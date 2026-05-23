@@ -582,7 +582,8 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
-    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional,
+    correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
+    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
   });
 
   const cuentaBase = cleanObject({
@@ -719,12 +720,6 @@ function validateState(state: ContactCreateState): string | null {
     !state.cuenta.tipo_persona.trim()
   ) {
     return "Selecciona el tipo de persona de la empresa.";
-  }
-  if (
-    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
-    !state.cuenta.correo_principal.trim()
-  ) {
-    return "El correo principal de la empresa es obligatorio.";
   }
   if (
     (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
@@ -1196,7 +1191,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               </Field>
               <Field label="Origen" required>
                 <Select
-                  value={state.persona.origen || undefined}
+                  value={state.persona.origen || ""}
                   onValueChange={(value) => dispatch({ type: "persona/set", field: "origen", value })}
                 >
                   <SelectTrigger className="w-full">

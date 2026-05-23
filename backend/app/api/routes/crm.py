@@ -10320,6 +10320,27 @@ class CRMCuentaDireccionRelacionUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+def _safe_model_from_row(
+    model_cls: type[BaseModel],
+    row: dict[str, Any],
+    *,
+    label: str,
+    extra_context: dict[str, Any] | None = None,
+) -> BaseModel:
+    try:
+        return model_cls.model_validate(row)
+    except ValidationError as exc:
+        logger.warning(
+            "crm.model_validation_fallback",
+            extra={
+                "label": label,
+                **(extra_context or {}),
+                "errors": exc.errors(),
+            },
+        )
+        return model_cls.model_construct(**row)
+
+
 class CRMPersonaAltaResponse(BaseModel):
     persona: CRMPersona
     cuenta: CRMAccount | None = None
@@ -10474,7 +10495,10 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "correo_principal": _persona_alta_normalize_email(payload.correo_principal)
             or _persona_alta_normalize_email(getattr(payload, "correo", None))
             or _persona_alta_normalize_email(getattr(payload, "email", None)),
-            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional),
+            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional)
+            or _persona_alta_normalize_email(payload.correo_principal)
+            or _persona_alta_normalize_email(getattr(payload, "correo", None))
+            or _persona_alta_normalize_email(getattr(payload, "email", None)),
             "correo_personal_3": _persona_alta_normalize_email(payload.correo_personal_3),
             "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164)
             or _persona_alta_normalize_phone(payload.telefono_movil_1_e164),
@@ -11324,7 +11348,6 @@ def _persona_alta_to_account_payload(
         "telefono_secundario_extension": _persona_alta_clean_text(cuenta.telefono_secundario_extension)
         or _persona_alta_clean_text(existing_values.get("telefono_secundario_extension")),
         "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta) or _persona_alta_clean_text(existing_values.get("codigo_cuenta")),
-        "codigo_contacto": _persona_alta_clean_text(persona.codigo_contacto) or _persona_alta_clean_text(existing_values.get("codigo_contacto")),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social)
         or _persona_alta_clean_text(existing_values.get("razon_social"))
         or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
@@ -16982,8 +17005,6 @@ async def validate_persona_alta(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.correo_principal):
-            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
         if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
@@ -17033,8 +17054,6 @@ async def create_persona_alta(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.correo_principal):
-            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
         if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
@@ -17140,17 +17159,12 @@ async def create_persona_alta(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    try:
-        persona_out = CRMPersona.model_validate(contact_row)
-    except ValidationError as exc:
-        logger.exception(
-            "crm.persona_update.persona_validation_failed",
-            extra={
-                "contacto_id": str(contacto_id),
-                "errors": exc.errors(),
-            },
-        )
-        raise HTTPException(status_code=502, detail="persona_response_invalid") from exc
+    persona_out = _safe_model_from_row(
+        CRMPersona,
+        contact_row,
+        label="persona",
+        extra_context={"persona_id": str(contact_row.get("id") or ""), "modo": contexto.modo},
+    )
     account_out: CRMAccount | None = None
     relation_out: CRMCuentaPersonaRelacion | None = None
 
@@ -17182,18 +17196,12 @@ async def create_persona_alta(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if account_row:
-            try:
-                account_out = CRMAccount.model_validate(account_row)
-            except ValidationError as exc:
-                logger.exception(
-                    "crm.persona_update.account_validation_failed",
-                    extra={
-                        "contacto_id": str(contacto_id),
-                        "cuenta_id": str(persona_out.cuenta_id),
-                        "errors": exc.errors(),
-                    },
-                )
-                raise HTTPException(status_code=502, detail="account_response_invalid") from exc
+            account_out = _safe_model_from_row(
+                CRMAccount,
+                account_row,
+                label="account",
+                extra_context={"persona_id": str(persona_out.id), "cuenta_id": str(persona_out.cuenta_id), "modo": contexto.modo},
+            )
 
         relation_defaults = {
             "rol_en_cuenta": (
@@ -17224,18 +17232,12 @@ async def create_persona_alta(
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        try:
-            relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
-        except ValidationError as exc:
-            logger.exception(
-                "crm.persona_update.relation_validation_failed",
-                extra={
-                    "contacto_id": str(contacto_id),
-                    "cuenta_id": str(persona_out.cuenta_id),
-                    "errors": exc.errors(),
-                },
-            )
-            raise HTTPException(status_code=502, detail="relation_response_invalid") from exc
+        relation_out = _safe_model_from_row(
+            CRMCuentaPersonaRelacion,
+            relation_row,
+            label="relation",
+            extra_context={"persona_id": str(persona_out.id), "cuenta_id": str(persona_out.cuenta_id), "modo": contexto.modo},
+        )
 
     return CRMPersonaAltaResponse(
         persona=persona_out,
@@ -17279,8 +17281,6 @@ async def update_persona(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.correo_principal):
-            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
         if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
@@ -17388,7 +17388,12 @@ async def update_persona(
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    persona_out = CRMPersona.model_validate(contact_row)
+    persona_out = _safe_model_from_row(
+        CRMPersona,
+        contact_row,
+        label="persona",
+        extra_context={"contacto_id": str(contacto_id), "modo": contexto.modo},
+    )
     account_out: CRMAccount | None = None
     relation_out: CRMCuentaPersonaRelacion | None = None
 
@@ -17421,7 +17426,12 @@ async def update_persona(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if account_row:
-            account_out = CRMAccount.model_validate(account_row)
+            account_out = _safe_model_from_row(
+                CRMAccount,
+                account_row,
+                label="account",
+                extra_context={"contacto_id": str(contacto_id), "cuenta_id": str(persona_out.cuenta_id), "modo": contexto.modo},
+            )
 
         relation_defaults = {
             "rol_en_cuenta": (
@@ -17452,7 +17462,12 @@ async def update_persona(
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
+        relation_out = _safe_model_from_row(
+            CRMCuentaPersonaRelacion,
+            relation_row,
+            label="relation",
+            extra_context={"contacto_id": str(contacto_id), "cuenta_id": str(persona_out.cuenta_id), "modo": contexto.modo},
+        )
 
     return CRMPersonaAltaResponse(
         persona=persona_out,
@@ -17753,8 +17768,6 @@ async def validate_persona_update(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.correo_principal):
-            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
         if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:

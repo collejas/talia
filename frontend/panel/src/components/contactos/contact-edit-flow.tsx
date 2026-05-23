@@ -484,7 +484,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
-    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional,
+    correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
+    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
   }, { keepEmptyStringsAsNull: true });
 
   const cuentaBase = cleanObject({
@@ -596,12 +597,6 @@ function validateState(state: ContactEditState): string | null {
     !state.cuenta.tipo_persona.trim()
   ) {
     return "Selecciona el tipo de persona de la cuenta.";
-  }
-  if (
-    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
-    !state.cuenta.correo_principal.trim()
-  ) {
-    return "El correo principal de la cuenta es obligatorio.";
   }
   if (
     (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
@@ -1554,7 +1549,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               </Field>
               <Field label="Origen">
                 <Select
-                  value={state.persona.origen || undefined}
+                  value={state.persona.origen || ""}
                   onValueChange={(value) => dispatch({ type: "persona/set", field: "origen", value })}
                 >
                   <SelectTrigger className="w-full">
@@ -1707,12 +1702,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 </Field>
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
-                </Field>
-                <Field label="Correo 1 principal" required>
-                  <Input value={state.cuenta.correo_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_principal", value: e.target.value })} />
-                </Field>
-                <Field label="Correo 2" hint="Opcional">
-                  <Input value={state.cuenta.correo_secundario} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_secundario", value: e.target.value })} />
                 </Field>
                 <Field label="Teléfono principal" required>
                   <div className="space-y-2">
