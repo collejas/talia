@@ -29,6 +29,11 @@ import {
   IconAdjustments,
   IconBuilding,
   IconHierarchy,
+  IconActivity,
+  IconTicket,
+  IconNotes,
+  IconBrandWhatsapp,
+  IconShieldCheck,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -81,27 +86,26 @@ const NAVIGATION: {
 } = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar, permission: "ver_panel" },
-    { title: "Embudo", url: "/embudo", icon: IconFilter, permission: "pipeline.view" },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
-    { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
     { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
-    { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
-    { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },
-    { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
     {
       title: "CRM (beta)",
       url: "/crm",
       icon: IconFolder,
       permission: "conv.read",
       children: [
-        { title: "Empresas", url: "/crm", permission: "clientes.view" },
-        { title: "Actividades", url: "/crm/actividades", permission: "activities.view" },
-        { title: "Tickets", url: "/crm/tickets", permission: "tickets.view" },
-        { title: "Notas", url: "/crm/notas", permission: "notes.view" },
-        { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones", permission: "conv.assign" },
-        { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", permission: ["audit.view", "audit.view_all"] },
+        { title: "Embudo", url: "/embudo", icon: IconFilter, permission: "pipeline.view" },
+        { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },
+        { title: "Empresas", url: "/crm", icon: IconBuilding, permission: "clientes.view" },
+        { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
+        { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
+        { title: "Actividades", url: "/crm/actividades", icon: IconActivity, permission: "activities.view" },
+        { title: "Tickets", url: "/crm/tickets", icon: IconTicket, permission: "tickets.view" },
+        { title: "Notas", url: "/crm/notas", icon: IconNotes, permission: "notes.view" },
+        { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones", icon: IconBrandWhatsapp, permission: "conv.assign" },
+        { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
       ],
     },
     {
@@ -180,6 +184,7 @@ const NAVIGATION: {
           permission: ["settings.view", "settings.manage"],
         },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
+        { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },
         
       ],
     },
