@@ -6654,7 +6654,6 @@ class CRMRepository:
             "contacto_datos": {},
             "persona_datos": metadata,
             "contacto_datos": dict(metadata),
-            "codigo_contacto": None,
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else None,
             "persona_fisica_moral": None,
             "nombre_nombres": persona.get("nombre"),
