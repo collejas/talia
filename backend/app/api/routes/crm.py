@@ -13630,6 +13630,33 @@ async def update_account(
     return CRMAccount.model_validate(row)
 
 
+@router.delete(
+    "/cuentas/{cuenta_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_account(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    cuenta_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_account(
+            organizacion_id=organizacion_id,
+            account_id=cuenta_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "cuenta_no_encontrada" in detail:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
+        if "cuenta_tiene_oportunidades" in detail:
+            raise HTTPException(status_code=409, detail="cuenta_tiene_oportunidades") from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/cuentas/{cuenta_id}/merge", response_model=CRMCuentaMergeResponse)
 async def merge_account(
     *,

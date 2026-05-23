@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { IconArrowLeft, IconBuilding, IconPencil, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 
@@ -114,6 +114,7 @@ function formatDate(value: unknown): string {
 
 export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [detail, setDetail] = React.useState<AccountDetail | null>(null);
   const [relations, setRelations] = React.useState<AccountRelation[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -254,6 +255,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   React.useEffect(() => {
     void loadDedupe();
   }, [loadDedupe]);
+
+  React.useEffect(() => {
+    if (searchParams.get("edit") === "1" && detail && !editOpen) {
+      openEditDialog();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, detail]);
 
   React.useEffect(() => {
     const query = relationQuery.trim();

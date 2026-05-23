@@ -1538,6 +1538,71 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al actualizar cuenta: {row!r}")
         return row
 
+    async def delete_account(
+        self,
+        *,
+        organizacion_id: UUID,
+        account_id: UUID,
+    ) -> None:
+        existing = await self.get_account(organizacion_id=organizacion_id, account_id=account_id)
+        if not existing:
+            raise CRMRepositoryError("cuenta_no_encontrada")
+
+        opportunities = await self.list_opportunities(
+            organizacion_id=organizacion_id,
+            cuenta_id=account_id,
+            limit=1,
+            offset=0,
+            include_contact_rows=False,
+        )
+        if opportunities:
+            raise CRMRepositoryError("cuenta_tiene_oportunidades")
+
+        person_relations = await self.list_account_person_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=account_id,
+            activo=None,
+        )
+        for relation in person_relations:
+            relation_id = relation.get("id")
+            if not relation_id:
+                continue
+            await self.delete_account_person_relation(
+                organizacion_id=organizacion_id,
+                cuenta_id=account_id,
+                relacion_id=UUID(str(relation_id)),
+            )
+
+        address_relations = await self.list_account_address_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=account_id,
+            activo=None,
+        )
+        for relation in address_relations:
+            relation_id = relation.get("id")
+            if not relation_id:
+                continue
+            await self.delete_account_address_relation(
+                organizacion_id=organizacion_id,
+                cuenta_id=account_id,
+                relacion_id=UUID(str(relation_id)),
+            )
+
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/cuentas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{account_id}",
+            },
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"cuenta_delete_invalid_response:{data!r}")
+        if data and not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"cuenta_delete_invalid_response:{data[0]!r}")
+
     async def list_pipelines(
         self,
         *,

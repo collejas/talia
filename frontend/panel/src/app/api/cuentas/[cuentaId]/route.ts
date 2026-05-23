@@ -45,3 +45,22 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json(response.data);
 }
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const { cuentaId } = await context.params;
+  if (!cuentaId) return NextResponse.json({ error: "missing_cuenta_id" }, { status: 400 });
+
+  const response = await callCrmApi<UnknownRecord>(`/crm/cuentas/${encodeURIComponent(cuentaId)}`, {
+    method: "DELETE",
+    withUserToken: true,
+  });
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { error: response.error || "cuenta_delete_failed" },
+      { status: response.status ?? 502 },
+    );
+  }
+
+  return new NextResponse(null, { status: 204 });
+}
