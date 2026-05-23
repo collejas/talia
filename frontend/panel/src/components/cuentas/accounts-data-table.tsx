@@ -33,9 +33,9 @@ function AccountRowDetails(row: DataTableRow) {
     <div className="grid gap-4">
       <Card className="border-border/60">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Ficha de cuenta</CardTitle>
+          <CardTitle className="text-base">Ficha de empresa</CardTitle>
           <CardDescription>
-            Abre la vista dedicada para ver y fusionar cuentas con más contexto.
+            Abre la vista dedicada para ver y fusionar empresas con más contexto.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
@@ -80,13 +80,13 @@ export function AccountsDataTable({ rows }: Props) {
     <ClientDataTable
       rows={rows}
       columnLabels={{
-        header: "Cuenta",
+        header: "Empresa",
         type: "Tipo",
         status: "Industria",
         target: "Sitio / Contacto",
         reviewer: "Alias",
       }}
-      detailDescription="Detalle de la cuenta"
+      detailDescription="Detalle de la empresa"
       renderRowDetails={AccountRowDetails}
     />
   );

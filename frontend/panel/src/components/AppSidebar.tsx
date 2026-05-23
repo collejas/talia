@@ -96,7 +96,7 @@ const NAVIGATION: {
       icon: IconFolder,
       permission: "conv.read",
       children: [
-        { title: "Cuentas", url: "/crm", permission: "clientes.view" },
+        { title: "Empresas", url: "/crm", permission: "clientes.view" },
         { title: "Actividades", url: "/crm/actividades", permission: "activities.view" },
         { title: "Tickets", url: "/crm/tickets", permission: "tickets.view" },
         { title: "Notas", url: "/crm/notas", permission: "notes.view" },

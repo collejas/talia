@@ -100,10 +100,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     try {
       const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}`, { cache: "no-store" });
       const body = (await response.json().catch(() => ({}))) as AccountDetail & { error?: string };
-      if (!response.ok) throw new Error(body.error || "No se pudo cargar la cuenta.");
+      if (!response.ok) throw new Error(body.error || "No se pudo cargar la empresa.");
       setDetail(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar la cuenta.");
+      setError(err instanceof Error ? err.message : "No se pudo cargar la empresa.");
       setDetail(null);
     } finally {
       setLoading(false);
@@ -215,11 +215,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           signal: controller.signal,
         });
         const body = (await response.json().catch(() => ({}))) as { items?: SearchItem[]; error?: string };
-        if (!response.ok) throw new Error(body.error || "No se pudieron buscar cuentas.");
+        if (!response.ok) throw new Error(body.error || "No se pudieron buscar empresas.");
         setMergeResults(Array.isArray(body.items) ? body.items : []);
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          setMergeError(err instanceof Error ? err.message : "No se pudieron buscar cuentas.");
+          setMergeError(err instanceof Error ? err.message : "No se pudieron buscar empresas.");
           setMergeResults([]);
         }
       } finally {
@@ -243,7 +243,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
   const handleMerge = async () => {
     if (!mergeTargetId) {
-      toast.error("Selecciona una cuenta destino.");
+      toast.error("Selecciona una empresa destino.");
       return;
     }
     setMergeSubmitting(true);
@@ -255,7 +255,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string; target_cuenta_id?: string };
       if (!response.ok) throw new Error(body.error || "No se pudo fusionar.");
-      toast.success("Fusión de cuenta completada.");
+      toast.success("Fusión de empresa completada.");
       setMergeOpen(false);
       setMergeQuery("");
       setMergeResults([]);
@@ -327,7 +327,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl p-6">
-        <div className="rounded-2xl border bg-background p-8 text-sm text-muted-foreground">Cargando cuenta...</div>
+        <div className="rounded-2xl border bg-background p-8 text-sm text-muted-foreground">Cargando empresa...</div>
       </div>
     );
   }
@@ -343,7 +343,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             </Link>
           </Button>
         </div>
-        <div className="rounded-2xl border bg-background p-8 text-sm text-destructive">{error || "No se encontró la cuenta."}</div>
+        <div className="rounded-2xl border bg-background p-8 text-sm text-destructive">{error || "No se encontró la empresa."}</div>
       </div>
     );
   }
@@ -352,7 +352,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     <div className="mx-auto max-w-6xl p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Ficha de cuenta</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Ficha de empresa</div>
           <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{alias !== "—" ? alias : "Sin alias"}</p>
         </div>
@@ -374,7 +374,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
         <Card>
           <CardHeader>
             <CardTitle>Resumen</CardTitle>
-            <CardDescription>Datos base de la cuenta y trazabilidad operativa.</CardDescription>
+            <CardDescription>Datos base de la empresa y trazabilidad operativa.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
             <div className="grid gap-1">
@@ -426,7 +426,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             </Button>
             <Button variant="outline" className="justify-start" onClick={() => setMergeOpen(true)}>
               <IconUsers className="mr-2 size-4" />
-              Fusionar con otra cuenta
+              Fusionar con otra empresa
             </Button>
             <Button variant="outline" className="justify-start" onClick={() => setAddRelationOpen(true)}>
               <IconUserPlus className="mr-2 size-4" />
@@ -439,8 +439,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       <div className="mt-6 grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Relaciones de cuenta</CardTitle>
-            <CardDescription>Personas vinculadas a esta cuenta y su rol operativo.</CardDescription>
+            <CardTitle>Relaciones de empresa</CardTitle>
+            <CardDescription>Personas vinculadas a esta empresa y su rol operativo.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {relationsLoading ? (
@@ -492,7 +492,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
         <Card>
           <CardHeader>
             <CardTitle>Posibles duplicados</CardTitle>
-            <CardDescription>Regla formal de dedupe para esta cuenta.</CardDescription>
+            <CardDescription>Regla formal de dedupe para esta empresa.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {dedupeLoading ? (
@@ -529,13 +529,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
         <DialogContent className="max-w-2xl">
           <div className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold">Fusionar cuenta</h2>
+              <h2 className="text-lg font-semibold">Fusionar empresa</h2>
               <p className="text-sm text-muted-foreground">
-                Busca la cuenta destino. La fuente quedará archivada con trazabilidad de merge.
+                Busca la empresa destino. La fuente quedará archivada con trazabilidad de merge.
               </p>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="merge-target-account">Buscar cuenta destino</Label>
+              <Label htmlFor="merge-target-account">Buscar empresa destino</Label>
               <Input
                 id="merge-target-account"
                 value={mergeQuery}
@@ -543,7 +543,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 placeholder="Nombre, RFC, alias..."
               />
             </div>
-            {mergeLoading ? <p className="text-xs text-muted-foreground">Buscando cuentas...</p> : null}
+            {mergeLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
             {mergeError ? <p className="text-xs text-destructive">{mergeError}</p> : null}
             {mergeResults.length ? (
               <div className="grid gap-2">
