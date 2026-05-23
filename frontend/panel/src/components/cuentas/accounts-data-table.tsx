@@ -9,6 +9,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableRow } from "@/components/data-table";
 import {
@@ -23,6 +24,11 @@ type Props = {
   rows: DataTableRow[];
 };
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function getText(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -35,29 +41,16 @@ function getAccountId(row: DataTableRow): string | null {
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
-function AccountRowActions({ row }: { row: DataTableRow }) {
-  const router = useRouter();
+function AccountRowActions({
+  row,
+  onDeleteRequest,
+}: {
+  row: DataTableRow;
+  onDeleteRequest: (target: DeleteTarget) => void;
+}) {
   const accountId = getAccountId(row);
 
   if (!accountId) return null;
-
-  const handleDelete = async () => {
-    const confirmed = window.confirm("¿Eliminar esta empresa?");
-    if (!confirmed) return;
-    try {
-      const response = await fetch(`/api/cuentas/${encodeURIComponent(accountId)}`, {
-        method: "DELETE",
-      });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(body.error || "No se pudo eliminar la empresa.");
-      }
-      toast.success("Empresa eliminada.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la empresa.");
-    }
-  };
 
   return (
     <DropdownMenu>
@@ -75,7 +68,15 @@ function AccountRowActions({ row }: { row: DataTableRow }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => void handleDelete()}>
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() =>
+            onDeleteRequest({
+              id: accountId,
+              name: getText((row.raw as Record<string, unknown> | undefined)?.nombre),
+            })
+          }
+        >
           <IconTrash className="mr-2 size-4" />
           Eliminar
         </DropdownMenuItem>
@@ -136,28 +137,88 @@ function AccountRowDetails(row: DataTableRow) {
 }
 
 export function AccountsDataTable({ rows }: Props) {
+  const router = useRouter();
+  const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
+
   const extraColumns = React.useMemo<ColumnDef<DataTableRow>[]>(() => [
     {
       id: "actions",
-      cell: ({ row }) => <AccountRowActions row={row.original} />,
+      cell: ({ row }) => (
+        <AccountRowActions
+          row={row.original}
+          onDeleteRequest={(target) => setDeleteTarget(target)}
+        />
+      ),
       meta: { label: "Acciones", reorderable: false },
     },
   ], []);
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteSubmitting(true);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(deleteTarget.id)}`, {
+        method: "DELETE",
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        if (body.error === "cuenta_tiene_contactos") {
+          throw new Error("No se puede eliminar: primero elimina los contactos vinculados.");
+        }
+        if (body.error === "cuenta_tiene_oportunidades") {
+          throw new Error("No se puede eliminar: primero elimina las oportunidades vinculadas.");
+        }
+        throw new Error(body.error || "No se pudo eliminar la empresa.");
+      }
+      toast.success("Empresa eliminada.");
+      setDeleteTarget(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la empresa.");
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
   return (
-    <ClientDataTable
-      rows={rows}
-      extraColumns={extraColumns}
-      hideDefaultActions
-      columnLabels={{
-        header: "Empresa",
-        type: "Tipo",
-        status: "Industria",
-        target: "Sitio / Contacto",
-        reviewer: "Alias",
-      }}
-      detailDescription="Detalle de la empresa"
-      renderRowDetails={AccountRowDetails}
-    />
+    <>
+      <ClientDataTable
+        rows={rows}
+        extraColumns={extraColumns}
+        hideDefaultActions
+        columnLabels={{
+          header: "Empresa",
+          type: "Tipo",
+          status: "Industria",
+          target: "Sitio / Contacto",
+          reviewer: "Alias",
+        }}
+        detailDescription="Detalle de la empresa"
+        renderRowDetails={AccountRowDetails}
+      />
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar empresa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>Vas a eliminar <strong>{deleteTarget?.name || "esta empresa"}</strong>.</p>
+            <p className="text-muted-foreground">
+              Si tiene contactos vinculados u oportunidades activas, el sistema bloqueará la eliminación.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleDeleteConfirm()} disabled={deleteSubmitting}>
+              {deleteSubmitting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

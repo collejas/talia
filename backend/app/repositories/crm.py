@@ -1548,6 +1548,14 @@ class CRMRepository:
         if not existing:
             raise CRMRepositoryError("cuenta_no_encontrada")
 
+        person_relations = await self.list_account_person_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=account_id,
+            activo=None,
+        )
+        if person_relations:
+            raise CRMRepositoryError("cuenta_tiene_contactos")
+
         opportunities = await self.list_opportunities(
             organizacion_id=organizacion_id,
             cuenta_id=account_id,
@@ -1557,21 +1565,6 @@ class CRMRepository:
         )
         if opportunities:
             raise CRMRepositoryError("cuenta_tiene_oportunidades")
-
-        person_relations = await self.list_account_person_relations(
-            organizacion_id=organizacion_id,
-            cuenta_id=account_id,
-            activo=None,
-        )
-        for relation in person_relations:
-            relation_id = relation.get("id")
-            if not relation_id:
-                continue
-            await self.delete_account_person_relation(
-                organizacion_id=organizacion_id,
-                cuenta_id=account_id,
-                relacion_id=UUID(str(relation_id)),
-            )
 
         address_relations = await self.list_account_address_relations(
             organizacion_id=organizacion_id,
