@@ -13739,7 +13739,9 @@ class CRMRepository:
             filtered_rows: list[dict[str, Any]] = []
             accepted_seen = 0
             scan_offset = 0
-            page_size = max(800, min(4000, max(limit * 6, 1500)))
+            # Mantener la pagina dentro del limite practico de PostgREST evita
+            # que una primera respuesta parcial se confunda con "ultima pagina".
+            page_size = 1000
             max_scan_rows = 200_000
             target_seen = offset + limit
 

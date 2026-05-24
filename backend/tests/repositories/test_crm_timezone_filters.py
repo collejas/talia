@@ -238,6 +238,57 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
     assert "contact_indicators" not in select
 
 
+@pytest.mark.asyncio
+async def test_list_prospectos_excluding_ids_scans_past_a_capped_first_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+    excluded_ids = {str(value) for value in range(1, 1001)}
+    seen_requests: list[tuple[str, dict[str, str] | None]] = []
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        params = kwargs.get("params")
+        seen_requests.append((f"{method} {path}", params if isinstance(params, dict) else None))
+        if method == "HEAD":
+            response = DummyResponse([])
+            response.headers = {"content-range": "0-0/2000"}
+            return response
+        if method == "GET" and path == "/rest/v1/prospeccion_prospectos":
+            if not isinstance(params, dict):
+                raise AssertionError("missing params")
+            limit = int(params.get("limit", "0"))
+            offset = int(params.get("offset", "0"))
+            if limit != 1000 or offset not in {0, 1000}:
+                raise AssertionError(f"unexpected scan params: {params!r}")
+            start = offset + 1
+            rows = [
+                {"id": str(value), "email_lookup_status": "valido"}
+                for value in range(start, start + 1000)
+            ]
+            return DummyResponse(rows)
+        raise AssertionError(f"unexpected request: {method} {path} {kwargs!r}")
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    rows, total = await repo._list_prospectos_excluding_ids(
+        usuario_token="token",
+        params={"organizacion_id": "eq.00000000-0000-0000-0000-000000000001"},
+        excluded_ids=excluded_ids,
+        limit=10,
+        offset=0,
+    )
+
+    assert total == 1000
+    assert len(rows) == 10
+    assert all(int(row["id"]) > 1000 for row in rows)
+    assert any(
+        entry[0] == "GET /rest/v1/prospeccion_prospectos" and entry[1] and entry[1].get("offset") == "1000"
+        for entry in seen_requests
+    )
+
+
 def test_prospectos_cache_key_includes_organizacion_id() -> None:
     token = "token"
     org_a = uuid.UUID("11111111-1111-1111-1111-111111111111")
