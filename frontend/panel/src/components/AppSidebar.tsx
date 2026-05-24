@@ -86,14 +86,10 @@ const NAVIGATION: {
 } = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar, permission: "ver_panel" },
-    { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
-    { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
-    { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
-    { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
     {
-      title: "CRM (beta)",
+      title: "CRM",
       url: "/crm",
-      icon: IconFolder,
+      icon: IconUsersGroup,
       permission: "conv.read",
       children: [
         { title: "Embudo", url: "/embudo", icon: IconFilter, permission: "pipeline.view" },
@@ -108,6 +104,10 @@ const NAVIGATION: {
         { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
       ],
     },
+    { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
+    { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
+    { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
+    { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
     {
       title: "Prospeccion",
       url: "/prospeccion",

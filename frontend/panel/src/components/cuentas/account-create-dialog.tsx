@@ -1,0 +1,604 @@
+"use client";
+
+import * as React from "react";
+
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
+import { toast } from "sonner";
+
+type CreateAccountForm = {
+  tipo: "empresa" | "persona_fisica_actividad_empresarial";
+  tipo_persona: "" | "fisica" | "moral";
+  nombre_comercial: string;
+  razon_social: string;
+  codigo_cuenta: string;
+  rfc: string;
+  sitio_web: string;
+  tamano: string;
+  tipo_establecimiento: string;
+  fecha_incorporacion: string;
+  latitud: string;
+  longitud: string;
+  telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
+  notas: string;
+  uso_cfdi: string;
+  forma_pago: string;
+  metodo_pago: string;
+  email_facturacion: string;
+  pais: string;
+  clave_entidad: string;
+  entidad: string;
+  clave_municipio: string;
+  municipio: string;
+  clave_localidad: string;
+  localidad: string;
+  tipo_vialidad: string;
+  nombre_vialidad: string;
+  numero_exterior: string;
+  letra_exterior: string;
+  edificio: string;
+  edificio_piso: string;
+  numero_interior: string;
+  letra_interior: string;
+  tipo_asentamiento: string;
+  nombre_asentamiento: string;
+  tipo_centro_comercial: string;
+  corredor_industrial: string;
+  numero_local: string;
+  codigo_postal: string;
+};
+
+const PHONE_LINE_TYPE_OPTIONS = [
+  { value: "movil", label: "Móvil" },
+  { value: "fijo", label: "Fijo" },
+  { value: "whatsapp", label: "WhatsApp" },
+] as const;
+
+const INITIAL_FORM: CreateAccountForm = {
+  tipo: "empresa",
+  tipo_persona: "moral",
+  nombre_comercial: "",
+  razon_social: "",
+  codigo_cuenta: "",
+  rfc: "",
+  sitio_web: "",
+  tamano: "",
+  tipo_establecimiento: "",
+  fecha_incorporacion: "",
+  latitud: "",
+  longitud: "",
+  telefono_principal_e164: "",
+  telefono_principal_tipo_linea: "movil",
+  telefono_principal_extension: "",
+  telefono_secundario_e164: "",
+  telefono_secundario_tipo_linea: "movil",
+  telefono_secundario_extension: "",
+  notas: "",
+  uso_cfdi: "",
+  forma_pago: "",
+  metodo_pago: "",
+  email_facturacion: "",
+  pais: "MX",
+  clave_entidad: "",
+  entidad: "",
+  clave_municipio: "",
+  municipio: "",
+  clave_localidad: "",
+  localidad: "",
+  tipo_vialidad: "",
+  nombre_vialidad: "",
+  numero_exterior: "",
+  letra_exterior: "",
+  edificio: "",
+  edificio_piso: "",
+  numero_interior: "",
+  letra_interior: "",
+  tipo_asentamiento: "",
+  nombre_asentamiento: "",
+  tipo_centro_comercial: "",
+  corredor_industrial: "",
+  numero_local: "",
+  codigo_postal: "",
+};
+
+type Props = {
+  onCreated?: () => void;
+};
+
+export function AccountCreateDialog({ onCreated }: Props) {
+  const tenantCatalogs = useTenantContactCatalogs();
+  const [open, setOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [codeLoading, setCodeLoading] = React.useState(false);
+  const [extrasOpen, setExtrasOpen] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [form, setForm] = React.useState<CreateAccountForm>(INITIAL_FORM);
+
+  const openDialog = React.useCallback(() => {
+    setForm(INITIAL_FORM);
+    setError(null);
+    setExtrasOpen(false);
+    setOpen(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    const run = async () => {
+      setCodeLoading(true);
+      try {
+        const response = await fetch(
+          `/api/personas/cuentas/codigo-siguiente?tipo=${encodeURIComponent(form.tipo)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const body = (await response.json().catch(() => ({}))) as { codigo_cuenta?: string | null; error?: string };
+        if (!response.ok) {
+          throw new Error(body.error || "No se pudo generar el ID de empresa.");
+        }
+        setForm((prev) =>
+          prev.codigo_cuenta === (body.codigo_cuenta ?? "") ? prev : { ...prev, codigo_cuenta: body.codigo_cuenta ?? "" },
+        );
+      } catch (fetchError) {
+        if ((fetchError as Error).name !== "AbortError") {
+          setForm((prev) => ({ ...prev, codigo_cuenta: "" }));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCodeLoading(false);
+        }
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [open, form.tipo]);
+
+  const clasificacionNegocioOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, form.tipo_establecimiento),
+    [form.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
+  );
+
+  const handleCreateConfirm = async () => {
+    if (!form.nombre_comercial.trim() && !form.razon_social.trim()) {
+      setError("La empresa requiere nombre comercial o razón social.");
+      return;
+    }
+    if (!form.tipo_persona.trim()) {
+      setError("Selecciona el tipo de persona.");
+      return;
+    }
+    if (!form.telefono_principal_e164.trim()) {
+      setError("El teléfono principal es obligatorio.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/cuentas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: form.tipo,
+          nombre: form.nombre_comercial.trim() || form.razon_social.trim(),
+          tipo_persona: form.tipo_persona.trim(),
+          nombre_comercial: form.nombre_comercial.trim() || null,
+          razon_social: form.razon_social.trim() || null,
+          codigo_cuenta: form.codigo_cuenta.trim() || null,
+          rfc: form.rfc.trim() || null,
+          sitio_web: form.sitio_web.trim() || null,
+          tamano: form.tamano.trim() || null,
+          tipo_establecimiento: form.tipo_establecimiento.trim() || null,
+          fecha_incorporacion: form.fecha_incorporacion.trim() || null,
+          latitud: form.latitud.trim() && Number.isFinite(Number(form.latitud)) ? Number(form.latitud) : null,
+          longitud: form.longitud.trim() && Number.isFinite(Number(form.longitud)) ? Number(form.longitud) : null,
+          telefono_principal_e164: form.telefono_principal_e164.trim() || null,
+          telefono_principal_tipo_linea: form.telefono_principal_tipo_linea || null,
+          telefono_principal_extension: form.telefono_principal_extension.trim() || null,
+          telefono_secundario_e164: form.telefono_secundario_e164.trim() || null,
+          telefono_secundario_tipo_linea: form.telefono_secundario_tipo_linea || null,
+          telefono_secundario_extension: form.telefono_secundario_extension.trim() || null,
+          notas: form.notas.trim() || null,
+          uso_cfdi: form.uso_cfdi.trim() || null,
+          forma_pago: form.forma_pago.trim() || null,
+          metodo_pago: form.metodo_pago.trim() || null,
+          email_facturacion: form.email_facturacion.trim() || null,
+          pais: form.pais.trim() || null,
+          clave_entidad: form.clave_entidad.trim() || null,
+          entidad: form.entidad.trim() || null,
+          clave_municipio: form.clave_municipio.trim() || null,
+          municipio: form.municipio.trim() || null,
+          clave_localidad: form.clave_localidad.trim() || null,
+          localidad: form.localidad.trim() || null,
+          tipo_vialidad: form.tipo_vialidad.trim() || null,
+          nombre_vialidad: form.nombre_vialidad.trim() || null,
+          numero_exterior: form.numero_exterior.trim() || null,
+          letra_exterior: form.letra_exterior.trim() || null,
+          edificio: form.edificio.trim() || null,
+          edificio_piso: form.edificio_piso.trim() || null,
+          numero_interior: form.numero_interior.trim() || null,
+          letra_interior: form.letra_interior.trim() || null,
+          tipo_asentamiento: form.tipo_asentamiento.trim() || null,
+          nombre_asentamiento: form.nombre_asentamiento.trim() || null,
+          tipo_centro_comercial: form.tipo_centro_comercial.trim() || null,
+          corredor_industrial: form.corredor_industrial.trim() || null,
+          numero_local: form.numero_local.trim() || null,
+          codigo_postal: form.codigo_postal.trim() || null,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error || "No se pudo crear la empresa.");
+      }
+      toast.success("Empresa creada.");
+      setOpen(false);
+      onCreated?.();
+    } catch (createError) {
+      const message = createError instanceof Error ? createError.message : "No se pudo crear la empresa.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-end">
+        <Button onClick={openDialog}>Nueva empresa</Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nueva empresa</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="create-tipo">Tipo de alta *</Label>
+                  <select
+                    id="create-tipo"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    value={form.tipo}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        tipo: event.target.value as CreateAccountForm["tipo"],
+                        tipo_persona: event.target.value === "persona_fisica_actividad_empresarial" ? "fisica" : "moral",
+                      }))
+                    }
+                  >
+                    <option value="empresa">Empresa</option>
+                    <option value="persona_fisica_actividad_empresarial">Persona física con actividad empresarial</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-nombre-comercial">Nombre comercial *</Label>
+                  <Input
+                    id="create-nombre-comercial"
+                    value={form.nombre_comercial}
+                    onChange={(event) => setForm((prev) => ({ ...prev, nombre_comercial: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-razon-social">Razón social *</Label>
+                  <Input
+                    id="create-razon-social"
+                    value={form.razon_social}
+                    onChange={(event) => setForm((prev) => ({ ...prev, razon_social: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-id">ID de empresa</Label>
+                  <Input
+                    id="create-id"
+                    value={form.codigo_cuenta || (codeLoading ? "Generando..." : "Se generará automáticamente")}
+                    readOnly
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-tipo-persona">Tipo persona *</Label>
+                  <select
+                    id="create-tipo-persona"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    value={form.tipo_persona}
+                    onChange={(event) => setForm((prev) => ({ ...prev, tipo_persona: event.target.value as CreateAccountForm["tipo_persona"] }))}
+                    disabled={form.tipo === "persona_fisica_actividad_empresarial"}
+                  >
+                    <option value="">Selecciona</option>
+                    <option value="fisica">Física</option>
+                    <option value="moral">Moral</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
+                  Debes completar al menos nombre comercial o razón social.
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-rfc">RFC</Label>
+                  <Input id="create-rfc" value={form.rfc} onChange={(event) => setForm((prev) => ({ ...prev, rfc: event.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-telefono-1">Teléfono principal *</Label>
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        id="create-telefono-1"
+                        value={form.telefono_principal_e164}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_e164: event.target.value }))}
+                      />
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                        value={form.telefono_principal_tipo_linea}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_tipo_linea: event.target.value }))}
+                      >
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {form.telefono_principal_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={form.telefono_principal_extension}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_extension: event.target.value }))}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-telefono-2">Teléfono 2</Label>
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        id="create-telefono-2"
+                        value={form.telefono_secundario_e164}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_e164: event.target.value }))}
+                      />
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                        value={form.telefono_secundario_tipo_linea}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_tipo_linea: event.target.value }))}
+                      >
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {form.telefono_secundario_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={form.telefono_secundario_extension}
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_extension: event.target.value }))}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-tamano">Tamaño</Label>
+                  <Input id="create-tamano" value={form.tamano} onChange={(event) => setForm((prev) => ({ ...prev, tamano: event.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-sitio-web">Sitio web</Label>
+                  <Input id="create-sitio-web" value={form.sitio_web} onChange={(event) => setForm((prev) => ({ ...prev, sitio_web: event.target.value }))} />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="create-clasificacion-negocio">Clasificación de negocio</Label>
+                  <ContactCatalogSelect
+                    value={form.tipo_establecimiento}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, tipo_establecimiento: value }))}
+                    options={clasificacionNegocioOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona una clasificación"}
+                    disabled={clasificacionNegocioOptions.length === 0}
+                    emptyLabel="Configura opciones en Cuenta y contactos"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-fecha">Fecha de incorporación</Label>
+                  <Input id="create-fecha" type="date" value={form.fecha_incorporacion} onChange={(event) => setForm((prev) => ({ ...prev, fecha_incorporacion: event.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-latitud">Latitud</Label>
+                  <Input id="create-latitud" type="number" step="any" value={form.latitud} onChange={(event) => setForm((prev) => ({ ...prev, latitud: event.target.value }))} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-longitud">Longitud</Label>
+                  <Input id="create-longitud" type="number" step="any" value={form.longitud} onChange={(event) => setForm((prev) => ({ ...prev, longitud: event.target.value }))} />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="create-notas">Notas</Label>
+                  <Textarea id="create-notas" value={form.notas} onChange={(event) => setForm((prev) => ({ ...prev, notas: event.target.value }))} rows={4} />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-muted/40 to-background p-4 shadow-sm">
+                <div className="text-sm font-semibold">Resumen</div>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-xl border border-border/60 bg-background p-3">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
+                    <div className="mt-1 text-sm font-semibold">{form.nombre_comercial || form.razon_social || "Pendiente"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[form.codigo_cuenta, form.rfc, form.sitio_web].filter(Boolean).join(" · ") || "Sin datos"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background p-3">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {[form.telefono_principal_e164, form.telefono_secundario_e164].filter(Boolean).join(" · ") || "Sin teléfono"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{form.tipo_persona || "Sin tipo de persona"}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Datos opcionales</div>
+                    <div className="text-xs text-muted-foreground">Datos fiscales, ubicación y domicilio.</div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setExtrasOpen((prev) => !prev)}>
+                    {extrasOpen ? "Ocultar extras" : "Completar extras"}
+                  </Button>
+                </div>
+                {extrasOpen ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-uso-cfdi">Uso CFDI</Label>
+                      <Input id="create-uso-cfdi" value={form.uso_cfdi} onChange={(event) => setForm((prev) => ({ ...prev, uso_cfdi: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-forma-pago">Forma de pago</Label>
+                      <Input id="create-forma-pago" value={form.forma_pago} onChange={(event) => setForm((prev) => ({ ...prev, forma_pago: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-metodo-pago">Método de pago</Label>
+                      <Input id="create-metodo-pago" value={form.metodo_pago} onChange={(event) => setForm((prev) => ({ ...prev, metodo_pago: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-email-facturacion">Email de facturación</Label>
+                      <Input
+                        id="create-email-facturacion"
+                        value={form.email_facturacion}
+                        onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
+                      />
+                    </div>
+                    <GeoLocationSelects
+                      countryCode={form.pais}
+                      stateCode={form.clave_entidad}
+                      municipalityCode={form.clave_municipio}
+                      onCountryChange={(countryCode) => {
+                        const nextCountry = countryCode || "MX";
+                        setForm((prev) => ({
+                          ...prev,
+                          pais: nextCountry,
+                          ...(nextCountry !== "MX"
+                            ? {
+                                clave_entidad: "",
+                                entidad: "",
+                                clave_municipio: "",
+                                municipio: "",
+                              }
+                            : {}),
+                        }));
+                      }}
+                      onStateChange={(stateCode, stateName) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          clave_entidad: stateCode,
+                          entidad: stateName,
+                          clave_municipio: "",
+                          municipio: "",
+                        }));
+                      }}
+                      onMunicipalityChange={(municipalityCode, municipalityName) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          clave_municipio: municipalityCode,
+                          municipio: municipalityName,
+                        }));
+                      }}
+                    />
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-clave-localidad">Clave de localidad</Label>
+                      <Input id="create-clave-localidad" value={form.clave_localidad} onChange={(event) => setForm((prev) => ({ ...prev, clave_localidad: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-localidad">Localidad</Label>
+                      <Input id="create-localidad" value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-tipo-vialidad">Tipo de vialidad</Label>
+                      <Input id="create-tipo-vialidad" value={form.tipo_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-nombre-vialidad">Nombre de vialidad</Label>
+                      <Input id="create-nombre-vialidad" value={form.nombre_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-numero-exterior">Número exterior</Label>
+                      <Input id="create-numero-exterior" value={form.numero_exterior} onChange={(event) => setForm((prev) => ({ ...prev, numero_exterior: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-letra-exterior">Letra exterior</Label>
+                      <Input id="create-letra-exterior" value={form.letra_exterior} onChange={(event) => setForm((prev) => ({ ...prev, letra_exterior: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-edificio">Edificio</Label>
+                      <Input id="create-edificio" value={form.edificio} onChange={(event) => setForm((prev) => ({ ...prev, edificio: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-edificio-piso">Piso / nivel</Label>
+                      <Input id="create-edificio-piso" value={form.edificio_piso} onChange={(event) => setForm((prev) => ({ ...prev, edificio_piso: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-numero-interior">Número interior</Label>
+                      <Input id="create-numero-interior" value={form.numero_interior} onChange={(event) => setForm((prev) => ({ ...prev, numero_interior: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-letra-interior">Letra interior</Label>
+                      <Input id="create-letra-interior" value={form.letra_interior} onChange={(event) => setForm((prev) => ({ ...prev, letra_interior: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-tipo-asentamiento">Tipo de asentamiento</Label>
+                      <Input id="create-tipo-asentamiento" value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-nombre-asentamiento">Nombre de asentamiento</Label>
+                      <Input id="create-nombre-asentamiento" value={form.nombre_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-tipo-centro-comercial">Tipo de centro comercial</Label>
+                      <Input id="create-tipo-centro-comercial" value={form.tipo_centro_comercial} onChange={(event) => setForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-corredor-industrial">Corredor industrial</Label>
+                      <Input id="create-corredor-industrial" value={form.corredor_industrial} onChange={(event) => setForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-numero-local">Número local</Label>
+                      <Input id="create-numero-local" value={form.numero_local} onChange={(event) => setForm((prev) => ({ ...prev, numero_local: event.target.value }))} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="create-codigo-postal">Código postal</Label>
+                      <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={() => void handleCreateConfirm()} disabled={submitting}>
+                  {submitting ? "Creando..." : "Crear empresa"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
