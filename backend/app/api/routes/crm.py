@@ -3152,7 +3152,7 @@ class ProspectoLookupPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+        ..., min_length=1, max_length=300, description="Prospectos a verificar."
     )
     country_code: str | None = Field(
         default="MX", description="Código de país ISO2 para normalizar el número."
@@ -3185,7 +3185,7 @@ class ProspectoEmailLookupPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+        ..., min_length=1, max_length=300, description="Prospectos a verificar."
     )
     check_smtp: bool = Field(
         default=True,
@@ -3215,7 +3215,7 @@ class ProspectoWebsiteLookupPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+        ..., min_length=1, max_length=300, description="Prospectos a verificar."
     )
     reintentar: bool = Field(
         default=False,
@@ -3241,7 +3241,7 @@ class ProspectoFullLookupPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=100, description="Prospectos a verificar en lote combinado."
+        ..., min_length=1, max_length=300, description="Prospectos a verificar en lote combinado."
     )
     country_code: str | None = Field(default="MX")
     proveedor: Literal["gratis", "twilio"] = Field(default="gratis")
@@ -3266,7 +3266,7 @@ class ProspectoChecklistLookupPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    limit: int = Field(default=200, ge=1, le=200)
+    limit: int = Field(default=200, ge=1, le=300)
     country_code: str | None = Field(default="MX", max_length=4)
     proveedor: Literal["gratis", "twilio"] = Field(default="gratis")
     reintentar: bool = Field(
@@ -3280,7 +3280,7 @@ class ProspectoChecklistScraperPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    limit: int = Field(default=3, ge=1, le=20, description="Número de jobs a disparar.")
+    limit: int = Field(default=3, ge=1, le=300, description="Número de jobs a disparar.")
     mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = Field(default="auto")
     max_pages: int = Field(default=150, ge=10, le=2000)
     max_depth: int = Field(default=3, ge=1, le=20)
@@ -3288,7 +3288,7 @@ class ProspectoChecklistScraperPayload(BaseModel):
     prospecto_ids: list[UUID] | None = Field(
         default=None,
         min_length=1,
-        max_length=200,
+        max_length=300,
         description="Prospectos específicos a scrapear (opcional).",
     )
 
@@ -3527,7 +3527,7 @@ class ProspectoContactarPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] | None = Field(
-        default=None, min_length=1, max_length=200, description="Prospectos seleccionados manualmente."
+        default=None, min_length=1, max_length=300, description="Prospectos seleccionados manualmente."
     )
     correo_asunto: str | None = Field(default=None, max_length=200)
     correo_cuerpo: str | None = Field(default=None, max_length=4000)

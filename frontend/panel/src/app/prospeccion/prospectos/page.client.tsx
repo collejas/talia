@@ -2142,7 +2142,7 @@ function ProspectosView() {
       message: "Verificando teléfonos pendientes...",
     })
     const pending = checklist?.telefonos_pendientes ?? 0
-    const targetLimit = pending > 0 ? Math.min(200, pending) : 200
+    const targetLimit = pending > 0 ? Math.min(300, pending) : 300
     try {
       const response = await ejecutarChecklistLookup({
         limit: targetLimit,
@@ -2202,7 +2202,7 @@ function ProspectosView() {
     }
     try {
       const response = await ejecutarChecklistScraper({
-        limit: Math.max(1, Math.min(20, pending)),
+        limit: Math.max(1, Math.min(300, pending)),
         mode: "auto",
       })
       if (!response.programados) {
@@ -2239,12 +2239,12 @@ function ProspectosView() {
 
   const handleScraperSelected = useCallback(async () => {
     if (!selectedIds.length) return
-    if (selectedIds.length > 20) {
+    if (selectedIds.length > 300) {
       setVerificationDialog({
         open: true,
         status: "error",
         title: "Operación con error",
-        message: "Solo puedes ejecutar scraper sobre 20 prospectos a la vez. Reduce la selección e inténtalo de nuevo.",
+        message: "Solo puedes ejecutar scraper sobre 300 prospectos a la vez. Reduce la selección e inténtalo de nuevo.",
       })
       return
     }
@@ -2259,7 +2259,7 @@ function ProspectosView() {
     const cappedIds = selectedIds
       .map((id) => id.trim())
       .filter((id) => UUID_RE.test(id))
-      .slice(0, 200)
+      .slice(0, 300)
     if (!cappedIds.length) {
       setVerificationDialog({
         open: true,
@@ -2270,7 +2270,7 @@ function ProspectosView() {
       setChecklistAction(null)
       return
     }
-    const limit = Math.max(1, Math.min(20, cappedIds.length))
+    const limit = Math.max(1, Math.min(300, cappedIds.length))
     try {
       const response = await ejecutarChecklistScraper({
         limit,

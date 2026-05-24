@@ -1094,6 +1094,7 @@ def _headers(*, include_user_token: bool = False) -> dict[str, str]:
     return headers
 
 
+
 @pytest.mark.asyncio
 async def test_list_accounts(client: AsyncClient) -> None:
     resp = await client.get("/crm/cuentas", headers=_headers())
@@ -1104,6 +1105,7 @@ async def test_list_accounts(client: AsyncClient) -> None:
     assert payload["offset"] == 0
 
 
+
 @pytest.mark.asyncio
 async def test_create_account(client: AsyncClient) -> None:
     body = {"nombre": "Nueva Cuenta", "tipo": "cliente"}
@@ -1112,6 +1114,7 @@ async def test_create_account(client: AsyncClient) -> None:
     data = resp.json()
     assert data["nombre"] == "Nueva Cuenta"
     assert data["tipo"] == "cliente"
+
 
 
 @pytest.mark.asyncio
@@ -1136,6 +1139,7 @@ async def test_delete_denue_busqueda_borra_fisicamente(
         for call_name, call_kwargs in fake_repo.calls
     )
     assert all(call_name != "worker_update_busqueda" for call_name, _ in fake_repo.calls)
+
 
 
 @pytest.mark.asyncio
@@ -1217,6 +1221,7 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
     assert fake_repo.last_upserted_prospectos[0].get("query_sort") == "Pizza artesanal cerca de mi"
 
 
+
 @pytest.mark.asyncio
 async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     client: AsyncClient, fake_repo: DummyCRMRepository
@@ -1270,6 +1275,7 @@ async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     assert create_opportunity_call["payload"]["metadata"]["prospeccion_actividad"] == "Arquitectura"
 
 
+
 @pytest.mark.asyncio
 async def test_registrar_venta_propiedad_requiere_oportunidad(
     client: AsyncClient, fake_repo: DummyCRMRepository
@@ -1305,6 +1311,7 @@ async def test_registrar_venta_propiedad_requiere_oportunidad(
 
     assert resp.status_code == 409
     assert resp.json()["detail"] == "sale_requires_opportunity"
+
 
 
 @pytest.mark.asyncio
@@ -1392,6 +1399,7 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert fake_repo.updated_catalog_items[0]["payload"]["persona_id"] == str(persona_id)
 
 
+
 @pytest.mark.asyncio
 async def test_actualizar_status_propiedad_unidad_crea_movimiento(
     client: AsyncClient, fake_repo: DummyCRMRepository
@@ -1429,6 +1437,7 @@ async def test_actualizar_status_propiedad_unidad_crea_movimiento(
     assert movimiento_payload["precio"] == 1200000
 
 
+
 @pytest.mark.asyncio
 async def test_make_json_serializable_convierte_uuid_anidados() -> None:
     nested_uuid = uuid.uuid4()
@@ -1446,6 +1455,7 @@ async def test_make_json_serializable_convierte_uuid_anidados() -> None:
     assert sanitized["metadata"]["principal"] == str(nested_uuid)
     assert sanitized["metadata"]["items"][0] == str(nested_uuid)
     assert sanitized["metadata"]["items"][1]["otro"] == str(nested_uuid)
+
 
 
 @pytest.mark.asyncio
@@ -1471,6 +1481,7 @@ async def test_build_contact_write_parts_mueve_segmento_a_metadata() -> None:
     assert account_body["metadata"]["segmento"] == "Servicios"
 
 
+
 @pytest.mark.asyncio
 async def test_bulk_delete_contacts_elimina_varios_registros(
     client: AsyncClient, fake_repo: DummyCRMRepository
@@ -1493,6 +1504,7 @@ async def test_bulk_delete_contacts_elimina_varios_registros(
     assert call_names.count("delete_persona") == 3
 
 
+
 @pytest.mark.asyncio
 async def test_get_account_not_found(client: AsyncClient) -> None:
     headers = _headers()
@@ -1501,6 +1513,7 @@ async def test_get_account_not_found(client: AsyncClient) -> None:
         headers=headers,
     )
     assert resp.status_code == 404
+
 
 
 @pytest.mark.asyncio
@@ -1528,6 +1541,7 @@ async def test_list_opportunities_uses_lightweight_repo_call(
 
     assert resp.status_code == 200
     assert captured["include_contact_rows"] is False
+
 
 
 @pytest.mark.asyncio
@@ -1606,6 +1620,7 @@ async def test_pipeline_board_filters_by_tablero(
     call_kwargs = next(kwargs for name, kwargs in fake_repo.calls if name == "list_pipeline_opportunities")
     assert call_kwargs["include_contact_rows"] is False
     assert call_kwargs["count_exact"] is False
+
 
 
 @pytest.mark.asyncio
@@ -1687,6 +1702,7 @@ async def test_pipeline_board_uses_tablero_column(
         card["metadata"] == {} and card["etapa_id"] == str(stage_a_id)
         for card in payload["stages"][0]["tarjetas"]
     )
+
 
 
 @pytest.mark.asyncio
@@ -1790,6 +1806,7 @@ async def test_pipeline_board_auto_selects_dominant_tablero(
     )
 
 
+
 @pytest.mark.asyncio
 async def test_pipeline_board_includes_channel_from_metadata(
     client: AsyncClient, fake_repo: DummyCRMRepository
@@ -1833,6 +1850,7 @@ async def test_pipeline_board_includes_channel_from_metadata(
     assert payload["stages"][0]["tarjetas"][0]["canal"] == "whatsapp"
 
 
+
 @pytest.mark.asyncio
 async def test_list_clientes(client: AsyncClient, fake_repo: DummyCRMRepository) -> None:
     resp = await client.get("/crm/clientes", headers=_headers())
@@ -1844,10 +1862,12 @@ async def test_list_clientes(client: AsyncClient, fake_repo: DummyCRMRepository)
     assert fake_repo.calls[-1][0] == "list_clientes"
 
 
+
 @pytest.mark.asyncio
 async def test_missing_org_header_returns_400(client: AsyncClient) -> None:
     resp = await client.get("/crm/cuentas")
     assert resp.status_code == 422  # FastAPI validation error for header
+
 
 
 @pytest.mark.asyncio
@@ -1860,6 +1880,7 @@ async def test_list_agenda_bookings_returns_oportunidad_id(client: AsyncClient) 
     payload = resp.json()
     assert payload["items"]
     assert payload["items"][0]["oportunidad_id"]
+
 
 
 @pytest.mark.asyncio
@@ -1958,6 +1979,7 @@ async def test_create_agenda_booking_can_skip_opportunity_creation(
     assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)
 
 
+
 @pytest.mark.asyncio
 async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_flow(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
@@ -2053,6 +2075,7 @@ async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_fl
     assert captured["email"]["conversation_id"] is None
     assert not any(call_name == "create_conversation" for call_name, _ in fake_repo.calls)
     assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)
+
 
 
 @pytest.mark.asyncio
@@ -2154,6 +2177,7 @@ async def test_create_agenda_booking_can_be_created_without_contact(
     assert not any(call_name == "get_persona_by_id" for call_name, _ in fake_repo.calls)
 
 
+
 @pytest.mark.asyncio
 async def test_visits_detail_maps_oportunidad_id(client: AsyncClient) -> None:
     resp = await client.get(
@@ -2166,11 +2190,13 @@ async def test_visits_detail_maps_oportunidad_id(client: AsyncClient) -> None:
     assert payload[0]["oportunidad_id"]
 
 
+
 @pytest.mark.asyncio
 async def test_list_activities(client: AsyncClient) -> None:
     resp = await client.get("/crm/actividades", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()["items"]
+
 
 
 @pytest.mark.asyncio
@@ -2181,10 +2207,12 @@ async def test_create_activity(client: AsyncClient) -> None:
     assert resp.json()["tipo"] == "llamada"
 
 
+
 @pytest.mark.asyncio
 async def test_get_activity_not_found(client: AsyncClient) -> None:
     resp = await client.get(f"/crm/actividades/{uuid.UUID(int=1)}", headers=_headers())
     assert resp.status_code == 404
+
 
 
 @pytest.mark.asyncio
@@ -2194,11 +2222,13 @@ async def test_list_tickets(client: AsyncClient) -> None:
     assert resp.json()["items"]
 
 
+
 @pytest.mark.asyncio
 async def test_create_ticket(client: AsyncClient) -> None:
     resp = await client.post("/crm/tickets", headers=_headers(), json={"asunto": "Incidencia"})
     assert resp.status_code == 201
     assert resp.json()["asunto"] == "Incidencia"
+
 
 
 @pytest.mark.asyncio
@@ -2207,12 +2237,14 @@ async def test_get_ticket_not_found(client: AsyncClient) -> None:
     assert resp.status_code == 404
 
 
+
 @pytest.mark.asyncio
 async def test_list_ticket_comments(client: AsyncClient) -> None:
     ticket_id = uuid.uuid4()
     resp = await client.get(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()[0]["ticket_id"] == str(ticket_id)
+
 
 
 @pytest.mark.asyncio
@@ -2224,6 +2256,7 @@ async def test_create_ticket_comment(client: AsyncClient) -> None:
     assert resp.json()["mensaje"] == "Seguimiento"
 
 
+
 @pytest.mark.asyncio
 async def test_create_ticket_comment_mismatch(client: AsyncClient) -> None:
     ticket_id = uuid.uuid4()
@@ -2231,6 +2264,7 @@ async def test_create_ticket_comment_mismatch(client: AsyncClient) -> None:
     body = {"ticket_id": str(other_id), "mensaje": "Error"}
     resp = await client.post(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers(), json=body)
     assert resp.status_code == 400
+
 
 
 @pytest.mark.asyncio
@@ -2246,6 +2280,7 @@ async def test_get_contacto_batch_summary(client: AsyncClient) -> None:
     assert data["totales"]["pendiente"] == 1
 
 
+
 @pytest.mark.asyncio
 async def test_get_contacto_batch_summary_not_found(client: AsyncClient) -> None:
     resp = await client.get(
@@ -2253,6 +2288,7 @@ async def test_get_contacto_batch_summary_not_found(client: AsyncClient) -> None
         headers=_headers(include_user_token=True),
     )
     assert resp.status_code == 404
+
 
 
 @pytest.mark.asyncio
@@ -2270,6 +2306,7 @@ async def test_reintentar_contacto_envio(
     assert fake_repo.calls[-1][0] == "insert_prospecto_logs"
 
 
+
 @pytest.mark.asyncio
 async def test_reintentar_contacto_envio_not_found(client: AsyncClient) -> None:
     resp = await client.post(
@@ -2279,11 +2316,13 @@ async def test_reintentar_contacto_envio_not_found(client: AsyncClient) -> None:
     assert resp.status_code == 404
 
 
+
 @pytest.mark.asyncio
 async def test_list_files(client: AsyncClient) -> None:
     resp = await client.get("/crm/archivos", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()
+
 
 
 @pytest.mark.asyncio
@@ -2299,6 +2338,7 @@ async def test_create_file(client: AsyncClient) -> None:
     assert resp.json()["nombre_original"] == "doc.pdf"
 
 
+
 @pytest.mark.asyncio
 async def test_list_tags(client: AsyncClient) -> None:
     resp = await client.get("/crm/tags", headers=_headers())
@@ -2306,11 +2346,13 @@ async def test_list_tags(client: AsyncClient) -> None:
     assert resp.json()[0]["nombre"] == "VIP"
 
 
+
 @pytest.mark.asyncio
 async def test_create_tag(client: AsyncClient) -> None:
     resp = await client.post("/crm/tags", headers=_headers(), json={"nombre": "Nuevo"})
     assert resp.status_code == 201
     assert resp.json()["nombre"] == "Nuevo"
+
 
 
 @pytest.mark.asyncio
@@ -2332,11 +2374,13 @@ async def test_create_and_delete_tagging(client: AsyncClient) -> None:
     assert del_resp.status_code == 204
 
 
+
 @pytest.mark.asyncio
 async def test_list_products(client: AsyncClient) -> None:
     resp = await client.get("/crm/productos", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()[0]["codigo"] == "SKU-1"
+
 
 
 @pytest.mark.asyncio
@@ -2350,6 +2394,7 @@ async def test_create_product(client: AsyncClient) -> None:
     assert resp.json()["codigo"] == "SKU-2"
 
 
+
 @pytest.mark.asyncio
 async def test_list_quotes(client: AsyncClient) -> None:
     resp = await client.get("/crm/cotizaciones", headers=_headers())
@@ -2357,11 +2402,13 @@ async def test_list_quotes(client: AsyncClient) -> None:
     assert resp.json()
 
 
+
 @pytest.mark.asyncio
 async def test_create_quote(client: AsyncClient) -> None:
     resp = await client.post("/crm/cotizaciones", headers=_headers(), json={})
     assert resp.status_code == 201
     assert resp.json()["estatus"] == "borrador"
+
 
 
 @pytest.mark.asyncio
@@ -2373,6 +2420,7 @@ async def test_list_quote_items(client: AsyncClient) -> None:
     )
     assert resp.status_code == 200
     assert resp.json()[0]["cotizacion_id"] == str(cotizacion_id)
+
 
 
 @pytest.mark.asyncio
@@ -2392,6 +2440,7 @@ async def test_create_quote_item(client: AsyncClient) -> None:
     assert resp.json()["descripcion"] == "Servicio"
 
 
+
 @pytest.mark.asyncio
 async def test_create_quote_item_mismatch(client: AsyncClient) -> None:
     cotizacion_id = uuid.uuid4()
@@ -2406,11 +2455,13 @@ async def test_create_quote_item_mismatch(client: AsyncClient) -> None:
     assert resp.status_code == 400
 
 
+
 @pytest.mark.asyncio
 async def test_list_campaigns(client: AsyncClient) -> None:
     resp = await client.get("/crm/campanas", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()[0]["nombre"] == "Campaña"
+
 
 
 @pytest.mark.asyncio
@@ -2420,11 +2471,13 @@ async def test_create_campaign(client: AsyncClient) -> None:
     assert resp.json()["nombre"] == "Nueva"
 
 
+
 @pytest.mark.asyncio
 async def test_list_leads(client: AsyncClient) -> None:
     resp = await client.get("/crm/leads", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()
+
 
 
 @pytest.mark.asyncio
@@ -2434,12 +2487,14 @@ async def test_create_lead(client: AsyncClient) -> None:
     assert resp.json()["origen"] == "ads"
 
 
+
 @pytest.mark.asyncio
 async def test_list_lead_events(client: AsyncClient) -> None:
     lead_id = uuid.uuid4()
     resp = await client.get(f"/crm/leads/{lead_id}/eventos", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()[0]["lead_id"] == str(lead_id)
+
 
 
 @pytest.mark.asyncio
@@ -2451,12 +2506,14 @@ async def test_create_lead_event(client: AsyncClient) -> None:
     assert resp.json()["tipo"] == "click"
 
 
+
 @pytest.mark.asyncio
 async def test_create_lead_event_mismatch(client: AsyncClient) -> None:
     lead_id = uuid.uuid4()
     body = {"lead_id": str(uuid.uuid4()), "tipo": "click"}
     resp = await client.post(f"/crm/leads/{lead_id}/eventos", headers=_headers(), json=body)
     assert resp.status_code == 400
+
 
 
 @pytest.mark.asyncio
@@ -2466,12 +2523,14 @@ async def test_list_notes(client: AsyncClient) -> None:
     assert resp.json()
 
 
+
 @pytest.mark.asyncio
 async def test_list_notes_by_activity(client: AsyncClient) -> None:
     activity_id = uuid.uuid4()
     resp = await client.get(f"/crm/notas?actividad_id={activity_id}", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()[0]["actividad_id"] == str(activity_id)
+
 
 
 @pytest.mark.asyncio
@@ -2484,6 +2543,7 @@ async def test_create_note(client: AsyncClient) -> None:
     resp = await client.post("/crm/notas", headers=_headers(), json=body)
     assert resp.status_code == 201
     assert resp.json()["texto"] == "Seguimiento interno"
+
 
 
 @pytest.mark.asyncio
@@ -2500,6 +2560,7 @@ async def test_create_note_with_activity_id(client: AsyncClient) -> None:
     assert resp.json()["actividad_id"] == str(activity_id)
 
 
+
 @pytest.mark.asyncio
 async def test_update_activity(client: AsyncClient) -> None:
     activity_id = uuid.uuid4()
@@ -2514,6 +2575,7 @@ async def test_update_activity(client: AsyncClient) -> None:
     assert data["prioridad"] == "alta"
 
 
+
 @pytest.mark.asyncio
 async def test_complete_activity(client: AsyncClient) -> None:
     activity_id = uuid.uuid4()
@@ -2522,6 +2584,7 @@ async def test_complete_activity(client: AsyncClient) -> None:
     data = resp.json()
     assert data["estado"] == "completada"
     assert data["completado_en"] is not None
+
 
 
 @pytest.mark.asyncio
@@ -2534,8 +2597,65 @@ async def test_cancel_activity(client: AsyncClient) -> None:
     assert data["cancelado_en"] is not None
 
 
+
 @pytest.mark.asyncio
 async def test_list_audit_logs(client: AsyncClient) -> None:
     resp = await client.get("/crm/audit_logs", headers=_headers())
     assert resp.status_code == 200
     assert resp.json()
+
+
+
+@pytest.mark.asyncio
+async def test_contactar_prospectos_allows_300_ids() -> None:
+    prospecto_ids = [str(uuid.uuid4()) for _ in range(300)]
+
+    payload = crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids})
+
+    assert len(payload.prospecto_ids or []) == 300
+
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids + [str(uuid.uuid4())]})
+
+@pytest.mark.asyncio
+async def test_prospect_lookup_batches_allow_300_ids() -> None:
+    prospecto_ids = [str(uuid.uuid4()) for _ in range(300)]
+    over_limit_ids = prospecto_ids + [str(uuid.uuid4())]
+
+    phone_payload = crm_routes.ProspectoLookupPayload.model_validate({"prospecto_ids": prospecto_ids})
+    email_payload = crm_routes.ProspectoEmailLookupPayload.model_validate({"prospecto_ids": prospecto_ids})
+    website_payload = crm_routes.ProspectoWebsiteLookupPayload.model_validate({"prospecto_ids": prospecto_ids})
+
+    assert len(phone_payload.prospecto_ids) == 300
+    assert len(email_payload.prospecto_ids) == 300
+    assert len(website_payload.prospecto_ids) == 300
+
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoLookupPayload.model_validate({"prospecto_ids": over_limit_ids})
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoEmailLookupPayload.model_validate({"prospecto_ids": over_limit_ids})
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoWebsiteLookupPayload.model_validate({"prospecto_ids": over_limit_ids})
+
+
+@pytest.mark.asyncio
+async def test_prospect_full_lookup_and_checklist_batches_allow_300_ids() -> None:
+    prospecto_ids = [str(uuid.uuid4()) for _ in range(300)]
+    over_limit_ids = prospecto_ids + [str(uuid.uuid4())]
+
+    full_payload = crm_routes.ProspectoFullLookupPayload.model_validate({"prospecto_ids": prospecto_ids})
+    checklist_lookup = crm_routes.ProspectoChecklistLookupPayload.model_validate({"limit": 300})
+    scraper_payload = crm_routes.ProspectoChecklistScraperPayload.model_validate({"prospecto_ids": prospecto_ids, "limit": 300})
+
+    assert len(full_payload.prospecto_ids) == 300
+    assert checklist_lookup.limit == 300
+    assert scraper_payload.limit == 300
+    assert len(scraper_payload.prospecto_ids or []) == 300
+
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoFullLookupPayload.model_validate({"prospecto_ids": over_limit_ids})
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoChecklistLookupPayload.model_validate({"limit": 301})
+    with pytest.raises(crm_routes.ValidationError):
+        crm_routes.ProspectoChecklistScraperPayload.model_validate({"prospecto_ids": over_limit_ids, "limit": 300})
+

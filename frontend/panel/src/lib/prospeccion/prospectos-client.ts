@@ -545,8 +545,8 @@ export type ProspectoManualInput = {
 
 export type ProspectoUpdateInput = Partial<ProspectoManualInput>
 
-export const PROSPECTO_IDS_MAX_BATCH = 200
-export const PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION = 100
+export const PROSPECTO_IDS_MAX_BATCH = 300
+export const PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION = 300
 
 /**
  * Build an absolute URL when the code runs on the client, otherwise fall back to env origin.
