@@ -94,7 +94,7 @@ const NAVIGATION: {
       children: [
         { title: "Embudo", url: "/embudo", icon: IconFilter, permission: "pipeline.view" },
         { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },
-        { title: "Empresas", url: "/crm", icon: IconBuilding, permission: "clientes.view" },
+        { title: "Empresas", url: "/empresas", icon: IconBuilding, permission: "clientes.view" },
         { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
         { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
         { title: "Actividades", url: "/crm/actividades", icon: IconActivity, permission: "activities.view" },

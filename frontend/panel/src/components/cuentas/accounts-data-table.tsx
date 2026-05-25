@@ -85,7 +85,7 @@ function AccountRowActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem asChild>
-          <Link href={`/cuentas/${encodeURIComponent(accountId)}?edit=1`}>
+          <Link href={`/empresas/${encodeURIComponent(accountId)}?edit=1`}>
             <IconPencil className="mr-2 size-4" />
             Editar
           </Link>
@@ -146,7 +146,7 @@ function AccountRowDetails(row: DataTableRow) {
           {accountId ? (
             <div className="flex flex-wrap gap-2 pt-2">
               <Button asChild size="sm">
-                <Link href={`/cuentas/${encodeURIComponent(accountId)}`}>
+                <Link href={`/empresas/${encodeURIComponent(accountId)}`}>
                   <IconArrowRight className="mr-2 size-4" />
                   Abrir ficha
                 </Link>

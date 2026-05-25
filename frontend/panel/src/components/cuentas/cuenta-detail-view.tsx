@@ -399,7 +399,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       setMergeResults([]);
       setMergeTargetId("");
       if (body.target_cuenta_id) {
-        router.replace(`/cuentas/${encodeURIComponent(body.target_cuenta_id)}`);
+        router.replace(`/empresas/${encodeURIComponent(body.target_cuenta_id)}`);
       } else {
         void loadData();
       }
@@ -537,7 +537,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       }
       toast.success("Empresa eliminada.");
       setDeleteOpen(false);
-      router.push("/crm");
+      router.push("/empresas");
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo eliminar la empresa.";
@@ -613,7 +613,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       <div className="mx-auto max-w-6xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <Button asChild variant="outline">
-            <Link href="/crm">
+            <Link href="/empresas">
               <IconArrowLeft className="mr-2 size-4" />
               Volver
             </Link>
@@ -638,7 +638,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             Editar
           </Button>
           <Button asChild variant="outline">
-            <Link href="/crm">
+            <Link href="/empresas">
               <IconArrowLeft className="mr-2 size-4" />
               Volver al listado
             </Link>
@@ -703,7 +703,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           </CardHeader>
           <CardContent className="grid gap-3">
             <Button asChild variant="outline" className="justify-start">
-              <Link href="/crm">
+              <Link href="/empresas">
                 <IconBuilding className="mr-2 size-4" />
                 Volver al listado
               </Link>
