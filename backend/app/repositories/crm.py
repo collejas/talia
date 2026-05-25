@@ -10357,29 +10357,6 @@ class CRMRepository:
     ) -> dict[str, Any]:
         return await self.personas_resumen(usuario_token=usuario_token)
 
-    async def personas_timeline(
-        self,
-        *,
-        usuario_token: str,
-    ) -> list[dict[str, Any]]:
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/panel_contactos_timeline",
-            token=usuario_token,
-            json={},
-        )
-        data = resp.json()
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en personas_timeline: {data!r}")
-        return data
-
-    async def contactos_timeline(
-        self,
-        *,
-        usuario_token: str,
-    ) -> list[dict[str, Any]]:
-        return await self.personas_timeline(usuario_token=usuario_token)
-
     async def personas_list(
         self,
         *,

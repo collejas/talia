@@ -1,5 +1,4 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { ContactChartArea } from "@/components/contactos/chart-area"
 import { ContactSectionCards } from "@/components/contactos/section-cards"
 import { ContactsDataTable } from "@/components/contactos/contacts-data-table"
 import { SessionRecovery } from "@/components/session-recovery"
@@ -26,9 +25,6 @@ export default async function Page() {
           </div>
         </div>
       ) : null}
-      <div className="px-4 lg:px-6">
-        <ContactChartArea data={contactosData.chart} />
-      </div>
       <div className="px-4 lg:px-6">
         <ContactsDataTable data={contactosData.table} />
       </div>

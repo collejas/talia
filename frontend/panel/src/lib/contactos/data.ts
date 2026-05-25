@@ -13,13 +13,6 @@ type CrmContactSummary = {
   ultimo?: string | null;
 };
 
-type CrmContactTimelineRow = {
-  bucket_date: string;
-  nuevos: number;
-  completos: number;
-  webchat: number;
-};
-
 type CrmContactListRow = {
   contacto_id: string;
   codigo_contacto: string | null;
@@ -63,13 +56,6 @@ export type ContactCards = {
   ultimo?: string | null;
 };
 
-export type ContactChartPoint = {
-  date: string;
-  nuevos: number;
-  completos: number;
-  webchat: number;
-};
-
 export type ContactTableRow = {
   id: number;
   header: string;
@@ -83,7 +69,6 @@ export type ContactTableRow = {
 
 export type ContactosPayload = {
   cards: ContactCards;
-  chart: ContactChartPoint[];
   table: ContactTableRow[];
   totalRows: number;
   errors: string[];
@@ -92,9 +77,8 @@ export type ContactosPayload = {
 const DEFAULT_LIMIT = 200;
 
 export async function loadContactosData(): Promise<ContactosPayload> {
-  const [resumen, timeline, listado] = await Promise.all([
+  const [resumen, listado] = await Promise.all([
     callCrmApi<CrmContactSummary>("/crm/contacts/summary"),
-    callCrmApi<CrmContactTimelineRow[]>("/crm/contacts/timeline"),
     callCrmApi<CrmContactListRow[]>("/crm/contacts/list", {
       searchParams: {
         limit: String(DEFAULT_LIMIT),
@@ -104,11 +88,9 @@ export async function loadContactosData(): Promise<ContactosPayload> {
 
   const errors: string[] = [];
   if (!resumen.ok) errors.push(resumen.error);
-  if (!timeline.ok) errors.push(timeline.error);
   if (!listado.ok) errors.push(listado.error);
 
   const cards = mapCards(resumen.ok ? resumen.data : undefined);
-  const chart = mapChart(timeline.ok ? timeline.data : undefined);
   const table = mapTable(listado.ok ? listado.data : undefined);
   const totalRows =
     listado.ok && Array.isArray(listado.data) && listado.data.length
@@ -117,7 +99,6 @@ export async function loadContactosData(): Promise<ContactosPayload> {
 
   return {
     cards,
-    chart,
     table,
     totalRows,
     errors: Array.from(new Set(errors)),
@@ -135,16 +116,6 @@ function mapCards(payload?: CrmContactSummary): ContactCards {
     propietarios: payload?.propietarios ?? 0,
     ultimo: payload?.ultimo ?? null,
   };
-}
-
-function mapChart(payload?: CrmContactTimelineRow[] | null): ContactChartPoint[] {
-  if (!payload || !payload.length) return [];
-  return payload.map((row) => ({
-    date: row.bucket_date,
-    nuevos: row.nuevos ?? 0,
-    completos: row.completos ?? 0,
-    webchat: row.webchat ?? 0,
-  }));
 }
 
 function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {

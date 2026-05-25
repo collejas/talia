@@ -18713,31 +18713,6 @@ async def get_personas_summary(
     return CRMPersonaSummary.model_validate(row.model_dump())
 
 
-@router.get("/contacts/timeline", response_model=list[CRMPersonaTimelineEntry])
-async def get_personas_timeline_legacy(
-    *,
-    repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("contacts.read")),
-    user_token: str = Depends(require_user_token),
-) -> list[CRMPersonaTimelineEntry]:
-    try:
-        rows = await repo.personas_timeline(usuario_token=user_token)
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMPersonaTimelineEntry.model_validate(row) for row in rows]
-
-
-@router.get("/personas/timeline", response_model=list[CRMPersonaTimelineEntry])
-async def get_personas_timeline(
-    *,
-    repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("contacts.read")),
-    user_token: str = Depends(require_user_token),
-) -> list[CRMPersonaTimelineEntry]:
-    rows = await get_personas_timeline_legacy(repo=repo, _=_, user_token=user_token)
-    return [CRMPersonaTimelineEntry.model_validate(row.model_dump()) for row in rows]
-
-
 @router.get("/contacts/list", response_model=list[CRMPersonaListRow])
 async def get_personas_list_legacy(
     *,
