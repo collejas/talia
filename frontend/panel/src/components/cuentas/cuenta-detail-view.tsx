@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -811,13 +811,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Fusionar empresa</DialogTitle>
+            <DialogDescription>
+              Busca la empresa destino. La fuente quedará archivada con trazabilidad de merge.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold">Fusionar empresa</h2>
-              <p className="text-sm text-muted-foreground">
-                Busca la empresa destino. La fuente quedará archivada con trazabilidad de merge.
-              </p>
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="merge-target-account">Buscar empresa destino</Label>
               <Input
@@ -893,13 +893,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Editar empresa</DialogTitle>
+            <DialogDescription>
+              Actualiza los datos principales sin tocar el código de empresa.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-5">
-            <div>
-              <h2 className="text-lg font-semibold">Editar empresa</h2>
-              <p className="text-sm text-muted-foreground">
-                Actualiza los datos principales sin tocar el código de empresa.
-              </p>
-            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
