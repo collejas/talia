@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { callCrmApi } from "@/lib/api/crm"
 
@@ -65,7 +66,20 @@ function makeDefaultReceptionNumber(): string {
   ].join("")
 }
 
-export default async function ComprasPage() {
+const COMPRAS_VIEWS = ["resumen", "almacenes", "proveedores", "ordenes", "inventario", "recepciones"] as const
+type ComprasView = (typeof COMPRAS_VIEWS)[number]
+
+type ComprasPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default async function ComprasPage({ searchParams }: ComprasPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const vistaParam = resolvedSearchParams.vista
+  const requestedView = typeof vistaParam === "string" ? vistaParam : Array.isArray(vistaParam) ? vistaParam[0] : "resumen"
+  const activeView: ComprasView = COMPRAS_VIEWS.includes(requestedView as ComprasView)
+    ? (requestedView as ComprasView)
+    : "resumen"
   const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
@@ -102,8 +116,17 @@ export default async function ComprasPage() {
   ].join("")
   const defaultOrderEmissionIso = new Date().toISOString()
 
+  const views: Array<{ value: ComprasView; label: string }> = [
+    { value: "resumen", label: "Resumen" },
+    { value: "almacenes", label: "Almacenes" },
+    { value: "proveedores", label: "Proveedores" },
+    { value: "ordenes", label: "Órdenes" },
+    { value: "inventario", label: "Inventario" },
+    { value: "recepciones", label: "Recepciones" },
+  ]
+
   return (
-    <AppViewLayout title="Compras · Compras e inventario">
+    <AppViewLayout title="Compras">
       <div className="space-y-6 px-4 py-6 lg:px-6">
         <header className="space-y-1">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Operación</p>
@@ -112,6 +135,23 @@ export default async function ComprasPage() {
             Captura almacenes y recepciones con una experiencia simple, visual y sin campos técnicos expuestos al usuario.
           </p>
         </header>
+
+        <div className="flex flex-wrap gap-2 rounded-2xl border bg-background p-2 shadow-sm">
+          {views.map((view) => {
+            const isActive = view.value === activeView
+            return (
+              <Link
+                key={view.value}
+                href={`/compras?vista=${view.value}`}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                  isActive ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {view.label}
+              </Link>
+            )
+          })}
+        </div>
 
         <ComprasWorkspace
           almacenes={almacenes}
@@ -131,6 +171,7 @@ export default async function ComprasPage() {
           defaultReceptionNumber={makeDefaultReceptionNumber()}
           defaultOrderFolio={defaultOrderFolio}
           defaultOrderEmissionIso={defaultOrderEmissionIso}
+          activeView={activeView}
         />
       </div>
     </AppViewLayout>

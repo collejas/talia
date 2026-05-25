@@ -48,6 +48,7 @@ type ComprasWorkspaceProps = {
   defaultReceptionNumber: string
   defaultOrderFolio: string
   defaultOrderEmissionIso: string
+  activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "inventario" | "recepciones"
 }
 
 type ReceptionLine = {
@@ -300,6 +301,7 @@ export function ComprasWorkspace({
   defaultReceptionNumber,
   defaultOrderFolio,
   defaultOrderEmissionIso,
+  activeView,
 }: ComprasWorkspaceProps) {
   const openOrders = useMemo(
     () =>
@@ -742,8 +744,16 @@ export function ComprasWorkspace({
     setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
   }
 
+  const showResumen = activeView === "resumen"
+  const showAlmacenes = activeView === "almacenes"
+  const showProveedores = activeView === "proveedores"
+  const showOrdenes = activeView === "ordenes"
+  const showInventario = activeView === "inventario"
+  const showRecepciones = activeView === "recepciones"
+
   return (
     <div className="grid gap-4 xl:grid-cols-3">
+      {showAlmacenes ? (
       <Card>
         <CardHeader>
           <CardTitle>Alta rápida de almacén</CardTitle>
@@ -893,7 +903,9 @@ export function ComprasWorkspace({
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showProveedores ? (
       <Card>
         <CardHeader>
           <CardTitle>Alta rápida de proveedor</CardTitle>
@@ -1018,7 +1030,9 @@ export function ComprasWorkspace({
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showOrdenes ? (
       <Card className="xl:col-span-2">
         <CardHeader>
           <CardTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</CardTitle>
@@ -2007,7 +2021,9 @@ export function ComprasWorkspace({
           </form>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showRecepciones ? (
       <Card className="xl:col-span-2">
         <CardHeader>
           <CardTitle>Registrar recepción</CardTitle>
@@ -2225,7 +2241,9 @@ export function ComprasWorkspace({
           </form>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showResumen ? (
       <Card>
         <CardHeader>
           <CardTitle>Alta visual</CardTitle>
@@ -2252,7 +2270,9 @@ export function ComprasWorkspace({
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showInventario ? (
       <Card>
         <CardHeader>
           <CardTitle>Ajuste manual de inventario</CardTitle>
@@ -2363,7 +2383,9 @@ export function ComprasWorkspace({
           </form>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showInventario ? (
       <Card className="xl:col-span-3">
         <CardHeader>
           <CardTitle>Existencias por almacén</CardTitle>
@@ -2464,7 +2486,9 @@ export function ComprasWorkspace({
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showOrdenes ? (
       <Card className="xl:col-span-3">
         <CardHeader>
           <CardTitle>Órdenes de compra recientes</CardTitle>
@@ -2571,7 +2595,9 @@ export function ComprasWorkspace({
           </Table>
         </CardContent>
       </Card>
+      ) : null}
 
+      {showRecepciones ? (
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle>Recepciones recientes</CardTitle>
@@ -2615,6 +2641,7 @@ export function ComprasWorkspace({
           </Table>
         </CardContent>
       </Card>
+      ) : null}
     </div>
   )
 }
