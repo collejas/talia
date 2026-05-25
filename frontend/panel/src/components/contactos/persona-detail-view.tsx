@@ -336,7 +336,6 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
                     </div>
                     <Separator className="my-3" />
                     <div className="grid gap-2 text-sm md:grid-cols-2">
-                      <SummaryItem label="Rol de la relación" value={getText(relation.rol_en_cuenta)} />
                       <SummaryItem label="Principal" value={getBoolean(relation.es_contacto_principal) ? "Sí" : "No"} />
                       <SummaryItem label="Facturación" value={getBoolean(relation.es_contacto_facturacion) ? "Sí" : "No"} />
                       <SummaryItem label="Representante legal" value={getBoolean(relation.es_representante_legal) ? "Sí" : "No"} />

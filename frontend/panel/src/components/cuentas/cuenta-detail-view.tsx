@@ -783,7 +783,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                     <div className="grid gap-1">
                       <div className="font-medium">{personName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {relation.rol_en_cuenta || "contacto_principal"} · {personSubtitle}
+                        {personSubtitle}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {relation.activo ? "Activa" : "Inactiva"} · {relation.puesto || "Sin puesto"}
