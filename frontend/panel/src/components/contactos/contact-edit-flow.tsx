@@ -1473,32 +1473,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
           {state.loading ? <p className="text-xs text-muted-foreground">Cargando...</p> : null}
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
 
-          <FormSection title="Resumen actual" description="Lo guardado y lo que quedará visible en este contacto.">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
-                <div className="mt-2 text-sm font-medium">{fullName || "Sin nombre"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164, state.persona.estado], "Sin medio de contacto")}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
-                <div className="mt-2 text-sm font-medium">{businessSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{georeferenceSummary}</div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos fiscales</div>
-                <div className="mt-2 text-sm font-medium">{fiscalSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{state.cuenta.rfc || "Sin RFC"}</div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dirección</div>
-                <div className="mt-2 text-sm font-medium">{locationSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{domicileSummary}</div>
-              </div>
-            </div>
-          </FormSection>
 
           <FormSection title="Tipo de registro">
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">

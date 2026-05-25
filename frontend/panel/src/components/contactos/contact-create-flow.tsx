@@ -1689,29 +1689,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             ) : null}
           </FormSection>
 
-          <FormSection title="Resumen" description="Resumen de lo que se va a crear o vincular.">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
-                <div className="mt-2 text-sm font-medium">{review.persona || "Sin nombre completo todavía"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164], "Sin medio de contacto")}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
-                <div className="mt-2 text-sm font-medium">{review.cuenta || "No se creará empresa"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{state.mode.replaceAll("_", " ")}</div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vinculación</div>
-                <div className="mt-2 text-sm font-medium">{review.relacion || "Sin relación"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {state.mode === "solo_persona" ? "No aplica" : state.relacion.es_contacto_principal ? "Contacto principal" : "Relación secundaria"}
-                </div>
-              </div>
-            </div>
-          </FormSection>
 
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
 

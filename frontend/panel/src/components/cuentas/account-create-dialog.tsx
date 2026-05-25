@@ -441,190 +441,168 @@ export function AccountCreateDialog({ onCreated }: Props) {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-muted/40 to-background p-4 shadow-sm">
-                <div className="text-sm font-semibold">Resumen</div>
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-xl border border-border/60 bg-background p-3">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
-                    <div className="mt-1 text-sm font-semibold">{form.nombre_comercial || form.razon_social || "Pendiente"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {[form.codigo_cuenta, form.rfc, form.sitio_web].filter(Boolean).join(" · ") || "Sin datos"}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-background p-3">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
-                    <div className="mt-1 text-sm font-semibold">
-                      {[form.telefono_principal_e164, form.telefono_secundario_e164].filter(Boolean).join(" · ") || "Sin teléfono"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{form.tipo_persona || "Sin tipo de persona"}</div>
-                  </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Datos opcionales</div>
+                  <div className="text-xs text-muted-foreground">Datos fiscales, ubicación y domicilio.</div>
                 </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setExtrasOpen((prev) => !prev)}>
+                  {extrasOpen ? "Ocultar extras" : "Completar extras"}
+                </Button>
               </div>
-
-              <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold">Datos opcionales</div>
-                    <div className="text-xs text-muted-foreground">Datos fiscales, ubicación y domicilio.</div>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setExtrasOpen((prev) => !prev)}>
-                    {extrasOpen ? "Ocultar extras" : "Completar extras"}
-                  </Button>
-                </div>
-                {extrasOpen ? (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-uso-cfdi">Uso CFDI</Label>
-                      <ContactCatalogSelect
-                        value={form.uso_cfdi}
-                        onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
-                        options={usoCfdiOptions}
-                        placeholder="Selecciona un uso CFDI"
-                        emptyLabel="Configura los usos CFDI en Extras"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-forma-pago">Forma de pago</Label>
-                      <ContactCatalogSelect
-                        value={form.forma_pago}
-                        onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
-                        options={formaPagoOptions}
-                        placeholder="Selecciona una forma de pago"
-                        emptyLabel="Configura las formas de pago en Extras"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-metodo-pago">Método de pago</Label>
-                      <ContactCatalogSelect
-                        value={form.metodo_pago}
-                        onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
-                        options={metodoPagoOptions}
-                        placeholder="Selecciona un método de pago"
-                        emptyLabel="Configura los métodos de pago en Extras"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-email-facturacion">Email de facturación</Label>
-                      <Input
-                        id="create-email-facturacion"
-                        value={form.email_facturacion}
-                        onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
-                      />
-                    </div>
-                    <GeoLocationSelects
-                      countryCode={form.pais}
-                      stateCode={form.clave_entidad}
-                      municipalityCode={form.clave_municipio}
-                      onCountryChange={(countryCode) => {
-                        const nextCountry = countryCode || "MX";
-                        setForm((prev) => ({
-                          ...prev,
-                          pais: nextCountry,
-                          ...(nextCountry !== "MX"
-                            ? {
-                                clave_entidad: "",
-                                entidad: "",
-                                clave_municipio: "",
-                                municipio: "",
-                              }
-                            : {}),
-                        }));
-                      }}
-                      onStateChange={(stateCode, stateName) => {
-                        setForm((prev) => ({
-                          ...prev,
-                          clave_entidad: stateCode,
-                          entidad: stateName,
-                          clave_municipio: "",
-                          municipio: "",
-                        }));
-                      }}
-                      onMunicipalityChange={(municipalityCode, municipalityName) => {
-                        setForm((prev) => ({
-                          ...prev,
-                          clave_municipio: municipalityCode,
-                          municipio: municipalityName,
-                        }));
-                      }}
+              {extrasOpen ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-uso-cfdi">Uso CFDI</Label>
+                    <ContactCatalogSelect
+                      value={form.uso_cfdi}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
+                      options={usoCfdiOptions}
+                      placeholder="Selecciona un uso CFDI"
+                      emptyLabel="Configura los usos CFDI en Extras"
                     />
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-clave-localidad">Clave de localidad</Label>
-                      <Input id="create-clave-localidad" value={form.clave_localidad} onChange={(event) => setForm((prev) => ({ ...prev, clave_localidad: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-localidad">Localidad</Label>
-                      <Input id="create-localidad" value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-tipo-vialidad">Tipo de vialidad</Label>
-                      <Input id="create-tipo-vialidad" value={form.tipo_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-nombre-vialidad">Nombre de vialidad</Label>
-                      <Input id="create-nombre-vialidad" value={form.nombre_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-numero-exterior">Número exterior</Label>
-                      <Input id="create-numero-exterior" value={form.numero_exterior} onChange={(event) => setForm((prev) => ({ ...prev, numero_exterior: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-letra-exterior">Letra exterior</Label>
-                      <Input id="create-letra-exterior" value={form.letra_exterior} onChange={(event) => setForm((prev) => ({ ...prev, letra_exterior: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-edificio">Edificio</Label>
-                      <Input id="create-edificio" value={form.edificio} onChange={(event) => setForm((prev) => ({ ...prev, edificio: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-edificio-piso">Piso / nivel</Label>
-                      <Input id="create-edificio-piso" value={form.edificio_piso} onChange={(event) => setForm((prev) => ({ ...prev, edificio_piso: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-numero-interior">Número interior</Label>
-                      <Input id="create-numero-interior" value={form.numero_interior} onChange={(event) => setForm((prev) => ({ ...prev, numero_interior: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-letra-interior">Letra interior</Label>
-                      <Input id="create-letra-interior" value={form.letra_interior} onChange={(event) => setForm((prev) => ({ ...prev, letra_interior: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-tipo-asentamiento">Tipo de asentamiento</Label>
-                      <Input id="create-tipo-asentamiento" value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-nombre-asentamiento">Nombre de asentamiento</Label>
-                      <Input id="create-nombre-asentamiento" value={form.nombre_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-tipo-centro-comercial">Tipo de centro comercial</Label>
-                      <Input id="create-tipo-centro-comercial" value={form.tipo_centro_comercial} onChange={(event) => setForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-corredor-industrial">Corredor industrial</Label>
-                      <Input id="create-corredor-industrial" value={form.corredor_industrial} onChange={(event) => setForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-numero-local">Número local</Label>
-                      <Input id="create-numero-local" value={form.numero_local} onChange={(event) => setForm((prev) => ({ ...prev, numero_local: event.target.value }))} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="create-codigo-postal">Código postal</Label>
-                      <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
-                    </div>
                   </div>
-                ) : null}
-              </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-forma-pago">Forma de pago</Label>
+                    <ContactCatalogSelect
+                      value={form.forma_pago}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
+                      options={formaPagoOptions}
+                      placeholder="Selecciona una forma de pago"
+                      emptyLabel="Configura las formas de pago en Extras"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-metodo-pago">Método de pago</Label>
+                    <ContactCatalogSelect
+                      value={form.metodo_pago}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
+                      options={metodoPagoOptions}
+                      placeholder="Selecciona un método de pago"
+                      emptyLabel="Configura los métodos de pago en Extras"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-email-facturacion">Email de facturación</Label>
+                    <Input
+                      id="create-email-facturacion"
+                      value={form.email_facturacion}
+                      onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
+                    />
+                  </div>
+                  <GeoLocationSelects
+                    countryCode={form.pais}
+                    stateCode={form.clave_entidad}
+                    municipalityCode={form.clave_municipio}
+                    onCountryChange={(countryCode) => {
+                      const nextCountry = countryCode || "MX";
+                      setForm((prev) => ({
+                        ...prev,
+                        pais: nextCountry,
+                        ...(nextCountry !== "MX"
+                          ? {
+                              clave_entidad: "",
+                              entidad: "",
+                              clave_municipio: "",
+                              municipio: "",
+                            }
+                          : {}),
+                      }));
+                    }}
+                    onStateChange={(stateCode, stateName) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        clave_entidad: stateCode,
+                        entidad: stateName,
+                        clave_municipio: "",
+                        municipio: "",
+                      }));
+                    }}
+                    onMunicipalityChange={(municipalityCode, municipalityName) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        clave_municipio: municipalityCode,
+                        municipio: municipalityName,
+                      }));
+                    }}
+                  />
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-clave-localidad">Clave de localidad</Label>
+                    <Input id="create-clave-localidad" value={form.clave_localidad} onChange={(event) => setForm((prev) => ({ ...prev, clave_localidad: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-localidad">Localidad</Label>
+                    <Input id="create-localidad" value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-tipo-vialidad">Tipo de vialidad</Label>
+                    <Input id="create-tipo-vialidad" value={form.tipo_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-nombre-vialidad">Nombre de vialidad</Label>
+                    <Input id="create-nombre-vialidad" value={form.nombre_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-numero-exterior">Número exterior</Label>
+                    <Input id="create-numero-exterior" value={form.numero_exterior} onChange={(event) => setForm((prev) => ({ ...prev, numero_exterior: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-letra-exterior">Letra exterior</Label>
+                    <Input id="create-letra-exterior" value={form.letra_exterior} onChange={(event) => setForm((prev) => ({ ...prev, letra_exterior: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-edificio">Edificio</Label>
+                    <Input id="create-edificio" value={form.edificio} onChange={(event) => setForm((prev) => ({ ...prev, edificio: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-edificio-piso">Piso / nivel</Label>
+                    <Input id="create-edificio-piso" value={form.edificio_piso} onChange={(event) => setForm((prev) => ({ ...prev, edificio_piso: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-numero-interior">Número interior</Label>
+                    <Input id="create-numero-interior" value={form.numero_interior} onChange={(event) => setForm((prev) => ({ ...prev, numero_interior: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-letra-interior">Letra interior</Label>
+                    <Input id="create-letra-interior" value={form.letra_interior} onChange={(event) => setForm((prev) => ({ ...prev, letra_interior: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-tipo-asentamiento">Tipo de asentamiento</Label>
+                    <Input id="create-tipo-asentamiento" value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-nombre-asentamiento">Nombre de asentamiento</Label>
+                    <Input id="create-nombre-asentamiento" value={form.nombre_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-tipo-centro-comercial">Tipo de centro comercial</Label>
+                    <Input id="create-tipo-centro-comercial" value={form.tipo_centro_comercial} onChange={(event) => setForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-corredor-industrial">Corredor industrial</Label>
+                    <Input id="create-corredor-industrial" value={form.corredor_industrial} onChange={(event) => setForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-numero-local">Número local</Label>
+                    <Input id="create-numero-local" value={form.numero_local} onChange={(event) => setForm((prev) => ({ ...prev, numero_local: event.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="create-codigo-postal">Código postal</Label>
+                    <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
-                  Cancelar
-                </Button>
-                <Button type="button" onClick={() => void handleCreateConfirm()} disabled={submitting}>
-                  {submitting ? "Creando..." : "Crear empresa"}
-                </Button>
-              </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={() => void handleCreateConfirm()} disabled={submitting}>
+                {submitting ? "Creando..." : "Crear empresa"}
+              </Button>
             </div>
           </div>
         </DialogContent>
