@@ -237,6 +237,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, editForm.uso_cfdi),
     [editForm.uso_cfdi, tenantCatalogs.usoCfdiOptions],
   );
+  const tamanoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.tamanoOptions, editForm.tamano),
+    [editForm.tamano, tenantCatalogs.tamanoOptions],
+  );
   const formaPagoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.formaPagoOptions, editForm.forma_pago),
     [editForm.forma_pago, tenantCatalogs.formaPagoOptions],
@@ -993,10 +997,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-tamano">Tamaño</Label>
-                <Input
-                  id="edit-tamano"
+                <ContactCatalogSelect
                   value={editForm.tamano}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, tamano: event.target.value }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, tamano: value }))}
+                  options={tamanoOptions}
+                  placeholder="Selecciona un tamaño"
+                  disabled={tamanoOptions.length === 0}
+                  emptyLabel="Configura tamaños en Extras"
                 />
               </div>
               <div className="grid gap-2">

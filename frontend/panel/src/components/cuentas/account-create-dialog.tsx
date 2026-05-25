@@ -188,6 +188,10 @@ export function AccountCreateDialog({ onCreated }: Props) {
     () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, form.tipo_establecimiento),
     [form.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
   );
+  const tamanoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.tamanoOptions, form.tamano),
+    [form.tamano, tenantCatalogs.tamanoOptions],
+  );
   const usoCfdiOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, form.uso_cfdi),
     [form.uso_cfdi, tenantCatalogs.usoCfdiOptions],
@@ -441,10 +445,16 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     ) : null}
                   </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="create-tamano">Tamaño</Label>
-                  <Input id="create-tamano" value={form.tamano} onChange={(event) => setForm((prev) => ({ ...prev, tamano: event.target.value }))} />
-                </div>
+                <Field label="Tamaño">
+                  <ContactCatalogSelect
+                    value={form.tamano}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, tamano: value }))}
+                    options={tamanoOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un tamaño"}
+                    disabled={tamanoOptions.length === 0}
+                    emptyLabel="Configura tamaños en Extras"
+                  />
+                </Field>
                 <div className="grid gap-2">
                   <Label htmlFor="create-sitio-web">Sitio web</Label>
                   <Input id="create-sitio-web" value={form.sitio_web} onChange={(event) => setForm((prev) => ({ ...prev, sitio_web: event.target.value }))} />

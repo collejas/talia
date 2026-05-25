@@ -329,6 +329,7 @@ function buildExtrasCatalogsJson(
   puestos: string[],
   rolesDecision: string[],
   clasificacionesNegocio: string[],
+  tamanos: string[],
   usosCfdi: string[],
   formasPago: string[],
   metodosPago: string[],
@@ -339,6 +340,7 @@ function buildExtrasCatalogsJson(
   extrasCatalogos.puesto = puestos
   extrasCatalogos.rol_decision = rolesDecision
   extrasCatalogos.clasificacion_negocio = clasificacionesNegocio
+  extrasCatalogos.tamano = tamanos
   extrasCatalogos.uso_cfdi = usosCfdi
   extrasCatalogos.forma_pago = formasPago
   extrasCatalogos.metodo_pago = metodosPago
@@ -377,6 +379,12 @@ export function TenantExtrasCatalogsForm({
       .filter(Boolean)
       .join("\n"),
   )
+  const [tamanos, setTamanos] = useState(() =>
+    (Array.isArray(catalogosConfig?.tamano) ? catalogosConfig?.tamano : Array.isArray(catalogosConfig?.tamanos) ? catalogosConfig?.tamanos : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
   const [usosCfdi, setUsosCfdi] = useState(() =>
     (Array.isArray(catalogosConfig?.uso_cfdi) ? catalogosConfig?.uso_cfdi : [])
       .map((item) => (typeof item === "string" ? item : ""))
@@ -402,11 +410,12 @@ export function TenantExtrasCatalogsForm({
         parseListLines(puestos),
         parseListLines(rolesDecision),
         parseListLines(clasificacionesNegocio),
+        parseListLines(tamanos),
         parseListLines(usosCfdi),
         parseListLines(formasPago),
         parseListLines(metodosPago),
       ),
-    [config, puestos, rolesDecision, clasificacionesNegocio, usosCfdi, formasPago, metodosPago],
+    [config, puestos, rolesDecision, clasificacionesNegocio, tamanos, usosCfdi, formasPago, metodosPago],
   )
 
   return (
@@ -453,6 +462,17 @@ export function TenantExtrasCatalogsForm({
           <p className="text-xs text-muted-foreground">
             Un valor por línea. Se mostrará como select al capturar empresa o persona física con actividad empresarial.
           </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="extras_tamanos">Tamaño</Label>
+          <Textarea
+            id="extras_tamanos"
+            value={tamanos}
+            onChange={(event) => setTamanos(event.target.value)}
+            placeholder={"Micro\nPequeña\nMediana\nGrande"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select en empresa y persona física con actividad empresarial.</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="extras_usos_cfdi">Uso CFDI</Label>

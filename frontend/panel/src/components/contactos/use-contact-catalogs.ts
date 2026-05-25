@@ -44,6 +44,7 @@ export function useTenantContactCatalogs() {
   const [puestoOptions, setPuestoOptions] = useState<ContactCatalogOption[]>([])
   const [rolDecisionOptions, setRolDecisionOptions] = useState<ContactCatalogOption[]>([])
   const [clasificacionNegocioOptions, setClasificacionNegocioOptions] = useState<ContactCatalogOption[]>([])
+  const [tamanoOptions, setTamanoOptions] = useState<ContactCatalogOption[]>([])
   const [usoCfdiOptions, setUsoCfdiOptions] = useState<ContactCatalogOption[]>([])
   const [formaPagoOptions, setFormaPagoOptions] = useState<ContactCatalogOption[]>([])
   const [metodoPagoOptions, setMetodoPagoOptions] = useState<ContactCatalogOption[]>([])
@@ -64,6 +65,7 @@ export function useTenantContactCatalogs() {
           setPuestoOptions([])
           setRolDecisionOptions([])
           setClasificacionNegocioOptions([])
+          setTamanoOptions([])
           setUsoCfdiOptions([])
           setFormaPagoOptions([])
           setMetodoPagoOptions([])
@@ -79,12 +81,14 @@ export function useTenantContactCatalogs() {
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null
         const clasificacionesRaw =
           catalogos ? catalogos.clasificacion_negocio ?? catalogos.clasificaciones_negocio : null
+        const tamanosRaw = catalogos ? catalogos.tamano ?? catalogos.tamanos : null
         const usoCfdiRaw = catalogos ? catalogos.uso_cfdi ?? catalogos.usos_cfdi : null
         const formaPagoRaw = catalogos ? catalogos.forma_pago ?? catalogos.formas_pago : null
         const metodoPagoRaw = catalogos ? catalogos.metodo_pago ?? catalogos.metodos_pago : null
         setPuestoOptions(valuesToOptions(normalizeValues(puestosRaw)))
         setRolDecisionOptions(valuesToOptions(normalizeValues(rolesRaw)))
         setClasificacionNegocioOptions(valuesToOptions(normalizeValues(clasificacionesRaw)))
+        setTamanoOptions(valuesToOptions(normalizeValues(tamanosRaw)))
         setUsoCfdiOptions(valuesToOptions(normalizeValues(usoCfdiRaw)))
         setFormaPagoOptions(valuesToOptions(normalizeValues(formaPagoRaw)))
         setMetodoPagoOptions(valuesToOptions(normalizeValues(metodoPagoRaw)))
@@ -93,6 +97,7 @@ export function useTenantContactCatalogs() {
         setPuestoOptions([])
         setRolDecisionOptions([])
         setClasificacionNegocioOptions([])
+        setTamanoOptions([])
         setUsoCfdiOptions([])
         setFormaPagoOptions([])
         setMetodoPagoOptions([])
@@ -113,11 +118,12 @@ export function useTenantContactCatalogs() {
       puestoOptions,
       rolDecisionOptions,
       clasificacionNegocioOptions,
+      tamanoOptions,
       usoCfdiOptions,
       formaPagoOptions,
       metodoPagoOptions,
       loading,
     }),
-    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
+    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions, tamanoOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
   )
 }

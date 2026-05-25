@@ -985,6 +985,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, state.cuenta.tipo_establecimiento),
     [state.cuenta.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
   );
+  const tamanoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.tamanoOptions, state.cuenta.tamano),
+    [state.cuenta.tamano, tenantCatalogs.tamanoOptions],
+  );
   const usoCfdiOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, state.extras.uso_cfdi),
     [state.extras.uso_cfdi, tenantCatalogs.usoCfdiOptions],
@@ -1516,7 +1520,14 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   </div>
                 </Field>
                 <Field label="Tamaño">
-                  <Input value={state.cuenta.tamano} onChange={(e) => dispatch({ type: "cuenta/set", field: "tamano", value: e.target.value })} />
+                  <ContactCatalogSelect
+                    value={state.cuenta.tamano}
+                    onValueChange={(value) => dispatch({ type: "cuenta/set", field: "tamano", value })}
+                    options={tamanoOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un tamaño"}
+                    disabled={tamanoOptions.length === 0}
+                    emptyLabel="Configura tamaños en Extras"
+                  />
                 </Field>
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
