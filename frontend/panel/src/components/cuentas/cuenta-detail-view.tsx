@@ -1277,13 +1277,14 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
       <Dialog open={addRelationOpen} onOpenChange={setAddRelationOpen}>
         <DialogContent className="max-w-2xl">
+          <DialogHeader className="space-y-2">
+            <DialogTitle>Vincular persona</DialogTitle>
+            <DialogDescription>
+              Busca una persona y asígnala a esta cuenta sin pasar por el flujo legacy.
+            </DialogDescription>
+          </DialogHeader>
+
           <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold">Vincular persona</h2>
-              <p className="text-sm text-muted-foreground">
-                Busca una persona y asígnala a esta cuenta sin pasar por el flujo legacy.
-              </p>
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="relation-person-search">Buscar persona</Label>
               <Input
