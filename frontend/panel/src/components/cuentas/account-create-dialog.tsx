@@ -66,6 +66,10 @@ const PHONE_LINE_TYPE_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
 ] as const;
 
+function getTodayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function Field({
   label,
   children,
@@ -472,7 +476,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-fecha">Fecha de incorporación</Label>
-                  <Input id="create-fecha" type="date" value={form.fecha_incorporacion} onChange={(event) => setForm((prev) => ({ ...prev, fecha_incorporacion: event.target.value }))} />
+                  <Input id="create-fecha" type="date" value={form.fecha_incorporacion || getTodayIsoDate()} readOnly disabled className="bg-muted" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-latitud">Latitud</Label>

@@ -324,6 +324,10 @@ const PHONE_LINE_TYPE_OPTIONS = [
   { value: "fijo", label: "Fijo" },
 ] as const;
 
+function getTodayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const INITIAL_STATE: ContactCreateState = {
   mode: "solo_persona",
   persona: {
@@ -1548,7 +1552,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   </div>
                 </Field>
                 <Field label="Fecha de incorporación">
-                  <Input type="date" value={state.cuenta.fecha_incorporacion} onChange={(e) => dispatch({ type: "cuenta/set", field: "fecha_incorporacion", value: e.target.value })} />
+                  <Input type="date" value={state.cuenta.fecha_incorporacion || getTodayIsoDate()} readOnly disabled className="bg-muted" />
                 </Field>
                 <Field label="Latitud">
                   <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />

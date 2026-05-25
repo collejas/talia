@@ -68,6 +68,9 @@ type AccountEditForm = {
   industria: string;
   tamano: string;
   tipo_establecimiento: string;
+  fecha_incorporacion: string;
+  latitud: string;
+  longitud: string;
   uso_cfdi: string;
   metodo_pago: string;
   forma_pago: string;
@@ -101,6 +104,16 @@ function getText(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "—";
+}
+
+function toDateInputValue(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const direct = raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 function Field({
@@ -228,6 +241,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     corredor_industrial: "",
     numero_local: "",
     codigo_postal: "",
+    fecha_incorporacion: "",
+    latitud: "",
+    longitud: "",
     notas: "",
     necesidad_proposito: "",
   });
@@ -447,6 +463,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       industria: getInputText(detail?.industria),
       tamano: getInputText(detail?.tamano),
       tipo_establecimiento: getInputText(detail?.tipo_establecimiento),
+      fecha_incorporacion: getInputText(detail?.fecha_incorporacion),
+      latitud: getInputText(detail?.latitud),
+      longitud: getInputText(detail?.longitud),
       uso_cfdi: getInputText(detail?.uso_cfdi),
       metodo_pago: getInputText(detail?.metodo_pago),
       forma_pago: getInputText(detail?.forma_pago),
@@ -1006,15 +1025,39 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   emptyLabel="Configura tamaños en Extras"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-tipo-establecimiento">Clasificación de negocio</Label>
-                <Input
-                  id="edit-tipo-establecimiento"
-                  value={editForm.tipo_establecimiento}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_establecimiento: event.target.value }))}
-                />
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-tipo-establecimiento">Clasificación de negocio</Label>
+                  <Input
+                    id="edit-tipo-establecimiento"
+                    value={editForm.tipo_establecimiento}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_establecimiento: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-fecha-incorporacion">Fecha de incorporación</Label>
+                  <Input id="edit-fecha-incorporacion" type="date" value={toDateInputValue(editForm.fecha_incorporacion)} readOnly disabled className="bg-muted" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-latitud">Latitud</Label>
+                  <Input
+                    id="edit-latitud"
+                    type="number"
+                    step="any"
+                    value={editForm.latitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-longitud">Longitud</Label>
+                  <Input
+                    id="edit-longitud"
+                    type="number"
+                    step="any"
+                    value={editForm.longitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
+                  />
+                </div>
               </div>
-            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Uso CFDI">
@@ -1053,10 +1096,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </Field>
             </div>
 
-            <div className="grid gap-4">
-              <GeoLocationSelects
-                countryCode={editForm.pais || "MX"}
-                stateCode={editForm.clave_entidad}
+              <div className="grid gap-4">
+                <GeoLocationSelects
+                  countryCode={editForm.pais || "MX"}
+                  stateCode={editForm.clave_entidad}
                 municipalityCode={editForm.clave_municipio}
                 onCountryChange={(countryCode) =>
                   setEditForm((prev) => ({
@@ -1217,16 +1260,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 value={editForm.notas}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, notas: event.target.value }))}
                 rows={4}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="edit-necesidad-proposito">Necesidad / propósito</Label>
-              <Textarea
-                id="edit-necesidad-proposito"
-                value={editForm.necesidad_proposito}
-                onChange={(event) => setEditForm((prev) => ({ ...prev, necesidad_proposito: event.target.value }))}
-                rows={3}
               />
             </div>
 

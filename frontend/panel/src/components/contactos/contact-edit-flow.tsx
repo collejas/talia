@@ -479,6 +479,16 @@ function formatSummaryLine(parts: Array<string | null | undefined>, fallback: st
   return cleaned.length ? cleaned.join(" · ") : fallback;
 }
 
+function toDateInputValue(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const direct = raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
 function inferMode(detail: ContactDetail): CreateMode {
   const cuentaId = readString(detail, "cuenta_id").trim();
   if (!cuentaId) return "solo_persona";
@@ -1884,7 +1894,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   </div>
                 </Field>
                 <Field label="Fecha de incorporación">
-                  <Input type="date" value={state.cuenta.fecha_incorporacion} onChange={(e) => dispatch({ type: "cuenta/set", field: "fecha_incorporacion", value: e.target.value })} />
+                  <Input type="date" value={toDateInputValue(state.cuenta.fecha_incorporacion)} readOnly disabled className="bg-muted" />
                 </Field>
                 <Field label="Latitud">
                   <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />

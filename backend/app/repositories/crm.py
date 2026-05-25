@@ -1486,6 +1486,7 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
         if not str(body.get("codigo_cuenta") or "").strip():
             body["codigo_cuenta"] = await self.preview_account_code(
                 organizacion_id=organizacion_id,
@@ -1518,7 +1519,7 @@ class CRMRepository:
                 raise CRMRepositoryError("cuenta_no_encontrada")
             return existing
 
-        body = {key: value for key, value in payload.items() if key != "codigo_cuenta"}
+        body = {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{account_id}",
