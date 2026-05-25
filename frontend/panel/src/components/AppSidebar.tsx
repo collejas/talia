@@ -34,6 +34,7 @@ import {
   IconNotes,
   IconBrandWhatsapp,
   IconShieldCheck,
+  IconShoppingCart,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -103,6 +104,12 @@ const NAVIGATION: {
         { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones", icon: IconBrandWhatsapp, permission: "conv.assign" },
         { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
       ],
+    },
+    {
+      title: "Compras e inventario",
+      url: "/compras",
+      icon: IconShoppingCart,
+      permission: "settings.manage",
     },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
@@ -185,7 +192,6 @@ const NAVIGATION: {
         },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },
-        
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },

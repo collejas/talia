@@ -2,7 +2,7 @@ import Link from "next/link"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { IconBuildingFactory, IconHierarchy, IconBox, IconPhoto, IconActivity, IconTruck, IconRulerMeasure } from "@tabler/icons-react"
+import { IconBuildingFactory, IconHierarchy, IconBox, IconPhoto, IconActivity, IconRulerMeasure } from "@tabler/icons-react"
 
 const SECTIONS = [
   {
@@ -40,12 +40,6 @@ const SECTIONS = [
     description: "Monitorea uso de embeddings, fallback y tendencia diaria para controlar costo.",
     url: "/settings/productos/observabilidad",
     icon: IconActivity,
-  },
-  {
-    title: "Compras e inventario",
-    description: "Gestiona almacenes, recepciones y el flujo de entrada de stock a la operación.",
-    url: "/settings/compras",
-    icon: IconTruck,
   },
 ]
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { callCrmApi } from "@/lib/api/crm"
 
-const SETTINGS_PATH = "/settings/compras"
+const SETTINGS_PATH = "/compras"
 
 function parseBoolean(value: FormDataEntryValue | null, fallback = false): boolean {
   if (typeof value !== "string") return fallback
