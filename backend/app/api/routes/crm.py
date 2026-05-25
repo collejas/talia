@@ -11858,11 +11858,27 @@ class CRMInventarioAjusteCreate(BaseModel):
 class CRMOrdenCompraCreateItem(BaseModel):
     catalog_item_id: UUID
     proveedor_item_id: UUID | None = None
+    numero_partida: int | None = Field(default=None, ge=1)
+    descripcion: str | None = Field(default=None, max_length=4000)
+    marca: str | None = Field(default=None, max_length=200)
+    modelo: str | None = Field(default=None, max_length=200)
+    fabricante: str | None = Field(default=None, max_length=200)
+    pais_origen_codigo_iso2: str | None = Field(default=None, min_length=2, max_length=2)
+    pais_procedencia_codigo_iso2: str | None = Field(default=None, min_length=2, max_length=2)
+    fraccion_arancelaria: str | None = Field(default=None, max_length=30)
+    hs_code: str | None = Field(default=None, max_length=30)
+    nico: str | None = Field(default=None, max_length=30)
     cantidad_solicitada: Annotated[float, Field(gt=0)]
     unidad: str | None = Field(default=None, max_length=80)
     costo_unitario: Annotated[float, Field(ge=0)]
     descuento_porcentaje: float | None = Field(default=None, ge=0, le=100)
     impuestos: float | None = Field(default=0, ge=0)
+    peso_neto: float | None = Field(default=None, ge=0)
+    peso_bruto: float | None = Field(default=None, ge=0)
+    volumen_cbm: float | None = Field(default=None, ge=0)
+    lote: str | None = Field(default=None, max_length=120)
+    numero_serie: str | None = Field(default=None, max_length=120)
+    fecha_caducidad: date | None = None
     observaciones: str | None = Field(default=None, max_length=1000)
 
 
@@ -11873,11 +11889,19 @@ class CRMOrdenCompraCreate(BaseModel):
     fecha_emision: datetime | None = None
     fecha_entrega_estimada: date | None = None
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    tipo_operacion: Literal["nacional", "internacional"] = "nacional"
+    tipo_cambio_referencia: float | None = Field(default=None, ge=0)
+    vigencia_hasta: date | None = None
+    proforma_referencia: str | None = Field(default=None, max_length=120)
     solicitado_por_usuario_id: UUID | None = None
     aprobado_por_usuario_id: UUID | None = None
     referencia_externa: str | None = Field(default=None, max_length=120)
     observaciones: str | None = Field(default=None, max_length=2000)
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
+    condiciones_comerciales: dict[str, Any] | None = None
+    condiciones_pago: dict[str, Any] | None = None
+    logistica: dict[str, Any] | None = None
+    documentos: list[dict[str, Any]] | None = None
     items: list[CRMOrdenCompraCreateItem] = Field(min_length=1)
 
 
@@ -11888,11 +11912,19 @@ class CRMOrdenCompraUpdate(BaseModel):
     fecha_emision: datetime | None = None
     fecha_entrega_estimada: date | None = None
     moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    tipo_operacion: Literal["nacional", "internacional"] | None = None
+    tipo_cambio_referencia: float | None = Field(default=None, ge=0)
+    vigencia_hasta: date | None = None
+    proforma_referencia: str | None = Field(default=None, max_length=120)
     solicitado_por_usuario_id: UUID | None = None
     aprobado_por_usuario_id: UUID | None = None
     referencia_externa: str | None = Field(default=None, max_length=120)
     observaciones: str | None = Field(default=None, max_length=2000)
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
+    condiciones_comerciales: dict[str, Any] | None = None
+    condiciones_pago: dict[str, Any] | None = None
+    logistica: dict[str, Any] | None = None
+    documentos: list[dict[str, Any]] | None = None
     estado: str | None = None
     items: list[CRMOrdenCompraCreateItem] | None = None
 
@@ -11962,6 +11994,16 @@ class CRMOrdenCompraRecepcionItem(BaseModel):
     orden_compra_id: UUID
     catalog_item_id: UUID
     proveedor_item_id: UUID | None = None
+    numero_partida: int | None = None
+    descripcion: str | None = None
+    marca: str | None = None
+    modelo: str | None = None
+    fabricante: str | None = None
+    pais_origen_codigo_iso2: str | None = None
+    pais_procedencia_codigo_iso2: str | None = None
+    fraccion_arancelaria: str | None = None
+    hs_code: str | None = None
+    nico: str | None = None
     cantidad_solicitada: float
     cantidad_recibida: float
     unidad: str
@@ -11970,6 +12012,12 @@ class CRMOrdenCompraRecepcionItem(BaseModel):
     subtotal: float
     impuestos: float
     total: float
+    peso_neto: float | None = None
+    peso_bruto: float | None = None
+    volumen_cbm: float | None = None
+    lote: str | None = None
+    numero_serie: str | None = None
+    fecha_caducidad: date | None = None
     observaciones: str | None = None
     creado_en: datetime
     actualizado_en: datetime
@@ -11988,6 +12036,10 @@ class CRMOrdenCompraRecepcion(BaseModel):
     fecha_emision: datetime
     fecha_entrega_estimada: date | None = None
     moneda: str
+    tipo_operacion: str | None = None
+    tipo_cambio_referencia: float | None = None
+    vigencia_hasta: date | None = None
+    proforma_referencia: str | None = None
     subtotal: float
     descuento_total: float
     impuestos_total: float
@@ -12006,6 +12058,10 @@ class CRMOrdenCompraRecepcion(BaseModel):
     almacen: dict[str, Any] | None = None
     enviada_por_usuario: dict[str, Any] | None = None
     aprobado_por_usuario: dict[str, Any] | None = None
+    condiciones_comerciales: dict[str, Any] | None = None
+    condiciones_pago: dict[str, Any] | None = None
+    logistica: dict[str, Any] | None = None
+    documentos: list[dict[str, Any]] = Field(default_factory=list)
     items: list[CRMOrdenCompraRecepcionItem] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)
@@ -15096,6 +15152,58 @@ async def list_compras_proveedores(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMProveedor.model_validate(row) for row in rows]
+
+
+@router.get("/compras/catalogos/incoterms", response_model=list[dict[str, Any]])
+async def list_compras_incoterms(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[dict[str, Any]]:
+    try:
+        return await repo.list_incoterms(limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/compras/catalogos/monedas", response_model=list[dict[str, Any]])
+async def list_compras_monedas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[dict[str, Any]]:
+    try:
+        return await repo.list_monedas(limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/compras/catalogos/modos-transporte", response_model=list[dict[str, Any]])
+async def list_compras_modos_transporte(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[dict[str, Any]]:
+    try:
+        return await repo.list_modos_transporte(limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/compras/catalogos/paises", response_model=list[dict[str, Any]])
+async def list_compras_paises(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 250,
+) -> list[dict[str, Any]]:
+    try:
+        return await repo.list_geo_paises(limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/compras/existencias", response_model=list[CRMInventarioExistencia])

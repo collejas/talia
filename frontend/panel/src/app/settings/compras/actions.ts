@@ -56,18 +56,42 @@ function getFormDataTextArray(formData: FormData, name: string): string[] {
     .map((value) => (typeof value === "string" ? value : ""))
 }
 
+function getFormDataOptionalTextArray(formData: FormData, name: string): Array<string | null> {
+  return formData.getAll(name).map((value) => parseOptionalText(value))
+}
+
 function getFormDataNumberArray(formData: FormData, name: string, field: string): number[] {
   return formData.getAll(name).map((value) => parseRequiredNumber(value, field))
+}
+
+function getFormDataOptionalNumberArray(formData: FormData, name: string): Array<number | null> {
+  return formData.getAll(name).map((value) => parseOptionalNumber(value))
 }
 
 function zipOrderItems(formData: FormData): Record<string, unknown>[] {
   const catalogItemIds = getFormDataTextArray(formData, "items_catalog_item_id")
   const proveedorItemIds = getFormDataTextArray(formData, "items_proveedor_item_id")
+  const numeroPartidas = getFormDataOptionalNumberArray(formData, "items_numero_partida")
   const cantidades = getFormDataNumberArray(formData, "items_cantidad_solicitada", "items_cantidad_solicitada")
   const unidades = getFormDataTextArray(formData, "items_unidad")
   const costos = getFormDataNumberArray(formData, "items_costo_unitario", "items_costo_unitario")
   const descuentos = formData.getAll("items_descuento_porcentaje").map((value) => parseOptionalNumber(value))
   const impuestos = formData.getAll("items_impuestos").map((value) => parseOptionalNumber(value) ?? 0)
+  const descripciones = getFormDataOptionalTextArray(formData, "items_descripcion")
+  const marcas = getFormDataOptionalTextArray(formData, "items_marca")
+  const modelos = getFormDataOptionalTextArray(formData, "items_modelo")
+  const fabricantes = getFormDataOptionalTextArray(formData, "items_fabricante")
+  const paisOrigenes = getFormDataOptionalTextArray(formData, "items_pais_origen_codigo_iso2")
+  const paisProcedencias = getFormDataOptionalTextArray(formData, "items_pais_procedencia_codigo_iso2")
+  const fracciones = getFormDataOptionalTextArray(formData, "items_fraccion_arancelaria")
+  const hsCodes = getFormDataOptionalTextArray(formData, "items_hs_code")
+  const nicos = getFormDataOptionalTextArray(formData, "items_nico")
+  const pesosNetos = getFormDataOptionalNumberArray(formData, "items_peso_neto")
+  const pesosBrutos = getFormDataOptionalNumberArray(formData, "items_peso_bruto")
+  const volumenes = getFormDataOptionalNumberArray(formData, "items_volumen_cbm")
+  const lotes = getFormDataOptionalTextArray(formData, "items_lote")
+  const numerosSerie = getFormDataOptionalTextArray(formData, "items_numero_serie")
+  const fechasCaducidad = getFormDataOptionalTextArray(formData, "items_fecha_caducidad")
   const observaciones = getFormDataTextArray(formData, "items_observaciones")
 
   const expectedLength = catalogItemIds.length
@@ -75,7 +99,31 @@ function zipOrderItems(formData: FormData): Record<string, unknown>[] {
     throw new Error("items_required")
   }
 
-  const arrays = [proveedorItemIds, cantidades, unidades, costos, descuentos, impuestos, observaciones]
+  const arrays = [
+    proveedorItemIds,
+    numeroPartidas,
+    cantidades,
+    unidades,
+    costos,
+    descuentos,
+    impuestos,
+    descripciones,
+    marcas,
+    modelos,
+    fabricantes,
+    paisOrigenes,
+    paisProcedencias,
+    fracciones,
+    hsCodes,
+    nicos,
+    pesosNetos,
+    pesosBrutos,
+    volumenes,
+    lotes,
+    numerosSerie,
+    fechasCaducidad,
+    observaciones,
+  ]
   if (arrays.some((array) => array.length !== expectedLength)) {
     throw new Error("items_mismatch")
   }
@@ -83,13 +131,117 @@ function zipOrderItems(formData: FormData): Record<string, unknown>[] {
   return catalogItemIds.map((catalogItemId, index) => ({
     catalog_item_id: parseRequiredText(catalogItemId, "items_catalog_item_id"),
     proveedor_item_id: parseOptionalText(proveedorItemIds[index]),
+    numero_partida: numeroPartidas[index],
+    descripcion: descripciones[index],
+    marca: marcas[index],
+    modelo: modelos[index],
+    fabricante: fabricantes[index],
+    pais_origen_codigo_iso2: paisOrigenes[index],
+    pais_procedencia_codigo_iso2: paisProcedencias[index],
+    fraccion_arancelaria: fracciones[index],
+    hs_code: hsCodes[index],
+    nico: nicos[index],
     cantidad_solicitada: cantidades[index],
     unidad: parseOptionalText(unidades[index]) ?? "unidad",
     costo_unitario: costos[index],
     descuento_porcentaje: descuentos[index],
     impuestos: impuestos[index],
+    peso_neto: pesosNetos[index],
+    peso_bruto: pesosBrutos[index],
+    volumen_cbm: volumenes[index],
+    lote: lotes[index],
+    numero_serie: numerosSerie[index],
+    fecha_caducidad: parseOptionalText(fechasCaducidad[index]),
     observaciones: parseOptionalText(observaciones[index]),
   }))
+}
+
+function hasAnyValue(values: Array<unknown>): boolean {
+  return values.some((value) => {
+    if (typeof value === "string") {
+      return value.trim().length > 0
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value)
+    }
+    return Boolean(value)
+  })
+}
+
+function buildOrdenCompraCondicionesComerciales(formData: FormData, tipoOperacion: string): Record<string, unknown> | null {
+  const payload = {
+    incoterm_codigo: parseOptionalText(formData.get("condiciones_comerciales_incoterm_codigo")),
+    incoterm_version: parseOptionalText(formData.get("condiciones_comerciales_incoterm_version")),
+    lugar_incoterm: parseOptionalText(formData.get("condiciones_comerciales_lugar_incoterm")),
+    responsable_flete: parseOptionalText(formData.get("condiciones_comerciales_responsable_flete")),
+    responsable_seguro: parseOptionalText(formData.get("condiciones_comerciales_responsable_seguro")),
+    responsable_despacho_exportacion: parseOptionalText(formData.get("condiciones_comerciales_responsable_despacho_exportacion")),
+    responsable_despacho_importacion: parseOptionalText(formData.get("condiciones_comerciales_responsable_despacho_importacion")),
+    responsable_impuestos_importacion: parseOptionalText(formData.get("condiciones_comerciales_responsable_impuestos_importacion")),
+    permite_embarques_parciales: parseBoolean(formData.get("condiciones_comerciales_permite_embarques_parciales"), true),
+    permite_transbordos: parseBoolean(formData.get("condiciones_comerciales_permite_transbordos"), true),
+    gastos_bancarios: parseOptionalText(formData.get("condiciones_comerciales_gastos_bancarios")),
+    observaciones: parseOptionalText(formData.get("condiciones_comerciales_observaciones")),
+  }
+  return tipoOperacion === "internacional" || hasAnyValue(Object.values(payload)) ? payload : null
+}
+
+function buildOrdenCompraCondicionesPago(formData: FormData, fallbackCurrency: string): Record<string, unknown> | null {
+  const payload = {
+    forma_pago: parseOptionalText(formData.get("condiciones_pago_forma_pago")),
+    moneda_pago: parseOptionalText(formData.get("condiciones_pago_moneda_pago")) || fallbackCurrency,
+    porcentaje_anticipo: parseOptionalNumber(formData.get("condiciones_pago_porcentaje_anticipo")),
+    monto_anticipo: parseOptionalNumber(formData.get("condiciones_pago_monto_anticipo")),
+    porcentaje_saldo: parseOptionalNumber(formData.get("condiciones_pago_porcentaje_saldo")),
+    monto_saldo: parseOptionalNumber(formData.get("condiciones_pago_monto_saldo")),
+    momento_pago_saldo: parseOptionalText(formData.get("condiciones_pago_momento_pago_saldo")),
+    dias_credito: parseOptionalNumber(formData.get("condiciones_pago_dias_credito")),
+    comisiones_bancarias: parseOptionalText(formData.get("condiciones_pago_comisiones_bancarias")),
+    observaciones: parseOptionalText(formData.get("condiciones_pago_observaciones")),
+  }
+  const hasMeaningfulValue = hasAnyValue([
+    payload.forma_pago,
+    payload.porcentaje_anticipo,
+    payload.monto_anticipo,
+    payload.porcentaje_saldo,
+    payload.monto_saldo,
+    payload.momento_pago_saldo,
+    payload.dias_credito,
+    payload.comisiones_bancarias,
+    payload.observaciones,
+  ])
+  return hasMeaningfulValue ? payload : null
+}
+
+function buildOrdenCompraLogistica(formData: FormData, tipoOperacion: string): Record<string, unknown> | null {
+  const payload = {
+    modo_transporte_codigo: parseOptionalText(formData.get("logistica_modo_transporte_codigo")),
+    fecha_requerida_embarque: parseOptionalText(formData.get("logistica_fecha_requerida_embarque")),
+    fecha_estimada_embarque: parseOptionalText(formData.get("logistica_fecha_estimada_embarque")),
+    fecha_estimada_arribo: parseOptionalText(formData.get("logistica_fecha_estimada_arribo")),
+    puerto_origen: parseOptionalText(formData.get("logistica_puerto_origen")),
+    puerto_destino: parseOptionalText(formData.get("logistica_puerto_destino")),
+    aeropuerto_origen: parseOptionalText(formData.get("logistica_aeropuerto_origen")),
+    aeropuerto_destino: parseOptionalText(formData.get("logistica_aeropuerto_destino")),
+    lugar_entrega_final: parseOptionalText(formData.get("logistica_lugar_entrega_final")),
+    direccion_entrega: parseOptionalText(formData.get("logistica_direccion_entrega")),
+    tipo_embarque: parseOptionalText(formData.get("logistica_tipo_embarque")),
+    tipo_contenedor: parseOptionalText(formData.get("logistica_tipo_contenedor")),
+    forwarder_nombre: parseOptionalText(formData.get("logistica_forwarder_nombre")),
+    numero_booking: parseOptionalText(formData.get("logistica_numero_booking")),
+    numero_bl_awb: parseOptionalText(formData.get("logistica_numero_bl_awb")),
+    tracking: parseOptionalText(formData.get("logistica_tracking")),
+    peso_neto_total: parseOptionalNumber(formData.get("logistica_peso_neto_total")),
+    peso_bruto_total: parseOptionalNumber(formData.get("logistica_peso_bruto_total")),
+    volumen_total_cbm: parseOptionalNumber(formData.get("logistica_volumen_total_cbm")),
+    cantidad_bultos: parseOptionalNumber(formData.get("logistica_cantidad_bultos")),
+    tipo_empaque: parseOptionalText(formData.get("logistica_tipo_empaque")),
+    marcas_embarque: parseOptionalText(formData.get("logistica_marcas_embarque")),
+    requiere_seguro: parseBoolean(formData.get("logistica_requiere_seguro"), false),
+    monto_asegurado: parseOptionalNumber(formData.get("logistica_monto_asegurado")),
+    observaciones: parseOptionalText(formData.get("logistica_observaciones")),
+  }
+  return tipoOperacion === "internacional" || hasAnyValue(Object.values(payload)) ? payload : null
 }
 
 function zipReceptionItems(formData: FormData): Record<string, unknown>[] {
@@ -289,18 +441,27 @@ export async function createInventarioAjusteAction(formData: FormData): Promise<
 
 export async function createOrdenCompraAction(formData: FormData): Promise<void> {
   const items = zipOrderItems(formData)
+  const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
+  const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
   const payload = {
     folio: parseRequiredText(formData.get("folio"), "folio"),
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
     almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
     fecha_emision: parseOptionalText(formData.get("fecha_emision")),
     fecha_entrega_estimada: parseOptionalText(formData.get("fecha_entrega_estimada")),
-    moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    moneda,
+    tipo_operacion: tipoOperacion === "internacional" ? "internacional" : "nacional",
+    tipo_cambio_referencia: parseOptionalNumber(formData.get("tipo_cambio_referencia")),
+    vigencia_hasta: parseOptionalText(formData.get("vigencia_hasta")),
+    proforma_referencia: parseOptionalText(formData.get("proforma_referencia")),
     solicitado_por_usuario_id: parseOptionalText(formData.get("solicitado_por_usuario_id")),
     aprobado_por_usuario_id: parseOptionalText(formData.get("aprobado_por_usuario_id")),
     referencia_externa: parseOptionalText(formData.get("referencia_externa")),
     observaciones: parseOptionalText(formData.get("observaciones")),
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
+    condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
+    condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
+    logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }
 
@@ -316,18 +477,27 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
 
 export async function updateOrdenCompraAction(ordenId: string, formData: FormData): Promise<void> {
   const items = zipOrderItems(formData)
+  const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
+  const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
   const payload = {
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
     almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
     folio: parseRequiredText(formData.get("folio"), "folio"),
     fecha_emision: parseOptionalText(formData.get("fecha_emision")),
     fecha_entrega_estimada: parseOptionalText(formData.get("fecha_entrega_estimada")),
-    moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    moneda,
+    tipo_operacion: tipoOperacion === "internacional" ? "internacional" : "nacional",
+    tipo_cambio_referencia: parseOptionalNumber(formData.get("tipo_cambio_referencia")),
+    vigencia_hasta: parseOptionalText(formData.get("vigencia_hasta")),
+    proforma_referencia: parseOptionalText(formData.get("proforma_referencia")),
     solicitado_por_usuario_id: parseOptionalText(formData.get("solicitado_por_usuario_id")),
     aprobado_por_usuario_id: parseOptionalText(formData.get("aprobado_por_usuario_id")),
     referencia_externa: parseOptionalText(formData.get("referencia_externa")),
     observaciones: parseOptionalText(formData.get("observaciones")),
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
+    condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
+    condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
+    logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }
 

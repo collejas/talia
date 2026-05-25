@@ -5,7 +5,10 @@ import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
 
 import {
   createAlmacenAction,
@@ -34,6 +37,10 @@ type ComprasWorkspaceProps = {
   ordenes: AnyRecord[]
   recepciones: AnyRecord[]
   existencias: AnyRecord[]
+  incoterms: AnyRecord[]
+  monedas: AnyRecord[]
+  modosTransporte: AnyRecord[]
+  paises: AnyRecord[]
   defaultOrderId: string
   defaultWarehouseId: string
   defaultWarehouseCode: string
@@ -60,11 +67,27 @@ type ReceptionLine = {
 type OrderLine = {
   catalog_item_id: string
   proveedor_item_id: string
+  numero_partida: string
   nombre: string
   unidad: string
   cantidad_solicitada: number
   costo_unitario: number
   descuento_porcentaje: string
+  descripcion: string
+  marca: string
+  modelo: string
+  fabricante: string
+  pais_origen_codigo_iso2: string
+  pais_procedencia_codigo_iso2: string
+  fraccion_arancelaria: string
+  hs_code: string
+  nico: string
+  peso_neto: string
+  peso_bruto: string
+  volumen_cbm: string
+  lote: string
+  numero_serie: string
+  fecha_caducidad: string
   observaciones: string
 }
 
@@ -140,6 +163,26 @@ function getAuditLabel(user: unknown, fallback = "Sin registrar"): string {
   return asString(record?.nombre_completo ?? record?.nombre ?? record?.correo, fallback)
 }
 
+function toSelectOptions(
+  records: AnyRecord[],
+  valueKey: string,
+  labelBuilder: (record: AnyRecord) => string,
+): Array<{ value: string; label: string }> {
+  const seen = new Set<string>()
+  return records
+    .map((record) => ({
+      value: asString(record[valueKey], ""),
+      label: labelBuilder(record),
+    }))
+    .filter((option) => {
+      if (!option.value || seen.has(option.value)) {
+        return false
+      }
+      seen.add(option.value)
+      return true
+    })
+}
+
 function buildLinesFromOrder(order: AnyRecord | undefined | null): ReceptionLine[] {
   if (!order || !Array.isArray(order.items)) return []
   return order.items
@@ -176,11 +219,27 @@ function buildOrderLinesFromOrder(order: AnyRecord | undefined | null): OrderLin
       return {
         catalog_item_id: asString(item.catalog_item_id, ""),
         proveedor_item_id: asString(item.proveedor_item_id, ""),
+        numero_partida: asString(item.numero_partida, ""),
         nombre: asString(catalogItem.nombre, "Producto"),
         unidad: asString(item.unidad ?? catalogItem.unidad, "unidad"),
         cantidad_solicitada: asNumber(item.cantidad_solicitada),
         costo_unitario: asNumber(item.costo_unitario),
         descuento_porcentaje: asString(item.descuento_porcentaje, ""),
+        descripcion: asString(item.descripcion, ""),
+        marca: asString(item.marca, ""),
+        modelo: asString(item.modelo, ""),
+        fabricante: asString(item.fabricante, ""),
+        pais_origen_codigo_iso2: asString(item.pais_origen_codigo_iso2, ""),
+        pais_procedencia_codigo_iso2: asString(item.pais_procedencia_codigo_iso2, ""),
+        fraccion_arancelaria: asString(item.fraccion_arancelaria, ""),
+        hs_code: asString(item.hs_code, ""),
+        nico: asString(item.nico, ""),
+        peso_neto: asString(item.peso_neto, ""),
+        peso_bruto: asString(item.peso_bruto, ""),
+        volumen_cbm: asString(item.volumen_cbm, ""),
+        lote: asString(item.lote, ""),
+        numero_serie: asString(item.numero_serie, ""),
+        fecha_caducidad: asString(item.fecha_caducidad, ""),
         observaciones: asString(item.observaciones, ""),
       }
     })
@@ -198,11 +257,27 @@ function createEmptyOrderLine(): OrderLine {
   return {
     catalog_item_id: "",
     proveedor_item_id: "",
+    numero_partida: "",
     nombre: "",
     unidad: "unidad",
     cantidad_solicitada: 1,
     costo_unitario: 0,
     descuento_porcentaje: "",
+    descripcion: "",
+    marca: "",
+    modelo: "",
+    fabricante: "",
+    pais_origen_codigo_iso2: "",
+    pais_procedencia_codigo_iso2: "",
+    fraccion_arancelaria: "",
+    hs_code: "",
+    nico: "",
+    peso_neto: "",
+    peso_bruto: "",
+    volumen_cbm: "",
+    lote: "",
+    numero_serie: "",
+    fecha_caducidad: "",
     observaciones: "",
   }
 }
@@ -214,6 +289,10 @@ export function ComprasWorkspace({
   ordenes,
   recepciones,
   existencias,
+  incoterms,
+  monedas,
+  modosTransporte,
+  paises,
   defaultOrderId,
   defaultWarehouseId,
   defaultWarehouseCode,
@@ -256,11 +335,62 @@ export function ComprasWorkspace({
   const [orderWarehouseId, setOrderWarehouseId] = useState<string>(defaultWarehouseId)
   const [orderEmissionIso, setOrderEmissionIso] = useState(defaultOrderEmissionIso)
   const [orderDueDate, setOrderDueDate] = useState("")
+  const [orderType, setOrderType] = useState<"nacional" | "internacional">("nacional")
   const [orderCurrency, setOrderCurrency] = useState("MXN")
+  const [orderExchangeRate, setOrderExchangeRate] = useState("")
+  const [orderVigenciaHasta, setOrderVigenciaHasta] = useState("")
+  const [orderProformaReferencia, setOrderProformaReferencia] = useState("")
   const [orderReferenceExternal, setOrderReferenceExternal] = useState("")
   const [orderObservations, setOrderObservations] = useState("")
   const [orderInstructions, setOrderInstructions] = useState("")
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
+  const [orderIncotermCodigo, setOrderIncotermCodigo] = useState("")
+  const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
+  const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
+  const [orderResponsableFlete, setOrderResponsableFlete] = useState("")
+  const [orderResponsableSeguro, setOrderResponsableSeguro] = useState("")
+  const [orderResponsableDespachoExportacion, setOrderResponsableDespachoExportacion] = useState("")
+  const [orderResponsableDespachoImportacion, setOrderResponsableDespachoImportacion] = useState("")
+  const [orderResponsableImpuestosImportacion, setOrderResponsableImpuestosImportacion] = useState("")
+  const [orderPermiteEmbarquesParciales, setOrderPermiteEmbarquesParciales] = useState(true)
+  const [orderPermiteTransbordos, setOrderPermiteTransbordos] = useState(true)
+  const [orderGastosBancarios, setOrderGastosBancarios] = useState("")
+  const [orderCondicionesComercialesObservaciones, setOrderCondicionesComercialesObservaciones] = useState("")
+  const [orderFormaPago, setOrderFormaPago] = useState("")
+  const [orderMonedaPago, setOrderMonedaPago] = useState("MXN")
+  const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
+  const [orderMontoAnticipo, setOrderMontoAnticipo] = useState("")
+  const [orderPorcentajeSaldo, setOrderPorcentajeSaldo] = useState("")
+  const [orderMontoSaldo, setOrderMontoSaldo] = useState("")
+  const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
+  const [orderDiasCredito, setOrderDiasCredito] = useState("")
+  const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
+  const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
+  const [orderModoTransporteCodigo, setOrderModoTransporteCodigo] = useState("")
+  const [orderFechaRequeridaEmbarque, setOrderFechaRequeridaEmbarque] = useState("")
+  const [orderFechaEstimadaEmbarque, setOrderFechaEstimadaEmbarque] = useState("")
+  const [orderFechaEstimadaArribo, setOrderFechaEstimadaArribo] = useState("")
+  const [orderPuertoOrigen, setOrderPuertoOrigen] = useState("")
+  const [orderPuertoDestino, setOrderPuertoDestino] = useState("")
+  const [orderAeropuertoOrigen, setOrderAeropuertoOrigen] = useState("")
+  const [orderAeropuertoDestino, setOrderAeropuertoDestino] = useState("")
+  const [orderLugarEntregaFinal, setOrderLugarEntregaFinal] = useState("")
+  const [orderDireccionEntrega, setOrderDireccionEntrega] = useState("")
+  const [orderTipoEmbarque, setOrderTipoEmbarque] = useState("")
+  const [orderTipoContenedor, setOrderTipoContenedor] = useState("")
+  const [orderForwarderNombre, setOrderForwarderNombre] = useState("")
+  const [orderNumeroBooking, setOrderNumeroBooking] = useState("")
+  const [orderNumeroBlAwb, setOrderNumeroBlAwb] = useState("")
+  const [orderTracking, setOrderTracking] = useState("")
+  const [orderPesoNetoTotal, setOrderPesoNetoTotal] = useState("")
+  const [orderPesoBrutoTotal, setOrderPesoBrutoTotal] = useState("")
+  const [orderVolumenTotalCbm, setOrderVolumenTotalCbm] = useState("")
+  const [orderCantidadBultos, setOrderCantidadBultos] = useState("")
+  const [orderTipoEmpaque, setOrderTipoEmpaque] = useState("")
+  const [orderMarcasEmbarque, setOrderMarcasEmbarque] = useState("")
+  const [orderRequiereSeguro, setOrderRequiereSeguro] = useState(false)
+  const [orderMontoAsegurado, setOrderMontoAsegurado] = useState("")
+  const [orderLogisticaObservaciones, setOrderLogisticaObservaciones] = useState("")
   const [adjustmentWarehouseId, setAdjustmentWarehouseId] = useState<string>(defaultWarehouseId)
   const [adjustmentCatalogItemId, setAdjustmentCatalogItemId] = useState<string>(String(catalogItems[0]?.id ?? ""))
   const [adjustmentSentido, setAdjustmentSentido] = useState<"entrada" | "salida">("entrada")
@@ -274,6 +404,7 @@ export function ComprasWorkspace({
   const [warehouseFormActive, setWarehouseFormActive] = useState(true)
   const [warehouseFormPrincipal, setWarehouseFormPrincipal] = useState(!almacenes.length)
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
+  const [expandedOrderLineIndex, setExpandedOrderLineIndex] = useState<number | null>(null)
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
@@ -320,6 +451,22 @@ export function ComprasWorkspace({
       }).length,
     [filteredExistencias],
   )
+  const incotermsOptions = useMemo(
+    () => mergeCatalogOptions(toSelectOptions(incoterms, "codigo", (record) => `${asString(record.codigo)} · ${asString(record.nombre)}`), orderIncotermCodigo),
+    [incoterms, orderIncotermCodigo],
+  )
+  const monedasOptions = useMemo(
+    () => mergeCatalogOptions(toSelectOptions(monedas, "codigo", (record) => `${asString(record.codigo)} · ${asString(record.nombre)}`), orderCurrency),
+    [monedas, orderCurrency],
+  )
+  const modosTransporteOptions = useMemo(
+    () => mergeCatalogOptions(toSelectOptions(modosTransporte, "codigo", (record) => `${asString(record.codigo)} · ${asString(record.nombre)}`), orderModoTransporteCodigo),
+    [modosTransporte, orderModoTransporteCodigo],
+  )
+  const paisesOptions = useMemo(
+    () => mergeCatalogOptions(toSelectOptions(paises, "codigo_iso2", (record) => `${asString(record.codigo_iso2)} · ${asString(record.nombre)}`), ""),
+    [paises],
+  )
 
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
@@ -346,10 +493,12 @@ export function ComprasWorkspace({
     updateOrderLine(index, {
       catalog_item_id: catalogItemId,
       proveedor_item_id: "",
+      numero_partida: orderLines[index]?.numero_partida || String(index + 1),
       nombre: asString(item?.nombre, "Producto"),
       unidad,
       cantidad_solicitada: Number.isFinite(orderLines[index]?.cantidad_solicitada) ? orderLines[index]!.cantidad_solicitada : 1,
       costo_unitario: Number.isFinite(costo) && costo > 0 ? costo : 0,
+      descripcion: orderLines[index]?.descripcion || asString(item?.nombre, "Producto"),
     })
   }
 
@@ -447,10 +596,64 @@ export function ComprasWorkspace({
     setOrderWarehouseId(asString(orden.almacen_destino_id, defaultWarehouseId))
     setOrderEmissionIso(asString(orden.fecha_emision, defaultOrderEmissionIso))
     setOrderDueDate(asString(orden.fecha_entrega_estimada, ""))
+    setOrderType((asString(orden.tipo_operacion, "nacional") as "nacional" | "internacional") || "nacional")
     setOrderCurrency(asString(orden.moneda, "MXN"))
+    setOrderExchangeRate(asString(orden.tipo_cambio_referencia, ""))
+    setOrderVigenciaHasta(asString(orden.vigencia_hasta, ""))
+    setOrderProformaReferencia(asString(orden.proforma_referencia, ""))
     setOrderReferenceExternal(asString(orden.referencia_externa, ""))
     setOrderObservations(asString(orden.observaciones, ""))
     setOrderInstructions(asString(orden.instrucciones_entrega, ""))
+    const comercial = (orden.condiciones_comerciales as AnyRecord | undefined) ?? {}
+    const pago = (orden.condiciones_pago as AnyRecord | undefined) ?? {}
+    const logistica = (orden.logistica as AnyRecord | undefined) ?? {}
+    setOrderIncotermCodigo(asString(comercial.incoterm_codigo, ""))
+    setOrderIncotermVersion(asString(comercial.incoterm_version, "2020"))
+    setOrderLugarIncoterm(asString(comercial.lugar_incoterm, ""))
+    setOrderResponsableFlete(asString(comercial.responsable_flete, ""))
+    setOrderResponsableSeguro(asString(comercial.responsable_seguro, ""))
+    setOrderResponsableDespachoExportacion(asString(comercial.responsable_despacho_exportacion, ""))
+    setOrderResponsableDespachoImportacion(asString(comercial.responsable_despacho_importacion, ""))
+    setOrderResponsableImpuestosImportacion(asString(comercial.responsable_impuestos_importacion, ""))
+    setOrderPermiteEmbarquesParciales(Boolean(comercial.permite_embarques_parciales ?? true))
+    setOrderPermiteTransbordos(Boolean(comercial.permite_transbordos ?? true))
+    setOrderGastosBancarios(asString(comercial.gastos_bancarios, ""))
+    setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
+    setOrderFormaPago(asString(pago.forma_pago, ""))
+    setOrderMonedaPago(asString(pago.moneda_pago, "MXN"))
+    setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
+    setOrderMontoAnticipo(asString(pago.monto_anticipo, ""))
+    setOrderPorcentajeSaldo(asString(pago.porcentaje_saldo, ""))
+    setOrderMontoSaldo(asString(pago.monto_saldo, ""))
+    setOrderMomentoPagoSaldo(asString(pago.momento_pago_saldo, ""))
+    setOrderDiasCredito(asString(pago.dias_credito, ""))
+    setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
+    setOrderCondicionesPagoObservaciones(asString(pago.observaciones, ""))
+    setOrderModoTransporteCodigo(asString(logistica.modo_transporte_codigo, ""))
+    setOrderFechaRequeridaEmbarque(asString(logistica.fecha_requerida_embarque, ""))
+    setOrderFechaEstimadaEmbarque(asString(logistica.fecha_estimada_embarque, ""))
+    setOrderFechaEstimadaArribo(asString(logistica.fecha_estimada_arribo, ""))
+    setOrderPuertoOrigen(asString(logistica.puerto_origen, ""))
+    setOrderPuertoDestino(asString(logistica.puerto_destino, ""))
+    setOrderAeropuertoOrigen(asString(logistica.aeropuerto_origen, ""))
+    setOrderAeropuertoDestino(asString(logistica.aeropuerto_destino, ""))
+    setOrderLugarEntregaFinal(asString(logistica.lugar_entrega_final, ""))
+    setOrderDireccionEntrega(asString(logistica.direccion_entrega, ""))
+    setOrderTipoEmbarque(asString(logistica.tipo_embarque, ""))
+    setOrderTipoContenedor(asString(logistica.tipo_contenedor, ""))
+    setOrderForwarderNombre(asString(logistica.forwarder_nombre, ""))
+    setOrderNumeroBooking(asString(logistica.numero_booking, ""))
+    setOrderNumeroBlAwb(asString(logistica.numero_bl_awb, ""))
+    setOrderTracking(asString(logistica.tracking, ""))
+    setOrderPesoNetoTotal(asString(logistica.peso_neto_total, ""))
+    setOrderPesoBrutoTotal(asString(logistica.peso_bruto_total, ""))
+    setOrderVolumenTotalCbm(asString(logistica.volumen_total_cbm, ""))
+    setOrderCantidadBultos(asString(logistica.cantidad_bultos, ""))
+    setOrderTipoEmpaque(asString(logistica.tipo_empaque, ""))
+    setOrderMarcasEmbarque(asString(logistica.marcas_embarque, ""))
+    setOrderRequiereSeguro(Boolean(logistica.requiere_seguro ?? false))
+    setOrderMontoAsegurado(asString(logistica.monto_asegurado, ""))
+    setOrderLogisticaObservaciones(asString(logistica.observaciones, ""))
     setOrderLines(buildOrderLinesFromOrder(orden))
   }
 
@@ -461,10 +664,61 @@ export function ComprasWorkspace({
     setOrderWarehouseId(defaultWarehouseId)
     setOrderEmissionIso(defaultOrderEmissionIso)
     setOrderDueDate("")
+    setOrderType("nacional")
     setOrderCurrency("MXN")
+    setOrderExchangeRate("")
+    setOrderVigenciaHasta("")
+    setOrderProformaReferencia("")
     setOrderReferenceExternal("")
     setOrderObservations("")
     setOrderInstructions("")
+    setOrderIncotermCodigo("")
+    setOrderIncotermVersion("2020")
+    setOrderLugarIncoterm("")
+    setOrderResponsableFlete("")
+    setOrderResponsableSeguro("")
+    setOrderResponsableDespachoExportacion("")
+    setOrderResponsableDespachoImportacion("")
+    setOrderResponsableImpuestosImportacion("")
+    setOrderPermiteEmbarquesParciales(true)
+    setOrderPermiteTransbordos(true)
+    setOrderGastosBancarios("")
+    setOrderCondicionesComercialesObservaciones("")
+    setOrderFormaPago("")
+    setOrderMonedaPago("MXN")
+    setOrderPorcentajeAnticipo("")
+    setOrderMontoAnticipo("")
+    setOrderPorcentajeSaldo("")
+    setOrderMontoSaldo("")
+    setOrderMomentoPagoSaldo("")
+    setOrderDiasCredito("")
+    setOrderComisionesBancarias("")
+    setOrderCondicionesPagoObservaciones("")
+    setOrderModoTransporteCodigo("")
+    setOrderFechaRequeridaEmbarque("")
+    setOrderFechaEstimadaEmbarque("")
+    setOrderFechaEstimadaArribo("")
+    setOrderPuertoOrigen("")
+    setOrderPuertoDestino("")
+    setOrderAeropuertoOrigen("")
+    setOrderAeropuertoDestino("")
+    setOrderLugarEntregaFinal("")
+    setOrderDireccionEntrega("")
+    setOrderTipoEmbarque("")
+    setOrderTipoContenedor("")
+    setOrderForwarderNombre("")
+    setOrderNumeroBooking("")
+    setOrderNumeroBlAwb("")
+    setOrderTracking("")
+    setOrderPesoNetoTotal("")
+    setOrderPesoBrutoTotal("")
+    setOrderVolumenTotalCbm("")
+    setOrderCantidadBultos("")
+    setOrderTipoEmpaque("")
+    setOrderMarcasEmbarque("")
+    setOrderRequiereSeguro(false)
+    setOrderMontoAsegurado("")
+    setOrderLogisticaObservaciones("")
     setOrderLines([createEmptyOrderLine()])
   }
 
@@ -854,6 +1108,565 @@ export function ComprasWorkspace({
               </label>
               <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción, contacto..." />
             </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Condiciones de la orden</div>
+                  <div className="text-xs text-muted-foreground">Campos comunes y, si aplica, los campos internacionales de la operación.</div>
+                </div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {orderType === "internacional" ? "Internacional" : "Nacional"}
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-tipo-operacion">
+                    Tipo de operación
+                  </label>
+                  <select
+                    id="orden-tipo-operacion"
+                    name="tipo_operacion"
+                    value={orderType}
+                    onChange={(event) => setOrderType(event.target.value as "nacional" | "internacional")}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="nacional">Nacional</option>
+                    <option value="internacional">Internacional</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-moneda">
+                    Moneda
+                  </label>
+                  <ContactCatalogSelect
+                    value={orderCurrency}
+                    onValueChange={(value) => {
+                      setOrderCurrency(value)
+                      setOrderMonedaPago(value)
+                    }}
+                    options={monedasOptions}
+                    placeholder="Selecciona moneda"
+                    emptyLabel="Sin monedas configuradas"
+                  />
+                  <input type="hidden" name="moneda" value={orderCurrency} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-tipo-cambio">
+                    Tipo de cambio referencia
+                  </label>
+                  <Input
+                    id="orden-tipo-cambio"
+                    name="tipo_cambio_referencia"
+                    type="number"
+                    min="0"
+                    step="0.000001"
+                    value={orderExchangeRate}
+                    onChange={(event) => setOrderExchangeRate(event.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+              </div>
+              {orderType === "internacional" ? (
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orden-vigencia">
+                      Vigencia hasta
+                    </label>
+                    <Input
+                      id="orden-vigencia"
+                      name="vigencia_hasta"
+                      type="date"
+                      value={orderVigenciaHasta}
+                      onChange={(event) => setOrderVigenciaHasta(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orden-proforma">
+                      Proforma referencia
+                    </label>
+                    <Input
+                      id="orden-proforma"
+                      name="proforma_referencia"
+                      value={orderProformaReferencia}
+                      onChange={(event) => setOrderProformaReferencia(event.target.value)}
+                      placeholder="PI-12345"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orden-incoterm">
+                      Incoterm
+                    </label>
+                  <ContactCatalogSelect
+                    value={orderIncotermCodigo}
+                    onValueChange={(value) => setOrderIncotermCodigo(value)}
+                    options={incotermsOptions}
+                    placeholder="Selecciona un Incoterm"
+                    emptyLabel="Sin incoterms configurados"
+                  />
+                  <input type="hidden" name="condiciones_comerciales_incoterm_codigo" value={orderIncotermCodigo} readOnly />
+                </div>
+              </div>
+              ) : null}
+            </div>
+            {orderType === "internacional" ? (
+              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-incoterm-version">
+                    Versión Incoterm
+                  </label>
+                  <Input
+                    id="orden-incoterm-version"
+                    name="condiciones_comerciales_incoterm_version"
+                    value={orderIncotermVersion}
+                    onChange={(event) => setOrderIncotermVersion(event.target.value)}
+                    placeholder="2020"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
+                    Lugar Incoterm
+                  </label>
+                  <Input
+                    id="orden-lugar-incoterm"
+                    name="condiciones_comerciales_lugar_incoterm"
+                    value={orderLugarIncoterm}
+                    onChange={(event) => setOrderLugarIncoterm(event.target.value)}
+                    placeholder="Puerto / aeropuerto / domicilio"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-resp-flete">
+                    Quién paga flete
+                  </label>
+                  <Input
+                    id="orden-resp-flete"
+                    name="condiciones_comerciales_responsable_flete"
+                    value={orderResponsableFlete}
+                    onChange={(event) => setOrderResponsableFlete(event.target.value)}
+                    placeholder="Comprador / vendedor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-resp-seguro">
+                    Quién paga seguro
+                  </label>
+                  <Input
+                    id="orden-resp-seguro"
+                    name="condiciones_comerciales_responsable_seguro"
+                    value={orderResponsableSeguro}
+                    onChange={(event) => setOrderResponsableSeguro(event.target.value)}
+                    placeholder="Comprador / vendedor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-resp-desp-export">
+                    Despacho exportación
+                  </label>
+                  <Input
+                    id="orden-resp-desp-export"
+                    name="condiciones_comerciales_responsable_despacho_exportacion"
+                    value={orderResponsableDespachoExportacion}
+                    onChange={(event) => setOrderResponsableDespachoExportacion(event.target.value)}
+                    placeholder="Comprador / vendedor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-resp-desp-import">
+                    Despacho importación
+                  </label>
+                  <Input
+                    id="orden-resp-desp-import"
+                    name="condiciones_comerciales_responsable_despacho_importacion"
+                    value={orderResponsableDespachoImportacion}
+                    onChange={(event) => setOrderResponsableDespachoImportacion(event.target.value)}
+                    placeholder="Comprador / vendedor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-resp-impuestos">
+                    Impuestos importación
+                  </label>
+                  <Input
+                    id="orden-resp-impuestos"
+                    name="condiciones_comerciales_responsable_impuestos_importacion"
+                    value={orderResponsableImpuestosImportacion}
+                    onChange={(event) => setOrderResponsableImpuestosImportacion(event.target.value)}
+                    placeholder="Comprador / vendedor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
+                    Gastos bancarios
+                  </label>
+                  <Input
+                    id="orden-gastos-bancarios"
+                    name="condiciones_comerciales_gastos_bancarios"
+                    value={orderGastosBancarios}
+                    onChange={(event) => setOrderGastosBancarios(event.target.value)}
+                    placeholder="OUR / SHA / BEN / descripción"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="condiciones_comerciales_permite_embarques_parciales"
+                    checked={orderPermiteEmbarquesParciales}
+                    onChange={(event) => setOrderPermiteEmbarquesParciales(event.target.checked)}
+                  />
+                  Permite embarques parciales
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="condiciones_comerciales_permite_transbordos"
+                    checked={orderPermiteTransbordos}
+                    onChange={(event) => setOrderPermiteTransbordos(event.target.checked)}
+                  />
+                  Permite transbordos
+                </label>
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="orden-comercial-observaciones">Observaciones comerciales</Label>
+                  <Textarea
+                    id="orden-comercial-observaciones"
+                    name="condiciones_comerciales_observaciones"
+                    value={orderCondicionesComercialesObservaciones}
+                    onChange={(event) => setOrderCondicionesComercialesObservaciones(event.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+            ) : null}
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-sm font-semibold">Condiciones de pago</div>
+                <div className="text-xs text-muted-foreground">Define anticipos, saldos y moneda de pago.</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-forma-pago">
+                  Forma de pago
+                </label>
+                <Input
+                  id="orden-forma-pago"
+                  name="condiciones_pago_forma_pago"
+                  value={orderFormaPago}
+                  onChange={(event) => setOrderFormaPago(event.target.value)}
+                  placeholder="Transferencia / carta de crédito"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-moneda-pago">
+                  Moneda de pago
+                </label>
+                <ContactCatalogSelect
+                  value={orderMonedaPago}
+                  onValueChange={(value) => setOrderMonedaPago(value)}
+                  options={monedasOptions}
+                  placeholder="Selecciona moneda"
+                  emptyLabel="Sin monedas configuradas"
+                />
+                <input type="hidden" name="condiciones_pago_moneda_pago" value={orderMonedaPago} readOnly />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-porcentaje-anticipo">
+                    % anticipo
+                  </label>
+                  <Input
+                    id="orden-porcentaje-anticipo"
+                    name="condiciones_pago_porcentaje_anticipo"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={orderPorcentajeAnticipo}
+                    onChange={(event) => setOrderPorcentajeAnticipo(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-monto-anticipo">
+                    Monto anticipo
+                  </label>
+                  <Input
+                    id="orden-monto-anticipo"
+                    name="condiciones_pago_monto_anticipo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={orderMontoAnticipo}
+                    onChange={(event) => setOrderMontoAnticipo(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-porcentaje-saldo">
+                    % saldo
+                  </label>
+                  <Input
+                    id="orden-porcentaje-saldo"
+                    name="condiciones_pago_porcentaje_saldo"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={orderPorcentajeSaldo}
+                    onChange={(event) => setOrderPorcentajeSaldo(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-monto-saldo">
+                    Monto saldo
+                  </label>
+                  <Input
+                    id="orden-monto-saldo"
+                    name="condiciones_pago_monto_saldo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={orderMontoSaldo}
+                    onChange={(event) => setOrderMontoSaldo(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-momento-saldo">
+                    Momento pago saldo
+                  </label>
+                  <Input
+                    id="orden-momento-saldo"
+                    name="condiciones_pago_momento_pago_saldo"
+                    value={orderMomentoPagoSaldo}
+                    onChange={(event) => setOrderMomentoPagoSaldo(event.target.value)}
+                    placeholder="Contra BL / antes de embarque"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-dias-credito">
+                    Días crédito
+                  </label>
+                  <Input
+                    id="orden-dias-credito"
+                    name="condiciones_pago_dias_credito"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={orderDiasCredito}
+                    onChange={(event) => setOrderDiasCredito(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium" htmlFor="orden-comisiones-bancarias">
+                    Comisiones bancarias
+                  </label>
+                  <Input
+                    id="orden-comisiones-bancarias"
+                    name="condiciones_pago_comisiones_bancarias"
+                    value={orderComisionesBancarias}
+                    onChange={(event) => setOrderComisionesBancarias(event.target.value)}
+                    placeholder="OUR / SHA / BEN"
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="orden-pago-observaciones">Observaciones de pago</Label>
+                  <Textarea
+                    id="orden-pago-observaciones"
+                    name="condiciones_pago_observaciones"
+                    value={orderCondicionesPagoObservaciones}
+                    onChange={(event) => setOrderCondicionesPagoObservaciones(event.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-sm font-semibold">Logística y embarque</div>
+                <div className="text-xs text-muted-foreground">Fechas, modo de transporte y datos de envío.</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-modo-transporte">
+                  Modo de transporte
+                </label>
+                <ContactCatalogSelect
+                  value={orderModoTransporteCodigo}
+                  onValueChange={(value) => setOrderModoTransporteCodigo(value)}
+                  options={modosTransporteOptions}
+                  placeholder="Selecciona un modo"
+                  emptyLabel="Sin modos de transporte configurados"
+                />
+                <input type="hidden" name="logistica_modo_transporte_codigo" value={orderModoTransporteCodigo} readOnly />
+              </div>
+              <div className="grid gap-3 md:grid-cols-3 md:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-fecha-embarque">
+                    Fecha requerida embarque
+                  </label>
+                  <Input
+                    id="orden-fecha-embarque"
+                    name="logistica_fecha_requerida_embarque"
+                    type="date"
+                    value={orderFechaRequeridaEmbarque}
+                    onChange={(event) => setOrderFechaRequeridaEmbarque(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-fecha-estimada-embarque">
+                    Fecha estimada embarque
+                  </label>
+                  <Input
+                    id="orden-fecha-estimada-embarque"
+                    name="logistica_fecha_estimada_embarque"
+                    type="date"
+                    value={orderFechaEstimadaEmbarque}
+                    onChange={(event) => setOrderFechaEstimadaEmbarque(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-fecha-arribo">
+                    Fecha estimada arribo
+                  </label>
+                  <Input
+                    id="orden-fecha-arribo"
+                    name="logistica_fecha_estimada_arribo"
+                    type="date"
+                    value={orderFechaEstimadaArribo}
+                    onChange={(event) => setOrderFechaEstimadaArribo(event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-puerto-origen">
+                    Puerto origen
+                  </label>
+                  <Input id="orden-puerto-origen" name="logistica_puerto_origen" value={orderPuertoOrigen} onChange={(event) => setOrderPuertoOrigen(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-puerto-destino">
+                    Puerto destino
+                  </label>
+                  <Input id="orden-puerto-destino" name="logistica_puerto_destino" value={orderPuertoDestino} onChange={(event) => setOrderPuertoDestino(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-aeropuerto-origen">
+                    Aeropuerto origen
+                  </label>
+                  <Input id="orden-aeropuerto-origen" name="logistica_aeropuerto_origen" value={orderAeropuertoOrigen} onChange={(event) => setOrderAeropuertoOrigen(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-aeropuerto-destino">
+                    Aeropuerto destino
+                  </label>
+                  <Input id="orden-aeropuerto-destino" name="logistica_aeropuerto_destino" value={orderAeropuertoDestino} onChange={(event) => setOrderAeropuertoDestino(event.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium" htmlFor="orden-lugar-entrega">
+                    Lugar entrega final
+                  </label>
+                  <Input id="orden-lugar-entrega" name="logistica_lugar_entrega_final" value={orderLugarEntregaFinal} onChange={(event) => setOrderLugarEntregaFinal(event.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium" htmlFor="orden-direccion-entrega">
+                    Dirección entrega
+                  </label>
+                  <Input id="orden-direccion-entrega" name="logistica_direccion_entrega" value={orderDireccionEntrega} onChange={(event) => setOrderDireccionEntrega(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-tipo-embarque">
+                    Tipo embarque
+                  </label>
+                  <Input id="orden-tipo-embarque" name="logistica_tipo_embarque" value={orderTipoEmbarque} onChange={(event) => setOrderTipoEmbarque(event.target.value)} placeholder="FCL / LCL / courier" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-tipo-contenedor">
+                    Tipo contenedor
+                  </label>
+                  <Input id="orden-tipo-contenedor" name="logistica_tipo_contenedor" value={orderTipoContenedor} onChange={(event) => setOrderTipoContenedor(event.target.value)} placeholder="20' / 40' / etc." />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-forwarder">
+                    Forwarder
+                  </label>
+                  <Input id="orden-forwarder" name="logistica_forwarder_nombre" value={orderForwarderNombre} onChange={(event) => setOrderForwarderNombre(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-booking">
+                    Booking
+                  </label>
+                  <Input id="orden-booking" name="logistica_numero_booking" value={orderNumeroBooking} onChange={(event) => setOrderNumeroBooking(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-bl-awb">
+                    BL / AWB
+                  </label>
+                  <Input id="orden-bl-awb" name="logistica_numero_bl_awb" value={orderNumeroBlAwb} onChange={(event) => setOrderNumeroBlAwb(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-tracking">
+                    Tracking
+                  </label>
+                  <Input id="orden-tracking" name="logistica_tracking" value={orderTracking} onChange={(event) => setOrderTracking(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-peso-neto">
+                    Peso neto total
+                  </label>
+                  <Input id="orden-peso-neto" name="logistica_peso_neto_total" type="number" min="0" step="0.0001" value={orderPesoNetoTotal} onChange={(event) => setOrderPesoNetoTotal(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-peso-bruto">
+                    Peso bruto total
+                  </label>
+                  <Input id="orden-peso-bruto" name="logistica_peso_bruto_total" type="number" min="0" step="0.0001" value={orderPesoBrutoTotal} onChange={(event) => setOrderPesoBrutoTotal(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-volumen">
+                    Volumen total CBM
+                  </label>
+                  <Input id="orden-volumen" name="logistica_volumen_total_cbm" type="number" min="0" step="0.0001" value={orderVolumenTotalCbm} onChange={(event) => setOrderVolumenTotalCbm(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-bultos">
+                    Cantidad bultos
+                  </label>
+                  <Input id="orden-bultos" name="logistica_cantidad_bultos" type="number" min="0" step="1" value={orderCantidadBultos} onChange={(event) => setOrderCantidadBultos(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-empaque">
+                    Tipo empaque
+                  </label>
+                  <Input id="orden-empaque" name="logistica_tipo_empaque" value={orderTipoEmpaque} onChange={(event) => setOrderTipoEmpaque(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-marcas">
+                    Marcas embarque
+                  </label>
+                  <Input id="orden-marcas" name="logistica_marcas_embarque" value={orderMarcasEmbarque} onChange={(event) => setOrderMarcasEmbarque(event.target.value)} />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="logistica_requiere_seguro"
+                    checked={orderRequiereSeguro}
+                    onChange={(event) => setOrderRequiereSeguro(event.target.checked)}
+                  />
+                  Requiere seguro
+                </label>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orden-monto-asegurado">
+                    Monto asegurado
+                  </label>
+                  <Input id="orden-monto-asegurado" name="logistica_monto_asegurado" type="number" min="0" step="0.01" value={orderMontoAsegurado} onChange={(event) => setOrderMontoAsegurado(event.target.value)} />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="orden-logistica-observaciones">Observaciones logísticas</Label>
+                  <Textarea
+                    id="orden-logistica-observaciones"
+                    name="logistica_observaciones"
+                    value={orderLogisticaObservaciones}
+                    onChange={(event) => setOrderLogisticaObservaciones(event.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="secondary" onClick={addOrderLine}>
                 Agregar producto
@@ -899,6 +1712,236 @@ export function ComprasWorkspace({
                           <input type="hidden" name="items_proveedor_item_id" value={line.proveedor_item_id} readOnly />
                           <input type="hidden" name="items_unidad" value={line.unidad} readOnly />
                           <input type="hidden" name="items_impuestos" value="0" readOnly />
+                          {orderType === "internacional" ? (
+                            <div className="mt-3 rounded-lg border border-dashed border-border/70 bg-background/60 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                  Datos internacionales
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setExpandedOrderLineIndex((current) => (current === index ? null : index))
+                                  }
+                                >
+                                  {expandedOrderLineIndex === index ? "Ocultar" : "Editar"}
+                                </Button>
+                              </div>
+                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-2" : "hidden"}>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
+                                    Número de partida
+                                  </label>
+                                  <Input
+                                    id={`item-numero-partida-${index}`}
+                                    name="items_numero_partida"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={line.numero_partida}
+                                    onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
+                                    Descripción
+                                  </label>
+                                  <Textarea
+                                    id={`item-descripcion-${index}`}
+                                    name="items_descripcion"
+                                    value={line.descripcion}
+                                    onChange={(event) => updateOrderLine(index, { descripcion: event.target.value })}
+                                    rows={2}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
+                                    Marca
+                                  </label>
+                                  <Input
+                                    id={`item-marca-${index}`}
+                                    name="items_marca"
+                                    value={line.marca}
+                                    onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
+                                    Modelo
+                                  </label>
+                                  <Input
+                                    id={`item-modelo-${index}`}
+                                    name="items_modelo"
+                                    value={line.modelo}
+                                    onChange={(event) => updateOrderLine(index, { modelo: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-fabricante-${index}`}>
+                                    Fabricante
+                                  </label>
+                                  <Input
+                                    id={`item-fabricante-${index}`}
+                                    name="items_fabricante"
+                                    value={line.fabricante}
+                                    onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium">País origen</label>
+                                  <ContactCatalogSelect
+                                    value={line.pais_origen_codigo_iso2}
+                                    onValueChange={(value) => updateOrderLine(index, { pais_origen_codigo_iso2: value })}
+                                    options={mergeCatalogOptions(paisesOptions, line.pais_origen_codigo_iso2)}
+                                    placeholder="Selecciona país"
+                                    emptyLabel="Sin países cargados"
+                                  />
+                                  <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium">País procedencia</label>
+                                  <ContactCatalogSelect
+                                    value={line.pais_procedencia_codigo_iso2}
+                                    onValueChange={(value) => updateOrderLine(index, { pais_procedencia_codigo_iso2: value })}
+                                    options={mergeCatalogOptions(paisesOptions, line.pais_procedencia_codigo_iso2)}
+                                    placeholder="Selecciona país"
+                                    emptyLabel="Sin países cargados"
+                                  />
+                                  <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
+                                    Fracción arancelaria
+                                  </label>
+                                  <Input
+                                    id={`item-fraccion-${index}`}
+                                    name="items_fraccion_arancelaria"
+                                    value={line.fraccion_arancelaria}
+                                    onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
+                                    HS code
+                                  </label>
+                                  <Input
+                                    id={`item-hs-${index}`}
+                                    name="items_hs_code"
+                                    value={line.hs_code}
+                                    onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
+                                    NICO
+                                  </label>
+                                  <Input
+                                    id={`item-nico-${index}`}
+                                    name="items_nico"
+                                    value={line.nico}
+                                    onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
+                                    Peso neto
+                                  </label>
+                                  <Input
+                                    id={`item-peso-neto-${index}`}
+                                    name="items_peso_neto"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.peso_neto}
+                                    onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
+                                    Peso bruto
+                                  </label>
+                                  <Input
+                                    id={`item-peso-bruto-${index}`}
+                                    name="items_peso_bruto"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.peso_bruto}
+                                    onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
+                                    Volumen CBM
+                                  </label>
+                                  <Input
+                                    id={`item-volumen-${index}`}
+                                    name="items_volumen_cbm"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.volumen_cbm}
+                                    onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
+                                    Lote
+                                  </label>
+                                  <Input
+                                    id={`item-lote-${index}`}
+                                    name="items_lote"
+                                    value={line.lote}
+                                    onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-serie-${index}`}>
+                                    Número de serie
+                                  </label>
+                                  <Input
+                                    id={`item-serie-${index}`}
+                                    name="items_numero_serie"
+                                    value={line.numero_serie}
+                                    onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-caducidad-${index}`}>
+                                    Fecha caducidad
+                                  </label>
+                                  <Input
+                                    id={`item-caducidad-${index}`}
+                                    name="items_fecha_caducidad"
+                                    type="date"
+                                    value={line.fecha_caducidad}
+                                    onChange={(event) => updateOrderLine(index, { fecha_caducidad: event.target.value })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <input type="hidden" name="items_numero_partida" value={line.numero_partida || String(index + 1)} readOnly />
+                              <input type="hidden" name="items_descripcion" value={line.descripcion} readOnly />
+                              <input type="hidden" name="items_marca" value={line.marca} readOnly />
+                              <input type="hidden" name="items_modelo" value={line.modelo} readOnly />
+                              <input type="hidden" name="items_fabricante" value={line.fabricante} readOnly />
+                              <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
+                              <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
+                              <input type="hidden" name="items_fraccion_arancelaria" value={line.fraccion_arancelaria} readOnly />
+                              <input type="hidden" name="items_hs_code" value={line.hs_code} readOnly />
+                              <input type="hidden" name="items_nico" value={line.nico} readOnly />
+                              <input type="hidden" name="items_peso_neto" value={line.peso_neto} readOnly />
+                              <input type="hidden" name="items_peso_bruto" value={line.peso_bruto} readOnly />
+                              <input type="hidden" name="items_volumen_cbm" value={line.volumen_cbm} readOnly />
+                              <input type="hidden" name="items_lote" value={line.lote} readOnly />
+                              <input type="hidden" name="items_numero_serie" value={line.numero_serie} readOnly />
+                              <input type="hidden" name="items_fecha_caducidad" value={line.fecha_caducidad} readOnly />
+                            </>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="w-28 align-top">

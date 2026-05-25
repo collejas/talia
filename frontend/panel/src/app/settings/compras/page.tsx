@@ -66,13 +66,17 @@ function makeDefaultReceptionNumber(): string {
 }
 
 export default async function SettingsComprasPage() {
-  const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias] = await Promise.all([
+  const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
     fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
     fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
     fetchList("/crm/compras/recepciones", { limit: 25 }),
     fetchList("/crm/compras/existencias", { limit: 200 }),
+    fetchList("/crm/compras/catalogos/incoterms", { limit: 200 }),
+    fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
+    fetchList("/crm/compras/catalogos/modos-transporte", { limit: 200 }),
+    fetchList("/crm/compras/catalogos/paises", { limit: 250 }),
   ])
   const inventoryCatalogItems = catalogItems.filter(isInventoryCatalogItem)
 
@@ -116,6 +120,10 @@ export default async function SettingsComprasPage() {
           ordenes={ordenes}
           recepciones={recepciones}
           existencias={existencias}
+          incoterms={incoterms}
+          monedas={monedas}
+          modosTransporte={modosTransporte}
+          paises={paises}
           defaultOrderId={defaultOrderId}
           defaultWarehouseId={defaultWarehouseId}
           defaultWarehouseCode={defaultWarehouseCode}

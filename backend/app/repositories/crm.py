@@ -9916,17 +9916,39 @@ class CRMRepository:
             "order": "fecha_emision.desc",
             "limit": str(max(1, min(limit, 5000))),
             "select": (
-                "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
-                "moneda,subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
+            "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
+                "moneda,tipo_operacion,tipo_cambio_referencia,vigencia_hasta,proforma_referencia,"
+                "subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
                 "enviada_por_usuario_id,enviada_en,aprobada_en,"
                 "referencia_externa,observaciones,instrucciones_entrega,creado_en,actualizado_en,"
                 "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
                 "almacen:almacenes(id,codigo,nombre,activo,es_principal),"
                 "enviada_por_usuario:usuarios!ordenes_compra_enviada_por_usuario_id_fkey(id,nombre_completo,correo),"
                 "aprobado_por_usuario:usuarios!ordenes_compra_aprobado_por_usuario_id_fkey(id,nombre_completo,correo),"
+                "condiciones_comerciales:ordenes_compra_condiciones_comerciales("
+                "id,orden_compra_id,incoterm_codigo,incoterm_version,lugar_incoterm,responsable_flete,responsable_seguro,"
+                "responsable_despacho_exportacion,responsable_despacho_importacion,responsable_impuestos_importacion,"
+                "permite_embarques_parciales,permite_transbordos,gastos_bancarios,observaciones,creado_en,actualizado_en"
+                "),"
+                "condiciones_pago:ordenes_compra_condiciones_pago("
+                "id,orden_compra_id,forma_pago,moneda_pago,porcentaje_anticipo,monto_anticipo,porcentaje_saldo,monto_saldo,"
+                "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
+                "),"
+                "logistica:ordenes_compra_logistica("
+                "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"
+                "puerto_origen,puerto_destino,aeropuerto_origen,aeropuerto_destino,lugar_entrega_final,direccion_entrega,"
+                "tipo_embarque,tipo_contenedor,forwarder_nombre,numero_booking,numero_bl_awb,tracking,peso_neto_total,"
+                "peso_bruto_total,volumen_total_cbm,cantidad_bultos,tipo_empaque,marcas_embarque,requiere_seguro,monto_asegurado,"
+                "observaciones,creado_en,actualizado_en"
+                "),"
+                "documentos:ordenes_compra_documentos("
+                "id,orden_compra_id,tipo_documento,obligatorio,estado,fecha_limite,archivo_id,observaciones,creado_en,actualizado_en"
+                "),"
                 "items:ordenes_compra_items("
-                "id,orden_compra_id,catalog_item_id,proveedor_item_id,cantidad_solicitada,cantidad_recibida,"
-                "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,observaciones,creado_en,actualizado_en,"
+                "id,orden_compra_id,catalog_item_id,proveedor_item_id,numero_partida,descripcion,marca,modelo,fabricante,"
+                "pais_origen_codigo_iso2,pais_procedencia_codigo_iso2,fraccion_arancelaria,hs_code,nico,cantidad_solicitada,cantidad_recibida,"
+                "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,peso_neto,peso_bruto,volumen_cbm,"
+                "lote,numero_serie,fecha_caducidad,observaciones,creado_en,actualizado_en,"
                 "catalog_item:catalog_items(id,slug,nombre,tipo,unidad,activo,maneja_inventario)"
                 ")"
             ),
@@ -9950,17 +9972,39 @@ class CRMRepository:
             "id": f"eq.{orden_id}",
             "limit": "1",
             "select": (
-                "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
-                "moneda,subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
+            "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
+                "moneda,tipo_operacion,tipo_cambio_referencia,vigencia_hasta,proforma_referencia,"
+                "subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
                 "enviada_por_usuario_id,enviada_en,aprobada_en,"
                 "referencia_externa,observaciones,instrucciones_entrega,creado_en,actualizado_en,"
                 "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
                 "almacen:almacenes(id,codigo,nombre,activo,es_principal),"
                 "enviada_por_usuario:usuarios!ordenes_compra_enviada_por_usuario_id_fkey(id,nombre_completo,correo),"
                 "aprobado_por_usuario:usuarios!ordenes_compra_aprobado_por_usuario_id_fkey(id,nombre_completo,correo),"
+                "condiciones_comerciales:ordenes_compra_condiciones_comerciales("
+                "id,orden_compra_id,incoterm_codigo,incoterm_version,lugar_incoterm,responsable_flete,responsable_seguro,"
+                "responsable_despacho_exportacion,responsable_despacho_importacion,responsable_impuestos_importacion,"
+                "permite_embarques_parciales,permite_transbordos,gastos_bancarios,observaciones,creado_en,actualizado_en"
+                "),"
+                "condiciones_pago:ordenes_compra_condiciones_pago("
+                "id,orden_compra_id,forma_pago,moneda_pago,porcentaje_anticipo,monto_anticipo,porcentaje_saldo,monto_saldo,"
+                "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
+                "),"
+                "logistica:ordenes_compra_logistica("
+                "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"
+                "puerto_origen,puerto_destino,aeropuerto_origen,aeropuerto_destino,lugar_entrega_final,direccion_entrega,"
+                "tipo_embarque,tipo_contenedor,forwarder_nombre,numero_booking,numero_bl_awb,tracking,peso_neto_total,"
+                "peso_bruto_total,volumen_total_cbm,cantidad_bultos,tipo_empaque,marcas_embarque,requiere_seguro,monto_asegurado,"
+                "observaciones,creado_en,actualizado_en"
+                "),"
+                "documentos:ordenes_compra_documentos("
+                "id,orden_compra_id,tipo_documento,obligatorio,estado,fecha_limite,archivo_id,observaciones,creado_en,actualizado_en"
+                "),"
                 "items:ordenes_compra_items("
-                "id,orden_compra_id,catalog_item_id,proveedor_item_id,cantidad_solicitada,cantidad_recibida,"
-                "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,observaciones,creado_en,actualizado_en,"
+                "id,orden_compra_id,catalog_item_id,proveedor_item_id,numero_partida,descripcion,marca,modelo,fabricante,"
+                "pais_origen_codigo_iso2,pais_procedencia_codigo_iso2,fraccion_arancelaria,hs_code,nico,cantidad_solicitada,cantidad_recibida,"
+                "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,peso_neto,peso_bruto,volumen_cbm,"
+                "lote,numero_serie,fecha_caducidad,observaciones,creado_en,actualizado_en,"
                 "catalog_item:catalog_items(id,slug,nombre,tipo,unidad,activo,maneja_inventario)"
                 ")"
             ),
@@ -10062,6 +10106,70 @@ class CRMRepository:
         )
         return data
 
+    async def list_incoterms(
+        self,
+        *,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "activo": "eq.true",
+            "order": "codigo.asc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        resp = await self._request("GET", "/rest/v1/incoterms", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar incoterms: {data!r}")
+        return data
+
+    async def list_monedas(
+        self,
+        *,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "activo": "eq.true",
+            "order": "codigo.asc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        resp = await self._request("GET", "/rest/v1/monedas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar monedas: {data!r}")
+        return data
+
+    async def list_modos_transporte(
+        self,
+        *,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "activo": "eq.true",
+            "order": "codigo.asc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        resp = await self._request("GET", "/rest/v1/modos_transporte", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar modos de transporte: {data!r}")
+        return data
+
+    async def list_geo_paises(
+        self,
+        *,
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "activo": "eq.true",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 2000))),
+        }
+        resp = await self._request("GET", "/rest/v1/geo_paises", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar paises: {data!r}")
+        return data
+
     async def create_orden_compra(
         self,
         *,
@@ -10076,11 +10184,19 @@ class CRMRepository:
             "p_fecha_emision": payload.get("fecha_emision"),
             "p_fecha_entrega_estimada": payload.get("fecha_entrega_estimada"),
             "p_moneda": payload.get("moneda"),
+            "p_tipo_operacion": payload.get("tipo_operacion"),
+            "p_tipo_cambio_referencia": payload.get("tipo_cambio_referencia"),
+            "p_vigencia_hasta": payload.get("vigencia_hasta"),
+            "p_proforma_referencia": payload.get("proforma_referencia"),
             "p_solicitado_por_usuario_id": payload.get("solicitado_por_usuario_id"),
             "p_aprobado_por_usuario_id": payload.get("aprobado_por_usuario_id"),
             "p_referencia_externa": payload.get("referencia_externa"),
             "p_observaciones": payload.get("observaciones"),
             "p_instrucciones_entrega": payload.get("instrucciones_entrega"),
+            "p_condiciones_comerciales": payload.get("condiciones_comerciales"),
+            "p_condiciones_pago": payload.get("condiciones_pago"),
+            "p_logistica": payload.get("logistica"),
+            "p_documentos": payload.get("documentos"),
             "p_items": payload.get("items") or [],
         }
         result = await self._rpc("crm_crear_orden_compra", body)
@@ -10114,11 +10230,19 @@ class CRMRepository:
             "p_fecha_emision": payload.get("fecha_emision"),
             "p_fecha_entrega_estimada": payload.get("fecha_entrega_estimada"),
             "p_moneda": payload.get("moneda"),
+            "p_tipo_operacion": payload.get("tipo_operacion"),
+            "p_tipo_cambio_referencia": payload.get("tipo_cambio_referencia"),
+            "p_vigencia_hasta": payload.get("vigencia_hasta"),
+            "p_proforma_referencia": payload.get("proforma_referencia"),
             "p_solicitado_por_usuario_id": payload.get("solicitado_por_usuario_id"),
             "p_aprobado_por_usuario_id": payload.get("aprobado_por_usuario_id"),
             "p_referencia_externa": payload.get("referencia_externa"),
             "p_observaciones": payload.get("observaciones"),
             "p_instrucciones_entrega": payload.get("instrucciones_entrega"),
+            "p_condiciones_comerciales": payload.get("condiciones_comerciales"),
+            "p_condiciones_pago": payload.get("condiciones_pago"),
+            "p_logistica": payload.get("logistica"),
+            "p_documentos": payload.get("documentos"),
             "p_items": payload.get("items") or [],
         }
         result = await self._rpc("crm_actualizar_orden_compra", body)
