@@ -103,6 +103,26 @@ function getText(value: unknown): string {
   return "—";
 }
 
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>
+        <span>{label}</span>
+      </Label>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {children}
+    </div>
+  );
+}
+
 function getInputText(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -990,8 +1010,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-uso-cfdi">Uso CFDI</Label>
+              <Field label="Uso CFDI">
                 <ContactCatalogSelect
                   value={editForm.uso_cfdi}
                   onValueChange={(value) => setEditForm((prev) => ({ ...prev, uso_cfdi: value }))}
@@ -999,19 +1018,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   placeholder="Selecciona un uso CFDI"
                   emptyLabel="Configura los usos CFDI en Extras"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-metodo-pago">Método de pago</Label>
-                <ContactCatalogSelect
-                  value={editForm.metodo_pago}
-                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, metodo_pago: value }))}
-                  options={metodoPagoOptions}
-                  placeholder="Selecciona un método de pago"
-                  emptyLabel="Configura los métodos de pago en Extras"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-forma-pago">Forma de pago</Label>
+              </Field>
+              <Field label="Forma de pago">
                 <ContactCatalogSelect
                   value={editForm.forma_pago}
                   onValueChange={(value) => setEditForm((prev) => ({ ...prev, forma_pago: value }))}
@@ -1019,15 +1027,23 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   placeholder="Selecciona una forma de pago"
                   emptyLabel="Configura las formas de pago en Extras"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-email-facturacion">Email de facturación</Label>
+              </Field>
+              <Field label="Método de pago">
+                <ContactCatalogSelect
+                  value={editForm.metodo_pago}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, metodo_pago: value }))}
+                  options={metodoPagoOptions}
+                  placeholder="Selecciona un método de pago"
+                  emptyLabel="Configura los métodos de pago en Extras"
+                />
+              </Field>
+              <Field label="Email de facturación">
                 <Input
                   id="edit-email-facturacion"
                   value={editForm.email_facturacion}
                   onChange={(event) => setEditForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
                 />
-              </div>
+              </Field>
             </div>
 
             <div className="grid gap-4">

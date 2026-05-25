@@ -66,6 +66,26 @@ const PHONE_LINE_TYPE_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
 ] as const;
 
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>
+        <span>{label}</span>
+      </Label>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {children}
+    </div>
+  );
+}
+
 const INITIAL_FORM: CreateAccountForm = {
   tipo: "empresa",
   tipo_persona: "moral",
@@ -471,8 +491,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
               </div>
               {extrasOpen ? (
                 <div className="mt-4 space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-uso-cfdi">Uso CFDI</Label>
+                  <Field label="Uso CFDI">
                     <ContactCatalogSelect
                       value={form.uso_cfdi}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
@@ -480,9 +499,8 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       placeholder="Selecciona un uso CFDI"
                       emptyLabel="Configura los usos CFDI en Extras"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-forma-pago">Forma de pago</Label>
+                  </Field>
+                  <Field label="Forma de pago">
                     <ContactCatalogSelect
                       value={form.forma_pago}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
@@ -490,9 +508,8 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       placeholder="Selecciona una forma de pago"
                       emptyLabel="Configura las formas de pago en Extras"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-metodo-pago">Método de pago</Label>
+                  </Field>
+                  <Field label="Método de pago">
                     <ContactCatalogSelect
                       value={form.metodo_pago}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
@@ -500,15 +517,14 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       placeholder="Selecciona un método de pago"
                       emptyLabel="Configura los métodos de pago en Extras"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-email-facturacion">Email de facturación</Label>
+                  </Field>
+                  <Field label="Email de facturación">
                     <Input
                       id="create-email-facturacion"
                       value={form.email_facturacion}
                       onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
                     />
-                  </div>
+                  </Field>
                   <GeoLocationSelects
                     countryCode={form.pais}
                     stateCode={form.clave_entidad}
