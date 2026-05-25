@@ -359,7 +359,6 @@ export function ComprasWorkspace({
   const [orderGastosBancarios, setOrderGastosBancarios] = useState("")
   const [orderCondicionesComercialesObservaciones, setOrderCondicionesComercialesObservaciones] = useState("")
   const [orderFormaPago, setOrderFormaPago] = useState("")
-  const [orderMonedaPago, setOrderMonedaPago] = useState("MXN")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
   const [orderMontoAnticipo, setOrderMontoAnticipo] = useState("")
   const [orderPorcentajeSaldo, setOrderPorcentajeSaldo] = useState("")
@@ -622,7 +621,6 @@ export function ComprasWorkspace({
     setOrderGastosBancarios(asString(comercial.gastos_bancarios, ""))
     setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
     setOrderFormaPago(asString(pago.forma_pago, ""))
-    setOrderMonedaPago(asString(pago.moneda_pago, "MXN"))
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
     setOrderMontoAnticipo(asString(pago.monto_anticipo, ""))
     setOrderPorcentajeSaldo(asString(pago.porcentaje_saldo, ""))
@@ -687,7 +685,6 @@ export function ComprasWorkspace({
     setOrderGastosBancarios("")
     setOrderCondicionesComercialesObservaciones("")
     setOrderFormaPago("")
-    setOrderMonedaPago("MXN")
     setOrderPorcentajeAnticipo("")
     setOrderMontoAnticipo("")
     setOrderPorcentajeSaldo("")
@@ -1047,7 +1044,7 @@ export function ComprasWorkspace({
           <form action={orderFormAction} className="space-y-5">
             <input type="hidden" name="fecha_emision" value={orderEmissionIso} readOnly />
             <div className="grid gap-4 md:grid-cols-6">
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-folio">
                   Folio
                 </label>
@@ -1061,18 +1058,61 @@ export function ComprasWorkspace({
                 />
               </div>
               <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="orden-tipo-operacion">
+                  Tipo de operación
+                </label>
+                <select
+                  id="orden-tipo-operacion"
+                  name="tipo_operacion"
+                  value={orderType}
+                  onChange={(event) => setOrderType(event.target.value as "nacional" | "internacional")}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="nacional">Nacional</option>
+                  <option value="internacional">Internacional</option>
+                </select>
+              </div>
+              <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-moneda">
                   Moneda
                 </label>
-                <select id="orden-moneda" name="moneda" value={orderCurrency} onChange={(event) => setOrderCurrency(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="MXN">MXN</option>
-                  <option value="USD">USD</option>
-                  <option value="COP">COP</option>
-                  <option value="CLP">CLP</option>
-                  <option value="EUR">EUR</option>
-                </select>
+                <ContactCatalogSelect
+                  value={orderCurrency}
+                  onValueChange={(value) => setOrderCurrency(value)}
+                  options={monedasOptions}
+                  placeholder="Selecciona moneda"
+                  emptyLabel="Sin monedas configuradas"
+                />
+                <input type="hidden" name="moneda" value={orderCurrency} readOnly />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="orden-tipo-cambio">
+                  Tipo de cambio
+                </label>
+                <Input
+                  id="orden-tipo-cambio"
+                  name="tipo_cambio_referencia"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={orderExchangeRate}
+                  onChange={(event) => setOrderExchangeRate(event.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="orden-entrega">
+                  Fecha estimada
+                </label>
+                <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="orden-instrucciones">
+                  Instrucciones
+                </label>
+                <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción..." />
+              </div>
+              <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium" htmlFor="orden-proveedor">
                   Proveedor
                 </label>
@@ -1085,7 +1125,7 @@ export function ComprasWorkspace({
                   ))}
                 </select>
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium" htmlFor="orden-almacen">
                   Almacén destino
                 </label>
@@ -1098,38 +1138,24 @@ export function ComprasWorkspace({
                   ))}
                 </select>
               </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-6">
-              <div className="space-y-2 md:col-span-1">
-                <label className="text-sm font-medium" htmlFor="orden-entrega">
-                  Fecha estimada
-                </label>
-                <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
-              </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium" htmlFor="orden-ref">
                   Referencia externa
                 </label>
                 <Input id="orden-ref" name="referencia_externa" value={orderReferenceExternal} onChange={(event) => setOrderReferenceExternal(event.target.value)} placeholder="Cotización, solicitud..." />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium" htmlFor="orden-notas">
                   Observaciones
                 </label>
                 <Input id="orden-notas" name="observaciones" value={orderObservations} onChange={(event) => setOrderObservations(event.target.value)} placeholder="Notas para compras" />
               </div>
-              <div className="space-y-2 md:col-span-1">
-                <label className="text-sm font-medium" htmlFor="orden-instrucciones">
-                  Instrucciones de entrega
-                </label>
-                <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción, contacto..." />
-              </div>
             </div>
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold">Condiciones de la orden</div>
-                  <div className="text-xs text-muted-foreground">Campos comunes y, si aplica, los campos internacionales de la operación.</div>
+                  <div className="text-sm font-semibold">Condiciones de la orden y pago</div>
+                  <div className="text-xs text-muted-foreground">Moneda única, condiciones comerciales y forma de pago en una sola sección.</div>
                 </div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
                   {orderType === "internacional" ? "Internacional" : "Nacional"}
@@ -1137,82 +1163,33 @@ export function ComprasWorkspace({
               </div>
               <div className="grid gap-4 md:grid-cols-6">
                 <div className="space-y-2 md:col-span-1">
-                  <label className="text-sm font-medium" htmlFor="orden-tipo-operacion">
-                    Tipo de operación
-                  </label>
-                  <select
-                    id="orden-tipo-operacion"
-                    name="tipo_operacion"
-                    value={orderType}
-                    onChange={(event) => setOrderType(event.target.value as "nacional" | "internacional")}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="nacional">Nacional</option>
-                    <option value="internacional">Internacional</option>
-                  </select>
-                </div>
-                <div className="space-y-2 md:col-span-1">
-                  <label className="text-sm font-medium" htmlFor="orden-moneda">
-                    Moneda
-                  </label>
-                  <ContactCatalogSelect
-                    value={orderCurrency}
-                    onValueChange={(value) => {
-                      setOrderCurrency(value)
-                      setOrderMonedaPago(value)
-                    }}
-                    options={monedasOptions}
-                    placeholder="Selecciona moneda"
-                    emptyLabel="Sin monedas configuradas"
-                  />
-                  <input type="hidden" name="moneda" value={orderCurrency} readOnly />
-                </div>
-                <div className="space-y-2 md:col-span-1">
-                  <label className="text-sm font-medium" htmlFor="orden-tipo-cambio">
-                    Tipo de cambio referencia
+                  <label className="text-sm font-medium" htmlFor="orden-vigencia">
+                    Vigencia hasta
                   </label>
                   <Input
-                    id="orden-tipo-cambio"
-                    name="tipo_cambio_referencia"
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    value={orderExchangeRate}
-                    onChange={(event) => setOrderExchangeRate(event.target.value)}
-                    placeholder="Opcional"
+                    id="orden-vigencia"
+                    name="vigencia_hasta"
+                    type="date"
+                    value={orderVigenciaHasta}
+                    onChange={(event) => setOrderVigenciaHasta(event.target.value)}
                   />
                 </div>
-              </div>
-              {orderType === "internacional" ? (
-                <div className="mt-4 grid gap-4 md:grid-cols-6">
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-sm font-medium" htmlFor="orden-vigencia">
-                      Vigencia hasta
-                    </label>
-                    <Input
-                      id="orden-vigencia"
-                      name="vigencia_hasta"
-                      type="date"
-                      value={orderVigenciaHasta}
-                      onChange={(event) => setOrderVigenciaHasta(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-sm font-medium" htmlFor="orden-proforma">
-                      Proforma referencia
-                    </label>
-                    <Input
-                      id="orden-proforma"
-                      name="proforma_referencia"
-                      value={orderProformaReferencia}
-                      onChange={(event) => setOrderProformaReferencia(event.target.value)}
-                      placeholder="PI-12345"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium" htmlFor="orden-incoterm">
-                      Incoterm
-                    </label>
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-sm font-medium" htmlFor="orden-proforma">
+                    Proforma
+                  </label>
+                  <Input
+                    id="orden-proforma"
+                    name="proforma_referencia"
+                    value={orderProformaReferencia}
+                    onChange={(event) => setOrderProformaReferencia(event.target.value)}
+                    placeholder="PI-12345"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium" htmlFor="orden-incoterm">
+                    Incoterm
+                  </label>
                   <ContactCatalogSelect
                     value={orderIncotermCodigo}
                     onValueChange={(value) => setOrderIncotermCodigo(value)}
@@ -1220,170 +1197,141 @@ export function ComprasWorkspace({
                     placeholder="Selecciona un Incoterm"
                     emptyLabel="Sin incoterms configurados"
                   />
-                    <input type="hidden" name="condiciones_comerciales_incoterm_codigo" value={orderIncotermCodigo} readOnly />
-                  </div>
+                  <input type="hidden" name="condiciones_comerciales_incoterm_codigo" value={orderIncotermCodigo} readOnly />
+                </div>
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-sm font-medium" htmlFor="orden-incoterm-version">
+                    Versión
+                  </label>
+                  <Input
+                    id="orden-incoterm-version"
+                    name="condiciones_comerciales_incoterm_version"
+                    value={orderIncotermVersion}
+                    readOnly
+                    className="bg-muted/40"
+                    placeholder="2020"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
+                    Lugar
+                  </label>
+                  <Input
+                    id="orden-lugar-incoterm"
+                    name="condiciones_comerciales_lugar_incoterm"
+                    value={orderLugarIncoterm}
+                    onChange={(event) => setOrderLugarIncoterm(event.target.value)}
+                    placeholder="Puerto / aeropuerto"
+                  />
+                </div>
+              </div>
+              {orderType === "internacional" ? (
+                <div className="mt-4 grid gap-4 md:grid-cols-6">
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium" htmlFor="orden-incoterm-version">
-                      Versión Incoterm
+                    <label className="text-sm font-medium" htmlFor="orden-resp-flete">
+                      Quién paga flete
                     </label>
                     <Input
-                      id="orden-incoterm-version"
-                      name="condiciones_comerciales_incoterm_version"
-                      value={orderIncotermVersion}
-                      onChange={(event) => setOrderIncotermVersion(event.target.value)}
-                      placeholder="2020"
+                      id="orden-resp-flete"
+                      name="condiciones_comerciales_responsable_flete"
+                      value={orderResponsableFlete}
+                      onChange={(event) => setOrderResponsableFlete(event.target.value)}
+                      placeholder="Comprador / vendedor"
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
-                      Lugar Incoterm
+                    <label className="text-sm font-medium" htmlFor="orden-resp-seguro">
+                      Quién paga seguro
                     </label>
                     <Input
-                      id="orden-lugar-incoterm"
-                      name="condiciones_comerciales_lugar_incoterm"
-                      value={orderLugarIncoterm}
-                      onChange={(event) => setOrderLugarIncoterm(event.target.value)}
-                      placeholder="Puerto / aeropuerto / domicilio"
+                      id="orden-resp-seguro"
+                      name="condiciones_comerciales_responsable_seguro"
+                      value={orderResponsableSeguro}
+                      onChange={(event) => setOrderResponsableSeguro(event.target.value)}
+                      placeholder="Comprador / vendedor"
                     />
                   </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-resp-desp-export">
+                      Despacho exportación
+                    </label>
+                    <Input
+                      id="orden-resp-desp-export"
+                      name="condiciones_comerciales_responsable_despacho_exportacion"
+                      value={orderResponsableDespachoExportacion}
+                      onChange={(event) => setOrderResponsableDespachoExportacion(event.target.value)}
+                      placeholder="Comprador / vendedor"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-resp-desp-import">
+                      Despacho importación
+                    </label>
+                    <Input
+                      id="orden-resp-desp-import"
+                      name="condiciones_comerciales_responsable_despacho_importacion"
+                      value={orderResponsableDespachoImportacion}
+                      onChange={(event) => setOrderResponsableDespachoImportacion(event.target.value)}
+                      placeholder="Comprador / vendedor"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-resp-impuestos">
+                      Impuestos importación
+                    </label>
+                    <Input
+                      id="orden-resp-impuestos"
+                      name="condiciones_comerciales_responsable_impuestos_importacion"
+                      value={orderResponsableImpuestosImportacion}
+                      onChange={(event) => setOrderResponsableImpuestosImportacion(event.target.value)}
+                      placeholder="Comprador / vendedor"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
+                      Gastos bancarios
+                    </label>
+                    <Input
+                      id="orden-gastos-bancarios"
+                      name="condiciones_comerciales_gastos_bancarios"
+                      value={orderGastosBancarios}
+                      onChange={(event) => setOrderGastosBancarios(event.target.value)}
+                      placeholder="OUR / SHA / BEN"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm md:col-span-3">
+                    <input
+                      type="checkbox"
+                      name="condiciones_comerciales_permite_embarques_parciales"
+                      checked={orderPermiteEmbarquesParciales}
+                      onChange={(event) => setOrderPermiteEmbarquesParciales(event.target.checked)}
+                    />
+                    Permite embarques parciales
+                  </label>
+                  <label className="flex items-center gap-2 text-sm md:col-span-3">
+                    <input
+                      type="checkbox"
+                      name="condiciones_comerciales_permite_transbordos"
+                      checked={orderPermiteTransbordos}
+                      onChange={(event) => setOrderPermiteTransbordos(event.target.checked)}
+                    />
+                    Permite transbordos
+                  </label>
                 </div>
               ) : null}
-            </div>
-            {orderType === "internacional" ? (
-              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
+              <div className="mt-4 grid gap-4 md:grid-cols-6">
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-resp-flete">
-                    Quién paga flete
+                  <label className="text-sm font-medium" htmlFor="orden-forma-pago">
+                    Forma de pago
                   </label>
                   <Input
-                    id="orden-resp-flete"
-                    name="condiciones_comerciales_responsable_flete"
-                    value={orderResponsableFlete}
-                    onChange={(event) => setOrderResponsableFlete(event.target.value)}
-                    placeholder="Comprador / vendedor"
+                    id="orden-forma-pago"
+                    name="condiciones_pago_forma_pago"
+                    value={orderFormaPago}
+                    onChange={(event) => setOrderFormaPago(event.target.value)}
+                    placeholder="Transferencia / carta de crédito"
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-resp-seguro">
-                    Quién paga seguro
-                  </label>
-                  <Input
-                    id="orden-resp-seguro"
-                    name="condiciones_comerciales_responsable_seguro"
-                    value={orderResponsableSeguro}
-                    onChange={(event) => setOrderResponsableSeguro(event.target.value)}
-                    placeholder="Comprador / vendedor"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-resp-desp-export">
-                    Despacho exportación
-                  </label>
-                  <Input
-                    id="orden-resp-desp-export"
-                    name="condiciones_comerciales_responsable_despacho_exportacion"
-                    value={orderResponsableDespachoExportacion}
-                    onChange={(event) => setOrderResponsableDespachoExportacion(event.target.value)}
-                    placeholder="Comprador / vendedor"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-resp-desp-import">
-                    Despacho importación
-                  </label>
-                  <Input
-                    id="orden-resp-desp-import"
-                    name="condiciones_comerciales_responsable_despacho_importacion"
-                    value={orderResponsableDespachoImportacion}
-                    onChange={(event) => setOrderResponsableDespachoImportacion(event.target.value)}
-                    placeholder="Comprador / vendedor"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-resp-impuestos">
-                    Impuestos importación
-                  </label>
-                  <Input
-                    id="orden-resp-impuestos"
-                    name="condiciones_comerciales_responsable_impuestos_importacion"
-                    value={orderResponsableImpuestosImportacion}
-                    onChange={(event) => setOrderResponsableImpuestosImportacion(event.target.value)}
-                    placeholder="Comprador / vendedor"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
-                    Gastos bancarios
-                  </label>
-                  <Input
-                    id="orden-gastos-bancarios"
-                    name="condiciones_comerciales_gastos_bancarios"
-                    value={orderGastosBancarios}
-                    onChange={(event) => setOrderGastosBancarios(event.target.value)}
-                    placeholder="OUR / SHA / BEN / descripción"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm md:col-span-3">
-                  <input
-                    type="checkbox"
-                    name="condiciones_comerciales_permite_embarques_parciales"
-                    checked={orderPermiteEmbarquesParciales}
-                    onChange={(event) => setOrderPermiteEmbarquesParciales(event.target.checked)}
-                  />
-                  Permite embarques parciales
-                </label>
-                <label className="flex items-center gap-2 text-sm md:col-span-3">
-                  <input
-                    type="checkbox"
-                    name="condiciones_comerciales_permite_transbordos"
-                    checked={orderPermiteTransbordos}
-                    onChange={(event) => setOrderPermiteTransbordos(event.target.checked)}
-                  />
-                  Permite transbordos
-                </label>
-                <div className="md:col-span-6 space-y-2">
-                  <Label htmlFor="orden-comercial-observaciones">Observaciones comerciales</Label>
-                  <Textarea
-                    id="orden-comercial-observaciones"
-                    name="condiciones_comerciales_observaciones"
-                    value={orderCondicionesComercialesObservaciones}
-                    onChange={(event) => setOrderCondicionesComercialesObservaciones(event.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-            ) : null}
-            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold">Condiciones de pago</div>
-                  <div className="text-xs text-muted-foreground">Define anticipos, saldos y moneda de pago.</div>
-                </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="orden-forma-pago">
-                  Forma de pago
-                </label>
-                <Input
-                  id="orden-forma-pago"
-                  name="condiciones_pago_forma_pago"
-                  value={orderFormaPago}
-                  onChange={(event) => setOrderFormaPago(event.target.value)}
-                  placeholder="Transferencia / carta de crédito"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="orden-moneda-pago">
-                  Moneda de pago
-                </label>
-                <ContactCatalogSelect
-                  value={orderMonedaPago}
-                  onValueChange={(value) => setOrderMonedaPago(value)}
-                  options={monedasOptions}
-                  placeholder="Selecciona moneda"
-                  emptyLabel="Sin monedas configuradas"
-                />
-                <input type="hidden" name="condiciones_pago_moneda_pago" value={orderMonedaPago} readOnly />
-              </div>
-              <div className="grid gap-3 md:grid-cols-6 md:col-span-6">
                 <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-porcentaje-anticipo">
                     % anticipo
@@ -1442,7 +1390,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderMontoSaldo(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2 md:col-span-1">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-momento-saldo">
                     Momento pago saldo
                   </label>
@@ -1746,8 +1694,8 @@ export function ComprasWorkspace({
                                   {expandedOrderLineIndex === index ? "Ocultar" : "Editar"}
                                 </Button>
                               </div>
-                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-2" : "hidden"}>
-                                <div className="space-y-2">
+                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-4" : "hidden"}>
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
                                     Número de partida
                                   </label>
@@ -1761,7 +1709,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2 md:col-span-2">
+                                <div className="space-y-2 md:col-span-4">
                                   <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
                                     Descripción
                                   </label>
@@ -1773,7 +1721,7 @@ export function ComprasWorkspace({
                                     rows={2}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
                                     Marca
                                   </label>
@@ -1784,7 +1732,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
                                     Modelo
                                   </label>
@@ -1806,7 +1754,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium">País origen</label>
                                   <ContactCatalogSelect
                                     value={line.pais_origen_codigo_iso2}
@@ -1817,7 +1765,7 @@ export function ComprasWorkspace({
                                   />
                                   <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium">País procedencia</label>
                                   <ContactCatalogSelect
                                     value={line.pais_procedencia_codigo_iso2}
@@ -1828,7 +1776,7 @@ export function ComprasWorkspace({
                                   />
                                   <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
                                     Fracción arancelaria
                                   </label>
@@ -1839,7 +1787,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
                                     HS code
                                   </label>
@@ -1850,7 +1798,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
                                     NICO
                                   </label>
@@ -1861,7 +1809,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
                                     Peso neto
                                   </label>
@@ -1875,7 +1823,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
                                     Peso bruto
                                   </label>
@@ -1889,7 +1837,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
                                     Volumen CBM
                                   </label>
@@ -1903,7 +1851,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
                                     Lote
                                   </label>
@@ -1914,7 +1862,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-serie-${index}`}>
                                     Número de serie
                                   </label>
@@ -1925,7 +1873,7 @@ export function ComprasWorkspace({
                                     onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-1">
                                   <label className="text-xs font-medium" htmlFor={`item-caducidad-${index}`}>
                                     Fecha caducidad
                                   </label>
