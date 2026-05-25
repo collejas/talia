@@ -184,7 +184,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [relationQuery, setRelationQuery] = React.useState("");
   const [relationResults, setRelationResults] = React.useState<SearchItem[]>([]);
   const [relationTargetId, setRelationTargetId] = React.useState<string>("");
-  const [relationRole, setRelationRole] = React.useState("contacto_principal");
   const [relationSubmitting, setRelationSubmitting] = React.useState(false);
   const [relationDeletingId, setRelationDeletingId] = React.useState<string | null>(null);
   const [dedupeLoading, setDedupeLoading] = React.useState(true);
@@ -602,11 +601,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/relaciones`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          persona_id: relationTargetId,
-          rol_en_cuenta: relationRole,
-          activo: true,
-        }),
+          body: JSON.stringify({
+            persona_id: relationTargetId,
+            rol_en_cuenta: "contacto_principal",
+            activo: true,
+          }),
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(body.error || "No se pudo vincular.");
@@ -615,7 +614,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       setRelationQuery("");
       setRelationResults([]);
       setRelationTargetId("");
-      setRelationRole("contacto_principal");
       await loadRelations();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo vincular.");
@@ -1293,15 +1291,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 value={relationQuery}
                 onChange={(event) => setRelationQuery(event.target.value)}
                 placeholder="Nombre, correo, teléfono..."
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="relation-role">Rol en cuenta</Label>
-              <Input
-                id="relation-role"
-                value={relationRole}
-                onChange={(event) => setRelationRole(event.target.value)}
-                placeholder="contacto_principal"
               />
             </div>
             {relationResults.length ? (

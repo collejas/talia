@@ -26,7 +26,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
-import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type CreateMode =
@@ -785,12 +784,6 @@ function validateState(state: ContactCreateState): string | null {
   }
   if (state.cuenta.rfc.trim() && sanitizeRfcInput(state.cuenta.rfc).length !== 13) {
     return "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
-  }
-  if (
-    (state.mode === "empresa_existente" || state.mode === "empresa_nueva") &&
-    !state.relacion.rol_en_cuenta.trim()
-  ) {
-    return "Define el rol de la persona dentro de la empresa.";
   }
   return null;
 }
@@ -1570,20 +1563,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {isContactMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol de la relación" hint="Define el tipo de vínculo; los checks marcan si además es principal, de facturación o representante legal." required>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.relacion.rol_en_cuenta}
-                    onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })}
-                  >
-                    <option value="">Selecciona un rol</option>
-                    {RELATION_ROLE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
                 <Field label="Fecha de inicio">
                   <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
                 </Field>

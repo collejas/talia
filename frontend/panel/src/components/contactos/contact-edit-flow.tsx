@@ -26,7 +26,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
-import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type CreateMode =
@@ -663,9 +662,6 @@ function validateState(state: ContactEditState): string | null {
   }
   if (state.cuenta.rfc.trim() && sanitizeRfcInput(state.cuenta.rfc).length !== 13) {
     return "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
-  }
-  if (state.mode !== "solo_persona" && !state.relacion.rol_en_cuenta.trim()) {
-    return "Define el rol de la persona dentro de la cuenta.";
   }
   return null;
 }
@@ -1450,7 +1446,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   const relationSectionDescription =
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Actualiza la relación principal de la persona con su negocio."
-      : "Actualiza el rol real de la persona dentro de la empresa.";
+      : "Actualiza la vinculación de la persona con la empresa.";
   const businessSummary = formatSummaryLine(
     [
       state.cuenta.nombre_comercial || state.cuenta.razon_social,
@@ -1912,20 +1908,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
           {state.mode !== "solo_persona" ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-<Field label="Rol de la relación" hint="El rol de la relación es independiente de los checks de principal, facturación y representante legal.">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.relacion.rol_en_cuenta}
-                    onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })}
-                  >
-                    <option value="">Selecciona un rol</option>
-                    {RELATION_ROLE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
                 <Field label="Fecha de inicio">
                   <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
                 </Field>
@@ -1969,26 +1951,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <Field label="Rol de la relación">
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                          value={relation.rol_en_cuenta}
-                          onChange={(e) =>
-                            setRelations((prev) =>
-                              prev.map((item) =>
-                                item.id === relation.id ? { ...item, rol_en_cuenta: e.target.value } : item,
-                              ),
-                            )
-                          }
-                        >
-                          <option value="">Selecciona un rol</option>
-                          {RELATION_ROLE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
                       <Field label="Fecha de inicio">
                         <Input
                           type="date"
@@ -2121,20 +2083,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       onChange={(e) => setRelationAccountQuery(e.target.value)}
                       placeholder="Nombre, RFC, correo o teléfono"
                     />
-                  </Field>
-                  <Field label="Rol de la relación" hint="Puedes cambiar el rol sin tocar las banderas de principal/facturación/legal.">
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                      value={newRelation.rol_en_cuenta}
-                      onChange={(e) => setNewRelation((prev) => ({ ...prev, rol_en_cuenta: e.target.value }))}
-                    >
-                      <option value="">Selecciona un rol</option>
-                      {RELATION_ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
                   </Field>
                   <Field label="Fecha de inicio">
                     <Input

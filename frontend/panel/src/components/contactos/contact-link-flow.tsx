@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 
 type ContactSearchItem = {
   id: string;
@@ -60,7 +59,6 @@ type ContactLinkFlowProps = {
 type LinkedSummary = {
   contacto: string;
   empresa: string;
-  rol: string;
 };
 
 function Field({
@@ -259,7 +257,6 @@ export function ContactLinkFlow({
   const summary: LinkedSummary = {
     contacto: selectedContact?.nombre?.trim() || "Pendiente",
     empresa: selectedCompany?.nombre?.trim() || "Pendiente",
-    rol: rolEnCuenta.trim() || "contacto_principal",
   };
 
   const handleSubmit = async () => {
@@ -313,7 +310,7 @@ export function ContactLinkFlow({
         <DialogHeader className="space-y-2">
           <DialogTitle>Vincular contacto a empresa</DialogTitle>
           <DialogDescription>
-            Relaciona un contacto ya creado con una empresa existente y define el rol dentro de esa empresa.
+            Relaciona un contacto ya creado con una empresa existente.
           </DialogDescription>
         </DialogHeader>
 
@@ -493,20 +490,6 @@ export function ContactLinkFlow({
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol de la relación" hint="El rol se elige aparte de las banderas de principal, facturación y representante legal.">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={rolEnCuenta}
-                    onChange={(e) => setRolEnCuenta(e.target.value)}
-                  >
-                    <option value="">Selecciona un rol</option>
-                    {RELATION_ROLE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -554,7 +537,6 @@ export function ContactLinkFlow({
               <div className="mt-4 space-y-3">
                 <SummaryCard title="Contacto" value={summary.contacto} subtitle={selectedContact?.empresa || "Sin empresa actual"} />
                 <SummaryCard title="Empresa" value={summary.empresa} subtitle={selectedCompany?.alias || selectedCompany?.tipo || "Pendiente"} />
-                <SummaryCard title="Rol" value={summary.rol} subtitle={esContactoPrincipal ? "Contacto principal" : "Vínculo secundario"} />
               </div>
             </div>
           </aside>
