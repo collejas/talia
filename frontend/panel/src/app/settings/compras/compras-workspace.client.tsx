@@ -750,9 +750,10 @@ export function ComprasWorkspace({
   const showOrdenes = activeView === "ordenes"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
+  const rootGridClassName = showResumen ? "grid gap-4 xl:grid-cols-3" : "grid gap-4"
 
   return (
-    <div className="grid gap-4 xl:grid-cols-3">
+    <div className={rootGridClassName}>
       {showAlmacenes ? (
       <Card>
         <CardHeader>
@@ -761,50 +762,52 @@ export function ComprasWorkspace({
         </CardHeader>
         <CardContent>
           <form action={warehouseFormAction} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="almacen-codigo">
-                Código automático
-              </label>
-              <Input
-                id="almacen-codigo"
-                name="codigo"
-                placeholder="AL-001"
-                readOnly
-                className="bg-muted/40"
-                value={warehouseFormCode}
-              />
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="almacen-codigo">
+                  Código automático
+                </label>
+                <Input
+                  id="almacen-codigo"
+                  name="codigo"
+                  placeholder="AL-001"
+                  readOnly
+                  className="bg-muted/40"
+                  value={warehouseFormCode}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium" htmlFor="almacen-nombre">
+                  Nombre
+                </label>
+                <Input
+                  id="almacen-nombre"
+                  name="nombre"
+                  placeholder="Almacén central"
+                  required
+                  value={warehouseFormName}
+                  onChange={(event) => setWarehouseFormName(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="almacen-tipo">
+                  Tipo
+                </label>
+                <select
+                  id="almacen-tipo"
+                  name="tipo"
+                  value={warehouseFormType}
+                  onChange={(event) => setWarehouseFormType(event.target.value as typeof warehouseFormType)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="central">Central</option>
+                  <option value="sucursal">Sucursal</option>
+                  <option value="transito">Tránsito</option>
+                  <option value="consignacion">Consignación</option>
+                </select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="almacen-nombre">
-                Nombre
-              </label>
-              <Input
-                id="almacen-nombre"
-                name="nombre"
-                placeholder="Almacén central"
-                required
-                value={warehouseFormName}
-                onChange={(event) => setWarehouseFormName(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="almacen-tipo">
-                Tipo
-              </label>
-              <select
-                id="almacen-tipo"
-                name="tipo"
-                value={warehouseFormType}
-                onChange={(event) => setWarehouseFormType(event.target.value as typeof warehouseFormType)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="central">Central</option>
-                <option value="sucursal">Sucursal</option>
-                <option value="transito">Tránsito</option>
-                <option value="consignacion">Consignación</option>
-              </select>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="almacen-telefono">
                   Teléfono
@@ -913,64 +916,66 @@ export function ComprasWorkspace({
         </CardHeader>
         <CardContent>
           <form action={providerFormAction} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="proveedor-codigo">
-                Código automático
-              </label>
-              <Input
-                id="proveedor-codigo"
-                name="codigo_proveedor"
-                value={providerFormCode}
-                readOnly
-                placeholder="Prov-001"
-                className="bg-muted/40"
-              />
+            <div className="grid gap-4 md:grid-cols-6">
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="proveedor-codigo">
+                  Código automático
+                </label>
+                <Input
+                  id="proveedor-codigo"
+                  name="codigo_proveedor"
+                  value={providerFormCode}
+                  readOnly
+                  placeholder="Prov-001"
+                  className="bg-muted/40"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-razon">
+                  Razón social
+                </label>
+                <Input id="proveedor-razon" name="razon_social" value={providerFormName} onChange={(event) => setProviderFormName(event.target.value)} placeholder="Proveedor SA de CV" required />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-comercial">
+                  Nombre comercial
+                </label>
+                <Input id="proveedor-comercial" name="nombre_comercial" value={providerFormCommercialName} onChange={(event) => setProviderFormCommercialName(event.target.value)} placeholder="Proveedor visible" />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="proveedor-rfc">
+                  RFC
+                </label>
+                <Input id="proveedor-rfc" name="rfc" value={providerFormTax} onChange={(event) => setProviderFormTax(event.target.value)} placeholder="RFC del proveedor" />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="proveedor-razon">
-                Razón social
-              </label>
-              <Input id="proveedor-razon" name="razon_social" value={providerFormName} onChange={(event) => setProviderFormName(event.target.value)} placeholder="Proveedor SA de CV" required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="proveedor-comercial">
-                Nombre comercial
-              </label>
-              <Input id="proveedor-comercial" name="nombre_comercial" value={providerFormCommercialName} onChange={(event) => setProviderFormCommercialName(event.target.value)} placeholder="Proveedor visible" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="proveedor-correo">
                   Correo
                 </label>
                 <Input id="proveedor-correo" name="correo" type="email" value={providerFormEmail} onChange={(event) => setProviderFormEmail(event.target.value)} placeholder="ventas@proveedor.com" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="proveedor-telefono">
                   Teléfono
                 </label>
                 <Input id="proveedor-telefono" name="telefono" value={providerFormPhone} onChange={(event) => setProviderFormPhone(event.target.value)} placeholder="55 5555 5555" />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="proveedor-plazo-pago">
                   Plazo pago
                 </label>
                 <Input id="proveedor-plazo-pago" name="plazo_pago_dias" type="number" min="0" value={providerFormPayDays} onChange={(event) => setProviderFormPayDays(event.target.value)} placeholder="30" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="proveedor-plazo-entrega">
                   Plazo entrega
                 </label>
                 <Input id="proveedor-plazo-entrega" name="plazo_entrega_dias" type="number" min="0" value={providerFormLeadDays} onChange={(event) => setProviderFormLeadDays(event.target.value)} placeholder="5" />
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="proveedor-rfc">
-                RFC
-              </label>
-              <Input id="proveedor-rfc" name="rfc" value={providerFormTax} onChange={(event) => setProviderFormTax(event.target.value)} placeholder="RFC del proveedor" />
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="activo" checked={providerFormActive} onChange={(event) => setProviderFormActive(event.target.checked)} />
@@ -1033,7 +1038,7 @@ export function ComprasWorkspace({
       ) : null}
 
       {showOrdenes ? (
-      <Card className="xl:col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</CardTitle>
           <CardDescription>Selecciona proveedor, almacén y productos. Todo se guarda en una sola operación.</CardDescription>
@@ -1041,7 +1046,7 @@ export function ComprasWorkspace({
         <CardContent>
           <form action={orderFormAction} className="space-y-5">
             <input type="hidden" name="fecha_emision" value={orderEmissionIso} readOnly />
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="orden-folio">
                   Folio
@@ -1055,7 +1060,7 @@ export function ComprasWorkspace({
                   placeholder="OC-20260522-001"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-moneda">
                   Moneda
                 </label>
@@ -1067,9 +1072,7 @@ export function ComprasWorkspace({
                   <option value="EUR">EUR</option>
                 </select>
               </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-proveedor">
                   Proveedor
                 </label>
@@ -1082,7 +1085,7 @@ export function ComprasWorkspace({
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-almacen">
                   Almacén destino
                 </label>
@@ -1096,31 +1099,31 @@ export function ComprasWorkspace({
                 </select>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
+            <div className="grid gap-4 md:grid-cols-6">
+              <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-entrega">
                   Fecha estimada
                 </label>
                 <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-ref">
                   Referencia externa
                 </label>
                 <Input id="orden-ref" name="referencia_externa" value={orderReferenceExternal} onChange={(event) => setOrderReferenceExternal(event.target.value)} placeholder="Cotización, solicitud..." />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-notas">
                   Observaciones
                 </label>
                 <Input id="orden-notas" name="observaciones" value={orderObservations} onChange={(event) => setOrderObservations(event.target.value)} placeholder="Notas para compras" />
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="orden-instrucciones">
-                Instrucciones de entrega
-              </label>
-              <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción, contacto..." />
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium" htmlFor="orden-instrucciones">
+                  Instrucciones de entrega
+                </label>
+                <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción, contacto..." />
+              </div>
             </div>
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -1132,8 +1135,8 @@ export function ComprasWorkspace({
                   {orderType === "internacional" ? "Internacional" : "Nacional"}
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
+              <div className="grid gap-4 md:grid-cols-6">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-tipo-operacion">
                     Tipo de operación
                   </label>
@@ -1148,7 +1151,7 @@ export function ComprasWorkspace({
                     <option value="internacional">Internacional</option>
                   </select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-moneda">
                     Moneda
                   </label>
@@ -1164,7 +1167,7 @@ export function ComprasWorkspace({
                   />
                   <input type="hidden" name="moneda" value={orderCurrency} readOnly />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-tipo-cambio">
                     Tipo de cambio referencia
                   </label>
@@ -1181,8 +1184,8 @@ export function ComprasWorkspace({
                 </div>
               </div>
               {orderType === "internacional" ? (
-                <div className="mt-4 grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
+                <div className="mt-4 grid gap-4 md:grid-cols-6">
+                  <div className="space-y-2 md:col-span-1">
                     <label className="text-sm font-medium" htmlFor="orden-vigencia">
                       Vigencia hasta
                     </label>
@@ -1194,7 +1197,7 @@ export function ComprasWorkspace({
                       onChange={(event) => setOrderVigenciaHasta(event.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-1">
                     <label className="text-sm font-medium" htmlFor="orden-proforma">
                       Proforma referencia
                     </label>
@@ -1206,7 +1209,7 @@ export function ComprasWorkspace({
                       placeholder="PI-12345"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-incoterm">
                       Incoterm
                     </label>
@@ -1217,38 +1220,38 @@ export function ComprasWorkspace({
                     placeholder="Selecciona un Incoterm"
                     emptyLabel="Sin incoterms configurados"
                   />
-                  <input type="hidden" name="condiciones_comerciales_incoterm_codigo" value={orderIncotermCodigo} readOnly />
+                    <input type="hidden" name="condiciones_comerciales_incoterm_codigo" value={orderIncotermCodigo} readOnly />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-incoterm-version">
+                      Versión Incoterm
+                    </label>
+                    <Input
+                      id="orden-incoterm-version"
+                      name="condiciones_comerciales_incoterm_version"
+                      value={orderIncotermVersion}
+                      onChange={(event) => setOrderIncotermVersion(event.target.value)}
+                      placeholder="2020"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
+                      Lugar Incoterm
+                    </label>
+                    <Input
+                      id="orden-lugar-incoterm"
+                      name="condiciones_comerciales_lugar_incoterm"
+                      value={orderLugarIncoterm}
+                      onChange={(event) => setOrderLugarIncoterm(event.target.value)}
+                      placeholder="Puerto / aeropuerto / domicilio"
+                    />
+                  </div>
                 </div>
-              </div>
               ) : null}
             </div>
             {orderType === "internacional" ? (
-              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orden-incoterm-version">
-                    Versión Incoterm
-                  </label>
-                  <Input
-                    id="orden-incoterm-version"
-                    name="condiciones_comerciales_incoterm_version"
-                    value={orderIncotermVersion}
-                    onChange={(event) => setOrderIncotermVersion(event.target.value)}
-                    placeholder="2020"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
-                    Lugar Incoterm
-                  </label>
-                  <Input
-                    id="orden-lugar-incoterm"
-                    name="condiciones_comerciales_lugar_incoterm"
-                    value={orderLugarIncoterm}
-                    onChange={(event) => setOrderLugarIncoterm(event.target.value)}
-                    placeholder="Puerto / aeropuerto / domicilio"
-                  />
-                </div>
-                <div className="space-y-2">
+              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-resp-flete">
                     Quién paga flete
                   </label>
@@ -1260,7 +1263,7 @@ export function ComprasWorkspace({
                     placeholder="Comprador / vendedor"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-resp-seguro">
                     Quién paga seguro
                   </label>
@@ -1272,7 +1275,7 @@ export function ComprasWorkspace({
                     placeholder="Comprador / vendedor"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-resp-desp-export">
                     Despacho exportación
                   </label>
@@ -1284,7 +1287,7 @@ export function ComprasWorkspace({
                     placeholder="Comprador / vendedor"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-resp-desp-import">
                     Despacho importación
                   </label>
@@ -1296,7 +1299,7 @@ export function ComprasWorkspace({
                     placeholder="Comprador / vendedor"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-resp-impuestos">
                     Impuestos importación
                   </label>
@@ -1308,7 +1311,7 @@ export function ComprasWorkspace({
                     placeholder="Comprador / vendedor"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
                     Gastos bancarios
                   </label>
@@ -1320,7 +1323,7 @@ export function ComprasWorkspace({
                     placeholder="OUR / SHA / BEN / descripción"
                   />
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-sm md:col-span-3">
                   <input
                     type="checkbox"
                     name="condiciones_comerciales_permite_embarques_parciales"
@@ -1329,7 +1332,7 @@ export function ComprasWorkspace({
                   />
                   Permite embarques parciales
                 </label>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-sm md:col-span-3">
                   <input
                     type="checkbox"
                     name="condiciones_comerciales_permite_transbordos"
@@ -1338,7 +1341,7 @@ export function ComprasWorkspace({
                   />
                   Permite transbordos
                 </label>
-                <div className="md:col-span-2 space-y-2">
+                <div className="md:col-span-6 space-y-2">
                   <Label htmlFor="orden-comercial-observaciones">Observaciones comerciales</Label>
                   <Textarea
                     id="orden-comercial-observaciones"
@@ -1350,12 +1353,12 @@ export function ComprasWorkspace({
                 </div>
               </div>
             ) : null}
-            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <div className="text-sm font-semibold">Condiciones de pago</div>
-                <div className="text-xs text-muted-foreground">Define anticipos, saldos y moneda de pago.</div>
-              </div>
-              <div className="space-y-2">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Condiciones de pago</div>
+                  <div className="text-xs text-muted-foreground">Define anticipos, saldos y moneda de pago.</div>
+                </div>
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-forma-pago">
                   Forma de pago
                 </label>
@@ -1367,7 +1370,7 @@ export function ComprasWorkspace({
                   placeholder="Transferencia / carta de crédito"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-moneda-pago">
                   Moneda de pago
                 </label>
@@ -1380,8 +1383,8 @@ export function ComprasWorkspace({
                 />
                 <input type="hidden" name="condiciones_pago_moneda_pago" value={orderMonedaPago} readOnly />
               </div>
-              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
-                <div className="space-y-2">
+              <div className="grid gap-3 md:grid-cols-6 md:col-span-6">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-porcentaje-anticipo">
                     % anticipo
                   </label>
@@ -1396,7 +1399,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderPorcentajeAnticipo(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-monto-anticipo">
                     Monto anticipo
                   </label>
@@ -1410,7 +1413,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderMontoAnticipo(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-porcentaje-saldo">
                     % saldo
                   </label>
@@ -1425,7 +1428,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderPorcentajeSaldo(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-monto-saldo">
                     Monto saldo
                   </label>
@@ -1439,7 +1442,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderMontoSaldo(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-momento-saldo">
                     Momento pago saldo
                   </label>
@@ -1451,7 +1454,7 @@ export function ComprasWorkspace({
                     placeholder="Contra BL / antes de embarque"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-dias-credito">
                     Días crédito
                   </label>
@@ -1477,7 +1480,7 @@ export function ComprasWorkspace({
                     placeholder="OUR / SHA / BEN"
                   />
                 </div>
-                <div className="md:col-span-2 space-y-2">
+                <div className="md:col-span-6 space-y-2">
                   <Label htmlFor="orden-pago-observaciones">Observaciones de pago</Label>
                   <Textarea
                     id="orden-pago-observaciones"
@@ -1489,12 +1492,12 @@ export function ComprasWorkspace({
                 </div>
               </div>
             </div>
-            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-2">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
               <div className="space-y-2">
                 <div className="text-sm font-semibold">Logística y embarque</div>
                 <div className="text-xs text-muted-foreground">Fechas, modo de transporte y datos de envío.</div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="orden-modo-transporte">
                   Modo de transporte
                 </label>
@@ -1507,8 +1510,8 @@ export function ComprasWorkspace({
                 />
                 <input type="hidden" name="logistica_modo_transporte_codigo" value={orderModoTransporteCodigo} readOnly />
               </div>
-              <div className="grid gap-3 md:grid-cols-3 md:col-span-2">
-                <div className="space-y-2">
+              <div className="grid gap-3 md:grid-cols-6 md:col-span-6">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-fecha-embarque">
                     Fecha requerida embarque
                   </label>
@@ -1520,7 +1523,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderFechaRequeridaEmbarque(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-fecha-estimada-embarque">
                     Fecha estimada embarque
                   </label>
@@ -1532,7 +1535,7 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderFechaEstimadaEmbarque(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-fecha-arribo">
                     Fecha estimada arribo
                   </label>
@@ -1545,116 +1548,116 @@ export function ComprasWorkspace({
                   />
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
-                <div className="space-y-2">
+              <div className="grid gap-3 md:grid-cols-6 md:col-span-6">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-puerto-origen">
                     Puerto origen
                   </label>
                   <Input id="orden-puerto-origen" name="logistica_puerto_origen" value={orderPuertoOrigen} onChange={(event) => setOrderPuertoOrigen(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-puerto-destino">
                     Puerto destino
                   </label>
                   <Input id="orden-puerto-destino" name="logistica_puerto_destino" value={orderPuertoDestino} onChange={(event) => setOrderPuertoDestino(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-aeropuerto-origen">
                     Aeropuerto origen
                   </label>
                   <Input id="orden-aeropuerto-origen" name="logistica_aeropuerto_origen" value={orderAeropuertoOrigen} onChange={(event) => setOrderAeropuertoOrigen(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-aeropuerto-destino">
                     Aeropuerto destino
                   </label>
                   <Input id="orden-aeropuerto-destino" name="logistica_aeropuerto_destino" value={orderAeropuertoDestino} onChange={(event) => setOrderAeropuertoDestino(event.target.value)} />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2 md:col-span-3">
                   <label className="text-sm font-medium" htmlFor="orden-lugar-entrega">
                     Lugar entrega final
                   </label>
                   <Input id="orden-lugar-entrega" name="logistica_lugar_entrega_final" value={orderLugarEntregaFinal} onChange={(event) => setOrderLugarEntregaFinal(event.target.value)} />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2 md:col-span-3">
                   <label className="text-sm font-medium" htmlFor="orden-direccion-entrega">
                     Dirección entrega
                   </label>
                   <Input id="orden-direccion-entrega" name="logistica_direccion_entrega" value={orderDireccionEntrega} onChange={(event) => setOrderDireccionEntrega(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-tipo-embarque">
                     Tipo embarque
                   </label>
                   <Input id="orden-tipo-embarque" name="logistica_tipo_embarque" value={orderTipoEmbarque} onChange={(event) => setOrderTipoEmbarque(event.target.value)} placeholder="FCL / LCL / courier" />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-tipo-contenedor">
                     Tipo contenedor
                   </label>
                   <Input id="orden-tipo-contenedor" name="logistica_tipo_contenedor" value={orderTipoContenedor} onChange={(event) => setOrderTipoContenedor(event.target.value)} placeholder="20' / 40' / etc." />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-forwarder">
                     Forwarder
                   </label>
                   <Input id="orden-forwarder" name="logistica_forwarder_nombre" value={orderForwarderNombre} onChange={(event) => setOrderForwarderNombre(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-booking">
                     Booking
                   </label>
                   <Input id="orden-booking" name="logistica_numero_booking" value={orderNumeroBooking} onChange={(event) => setOrderNumeroBooking(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-bl-awb">
                     BL / AWB
                   </label>
                   <Input id="orden-bl-awb" name="logistica_numero_bl_awb" value={orderNumeroBlAwb} onChange={(event) => setOrderNumeroBlAwb(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-tracking">
                     Tracking
                   </label>
                   <Input id="orden-tracking" name="logistica_tracking" value={orderTracking} onChange={(event) => setOrderTracking(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-peso-neto">
                     Peso neto total
                   </label>
                   <Input id="orden-peso-neto" name="logistica_peso_neto_total" type="number" min="0" step="0.0001" value={orderPesoNetoTotal} onChange={(event) => setOrderPesoNetoTotal(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-peso-bruto">
                     Peso bruto total
                   </label>
                   <Input id="orden-peso-bruto" name="logistica_peso_bruto_total" type="number" min="0" step="0.0001" value={orderPesoBrutoTotal} onChange={(event) => setOrderPesoBrutoTotal(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-volumen">
                     Volumen total CBM
                   </label>
                   <Input id="orden-volumen" name="logistica_volumen_total_cbm" type="number" min="0" step="0.0001" value={orderVolumenTotalCbm} onChange={(event) => setOrderVolumenTotalCbm(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-bultos">
                     Cantidad bultos
                   </label>
                   <Input id="orden-bultos" name="logistica_cantidad_bultos" type="number" min="0" step="1" value={orderCantidadBultos} onChange={(event) => setOrderCantidadBultos(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-empaque">
                     Tipo empaque
                   </label>
                   <Input id="orden-empaque" name="logistica_tipo_empaque" value={orderTipoEmpaque} onChange={(event) => setOrderTipoEmpaque(event.target.value)} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-marcas">
                     Marcas embarque
                   </label>
                   <Input id="orden-marcas" name="logistica_marcas_embarque" value={orderMarcasEmbarque} onChange={(event) => setOrderMarcasEmbarque(event.target.value)} />
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-sm md:col-span-2">
                   <input
                     type="checkbox"
                     name="logistica_requiere_seguro"
@@ -1663,13 +1666,13 @@ export function ComprasWorkspace({
                   />
                   Requiere seguro
                 </label>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-monto-asegurado">
                     Monto asegurado
                   </label>
                   <Input id="orden-monto-asegurado" name="logistica_monto_asegurado" type="number" min="0" step="0.01" value={orderMontoAsegurado} onChange={(event) => setOrderMontoAsegurado(event.target.value)} />
                 </div>
-                <div className="md:col-span-2 space-y-2">
+                <div className="md:col-span-6 space-y-2">
                   <Label htmlFor="orden-logistica-observaciones">Observaciones logísticas</Label>
                   <Textarea
                     id="orden-logistica-observaciones"
@@ -2024,7 +2027,7 @@ export function ComprasWorkspace({
       ) : null}
 
       {showRecepciones ? (
-      <Card className="xl:col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>Registrar recepción</CardTitle>
           <CardDescription>
@@ -2033,7 +2036,7 @@ export function ComprasWorkspace({
         </CardHeader>
         <CardContent>
           <form action={createRecepcionAction} className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-orden">
                   Orden de compra
@@ -2055,11 +2058,11 @@ export function ComprasWorkspace({
                     </option>
                   ))}
                 </select>
-                {selectedProvider ? (
-                  <p className="text-xs text-muted-foreground">
-                    Proveedor: <span className="font-medium text-foreground">{asString(selectedProvider.razon_social ?? selectedProvider.nombre_comercial)}</span>
-                  </p>
-                ) : null}
+                  {selectedProvider ? (
+                    <p className="text-xs text-muted-foreground">
+                      Proveedor: <span className="font-medium text-foreground">{asString(selectedProvider.razon_social ?? selectedProvider.nombre_comercial)}</span>
+                    </p>
+                  ) : null}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-almacen">
@@ -2072,7 +2075,7 @@ export function ComprasWorkspace({
                   onChange={(event) => setSelectedWarehouseId(event.target.value)}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   required
-                >
+                  >
                   <option value="" disabled>
                     Selecciona un almacén
                   </option>
@@ -2083,9 +2086,6 @@ export function ComprasWorkspace({
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-numero">
                   Número de recepción
@@ -2098,7 +2098,10 @@ export function ComprasWorkspace({
                   required
                 />
               </div>
-              <div className="space-y-2">
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-ref">
                   Referencia externa
                 </label>
@@ -2110,7 +2113,7 @@ export function ComprasWorkspace({
                   onChange={(event) => setReferenceExternal(event.target.value)}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-notas">
                   Observaciones
                 </label>
@@ -2386,7 +2389,7 @@ export function ComprasWorkspace({
       ) : null}
 
       {showInventario ? (
-      <Card className="xl:col-span-3">
+      <Card>
         <CardHeader>
           <CardTitle>Existencias por almacén</CardTitle>
           <CardDescription>Consulta rápida del stock real disponible para cada almacén.</CardDescription>
@@ -2489,7 +2492,7 @@ export function ComprasWorkspace({
       ) : null}
 
       {showOrdenes ? (
-      <Card className="xl:col-span-3">
+      <Card>
         <CardHeader>
           <CardTitle>Órdenes de compra recientes</CardTitle>
           <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
@@ -2598,7 +2601,7 @@ export function ComprasWorkspace({
       ) : null}
 
       {showRecepciones ? (
-      <Card className="lg:col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>Recepciones recientes</CardTitle>
           <CardDescription>Historial de ingresos de mercancía al inventario.</CardDescription>
