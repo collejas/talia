@@ -105,12 +105,6 @@ const NAVIGATION: {
         { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
       ],
     },
-    {
-      title: "Compras e inventario",
-      url: "/compras",
-      icon: IconShoppingCart,
-      permission: "settings.manage",
-    },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
@@ -137,6 +131,12 @@ const NAVIGATION: {
         { title: "Atribución WhatsApp", url: "/prospeccion/whatsapp-atribucion", permission: "busquedas.run" },
         { title: "Mensajes automatizados", url: "/prospeccion/mensajes", permission: "messages.read" },
       ],
+    },
+    {
+      title: "Compras e inventario",
+      url: "/compras",
+      icon: IconShoppingCart,
+      permission: "settings.manage",
     },
     {
       title: "Settings",
