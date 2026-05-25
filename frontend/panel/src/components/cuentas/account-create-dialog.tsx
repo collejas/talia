@@ -443,7 +443,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold">Datos opcionales</div>
+                  <div className="text-sm font-semibold">Datos Fiscales</div>
                   <div className="text-xs text-muted-foreground">Datos fiscales, ubicación y domicilio.</div>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={() => setExtrasOpen((prev) => !prev)}>

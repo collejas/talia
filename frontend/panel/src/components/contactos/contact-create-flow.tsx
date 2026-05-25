@@ -1551,7 +1551,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          <FormSection title="Datos opcionales" description="Puedes omitirlos por ahora y completarlos más tarde.">
+          <FormSection title="Datos Fiscales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Datos fiscales, país, estado y municipio con claves reales.</p>
               <Button type="button" variant="outline" size="sm" onClick={() => dispatch({ type: "extras/toggle" })}>
