@@ -1058,14 +1058,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   onChange={(event) => setEditForm((prev) => ({ ...prev, municipio: event.target.value }))}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-clave-localidad">Clave localidad</Label>
-                <Input
-                  id="edit-clave-localidad"
-                  value={editForm.clave_localidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_localidad: event.target.value }))}
-                />
-              </div>
               <div className="grid gap-2 md:col-span-3">
                 <Label htmlFor="edit-localidad">Localidad</Label>
                 <Input

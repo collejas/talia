@@ -2233,9 +2233,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               }}
             />
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field label="Clave de localidad">
-                <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
-              </Field>
               <Field label="Localidad">
                 <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
               </Field>

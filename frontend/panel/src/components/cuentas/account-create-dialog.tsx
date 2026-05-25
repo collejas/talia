@@ -527,10 +527,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     }}
                   />
                   <div className="grid gap-2">
-                    <Label htmlFor="create-clave-localidad">Clave de localidad</Label>
-                    <Input id="create-clave-localidad" value={form.clave_localidad} onChange={(event) => setForm((prev) => ({ ...prev, clave_localidad: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
                     <Label htmlFor="create-localidad">Localidad</Label>
                     <Input id="create-localidad" value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
                   </div>

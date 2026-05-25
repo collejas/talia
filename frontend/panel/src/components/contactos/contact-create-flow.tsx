@@ -1637,9 +1637,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     dispatch({ type: "extras/set", field: "municipio", value: municipalityName });
                   }}
                 />
-                <Field label="Clave de localidad">
-                  <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
-                </Field>
                 <Field label="Localidad">
                   <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
                 </Field>
