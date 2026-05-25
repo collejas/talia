@@ -1868,9 +1868,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     ) : null}
                   </div>
                 </Field>
-                <Field label="Necesidad / propósito">
-                  <Input value={state.cuenta.necesidad_proposito} onChange={(e) => dispatch({ type: "cuenta/set", field: "necesidad_proposito", value: e.target.value })} />
-                </Field>
                 <Field label="Clasificación de negocio">
                   <div className="space-y-2">
                     <ContactCatalogSelect
