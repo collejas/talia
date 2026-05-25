@@ -893,14 +893,14 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Editar empresa</DialogTitle>
             <DialogDescription>
               Actualiza los datos principales sin tocar el código de empresa.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5">
+          <div className="max-h-[calc(90vh-6rem)] space-y-4 overflow-y-auto pr-1">
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
