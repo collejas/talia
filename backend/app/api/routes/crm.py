@@ -15468,6 +15468,84 @@ async def update_compras_orden(
     return CRMOrdenCompraRecepcion.model_validate(row)
 
 
+@router.post("/compras/ordenes/{orden_id}/proforma", response_model=CRMFile, status_code=status.HTTP_201_CREATED)
+async def upload_compras_orden_proforma(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    orden_id: UUID,
+    file: UploadFile = File(...),
+) -> CRMFile:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="proforma_file_required")
+
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if orden is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="proforma_file_empty")
+        upload = await storage.upload_quote_document(
+            content=content,
+            filename=file.filename,
+            lead_id=str(orden_id),
+            content_type=file.content_type or "application/pdf",
+        )
+        archivo_row = await repo.create_file(
+            organizacion_id=organizacion_id,
+            payload={
+                "relacion_tipo": "orden_compra",
+                "relacion_id": str(orden_id),
+                "nombre_original": file.filename,
+                "content_type": file.content_type or "application/pdf",
+                "tamano_bytes": len(content),
+                "storage_path": upload["path"],
+                "metadata": {
+                    "bucket": upload.get("bucket", "quotes"),
+                    "url": upload.get("url"),
+                    "tipo_documento": "proforma",
+                    "orden_compra_id": str(orden_id),
+                },
+                "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+        archivo_id = archivo_row.get("id")
+        if archivo_id is None:
+            raise HTTPException(status_code=502, detail="proforma_archivo_not_created")
+
+        await repo.delete_orden_compra_documentos(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            tipo_documento="proforma",
+        )
+        await repo.create_orden_compra_documento(
+            organizacion_id=organizacion_id,
+            payload={
+                "orden_compra_id": str(orden_id),
+                "tipo_documento": "proforma",
+                "obligatorio": False,
+                "estado": "cargado",
+                "archivo_id": str(archivo_id),
+                "observaciones": "Proforma adjunta base de la orden",
+            },
+        )
+    except HTTPException:
+        raise
+    except (StorageError, CRMRepositoryError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMFile.model_validate(archivo_row)
+
+
 async def _update_compras_orden_estado(
     *,
     repo: CRMRepository,

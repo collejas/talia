@@ -2244,6 +2244,46 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear archivo: {row!r}")
         return row
 
+    async def create_orden_compra_documento(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/ordenes_compra_documentos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el documento de orden creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear documento de orden: {row!r}")
+        return row
+
+    async def delete_orden_compra_documentos(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        tipo_documento: str | None = None,
+    ) -> None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "orden_compra_id": f"eq.{orden_id}",
+        }
+        if tipo_documento:
+            params["tipo_documento"] = f"eq.{tipo_documento}"
+        await self._request(
+            "DELETE",
+            "/rest/v1/ordenes_compra_documentos",
+            params=params,
+        )
+
     async def list_assistant_documents(
         self,
         *,

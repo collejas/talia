@@ -342,6 +342,8 @@ export function ComprasWorkspace({
   const [orderExchangeRate, setOrderExchangeRate] = useState("")
   const [orderVigenciaHasta, setOrderVigenciaHasta] = useState("")
   const [orderProformaReferencia, setOrderProformaReferencia] = useState("")
+  const [orderProformaFileName, setOrderProformaFileName] = useState("")
+  const [orderProformaInputKey, setOrderProformaInputKey] = useState(0)
   const [orderReferenceExternal, setOrderReferenceExternal] = useState("")
   const [orderObservations, setOrderObservations] = useState("")
   const [orderInstructions, setOrderInstructions] = useState("")
@@ -409,6 +411,12 @@ export function ComprasWorkspace({
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
+  const selectedOrderDocuments = Array.isArray((selectedOrder as AnyRecord | null)?.documentos)
+    ? ((selectedOrder as AnyRecord).documentos as AnyRecord[])
+    : []
+  const selectedOrderHasProforma = selectedOrderDocuments.some(
+    (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
+  )
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
@@ -592,6 +600,7 @@ export function ComprasWorkspace({
 
   const startEditOrder = (orden: AnyRecord) => {
     setEditingOrderId(String(orden.id))
+    setOrderProformaInputKey((current) => current + 1)
     setOrderFolio(asString(orden.folio, defaultOrderFolio))
     setOrderProviderId(asString(orden.proveedor_id, ""))
     setOrderWarehouseId(asString(orden.almacen_destino_id, defaultWarehouseId))
@@ -602,6 +611,7 @@ export function ComprasWorkspace({
     setOrderExchangeRate(asString(orden.tipo_cambio_referencia, ""))
     setOrderVigenciaHasta(asString(orden.vigencia_hasta, ""))
     setOrderProformaReferencia(asString(orden.proforma_referencia, ""))
+    setOrderProformaFileName("")
     setOrderReferenceExternal(asString(orden.referencia_externa, ""))
     setOrderObservations(asString(orden.observaciones, ""))
     setOrderInstructions(asString(orden.instrucciones_entrega, ""))
@@ -669,6 +679,8 @@ export function ComprasWorkspace({
     setOrderExchangeRate("")
     setOrderVigenciaHasta("")
     setOrderProformaReferencia("")
+    setOrderProformaFileName("")
+    setOrderProformaInputKey((current) => current + 1)
     setOrderReferenceExternal("")
     setOrderObservations("")
     setOrderInstructions("")
@@ -1161,7 +1173,7 @@ export function ComprasWorkspace({
                   {orderType === "internacional" ? "Internacional" : "Nacional"}
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-6">
+              <div className="grid gap-4 md:grid-cols-8">
                 <div className="space-y-2 md:col-span-1">
                   <label className="text-sm font-medium" htmlFor="orden-vigencia">
                     Vigencia hasta
@@ -1185,6 +1197,29 @@ export function ComprasWorkspace({
                     onChange={(event) => setOrderProformaReferencia(event.target.value)}
                     placeholder="PI-12345"
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium" htmlFor="orden-proforma-file">
+                    Archivo PI
+                  </label>
+                  <Input
+                    key={orderProformaInputKey}
+                    id="orden-proforma-file"
+                    name="proforma_file"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null
+                      setOrderProformaFileName(file?.name ?? "")
+                    }}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    {orderProformaFileName
+                      ? `Archivo seleccionado: ${orderProformaFileName}`
+                      : selectedOrderHasProforma
+                        ? "La orden ya tiene una PI adjunta."
+                        : "Adjunta aquí la cotización del vendedor en PDF."}
+                  </div>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-incoterm">
