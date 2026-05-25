@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogDescription, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
@@ -72,10 +73,10 @@ type AccountEditForm = {
   forma_pago: string;
   email_facturacion: string;
   pais: string;
-  entidad: string;
   clave_entidad: string;
-  municipio: string;
+  entidad: string;
   clave_municipio: string;
+  municipio: string;
   localidad: string;
   clave_localidad: string;
   tipo_vialidad: string;
@@ -187,10 +188,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     forma_pago: "",
     email_facturacion: "",
     pais: "",
-    entidad: "",
     clave_entidad: "",
-    municipio: "",
+    entidad: "",
     clave_municipio: "",
+    municipio: "",
     localidad: "",
     clave_localidad: "",
     tipo_vialidad: "",
@@ -427,10 +428,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       forma_pago: getInputText(detail?.forma_pago),
       email_facturacion: getInputText(detail?.email_facturacion),
       pais: getInputText(detail?.pais),
-      entidad: getInputText(detail?.entidad),
       clave_entidad: getInputText(detail?.clave_entidad),
-      municipio: getInputText(detail?.municipio),
+      entidad: getInputText(detail?.entidad),
       clave_municipio: getInputText(detail?.clave_municipio),
+      municipio: getInputText(detail?.municipio),
       localidad: getInputText(detail?.localidad),
       clave_localidad: getInputText(detail?.clave_localidad),
       tipo_vialidad: getInputText(detail?.tipo_vialidad),
@@ -484,10 +485,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           forma_pago: editForm.forma_pago.trim(),
           email_facturacion: editForm.email_facturacion.trim(),
           pais: editForm.pais.trim(),
-          entidad: editForm.entidad.trim(),
           clave_entidad: editForm.clave_entidad.trim(),
-          municipio: editForm.municipio.trim(),
+          entidad: editForm.entidad.trim(),
           clave_municipio: editForm.clave_municipio.trim(),
+          municipio: editForm.municipio.trim(),
           localidad: editForm.localidad.trim(),
           clave_localidad: editForm.clave_localidad.trim(),
           tipo_vialidad: editForm.tipo_vialidad.trim(),
@@ -1029,48 +1030,39 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4">
+              <GeoLocationSelects
+                countryCode={editForm.pais || "MX"}
+                stateCode={editForm.clave_entidad}
+                municipalityCode={editForm.clave_municipio}
+                onCountryChange={(countryCode) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    pais: countryCode,
+                    clave_entidad: "",
+                    entidad: "",
+                    clave_municipio: "",
+                    municipio: "",
+                  }))
+                }
+                onStateChange={(stateCode, stateName) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    clave_entidad: stateCode,
+                    entidad: stateName,
+                    clave_municipio: "",
+                    municipio: "",
+                  }))
+                }
+                onMunicipalityChange={(municipalityCode, municipalityName) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    clave_municipio: municipalityCode,
+                    municipio: municipalityName,
+                  }))
+                }
+              />
               <div className="grid gap-2">
-                <Label htmlFor="edit-pais">País</Label>
-                <Input
-                  id="edit-pais"
-                  value={editForm.pais}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, pais: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-clave-entidad">Clave entidad</Label>
-                <Input
-                  id="edit-clave-entidad"
-                  value={editForm.clave_entidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_entidad: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-entidad">Entidad</Label>
-                <Input
-                  id="edit-entidad"
-                  value={editForm.entidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, entidad: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-clave-municipio">Clave municipio</Label>
-                <Input
-                  id="edit-clave-municipio"
-                  value={editForm.clave_municipio}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_municipio: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-municipio">Municipio</Label>
-                <Input
-                  id="edit-municipio"
-                  value={editForm.municipio}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, municipio: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2 md:col-span-3">
                 <Label htmlFor="edit-localidad">Localidad</Label>
                 <Input
                   id="edit-localidad"
