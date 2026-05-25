@@ -445,6 +445,10 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     ) : null}
                   </div>
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="create-sitio-web">Sitio web</Label>
+                  <Input id="create-sitio-web" value={form.sitio_web} onChange={(event) => setForm((prev) => ({ ...prev, sitio_web: event.target.value }))} />
+                </div>
                 <Field label="Tamaño">
                   <ContactCatalogSelect
                     value={form.tamano}
@@ -455,10 +459,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     emptyLabel="Configura tamaños en Extras"
                   />
                 </Field>
-                <div className="grid gap-2">
-                  <Label htmlFor="create-sitio-web">Sitio web</Label>
-                  <Input id="create-sitio-web" value={form.sitio_web} onChange={(event) => setForm((prev) => ({ ...prev, sitio_web: event.target.value }))} />
-                </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="create-clasificacion-negocio">Clasificación de negocio</Label>
                   <ContactCatalogSelect

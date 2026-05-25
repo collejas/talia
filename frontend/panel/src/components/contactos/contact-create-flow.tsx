@@ -1519,6 +1519,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     ) : null}
                   </div>
                 </Field>
+                <Field label="Sitio web">
+                  <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
+                </Field>
                 <Field label="Tamaño">
                   <ContactCatalogSelect
                     value={state.cuenta.tamano}
@@ -1528,9 +1531,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     disabled={tamanoOptions.length === 0}
                     emptyLabel="Configura tamaños en Extras"
                   />
-                </Field>
-                <Field label="Sitio web">
-                  <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
                 </Field>
                 <Field label="Clasificación de negocio">
                   <div className="space-y-2">

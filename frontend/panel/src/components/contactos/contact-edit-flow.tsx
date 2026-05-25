@@ -1775,19 +1775,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: sanitizeRfcInput(e.target.value) })}
                   />
                 </Field>
-                <Field label="Tamaño">
-                  <ContactCatalogSelect
-                    value={state.cuenta.tamano}
-                    onValueChange={(value) => dispatch({ type: "cuenta/set", field: "tamano", value })}
-                    options={tamanoOptions}
-                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un tamaño"}
-                    disabled={tamanoOptions.length === 0}
-                    emptyLabel="Configura tamaños en Extras"
-                  />
-                </Field>
-                <Field label="Sitio web">
-                  <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
-                </Field>
                 <Field label="Teléfono principal" required>
                   <div className="space-y-2">
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
@@ -1867,6 +1854,19 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       />
                     ) : null}
                   </div>
+                </Field>
+                <Field label="Sitio web">
+                  <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
+                </Field>
+                <Field label="Tamaño">
+                  <ContactCatalogSelect
+                    value={state.cuenta.tamano}
+                    onValueChange={(value) => dispatch({ type: "cuenta/set", field: "tamano", value })}
+                    options={tamanoOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un tamaño"}
+                    disabled={tamanoOptions.length === 0}
+                    emptyLabel="Configura tamaños en Extras"
+                  />
                 </Field>
                 <Field label="Clasificación de negocio">
                   <div className="space-y-2">

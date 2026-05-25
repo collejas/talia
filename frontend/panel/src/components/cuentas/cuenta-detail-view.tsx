@@ -962,14 +962,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-website">Sitio web</Label>
-                <Input
-                  id="edit-website"
-                  value={editForm.website}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, website: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
                 <Label htmlFor="edit-correo">Correo</Label>
                 <Input
                   id="edit-correo"
@@ -993,6 +985,14 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   id="edit-industria"
                   value={editForm.industria}
                   onChange={(event) => setEditForm((prev) => ({ ...prev, industria: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-sitio-web">Sitio web</Label>
+                <Input
+                  id="edit-sitio-web"
+                  value={editForm.website}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, website: event.target.value }))}
                 />
               </div>
               <div className="grid gap-2">
