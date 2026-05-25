@@ -10116,7 +10116,6 @@ class CRMPersonaAltaCuenta(BaseModel):
 
 class CRMPersonaAltaRelacion(BaseModel):
     rol_en_cuenta: str | None = Field(default=None, max_length=120)
-    puesto: str | None = Field(default=None, max_length=120)
     es_contacto_principal: bool = True
     es_contacto_facturacion: bool = False
     es_representante_legal: bool = False
@@ -10215,7 +10214,6 @@ class CRMCuentaPersonaRelacion(BaseModel):
     persona_id: UUID
     persona: dict[str, Any] | None = None
     rol_en_cuenta: str
-    puesto: str | None = None
     es_contacto_principal: bool = False
     es_contacto_facturacion: bool = False
     es_representante_legal: bool = False
@@ -10231,7 +10229,6 @@ class CRMCuentaPersonaRelacion(BaseModel):
 class CRMCuentaPersonaRelacionCreate(BaseModel):
     cuenta_id: UUID
     rol_en_cuenta: str | None = Field(default=None, max_length=120)
-    puesto: str | None = Field(default=None, max_length=120)
     es_contacto_principal: bool = False
     es_contacto_facturacion: bool = False
     es_representante_legal: bool = False
@@ -10245,7 +10242,6 @@ class CRMCuentaPersonaRelacionCreate(BaseModel):
 class CRMCuentaPersonaRelacionUpdate(BaseModel):
     cuenta_id: UUID | None = None
     rol_en_cuenta: str | None = Field(default=None, max_length=120)
-    puesto: str | None = Field(default=None, max_length=120)
     es_contacto_principal: bool | None = None
     es_contacto_facturacion: bool | None = None
     es_representante_legal: bool | None = None
@@ -10263,7 +10259,6 @@ class CRMCuentaPersonaRelacionStatusUpdate(BaseModel):
 class CRMCuentaRelacionCreate(BaseModel):
     persona_id: UUID
     rol_en_cuenta: str | None = Field(default=None, max_length=120)
-    puesto: str | None = Field(default=None, max_length=120)
     es_contacto_principal: bool = False
     es_contacto_facturacion: bool = False
     es_representante_legal: bool = False
@@ -10277,7 +10272,6 @@ class CRMCuentaRelacionCreate(BaseModel):
 class CRMCuentaRelacionUpdate(BaseModel):
     persona_id: UUID | None = None
     rol_en_cuenta: str | None = Field(default=None, max_length=120)
-    puesto: str | None = Field(default=None, max_length=120)
     es_contacto_principal: bool | None = None
     es_contacto_facturacion: bool | None = None
     es_representante_legal: bool | None = None
@@ -17238,8 +17232,7 @@ async def create_persona_alta(
                 if relacion and _persona_alta_clean_text(relacion.rol_en_cuenta)
                 else ("dueno" if contexto.modo == "persona_fisica_actividad_empresarial" else "contacto_principal")
             ),
-            "puesto": relacion.puesto if relacion else persona.puesto,
-            "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
+                "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
             "es_contacto_facturacion": relacion.es_contacto_facturacion if relacion else False,
             "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
             "activo": relacion.activo if relacion else True,
@@ -17468,8 +17461,7 @@ async def update_persona(
                 if relacion and _persona_alta_clean_text(relacion.rol_en_cuenta)
                 else ("dueno" if contexto.modo == "persona_fisica_actividad_empresarial" else "contacto_principal")
             ),
-            "puesto": relacion.puesto if relacion else persona.puesto,
-            "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
+                "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
             "es_contacto_facturacion": relacion.es_contacto_facturacion if relacion else False,
             "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
             "activo": relacion.activo if relacion else True,
@@ -17561,7 +17553,6 @@ async def merge_persona(
         "telefono",
         "telefono_e164",
         "telefono_principal_e164",
-        "puesto",
         "area",
         "rol_decision",
         "estado",
@@ -17622,7 +17613,6 @@ async def merge_persona(
         target_relation = target_relations_by_account.get(account_id_raw)
         relation_payload = {
             "rol_en_cuenta": relation.get("rol_en_cuenta"),
-            "puesto": relation.get("puesto"),
             "es_contacto_principal": bool(relation.get("es_contacto_principal")),
             "es_contacto_facturacion": bool(relation.get("es_contacto_facturacion")),
             "es_representante_legal": bool(relation.get("es_representante_legal")),
@@ -17635,7 +17625,6 @@ async def merge_persona(
         if target_relation and target_relation.get("id"):
             merged_relation_payload = {
                 "rol_en_cuenta": target_relation.get("rol_en_cuenta") or relation_payload["rol_en_cuenta"],
-                "puesto": target_relation.get("puesto") or relation_payload["puesto"],
                 "es_contacto_principal": bool(target_relation.get("es_contacto_principal")) or relation_payload["es_contacto_principal"],
                 "es_contacto_facturacion": bool(target_relation.get("es_contacto_facturacion")) or relation_payload["es_contacto_facturacion"],
                 "es_representante_legal": bool(target_relation.get("es_representante_legal")) or relation_payload["es_representante_legal"],

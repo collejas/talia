@@ -6545,7 +6545,7 @@ class CRMRepository:
             "persona_id": f"eq.{persona_id}",
             "order": "es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
             "limit": "1",
-            "select": "cuenta_id,rol_en_cuenta,puesto,es_contacto_principal,es_contacto_facturacion,es_representante_legal,activo",
+            "select": "cuenta_id,rol_en_cuenta,es_contacto_principal,es_contacto_facturacion,es_representante_legal,activo",
         }
         relation_resp = await self._request("GET", "/rest/v1/cuenta_personas", params=relation_params)
         relation_data = relation_resp.json()
@@ -6731,7 +6731,7 @@ class CRMRepository:
             "tipo_industria": account.get("tipo_industria") if isinstance(account, dict) else None,
             "tamano": account.get("tamano") if isinstance(account, dict) else None,
             "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
-            "puesto": relation.get("puesto") if isinstance(relation, dict) and relation.get("puesto") else persona.get("puesto"),
+            "puesto": persona.get("puesto"),
             "rol_en_cuenta": relation.get("rol_en_cuenta") if isinstance(relation, dict) else None,
             "es_contacto_principal": relation.get("es_contacto_principal") if isinstance(relation, dict) else None,
             "es_contacto_facturacion": relation.get("es_contacto_facturacion") if isinstance(relation, dict) else None,
@@ -7389,7 +7389,6 @@ class CRMRepository:
                     "cuenta_id": str(account_uuid),
                     "persona_id": str(persona_row.get("id")),
                     "rol_en_cuenta": relation_role,
-                    "puesto": persona_row.get("puesto"),
                     "es_contacto_principal": True,
                     "es_contacto_facturacion": False,
                     "es_representante_legal": bool(parts["contact_is_physical"]),
@@ -7611,7 +7610,6 @@ class CRMRepository:
             "cuenta_id": str(cuenta_id),
             "persona_id": str(persona_uuid),
             "rol_en_cuenta": str(payload.get("rol_en_cuenta") or "").strip() or "contacto_principal",
-            "puesto": payload.get("puesto") or persona_row.get("puesto"),
             "es_contacto_principal": bool(payload.get("es_contacto_principal", True)),
             "es_contacto_facturacion": bool(payload.get("es_contacto_facturacion", False)),
             "es_representante_legal": bool(payload.get("es_representante_legal", False)),
@@ -7901,7 +7899,6 @@ class CRMRepository:
             if target_relation and target_relation.get("id"):
                 merged_relation_payload = {
                     "rol_en_cuenta": target_relation.get("rol_en_cuenta") or relation.get("rol_en_cuenta"),
-                    "puesto": target_relation.get("puesto") or relation.get("puesto"),
                     "es_contacto_principal": bool(target_relation.get("es_contacto_principal")) or bool(relation.get("es_contacto_principal")),
                     "es_contacto_facturacion": bool(target_relation.get("es_contacto_facturacion")) or bool(relation.get("es_contacto_facturacion")),
                     "es_representante_legal": bool(target_relation.get("es_representante_legal")) or bool(relation.get("es_representante_legal")),
@@ -8374,7 +8371,6 @@ class CRMRepository:
                     "cuenta_id": str(account_uuid),
                     "persona_id": str(persona_row.get("id")),
                     "rol_en_cuenta": relation_role,
-                    "puesto": persona_row.get("puesto"),
                     "es_contacto_principal": True,
                     "es_contacto_facturacion": False,
                     "es_representante_legal": bool(parts["contact_is_physical"]),
@@ -8430,7 +8426,6 @@ class CRMRepository:
             "cuenta_id": str(cuenta_id),
             "persona_id": persona_id,
             "rol_en_cuenta": role,
-            "puesto": payload.get("puesto") or persona_row.get("puesto"),
             "es_contacto_principal": bool(payload.get("es_contacto_principal", True)),
             "es_contacto_facturacion": bool(payload.get("es_contacto_facturacion", False)),
             "es_representante_legal": bool(payload.get("es_representante_legal", False)),
@@ -8502,7 +8497,7 @@ class CRMRepository:
             "persona_id": f"eq.{persona_id}",
             "order": "es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
             "select": (
-                "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
+                "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
                 "metadata,creado_en,actualizado_en"
             ),
@@ -8531,7 +8526,6 @@ class CRMRepository:
             "persona_id": str(persona_id),
             "cuenta_id": str(cuenta_uuid),
             "rol_en_cuenta": str(payload.get("rol_en_cuenta") or "").strip() or "contacto_principal",
-            "puesto": payload.get("puesto"),
             "es_contacto_principal": bool(payload.get("es_contacto_principal", False)),
             "es_contacto_facturacion": bool(payload.get("es_contacto_facturacion", False)),
             "es_representante_legal": bool(payload.get("es_representante_legal", False)),

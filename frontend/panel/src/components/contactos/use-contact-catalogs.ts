@@ -66,8 +66,8 @@ export function useTenantContactCatalogs() {
         }
         const payload = (await response.json()) as SessionResponse
         const config = asRecord(payload.tenantConfig)
-        const contactos = config ? asRecord(config.contactos) : null
-        const catalogos = contactos ? asRecord(contactos.catalogos) : null
+        const extras = config ? asRecord(config.extras) : null
+        const catalogos = extras ? asRecord(extras.catalogos) : null
         const puestosRaw = catalogos ? catalogos.puesto ?? catalogos.puestos : null
         const rolesRaw =
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null

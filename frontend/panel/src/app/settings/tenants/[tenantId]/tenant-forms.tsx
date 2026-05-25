@@ -324,24 +324,25 @@ function parseListLines(value: string): string[] {
     .filter(Boolean)
 }
 
-function buildContactosCatalogsJson(
+function buildExtrasCatalogsJson(
   config: Record<string, unknown> | null | undefined,
   puestos: string[],
   rolesDecision: string[],
   clasificacionesNegocio: string[],
 ): string {
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
-  const contactos = isRecord(nextConfig.contactos) ? { ...nextConfig.contactos } : {}
-  const catalogos = isRecord(contactos.catalogos) ? { ...contactos.catalogos } : {}
-  catalogos.puesto = puestos
-  catalogos.rol_decision = rolesDecision
-  catalogos.clasificacion_negocio = clasificacionesNegocio
-  contactos.catalogos = catalogos
-  nextConfig.contactos = contactos
+  const extras = isRecord(nextConfig.extras) ? { ...nextConfig.extras } : {}
+  const extrasCatalogos = isRecord(extras.catalogos) ? { ...extras.catalogos } : {}
+  extrasCatalogos.puesto = puestos
+  extrasCatalogos.rol_decision = rolesDecision
+  extrasCatalogos.clasificacion_negocio = clasificacionesNegocio
+  extras.catalogos = extrasCatalogos
+  nextConfig.extras = extras
+
   return JSON.stringify(nextConfig, null, 2)
 }
 
-export function TenantContactCatalogsForm({
+export function TenantExtrasCatalogsForm({
   tenantId,
   config,
 }: {
@@ -350,10 +351,8 @@ export function TenantContactCatalogsForm({
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
-  const contactosConfig = isRecord(config?.contactos) ? (config?.contactos as Record<string, unknown>) : null
-  const catalogosConfig = isRecord(contactosConfig?.catalogos)
-    ? (contactosConfig?.catalogos as Record<string, unknown>)
-    : null
+  const extrasConfig = isRecord(config?.extras) ? (config?.extras as Record<string, unknown>) : null
+  const catalogosConfig = isRecord(extrasConfig?.catalogos) ? (extrasConfig?.catalogos as Record<string, unknown>) : null
   const [puestos, setPuestos] = useState(() =>
     (Array.isArray(catalogosConfig?.puesto) ? catalogosConfig?.puesto : [])
       .map((item) => (typeof item === "string" ? item : ""))
@@ -374,7 +373,7 @@ export function TenantContactCatalogsForm({
   )
   const configJson = useMemo(
     () =>
-      buildContactosCatalogsJson(
+      buildExtrasCatalogsJson(
         config,
         parseListLines(puestos),
         parseListLines(rolesDecision),
@@ -389,9 +388,9 @@ export function TenantContactCatalogsForm({
       <input type="hidden" name="config_json" value={configJson} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="contactos_puestos">Puestos</Label>
+          <Label htmlFor="extras_puestos">Puestos</Label>
           <Textarea
-            id="contactos_puestos"
+            id="extras_puestos"
             value={puestos}
             onChange={(event) => setPuestos(event.target.value)}
             placeholder={"Gerente\nDirector\nCoordinador"}
@@ -402,9 +401,9 @@ export function TenantContactCatalogsForm({
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="contactos_roles_decision">Roles de decisión</Label>
+          <Label htmlFor="extras_roles_decision">Roles de decisión</Label>
           <Textarea
-            id="contactos_roles_decision"
+            id="extras_roles_decision"
             value={rolesDecision}
             onChange={(event) => setRolesDecision(event.target.value)}
             placeholder={"Dueño\nInfluenciador\nUsuario final"}
@@ -416,9 +415,9 @@ export function TenantContactCatalogsForm({
           </p>
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="contactos_clasificaciones_negocio">Clasificación de negocio</Label>
+          <Label htmlFor="extras_clasificaciones_negocio">Clasificación de negocio</Label>
           <Textarea
-            id="contactos_clasificaciones_negocio"
+            id="extras_clasificaciones_negocio"
             value={clasificacionesNegocio}
             onChange={(event) => setClasificacionesNegocio(event.target.value)}
             placeholder={"Restaurante\nConsultorio\nTienda"}

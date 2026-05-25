@@ -118,7 +118,6 @@ export function ContactLinkFlow({
   const [selectedCompany, setSelectedCompany] = React.useState<AccountOption | null>(null);
 
   const [rolEnCuenta, setRolEnCuenta] = React.useState("contacto_principal");
-  const [puesto, setPuesto] = React.useState("");
   const [esContactoPrincipal, setEsContactoPrincipal] = React.useState(true);
   const [esContactoFacturacion, setEsContactoFacturacion] = React.useState(false);
   const [esRepresentanteLegal, setEsRepresentanteLegal] = React.useState(false);
@@ -143,7 +142,6 @@ export function ContactLinkFlow({
       setCompanyError(null);
       setSelectedCompany(null);
       setRolEnCuenta("contacto_principal");
-      setPuesto("");
       setEsContactoPrincipal(true);
       setEsContactoFacturacion(false);
       setEsRepresentanteLegal(false);
@@ -285,7 +283,6 @@ export function ContactLinkFlow({
           body: JSON.stringify({
             cuenta_id: selectedCompany.id,
             rol_en_cuenta: rolEnCuenta.trim() || "contacto_principal",
-            puesto: puesto.trim() || null,
             es_contacto_principal: esContactoPrincipal,
             es_contacto_facturacion: esContactoFacturacion,
             es_representante_legal: esRepresentanteLegal,
@@ -496,7 +493,7 @@ export function ContactLinkFlow({
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Función en la empresa" hint="La función se elige aparte de las banderas de principal, facturación y representante legal.">
+                <Field label="Rol de la relación" hint="El rol se elige aparte de las banderas de principal, facturación y representante legal.">
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={rolEnCuenta}
@@ -509,9 +506,6 @@ export function ContactLinkFlow({
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Puesto">
-                  <Input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Director, gerente..." />
                 </Field>
               </div>
 

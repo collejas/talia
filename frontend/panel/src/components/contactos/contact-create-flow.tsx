@@ -102,7 +102,6 @@ type CuentaDraft = {
 
 type RelacionDraft = {
   rol_en_cuenta: string;
-  puesto: string;
   es_contacto_principal: boolean;
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
@@ -392,7 +391,6 @@ const INITIAL_STATE: ContactCreateState = {
   },
   relacion: {
     rol_en_cuenta: "",
-    puesto: "",
     es_contacto_principal: true,
     es_contacto_facturacion: false,
     es_representante_legal: false,
@@ -1119,7 +1117,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-6xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-7xl">
         <DialogHeader className="space-y-2">
           <DialogTitle>Nuevo contacto</DialogTitle>
           <DialogDescription>
@@ -1127,7 +1125,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-6">
           <div className="space-y-5">
           <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar." required>
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
@@ -1496,7 +1494,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {isContactMode || isCompanyMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Función en la empresa" hint="Este es el rol operativo; los checks marcan si además es principal, de facturación o representante legal." required>
+                <Field label="Rol de la relación" hint="Define el tipo de vínculo; los checks marcan si además es principal, de facturación o representante legal." required>
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={state.relacion.rol_en_cuenta}
@@ -1509,9 +1507,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Puesto en la empresa">
-                  <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
                 </Field>
                 <Field label="Fecha de inicio">
                   <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
@@ -1705,39 +1700,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </Button>
           </div>
           </div>
-
-          <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-            <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-muted/40 to-background p-4 shadow-sm">
-              <div className="text-sm font-semibold">Resumen</div>
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-border/60 bg-background p-3">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
-                  <div className="mt-1 text-sm font-semibold">{review.persona || "Pendiente"}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164], "Sin medio de contacto")}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border/60 bg-background p-3">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
-                  <div className="mt-1 text-sm font-semibold">{review.cuenta || "No asociada"}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {state.mode === "solo_persona" ? "Contacto independiente" : state.mode.replaceAll("_", " ")}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border/60 bg-background p-3">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Vinculación</div>
-                  <div className="mt-1 text-sm font-semibold">{review.relacion || "Sin vínculo"}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {state.mode === "solo_persona"
-                      ? "No aplica"
-                      : state.relacion.es_contacto_principal
-                        ? "Contacto principal"
-                        : "Vínculo secundario"}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </DialogContent>
     </Dialog>

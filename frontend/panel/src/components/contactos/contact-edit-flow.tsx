@@ -102,7 +102,6 @@ type CuentaDraft = {
 
 type RelacionDraft = {
   rol_en_cuenta: string;
-  puesto: string;
   es_contacto_principal: boolean;
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
@@ -201,7 +200,6 @@ type AccountRelation = {
   cuenta_id: string;
   persona_id: string;
   rol_en_cuenta: string;
-  puesto: string | null;
   es_contacto_principal: boolean;
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
@@ -215,7 +213,6 @@ type AccountRelation = {
 type NewRelationDraft = {
   cuenta_id: string;
   rol_en_cuenta: string;
-  puesto: string;
   es_contacto_principal: boolean;
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
@@ -418,7 +415,6 @@ const INITIAL_STATE: ContactEditState = {
   },
   relacion: {
     rol_en_cuenta: "",
-    puesto: "",
     es_contacto_principal: true,
     es_contacto_facturacion: false,
     es_representante_legal: false,
@@ -718,7 +714,6 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           telefono_empresa_1_extension: readString(detail, "telefono_empresa_1_extension"),
           telefono_empresa_2_e164: readString(detail, "telefono_empresa_2_e164"),
           telefono_empresa_2_extension: readString(detail, "telefono_empresa_2_extension"),
-          puesto: readString(detail, "puesto"),
           area: readString(detail, "area"),
           rol_decision: readString(detail, "rol_decision"),
           estado: readString(detail, "estado"),
@@ -762,7 +757,6 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         relacion: {
           ...INITIAL_STATE.relacion,
           rol_en_cuenta: readString(detail, "rol_en_cuenta"),
-          puesto: readString(detail, "puesto"),
           es_contacto_principal: readBool(detail, "es_contacto_principal", true),
           es_contacto_facturacion: readBool(detail, "es_contacto_facturacion", false),
           es_representante_legal: readBool(detail, "es_representante_legal", false),
@@ -930,7 +924,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   const [newRelation, setNewRelation] = React.useState<NewRelationDraft>({
     cuenta_id: "",
     rol_en_cuenta: "contacto_principal",
-    puesto: "",
     es_contacto_principal: false,
     es_contacto_facturacion: false,
     es_representante_legal: false,
@@ -1149,7 +1142,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
             cuenta_id,
             persona_id,
             rol_en_cuenta: typeof item.rol_en_cuenta === "string" ? item.rol_en_cuenta : "contacto_principal",
-            puesto: typeof item.puesto === "string" ? item.puesto : null,
             es_contacto_principal: Boolean(item.es_contacto_principal),
             es_contacto_facturacion: Boolean(item.es_contacto_facturacion),
             es_representante_legal: Boolean(item.es_representante_legal),
@@ -1296,7 +1288,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
         body: JSON.stringify({
           cuenta_id: newRelation.cuenta_id.trim(),
           rol_en_cuenta: newRelation.rol_en_cuenta.trim() || "contacto_principal",
-          puesto: newRelation.puesto.trim() || null,
           es_contacto_principal: newRelation.es_contacto_principal,
           es_contacto_facturacion: newRelation.es_contacto_facturacion,
           es_representante_legal: newRelation.es_representante_legal,
@@ -1311,7 +1302,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
       setNewRelation({
         cuenta_id: "",
         rol_en_cuenta: "contacto_principal",
-        puesto: "",
         es_contacto_principal: false,
         es_contacto_facturacion: false,
         es_representante_legal: false,
@@ -1863,7 +1853,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
           {state.mode !== "solo_persona" ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Función en la empresa" hint="El rol operativo es independiente de los checks de principal, facturación y representante legal.">
+<Field label="Rol de la relación" hint="El rol de la relación es independiente de los checks de principal, facturación y representante legal.">
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={state.relacion.rol_en_cuenta}
@@ -1876,9 +1866,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Puesto en la empresa">
-                  <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
                 </Field>
                 <Field label="Fecha de inicio">
                   <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
@@ -1923,7 +1910,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <Field label="Función">
+                      <Field label="Rol de la relación">
                         <select
                           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                           value={relation.rol_en_cuenta}
@@ -1942,18 +1929,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                             </option>
                           ))}
                         </select>
-                      </Field>
-                      <Field label="Puesto">
-                        <Input
-                          value={relation.puesto ?? ""}
-                          onChange={(e) =>
-                            setRelations((prev) =>
-                              prev.map((item) =>
-                                item.id === relation.id ? { ...item, puesto: e.target.value } : item,
-                              ),
-                            )
-                          }
-                        />
                       </Field>
                       <Field label="Fecha de inicio">
                         <Input
@@ -2043,7 +2018,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                         onClick={() =>
                           void patchRelation(relation.id, {
                             rol_en_cuenta: relation.rol_en_cuenta,
-                            puesto: relation.puesto,
                             es_contacto_principal: relation.es_contacto_principal,
                             es_contacto_facturacion: relation.es_contacto_facturacion,
                             es_representante_legal: relation.es_representante_legal,
@@ -2089,7 +2063,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       placeholder="Nombre, RFC, correo o teléfono"
                     />
                   </Field>
-                  <Field label="Función en cuenta" hint="Puedes cambiar la función sin tocar las banderas de principal/facturación/legal.">
+                  <Field label="Rol de la relación" hint="Puedes cambiar el rol sin tocar las banderas de principal/facturación/legal.">
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                       value={newRelation.rol_en_cuenta}
@@ -2102,12 +2076,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                         </option>
                       ))}
                     </select>
-                  </Field>
-                  <Field label="Puesto">
-                    <Input
-                      value={newRelation.puesto}
-                      onChange={(e) => setNewRelation((prev) => ({ ...prev, puesto: e.target.value }))}
-                    />
                   </Field>
                   <Field label="Fecha de inicio">
                     <Input
