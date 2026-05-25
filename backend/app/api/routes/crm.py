@@ -2638,6 +2638,14 @@ class CRMAccountCreate(BaseModel):
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = Field(default_factory=dict)
 
+    @field_validator("rfc")
+    @classmethod
+    def _validate_rfc(cls, value: str | None) -> str | None:
+        normalized = _normalize_rfc_text(value)
+        if normalized and len(normalized) != 13:
+            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        return normalized
+
 
 class CRMAccountUpdate(BaseModel):
     nombre: str | None = Field(default=None, max_length=255)
@@ -2696,6 +2704,14 @@ class CRMAccountUpdate(BaseModel):
     fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = None
+
+    @field_validator("rfc")
+    @classmethod
+    def _validate_rfc(cls, value: str | None) -> str | None:
+        normalized = _normalize_rfc_text(value)
+        if normalized and len(normalized) != 13:
+            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        return normalized
 
 
 class CRMAccountsResponse(BaseModel):
@@ -9947,6 +9963,14 @@ class CRMContactCreate(BaseModel):
         serialization_alias="persona_datos",
     )
 
+    @field_validator("rfc")
+    @classmethod
+    def _validate_rfc(cls, value: str | None) -> str | None:
+        normalized = _normalize_rfc_text(value)
+        if normalized and len(normalized) != 13:
+            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        return normalized
+
 
 class CRMContactUpdate(BaseModel):
     cuenta_id: UUID | None = None
@@ -10021,6 +10045,14 @@ class CRMContactUpdate(BaseModel):
         validation_alias=AliasChoices("persona_datos", "contacto_datos"),
         serialization_alias="persona_datos",
     )
+
+    @field_validator("rfc")
+    @classmethod
+    def _validate_rfc(cls, value: str | None) -> str | None:
+        normalized = _normalize_rfc_text(value)
+        if normalized and len(normalized) != 13:
+            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        return normalized
 
 
 class CRMPersona(CRMContact):
@@ -10112,6 +10144,14 @@ class CRMPersonaAltaCuenta(BaseModel):
     latitud: float | None = None
     longitud: float | None = None
     fecha_incorporacion: datetime | None = None
+
+    @field_validator("rfc")
+    @classmethod
+    def _validate_rfc(cls, value: str | None) -> str | None:
+        normalized = _normalize_rfc_text(value)
+        if normalized and len(normalized) != 13:
+            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        return normalized
 
 
 class CRMPersonaAltaRelacion(BaseModel):
@@ -10448,6 +10488,14 @@ def _persona_alta_normalize_estado(value: str | None) -> str:
 def _persona_alta_normalize_email(value: str | None) -> str | None:
     cleaned = _persona_alta_clean_text(value)
     return cleaned.lower() if cleaned else None
+
+
+def _normalize_rfc_text(value: str | None) -> str | None:
+    cleaned = _persona_alta_clean_text(value, compact_spaces=True)
+    if not cleaned:
+        return None
+    normalized = re.sub(r"[^0-9A-Za-z]+", "", cleaned).upper()
+    return normalized or None
 
 
 def _persona_alta_normalize_phone(value: str | None) -> str | None:

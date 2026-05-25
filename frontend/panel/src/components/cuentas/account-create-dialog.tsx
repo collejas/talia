@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { sanitizeRfcInput, sanitizePhoneInput } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 import { toast } from "sonner";
 
@@ -193,6 +194,10 @@ export function AccountCreateDialog({ onCreated }: Props) {
       setError("El teléfono principal es obligatorio.");
       return;
     }
+    if (form.rfc.trim() && sanitizeRfcInput(form.rfc).length !== 13) {
+      setError("El RFC debe tener exactamente 13 caracteres alfanuméricos.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -206,19 +211,19 @@ export function AccountCreateDialog({ onCreated }: Props) {
           nombre_comercial: form.nombre_comercial.trim() || null,
           razon_social: form.razon_social.trim() || null,
           codigo_cuenta: form.codigo_cuenta.trim() || null,
-          rfc: form.rfc.trim() || null,
+          rfc: sanitizeRfcInput(form.rfc) || null,
           sitio_web: form.sitio_web.trim() || null,
           tamano: form.tamano.trim() || null,
           tipo_establecimiento: form.tipo_establecimiento.trim() || null,
           fecha_incorporacion: form.fecha_incorporacion.trim() || null,
           latitud: form.latitud.trim() && Number.isFinite(Number(form.latitud)) ? Number(form.latitud) : null,
           longitud: form.longitud.trim() && Number.isFinite(Number(form.longitud)) ? Number(form.longitud) : null,
-          telefono_principal_e164: form.telefono_principal_e164.trim() || null,
+          telefono_principal_e164: sanitizePhoneInput(form.telefono_principal_e164) || null,
           telefono_principal_tipo_linea: form.telefono_principal_tipo_linea || null,
-          telefono_principal_extension: form.telefono_principal_extension.trim() || null,
-          telefono_secundario_e164: form.telefono_secundario_e164.trim() || null,
+          telefono_principal_extension: sanitizePhoneInput(form.telefono_principal_extension) || null,
+          telefono_secundario_e164: sanitizePhoneInput(form.telefono_secundario_e164) || null,
           telefono_secundario_tipo_linea: form.telefono_secundario_tipo_linea || null,
-          telefono_secundario_extension: form.telefono_secundario_extension.trim() || null,
+          telefono_secundario_extension: sanitizePhoneInput(form.telefono_secundario_extension) || null,
           notas: form.notas.trim() || null,
           uso_cfdi: form.uso_cfdi.trim() || null,
           forma_pago: form.forma_pago.trim() || null,
@@ -340,7 +345,13 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-rfc">RFC</Label>
-                  <Input id="create-rfc" value={form.rfc} onChange={(event) => setForm((prev) => ({ ...prev, rfc: event.target.value }))} />
+                  <Input
+                    id="create-rfc"
+                    value={form.rfc}
+                    maxLength={13}
+                    autoCapitalize="characters"
+                    onChange={(event) => setForm((prev) => ({ ...prev, rfc: sanitizeRfcInput(event.target.value) }))}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-telefono-1">Teléfono principal *</Label>
@@ -349,7 +360,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       <Input
                         id="create-telefono-1"
                         value={form.telefono_principal_e164}
-                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_e164: event.target.value }))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_e164: sanitizePhoneInput(event.target.value) }))}
                       />
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -367,7 +380,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       <Input
                         placeholder="Extensión"
                         value={form.telefono_principal_extension}
-                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_extension: event.target.value }))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_principal_extension: sanitizePhoneInput(event.target.value) }))}
                       />
                     ) : null}
                   </div>
@@ -379,7 +394,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       <Input
                         id="create-telefono-2"
                         value={form.telefono_secundario_e164}
-                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_e164: event.target.value }))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_e164: sanitizePhoneInput(event.target.value) }))}
                       />
                       <select
                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -397,7 +414,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       <Input
                         placeholder="Extensión"
                         value={form.telefono_secundario_extension}
-                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_extension: event.target.value }))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(event) => setForm((prev) => ({ ...prev, telefono_secundario_extension: sanitizePhoneInput(event.target.value) }))}
                       />
                     ) : null}
                   </div>

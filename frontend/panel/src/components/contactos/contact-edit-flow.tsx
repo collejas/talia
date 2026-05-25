@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
 import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
@@ -545,16 +546,23 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       state.mode === "persona_fisica_actividad_empresarial"
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
+    rfc: sanitizeRfcInput(state.cuenta.rfc),
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
     correo_secundario: state.cuenta.correo_secundario,
-    telefono_principal_e164: state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal || state.cuenta.telefono,
+    telefono_principal_e164:
+      sanitizePhoneInput(state.cuenta.telefono_principal_e164) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal) ||
+      sanitizePhoneInput(state.cuenta.telefono),
     telefono_principal_tipo_linea: state.cuenta.telefono_principal_tipo_linea,
-    telefono_principal_extension: state.cuenta.telefono_principal_extension,
-    telefono_secundario_e164: state.cuenta.telefono_secundario_e164,
+    telefono_principal_extension: sanitizePhoneInput(state.cuenta.telefono_principal_extension),
+    telefono_secundario_e164: sanitizePhoneInput(state.cuenta.telefono_secundario_e164),
     telefono_secundario_tipo_linea: state.cuenta.telefono_secundario_tipo_linea,
-    telefono_secundario_extension: state.cuenta.telefono_secundario_extension,
+    telefono_secundario_extension: sanitizePhoneInput(state.cuenta.telefono_secundario_extension),
     correo: state.cuenta.correo || state.cuenta.correo_principal,
-    telefono: state.cuenta.telefono || state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal,
+    telefono:
+      sanitizePhoneInput(state.cuenta.telefono) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal_e164) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal),
   }, { keepEmptyStringsAsNull: true });
 
   const relacion =
@@ -643,6 +651,9 @@ function validateState(state: ContactEditState): string | null {
   ) {
     return "El teléfono principal de la cuenta es obligatorio.";
   }
+  if (state.cuenta.rfc.trim() && sanitizeRfcInput(state.cuenta.rfc).length !== 13) {
+    return "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
+  }
   if (state.mode !== "solo_persona" && !state.relacion.rol_en_cuenta.trim()) {
     return "Define el rol de la persona dentro de la cuenta.";
   }
@@ -699,21 +710,25 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           correo_principal: readString(detail, "correo_principal") || readString(detail, "correo") || readString(detail, "email"),
           correo_institucional: readString(detail, "correo_institucional"),
           correo_personal_3: readString(detail, "correo_personal_3"),
-          telefono_principal_e164: readString(detail, "telefono_principal_e164") || readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_e164") || readString(detail, "telefono"),
+          telefono_principal_e164: sanitizePhoneInput(
+            readString(detail, "telefono_principal_e164") || readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_e164") || readString(detail, "telefono"),
+          ),
           telefono_principal_tipo_linea: readString(detail, "telefono_principal_tipo_linea") || readString(detail, "telefono_movil_1_tipo_linea") || "movil",
-          telefono_principal_extension: readString(detail, "telefono_principal_extension"),
-          telefono_movil_1_e164: readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono_e164"),
+          telefono_principal_extension: sanitizePhoneInput(readString(detail, "telefono_principal_extension")),
+          telefono_movil_1_e164: sanitizePhoneInput(
+            readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono_e164"),
+          ),
           telefono_movil_1_tipo_linea: readString(detail, "telefono_movil_1_tipo_linea") || readString(detail, "telefono_principal_tipo_linea") || "movil",
-          telefono_movil_2_e164: readString(detail, "telefono_movil_2_e164"),
+          telefono_movil_2_e164: sanitizePhoneInput(readString(detail, "telefono_movil_2_e164")),
           telefono_movil_2_tipo_linea: readString(detail, "telefono_movil_2_tipo_linea") || readString(detail, "telefono_secundario_tipo_linea") || "movil",
-          telefono_movil_2_extension: readString(detail, "telefono_movil_2_extension") || readString(detail, "telefono_secundario_extension"),
-          telefono_secundario_e164: readString(detail, "telefono_secundario_e164") || readString(detail, "telefono_movil_2_e164"),
+          telefono_movil_2_extension: sanitizePhoneInput(readString(detail, "telefono_movil_2_extension") || readString(detail, "telefono_secundario_extension")),
+          telefono_secundario_e164: sanitizePhoneInput(readString(detail, "telefono_secundario_e164") || readString(detail, "telefono_movil_2_e164")),
           telefono_secundario_tipo_linea: readString(detail, "telefono_secundario_tipo_linea") || readString(detail, "telefono_movil_2_tipo_linea") || "movil",
-          telefono_secundario_extension: readString(detail, "telefono_secundario_extension") || readString(detail, "telefono_movil_2_extension"),
-          telefono_empresa_1_e164: readString(detail, "telefono_empresa_1_e164"),
-          telefono_empresa_1_extension: readString(detail, "telefono_empresa_1_extension"),
-          telefono_empresa_2_e164: readString(detail, "telefono_empresa_2_e164"),
-          telefono_empresa_2_extension: readString(detail, "telefono_empresa_2_extension"),
+          telefono_secundario_extension: sanitizePhoneInput(readString(detail, "telefono_secundario_extension") || readString(detail, "telefono_movil_2_extension")),
+          telefono_empresa_1_e164: sanitizePhoneInput(readString(detail, "telefono_empresa_1_e164")),
+          telefono_empresa_1_extension: sanitizePhoneInput(readString(detail, "telefono_empresa_1_extension")),
+          telefono_empresa_2_e164: sanitizePhoneInput(readString(detail, "telefono_empresa_2_e164")),
+          telefono_empresa_2_extension: sanitizePhoneInput(readString(detail, "telefono_empresa_2_extension")),
           area: readString(detail, "area"),
           rol_decision: readString(detail, "rol_decision"),
           estado: readString(detail, "estado"),
@@ -731,18 +746,20 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           tipo_cuenta: readString(detail, "cuenta_tipo") || "empresa",
           tipo: readString(detail, "tipo") || "empresa",
           codigo_cuenta: readString(detail, "codigo_cuenta"),
-          rfc: readString(detail, "rfc"),
+          rfc: sanitizeRfcInput(readString(detail, "rfc")),
           industria: readString(detail, "tipo_industria"),
           sitio_web: readString(detail, "website"),
           correo_principal: readString(detail, "cuenta_correo_principal") || readString(detail, "correo_principal") || readString(detail, "correo") || readString(detail, "email"),
           correo_secundario: readString(detail, "cuenta_correo_secundario") || readString(detail, "correo_secundario"),
-          telefono_principal: readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono"),
-          telefono_principal_e164: readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono"),
+          telefono_principal: sanitizePhoneInput(readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono")),
+          telefono_principal_e164: sanitizePhoneInput(
+            readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono"),
+          ),
           telefono_principal_tipo_linea: readString(detail, "cuenta_telefono_principal_tipo_linea") || readString(detail, "telefono_principal_tipo_linea") || "movil",
-          telefono_principal_extension: readString(detail, "cuenta_telefono_principal_extension") || readString(detail, "telefono_principal_extension"),
-          telefono_secundario_e164: readString(detail, "cuenta_telefono_secundario_e164") || readString(detail, "telefono_secundario_e164"),
+          telefono_principal_extension: sanitizePhoneInput(readString(detail, "cuenta_telefono_principal_extension") || readString(detail, "telefono_principal_extension")),
+          telefono_secundario_e164: sanitizePhoneInput(readString(detail, "cuenta_telefono_secundario_e164") || readString(detail, "telefono_secundario_e164")),
           telefono_secundario_tipo_linea: readString(detail, "cuenta_telefono_secundario_tipo_linea") || readString(detail, "telefono_secundario_tipo_linea") || "movil",
-          telefono_secundario_extension: readString(detail, "cuenta_telefono_secundario_extension") || readString(detail, "telefono_secundario_extension"),
+          telefono_secundario_extension: sanitizePhoneInput(readString(detail, "cuenta_telefono_secundario_extension") || readString(detail, "telefono_secundario_extension")),
           correo: readString(detail, "correo"),
           telefono: readString(detail, "telefono"),
           notas: "",
@@ -839,10 +856,13 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
-          telefono_principal_e164:
+          telefono_principal_e164: sanitizePhoneInput(
             action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal_e164,
-          telefono_principal: action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
-          telefono_secundario_e164: action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164,
+          ),
+          telefono_principal: sanitizePhoneInput(
+            action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
+          ),
+          telefono_secundario_e164: sanitizePhoneInput(action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164),
         },
         relacion: {
           ...state.relacion,
@@ -1523,7 +1543,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                     <Input
                       value={state.persona.telefono_principal_e164}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_principal_e164", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                     <Select
                       value={state.persona.telefono_principal_tipo_linea || "movil"}
@@ -1545,7 +1569,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     <Input
                       placeholder="Extensión"
                       value={state.persona.telefono_principal_extension}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_extension", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_principal_extension", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                   ) : null}
                 </div>
@@ -1555,7 +1583,9 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                     <Input
                       value={state.persona.telefono_movil_2_e164}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: sanitizePhoneInput(e.target.value) })}
                     />
                     <Select
                       value={state.persona.telefono_movil_2_tipo_linea || "movil"}
@@ -1577,7 +1607,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     <Input
                       placeholder="Extensión"
                       value={state.persona.telefono_movil_2_extension}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                   ) : null}
                 </div>
@@ -1730,7 +1764,12 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   </select>
                 </Field>
                 <Field label="RFC">
-                  <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
+                  <Input
+                    value={state.cuenta.rfc}
+                    maxLength={13}
+                    autoCapitalize="characters"
+                    onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: sanitizeRfcInput(e.target.value) })}
+                  />
                 </Field>
                 <Field label="Tamaño">
                   <Input value={state.cuenta.tamano} onChange={(e) => dispatch({ type: "cuenta/set", field: "tamano", value: e.target.value })} />
@@ -1743,7 +1782,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input
                         value={state.cuenta.telefono_principal_e164}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                       <Select
                         value={state.cuenta.telefono_principal_tipo_linea || "movil"}
@@ -1765,7 +1808,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       <Input
                         placeholder="Extensión"
                         value={state.cuenta.telefono_principal_extension}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                     ) : null}
                   </div>
@@ -1775,7 +1822,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input
                         value={state.cuenta.telefono_secundario_e164}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                       <Select
                         value={state.cuenta.telefono_secundario_tipo_linea || "movil"}
@@ -1797,7 +1848,11 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                       <Input
                         placeholder="Extensión"
                         value={state.cuenta.telefono_secundario_extension}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                     ) : null}
                   </div>

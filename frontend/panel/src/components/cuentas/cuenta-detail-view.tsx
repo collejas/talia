@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type AccountDetail = Record<string, unknown>;
@@ -414,10 +415,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       nombre: getInputText(detail?.nombre),
       alias: getInputText(detail?.alias),
       razon_social: getInputText(detail?.razon_social),
-      rfc: getInputText(detail?.rfc),
+      rfc: sanitizeRfcInput(getInputText(detail?.rfc)),
       website: getInputText(detail?.website ?? detail?.sitio_web),
       correo: getInputText(detail?.correo ?? detail?.email ?? detail?.correo_principal),
-      telefono: getInputText(detail?.telefono),
+      telefono: sanitizePhoneInput(getInputText(detail?.telefono)),
       industria: getInputText(detail?.industria),
       tamano: getInputText(detail?.tamano),
       tipo_establecimiento: getInputText(detail?.tipo_establecimiento),
@@ -454,6 +455,13 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   };
 
   const handleSaveEdit = async () => {
+    const normalizedRfc = sanitizeRfcInput(editForm.rfc);
+    if (editForm.rfc.trim() && normalizedRfc.length !== 13) {
+      const message = "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
+      setEditError(message);
+      toast.error(message);
+      return;
+    }
     setEditSubmitting(true);
     setEditError(null);
     try {
@@ -464,10 +472,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           nombre: editForm.nombre.trim(),
           alias: editForm.alias.trim(),
           razon_social: editForm.razon_social.trim(),
-          rfc: editForm.rfc.trim(),
+          rfc: sanitizeRfcInput(editForm.rfc) || null,
           website: editForm.website.trim(),
           correo: editForm.correo.trim(),
-          telefono: editForm.telefono.trim(),
+          telefono: sanitizePhoneInput(editForm.telefono) || null,
           industria: editForm.industria.trim(),
           tamano: editForm.tamano.trim(),
           tipo_establecimiento: editForm.tipo_establecimiento.trim(),
@@ -923,7 +931,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 <Input
                   id="edit-rfc"
                   value={editForm.rfc}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, rfc: event.target.value }))}
+                  maxLength={13}
+                  autoCapitalize="characters"
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, rfc: sanitizeRfcInput(event.target.value) }))}
                 />
               </div>
               <div className="grid gap-2">
@@ -947,7 +957,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 <Input
                   id="edit-telefono"
                   value={editForm.telefono}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, telefono: event.target.value }))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, telefono: sanitizePhoneInput(event.target.value) }))}
                 />
               </div>
               <div className="grid gap-2">

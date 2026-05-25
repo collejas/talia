@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
 import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
@@ -560,10 +561,13 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
-          telefono_principal_e164:
+          telefono_principal_e164: sanitizePhoneInput(
             action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal_e164,
-          telefono_principal: action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
-          telefono_secundario_e164: action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164,
+          ),
+          telefono_principal: sanitizePhoneInput(
+            action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
+          ),
+          telefono_secundario_e164: sanitizePhoneInput(action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164),
         },
         relacion: {
           ...state.relacion,
@@ -650,17 +654,24 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
     state.mode === "persona_fisica_actividad_empresarial"
       ? "persona_fisica_actividad_empresarial"
       : state.cuenta.tipo,
+    rfc: sanitizeRfcInput(state.cuenta.rfc),
     tamano: state.cuenta.tamano,
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
     correo_secundario: state.cuenta.correo_secundario,
-    telefono_principal_e164: state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal || state.cuenta.telefono,
+    telefono_principal_e164:
+      sanitizePhoneInput(state.cuenta.telefono_principal_e164) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal) ||
+      sanitizePhoneInput(state.cuenta.telefono),
     telefono_principal_tipo_linea: state.cuenta.telefono_principal_tipo_linea,
-    telefono_principal_extension: state.cuenta.telefono_principal_extension,
-    telefono_secundario_e164: state.cuenta.telefono_secundario_e164,
+    telefono_principal_extension: sanitizePhoneInput(state.cuenta.telefono_principal_extension),
+    telefono_secundario_e164: sanitizePhoneInput(state.cuenta.telefono_secundario_e164),
     telefono_secundario_tipo_linea: state.cuenta.telefono_secundario_tipo_linea,
-    telefono_secundario_extension: state.cuenta.telefono_secundario_extension,
+    telefono_secundario_extension: sanitizePhoneInput(state.cuenta.telefono_secundario_extension),
     correo: state.cuenta.correo || state.cuenta.correo_principal,
-    telefono: state.cuenta.telefono || state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal,
+    telefono:
+      sanitizePhoneInput(state.cuenta.telefono) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal_e164) ||
+      sanitizePhoneInput(state.cuenta.telefono_principal),
     necesidad_proposito: state.cuenta.necesidad_proposito,
     tipo_establecimiento: state.cuenta.tipo_establecimiento,
     fecha_incorporacion: state.cuenta.fecha_incorporacion || undefined,
@@ -767,6 +778,9 @@ function validateState(state: ContactCreateState): string | null {
     !state.cuenta.telefono_principal_e164.trim()
   ) {
     return "El teléfono principal de la empresa es obligatorio.";
+  }
+  if (state.cuenta.rfc.trim() && sanitizeRfcInput(state.cuenta.rfc).length !== 13) {
+    return "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
   }
   if (
     (state.mode === "empresa_existente" || state.mode === "empresa_nueva") &&
@@ -1199,7 +1213,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                     <Input
                       value={state.persona.telefono_principal_e164}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_principal_e164", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                     <Select
                       value={state.persona.telefono_principal_tipo_linea || "movil"}
@@ -1221,7 +1239,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     <Input
                       placeholder="Extensión"
                       value={state.persona.telefono_principal_extension}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_extension", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_principal_extension", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                   ) : null}
                 </div>
@@ -1231,7 +1253,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                     <Input
                       value={state.persona.telefono_movil_2_e164}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: sanitizePhoneInput(e.target.value) })}
                     />
                     <Select
                       value={state.persona.telefono_movil_2_tipo_linea || "movil"}
@@ -1253,7 +1277,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     <Input
                       placeholder="Extensión"
                       value={state.persona.telefono_movil_2_extension}
-                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: e.target.value })}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      onChange={(e) =>
+                        dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: sanitizePhoneInput(e.target.value) })
+                      }
                     />
                   ) : null}
                 </div>
@@ -1400,14 +1428,23 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   Debes completar al menos nombre comercial o razón social.
                 </div>
                 <Field label="RFC">
-                  <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
+                  <Input
+                    value={state.cuenta.rfc}
+                    maxLength={13}
+                    autoCapitalize="characters"
+                    onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: sanitizeRfcInput(e.target.value) })}
+                  />
                 </Field>
                 <Field label="Teléfono principal" required>
                   <div className="space-y-2">
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input
                         value={state.cuenta.telefono_principal_e164}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                       <Select
                         value={state.cuenta.telefono_principal_tipo_linea || "movil"}
@@ -1429,7 +1466,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                       <Input
                         placeholder="Extensión"
                         value={state.cuenta.telefono_principal_extension}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                     ) : null}
                   </div>
@@ -1439,7 +1480,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input
                         value={state.cuenta.telefono_secundario_e164}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                       <Select
                         value={state.cuenta.telefono_secundario_tipo_linea || "movil"}
@@ -1461,7 +1506,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                       <Input
                         placeholder="Extensión"
                         value={state.cuenta.telefono_secundario_extension}
-                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: e.target.value })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) =>
+                          dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: sanitizePhoneInput(e.target.value) })
+                        }
                       />
                     ) : null}
                   </div>
