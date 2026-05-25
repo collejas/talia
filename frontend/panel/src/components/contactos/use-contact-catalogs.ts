@@ -44,6 +44,9 @@ export function useTenantContactCatalogs() {
   const [puestoOptions, setPuestoOptions] = useState<ContactCatalogOption[]>([])
   const [rolDecisionOptions, setRolDecisionOptions] = useState<ContactCatalogOption[]>([])
   const [clasificacionNegocioOptions, setClasificacionNegocioOptions] = useState<ContactCatalogOption[]>([])
+  const [usoCfdiOptions, setUsoCfdiOptions] = useState<ContactCatalogOption[]>([])
+  const [formaPagoOptions, setFormaPagoOptions] = useState<ContactCatalogOption[]>([])
+  const [metodoPagoOptions, setMetodoPagoOptions] = useState<ContactCatalogOption[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -61,6 +64,9 @@ export function useTenantContactCatalogs() {
           setPuestoOptions([])
           setRolDecisionOptions([])
           setClasificacionNegocioOptions([])
+          setUsoCfdiOptions([])
+          setFormaPagoOptions([])
+          setMetodoPagoOptions([])
           setLoading(false)
           return
         }
@@ -73,14 +79,23 @@ export function useTenantContactCatalogs() {
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null
         const clasificacionesRaw =
           catalogos ? catalogos.clasificacion_negocio ?? catalogos.clasificaciones_negocio : null
+        const usoCfdiRaw = catalogos ? catalogos.uso_cfdi ?? catalogos.usos_cfdi : null
+        const formaPagoRaw = catalogos ? catalogos.forma_pago ?? catalogos.formas_pago : null
+        const metodoPagoRaw = catalogos ? catalogos.metodo_pago ?? catalogos.metodos_pago : null
         setPuestoOptions(valuesToOptions(normalizeValues(puestosRaw)))
         setRolDecisionOptions(valuesToOptions(normalizeValues(rolesRaw)))
         setClasificacionNegocioOptions(valuesToOptions(normalizeValues(clasificacionesRaw)))
+        setUsoCfdiOptions(valuesToOptions(normalizeValues(usoCfdiRaw)))
+        setFormaPagoOptions(valuesToOptions(normalizeValues(formaPagoRaw)))
+        setMetodoPagoOptions(valuesToOptions(normalizeValues(metodoPagoRaw)))
       } catch {
         if (controller.signal.aborted) return
         setPuestoOptions([])
         setRolDecisionOptions([])
         setClasificacionNegocioOptions([])
+        setUsoCfdiOptions([])
+        setFormaPagoOptions([])
+        setMetodoPagoOptions([])
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
@@ -98,8 +113,11 @@ export function useTenantContactCatalogs() {
       puestoOptions,
       rolDecisionOptions,
       clasificacionNegocioOptions,
+      usoCfdiOptions,
+      formaPagoOptions,
+      metodoPagoOptions,
       loading,
     }),
-    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions],
+    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
   )
 }

@@ -329,6 +329,9 @@ function buildExtrasCatalogsJson(
   puestos: string[],
   rolesDecision: string[],
   clasificacionesNegocio: string[],
+  usosCfdi: string[],
+  formasPago: string[],
+  metodosPago: string[],
 ): string {
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
   const extras = isRecord(nextConfig.extras) ? { ...nextConfig.extras } : {}
@@ -336,6 +339,9 @@ function buildExtrasCatalogsJson(
   extrasCatalogos.puesto = puestos
   extrasCatalogos.rol_decision = rolesDecision
   extrasCatalogos.clasificacion_negocio = clasificacionesNegocio
+  extrasCatalogos.uso_cfdi = usosCfdi
+  extrasCatalogos.forma_pago = formasPago
+  extrasCatalogos.metodo_pago = metodosPago
   extras.catalogos = extrasCatalogos
   nextConfig.extras = extras
 
@@ -371,6 +377,24 @@ export function TenantExtrasCatalogsForm({
       .filter(Boolean)
       .join("\n"),
   )
+  const [usosCfdi, setUsosCfdi] = useState(() =>
+    (Array.isArray(catalogosConfig?.uso_cfdi) ? catalogosConfig?.uso_cfdi : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
+  const [formasPago, setFormasPago] = useState(() =>
+    (Array.isArray(catalogosConfig?.forma_pago) ? catalogosConfig?.forma_pago : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
+  const [metodosPago, setMetodosPago] = useState(() =>
+    (Array.isArray(catalogosConfig?.metodo_pago) ? catalogosConfig?.metodo_pago : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
   const configJson = useMemo(
     () =>
       buildExtrasCatalogsJson(
@@ -378,8 +402,11 @@ export function TenantExtrasCatalogsForm({
         parseListLines(puestos),
         parseListLines(rolesDecision),
         parseListLines(clasificacionesNegocio),
+        parseListLines(usosCfdi),
+        parseListLines(formasPago),
+        parseListLines(metodosPago),
       ),
-    [config, puestos, rolesDecision, clasificacionesNegocio],
+    [config, puestos, rolesDecision, clasificacionesNegocio, usosCfdi, formasPago, metodosPago],
   )
 
   return (
@@ -426,6 +453,39 @@ export function TenantExtrasCatalogsForm({
           <p className="text-xs text-muted-foreground">
             Un valor por línea. Se mostrará como select al capturar empresa o persona física con actividad empresarial.
           </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="extras_usos_cfdi">Uso CFDI</Label>
+          <Textarea
+            id="extras_usos_cfdi"
+            value={usosCfdi}
+            onChange={(event) => setUsosCfdi(event.target.value)}
+            placeholder={"G01\nG03\nP01"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select en facturación.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="extras_formas_pago">Forma de pago</Label>
+          <Textarea
+            id="extras_formas_pago"
+            value={formasPago}
+            onChange={(event) => setFormasPago(event.target.value)}
+            placeholder={"PUE\nPPD"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select en facturación.</p>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="extras_metodos_pago">Método de pago</Label>
+          <Textarea
+            id="extras_metodos_pago"
+            value={metodosPago}
+            onChange={(event) => setMetodosPago(event.target.value)}
+            placeholder={"Transferencia electrónica\nEfectivo\nTarjeta"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select en facturación.</p>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">

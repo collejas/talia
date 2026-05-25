@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type AccountDetail = Record<string, unknown>;
 type AccountRelation = {
@@ -207,6 +209,20 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     notas: "",
     necesidad_proposito: "",
   });
+
+  const tenantCatalogs = useTenantContactCatalogs();
+  const usoCfdiOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, editForm.uso_cfdi),
+    [editForm.uso_cfdi, tenantCatalogs.usoCfdiOptions],
+  );
+  const formaPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.formaPagoOptions, editForm.forma_pago),
+    [editForm.forma_pago, tenantCatalogs.formaPagoOptions],
+  );
+  const metodoPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.metodoPagoOptions, editForm.metodo_pago),
+    [editForm.metodo_pago, tenantCatalogs.metodoPagoOptions],
+  );
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -963,26 +979,32 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="edit-uso-cfdi">Uso CFDI</Label>
-                <Input
-                  id="edit-uso-cfdi"
+                <ContactCatalogSelect
                   value={editForm.uso_cfdi}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, uso_cfdi: event.target.value }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, uso_cfdi: value }))}
+                  options={usoCfdiOptions}
+                  placeholder="Selecciona un uso CFDI"
+                  emptyLabel="Configura los usos CFDI en Extras"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-metodo-pago">Método de pago</Label>
-                <Input
-                  id="edit-metodo-pago"
+                <ContactCatalogSelect
                   value={editForm.metodo_pago}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, metodo_pago: event.target.value }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, metodo_pago: value }))}
+                  options={metodoPagoOptions}
+                  placeholder="Selecciona un método de pago"
+                  emptyLabel="Configura los métodos de pago en Extras"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-forma-pago">Forma de pago</Label>
-                <Input
-                  id="edit-forma-pago"
+                <ContactCatalogSelect
                   value={editForm.forma_pago}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, forma_pago: event.target.value }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, forma_pago: value }))}
+                  options={formaPagoOptions}
+                  placeholder="Selecciona una forma de pago"
+                  emptyLabel="Configura las formas de pago en Extras"
                 />
               </div>
               <div className="grid gap-2">

@@ -971,6 +971,18 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, state.cuenta.tipo_establecimiento),
     [state.cuenta.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
   );
+  const usoCfdiOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, state.extras.uso_cfdi),
+    [state.extras.uso_cfdi, tenantCatalogs.usoCfdiOptions],
+  );
+  const formaPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.formaPagoOptions, state.extras.forma_pago),
+    [state.extras.forma_pago, tenantCatalogs.formaPagoOptions],
+  );
+  const metodoPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.metodoPagoOptions, state.extras.metodo_pago),
+    [state.extras.metodo_pago, tenantCatalogs.metodoPagoOptions],
+  );
 
   React.useEffect(() => {
     const desiredPrefix = isPfaeMode ? "PFAE-" : "Emp-";
@@ -1555,13 +1567,31 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             {state.extrasOpen ? (
               <div className="space-y-4">
                 <Field label="Uso CFDI">
-                  <Input value={state.extras.uso_cfdi} onChange={(e) => dispatch({ type: "extras/set", field: "uso_cfdi", value: e.target.value })} />
+                  <ContactCatalogSelect
+                    value={state.extras.uso_cfdi}
+                    onValueChange={(value) => dispatch({ type: "extras/set", field: "uso_cfdi", value })}
+                    options={usoCfdiOptions}
+                    placeholder="Selecciona un uso CFDI"
+                    emptyLabel="Configura los usos CFDI en Extras"
+                  />
                 </Field>
                 <Field label="Forma de pago">
-                  <Input value={state.extras.forma_pago} onChange={(e) => dispatch({ type: "extras/set", field: "forma_pago", value: e.target.value })} />
+                  <ContactCatalogSelect
+                    value={state.extras.forma_pago}
+                    onValueChange={(value) => dispatch({ type: "extras/set", field: "forma_pago", value })}
+                    options={formaPagoOptions}
+                    placeholder="Selecciona una forma de pago"
+                    emptyLabel="Configura las formas de pago en Extras"
+                  />
                 </Field>
                 <Field label="Método de pago">
-                  <Input value={state.extras.metodo_pago} onChange={(e) => dispatch({ type: "extras/set", field: "metodo_pago", value: e.target.value })} />
+                  <ContactCatalogSelect
+                    value={state.extras.metodo_pago}
+                    onValueChange={(value) => dispatch({ type: "extras/set", field: "metodo_pago", value })}
+                    options={metodoPagoOptions}
+                    placeholder="Selecciona un método de pago"
+                    emptyLabel="Configura los métodos de pago en Extras"
+                  />
                 </Field>
                 <Field label="Email de facturación">
                   <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />

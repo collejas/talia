@@ -167,6 +167,18 @@ export function AccountCreateDialog({ onCreated }: Props) {
     () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, form.tipo_establecimiento),
     [form.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
   );
+  const usoCfdiOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.usoCfdiOptions, form.uso_cfdi),
+    [form.uso_cfdi, tenantCatalogs.usoCfdiOptions],
+  );
+  const formaPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.formaPagoOptions, form.forma_pago),
+    [form.forma_pago, tenantCatalogs.formaPagoOptions],
+  );
+  const metodoPagoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.metodoPagoOptions, form.metodo_pago),
+    [form.metodo_pago, tenantCatalogs.metodoPagoOptions],
+  );
 
   const handleCreateConfirm = async () => {
     if (!form.nombre_comercial.trim() && !form.razon_social.trim()) {
@@ -463,15 +475,33 @@ export function AccountCreateDialog({ onCreated }: Props) {
                   <div className="mt-4 space-y-4">
                     <div className="grid gap-2">
                       <Label htmlFor="create-uso-cfdi">Uso CFDI</Label>
-                      <Input id="create-uso-cfdi" value={form.uso_cfdi} onChange={(event) => setForm((prev) => ({ ...prev, uso_cfdi: event.target.value }))} />
+                      <ContactCatalogSelect
+                        value={form.uso_cfdi}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
+                        options={usoCfdiOptions}
+                        placeholder="Selecciona un uso CFDI"
+                        emptyLabel="Configura los usos CFDI en Extras"
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="create-forma-pago">Forma de pago</Label>
-                      <Input id="create-forma-pago" value={form.forma_pago} onChange={(event) => setForm((prev) => ({ ...prev, forma_pago: event.target.value }))} />
+                      <ContactCatalogSelect
+                        value={form.forma_pago}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
+                        options={formaPagoOptions}
+                        placeholder="Selecciona una forma de pago"
+                        emptyLabel="Configura las formas de pago en Extras"
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="create-metodo-pago">Método de pago</Label>
-                      <Input id="create-metodo-pago" value={form.metodo_pago} onChange={(event) => setForm((prev) => ({ ...prev, metodo_pago: event.target.value }))} />
+                      <ContactCatalogSelect
+                        value={form.metodo_pago}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
+                        options={metodoPagoOptions}
+                        placeholder="Selecciona un método de pago"
+                        emptyLabel="Configura los métodos de pago en Extras"
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="create-email-facturacion">Email de facturación</Label>
