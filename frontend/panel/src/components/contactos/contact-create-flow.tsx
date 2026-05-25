@@ -1503,7 +1503,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          {isContactMode || isCompanyMode ? (
+          {isContactMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Rol de la relación" hint="Define el tipo de vínculo; los checks marcan si además es principal, de facturación o representante legal." required>
@@ -1547,12 +1547,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <Checkbox checked={state.relacion.activo} onCheckedChange={(value) => dispatch({ type: "relacion/set", field: "activo", value: Boolean(value) })} />
                   <span className="text-sm">Vínculo activo</span>
                 </label>
-              </div>
-            </FormSection>
-          ) : isPfaeMode ? (
-            <FormSection title={relationSectionTitle} description={relationSectionDescription}>
-              <div className="rounded-lg border border-dashed border-border/70 bg-background p-4 text-sm text-muted-foreground">
-                Al guardar se creará automáticamente la relación principal para esta persona y su negocio.
               </div>
             </FormSection>
           ) : null}
