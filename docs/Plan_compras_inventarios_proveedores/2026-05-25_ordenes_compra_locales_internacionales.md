@@ -174,6 +174,58 @@ Campos:
 - `comisiones_bancarias` text null
 - `observaciones` text null
 
+Notas:
+
+- esta tabla debe funcionar como resumen comercial de pago;
+- representa el acuerdo principal con el proveedor, no necesariamente cada hito de cobro;
+- `porcentaje_anticipo` define la parte que se paga para arrancar produccion o confirmar la orden;
+- `monto_anticipo`, `porcentaje_saldo` y `monto_saldo` deben poder derivarse del subtotal de la orden;
+- `momento_pago_saldo` conviene tratarlo como una referencia a un evento de pago o embarque, no como texto libre.
+
+### 4.1. `ordenes_compra_pagos_programados`
+
+Detalle operativo de cobros por orden.
+
+Esta tabla permite manejar:
+
+- ordenes nacionales e internacionales con el mismo modelo;
+- un anticipo inicial;
+- un saldo al evento acordado;
+- pagos parciales adicionales si alguna compra lo requiere;
+- credito asociado a un evento base;
+- fechas de vencimiento calculadas;
+- historial claro de cada hito de pago.
+
+Campos:
+
+- `id` uuid
+- `organizacion_id` uuid
+- `orden_compra_id` uuid
+- `tipo_pago` text
+  - valores sugeridos: `anticipo`, `saldo`, `parcial`
+- `evento_base` text
+  - valores sugeridos para internacional: `contra_aceptacion_orden`, `contra_inicio_produccion`, `contra_embarque`, `contra_bl_awb`, `contra_arribo`, `contra_entrega`
+  - valores sugeridos para nacional: `contra_aceptacion_orden`, `contra_factura`, `contra_entrega`, `contra_recepcion`, `x_dias_factura`, `x_dias_evento`
+- `porcentaje` numeric(5,2) null
+- `monto` numeric(14,4) null
+- `moneda_codigo` char(3) not null
+- `dias_credito` integer null
+- `fecha_vencimiento_calculada` date null
+- `estado` text not null
+  - valores sugeridos: `programado`, `pendiente`, `parcial`, `pagado`, `vencido`, `cancelado`
+- `observaciones` text null
+- `creado_en` timestamptz
+- `actualizado_en` timestamptz
+
+Notas:
+
+- esta tabla es opcional para compras simples, pero muy recomendable para control profesional;
+- si solo hay anticipo y saldo, se pueden crear dos filas por orden;
+- `condiciones_pago` queda como resumen y `pagos_programados` como ejecucion real;
+- para ordenes internacionales, `evento_base` puede sugerirse desde el Incoterm;
+- para ordenes nacionales, `evento_base` se sugiere desde factura, recepcion o dias de credito;
+- la UI debe mostrar el calendario de pagos por orden y no solo los importes resumidos.
+
 ### 5. `ordenes_compra_logistica`
 
 Snapshot logístico.
@@ -778,10 +830,11 @@ Secciones sugeridas:
 3. partidas;
 4. condiciones comerciales;
 5. condiciones de pago;
-6. logistica;
-7. documentos;
-8. autorizacion;
-9. resumen.
+6. pagos programados;
+7. logistica;
+8. documentos;
+9. autorizacion;
+10. resumen.
 
 ### Comportamiento de la UI
 
@@ -799,6 +852,11 @@ Secciones sugeridas:
   - las partidas tengan cantidad y precio;
   - la orden no se cierre sin recepcion completa;
   - los campos internacionales solo sean obligatorios cuando aplique.
+  - `porcentaje_anticipo` y `dias_credito` pueden capturarse manualmente, pero los importes de anticipo y saldo deben calcularse desde el subtotal de la orden;
+  - `momento_pago_saldo` debe renderizarse como select basado en evento y no como texto libre;
+  - la UI debe permitir agregar uno o mas pagos programados por orden;
+  - para ordenes internacionales, la UI debe sugerir el evento base de pago segun el Incoterm;
+  - para ordenes nacionales, la UI debe sugerir eventos como factura, recepcion o dias de credito.
 
 ## Backend propuesto
 
@@ -813,6 +871,10 @@ Secciones sugeridas:
 - `POST /crm/compras/ordenes/{orden_id}/cerrar`
 - `POST /crm/compras/ordenes/{orden_id}/cancelar`
 - `POST /crm/compras/ordenes/{orden_id}/recepciones`
+- `GET /crm/compras/ordenes/{orden_id}/pagos`
+- `POST /crm/compras/ordenes/{orden_id}/pagos`
+- `PATCH /crm/compras/ordenes/{orden_id}/pagos/{pago_id}`
+- `DELETE /crm/compras/ordenes/{orden_id}/pagos/{pago_id}`
 
 ### Reglas de backend
 
@@ -821,6 +883,12 @@ Secciones sugeridas:
 - persistir snapshot historico de condiciones y partidas;
 - registrar eventos en bitacora;
 - validar que lo internacional solo aplique cuando corresponde.
+- normalizar responsables de pago a valores controlados (`comprador` / `vendedor`) donde aplique;
+- calcular `monto_anticipo`, `porcentaje_saldo` y `monto_saldo` desde el subtotal;
+- generar o sugerir `pagos_programados` a partir de `condiciones_pago` cuando la orden se crea o edita;
+- para ordenes internacionales, sugerir el `evento_base` de pago segun el Incoterm;
+- para ordenes nacionales, sugerir el `evento_base` segun factura, recepcion o dias de credito;
+- exponer la lista de pagos programados en el detalle de la orden para trazabilidad.
 
 ## Estrategia de implementacion
 
@@ -829,6 +897,7 @@ Secciones sugeridas:
 - formalizar la tabla madre de ordenes;
 - consolidar partidas;
 - guardar condiciones comerciales y de pago;
+- agregar `ordenes_compra_pagos_programados`;
 - guardar logistica.
 
 ### Fase 2
