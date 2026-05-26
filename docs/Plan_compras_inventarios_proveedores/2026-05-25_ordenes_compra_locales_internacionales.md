@@ -239,6 +239,42 @@ Tipos sugeridos:
 - `certificado_nom`
 - `garantia`
 
+Regla de UI por tipo de operacion:
+
+#### Orden nacional
+
+Mostrar como documentos base:
+
+- `commercial_invoice`
+- `packing_list`
+- `ficha_tecnica`
+- `certificado_calidad`
+- `garantia`
+
+#### Orden internacional
+
+Mostrar como documentos base mas documentos de comercio exterior:
+
+- `commercial_invoice`
+- `packing_list`
+- `bill_of_lading`
+- `air_waybill`
+- `certificate_of_origin`
+- `ficha_tecnica`
+- `msds`
+- `certificado_calidad`
+- `certificado_sanitario`
+- `certificado_nom`
+- `garantia`
+
+Notas de UI:
+
+- cada documento debe renderizarse como fila o tarjeta compacta con nombre, estado y boton de adjuntar;
+- la orden nacional no debe mostrar documentos aduanales ni de transporte internacional;
+- la orden internacional debe habilitar todos los documentos anteriores;
+- la base de datos puede guardar todos los tipos, pero la UI solo debe mostrar los que correspondan al tipo de operacion;
+- si un producto o categoria requiere un documento extra, se puede marcar como `obligatorio` por orden.
+
 ### 7. `ordenes_compra_autorizaciones`
 
 Flujo interno de aprobacion.
