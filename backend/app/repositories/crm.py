@@ -2278,6 +2278,165 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear documento de orden: {row!r}")
         return row
 
+    async def list_orden_compra_pagos_programados(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "orden_compra_id": f"eq.{orden_id}",
+            "order": "creado_en.asc",
+            "select": (
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,"
+                "dias_credito,fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/ordenes_compra_pagos_programados", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar pagos programados: {data!r}")
+        return data
+
+    async def create_orden_compra_pago_programado(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/ordenes_compra_pagos_programados",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el pago programado creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear pago programado: {row!r}")
+        return row
+
+    async def update_orden_compra_pago_programado(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        pago_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/ordenes_compra_pagos_programados?id=eq.{pago_id}&orden_compra_id=eq.{orden_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pago_programado_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar pago programado: {row!r}")
+        return row
+
+    async def delete_orden_compra_pago_programado(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        pago_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/ordenes_compra_pagos_programados?id=eq.{pago_id}&orden_compra_id=eq.{orden_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pago_programado_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar pago programado: {row!r}")
+        return row
+
+    async def replace_orden_compra_pagos_programados(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        pagos_programados: list[dict[str, Any]],
+    ) -> None:
+        current_rows = await self.list_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "orden_compra_id": f"eq.{orden_id}",
+        }
+        await self._request(
+            "DELETE",
+            "/rest/v1/ordenes_compra_pagos_programados",
+            params=params,
+        )
+        if not pagos_programados:
+            return
+        body = [
+            {"organizacion_id": str(organizacion_id), "orden_compra_id": str(orden_id), **payload}
+            for payload in pagos_programados
+        ]
+        try:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/ordenes_compra_pagos_programados",
+                json=body,
+                prefer="return=representation",
+            )
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inválida al reemplazar pagos programados: {data!r}")
+        except CRMRepositoryError:
+            if current_rows:
+                restore_body = []
+                for row in current_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    restore_payload: dict[str, Any] = {}
+                    for key in (
+                        "tipo_pago",
+                        "evento_base",
+                        "porcentaje",
+                        "monto",
+                        "moneda_codigo",
+                        "dias_credito",
+                        "fecha_vencimiento_calculada",
+                        "estado",
+                        "observaciones",
+                    ):
+                        value = row.get(key)
+                        if value is not None:
+                            restore_payload[key] = value
+                    restore_body.append(
+                        {
+                            "organizacion_id": str(organizacion_id),
+                            "orden_compra_id": str(orden_id),
+                            **restore_payload,
+                        }
+                    )
+                if restore_body:
+                    await self._request(
+                        "POST",
+                        "/rest/v1/ordenes_compra_pagos_programados",
+                        json=restore_body,
+                        prefer="return=representation",
+                    )
+            raise
+
     async def delete_orden_compra_documentos(
         self,
         *,
@@ -9987,6 +10146,10 @@ class CRMRepository:
                 "id,orden_compra_id,forma_pago,moneda_pago,porcentaje_anticipo,monto_anticipo,porcentaje_saldo,monto_saldo,"
                 "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
                 "),"
+                "pagos_programados:ordenes_compra_pagos_programados("
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
+                "fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
+                "),"
                 "logistica:ordenes_compra_logistica("
                 "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"
                 "puerto_origen,puerto_destino,aeropuerto_origen,aeropuerto_destino,lugar_entrega_final,direccion_entrega,"
@@ -10043,6 +10206,10 @@ class CRMRepository:
                 "condiciones_pago:ordenes_compra_condiciones_pago("
                 "id,orden_compra_id,forma_pago,moneda_pago,porcentaje_anticipo,monto_anticipo,porcentaje_saldo,monto_saldo,"
                 "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
+                "),"
+                "pagos_programados:ordenes_compra_pagos_programados("
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
+                "fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
                 "),"
                 "logistica:ordenes_compra_logistica("
                 "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"

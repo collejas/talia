@@ -11883,6 +11883,24 @@ class CRMOrdenCompraCreateItem(BaseModel):
     observaciones: str | None = Field(default=None, max_length=1000)
 
 
+class CRMOrdenCompraPagoProgramadoInput(BaseModel):
+    tipo_pago: Literal["anticipo", "saldo", "parcial"]
+    evento_base: str = Field(..., min_length=1, max_length=120)
+    porcentaje: float | None = Field(default=None, ge=0, le=100)
+    monto: float | None = Field(default=None, ge=0)
+    moneda_codigo: str | None = Field(default=None, min_length=3, max_length=3)
+    dias_credito: int | None = Field(default=None, ge=0)
+    fecha_vencimiento_calculada: date | None = None
+    estado: Literal["programado", "pendiente", "parcial", "pagado", "vencido", "cancelado"] = "programado"
+    observaciones: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _ensure_amount_or_percentage(self) -> "CRMOrdenCompraPagoProgramadoInput":
+        if self.porcentaje is None and self.monto is None:
+            raise ValueError("Debe indicar porcentaje o monto")
+        return self
+
+
 class CRMOrdenCompraCreate(BaseModel):
     folio: str = Field(..., min_length=1, max_length=80)
     proveedor_id: UUID
@@ -11901,6 +11919,7 @@ class CRMOrdenCompraCreate(BaseModel):
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
     condiciones_comerciales: dict[str, Any] | None = None
     condiciones_pago: dict[str, Any] | None = None
+    pagos_programados: list[CRMOrdenCompraPagoProgramadoInput] | None = None
     logistica: dict[str, Any] | None = None
     documentos: list[dict[str, Any]] | None = None
     items: list[CRMOrdenCompraCreateItem] = Field(min_length=1)
@@ -11924,6 +11943,7 @@ class CRMOrdenCompraUpdate(BaseModel):
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
     condiciones_comerciales: dict[str, Any] | None = None
     condiciones_pago: dict[str, Any] | None = None
+    pagos_programados: list[CRMOrdenCompraPagoProgramadoInput] | None = None
     logistica: dict[str, Any] | None = None
     documentos: list[dict[str, Any]] | None = None
     estado: str | None = None
@@ -12027,6 +12047,25 @@ class CRMOrdenCompraRecepcionItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CRMOrdenCompraPagoProgramado(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    orden_compra_id: UUID
+    tipo_pago: str
+    evento_base: str
+    porcentaje: float | None = None
+    monto: float | None = None
+    moneda_codigo: str
+    dias_credito: int | None = None
+    fecha_vencimiento_calculada: date | None = None
+    estado: str
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class CRMOrdenCompraRecepcion(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -12061,6 +12100,7 @@ class CRMOrdenCompraRecepcion(BaseModel):
     aprobado_por_usuario: dict[str, Any] | None = None
     condiciones_comerciales: dict[str, Any] | None = None
     condiciones_pago: dict[str, Any] | None = None
+    pagos_programados: list[CRMOrdenCompraPagoProgramado] = Field(default_factory=list)
     logistica: dict[str, Any] | None = None
     documentos: list[dict[str, Any]] = Field(default_factory=list)
     items: list[CRMOrdenCompraRecepcionItem] = Field(default_factory=list)
@@ -12085,7 +12125,104 @@ def _normalize_orden_compra_row(row: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(row)
     for field in ("condiciones_comerciales", "condiciones_pago", "logistica"):
         normalized[field] = _single_related(normalized.get(field))
+    normalized["pagos_programados"] = _ensure_concept_list(normalized.get("pagos_programados"))
     return normalized
+
+
+def _normalize_orden_compra_pago_programado_rows(
+    value: Any,
+    *,
+    default_moneda_codigo: str = "MXN",
+    subtotal: Decimal | None = None,
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    subtotal_decimal = subtotal if isinstance(subtotal, Decimal) else None
+    if subtotal_decimal is None and subtotal is not None:
+        try:
+            subtotal_decimal = Decimal(str(subtotal))
+        except (ArithmeticError, ValueError, TypeError):
+            subtotal_decimal = None
+
+    for raw in value:
+        if isinstance(raw, BaseModel):
+            raw_item = raw.model_dump(exclude_none=True)
+        elif isinstance(raw, dict):
+            raw_item = raw
+        else:
+            continue
+
+        tipo_pago = _clean_text(raw_item.get("tipo_pago")).lower()
+        evento_base = _clean_text(raw_item.get("evento_base"))
+        if not tipo_pago or not evento_base:
+            continue
+
+        porcentaje = _decimal_from_value(raw_item.get("porcentaje"))
+        monto = _decimal_from_value(raw_item.get("monto"))
+        if subtotal_decimal and subtotal_decimal > 0:
+            if porcentaje is None and monto is not None:
+                porcentaje = (monto / subtotal_decimal * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            elif monto is None and porcentaje is not None:
+                monto = (subtotal_decimal * porcentaje / Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        moneda_codigo = _clean_text(raw_item.get("moneda_codigo")).upper()
+        if len(moneda_codigo) != 3:
+            moneda_codigo = (default_moneda_codigo or "MXN").upper()
+
+        estado = _clean_text(raw_item.get("estado")).lower() or "programado"
+        if estado not in {"programado", "pendiente", "parcial", "pagado", "vencido", "cancelado"}:
+            estado = "programado"
+
+        entry: dict[str, Any] = {
+            "tipo_pago": tipo_pago,
+            "evento_base": evento_base,
+            "moneda_codigo": moneda_codigo,
+            "estado": estado,
+        }
+        if porcentaje is not None:
+            entry["porcentaje"] = float(porcentaje.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        if monto is not None:
+            entry["monto"] = float(monto.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+        dias_credito = raw_item.get("dias_credito")
+        if dias_credito is not None:
+            try:
+                entry["dias_credito"] = int(dias_credito)
+            except (TypeError, ValueError):
+                pass
+        fecha_vencimiento = raw_item.get("fecha_vencimiento_calculada")
+        if fecha_vencimiento is not None:
+            entry["fecha_vencimiento_calculada"] = fecha_vencimiento
+        observaciones = _clean_text(raw_item.get("observaciones"))
+        if observaciones:
+            entry["observaciones"] = observaciones
+        normalized.append(entry)
+
+    return normalized
+
+
+async def _replace_orden_compra_pagos_programados(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    orden_id: UUID,
+    pagos_programados: Any,
+    subtotal: Decimal | None,
+    moneda_codigo: str | None,
+) -> None:
+    normalized_rows = _normalize_orden_compra_pago_programado_rows(
+        pagos_programados,
+        default_moneda_codigo=moneda_codigo or "MXN",
+        subtotal=subtotal,
+    )
+    try:
+        await repo.replace_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            pagos_programados=normalized_rows,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 # existing classes...
@@ -15475,6 +15612,7 @@ async def create_compras_orden(
     payload: CRMOrdenCompraCreate,
 ) -> CRMOrdenCompraRecepcion:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    pagos_programados = body.pop("pagos_programados", None)
     if usuario_id:
         body.setdefault("solicitado_por_usuario_id", str(usuario_id))
     try:
@@ -15486,6 +15624,29 @@ async def create_compras_orden(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
         )
+        if row is not None and pagos_programados is not None:
+            try:
+                await _replace_orden_compra_pagos_programados(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    orden_id=orden_id,
+                    pagos_programados=pagos_programados,
+                    subtotal=_decimal_from_value(row.get("subtotal")),
+                    moneda_codigo=_clean_text(row.get("moneda")),
+                )
+            except HTTPException:
+                try:
+                    await repo.delete_orden_compra(
+                        organizacion_id=organizacion_id,
+                        orden_id=orden_id,
+                    )
+                except CRMRepositoryError:
+                    pass
+                raise
+            row = await repo.get_orden_compra(
+                organizacion_id=organizacion_id,
+                orden_id=orden_id,
+            )
     except CRMRepositoryError as exc:
         detail = str(exc)
         if "exists" in detail.lower() or "unq" in detail.lower():
@@ -15505,16 +15666,31 @@ async def update_compras_orden(
     orden_id: UUID,
     payload: CRMOrdenCompraUpdate,
 ) -> CRMOrdenCompraRecepcion:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    pagos_programados = body.pop("pagos_programados", None)
     try:
         orden_id_result = await repo.update_orden_compra_transactional(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=body,
         )
         row = await repo.get_orden_compra(
             organizacion_id=organizacion_id,
             orden_id=orden_id_result,
         )
+        if row is not None and pagos_programados is not None:
+            await _replace_orden_compra_pagos_programados(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                orden_id=orden_id_result,
+                pagos_programados=pagos_programados,
+                subtotal=_decimal_from_value(row.get("subtotal")),
+                moneda_codigo=_clean_text(row.get("moneda")),
+            )
+            row = await repo.get_orden_compra(
+                organizacion_id=organizacion_id,
+                orden_id=orden_id_result,
+            )
     except CRMRepositoryError as exc:
         detail = str(exc)
         if "No se puede editar" in detail or "no se puede editar" in detail.lower():
@@ -15739,6 +15915,138 @@ async def get_compras_orden_documento_url(
         tipo_documento=normalized_tipo,
         expires_in=expires_in,
     )
+
+
+@router.get("/compras/ordenes/{orden_id}/pagos-programados", response_model=list[CRMOrdenCompraPagoProgramado])
+async def list_compras_orden_pagos_programados(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    orden_id: UUID,
+) -> list[CRMOrdenCompraPagoProgramado]:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        rows = await repo.list_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMOrdenCompraPagoProgramado.model_validate(row) for row in rows]
+
+
+@router.post("/compras/ordenes/{orden_id}/pagos-programados", response_model=CRMOrdenCompraPagoProgramado, status_code=status.HTTP_201_CREATED)
+async def create_compras_orden_pago_programado(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    payload: CRMOrdenCompraPagoProgramadoInput,
+) -> CRMOrdenCompraPagoProgramado:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        body = payload.model_dump(mode="json", exclude_unset=True)
+        if not _clean_text(body.get("moneda_codigo")):
+            body["moneda_codigo"] = _clean_text(orden.get("moneda")) or "MXN"
+        else:
+            body["moneda_codigo"] = _clean_text(body.get("moneda_codigo")).upper()
+        if body.get("monto") is None and body.get("porcentaje") is not None:
+            subtotal = _decimal_from_value(orden.get("subtotal"))
+            if subtotal and subtotal > 0:
+                body["monto"] = float((subtotal * _decimal_from_value(body.get("porcentaje")) / Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+        elif body.get("porcentaje") is None and body.get("monto") is not None:
+            subtotal = _decimal_from_value(orden.get("subtotal"))
+            if subtotal and subtotal > 0:
+                body["porcentaje"] = float(((_decimal_from_value(body.get("monto")) or Decimal("0")) / subtotal * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        row = await repo.create_orden_compra_pago_programado(
+            organizacion_id=organizacion_id,
+            payload={
+                **body,
+                "orden_compra_id": str(orden_id),
+            },
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMOrdenCompraPagoProgramado.model_validate(row)
+
+
+@router.patch("/compras/ordenes/{orden_id}/pagos-programados/{pago_id}", response_model=CRMOrdenCompraPagoProgramado)
+async def update_compras_orden_pago_programado(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    pago_id: UUID,
+    payload: CRMOrdenCompraPagoProgramadoInput,
+) -> CRMOrdenCompraPagoProgramado:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        body = payload.model_dump(mode="json", exclude_unset=True)
+        if not _clean_text(body.get("moneda_codigo")):
+            body["moneda_codigo"] = _clean_text(orden.get("moneda")) or "MXN"
+        else:
+            body["moneda_codigo"] = _clean_text(body.get("moneda_codigo")).upper()
+        if body.get("monto") is None and body.get("porcentaje") is not None:
+            subtotal = _decimal_from_value(orden.get("subtotal"))
+            if subtotal and subtotal > 0:
+                body["monto"] = float((subtotal * _decimal_from_value(body.get("porcentaje")) / Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+        elif body.get("porcentaje") is None and body.get("monto") is not None:
+            subtotal = _decimal_from_value(orden.get("subtotal"))
+            if subtotal and subtotal > 0:
+                body["porcentaje"] = float(((_decimal_from_value(body.get("monto")) or Decimal("0")) / subtotal * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        row = await repo.update_orden_compra_pago_programado(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            pago_id=pago_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMOrdenCompraPagoProgramado.model_validate(row)
+
+
+@router.delete("/compras/ordenes/{orden_id}/pagos-programados/{pago_id}", response_model=CRMOrdenCompraPagoProgramado)
+async def delete_compras_orden_pago_programado(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    pago_id: UUID,
+) -> CRMOrdenCompraPagoProgramado:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        row = await repo.delete_orden_compra_pago_programado(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            pago_id=pago_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMOrdenCompraPagoProgramado.model_validate(row)
 
 
 async def _update_compras_orden_estado(
