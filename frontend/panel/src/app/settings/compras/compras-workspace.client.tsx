@@ -567,12 +567,8 @@ function buildDerivedPaymentSchedules(
   const anticipoPct = asString(paymentSummary.porcentaje_anticipo, "")
   const saldoPct = asString(paymentSummary.porcentaje_saldo, "")
   const saldoDias = asString(paymentSummary.dias_credito, "")
-  const anticipoEventoReal = asString(paymentSummary.fecha_evento_anticipo_real, "")
   const saldoEventoReal = asString(paymentSummary.fecha_evento_saldo_real, "")
-  const anticipoFechaPago = asString(paymentSummary.fecha_pago_anticipo_real, "")
-  const saldoFechaPago = asString(paymentSummary.fecha_pago_saldo_real, "")
   const saldoReferencia = asString(paymentSummary.referencia_pago_saldo, "")
-  const anticipoReferencia = asString(paymentSummary.referencia_pago_anticipo, "")
   const saldoVencimiento = calculatePaymentScheduleDueDate(saldoEventoReal, saldoDias)
 
   return [
@@ -584,9 +580,9 @@ function buildDerivedPaymentSchedules(
       moneda_codigo: currency,
       dias_credito: "",
       fecha_vencimiento_calculada: "",
-      fecha_evento_real: anticipoEventoReal,
-      fecha_pago_real: anticipoFechaPago,
-      referencia_pago: anticipoReferencia,
+      fecha_evento_real: orderEmissionIso,
+      fecha_pago_real: "",
+      referencia_pago: "",
       estado: "programado",
       observaciones: "",
     },
@@ -599,7 +595,7 @@ function buildDerivedPaymentSchedules(
       dias_credito: saldoDias,
       fecha_vencimiento_calculada: saldoVencimiento,
       fecha_evento_real: saldoEventoReal,
-      fecha_pago_real: saldoFechaPago,
+      fecha_pago_real: "",
       referencia_pago: saldoReferencia,
       estado: "programado",
       observaciones: "",
@@ -692,6 +688,8 @@ export function ComprasWorkspace({
   const [orderFormaPago, setOrderFormaPago] = useState("")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
   const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
+  const [orderFechaPagoAnticipo, setOrderFechaPagoAnticipo] = useState("")
+  const [orderFechaEventoSaldo, setOrderFechaEventoSaldo] = useState("")
   const [orderDiasCredito, setOrderDiasCredito] = useState("")
   const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
@@ -876,12 +874,8 @@ export function ComprasWorkspace({
           porcentaje_saldo: orderPorcentajeSaldoCalculated?.toFixed(2) ?? "",
           dias_credito: orderDiasCredito,
           momento_pago_saldo: orderMomentoPagoSaldo,
-          fecha_evento_anticipo_real: asString(selectedOrderPaymentScheduleByType.get("anticipo")?.fecha_evento_real, ""),
-          fecha_evento_saldo_real: asString(selectedOrderPaymentScheduleByType.get("saldo")?.fecha_evento_real, ""),
-          fecha_pago_anticipo_real: asString(selectedOrderPaymentScheduleByType.get("anticipo")?.fecha_pago_real, ""),
-          fecha_pago_saldo_real: asString(selectedOrderPaymentScheduleByType.get("saldo")?.fecha_pago_real, ""),
-          referencia_pago_anticipo: asString(selectedOrderPaymentScheduleByType.get("anticipo")?.referencia_pago, ""),
           referencia_pago_saldo: asString(selectedOrderPaymentScheduleByType.get("saldo")?.referencia_pago, ""),
+          fecha_evento_saldo_real: orderFechaEventoSaldo,
         },
         orderEmissionIso,
       ),
@@ -893,6 +887,7 @@ export function ComprasWorkspace({
       orderPorcentajeSaldoCalculated,
       orderDiasCredito,
       orderMomentoPagoSaldo,
+      orderFechaEventoSaldo,
       orderEmissionIso,
       selectedOrderPaymentScheduleByType,
     ],
@@ -1179,7 +1174,9 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
     setOrderFormaPago(asString(pago.forma_pago, ""))
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
+    setOrderFechaPagoAnticipo(asString((selectedOrderPaymentScheduleByType.get("anticipo")?.fecha_pago_real) ?? "", ""))
     setOrderMomentoPagoSaldo(asString(pago.momento_pago_saldo, ""))
+    setOrderFechaEventoSaldo(asString((selectedOrderPaymentScheduleByType.get("saldo")?.fecha_evento_real) ?? "", ""))
     setOrderDiasCredito(asString(pago.dias_credito, ""))
     setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
     setOrderCondicionesPagoObservaciones(asString(pago.observaciones, ""))
@@ -1256,7 +1253,9 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones("")
     setOrderFormaPago("")
     setOrderPorcentajeAnticipo("")
+    setOrderFechaPagoAnticipo("")
     setOrderMomentoPagoSaldo("")
+    setOrderFechaEventoSaldo("")
     setOrderDiasCredito("")
     setOrderComisionesBancarias("")
     setOrderCondicionesPagoObservaciones("")
@@ -2560,7 +2559,7 @@ export function ComprasWorkspace({
                   <div className="grid gap-3 md:grid-cols-2">
                     {derivedPaymentSchedules.map((row, index) => {
                       const eventLabel = paymentEventOptions.find((option) => option.value === row.evento_base)?.label ?? row.evento_base
-                      const dueLabel = row.fecha_vencimiento_calculada || "Pendiente del evento"
+                      const dueLabel = row.fecha_vencimiento_calculada || (row.tipo_pago === "anticipo" ? "Pago al emitir la OC" : "Pendiente del evento")
                       return (
                         <div key={`derived-${row.tipo_pago}-${index}`} className="rounded-md border border-border/60 bg-muted/30 p-3">
                           <input type="hidden" name="pagos_programados_tipo_pago" value={row.tipo_pago} />
@@ -2571,6 +2570,7 @@ export function ComprasWorkspace({
                           <input type="hidden" name="pagos_programados_dias_credito" value={row.dias_credito} />
                           <input type="hidden" name="pagos_programados_fecha_vencimiento_calculada" value={row.fecha_vencimiento_calculada} />
                           <input type="hidden" name="pagos_programados_estado" value={row.estado} />
+                          <input type="hidden" name="pagos_programados_observaciones" value={row.observaciones} />
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <div className="text-sm font-medium capitalize">{row.tipo_pago}</div>
                             <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -2594,22 +2594,31 @@ export function ComprasWorkspace({
                               <div className="text-xs text-muted-foreground">Moneda</div>
                               <div className="text-sm font-medium">{row.moneda_codigo}</div>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-medium">Fecha del hito</label>
-                              <Input
-                                name="pagos_programados_fecha_evento_real"
-                                type="date"
-                                defaultValue={row.fecha_evento_real}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-medium">Fecha de pago</label>
-                              <Input
-                                name="pagos_programados_fecha_pago_real"
-                                type="date"
-                                defaultValue={row.fecha_pago_real}
-                              />
-                            </div>
+                            {row.tipo_pago === "anticipo" ? (
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Fecha de pago</label>
+                                <Input
+                                  name="pagos_programados_fecha_pago_real"
+                                  type="date"
+                                  value={orderFechaPagoAnticipo}
+                                  onChange={(event) => setOrderFechaPagoAnticipo(event.target.value)}
+                                />
+                                <input type="hidden" name="pagos_programados_fecha_evento_real" value={orderEmissionIso} />
+                                <input type="hidden" name="pagos_programados_referencia_pago" value={row.referencia_pago} />
+                              </div>
+                            ) : (
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Fecha del hito</label>
+                                <Input
+                                  name="pagos_programados_fecha_evento_real"
+                                  type="date"
+                                  value={orderFechaEventoSaldo}
+                                  onChange={(event) => setOrderFechaEventoSaldo(event.target.value)}
+                                />
+                                <input type="hidden" name="pagos_programados_fecha_pago_real" value={row.fecha_pago_real} />
+                                <input type="hidden" name="pagos_programados_referencia_pago" value={row.referencia_pago} />
+                              </div>
+                            )}
                             <div className="space-y-2 md:col-span-2">
                               <label className="text-xs font-medium">Referencia de pago</label>
                               <Input
