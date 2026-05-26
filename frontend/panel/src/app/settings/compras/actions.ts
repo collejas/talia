@@ -221,6 +221,9 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
   const monedas = getFormDataOptionalTextArray(formData, "pagos_programados_moneda_codigo")
   const diasCredito = getFormDataOptionalNumberArray(formData, "pagos_programados_dias_credito")
   const fechasVencimiento = getFormDataOptionalTextArray(formData, "pagos_programados_fecha_vencimiento_calculada")
+  const fechasEventoReal = getFormDataOptionalTextArray(formData, "pagos_programados_fecha_evento_real")
+  const fechasPagoReal = getFormDataOptionalTextArray(formData, "pagos_programados_fecha_pago_real")
+  const referenciasPago = getFormDataOptionalTextArray(formData, "pagos_programados_referencia_pago")
   const estados = getFormDataOptionalTextArray(formData, "pagos_programados_estado")
   const observaciones = getFormDataOptionalTextArray(formData, "pagos_programados_observaciones")
 
@@ -229,7 +232,7 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
     return []
   }
 
-  const arrays = [eventos, porcentajes, montos, monedas, diasCredito, fechasVencimiento, estados, observaciones]
+  const arrays = [eventos, porcentajes, montos, monedas, diasCredito, fechasVencimiento, fechasEventoReal, fechasPagoReal, referenciasPago, estados, observaciones]
   if (arrays.some((array) => array.length !== expectedLength)) {
     throw new Error("pagos_programados_mismatch")
   }
@@ -245,6 +248,9 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
     const monto = montos[index]
     const dias = diasCredito[index]
     const fechaVencimiento = parseOptionalText(fechasVencimiento[index])
+    const fechaEventoReal = parseOptionalText(fechasEventoReal[index])
+    const fechaPagoReal = parseOptionalText(fechasPagoReal[index])
+    const referenciaPago = parseOptionalText(referenciasPago[index])
     const observacion = parseOptionalText(observaciones[index])
     const estado = parseOptionalText(estados[index])
     const hasMeaningfulValue =
@@ -265,6 +271,9 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
       moneda_codigo: parseOptionalText(monedas[index]),
       dias_credito: dias,
       fecha_vencimiento_calculada: fechaVencimiento,
+      fecha_evento_real: fechaEventoReal,
+      fecha_pago_real: fechaPagoReal,
+      referencia_pago: referenciaPago,
       estado,
       observaciones: observacion,
     })

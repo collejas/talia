@@ -2290,7 +2290,7 @@ class CRMRepository:
             "order": "creado_en.asc",
             "select": (
                 "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,"
-                "dias_credito,fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
+                "dias_credito,fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
             ),
         }
         resp = await self._request("GET", "/rest/v1/ordenes_compra_pagos_programados", params=params)
@@ -10148,7 +10148,7 @@ class CRMRepository:
                 "),"
                 "pagos_programados:ordenes_compra_pagos_programados("
                 "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
-                "fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
+                "fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
                 "),"
                 "logistica:ordenes_compra_logistica("
                 "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"
@@ -10209,7 +10209,7 @@ class CRMRepository:
                 "),"
                 "pagos_programados:ordenes_compra_pagos_programados("
                 "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
-                "fecha_vencimiento_calculada,estado,observaciones,creado_en,actualizado_en"
+                "fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
                 "),"
                 "logistica:ordenes_compra_logistica("
                 "id,orden_compra_id,modo_transporte_codigo,fecha_requerida_embarque,fecha_estimada_embarque,fecha_estimada_arribo,"

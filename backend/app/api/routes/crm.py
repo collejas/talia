@@ -11891,6 +11891,9 @@ class CRMOrdenCompraPagoProgramadoInput(BaseModel):
     moneda_codigo: str | None = Field(default=None, min_length=3, max_length=3)
     dias_credito: int | None = Field(default=None, ge=0)
     fecha_vencimiento_calculada: date | None = None
+    fecha_evento_real: date | None = None
+    fecha_pago_real: date | None = None
+    referencia_pago: str | None = Field(default=None, max_length=120)
     estado: Literal["programado", "pendiente", "parcial", "pagado", "vencido", "cancelado"] = "programado"
     observaciones: str | None = Field(default=None, max_length=1000)
 
@@ -12058,6 +12061,9 @@ class CRMOrdenCompraPagoProgramado(BaseModel):
     moneda_codigo: str
     dias_credito: int | None = None
     fecha_vencimiento_calculada: date | None = None
+    fecha_evento_real: date | None = None
+    fecha_pago_real: date | None = None
+    referencia_pago: str | None = None
     estado: str
     observaciones: str | None = None
     creado_en: datetime
@@ -12193,6 +12199,15 @@ def _normalize_orden_compra_pago_programado_rows(
         fecha_vencimiento = raw_item.get("fecha_vencimiento_calculada")
         if fecha_vencimiento is not None:
             entry["fecha_vencimiento_calculada"] = fecha_vencimiento
+        fecha_evento_real = raw_item.get("fecha_evento_real")
+        if fecha_evento_real is not None:
+            entry["fecha_evento_real"] = fecha_evento_real
+        fecha_pago_real = raw_item.get("fecha_pago_real")
+        if fecha_pago_real is not None:
+            entry["fecha_pago_real"] = fecha_pago_real
+        referencia_pago = _clean_text(raw_item.get("referencia_pago"))
+        if referencia_pago:
+            entry["referencia_pago"] = referencia_pago
         observaciones = _clean_text(raw_item.get("observaciones"))
         if observaciones:
             entry["observaciones"] = observaciones
