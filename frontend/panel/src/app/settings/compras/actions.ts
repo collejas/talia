@@ -168,6 +168,14 @@ function hasAnyValue(values: Array<unknown>): boolean {
   })
 }
 
+function normalizeDateInput(value: FormDataEntryValue | null): string | undefined {
+  const raw = parseOptionalText(value)
+  if (!raw) {
+    return undefined
+  }
+  return raw.includes("T") ? raw.slice(0, 10) : raw.slice(0, 10)
+}
+
 function buildOrdenCompraCondicionesComerciales(formData: FormData, tipoOperacion: string): Record<string, unknown> | null {
   const payload = {
     incoterm_codigo: parseOptionalText(formData.get("condiciones_comerciales_incoterm_codigo")),
@@ -227,14 +235,22 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
   const estados = getFormDataOptionalTextArray(formData, "pagos_programados_estado")
   const observaciones = getFormDataOptionalTextArray(formData, "pagos_programados_observaciones")
 
-  const expectedLength = tipos.length
+  const expectedLength = Math.max(
+    tipos.length,
+    eventos.length,
+    porcentajes.length,
+    montos.length,
+    monedas.length,
+    diasCredito.length,
+    fechasVencimiento.length,
+    fechasEventoReal.length,
+    fechasPagoReal.length,
+    referenciasPago.length,
+    estados.length,
+    observaciones.length,
+  )
   if (!expectedLength) {
     return []
-  }
-
-  const arrays = [eventos, porcentajes, montos, monedas, diasCredito, fechasVencimiento, fechasEventoReal, fechasPagoReal, referenciasPago, estados, observaciones]
-  if (arrays.some((array) => array.length !== expectedLength)) {
-    throw new Error("pagos_programados_mismatch")
   }
 
   const rows: Record<string, unknown>[] = []
@@ -247,9 +263,9 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
     const porcentaje = porcentajes[index]
     const monto = montos[index]
     const dias = diasCredito[index]
-    const fechaVencimiento = parseOptionalText(fechasVencimiento[index])
-    const fechaEventoReal = parseOptionalText(fechasEventoReal[index])
-    const fechaPagoReal = parseOptionalText(fechasPagoReal[index])
+    const fechaVencimiento = normalizeDateInput(fechasVencimiento[index])
+    const fechaEventoReal = normalizeDateInput(fechasEventoReal[index])
+    const fechaPagoReal = normalizeDateInput(fechasPagoReal[index])
     const referenciaPago = parseOptionalText(referenciasPago[index])
     const observacion = parseOptionalText(observaciones[index])
     const estado = parseOptionalText(estados[index])
@@ -270,12 +286,12 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
       monto,
       moneda_codigo: parseOptionalText(monedas[index]),
       dias_credito: dias,
-      fecha_vencimiento_calculada: fechaVencimiento,
-      fecha_evento_real: fechaEventoReal,
-      fecha_pago_real: fechaPagoReal,
-      referencia_pago: referenciaPago,
-      estado,
-      observaciones: observacion,
+      ...(fechaVencimiento ? { fecha_vencimiento_calculada: fechaVencimiento } : {}),
+      ...(fechaEventoReal ? { fecha_evento_real: fechaEventoReal } : {}),
+      ...(fechaPagoReal ? { fecha_pago_real: fechaPagoReal } : {}),
+      ...(referenciaPago ? { referencia_pago: referenciaPago } : {}),
+      ...(estado ? { estado } : {}),
+      ...(observacion ? { observaciones: observacion } : {}),
     })
   }
   return rows
@@ -542,7 +558,6 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
-  const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
   const payload = {
     folio: parseRequiredText(formData.get("folio"), "folio"),
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
@@ -561,7 +576,6 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
     condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
     condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
-    pagos_programados: pagosProgramados,
     logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }
@@ -584,7 +598,6 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
-  const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
   const payload = {
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
     almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
@@ -603,7 +616,6 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
     condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
     condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
-    pagos_programados: pagosProgramados,
     logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }
@@ -616,6 +628,18 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
     throw new Error(response.error)
   }
   await uploadOrdenCompraFormDocuments(ordenId, formData)
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function saveOrdenCompraPagosProgramadosAction(ordenId: string, formData: FormData): Promise<void> {
+  const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/pagos-programados`, {
+    method: "PUT",
+    body: pagosProgramados,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
   revalidatePath(SETTINGS_PATH)
 }
 

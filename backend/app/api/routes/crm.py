@@ -15997,6 +15997,39 @@ async def create_compras_orden_pago_programado(
     return CRMOrdenCompraPagoProgramado.model_validate(row)
 
 
+@router.put("/compras/ordenes/{orden_id}/pagos-programados", response_model=list[CRMOrdenCompraPagoProgramado])
+async def replace_compras_orden_pagos_programados(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    payload: list[CRMOrdenCompraPagoProgramadoInput],
+) -> list[CRMOrdenCompraPagoProgramado]:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        await _replace_orden_compra_pagos_programados(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            pagos_programados=payload,
+            subtotal=_decimal_from_value(orden.get("subtotal")),
+            moneda_codigo=_clean_text(orden.get("moneda")),
+        )
+        rows = await repo.list_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMOrdenCompraPagoProgramado.model_validate(row) for row in rows]
+
+
 @router.patch("/compras/ordenes/{orden_id}/pagos-programados/{pago_id}", response_model=CRMOrdenCompraPagoProgramado)
 async def update_compras_orden_pago_programado(
     *,

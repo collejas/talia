@@ -2371,6 +2371,33 @@ class CRMRepository:
         orden_id: UUID,
         pagos_programados: list[dict[str, Any]],
     ) -> None:
+        payload_keys = (
+            "organizacion_id",
+            "orden_compra_id",
+            "tipo_pago",
+            "evento_base",
+            "porcentaje",
+            "monto",
+            "moneda_codigo",
+            "dias_credito",
+            "fecha_vencimiento_calculada",
+            "fecha_evento_real",
+            "fecha_pago_real",
+            "referencia_pago",
+            "estado",
+            "observaciones",
+        )
+
+        def _row_with_all_keys(row: dict[str, Any]) -> dict[str, Any]:
+            normalized_row: dict[str, Any] = {}
+            for key in payload_keys:
+                value = row.get(key)
+                if value is not None:
+                    normalized_row[key] = value
+                else:
+                    normalized_row[key] = None
+            return normalized_row
+
         current_rows = await self.list_orden_compra_pagos_programados(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
@@ -2387,7 +2414,13 @@ class CRMRepository:
         if not pagos_programados:
             return
         body = [
-            {"organizacion_id": str(organizacion_id), "orden_compra_id": str(orden_id), **payload}
+            _row_with_all_keys(
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "orden_compra_id": str(orden_id),
+                    **payload,
+                }
+            )
             for payload in pagos_programados
         ]
         try:
@@ -2406,27 +2439,14 @@ class CRMRepository:
                 for row in current_rows:
                     if not isinstance(row, dict):
                         continue
-                    restore_payload: dict[str, Any] = {}
-                    for key in (
-                        "tipo_pago",
-                        "evento_base",
-                        "porcentaje",
-                        "monto",
-                        "moneda_codigo",
-                        "dias_credito",
-                        "fecha_vencimiento_calculada",
-                        "estado",
-                        "observaciones",
-                    ):
-                        value = row.get(key)
-                        if value is not None:
-                            restore_payload[key] = value
                     restore_body.append(
-                        {
-                            "organizacion_id": str(organizacion_id),
-                            "orden_compra_id": str(orden_id),
-                            **restore_payload,
-                        }
+                        _row_with_all_keys(
+                            {
+                                "organizacion_id": str(organizacion_id),
+                                "orden_compra_id": str(orden_id),
+                                **row,
+                            }
+                        )
                     )
                 if restore_body:
                     await self._request(
