@@ -252,6 +252,13 @@ function formatCurrency(value: unknown, currency = "MXN"): string {
   }
 }
 
+function formatDecimalInput(value: number | null, fractionDigits = 2): string {
+  if (value === null || !Number.isFinite(value)) {
+    return ""
+  }
+  return value.toFixed(fractionDigits)
+}
+
 function formatDateTime(value: unknown): string {
   if (typeof value !== "string" || !value) return "—"
   const parsed = new Date(value)
@@ -494,9 +501,6 @@ export function ComprasWorkspace({
   const [orderCondicionesComercialesObservaciones, setOrderCondicionesComercialesObservaciones] = useState("")
   const [orderFormaPago, setOrderFormaPago] = useState("")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
-  const [orderMontoAnticipo, setOrderMontoAnticipo] = useState("")
-  const [orderPorcentajeSaldo, setOrderPorcentajeSaldo] = useState("")
-  const [orderMontoSaldo, setOrderMontoSaldo] = useState("")
   const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
   const [orderDiasCredito, setOrderDiasCredito] = useState("")
   const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
@@ -586,6 +590,23 @@ export function ComprasWorkspace({
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
   const orderSubtotal = orderLines.reduce((sum, line) => sum + calculateOrderLineTotal(line), 0)
+  const orderPorcentajeAnticipoValue = Number.parseFloat(orderPorcentajeAnticipo)
+  const orderDiasCreditoValue = Number.parseFloat(orderDiasCredito)
+  const orderMontoAnticipoCalculated =
+    Number.isFinite(orderPorcentajeAnticipoValue) && orderPorcentajeAnticipoValue >= 0
+      ? orderSubtotal * (orderPorcentajeAnticipoValue / 100)
+      : null
+  const orderPorcentajeSaldoCalculated =
+    Number.isFinite(orderPorcentajeAnticipoValue) && orderPorcentajeAnticipoValue >= 0
+      ? Math.max(100 - orderPorcentajeAnticipoValue, 0)
+      : null
+  const orderMontoSaldoCalculated =
+    orderMontoAnticipoCalculated !== null
+      ? Math.max(orderSubtotal - orderMontoAnticipoCalculated, 0)
+      : null
+  const orderMomentoPagoSaldoSuggested = Number.isFinite(orderDiasCreditoValue) && orderDiasCreditoValue > 0
+    ? `Crédito a ${orderDiasCreditoValue} días`
+    : ""
   const orderExchangeRateValue = Number.parseFloat(orderExchangeRate)
   const orderSubtotalMxn = Number.isFinite(orderExchangeRateValue) && orderExchangeRateValue > 0
     ? orderSubtotal * orderExchangeRateValue
@@ -729,6 +750,19 @@ export function ComprasWorkspace({
     }
     void refreshOrderExchangeRate(orderCurrency)
   }, [orderCurrency, refreshOrderExchangeRate])
+
+  useEffect(() => {
+    if (!orderMomentoPagoSaldoSuggested) {
+      return
+    }
+    setOrderMomentoPagoSaldo((current) => {
+      const trimmed = current.trim()
+      if (!trimmed || /^Crédito a \d+(\.\d+)? días$/i.test(trimmed)) {
+        return orderMomentoPagoSaldoSuggested
+      }
+      return current
+    })
+  }, [orderMomentoPagoSaldoSuggested])
 
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
@@ -891,9 +925,6 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
     setOrderFormaPago(asString(pago.forma_pago, ""))
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
-    setOrderMontoAnticipo(asString(pago.monto_anticipo, ""))
-    setOrderPorcentajeSaldo(asString(pago.porcentaje_saldo, ""))
-    setOrderMontoSaldo(asString(pago.monto_saldo, ""))
     setOrderMomentoPagoSaldo(asString(pago.momento_pago_saldo, ""))
     setOrderDiasCredito(asString(pago.dias_credito, ""))
     setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
@@ -970,9 +1001,6 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones("")
     setOrderFormaPago("")
     setOrderPorcentajeAnticipo("")
-    setOrderMontoAnticipo("")
-    setOrderPorcentajeSaldo("")
-    setOrderMontoSaldo("")
     setOrderMomentoPagoSaldo("")
     setOrderDiasCredito("")
     setOrderComisionesBancarias("")
@@ -2155,8 +2183,9 @@ export function ComprasWorkspace({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={orderMontoAnticipo}
-                    onChange={(event) => setOrderMontoAnticipo(event.target.value)}
+                    value={formatDecimalInput(orderMontoAnticipoCalculated)}
+                    readOnly
+                    className="bg-muted/40"
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
@@ -2170,8 +2199,9 @@ export function ComprasWorkspace({
                     min="0"
                     max="100"
                     step="0.01"
-                    value={orderPorcentajeSaldo}
-                    onChange={(event) => setOrderPorcentajeSaldo(event.target.value)}
+                    value={formatDecimalInput(orderPorcentajeSaldoCalculated)}
+                    readOnly
+                    className="bg-muted/40"
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
@@ -2184,8 +2214,9 @@ export function ComprasWorkspace({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={orderMontoSaldo}
-                    onChange={(event) => setOrderMontoSaldo(event.target.value)}
+                    value={formatDecimalInput(orderMontoSaldoCalculated)}
+                    readOnly
+                    className="bg-muted/40"
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -2197,7 +2228,7 @@ export function ComprasWorkspace({
                     name="condiciones_pago_momento_pago_saldo"
                     value={orderMomentoPagoSaldo}
                     onChange={(event) => setOrderMomentoPagoSaldo(event.target.value)}
-                    placeholder="Contra BL / antes de embarque"
+                    placeholder={orderMomentoPagoSaldoSuggested || "Contra BL / antes de embarque"}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
