@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -1466,9 +1466,10 @@ export function ComprasWorkspace({
                 </TableHeader>
                 <TableBody>
                   {orderLines.map((line, index) => (
-                    <TableRow key={`${line.catalog_item_id || "new"}-${index}`}>
+                    <Fragment key={`${line.catalog_item_id || "new"}-${index}`}>
+                      <TableRow>
                       <TableCell className="align-top">
-                        <div className="space-y-2 min-w-72">
+                        <div className="w-full min-w-0 space-y-2">
                           <select
                             value={line.catalog_item_id}
                             onChange={(event) => setOrderLineFromCatalog(index, event.target.value)}
@@ -1489,236 +1490,35 @@ export function ComprasWorkspace({
                           <input type="hidden" name="items_proveedor_item_id" value={line.proveedor_item_id} readOnly />
                           <input type="hidden" name="items_unidad" value={line.unidad} readOnly />
                           <input type="hidden" name="items_impuestos" value="0" readOnly />
+                          <input type="hidden" name="items_numero_partida" value={line.numero_partida || String(index + 1)} readOnly />
+                          <input type="hidden" name="items_descripcion" value={line.descripcion} readOnly />
+                          <input type="hidden" name="items_marca" value={line.marca} readOnly />
+                          <input type="hidden" name="items_modelo" value={line.modelo} readOnly />
+                          <input type="hidden" name="items_fabricante" value={line.fabricante} readOnly />
+                          <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
+                          <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
+                          <input type="hidden" name="items_fraccion_arancelaria" value={line.fraccion_arancelaria} readOnly />
+                          <input type="hidden" name="items_hs_code" value={line.hs_code} readOnly />
+                          <input type="hidden" name="items_nico" value={line.nico} readOnly />
+                          <input type="hidden" name="items_peso_neto" value={line.peso_neto} readOnly />
+                          <input type="hidden" name="items_peso_bruto" value={line.peso_bruto} readOnly />
+                          <input type="hidden" name="items_volumen_cbm" value={line.volumen_cbm} readOnly />
+                          <input type="hidden" name="items_lote" value={line.lote} readOnly />
+                          <input type="hidden" name="items_numero_serie" value={line.numero_serie} readOnly />
+                          <input type="hidden" name="items_fecha_caducidad" value={line.fecha_caducidad} readOnly />
                           {orderType === "internacional" ? (
-                            <div className="mt-3 rounded-lg border border-dashed border-border/70 bg-background/60 p-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                  Datos internacionales
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    setExpandedOrderLineIndex((current) => (current === index ? null : index))
-                                  }
-                                >
-                                  {expandedOrderLineIndex === index ? "Ocultar" : "Editar"}
-                                </Button>
-                              </div>
-                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-4" : "hidden"}>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
-                                    Número de partida
-                                  </label>
-                                  <Input
-                                    id={`item-numero-partida-${index}`}
-                                    name="items_numero_partida"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={line.numero_partida}
-                                    onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-4">
-                                  <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
-                                    Descripción
-                                  </label>
-                                  <Textarea
-                                    id={`item-descripcion-${index}`}
-                                    name="items_descripcion"
-                                    value={line.descripcion}
-                                    onChange={(event) => updateOrderLine(index, { descripcion: event.target.value })}
-                                    rows={2}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
-                                    Marca
-                                  </label>
-                                  <Input
-                                    id={`item-marca-${index}`}
-                                    name="items_marca"
-                                    value={line.marca}
-                                    onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
-                                    Modelo
-                                  </label>
-                                  <Input
-                                    id={`item-modelo-${index}`}
-                                    name="items_modelo"
-                                    value={line.modelo}
-                                    onChange={(event) => updateOrderLine(index, { modelo: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <label className="text-xs font-medium" htmlFor={`item-fabricante-${index}`}>
-                                    Fabricante
-                                  </label>
-                                  <Input
-                                    id={`item-fabricante-${index}`}
-                                    name="items_fabricante"
-                                    value={line.fabricante}
-                                    onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium">País origen</label>
-                                  <ContactCatalogSelect
-                                    value={line.pais_origen_codigo_iso2}
-                                    onValueChange={(value) => updateOrderLine(index, { pais_origen_codigo_iso2: value })}
-                                    options={mergeCatalogOptions(paisesOptions, line.pais_origen_codigo_iso2)}
-                                    placeholder="Selecciona país"
-                                    emptyLabel="Sin países cargados"
-                                  />
-                                  <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium">País procedencia</label>
-                                  <ContactCatalogSelect
-                                    value={line.pais_procedencia_codigo_iso2}
-                                    onValueChange={(value) => updateOrderLine(index, { pais_procedencia_codigo_iso2: value })}
-                                    options={mergeCatalogOptions(paisesOptions, line.pais_procedencia_codigo_iso2)}
-                                    placeholder="Selecciona país"
-                                    emptyLabel="Sin países cargados"
-                                  />
-                                  <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
-                                    Fracción arancelaria
-                                  </label>
-                                  <Input
-                                    id={`item-fraccion-${index}`}
-                                    name="items_fraccion_arancelaria"
-                                    value={line.fraccion_arancelaria}
-                                    onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
-                                    HS code
-                                  </label>
-                                  <Input
-                                    id={`item-hs-${index}`}
-                                    name="items_hs_code"
-                                    value={line.hs_code}
-                                    onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
-                                    NICO
-                                  </label>
-                                  <Input
-                                    id={`item-nico-${index}`}
-                                    name="items_nico"
-                                    value={line.nico}
-                                    onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
-                                    Peso neto
-                                  </label>
-                                  <Input
-                                    id={`item-peso-neto-${index}`}
-                                    name="items_peso_neto"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.peso_neto}
-                                    onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
-                                    Peso bruto
-                                  </label>
-                                  <Input
-                                    id={`item-peso-bruto-${index}`}
-                                    name="items_peso_bruto"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.peso_bruto}
-                                    onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
-                                    Volumen CBM
-                                  </label>
-                                  <Input
-                                    id={`item-volumen-${index}`}
-                                    name="items_volumen_cbm"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.volumen_cbm}
-                                    onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
-                                    Lote
-                                  </label>
-                                  <Input
-                                    id={`item-lote-${index}`}
-                                    name="items_lote"
-                                    value={line.lote}
-                                    onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-serie-${index}`}>
-                                    Número de serie
-                                  </label>
-                                  <Input
-                                    id={`item-serie-${index}`}
-                                    name="items_numero_serie"
-                                    value={line.numero_serie}
-                                    onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-caducidad-${index}`}>
-                                    Fecha caducidad
-                                  </label>
-                                  <Input
-                                    id={`item-caducidad-${index}`}
-                                    name="items_fecha_caducidad"
-                                    type="date"
-                                    value={line.fecha_caducidad}
-                                    onChange={(event) => updateOrderLine(index, { fecha_caducidad: event.target.value })}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <input type="hidden" name="items_numero_partida" value={line.numero_partida || String(index + 1)} readOnly />
-                              <input type="hidden" name="items_descripcion" value={line.descripcion} readOnly />
-                              <input type="hidden" name="items_marca" value={line.marca} readOnly />
-                              <input type="hidden" name="items_modelo" value={line.modelo} readOnly />
-                              <input type="hidden" name="items_fabricante" value={line.fabricante} readOnly />
-                              <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
-                              <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
-                              <input type="hidden" name="items_fraccion_arancelaria" value={line.fraccion_arancelaria} readOnly />
-                              <input type="hidden" name="items_hs_code" value={line.hs_code} readOnly />
-                              <input type="hidden" name="items_nico" value={line.nico} readOnly />
-                              <input type="hidden" name="items_peso_neto" value={line.peso_neto} readOnly />
-                              <input type="hidden" name="items_peso_bruto" value={line.peso_bruto} readOnly />
-                              <input type="hidden" name="items_volumen_cbm" value={line.volumen_cbm} readOnly />
-                              <input type="hidden" name="items_lote" value={line.lote} readOnly />
-                              <input type="hidden" name="items_numero_serie" value={line.numero_serie} readOnly />
-                              <input type="hidden" name="items_fecha_caducidad" value={line.fecha_caducidad} readOnly />
-                            </>
-                          )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto px-0 text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() =>
+                                setExpandedOrderLineIndex((current) => (current === index ? null : index))
+                              }
+                            >
+                              {expandedOrderLineIndex === index ? "Ocultar datos internacionales" : "Editar datos internacionales"}
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="w-28 align-top">
@@ -1772,6 +1572,212 @@ export function ComprasWorkspace({
                         </Button>
                       </TableCell>
                     </TableRow>
+                      {orderType === "internacional" && expandedOrderLineIndex === index ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="whitespace-normal bg-muted/20 p-4 align-top">
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                  Datos internacionales
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setExpandedOrderLineIndex((current) => (current === index ? null : index))
+                                  }
+                                >
+                                  Ocultar
+                                </Button>
+                              </div>
+                              <div className="space-y-4">
+                                <div className="grid gap-4 xl:grid-cols-[minmax(180px,220px)_minmax(0,1fr)]">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
+                                      Número de partida
+                                    </label>
+                                    <Input
+                                      id={`item-numero-partida-${index}`}
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={line.numero_partida}
+                                      onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
+                                      Descripción
+                                    </label>
+                                    <Textarea
+                                      id={`item-descripcion-${index}`}
+                                      className="min-h-20"
+                                      value={line.descripcion}
+                                      onChange={(event) => updateOrderLine(index, { descripcion: event.target.value })}
+                                      rows={3}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-4 xl:grid-cols-3">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
+                                      Marca
+                                    </label>
+                                    <Input
+                                      id={`item-marca-${index}`}
+                                      value={line.marca}
+                                      onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
+                                      Modelo
+                                    </label>
+                                    <Input
+                                      id={`item-modelo-${index}`}
+                                      value={line.modelo}
+                                      onChange={(event) => updateOrderLine(index, { modelo: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-fabricante-${index}`}>
+                                      Fabricante
+                                    </label>
+                                    <Input
+                                      id={`item-fabricante-${index}`}
+                                      value={line.fabricante}
+                                      onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium">País origen</label>
+                                    <ContactCatalogSelect
+                                      value={line.pais_origen_codigo_iso2}
+                                      onValueChange={(value) => updateOrderLine(index, { pais_origen_codigo_iso2: value })}
+                                      options={mergeCatalogOptions(paisesOptions, line.pais_origen_codigo_iso2)}
+                                      placeholder="Selecciona país"
+                                      emptyLabel="Sin países cargados"
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium">País procedencia</label>
+                                    <ContactCatalogSelect
+                                      value={line.pais_procedencia_codigo_iso2}
+                                      onValueChange={(value) => updateOrderLine(index, { pais_procedencia_codigo_iso2: value })}
+                                      options={mergeCatalogOptions(paisesOptions, line.pais_procedencia_codigo_iso2)}
+                                      placeholder="Selecciona país"
+                                      emptyLabel="Sin países cargados"
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
+                                      Fracción
+                                    </label>
+                                    <Input
+                                      id={`item-fraccion-${index}`}
+                                      value={line.fraccion_arancelaria}
+                                      onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
+                                      HS code
+                                    </label>
+                                    <Input
+                                      id={`item-hs-${index}`}
+                                      value={line.hs_code}
+                                      onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
+                                      NICO
+                                    </label>
+                                    <Input
+                                      id={`item-nico-${index}`}
+                                      value={line.nico}
+                                      onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-4 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.4fr)]">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
+                                      Peso neto
+                                    </label>
+                                    <Input
+                                      id={`item-peso-neto-${index}`}
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={line.peso_neto}
+                                      onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
+                                      Peso bruto
+                                    </label>
+                                    <Input
+                                      id={`item-peso-bruto-${index}`}
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={line.peso_bruto}
+                                      onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
+                                      Volumen CBM
+                                    </label>
+                                    <Input
+                                      id={`item-volumen-${index}`}
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={line.volumen_cbm}
+                                      onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
+                                      Lote / serie / caducidad
+                                    </label>
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                      <Input
+                                        id={`item-lote-${index}`}
+                                        value={line.lote}
+                                        onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
+                                        placeholder="Lote"
+                                      />
+                                      <Input
+                                        id={`item-serie-${index}`}
+                                        value={line.numero_serie}
+                                        onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
+                                        placeholder="Serie"
+                                      />
+                                      <Input
+                                        id={`item-caducidad-${index}`}
+                                        type="date"
+                                        value={line.fecha_caducidad}
+                                        onChange={(event) => updateOrderLine(index, { fecha_caducidad: event.target.value })}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
