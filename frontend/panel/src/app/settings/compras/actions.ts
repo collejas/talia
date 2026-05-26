@@ -213,6 +213,65 @@ function buildOrdenCompraCondicionesPago(formData: FormData, fallbackCurrency: s
   return hasMeaningfulValue ? payload : null
 }
 
+function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, unknown>[] {
+  const tipos = getFormDataOptionalTextArray(formData, "pagos_programados_tipo_pago")
+  const eventos = getFormDataOptionalTextArray(formData, "pagos_programados_evento_base")
+  const porcentajes = getFormDataOptionalNumberArray(formData, "pagos_programados_porcentaje")
+  const montos = getFormDataOptionalNumberArray(formData, "pagos_programados_monto")
+  const monedas = getFormDataOptionalTextArray(formData, "pagos_programados_moneda_codigo")
+  const diasCredito = getFormDataOptionalNumberArray(formData, "pagos_programados_dias_credito")
+  const fechasVencimiento = getFormDataOptionalTextArray(formData, "pagos_programados_fecha_vencimiento_calculada")
+  const estados = getFormDataOptionalTextArray(formData, "pagos_programados_estado")
+  const observaciones = getFormDataOptionalTextArray(formData, "pagos_programados_observaciones")
+
+  const expectedLength = tipos.length
+  if (!expectedLength) {
+    return []
+  }
+
+  const arrays = [eventos, porcentajes, montos, monedas, diasCredito, fechasVencimiento, estados, observaciones]
+  if (arrays.some((array) => array.length !== expectedLength)) {
+    throw new Error("pagos_programados_mismatch")
+  }
+
+  const rows: Record<string, unknown>[] = []
+  for (let index = 0; index < expectedLength; index += 1) {
+    const tipoPago = parseOptionalText(tipos[index])
+    const eventoBase = parseOptionalText(eventos[index])
+    if (!tipoPago || !eventoBase) {
+      continue
+    }
+    const porcentaje = porcentajes[index]
+    const monto = montos[index]
+    const dias = diasCredito[index]
+    const fechaVencimiento = parseOptionalText(fechasVencimiento[index])
+    const observacion = parseOptionalText(observaciones[index])
+    const estado = parseOptionalText(estados[index])
+    const hasMeaningfulValue =
+      porcentaje !== null ||
+      monto !== null ||
+      dias !== null ||
+      Boolean(fechaVencimiento) ||
+      Boolean(observacion) ||
+      (estado && estado !== "programado")
+    if (!hasMeaningfulValue) {
+      continue
+    }
+    rows.push({
+      tipo_pago: tipoPago,
+      evento_base: eventoBase,
+      porcentaje,
+      monto,
+      moneda_codigo: parseOptionalText(monedas[index]),
+      dias_credito: dias,
+      fecha_vencimiento_calculada: fechaVencimiento,
+      estado,
+      observaciones: observacion,
+    })
+  }
+  return rows
+}
+
 async function uploadOrdenCompraDocumentAttachment(ordenId: string, tipoDocumento: string, file: File): Promise<void> {
   const payload = new FormData()
   payload.append("file", file, file.name || "documento.pdf")
@@ -474,6 +533,7 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
+  const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
   const payload = {
     folio: parseRequiredText(formData.get("folio"), "folio"),
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
@@ -492,6 +552,7 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
     condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
     condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
+    pagos_programados: pagosProgramados,
     logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }
@@ -514,6 +575,7 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
+  const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
   const payload = {
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
     almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
@@ -532,6 +594,7 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
     condiciones_comerciales: buildOrdenCompraCondicionesComerciales(formData, tipoOperacion),
     condiciones_pago: buildOrdenCompraCondicionesPago(formData, moneda),
+    pagos_programados: pagosProgramados,
     logistica: buildOrdenCompraLogistica(formData, tipoOperacion),
     items,
   }

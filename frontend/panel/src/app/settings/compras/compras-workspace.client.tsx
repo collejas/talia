@@ -94,6 +94,18 @@ type OrderLine = {
   observaciones: string
 }
 
+type OrderPaymentScheduleLine = {
+  tipo_pago: "anticipo" | "saldo" | "parcial"
+  evento_base: string
+  porcentaje: string
+  monto: string
+  moneda_codigo: string
+  dias_credito: string
+  fecha_vencimiento_calculada: string
+  estado: "programado" | "pendiente" | "parcial" | "pagado" | "vencido" | "cancelado"
+  observaciones: string
+}
+
 type OrderDocumentDefinition = {
   tipoDocumento: string
   label: string
@@ -380,6 +392,122 @@ function buildOrderLinesFromOrder(order: AnyRecord | undefined | null): OrderLin
     })
 }
 
+function getPaymentEventOptions(tipoOperacion: "nacional" | "internacional"): Array<{ value: string; label: string }> {
+  const shared = [
+    { value: "contra_aceptacion_orden", label: "Contra aceptación de la orden" },
+    { value: "contra_factura", label: "Contra factura" },
+    { value: "contra_entrega", label: "Contra entrega" },
+    { value: "contra_recepcion", label: "Contra recepción" },
+  ]
+  if (tipoOperacion === "internacional") {
+    return [
+      ...shared,
+      { value: "contra_inicio_produccion", label: "Contra inicio de producción" },
+      { value: "contra_embarque", label: "Contra embarque" },
+      { value: "contra_bl_awb", label: "Contra BL / AWB" },
+      { value: "contra_arribo", label: "Contra arribo" },
+      { value: "credito_x_dias", label: "Crédito a X días" },
+    ]
+  }
+  return [
+    ...shared,
+    { value: "30_dias_factura", label: "30 días factura" },
+    { value: "45_dias_factura", label: "45 días factura" },
+    { value: "60_dias_factura", label: "60 días factura" },
+  ]
+}
+
+function addDaysToIsoDate(isoDate: string, days: number): string {
+  if (!isoDate || !Number.isFinite(days) || days < 0) {
+    return ""
+  }
+  const date = new Date(isoDate)
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+  date.setDate(date.getDate() + Math.trunc(days))
+  return date.toISOString().slice(0, 10)
+}
+
+function calculatePaymentScheduleAmount(subtotal: number, porcentaje: string): string {
+  const parsed = Number.parseFloat(porcentaje)
+  if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(parsed)) {
+    return ""
+  }
+  return (subtotal * (parsed / 100)).toFixed(4)
+}
+
+function calculatePaymentScheduleDate(isoDate: string, days: string): string {
+  const parsed = Number.parseFloat(days)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return ""
+  }
+  return addDaysToIsoDate(isoDate, parsed)
+}
+
+function buildOrderPaymentSchedulesFromOrder(order: AnyRecord | undefined | null): OrderPaymentScheduleLine[] {
+  const currency = asString(order?.moneda, "MXN")
+  const subtotal = asNumber(order?.subtotal)
+  const orderType = (asString(order?.tipo_operacion, "nacional") as "nacional" | "internacional") || "nacional"
+  const paymentSummary = ((order as AnyRecord | undefined | null)?.condiciones_pago as AnyRecord | undefined) ?? {}
+  const pagos = Array.isArray((order as AnyRecord | null)?.pagos_programados)
+    ? ((order as AnyRecord).pagos_programados as AnyRecord[])
+    : []
+
+  if (pagos.length > 0) {
+    return pagos
+      .filter((row) => Boolean(row) && typeof row === "object")
+      .map((row) => {
+        const porcentaje = asString(row.porcentaje, "")
+        const monto = asString(row.monto, "") || calculatePaymentScheduleAmount(subtotal, porcentaje)
+        return {
+          tipo_pago: (asString(row.tipo_pago, "anticipo") as OrderPaymentScheduleLine["tipo_pago"]) || "anticipo",
+          evento_base: asString(row.evento_base, ""),
+          porcentaje,
+          monto,
+          moneda_codigo: asString(row.moneda_codigo, currency),
+          dias_credito: asString(row.dias_credito, ""),
+          fecha_vencimiento_calculada: asString(row.fecha_vencimiento_calculada, ""),
+          estado: (asString(row.estado, "programado") as OrderPaymentScheduleLine["estado"]) || "programado",
+          observaciones: asString(row.observaciones, ""),
+        }
+      })
+  }
+
+  const defaultSaldoEvent = orderType === "internacional" ? "contra_bl_awb" : "contra_factura"
+  const anticipoPct = asString(paymentSummary.porcentaje_anticipo, "")
+  const saldoPct = asString(paymentSummary.porcentaje_saldo, "")
+  const saldoDias = asString(paymentSummary.dias_credito, "")
+  const saldoMonto = Number.isFinite(Number.parseFloat(saldoPct)) && subtotal > 0
+    ? subtotal * (Number.parseFloat(saldoPct) / 100)
+    : ""
+  const saldoVencimiento = addDaysToIsoDate(asString(order?.fecha_emision, ""), Number.parseFloat(saldoDias || "0"))
+  return [
+    {
+      tipo_pago: "anticipo",
+      evento_base: "contra_aceptacion_orden",
+      porcentaje: anticipoPct,
+      monto: calculatePaymentScheduleAmount(subtotal, anticipoPct),
+      moneda_codigo: currency,
+      dias_credito: "",
+      fecha_vencimiento_calculada: "",
+      estado: "programado",
+      observaciones: "",
+    },
+    {
+      tipo_pago: "saldo",
+      evento_base: asString(paymentSummary.momento_pago_saldo, defaultSaldoEvent) || defaultSaldoEvent,
+      porcentaje: saldoPct,
+      monto: calculatePaymentScheduleAmount(subtotal, saldoPct) || (typeof saldoMonto === "number" ? saldoMonto.toFixed(4) : ""),
+      moneda_codigo: currency,
+      dias_credito: saldoDias,
+      fecha_vencimiento_calculada: saldoVencimiento,
+      estado: "programado",
+      observaciones: "",
+    },
+  ]
+}
+
 function createSuggestedReceptionNumber(): string {
   const now = new Date()
   const pad = (n: number) => String(n).padStart(2, "0")
@@ -413,6 +541,25 @@ function createEmptyOrderLine(): OrderLine {
     lote: "",
     numero_serie: "",
     fecha_caducidad: "",
+    observaciones: "",
+  }
+}
+
+function createEmptyOrderPaymentSchedule(tipoPago: OrderPaymentScheduleLine["tipo_pago"], currency = "MXN", tipoOperacion: "nacional" | "internacional" = "nacional"): OrderPaymentScheduleLine {
+  return {
+    tipo_pago: tipoPago,
+    evento_base:
+      tipoPago === "anticipo"
+        ? "contra_aceptacion_orden"
+        : tipoOperacion === "internacional"
+          ? "contra_bl_awb"
+          : "contra_factura",
+    porcentaje: "",
+    monto: "",
+    moneda_codigo: currency,
+    dias_credito: "",
+    fecha_vencimiento_calculada: "",
+    estado: "programado",
     observaciones: "",
   }
 }
@@ -505,6 +652,10 @@ export function ComprasWorkspace({
   const [orderDiasCredito, setOrderDiasCredito] = useState("")
   const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
+  const [orderPaymentSchedules, setOrderPaymentSchedules] = useState<OrderPaymentScheduleLine[]>(() => [
+    createEmptyOrderPaymentSchedule("anticipo"),
+    createEmptyOrderPaymentSchedule("saldo"),
+  ])
   const [orderModoTransporteCodigo, setOrderModoTransporteCodigo] = useState("")
   const [orderFechaRequeridaEmbarque, setOrderFechaRequeridaEmbarque] = useState("")
   const [orderFechaEstimadaEmbarque, setOrderFechaEstimadaEmbarque] = useState("")
@@ -660,6 +811,7 @@ export function ComprasWorkspace({
     () => mergeCatalogOptions(toSelectOptions(paises, "codigo_iso2", (record) => `${asString(record.codigo_iso2)} · ${asString(record.nombre)}`), ""),
     [paises],
   )
+  const paymentEventOptions = useMemo(() => getPaymentEventOptions(orderType), [orderType])
 
   const refreshOrderExchangeRate = useCallback(async (currencyCode: string) => {
     const normalizedCurrency = String(currencyCode || "").trim().toUpperCase()
@@ -780,6 +932,23 @@ export function ComprasWorkspace({
 
   const removeOrderLine = (index: number) => {
     setOrderLines((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
+  const updateOrderPaymentSchedule = (index: number, patch: Partial<OrderPaymentScheduleLine>) => {
+    setOrderPaymentSchedules((current) =>
+      current.map((row, currentIndex) => (currentIndex === index ? { ...row, ...patch } : row)),
+    )
+  }
+
+  const addOrderPaymentSchedule = () => {
+    setOrderPaymentSchedules((current) => [
+      ...current,
+      createEmptyOrderPaymentSchedule("parcial", orderCurrency, orderType),
+    ])
+  }
+
+  const removeOrderPaymentSchedule = (index: number) => {
+    setOrderPaymentSchedules((current) => current.filter((_, currentIndex) => currentIndex !== index))
   }
 
   const setOrderLineFromCatalog = (index: number, catalogItemId: string) => {
@@ -929,6 +1098,7 @@ export function ComprasWorkspace({
     setOrderDiasCredito(asString(pago.dias_credito, ""))
     setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
     setOrderCondicionesPagoObservaciones(asString(pago.observaciones, ""))
+    setOrderPaymentSchedules(buildOrderPaymentSchedulesFromOrder(orden))
     setOrderModoTransporteCodigo(asString(logistica.modo_transporte_codigo, ""))
     setOrderFechaRequeridaEmbarque(asString(logistica.fecha_requerida_embarque, ""))
     setOrderFechaEstimadaEmbarque(asString(logistica.fecha_estimada_embarque, ""))
@@ -1005,6 +1175,10 @@ export function ComprasWorkspace({
     setOrderDiasCredito("")
     setOrderComisionesBancarias("")
     setOrderCondicionesPagoObservaciones("")
+    setOrderPaymentSchedules([
+      createEmptyOrderPaymentSchedule("anticipo", "MXN", "nacional"),
+      createEmptyOrderPaymentSchedule("saldo", "MXN", "nacional"),
+    ])
     setOrderModoTransporteCodigo("")
     setOrderFechaRequeridaEmbarque("")
     setOrderFechaEstimadaEmbarque("")
@@ -2267,6 +2441,159 @@ export function ComprasWorkspace({
                     rows={3}
                   />
                 </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/10 p-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Pagos programados</div>
+                  <div className="text-xs text-muted-foreground">
+                    Define anticipo, saldo y pagos parciales con su evento, porcentaje y vencimiento.
+                  </div>
+                </div>
+                <Button type="button" variant="secondary" onClick={addOrderPaymentSchedule}>
+                  Agregar pago
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {orderPaymentSchedules.map((row, index) => {
+                  const calculatedAmount = calculatePaymentScheduleAmount(orderSubtotal, row.porcentaje)
+                  const calculatedDueDate = row.fecha_vencimiento_calculada || calculatePaymentScheduleDate(orderEmissionIso, row.dias_credito)
+                  return (
+                    <div key={`${row.tipo_pago}-${index}`} className="rounded-lg border border-border/60 bg-background/80 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Pago {index + 1}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeOrderPaymentSchedule(index)}
+                          disabled={orderPaymentSchedules.length <= 1}
+                        >
+                          Quitar
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-12">
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-medium">Tipo</label>
+                          <select
+                            name="pagos_programados_tipo_pago"
+                            value={row.tipo_pago}
+                            onChange={(event) =>
+                              updateOrderPaymentSchedule(index, { tipo_pago: event.target.value as OrderPaymentScheduleLine["tipo_pago"] })
+                            }
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="anticipo">Anticipo</option>
+                            <option value="saldo">Saldo</option>
+                            <option value="parcial">Parcial</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2 md:col-span-3">
+                          <label className="text-xs font-medium">Evento base</label>
+                          <select
+                            name="pagos_programados_evento_base"
+                            value={row.evento_base}
+                            onChange={(event) => updateOrderPaymentSchedule(index, { evento_base: event.target.value })}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            {paymentEventOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-xs font-medium">%</label>
+                          <Input
+                            name="pagos_programados_porcentaje"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={row.porcentaje}
+                            onChange={(event) => updateOrderPaymentSchedule(index, { porcentaje: event.target.value })}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-xs font-medium">Monto</label>
+                          <Input
+                            name="pagos_programados_monto"
+                            type="number"
+                            min="0"
+                            step="0.0001"
+                            value={row.monto || calculatedAmount}
+                            readOnly
+                            className="bg-muted/40"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-xs font-medium">Moneda</label>
+                          <Input
+                            name="pagos_programados_moneda_codigo"
+                            value={orderCurrency}
+                            readOnly
+                            className="bg-muted/40 font-mono text-xs"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-xs font-medium">Días crédito</label>
+                          <Input
+                            name="pagos_programados_dias_credito"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={row.dias_credito}
+                            onChange={(event) => updateOrderPaymentSchedule(index, { dias_credito: event.target.value })}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-xs font-medium">Vencimiento</label>
+                          <Input
+                            name="pagos_programados_fecha_vencimiento_calculada"
+                            type="date"
+                            value={calculatedDueDate}
+                            readOnly
+                            className="bg-muted/40"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-medium">Estado</label>
+                          <select
+                            name="pagos_programados_estado"
+                            value={row.estado}
+                            onChange={(event) =>
+                              updateOrderPaymentSchedule(index, { estado: event.target.value as OrderPaymentScheduleLine["estado"] })
+                            }
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="programado">Programado</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="parcial">Parcial</option>
+                            <option value="pagado">Pagado</option>
+                            <option value="vencido">Vencido</option>
+                            <option value="cancelado">Cancelado</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2 md:col-span-12">
+                          <label className="text-xs font-medium">Observaciones</label>
+                          <Textarea
+                            name="pagos_programados_observaciones"
+                            value={row.observaciones}
+                            onChange={(event) => updateOrderPaymentSchedule(index, { observaciones: event.target.value })}
+                            rows={2}
+                            placeholder="Notas del hito de pago"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/10 p-4 md:grid-cols-6">
