@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     )
     openai_api_key: str | None = None
     openai_admin_api_key: str | None = None
+    banxico_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BANXICO_TOKEN", "TALIA_BANXICO_TOKEN"),
+    )
+    banxico_base_url: str = Field(
+        default="https://www.banxico.org.mx/SieAPIRest/service/v1/series",
+        validation_alias=AliasChoices("BANXICO_BASE_URL", "TALIA_BANXICO_BASE_URL"),
+    )
     embeddings_model: str = Field(
         default="text-embedding-3-small",
         description="Modelo de embeddings que se usa para la vector store.",

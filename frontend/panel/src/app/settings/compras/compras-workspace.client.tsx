@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -99,6 +99,44 @@ type OrderDocumentDefinition = {
   help: string
   appliesTo: "nacional" | "internacional" | "ambos"
   requiredByDefault?: boolean
+}
+
+type BanxicoTipoCambioResponse = {
+  moneda: string
+  tipo_cambio: number
+  serie: string
+  descripcion?: string | null
+  fecha?: string | null
+  fuente: string
+  fuente_url?: string | null
+  actualizado_en: string
+}
+
+type OrderExchangeRateStatus = {
+  loading: boolean
+  message: string
+  sourceLabel: string
+}
+
+function isBanxicoTipoCambioResponse(
+  value: BanxicoTipoCambioResponse | { error?: string } | null,
+): value is BanxicoTipoCambioResponse {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "tipo_cambio" in value &&
+      "serie" in value &&
+      "fuente" in value,
+  )
+}
+
+function calculateOrderLineTotal(line: OrderLine): number {
+  const qty = Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0
+  const cost = Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0
+  const discount = Number.parseFloat(line.descuento_porcentaje || "0")
+  const gross = qty * cost
+  const discountAmount = Number.isFinite(discount) ? (gross * discount) / 100 : 0
+  return Math.max(gross - discountAmount, 0)
 }
 
 const ORDER_DOCUMENT_DEFINITIONS: OrderDocumentDefinition[] = [
@@ -428,6 +466,11 @@ export function ComprasWorkspace({
   const [orderType, setOrderType] = useState<"nacional" | "internacional">("nacional")
   const [orderCurrency, setOrderCurrency] = useState("MXN")
   const [orderExchangeRate, setOrderExchangeRate] = useState("")
+  const [orderExchangeRateStatus, setOrderExchangeRateStatus] = useState<OrderExchangeRateStatus>({
+    loading: false,
+    message: "Se actualiza automáticamente desde Banxico según la moneda seleccionada.",
+    sourceLabel: "",
+  })
   const [orderVigenciaHasta, setOrderVigenciaHasta] = useState("")
   const [orderProformaReferencia, setOrderProformaReferencia] = useState("")
   const [orderProformaFileName, setOrderProformaFileName] = useState("")
@@ -496,6 +539,8 @@ export function ComprasWorkspace({
   const [warehouseFormPrincipal, setWarehouseFormPrincipal] = useState(!almacenes.length)
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
   const [expandedOrderLineIndex, setExpandedOrderLineIndex] = useState<number | null>(null)
+  const orderHydratingRef = useRef(false)
+  const orderExchangeRateRequestIdRef = useRef(0)
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
@@ -539,14 +584,11 @@ export function ComprasWorkspace({
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
-  const orderSubtotal = orderLines.reduce((sum, line) => {
-    const qty = Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0
-    const cost = Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0
-    const discount = Number.parseFloat(line.descuento_porcentaje || "0")
-    const gross = qty * cost
-    const net = gross - (Number.isFinite(discount) ? gross * discount / 100 : 0)
-    return sum + net
-  }, 0)
+  const orderSubtotal = orderLines.reduce((sum, line) => sum + calculateOrderLineTotal(line), 0)
+  const orderExchangeRateValue = Number.parseFloat(orderExchangeRate)
+  const orderSubtotalMxn = Number.isFinite(orderExchangeRateValue) && orderExchangeRateValue > 0
+    ? orderSubtotal * orderExchangeRateValue
+    : null
   const filteredExistencias = useMemo(() => {
     if (!selectedExistenceWarehouseId) {
       return existencias
@@ -596,6 +638,96 @@ export function ComprasWorkspace({
     () => mergeCatalogOptions(toSelectOptions(paises, "codigo_iso2", (record) => `${asString(record.codigo_iso2)} · ${asString(record.nombre)}`), ""),
     [paises],
   )
+
+  const refreshOrderExchangeRate = useCallback(async (currencyCode: string) => {
+    const normalizedCurrency = String(currencyCode || "").trim().toUpperCase()
+    const requestId = ++orderExchangeRateRequestIdRef.current
+
+    if (!normalizedCurrency) {
+      if (requestId === orderExchangeRateRequestIdRef.current) {
+        setOrderExchangeRate("")
+        setOrderExchangeRateStatus({
+          loading: false,
+          message: "Selecciona una moneda para calcular el tipo de cambio.",
+          sourceLabel: "",
+        })
+      }
+      return
+    }
+
+    if (normalizedCurrency === "MXN") {
+      if (requestId === orderExchangeRateRequestIdRef.current) {
+        setOrderExchangeRate("1")
+        setOrderExchangeRateStatus({
+          loading: false,
+          message: "Moneda nacional: 1 MXN = 1 MXN.",
+          sourceLabel: "Banxico / MXN",
+        })
+      }
+      return
+    }
+
+    setOrderExchangeRateStatus({
+      loading: true,
+      message: `Consultando tipo de cambio Banxico para ${normalizedCurrency}...`,
+      sourceLabel: "",
+    })
+
+    try {
+      const response = await fetch(`/api/compras/tipo-cambio?moneda=${encodeURIComponent(normalizedCurrency)}`, {
+        cache: "no-store",
+      })
+      const data = (await response.json().catch(() => null)) as BanxicoTipoCambioResponse | { error?: string } | null
+      const payload = isBanxicoTipoCambioResponse(data) ? data : null
+      if (!response.ok) {
+        const errorCode = typeof data === "object" && data && "error" in data ? String(data.error ?? "") : ""
+        throw new Error(errorCode || "tipo_cambio_no_disponible")
+      }
+      if (!payload) {
+        throw new Error("tipo_cambio_no_disponible")
+      }
+      const rate = Number(payload.tipo_cambio)
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new Error("tipo_cambio_invalido")
+      }
+      if (requestId !== orderExchangeRateRequestIdRef.current) {
+        return
+      }
+      setOrderExchangeRate(rate.toFixed(6).replace(/\.?0+$/, ""))
+      const fecha = asString(payload.fecha, "")
+      const fuente = asString(payload.fuente, "Banxico")
+      const serie = asString(payload.serie, "")
+      setOrderExchangeRateStatus({
+        loading: false,
+        message: fecha ? `Actualizado desde ${fuente} ${serie} · ${fecha}` : `Actualizado desde ${fuente} ${serie}`,
+        sourceLabel: serie ? `${fuente} · ${serie}` : fuente,
+      })
+    } catch (error) {
+      if (requestId !== orderExchangeRateRequestIdRef.current) {
+        return
+      }
+      const message = error instanceof Error ? error.message : "tipo_cambio_no_disponible"
+      setOrderExchangeRate("")
+      let userMessage = "No se pudo consultar Banxico. Captura el tipo de cambio manualmente."
+      if (message === "moneda_no_soportada_en_banxico") {
+        userMessage = "Banxico no publica automáticamente esta moneda. Captura el tipo de cambio manualmente."
+      } else if (message === "banxico_token_missing") {
+        userMessage = "Falta configurar BANXICO_TOKEN en el backend."
+      }
+      setOrderExchangeRateStatus({
+        loading: false,
+        message: userMessage,
+        sourceLabel: "",
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (orderHydratingRef.current) {
+      return
+    }
+    void refreshOrderExchangeRate(orderCurrency)
+  }, [orderCurrency, refreshOrderExchangeRate])
 
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
@@ -719,6 +851,7 @@ export function ComprasWorkspace({
   }
 
   const startEditOrder = (orden: AnyRecord) => {
+    orderHydratingRef.current = true
     setEditingOrderId(String(orden.id))
     setOrderProformaInputKey((current) => current + 1)
     setOrderFolio(asString(orden.folio, defaultOrderFolio))
@@ -729,6 +862,11 @@ export function ComprasWorkspace({
     setOrderType((asString(orden.tipo_operacion, "nacional") as "nacional" | "internacional") || "nacional")
     setOrderCurrency(asString(orden.moneda, "MXN"))
     setOrderExchangeRate(asString(orden.tipo_cambio_referencia, ""))
+    setOrderExchangeRateStatus({
+      loading: false,
+      message: "Tipo de cambio cargado desde la orden. Si cambias la moneda, se recalcula desde Banxico.",
+      sourceLabel: "",
+    })
     setOrderVigenciaHasta(asString(orden.vigencia_hasta, ""))
     setOrderProformaReferencia(asString(orden.proforma_referencia, ""))
     setOrderProformaFileName("")
@@ -785,9 +923,17 @@ export function ComprasWorkspace({
     setOrderMontoAsegurado(asString(logistica.monto_asegurado, ""))
     setOrderLogisticaObservaciones(asString(logistica.observaciones, ""))
     setOrderLines(buildOrderLinesFromOrder(orden))
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        orderHydratingRef.current = false
+      }, 0)
+    } else {
+      orderHydratingRef.current = false
+    }
   }
 
   const clearOrderForm = () => {
+    orderHydratingRef.current = true
     setEditingOrderId(null)
     setOrderFolio(defaultOrderFolio)
     setOrderProviderId(String(proveedores[0]?.id ?? ""))
@@ -796,7 +942,12 @@ export function ComprasWorkspace({
     setOrderDueDate("")
     setOrderType("nacional")
     setOrderCurrency("MXN")
-    setOrderExchangeRate("")
+    setOrderExchangeRate("1")
+    setOrderExchangeRateStatus({
+      loading: false,
+      message: "Se actualiza automáticamente desde Banxico según la moneda seleccionada.",
+      sourceLabel: "",
+    })
     setOrderVigenciaHasta("")
     setOrderProformaReferencia("")
     setOrderProformaFileName("")
@@ -851,6 +1002,13 @@ export function ComprasWorkspace({
     setOrderMontoAsegurado("")
     setOrderLogisticaObservaciones("")
     setOrderLines([createEmptyOrderLine()])
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        orderHydratingRef.current = false
+      }, 0)
+    } else {
+      orderHydratingRef.current = false
+    }
   }
 
   const clearProviderForm = () => {
@@ -1229,8 +1387,13 @@ export function ComprasWorkspace({
                   step="0.000001"
                   value={orderExchangeRate}
                   onChange={(event) => setOrderExchangeRate(event.target.value)}
-                  placeholder="Opcional"
+                  placeholder="Banxico"
                 />
+                <p className="text-xs text-muted-foreground">
+                  {orderExchangeRateStatus.loading
+                    ? "Consultando Banxico..."
+                    : orderExchangeRateStatus.message}
+                </p>
               </div>
               <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-entrega">
@@ -1288,7 +1451,7 @@ export function ComprasWorkspace({
                 Agregar producto
               </Button>
               <div className="ml-auto text-sm text-muted-foreground">
-                {orderLines.length} líneas · {formatCurrency(orderSubtotal)}
+                {orderLines.length} líneas · {formatCurrency(orderSubtotal, orderCurrency)}{orderSubtotalMxn !== null ? ` · ${formatCurrency(orderSubtotalMxn, "MXN")} MXN` : ""}
               </div>
             </div>
             <div className="overflow-hidden rounded-lg border">
@@ -1299,6 +1462,7 @@ export function ComprasWorkspace({
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Costo</TableHead>
                     <TableHead>Desc %</TableHead>
+                    <TableHead className="w-32 text-right">Total</TableHead>
                     <TableHead>Observaciones</TableHead>
                     <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
@@ -1592,6 +1756,11 @@ export function ComprasWorkspace({
                           placeholder="0"
                         />
                       </TableCell>
+                      <TableCell className="w-32 align-top">
+                        <div className="pt-2 text-right text-sm font-medium tabular-nums">
+                          {formatCurrency(calculateOrderLineTotal(line), orderCurrency)}
+                        </div>
+                      </TableCell>
                       <TableCell className="align-top">
                         <Input
                           name="items_observaciones"
@@ -1609,6 +1778,24 @@ export function ComprasWorkspace({
                   ))}
                 </TableBody>
               </Table>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-border/70 bg-background/70 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal moneda</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums">{formatCurrency(orderSubtotal, orderCurrency)}</div>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/70 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Tipo de cambio</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums">
+                  {orderExchangeRate ? `${orderExchangeRate} ${orderCurrency}/MXN` : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/70 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal MXN</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums">
+                  {orderSubtotalMxn !== null ? formatCurrency(orderSubtotalMxn, "MXN") : "—"}
+                </div>
+              </div>
             </div>
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">

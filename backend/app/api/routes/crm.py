@@ -109,6 +109,7 @@ from app.services.brevo_templates import (
     list_brevo_smtp_templates,
 )
 from app.services.brevo_quota import fetch_brevo_daily_quota
+from app.services.banxico import BanxicoError, BanxicoTipoCambio, fetch_banxico_tipo_cambio
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos as list_fraccionamientos,
@@ -12067,6 +12068,19 @@ class CRMOrdenCompraRecepcion(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CRMBanxicoTipoCambioResponse(BaseModel):
+    moneda: str
+    tipo_cambio: float
+    serie: str
+    descripcion: str | None = None
+    fecha: date | None = None
+    fuente: str
+    fuente_url: str | None = None
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 def _normalize_orden_compra_row(row: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(row)
     for field in ("condiciones_comerciales", "condiciones_pago", "logistica"):
@@ -15418,6 +15432,37 @@ async def list_compras_ordenes_para_recepcion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMOrdenCompraRecepcion.model_validate(_normalize_orden_compra_row(row)) for row in rows]
+
+
+@router.get("/compras/tipo-cambio", response_model=CRMBanxicoTipoCambioResponse)
+async def get_compras_tipo_cambio(
+    *,
+    moneda: str = Query(default="USD", min_length=3, max_length=3),
+    _: str = Depends(require_permission("settings.view")),
+) -> CRMBanxicoTipoCambioResponse:
+    normalized_currency = moneda.strip().upper()
+    try:
+        resultado: BanxicoTipoCambio = await fetch_banxico_tipo_cambio(normalized_currency)
+    except BanxicoError as exc:
+        message = str(exc)
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        if message in {"moneda_no_soportada_en_banxico", "banxico_currency_required"}:
+            status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        elif message == "banxico_token_missing":
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    return CRMBanxicoTipoCambioResponse.model_validate(
+        {
+            "moneda": resultado.moneda,
+            "tipo_cambio": resultado.tipo_cambio,
+            "serie": resultado.serie,
+            "descripcion": resultado.descripcion,
+            "fecha": resultado.fecha,
+            "fuente": resultado.fuente,
+            "fuente_url": resultado.fuente_url or None,
+            "actualizado_en": resultado.actualizado_en,
+        }
+    )
 
 
 @router.post("/compras/ordenes", response_model=CRMOrdenCompraRecepcion, status_code=status.HTTP_201_CREATED)
