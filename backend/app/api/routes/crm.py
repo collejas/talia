@@ -12342,6 +12342,11 @@ class QuoteSignedUrlResponse(BaseModel):
     expires_in: int = Field(default=300, ge=1)
 
 
+class CRMDocumentSignedUrlResponse(BaseModel):
+    url: HttpUrl
+    expires_in: int = Field(default=300, ge=1)
+
+
 class CRMContactSummary(BaseModel):
     total: int | None = 0
     completos: int | None = 0
@@ -15544,6 +15549,52 @@ async def upload_compras_orden_proforma(
     except (StorageError, CRMRepositoryError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMFile.model_validate(archivo_row)
+
+
+@router.get("/compras/ordenes/{orden_id}/proforma-url", response_model=CRMDocumentSignedUrlResponse)
+async def get_compras_orden_proforma_url(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    expires_in: int = Query(300, ge=30, le=3600),
+) -> CRMDocumentSignedUrlResponse:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if orden is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+
+    documentos = orden.get("documentos")
+    archivo_path: str | None = None
+    if isinstance(documentos, list):
+        for documento in documentos:
+            if not isinstance(documento, dict):
+                continue
+            if str(documento.get("tipo_documento") or "").lower() != "proforma":
+                continue
+            archivo = documento.get("archivo")
+            if isinstance(archivo, dict):
+                archivo_path = _clean_text(archivo.get("storage_path"))
+                if archivo_path:
+                    break
+
+    if not archivo_path:
+        raise HTTPException(status_code=404, detail="orden_proforma_not_found")
+
+    try:
+        signed_url = await storage.generate_quote_signed_url(
+            path=archivo_path,
+            expires_in=expires_in,
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="orden_proforma_link_failed") from exc
+    return CRMDocumentSignedUrlResponse(url=signed_url, expires_in=expires_in)
 
 
 async def _update_compras_orden_estado(

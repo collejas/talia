@@ -417,6 +417,7 @@ export function ComprasWorkspace({
   const selectedOrderHasProforma = selectedOrderDocuments.some(
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
+  const selectedOrderProformaHref = selectedOrderHasProforma && selectedOrder ? `/api/compras/ordenes/${selectedOrder.id}/proforma` : null
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
@@ -1213,12 +1214,21 @@ export function ComprasWorkspace({
                       setOrderProformaFileName(file?.name ?? "")
                     }}
                   />
-                  <div className="text-xs text-muted-foreground">
-                    {orderProformaFileName
-                      ? `Archivo seleccionado: ${orderProformaFileName}`
-                      : selectedOrderHasProforma
-                        ? "La orden ya tiene una PI adjunta."
-                        : "Adjunta aquí la cotización del vendedor en PDF."}
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>
+                      {orderProformaFileName
+                        ? `Archivo seleccionado: ${orderProformaFileName}`
+                        : selectedOrderHasProforma
+                          ? "La orden ya tiene una PI adjunta."
+                          : "Adjunta aquí la cotización del vendedor en PDF."}
+                    </span>
+                    {selectedOrderProformaHref ? (
+                      <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                        <a href={selectedOrderProformaHref} target="_blank" rel="noreferrer">
+                          Ver PI
+                        </a>
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="space-y-2 md:col-span-2">
