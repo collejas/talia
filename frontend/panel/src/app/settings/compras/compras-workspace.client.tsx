@@ -92,6 +92,93 @@ type OrderLine = {
   observaciones: string
 }
 
+type OrderDocumentDefinition = {
+  tipoDocumento: string
+  label: string
+  help: string
+  appliesTo: "nacional" | "internacional" | "ambos"
+  requiredByDefault?: boolean
+}
+
+const ORDER_DOCUMENT_DEFINITIONS: OrderDocumentDefinition[] = [
+  {
+    tipoDocumento: "commercial_invoice",
+    label: "Factura comercial",
+    help: "Documento base de la orden.",
+    appliesTo: "ambos",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "packing_list",
+    label: "Packing list",
+    help: "Lista de empaque y bultos.",
+    appliesTo: "ambos",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "bill_of_lading",
+    label: "Bill of lading",
+    help: "Conocimiento de embarque marítimo.",
+    appliesTo: "internacional",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "air_waybill",
+    label: "Air waybill",
+    help: "Guía aérea.",
+    appliesTo: "internacional",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "certificate_of_origin",
+    label: "Certificado de origen",
+    help: "Preferencias arancelarias y origen.",
+    appliesTo: "internacional",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "ficha_tecnica",
+    label: "Ficha técnica",
+    help: "Especificaciones del producto.",
+    appliesTo: "ambos",
+    requiredByDefault: true,
+  },
+  {
+    tipoDocumento: "msds",
+    label: "MSDS / SDS",
+    help: "Hoja de seguridad.",
+    appliesTo: "internacional",
+  },
+  {
+    tipoDocumento: "certificado_calidad",
+    label: "Certificado de calidad",
+    help: "Validación de calidad.",
+    appliesTo: "ambos",
+  },
+  {
+    tipoDocumento: "certificado_sanitario",
+    label: "Certificado sanitario",
+    help: "Cumplimiento sanitario.",
+    appliesTo: "internacional",
+  },
+  {
+    tipoDocumento: "certificado_nom",
+    label: "Certificado NOM",
+    help: "Cumplimiento normativo México.",
+    appliesTo: "internacional",
+  },
+  {
+    tipoDocumento: "garantia",
+    label: "Garantía",
+    help: "Términos de garantía / soporte.",
+    appliesTo: "ambos",
+  },
+]
+
+function getOrderDocumentDefinitions(tipoOperacion: "nacional" | "internacional"): OrderDocumentDefinition[] {
+  return ORDER_DOCUMENT_DEFINITIONS.filter((definition) => definition.appliesTo === "ambos" || definition.appliesTo === tipoOperacion)
+}
+
 function asString(value: unknown, fallback = "—"): string {
   if (typeof value === "string") {
     const trimmed = value.trim()
@@ -414,6 +501,16 @@ export function ComprasWorkspace({
   const selectedOrderDocuments = Array.isArray((selectedOrder as AnyRecord | null)?.documentos)
     ? ((selectedOrder as AnyRecord).documentos as AnyRecord[])
     : []
+  const selectedOrderDocumentsByType = useMemo(() => {
+    const map = new Map<string, AnyRecord>()
+    for (const documento of selectedOrderDocuments) {
+      const tipoDocumento = asString(documento?.tipo_documento, "").toLowerCase()
+      if (tipoDocumento && !map.has(tipoDocumento)) {
+        map.set(tipoDocumento, documento)
+      }
+    }
+    return map
+  }, [selectedOrderDocuments])
   const selectedOrderHasProforma = selectedOrderDocuments.some(
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
@@ -443,6 +540,7 @@ export function ComprasWorkspace({
     () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_disponible), 0),
     [filteredExistencias],
   )
+  const orderDocumentDefinitions = useMemo(() => getOrderDocumentDefinitions(orderType), [orderType])
   const adjustmentExistencia = useMemo(
     () =>
       existencias.find(
@@ -1675,6 +1773,79 @@ export function ComprasWorkspace({
                     rows={3}
                   />
                 </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/10 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Documentos de la orden</div>
+                  <div className="text-xs text-muted-foreground">
+                    Adjunta los soportes requeridos según el tipo de operación. La PI se carga arriba como archivo base.
+                  </div>
+                </div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {orderType === "internacional" ? "Internacional" : "Nacional"}
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {orderDocumentDefinitions.map((definition) => {
+                  const selectedDocument = selectedOrderDocumentsByType.get(definition.tipoDocumento) ?? null
+                  const selectedDocumentFile =
+                    selectedDocument?.archivo && typeof selectedDocument.archivo === "object"
+                      ? (selectedDocument.archivo as AnyRecord)
+                      : null
+                  const selectedDocumentMetadata =
+                    selectedDocumentFile?.metadata && typeof selectedDocumentFile.metadata === "object"
+                      ? (selectedDocumentFile.metadata as AnyRecord)
+                      : null
+                  const documentHref = selectedOrder?.id
+                    ? `/api/compras/ordenes/${selectedOrder.id}/documentos/${definition.tipoDocumento}/url`
+                    : null
+                  return (
+                    <div key={definition.tipoDocumento} className="rounded-lg border border-border/60 bg-background p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">{definition.label}</div>
+                          <div className="text-xs text-muted-foreground">{definition.help}</div>
+                        </div>
+                        <div
+                          className={[
+                            "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
+                            selectedDocument
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : definition.requiredByDefault
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-border bg-muted text-muted-foreground",
+                          ].join(" ")}
+                        >
+                          {selectedDocument ? "Cargado" : definition.requiredByDefault ? "Base" : "Opcional"}
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <Input
+                          id={`orden-doc-${definition.tipoDocumento}`}
+                          name={`documento_file_${definition.tipoDocumento}`}
+                          type="file"
+                          accept=".pdf,application/pdf"
+                        />
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span className="truncate">
+                            {selectedDocument
+                              ? `Adjunto actual: ${asString(selectedDocumentFile?.nombre_original ?? selectedDocumentMetadata?.nombre_original ?? "archivo")}`
+                              : "Sin archivo adjunto."}
+                          </span>
+                          {documentHref ? (
+                            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                              <a href={documentHref} target="_blank" rel="noreferrer">
+                                Ver
+                              </a>
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">

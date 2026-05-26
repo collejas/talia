@@ -213,15 +213,34 @@ function buildOrdenCompraCondicionesPago(formData: FormData, fallbackCurrency: s
   return hasMeaningfulValue ? payload : null
 }
 
-async function uploadOrdenCompraProformaAttachment(ordenId: string, file: File): Promise<void> {
+async function uploadOrdenCompraDocumentAttachment(ordenId: string, tipoDocumento: string, file: File): Promise<void> {
   const payload = new FormData()
-  payload.append("file", file, file.name || "proforma.pdf")
-  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/proforma`, {
+  payload.append("file", file, file.name || "documento.pdf")
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/documentos/${tipoDocumento}`, {
     method: "POST",
     body: payload,
   })
   if (!response.ok) {
     throw new Error(response.error)
+  }
+}
+
+async function uploadOrdenCompraFormDocuments(ordenId: string, formData: FormData): Promise<void> {
+  const uploads: Array<{ tipoDocumento: string; file: File }> = []
+  const proformaFile = formData.get("proforma_file")
+  if (proformaFile instanceof File && proformaFile.size > 0) {
+    uploads.push({ tipoDocumento: "proforma", file: proformaFile })
+  }
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("documento_file_")) continue
+    if (!(value instanceof File) || value.size <= 0) continue
+    const tipoDocumento = key.slice("documento_file_".length).trim().toLowerCase()
+    if (!tipoDocumento) continue
+    uploads.push({ tipoDocumento, file: value })
+  }
+
+  for (const upload of uploads) {
+    await uploadOrdenCompraDocumentAttachment(ordenId, upload.tipoDocumento, upload.file)
   }
 }
 
@@ -455,7 +474,6 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
-  const proformaFile = formData.get("proforma_file")
   const payload = {
     folio: parseRequiredText(formData.get("folio"), "folio"),
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
@@ -486,8 +504,8 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
     throw new Error(response.error)
   }
   const createdOrderId = typeof response.data === "object" && response.data !== null ? String((response.data as { id?: string }).id ?? "") : ""
-  if (createdOrderId && proformaFile instanceof File && proformaFile.size > 0) {
-    await uploadOrdenCompraProformaAttachment(createdOrderId, proformaFile)
+  if (createdOrderId) {
+    await uploadOrdenCompraFormDocuments(createdOrderId, formData)
   }
   revalidatePath(SETTINGS_PATH)
 }
@@ -496,7 +514,6 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
-  const proformaFile = formData.get("proforma_file")
   const payload = {
     proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
     almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
@@ -526,9 +543,7 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
   if (!response.ok) {
     throw new Error(response.error)
   }
-  if (proformaFile instanceof File && proformaFile.size > 0) {
-    await uploadOrdenCompraProformaAttachment(ordenId, proformaFile)
-  }
+  await uploadOrdenCompraFormDocuments(ordenId, formData)
   revalidatePath(SETTINGS_PATH)
 }
 

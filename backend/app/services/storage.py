@@ -2119,11 +2119,13 @@ async def upload_quote_document(
     filename: str,
     lead_id: str,
     content_type: str = "application/pdf",
+    document_type: str | None = None,
 ) -> dict[str, str]:
     """Sube el PDF de una cotización al bucket `quotes`."""
 
     safe_name = Path(filename).name or "cotizacion.pdf"
-    key = f"{lead_id}/{uuid4().hex}-{safe_name}"
+    doc_folder = Path(str(document_type).strip()).name if document_type else ""
+    key = f"{lead_id}/{doc_folder}/{uuid4().hex}-{safe_name}" if doc_folder else f"{lead_id}/{uuid4().hex}-{safe_name}"
     repo = CRMRepository()
     try:
         public_path = await repo.upload_storage_object(
