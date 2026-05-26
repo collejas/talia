@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Info, Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -51,7 +52,8 @@ type ComprasWorkspaceProps = {
   defaultReceptionNumber: string
   defaultOrderFolio: string
   defaultOrderEmissionIso: string
-  activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "inventario" | "recepciones"
+  defaultPaymentOrderId: string
+  activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "inventario" | "recepciones" | "pagos"
 }
 
 type ReceptionLine = {
@@ -408,6 +410,7 @@ function getPaymentEventOptions(tipoOperacion: "nacional" | "internacional"): Ar
     { value: "contra_factura", label: "Contra factura" },
     { value: "contra_entrega", label: "Contra entrega" },
     { value: "contra_recepcion", label: "Contra recepción" },
+    { value: "gasto_adicional", label: "Gasto adicional" },
   ]
   if (tipoOperacion === "internacional") {
     return [
@@ -609,6 +612,56 @@ function buildDerivedPaymentSchedules(
   ]
 }
 
+function mergePaymentScheduleForDisplay(
+  base: OrderPaymentScheduleLine,
+  stored?: AnyRecord | null,
+): OrderPaymentScheduleLine {
+  if (!stored || typeof stored !== "object") {
+    return base
+  }
+  return {
+    ...base,
+    evento_base: asString(stored.evento_base, base.evento_base),
+    porcentaje: asString(stored.porcentaje, base.porcentaje),
+    monto: asString(stored.monto, base.monto),
+    moneda_codigo: asString(stored.moneda_codigo, base.moneda_codigo),
+    dias_credito: asString(stored.dias_credito, base.dias_credito),
+    fecha_vencimiento_calculada: asString(stored.fecha_vencimiento_calculada, base.fecha_vencimiento_calculada),
+    fecha_evento_real: asString(stored.fecha_evento_real, base.fecha_evento_real),
+    fecha_pago_real: asString(stored.fecha_pago_real, base.fecha_pago_real),
+    referencia_pago: asString(stored.referencia_pago, base.referencia_pago),
+    estado: (asString(stored.estado, base.estado) as OrderPaymentScheduleLine["estado"]) || base.estado,
+    observaciones: asString(stored.observaciones, base.observaciones),
+  }
+}
+
+function getPaymentDisplayDueLabel(row: AnyRecord): string {
+  if (asString(row.estado, "") === "pagado") {
+    return "Pagado"
+  }
+  const due = asString(row.fecha_vencimiento_calculada, "")
+  if (due) {
+    return due
+  }
+  const paymentDate = asString(row.fecha_pago_real, "")
+  if (paymentDate) {
+    return paymentDate
+  }
+  return "Pendiente"
+}
+
+function getPaymentDisplayDate(row: AnyRecord, fallback: string): string {
+  const paymentDate = asString(row.fecha_pago_real, "")
+  if (paymentDate) {
+    return paymentDate
+  }
+  const eventDate = asString(row.fecha_evento_real, "")
+  if (eventDate) {
+    return eventDate
+  }
+  return fallback
+}
+
 export function ComprasWorkspace({
   almacenes,
   proveedores,
@@ -627,8 +680,10 @@ export function ComprasWorkspace({
   defaultReceptionNumber,
   defaultOrderFolio,
   defaultOrderEmissionIso,
+  defaultPaymentOrderId,
   activeView,
 }: ComprasWorkspaceProps) {
+  const router = useRouter()
   const openOrders = useMemo(
     () =>
       ordenes.filter((orden) =>
@@ -649,7 +704,6 @@ export function ComprasWorkspace({
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
-  const [paymentsOnlyMode, setPaymentsOnlyMode] = useState(false)
   const [providerFormCode, setProviderFormCode] = useState(defaultProviderCode)
   const [providerFormName, setProviderFormName] = useState("")
   const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
@@ -695,8 +749,6 @@ export function ComprasWorkspace({
   const [orderFormaPago, setOrderFormaPago] = useState("")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
   const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
-  const [orderFechaPagoAnticipo, setOrderFechaPagoAnticipo] = useState("")
-  const [orderFechaEventoSaldo, setOrderFechaEventoSaldo] = useState("")
   const [orderDiasCredito, setOrderDiasCredito] = useState("")
   const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
@@ -740,7 +792,6 @@ export function ComprasWorkspace({
   const [warehouseFormPrincipal, setWarehouseFormPrincipal] = useState(!almacenes.length)
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
   const [expandedOrderLineIndex, setExpandedOrderLineIndex] = useState<number | null>(null)
-  const paymentsSectionRef = useRef<HTMLDivElement | null>(null)
   const orderHydratingRef = useRef(false)
   const orderExchangeRateRequestIdRef = useRef(0)
 
@@ -788,7 +839,6 @@ export function ComprasWorkspace({
     }
   }
   const openOrderDocuments = (orden: AnyRecord) => {
-    setPaymentsOnlyMode(false)
     startEditOrder(orden)
     setSelectedOrderId(String(orden.id))
     if (typeof window !== "undefined") {
@@ -799,14 +849,7 @@ export function ComprasWorkspace({
   }
 
   const openOrderPayments = (orden: AnyRecord) => {
-    setPaymentsOnlyMode(true)
-    startEditOrder(orden)
-    setSelectedOrderId(String(orden.id))
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        paymentsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-      })
-    }
+    router.push(`/compras?vista=pagos&orden_id=${encodeURIComponent(String(orden.id))}`)
   }
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
@@ -884,8 +927,8 @@ export function ComprasWorkspace({
   )
   const paymentEventOptions = useMemo(() => getPaymentEventOptions(orderType), [orderType])
   const derivedPaymentSchedules = useMemo(
-    () =>
-      buildDerivedPaymentSchedules(
+    () => {
+      const derived = buildDerivedPaymentSchedules(
         orderSubtotal,
         orderCurrency,
         orderType,
@@ -895,10 +938,12 @@ export function ComprasWorkspace({
           dias_credito: orderDiasCredito,
           momento_pago_saldo: orderMomentoPagoSaldo,
           referencia_pago_saldo: asString(selectedOrderPaymentScheduleByType.get("saldo")?.referencia_pago, ""),
-          fecha_evento_saldo_real: orderFechaEventoSaldo,
+          fecha_evento_saldo_real: asString(selectedOrderPaymentScheduleByType.get("saldo")?.fecha_evento_real, ""),
         },
         orderEmissionIso,
-      ),
+      )
+      return derived.map((row) => mergePaymentScheduleForDisplay(row, selectedOrderPaymentScheduleByType.get(row.tipo_pago)))
+    },
     [
       orderSubtotal,
       orderCurrency,
@@ -907,12 +952,10 @@ export function ComprasWorkspace({
       orderPorcentajeSaldoCalculated,
       orderDiasCredito,
       orderMomentoPagoSaldo,
-      orderFechaEventoSaldo,
       orderEmissionIso,
       selectedOrderPaymentScheduleByType,
     ],
   )
-
   const refreshOrderExchangeRate = useCallback(async (currencyCode: string) => {
     const normalizedCurrency = String(currencyCode || "").trim().toUpperCase()
     const requestId = ++orderExchangeRateRequestIdRef.current
@@ -1015,6 +1058,26 @@ export function ComprasWorkspace({
       return current
     })
   }, [orderMomentoPagoSaldoSuggested])
+
+  useEffect(() => {
+    if (activeView !== "pagos") {
+      return
+    }
+    const targetOrderId = defaultPaymentOrderId || selectedOrderId || defaultOrderId
+    if (!targetOrderId) {
+      return
+    }
+    const targetOrder = openOrders.find((orden) => String(orden.id) === targetOrderId) ?? null
+    if (!targetOrder) {
+      return
+    }
+    if (String(targetOrder.id) !== selectedOrderId) {
+      setSelectedOrderId(String(targetOrder.id))
+    }
+    if (String(targetOrder.id) !== editingOrderId) {
+      startEditOrder(targetOrder)
+    }
+  }, [activeView, defaultPaymentOrderId, defaultOrderId, editingOrderId, openOrders, selectedOrderId])
 
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
@@ -1194,9 +1257,7 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
     setOrderFormaPago(asString(pago.forma_pago, ""))
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
-    setOrderFechaPagoAnticipo(asString((selectedOrderPaymentScheduleByType.get("anticipo")?.fecha_pago_real) ?? "", ""))
     setOrderMomentoPagoSaldo(asString(pago.momento_pago_saldo, ""))
-    setOrderFechaEventoSaldo(asString((selectedOrderPaymentScheduleByType.get("saldo")?.fecha_evento_real) ?? "", ""))
     setOrderDiasCredito(asString(pago.dias_credito, ""))
     setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
     setOrderCondicionesPagoObservaciones(asString(pago.observaciones, ""))
@@ -1273,9 +1334,7 @@ export function ComprasWorkspace({
     setOrderCondicionesComercialesObservaciones("")
     setOrderFormaPago("")
     setOrderPorcentajeAnticipo("")
-    setOrderFechaPagoAnticipo("")
     setOrderMomentoPagoSaldo("")
-    setOrderFechaEventoSaldo("")
     setOrderDiasCredito("")
     setOrderComisionesBancarias("")
     setOrderCondicionesPagoObservaciones("")
@@ -1339,6 +1398,7 @@ export function ComprasWorkspace({
   const showAlmacenes = activeView === "almacenes"
   const showProveedores = activeView === "proveedores"
   const showOrdenes = activeView === "ordenes"
+  const showPagos = activeView === "pagos"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
   const rootGridClassName = showResumen ? "grid gap-4 xl:grid-cols-3" : "grid gap-4"
@@ -1628,7 +1688,7 @@ export function ComprasWorkspace({
       </Card>
       ) : null}
 
-      {showOrdenes && !paymentsOnlyMode ? (
+      {showOrdenes ? (
       <Card>
         <CardHeader>
           <CardTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</CardTitle>
@@ -2916,272 +2976,305 @@ export function ComprasWorkspace({
       </Card>
       ) : null}
 
-      {editingOrderId ? (
-        <div ref={paymentsSectionRef}>
-          <Card>
+      {showPagos ? (
+        <Card>
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Pagos programados</CardTitle>
+                <CardTitle>Pagos y gastos</CardTitle>
                 <CardDescription>
-                  Gestiona los pagos después de guardar la orden. El anticipo y el saldo se calculan desde las condiciones y aquí solo registras su ejecución y pagos parciales.
+                  Gestiona anticipos, saldos, pagos parciales y otros gastos ligados a una orden ya guardada.
                 </CardDescription>
               </div>
-              {paymentsOnlyMode ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setPaymentsOnlyMode(false)}>
-                  Volver a la orden
-                </Button>
-              ) : null}
             </div>
           </CardHeader>
-          <CardContent>
-            <form action={saveOrdenCompraPagosProgramadosAction.bind(null, editingOrderId)} className="space-y-5">
-              <div className="rounded-lg border border-border/60 bg-background/80 p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagos derivados</div>
-                    <div className="text-xs text-muted-foreground">
-                      Se generan automáticamente desde <span className="font-medium">Condiciones de la orden y pago</span>. Captura aquí el hito real y, cuando ocurra, la fecha de pago.
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium" htmlFor="pagos-orden">
+                  Orden de compra
+                </label>
+                <select
+                  id="pagos-orden"
+                  value={selectedOrderId}
+                  onChange={(event) => {
+                    const nextOrderId = event.target.value
+                    router.push(`/compras?vista=pagos&orden_id=${encodeURIComponent(nextOrderId)}`)
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="" disabled>
+                    Selecciona una orden
+                  </option>
+                  {openOrders.map((orden) => (
+                    <option key={String(orden.id)} value={String(orden.id)}>
+                      {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                <label className="text-sm font-medium">Tipo</label>
+                <Input value={selectedOrder ? getOrderStatusBadge(selectedOrder.estado).label : "—"} readOnly className="bg-muted/40" />
+              </div>
+            </div>
+
+            {editingOrderId && selectedOrder ? (
+              <form action={saveOrdenCompraPagosProgramadosAction.bind(null, editingOrderId)} className="space-y-5">
+                <div className="rounded-lg border border-border/60 bg-background/80 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagos derivados</div>
+                      <div className="text-xs text-muted-foreground">
+                        Calculados desde las condiciones de la orden y visibles solo como resumen.
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {derivedPaymentSchedules.map((row, index) => {
-                    const eventLabel = paymentEventOptions.find((option) => option.value === row.evento_base)?.label ?? row.evento_base
-                    const dueLabel = row.fecha_vencimiento_calculada || (row.tipo_pago === "anticipo" ? "Pago al emitir la OC" : "Pendiente del evento")
-                    return (
-                      <div key={`derived-${row.tipo_pago}-${index}`} className="rounded-md border border-border/60 bg-muted/30 p-3">
-                        <input type="hidden" name="pagos_programados_tipo_pago" value={row.tipo_pago} />
-                        <input type="hidden" name="pagos_programados_evento_base" value={row.evento_base} />
-                        <input type="hidden" name="pagos_programados_porcentaje" value={row.porcentaje} />
-                        <input type="hidden" name="pagos_programados_monto" value={row.monto} />
-                        <input type="hidden" name="pagos_programados_moneda_codigo" value={row.moneda_codigo} />
-                        <input type="hidden" name="pagos_programados_dias_credito" value={row.dias_credito} />
-                        <input type="hidden" name="pagos_programados_fecha_vencimiento_calculada" value={row.fecha_vencimiento_calculada} />
-                        <input type="hidden" name="pagos_programados_estado" value={row.estado} />
-                        <input type="hidden" name="pagos_programados_observaciones" value={row.observaciones} />
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium capitalize">{row.tipo_pago}</div>
-                          <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {row.estado}
-                          </span>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Evento</div>
-                            <div className="text-sm font-medium">{eventLabel}</div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+                    {derivedPaymentSchedules.map((row, index) => {
+                      const eventLabel = paymentEventOptions.find((option) => option.value === row.evento_base)?.label ?? row.evento_base
+                      return (
+                        <div key={`derived-${row.tipo_pago}-${index}`} className="rounded-md border border-border/60 bg-muted/30 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold capitalize">{row.tipo_pago}</div>
+                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                              {row.estado}
+                            </span>
                           </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">%</div>
-                            <div className="text-sm font-medium">{row.porcentaje || "—"}</div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Monto</div>
-                            <div className="text-sm font-medium">{row.monto ? formatCurrency(row.monto, row.moneda_codigo) : "—"}</div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Moneda</div>
-                            <div className="text-sm font-medium">{row.moneda_codigo}</div>
-                          </div>
-                          {row.tipo_pago === "anticipo" ? (
-                            <div className="space-y-2 md:col-span-2">
-                              <label className="text-xs font-medium">Fecha de pago</label>
-                              <Input
-                                name="pagos_programados_fecha_pago_real"
-                                type="date"
-                                value={orderFechaPagoAnticipo}
-                                onChange={(event) => setOrderFechaPagoAnticipo(event.target.value)}
-                              />
-                              <input type="hidden" name="pagos_programados_fecha_evento_real" value={formatDateOnly(orderEmissionIso)} />
+                          <div className={`grid gap-2 text-xs ${row.tipo_pago === "saldo" ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                            <div className="rounded-md bg-background/70 p-2">
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Evento</div>
+                              <div className="mt-1 font-medium">{eventLabel}</div>
                             </div>
-                          ) : (
-                            <div className="space-y-2 md:col-span-2">
-                              <label className="text-xs font-medium">Fecha del hito</label>
-                              <Input
-                                name="pagos_programados_fecha_evento_real"
-                                type="date"
-                                value={orderFechaEventoSaldo}
-                                onChange={(event) => setOrderFechaEventoSaldo(event.target.value)}
-                              />
-                              <input type="hidden" name="pagos_programados_fecha_pago_real" value={row.fecha_pago_real} />
+                            <div className="rounded-md bg-background/70 p-2">
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Monto</div>
+                              <div className="mt-1 font-medium">{row.monto ? formatCurrency(row.monto, row.moneda_codigo) : "—"}</div>
                             </div>
-                          )}
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-medium">Referencia de pago</label>
-                            <Input
-                              name="pagos_programados_referencia_pago"
-                              defaultValue={row.referencia_pago}
-                              placeholder="Folio, transferencia, referencia bancaria"
-                            />
-                          </div>
-                          <div className="space-y-1 md:col-span-2">
-                            <div className="text-xs text-muted-foreground">Días crédito</div>
-                            <div className="text-sm font-medium">{row.dias_credito || "—"}</div>
-                          </div>
-                          <div className="space-y-1 md:col-span-2">
-                            <div className="text-xs text-muted-foreground">Vencimiento</div>
-                            <div className="text-sm font-medium">{dueLabel}</div>
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-medium">Observaciones</label>
-                            <Textarea
-                              name="pagos_programados_observaciones"
-                              defaultValue={row.observaciones}
-                              rows={2}
-                              placeholder="Notas del hito de pago"
-                            />
+                            {row.tipo_pago !== "saldo" ? (
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha</div>
+                                <div className="mt-1 font-medium">{getPaymentDisplayDate(row, formatDateOnly(orderEmissionIso) || "—")}</div>
+                              </div>
+                            ) : null}
+                            <div className="rounded-md bg-background/70 p-2">
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
+                              <div className="mt-1 font-medium">{getPaymentDisplayDueLabel(row)}</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {orderPaymentSchedules.length > 0 ? (
-                  orderPaymentSchedules.map((row, index) => {
-                    return (
-                      <div key={`${row.tipo_pago}-${index}`} className="rounded-lg border border-border/60 bg-background/80 p-3">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Pago extra {index + 1}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeOrderPaymentSchedule(index)}
-                          >
-                            Quitar
-                          </Button>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-12">
-                          <input type="hidden" name="pagos_programados_tipo_pago" value="parcial" />
-                          <input type="hidden" name="pagos_programados_porcentaje" value={row.porcentaje} />
-                          <input type="hidden" name="pagos_programados_dias_credito" value={row.dias_credito} />
-                          <input type="hidden" name="pagos_programados_fecha_vencimiento_calculada" value={row.fecha_vencimiento_calculada} />
-                          <input type="hidden" name="pagos_programados_fecha_evento_real" value={row.fecha_evento_real} />
-                          <div className="space-y-2 md:col-span-4">
-                            <label className="text-xs font-medium">Evento base</label>
-                            <select
-                              name="pagos_programados_evento_base"
-                              value={row.evento_base}
-                              onChange={(event) => updateOrderPaymentSchedule(index, { evento_base: event.target.value })}
-                              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            >
-                              {paymentEventOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-medium">Monto pagado</label>
-                            <Input
-                              name="pagos_programados_monto"
-                              type="number"
-                              min="0"
-                              step="0.0001"
-                              value={row.monto}
-                              onChange={(event) => updateOrderPaymentSchedule(index, { monto: event.target.value })}
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-medium">Fecha de pago</label>
-                            <Input
-                              name="pagos_programados_fecha_pago_real"
-                              type="date"
-                              value={row.fecha_pago_real}
-                              onChange={(event) => updateOrderPaymentSchedule(index, { fecha_pago_real: event.target.value })}
-                            />
-                          </div>
-                          <div className="space-y-2 md:col-span-1">
-                            <label className="text-xs font-medium">Moneda</label>
-                            <Input
-                              name="pagos_programados_moneda_codigo"
-                              value={orderCurrency}
-                              readOnly
-                              className="bg-muted/40 font-mono text-xs"
-                            />
-                          </div>
-                          <div className="space-y-2 md:col-span-3">
-                            <label className="text-xs font-medium">Referencia</label>
-                            <Input
-                              name="pagos_programados_referencia_pago"
-                              value={row.referencia_pago}
-                              onChange={(event) => updateOrderPaymentSchedule(index, { referencia_pago: event.target.value })}
-                              placeholder="Transferencia, folio, nota"
-                            />
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <label className="text-xs font-medium">Estado</label>
-                            <select
-                              name="pagos_programados_estado"
-                              value={row.estado}
-                              onChange={(event) =>
-                                updateOrderPaymentSchedule(index, { estado: event.target.value as OrderPaymentScheduleLine["estado"] })
-                              }
-                              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="programado">Programado</option>
-                              <option value="pendiente">Pendiente</option>
-                              <option value="parcial">Parcial</option>
-                              <option value="pagado">Pagado</option>
-                              <option value="vencido">Vencido</option>
-                              <option value="cancelado">Cancelado</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2 md:col-span-12">
-                            <label className="text-xs font-medium">Observaciones</label>
-                            <Textarea
-                              name="pagos_programados_observaciones"
-                              value={row.observaciones}
-                              onChange={(event) => updateOrderPaymentSchedule(index, { observaciones: event.target.value })}
-                              rows={2}
-                              placeholder="Notas del pago parcial"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
-                    No hay pagos extra. Si necesitas registrar un abono parcial adicional, agréguelo aquí.
+                      )
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Button type="button" variant="secondary" onClick={addOrderPaymentSchedule}>
-                  Agregar pago parcial
-                </Button>
-                <Button type="submit" disabled={!editingOrderId}>
-                  Guardar pagos programados
-                </Button>
+                <div className="rounded-lg border border-border/60 bg-background/80 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagos registrados</div>
+                      <div className="text-xs text-muted-foreground">
+                        Movimientos ya guardados para esta orden. Aquí se reflejan anticipos, saldos y abonos reales.
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {selectedOrderPaymentSchedules.length} registrados
+                    </span>
+                  </div>
+                  {selectedOrderPaymentSchedules.length > 0 ? (
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {selectedOrderPaymentSchedules.map((row, index) => {
+                        const eventLabel =
+                          paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
+                          asString(row.evento_base, "")
+                        const dueLabel = getPaymentDisplayDueLabel(row)
+                        const paymentDate = getPaymentDisplayDate(row, "Pendiente")
+                        return (
+                          <div key={String(row.id ?? `${row.tipo_pago}-${index}`)} className="rounded-md border border-border/60 bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold capitalize">{asString(row.tipo_pago, "pago")}</div>
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                {asString(row.estado, "programado")}
+                              </span>
+                            </div>
+                            <div className="grid gap-2 text-xs sm:grid-cols-2">
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Evento</div>
+                                <div className="mt-1 font-medium">{eventLabel}</div>
+                              </div>
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Monto</div>
+                                <div className="mt-1 font-medium">
+                                  {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
+                                </div>
+                              </div>
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
+                                <div className="mt-1 font-medium">{paymentDate}</div>
+                              </div>
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
+                                <div className="mt-1 font-medium">{dueLabel}</div>
+                              </div>
+                              <div className="rounded-md bg-background/70 p-2 sm:col-span-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Referencia</div>
+                                <div className="mt-1 font-medium">{asString(row.referencia_pago, "—")}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+                      No hay pagos registrados todavía para esta orden.
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagos y gastos</div>
+                        <div className="text-xs text-muted-foreground">
+                          Selecciona la orden y registra aquí pagos de cumplimiento, abonos parciales o gastos ligados a esa O.C.
+                        </div>
+                      </div>
+                    </div>
+                    {orderPaymentSchedules.length > 0 ? (
+                      orderPaymentSchedules.map((row, index) => {
+                        return (
+                          <div key={`${row.tipo_pago}-${index}`} className="rounded-lg border border-border/60 bg-muted/20 p-3 mb-3 last:mb-0">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Movimiento {index + 1}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeOrderPaymentSchedule(index)}
+                            >
+                              Quitar
+                            </Button>
+                          </div>
+                            <div className="grid gap-3 md:grid-cols-12">
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Tipo</label>
+                                <select
+                                  name="pagos_programados_tipo_pago"
+                                  value={row.tipo_pago}
+                                  onChange={(event) =>
+                                    updateOrderPaymentSchedule(index, { tipo_pago: event.target.value as OrderPaymentScheduleLine["tipo_pago"] })
+                                  }
+                                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  <option value="anticipo">Anticipo</option>
+                                  <option value="saldo">Saldo</option>
+                                  <option value="parcial">Parcial / gasto</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2 md:col-span-4">
+                                <label className="text-xs font-medium">Evento base</label>
+                                <select
+                                  name="pagos_programados_evento_base"
+                                  value={row.evento_base}
+                                  onChange={(event) => updateOrderPaymentSchedule(index, { evento_base: event.target.value })}
+                                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  {paymentEventOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Monto</label>
+                                <Input
+                                  name="pagos_programados_monto"
+                                  type="number"
+                                  min="0"
+                                  step="0.0001"
+                                  value={row.monto}
+                                  onChange={(event) => updateOrderPaymentSchedule(index, { monto: event.target.value })}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Fecha de pago</label>
+                                <Input
+                                  name="pagos_programados_fecha_pago_real"
+                                  type="date"
+                                  value={row.fecha_pago_real}
+                                  onChange={(event) => updateOrderPaymentSchedule(index, { fecha_pago_real: event.target.value })}
+                                />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Referencia</label>
+                                <Input
+                                  name="pagos_programados_referencia_pago"
+                                  value={row.referencia_pago}
+                                  onChange={(event) => updateOrderPaymentSchedule(index, { referencia_pago: event.target.value })}
+                                  placeholder="Transferencia, folio, nota"
+                                />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium">Estado</label>
+                                <select
+                                  name="pagos_programados_estado"
+                                  value={row.estado}
+                                  onChange={(event) =>
+                                    updateOrderPaymentSchedule(index, { estado: event.target.value as OrderPaymentScheduleLine["estado"] })
+                                  }
+                                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  <option value="programado">Programado</option>
+                                  <option value="pendiente">Pendiente</option>
+                                  <option value="parcial">Parcial</option>
+                                  <option value="pagado">Pagado</option>
+                                  <option value="vencido">Vencido</option>
+                                  <option value="cancelado">Cancelado</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2 md:col-span-12">
+                                <label className="text-xs font-medium">Observaciones</label>
+                                <Textarea
+                                  name="pagos_programados_observaciones"
+                                  value={row.observaciones}
+                                  onChange={(event) => updateOrderPaymentSchedule(index, { observaciones: event.target.value })}
+                                  rows={2}
+                                  placeholder="Notas del movimiento"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                      )
+                    })
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+                      No hay movimientos registrados para esta orden. Agrega uno para registrar un anticipo, saldo o gasto.
+                    </div>
+                  )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Button type="button" variant="secondary" onClick={addOrderPaymentSchedule}>
+                    Agregar movimiento
+                  </Button>
+                  <Button type="submit" disabled={!editingOrderId}>
+                    Guardar movimientos
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+                Selecciona una orden para administrar sus pagos y gastos.
               </div>
-            </form>
+            )}
           </CardContent>
         </Card>
-        </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Pagos programados</CardTitle>
-            <CardDescription>
-              Guarda la orden primero para habilitar el registro de anticipo, saldo y pagos parciales.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
-              Los pagos se agregan después de guardar la orden. Abre una orden existente para administrar sus pagos.
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      ) : null}
 
       {showRecepciones ? (
 
@@ -3765,7 +3858,7 @@ export function ComprasWorkspace({
                           </Button>
                         ) : null}
                         {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
-                          <Button type="button" variant="outline" size="sm" onClick={() => { setPaymentsOnlyMode(false); startEditOrder(orden) }}>
+                          <Button type="button" variant="outline" size="sm" onClick={() => openOrderDocuments(orden)}>
                             Editar
                           </Button>
                         ) : null}

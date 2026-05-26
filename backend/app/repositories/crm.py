@@ -2413,26 +2413,24 @@ class CRMRepository:
         )
         if not pagos_programados:
             return
-        body = [
-            _row_with_all_keys(
-                {
-                    "organizacion_id": str(organizacion_id),
-                    "orden_compra_id": str(orden_id),
-                    **payload,
-                }
-            )
-            for payload in pagos_programados
-        ]
         try:
-            resp = await self._request(
-                "POST",
-                "/rest/v1/ordenes_compra_pagos_programados",
-                json=body,
-                prefer="return=representation",
-            )
-            data = resp.json()
-            if not isinstance(data, list):
-                raise CRMRepositoryError(f"Respuesta inválida al reemplazar pagos programados: {data!r}")
+            for payload in pagos_programados:
+                row_body = _row_with_all_keys(
+                    {
+                        "organizacion_id": str(organizacion_id),
+                        "orden_compra_id": str(orden_id),
+                        **payload,
+                    }
+                )
+                resp = await self._request(
+                    "POST",
+                    "/rest/v1/ordenes_compra_pagos_programados",
+                    json=row_body,
+                    prefer="return=representation",
+                )
+                data = resp.json()
+                if not isinstance(data, list) or not data:
+                    raise CRMRepositoryError(f"Respuesta inválida al reemplazar pagos programados: {data!r}")
         except CRMRepositoryError:
             if current_rows:
                 restore_body = []
@@ -2448,11 +2446,11 @@ class CRMRepository:
                             }
                         )
                     )
-                if restore_body:
+                for restore_row in restore_body:
                     await self._request(
                         "POST",
                         "/rest/v1/ordenes_compra_pagos_programados",
-                        json=restore_body,
+                        json=restore_row,
                         prefer="return=representation",
                     )
             raise

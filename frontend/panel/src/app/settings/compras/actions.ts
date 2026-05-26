@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 import { callCrmApi } from "@/lib/api/crm"
 
@@ -641,6 +642,7 @@ export async function saveOrdenCompraPagosProgramadosAction(ordenId: string, for
     throw new Error(response.error)
   }
   revalidatePath(SETTINGS_PATH)
+  redirect(`/compras?vista=pagos&orden_id=${encodeURIComponent(ordenId)}`)
 }
 
 export async function cancelOrdenCompraAction(ordenId: string): Promise<void> {

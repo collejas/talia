@@ -66,7 +66,7 @@ function makeDefaultReceptionNumber(): string {
   ].join("")
 }
 
-const COMPRAS_VIEWS = ["resumen", "almacenes", "proveedores", "ordenes", "inventario", "recepciones"] as const
+const COMPRAS_VIEWS = ["resumen", "almacenes", "proveedores", "ordenes", "inventario", "recepciones", "pagos"] as const
 type ComprasView = (typeof COMPRAS_VIEWS)[number]
 
 type ComprasPageProps = {
@@ -80,6 +80,13 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
   const activeView: ComprasView = COMPRAS_VIEWS.includes(requestedView as ComprasView)
     ? (requestedView as ComprasView)
     : "resumen"
+  const ordenIdParam = resolvedSearchParams.orden_id
+  const defaultPaymentOrderId =
+    typeof ordenIdParam === "string"
+      ? ordenIdParam
+      : Array.isArray(ordenIdParam)
+        ? ordenIdParam[0] ?? ""
+        : ""
   const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
@@ -121,6 +128,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
     { value: "almacenes", label: "Almacenes" },
     { value: "proveedores", label: "Proveedores" },
     { value: "ordenes", label: "Órdenes" },
+    { value: "pagos", label: "Pagos" },
     { value: "inventario", label: "Inventario" },
     { value: "recepciones", label: "Recepciones" },
   ]
@@ -171,6 +179,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
           defaultReceptionNumber={makeDefaultReceptionNumber()}
           defaultOrderFolio={defaultOrderFolio}
           defaultOrderEmissionIso={defaultOrderEmissionIso}
+          defaultPaymentOrderId={defaultPaymentOrderId}
           activeView={activeView}
         />
       </div>

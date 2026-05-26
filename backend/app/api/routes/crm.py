@@ -12172,7 +12172,7 @@ def _normalize_orden_compra_pago_programado_rows(
             elif monto is None and porcentaje is not None:
                 monto = (subtotal_decimal * porcentaje / Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
-        moneda_codigo = _clean_text(raw_item.get("moneda_codigo")).upper()
+        moneda_codigo = (_clean_text(raw_item.get("moneda_codigo")) or "").upper()
         if len(moneda_codigo) != 3:
             moneda_codigo = (default_moneda_codigo or "MXN").upper()
 
