@@ -175,6 +175,19 @@ def _normalize_persona_estado(value: Any) -> str:
     return "lead"
 
 
+def _normalize_trade_responsibility(value: Any) -> str | None:
+    raw = _clean_text(value)
+    if not raw:
+        return None
+    normalized = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    if "compr" in normalized or normalized in {"buyer", "buyer_side"}:
+        return "comprador"
+    if "vend" in normalized or normalized in {"seller", "seller_side"}:
+        return "vendedor"
+    return None
+
+
 def _deep_merge_metadata(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in patch.items():
@@ -10218,6 +10231,18 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> UUID:
+        condiciones_comerciales = payload.get("condiciones_comerciales")
+        if isinstance(condiciones_comerciales, dict):
+            condiciones_comerciales = dict(condiciones_comerciales)
+            for key in (
+                "responsable_flete",
+                "responsable_seguro",
+                "responsable_despacho_exportacion",
+                "responsable_despacho_importacion",
+                "responsable_impuestos_importacion",
+            ):
+                condiciones_comerciales[key] = _normalize_trade_responsibility(condiciones_comerciales.get(key))
+
         body = {
             "p_organizacion_id": str(organizacion_id),
             "p_proveedor_id": payload.get("proveedor_id"),
@@ -10235,7 +10260,7 @@ class CRMRepository:
             "p_referencia_externa": payload.get("referencia_externa"),
             "p_observaciones": payload.get("observaciones"),
             "p_instrucciones_entrega": payload.get("instrucciones_entrega"),
-            "p_condiciones_comerciales": payload.get("condiciones_comerciales"),
+            "p_condiciones_comerciales": condiciones_comerciales,
             "p_condiciones_pago": payload.get("condiciones_pago"),
             "p_logistica": payload.get("logistica"),
             "p_documentos": payload.get("documentos"),
@@ -10263,6 +10288,18 @@ class CRMRepository:
         orden_id: UUID,
         payload: dict[str, Any],
     ) -> UUID:
+        condiciones_comerciales = payload.get("condiciones_comerciales")
+        if isinstance(condiciones_comerciales, dict):
+            condiciones_comerciales = dict(condiciones_comerciales)
+            for key in (
+                "responsable_flete",
+                "responsable_seguro",
+                "responsable_despacho_exportacion",
+                "responsable_despacho_importacion",
+                "responsable_impuestos_importacion",
+            ):
+                condiciones_comerciales[key] = _normalize_trade_responsibility(condiciones_comerciales.get(key))
+
         body = {
             "p_organizacion_id": str(organizacion_id),
             "p_orden_id": str(orden_id),
@@ -10281,7 +10318,7 @@ class CRMRepository:
             "p_referencia_externa": payload.get("referencia_externa"),
             "p_observaciones": payload.get("observaciones"),
             "p_instrucciones_entrega": payload.get("instrucciones_entrega"),
-            "p_condiciones_comerciales": payload.get("condiciones_comerciales"),
+            "p_condiciones_comerciales": condiciones_comerciales,
             "p_condiciones_pago": payload.get("condiciones_pago"),
             "p_logistica": payload.get("logistica"),
             "p_documentos": payload.get("documentos"),

@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Paperclip } from "lucide-react"
+import { Info, Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
 
 import {
@@ -1675,19 +1676,25 @@ export function ComprasWorkspace({
                                     />
                                   </div>
                                   <div className="space-y-2 min-w-0">
-                                    <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
-                                      Fracción
-                                    </label>
-                                    <Input
-                                      id={`item-fraccion-${index}`}
-                                      value={line.fraccion_arancelaria}
-                                      onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
-                                    />
-                                  </div>
-                                  <div className="space-y-2 min-w-0">
-                                    <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
-                                      HS code
-                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
+                                        HS code
+                                      </label>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                                            aria-label="Qué es HS code"
+                                          >
+                                            <Info className="size-3" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          Código internacional armonizado que identifica la mercancía a nivel global.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
                                     <Input
                                       id={`item-hs-${index}`}
                                       value={line.hs_code}
@@ -1695,9 +1702,51 @@ export function ComprasWorkspace({
                                     />
                                   </div>
                                   <div className="space-y-2 min-w-0">
-                                    <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
-                                      NICO
-                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
+                                        Fracción <span className="text-muted-foreground">(Cumplimiento MEX)</span>
+                                      </label>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                                            aria-label="Qué es fracción arancelaria"
+                                          >
+                                            <Info className="size-3" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          Subpartida arancelaria usada en México para clasificación aduanal.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                    <Input
+                                      id={`item-fraccion-${index}`}
+                                      value={line.fraccion_arancelaria}
+                                      onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-2 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
+                                        NICO <span className="text-muted-foreground">(Cumplimiento MEX)</span>
+                                      </label>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                                            aria-label="Qué es NICO"
+                                          >
+                                            <Info className="size-3" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          Complemento mexicano de la fracción para identificar con más precisión la mercancía.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
                                     <Input
                                       id={`item-nico-${index}`}
                                       value={line.nico}
@@ -1824,9 +1873,25 @@ export function ComprasWorkspace({
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
-                  <label className="text-sm font-medium" htmlFor="orden-proforma">
-                    Proforma
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-proforma">
+                      Proforma
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es proforma"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Documento preliminar enviado por el vendedor que sirve como base para la orden de compra.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     id="orden-proforma"
                     name="proforma_referencia"
@@ -1868,9 +1933,25 @@ export function ComprasWorkspace({
                   </div>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-incoterm">
-                    Incoterm
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-incoterm">
+                      Incoterm
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es incoterm"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Regla internacional que define responsabilidades, costos y riesgos entre comprador y vendedor.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <ContactCatalogSelect
                     value={orderIncotermCodigo}
                     onValueChange={(value) => setOrderIncotermCodigo(value)}
@@ -1894,9 +1975,25 @@ export function ComprasWorkspace({
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
-                  <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
-                    Lugar
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-lugar-incoterm">
+                      Lugar
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es lugar de incoterm"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Punto exacto acordado en el Incoterm, por ejemplo puerto, aeropuerto o bodega.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     id="orden-lugar-incoterm"
                     name="condiciones_comerciales_lugar_incoterm"
@@ -1912,61 +2009,81 @@ export function ComprasWorkspace({
                     <label className="text-sm font-medium" htmlFor="orden-resp-flete">
                       Quién paga flete
                     </label>
-                    <Input
+                    <select
                       id="orden-resp-flete"
                       name="condiciones_comerciales_responsable_flete"
                       value={orderResponsableFlete}
                       onChange={(event) => setOrderResponsableFlete(event.target.value)}
-                      placeholder="Comprador / vendedor"
-                    />
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      <option value="comprador">Comprador</option>
+                      <option value="vendedor">Vendedor</option>
+                    </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-resp-seguro">
                       Quién paga seguro
                     </label>
-                    <Input
+                    <select
                       id="orden-resp-seguro"
                       name="condiciones_comerciales_responsable_seguro"
                       value={orderResponsableSeguro}
                       onChange={(event) => setOrderResponsableSeguro(event.target.value)}
-                      placeholder="Comprador / vendedor"
-                    />
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      <option value="comprador">Comprador</option>
+                      <option value="vendedor">Vendedor</option>
+                    </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-resp-desp-export">
                       Despacho exportación
                     </label>
-                    <Input
+                    <select
                       id="orden-resp-desp-export"
                       name="condiciones_comerciales_responsable_despacho_exportacion"
                       value={orderResponsableDespachoExportacion}
                       onChange={(event) => setOrderResponsableDespachoExportacion(event.target.value)}
-                      placeholder="Comprador / vendedor"
-                    />
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      <option value="comprador">Comprador</option>
+                      <option value="vendedor">Vendedor</option>
+                    </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-resp-desp-import">
                       Despacho importación
                     </label>
-                    <Input
+                    <select
                       id="orden-resp-desp-import"
                       name="condiciones_comerciales_responsable_despacho_importacion"
                       value={orderResponsableDespachoImportacion}
                       onChange={(event) => setOrderResponsableDespachoImportacion(event.target.value)}
-                      placeholder="Comprador / vendedor"
-                    />
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      <option value="comprador">Comprador</option>
+                      <option value="vendedor">Vendedor</option>
+                    </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-resp-impuestos">
                       Impuestos importación
                     </label>
-                    <Input
+                    <select
                       id="orden-resp-impuestos"
                       name="condiciones_comerciales_responsable_impuestos_importacion"
                       value={orderResponsableImpuestosImportacion}
                       onChange={(event) => setOrderResponsableImpuestosImportacion(event.target.value)}
-                      placeholder="Comprador / vendedor"
-                    />
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      <option value="comprador">Comprador</option>
+                      <option value="vendedor">Vendedor</option>
+                    </select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
@@ -2215,33 +2332,113 @@ export function ComprasWorkspace({
                   <Input id="orden-direccion-entrega" name="logistica_direccion_entrega" value={orderDireccionEntrega} onChange={(event) => setOrderDireccionEntrega(event.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-tipo-embarque">
-                    Tipo embarque
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-tipo-embarque">
+                      Tipo embarque
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es tipo embarque"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Modalidad logística del envío, por ejemplo FCL, LCL o courier.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input id="orden-tipo-embarque" name="logistica_tipo_embarque" value={orderTipoEmbarque} onChange={(event) => setOrderTipoEmbarque(event.target.value)} placeholder="FCL / LCL / courier" />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-tipo-contenedor">
-                    Tipo contenedor
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-tipo-contenedor">
+                      Tipo contenedor
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es tipo contenedor"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Tipo físico del contenedor usado en el embarque, por ejemplo 20&apos; o 40&apos;.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input id="orden-tipo-contenedor" name="logistica_tipo_contenedor" value={orderTipoContenedor} onChange={(event) => setOrderTipoContenedor(event.target.value)} placeholder="20' / 40' / etc." />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-forwarder">
-                    Forwarder
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-forwarder">
+                      Forwarder
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es forwarder"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Es la empresa que coordina el transporte internacional de la mercancía.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input id="orden-forwarder" name="logistica_forwarder_nombre" value={orderForwarderNombre} onChange={(event) => setOrderForwarderNombre(event.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-booking">
-                    Booking
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-booking">
+                      Booking
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es booking"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Número de reserva asignado por la naviera o aerolínea para el embarque.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input id="orden-booking" name="logistica_numero_booking" value={orderNumeroBooking} onChange={(event) => setOrderNumeroBooking(event.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium" htmlFor="orden-bl-awb">
-                    BL / AWB
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="orden-bl-awb">
+                      BL / AWB
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Qué es BL o AWB"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Conocimiento de embarque marítimo (BL) o guía aérea (AWB) del envío.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input id="orden-bl-awb" name="logistica_numero_bl_awb" value={orderNumeroBlAwb} onChange={(event) => setOrderNumeroBlAwb(event.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
