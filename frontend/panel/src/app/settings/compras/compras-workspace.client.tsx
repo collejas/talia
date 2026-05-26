@@ -1450,9 +1450,6 @@ export function ComprasWorkspace({
               <Button type="button" variant="secondary" onClick={addOrderLine}>
                 Agregar producto
               </Button>
-              <div className="ml-auto text-sm text-muted-foreground">
-                {orderLines.length} líneas · {formatCurrency(orderSubtotal, orderCurrency)}{orderSubtotalMxn !== null ? ` · ${formatCurrency(orderSubtotalMxn, "MXN")} MXN` : ""}
-              </div>
             </div>
             <div className="overflow-hidden rounded-lg border">
               <Table>
