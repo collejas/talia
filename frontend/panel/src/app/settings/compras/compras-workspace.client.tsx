@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -515,6 +516,26 @@ export function ComprasWorkspace({
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
   const selectedOrderProformaHref = selectedOrderHasProforma && selectedOrder ? `/api/compras/ordenes/${selectedOrder.id}/proforma` : null
+  const getOrderDocumentsSummary = (orden: AnyRecord): { total: number; proforma: number; anexos: number } => {
+    const documentos = Array.isArray(orden.documentos)
+      ? orden.documentos.filter((documento) => Boolean(documento) && typeof documento === "object")
+      : []
+    const proforma = documentos.filter((documento) => String((documento as AnyRecord).tipo_documento || "").toLowerCase() === "proforma").length
+    return {
+      total: documentos.length,
+      proforma,
+      anexos: Math.max(documentos.length - proforma, 0),
+    }
+  }
+  const openOrderDocuments = (orden: AnyRecord) => {
+    startEditOrder(orden)
+    setSelectedOrderId(String(orden.id))
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      })
+    }
+  }
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
@@ -1262,6 +1283,333 @@ export function ComprasWorkspace({
                 <Input id="orden-notas" name="observaciones" value={orderObservations} onChange={(event) => setOrderObservations(event.target.value)} placeholder="Notas para compras" />
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" onClick={addOrderLine}>
+                Agregar producto
+              </Button>
+              <div className="ml-auto text-sm text-muted-foreground">
+                {orderLines.length} líneas · {formatCurrency(orderSubtotal)}
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Costo</TableHead>
+                    <TableHead>Desc %</TableHead>
+                    <TableHead>Observaciones</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orderLines.map((line, index) => (
+                    <TableRow key={`${line.catalog_item_id || "new"}-${index}`}>
+                      <TableCell className="align-top">
+                        <div className="space-y-2 min-w-72">
+                          <select
+                            value={line.catalog_item_id}
+                            onChange={(event) => setOrderLineFromCatalog(index, event.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Selecciona producto</option>
+                            {catalogItems.map((item) => (
+                              <option key={String(item.id)} value={String(item.id)}>
+                                {asString(item.nombre)} · {asString(item.unidad, "unidad")}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="text-xs text-muted-foreground">
+                            {line.unidad || "unidad"} · costo sugerido {formatCurrency(line.costo_unitario)}
+                          </div>
+                          <input type="hidden" name="items_catalog_item_id" value={line.catalog_item_id} readOnly />
+                          <input type="hidden" name="items_proveedor_item_id" value={line.proveedor_item_id} readOnly />
+                          <input type="hidden" name="items_unidad" value={line.unidad} readOnly />
+                          <input type="hidden" name="items_impuestos" value="0" readOnly />
+                          {orderType === "internacional" ? (
+                            <div className="mt-3 rounded-lg border border-dashed border-border/70 bg-background/60 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                  Datos internacionales
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setExpandedOrderLineIndex((current) => (current === index ? null : index))
+                                  }
+                                >
+                                  {expandedOrderLineIndex === index ? "Ocultar" : "Editar"}
+                                </Button>
+                              </div>
+                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-4" : "hidden"}>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
+                                    Número de partida
+                                  </label>
+                                  <Input
+                                    id={`item-numero-partida-${index}`}
+                                    name="items_numero_partida"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={line.numero_partida}
+                                    onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-4">
+                                  <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
+                                    Descripción
+                                  </label>
+                                  <Textarea
+                                    id={`item-descripcion-${index}`}
+                                    name="items_descripcion"
+                                    value={line.descripcion}
+                                    onChange={(event) => updateOrderLine(index, { descripcion: event.target.value })}
+                                    rows={2}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
+                                    Marca
+                                  </label>
+                                  <Input
+                                    id={`item-marca-${index}`}
+                                    name="items_marca"
+                                    value={line.marca}
+                                    onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
+                                    Modelo
+                                  </label>
+                                  <Input
+                                    id={`item-modelo-${index}`}
+                                    name="items_modelo"
+                                    value={line.modelo}
+                                    onChange={(event) => updateOrderLine(index, { modelo: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                  <label className="text-xs font-medium" htmlFor={`item-fabricante-${index}`}>
+                                    Fabricante
+                                  </label>
+                                  <Input
+                                    id={`item-fabricante-${index}`}
+                                    name="items_fabricante"
+                                    value={line.fabricante}
+                                    onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium">País origen</label>
+                                  <ContactCatalogSelect
+                                    value={line.pais_origen_codigo_iso2}
+                                    onValueChange={(value) => updateOrderLine(index, { pais_origen_codigo_iso2: value })}
+                                    options={mergeCatalogOptions(paisesOptions, line.pais_origen_codigo_iso2)}
+                                    placeholder="Selecciona país"
+                                    emptyLabel="Sin países cargados"
+                                  />
+                                  <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium">País procedencia</label>
+                                  <ContactCatalogSelect
+                                    value={line.pais_procedencia_codigo_iso2}
+                                    onValueChange={(value) => updateOrderLine(index, { pais_procedencia_codigo_iso2: value })}
+                                    options={mergeCatalogOptions(paisesOptions, line.pais_procedencia_codigo_iso2)}
+                                    placeholder="Selecciona país"
+                                    emptyLabel="Sin países cargados"
+                                  />
+                                  <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
+                                    Fracción arancelaria
+                                  </label>
+                                  <Input
+                                    id={`item-fraccion-${index}`}
+                                    name="items_fraccion_arancelaria"
+                                    value={line.fraccion_arancelaria}
+                                    onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
+                                    HS code
+                                  </label>
+                                  <Input
+                                    id={`item-hs-${index}`}
+                                    name="items_hs_code"
+                                    value={line.hs_code}
+                                    onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
+                                    NICO
+                                  </label>
+                                  <Input
+                                    id={`item-nico-${index}`}
+                                    name="items_nico"
+                                    value={line.nico}
+                                    onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
+                                    Peso neto
+                                  </label>
+                                  <Input
+                                    id={`item-peso-neto-${index}`}
+                                    name="items_peso_neto"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.peso_neto}
+                                    onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
+                                    Peso bruto
+                                  </label>
+                                  <Input
+                                    id={`item-peso-bruto-${index}`}
+                                    name="items_peso_bruto"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.peso_bruto}
+                                    onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
+                                    Volumen CBM
+                                  </label>
+                                  <Input
+                                    id={`item-volumen-${index}`}
+                                    name="items_volumen_cbm"
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    value={line.volumen_cbm}
+                                    onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
+                                    Lote
+                                  </label>
+                                  <Input
+                                    id={`item-lote-${index}`}
+                                    name="items_lote"
+                                    value={line.lote}
+                                    onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-serie-${index}`}>
+                                    Número de serie
+                                  </label>
+                                  <Input
+                                    id={`item-serie-${index}`}
+                                    name="items_numero_serie"
+                                    value={line.numero_serie}
+                                    onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                  <label className="text-xs font-medium" htmlFor={`item-caducidad-${index}`}>
+                                    Fecha caducidad
+                                  </label>
+                                  <Input
+                                    id={`item-caducidad-${index}`}
+                                    name="items_fecha_caducidad"
+                                    type="date"
+                                    value={line.fecha_caducidad}
+                                    onChange={(event) => updateOrderLine(index, { fecha_caducidad: event.target.value })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <input type="hidden" name="items_numero_partida" value={line.numero_partida || String(index + 1)} readOnly />
+                              <input type="hidden" name="items_descripcion" value={line.descripcion} readOnly />
+                              <input type="hidden" name="items_marca" value={line.marca} readOnly />
+                              <input type="hidden" name="items_modelo" value={line.modelo} readOnly />
+                              <input type="hidden" name="items_fabricante" value={line.fabricante} readOnly />
+                              <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
+                              <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
+                              <input type="hidden" name="items_fraccion_arancelaria" value={line.fraccion_arancelaria} readOnly />
+                              <input type="hidden" name="items_hs_code" value={line.hs_code} readOnly />
+                              <input type="hidden" name="items_nico" value={line.nico} readOnly />
+                              <input type="hidden" name="items_peso_neto" value={line.peso_neto} readOnly />
+                              <input type="hidden" name="items_peso_bruto" value={line.peso_bruto} readOnly />
+                              <input type="hidden" name="items_volumen_cbm" value={line.volumen_cbm} readOnly />
+                              <input type="hidden" name="items_lote" value={line.lote} readOnly />
+                              <input type="hidden" name="items_numero_serie" value={line.numero_serie} readOnly />
+                              <input type="hidden" name="items_fecha_caducidad" value={line.fecha_caducidad} readOnly />
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-28 align-top">
+                        <Input
+                          name="items_cantidad_solicitada"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0}
+                          onChange={(event) => updateOrderLine(index, { cantidad_solicitada: Number(event.target.value) })}
+                        />
+                      </TableCell>
+                      <TableCell className="w-36 align-top">
+                        <Input
+                          name="items_costo_unitario"
+                          type="number"
+                          min="0"
+                          step="0.0001"
+                          value={Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0}
+                          onChange={(event) => updateOrderLine(index, { costo_unitario: Number(event.target.value) })}
+                        />
+                      </TableCell>
+                      <TableCell className="w-28 align-top">
+                        <Input
+                          name="items_descuento_porcentaje"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={line.descuento_porcentaje}
+                          onChange={(event) => updateOrderLine(index, { descuento_porcentaje: event.target.value })}
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Input
+                          name="items_observaciones"
+                          value={line.observaciones}
+                          onChange={(event) => updateOrderLine(index, { observaciones: event.target.value })}
+                          placeholder="Opcional"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right align-top">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeOrderLine(index)} disabled={orderLines.length <= 1}>
+                          Quitar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -1799,7 +2147,7 @@ export function ComprasWorkspace({
                       ? (selectedDocumentFile.metadata as AnyRecord)
                       : null
                   const documentHref = selectedOrder?.id
-                    ? `/api/compras/ordenes/${selectedOrder.id}/documentos/${definition.tipoDocumento}/url`
+                    ? `/api/compras/ordenes/${selectedOrder.id}/documentos/${definition.tipoDocumento}`
                     : null
                   return (
                     <div key={definition.tipoDocumento} className="rounded-lg border border-border/60 bg-background p-3">
@@ -1847,333 +2195,6 @@ export function ComprasWorkspace({
                   )
                 })}
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="secondary" onClick={addOrderLine}>
-                Agregar producto
-              </Button>
-              <div className="ml-auto text-sm text-muted-foreground">
-                {orderLines.length} líneas · {formatCurrency(orderSubtotal)}
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Cantidad</TableHead>
-                    <TableHead>Costo</TableHead>
-                    <TableHead>Desc %</TableHead>
-                    <TableHead>Observaciones</TableHead>
-                    <TableHead className="text-right">Acción</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orderLines.map((line, index) => (
-                    <TableRow key={`${line.catalog_item_id || "new"}-${index}`}>
-                      <TableCell className="align-top">
-                        <div className="space-y-2 min-w-72">
-                          <select
-                            value={line.catalog_item_id}
-                            onChange={(event) => setOrderLineFromCatalog(index, event.target.value)}
-                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            required
-                          >
-                            <option value="">Selecciona producto</option>
-                            {catalogItems.map((item) => (
-                              <option key={String(item.id)} value={String(item.id)}>
-                                {asString(item.nombre)} · {asString(item.unidad, "unidad")}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="text-xs text-muted-foreground">
-                            {line.unidad || "unidad"} · costo sugerido {formatCurrency(line.costo_unitario)}
-                          </div>
-                          <input type="hidden" name="items_catalog_item_id" value={line.catalog_item_id} readOnly />
-                          <input type="hidden" name="items_proveedor_item_id" value={line.proveedor_item_id} readOnly />
-                          <input type="hidden" name="items_unidad" value={line.unidad} readOnly />
-                          <input type="hidden" name="items_impuestos" value="0" readOnly />
-                          {orderType === "internacional" ? (
-                            <div className="mt-3 rounded-lg border border-dashed border-border/70 bg-background/60 p-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                  Datos internacionales
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    setExpandedOrderLineIndex((current) => (current === index ? null : index))
-                                  }
-                                >
-                                  {expandedOrderLineIndex === index ? "Ocultar" : "Editar"}
-                                </Button>
-                              </div>
-                              <div className={expandedOrderLineIndex === index ? "mt-3 grid gap-3 md:grid-cols-4" : "hidden"}>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-numero-partida-${index}`}>
-                                    Número de partida
-                                  </label>
-                                  <Input
-                                    id={`item-numero-partida-${index}`}
-                                    name="items_numero_partida"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={line.numero_partida}
-                                    onChange={(event) => updateOrderLine(index, { numero_partida: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-4">
-                                  <label className="text-xs font-medium" htmlFor={`item-descripcion-${index}`}>
-                                    Descripción
-                                  </label>
-                                  <Textarea
-                                    id={`item-descripcion-${index}`}
-                                    name="items_descripcion"
-                                    value={line.descripcion}
-                                    onChange={(event) => updateOrderLine(index, { descripcion: event.target.value })}
-                                    rows={2}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-marca-${index}`}>
-                                    Marca
-                                  </label>
-                                  <Input
-                                    id={`item-marca-${index}`}
-                                    name="items_marca"
-                                    value={line.marca}
-                                    onChange={(event) => updateOrderLine(index, { marca: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-modelo-${index}`}>
-                                    Modelo
-                                  </label>
-                                  <Input
-                                    id={`item-modelo-${index}`}
-                                    name="items_modelo"
-                                    value={line.modelo}
-                                    onChange={(event) => updateOrderLine(index, { modelo: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <label className="text-xs font-medium" htmlFor={`item-fabricante-${index}`}>
-                                    Fabricante
-                                  </label>
-                                  <Input
-                                    id={`item-fabricante-${index}`}
-                                    name="items_fabricante"
-                                    value={line.fabricante}
-                                    onChange={(event) => updateOrderLine(index, { fabricante: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium">País origen</label>
-                                  <ContactCatalogSelect
-                                    value={line.pais_origen_codigo_iso2}
-                                    onValueChange={(value) => updateOrderLine(index, { pais_origen_codigo_iso2: value })}
-                                    options={mergeCatalogOptions(paisesOptions, line.pais_origen_codigo_iso2)}
-                                    placeholder="Selecciona país"
-                                    emptyLabel="Sin países cargados"
-                                  />
-                                  <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium">País procedencia</label>
-                                  <ContactCatalogSelect
-                                    value={line.pais_procedencia_codigo_iso2}
-                                    onValueChange={(value) => updateOrderLine(index, { pais_procedencia_codigo_iso2: value })}
-                                    options={mergeCatalogOptions(paisesOptions, line.pais_procedencia_codigo_iso2)}
-                                    placeholder="Selecciona país"
-                                    emptyLabel="Sin países cargados"
-                                  />
-                                  <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-fraccion-${index}`}>
-                                    Fracción arancelaria
-                                  </label>
-                                  <Input
-                                    id={`item-fraccion-${index}`}
-                                    name="items_fraccion_arancelaria"
-                                    value={line.fraccion_arancelaria}
-                                    onChange={(event) => updateOrderLine(index, { fraccion_arancelaria: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-hs-${index}`}>
-                                    HS code
-                                  </label>
-                                  <Input
-                                    id={`item-hs-${index}`}
-                                    name="items_hs_code"
-                                    value={line.hs_code}
-                                    onChange={(event) => updateOrderLine(index, { hs_code: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-nico-${index}`}>
-                                    NICO
-                                  </label>
-                                  <Input
-                                    id={`item-nico-${index}`}
-                                    name="items_nico"
-                                    value={line.nico}
-                                    onChange={(event) => updateOrderLine(index, { nico: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-peso-neto-${index}`}>
-                                    Peso neto
-                                  </label>
-                                  <Input
-                                    id={`item-peso-neto-${index}`}
-                                    name="items_peso_neto"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.peso_neto}
-                                    onChange={(event) => updateOrderLine(index, { peso_neto: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-peso-bruto-${index}`}>
-                                    Peso bruto
-                                  </label>
-                                  <Input
-                                    id={`item-peso-bruto-${index}`}
-                                    name="items_peso_bruto"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.peso_bruto}
-                                    onChange={(event) => updateOrderLine(index, { peso_bruto: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-volumen-${index}`}>
-                                    Volumen CBM
-                                  </label>
-                                  <Input
-                                    id={`item-volumen-${index}`}
-                                    name="items_volumen_cbm"
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    value={line.volumen_cbm}
-                                    onChange={(event) => updateOrderLine(index, { volumen_cbm: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-lote-${index}`}>
-                                    Lote
-                                  </label>
-                                  <Input
-                                    id={`item-lote-${index}`}
-                                    name="items_lote"
-                                    value={line.lote}
-                                    onChange={(event) => updateOrderLine(index, { lote: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-serie-${index}`}>
-                                    Número de serie
-                                  </label>
-                                  <Input
-                                    id={`item-serie-${index}`}
-                                    name="items_numero_serie"
-                                    value={line.numero_serie}
-                                    onChange={(event) => updateOrderLine(index, { numero_serie: event.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-1">
-                                  <label className="text-xs font-medium" htmlFor={`item-caducidad-${index}`}>
-                                    Fecha caducidad
-                                  </label>
-                                  <Input
-                                    id={`item-caducidad-${index}`}
-                                    name="items_fecha_caducidad"
-                                    type="date"
-                                    value={line.fecha_caducidad}
-                                    onChange={(event) => updateOrderLine(index, { fecha_caducidad: event.target.value })}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <input type="hidden" name="items_numero_partida" value={line.numero_partida || String(index + 1)} readOnly />
-                              <input type="hidden" name="items_descripcion" value={line.descripcion} readOnly />
-                              <input type="hidden" name="items_marca" value={line.marca} readOnly />
-                              <input type="hidden" name="items_modelo" value={line.modelo} readOnly />
-                              <input type="hidden" name="items_fabricante" value={line.fabricante} readOnly />
-                              <input type="hidden" name="items_pais_origen_codigo_iso2" value={line.pais_origen_codigo_iso2} readOnly />
-                              <input type="hidden" name="items_pais_procedencia_codigo_iso2" value={line.pais_procedencia_codigo_iso2} readOnly />
-                              <input type="hidden" name="items_fraccion_arancelaria" value={line.fraccion_arancelaria} readOnly />
-                              <input type="hidden" name="items_hs_code" value={line.hs_code} readOnly />
-                              <input type="hidden" name="items_nico" value={line.nico} readOnly />
-                              <input type="hidden" name="items_peso_neto" value={line.peso_neto} readOnly />
-                              <input type="hidden" name="items_peso_bruto" value={line.peso_bruto} readOnly />
-                              <input type="hidden" name="items_volumen_cbm" value={line.volumen_cbm} readOnly />
-                              <input type="hidden" name="items_lote" value={line.lote} readOnly />
-                              <input type="hidden" name="items_numero_serie" value={line.numero_serie} readOnly />
-                              <input type="hidden" name="items_fecha_caducidad" value={line.fecha_caducidad} readOnly />
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-28 align-top">
-                        <Input
-                          name="items_cantidad_solicitada"
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          value={Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0}
-                          onChange={(event) => updateOrderLine(index, { cantidad_solicitada: Number(event.target.value) })}
-                        />
-                      </TableCell>
-                      <TableCell className="w-36 align-top">
-                        <Input
-                          name="items_costo_unitario"
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          value={Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0}
-                          onChange={(event) => updateOrderLine(index, { costo_unitario: Number(event.target.value) })}
-                        />
-                      </TableCell>
-                      <TableCell className="w-28 align-top">
-                        <Input
-                          name="items_descuento_porcentaje"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={line.descuento_porcentaje}
-                          onChange={(event) => updateOrderLine(index, { descuento_porcentaje: event.target.value })}
-                          placeholder="0"
-                        />
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <Input
-                          name="items_observaciones"
-                          value={line.observaciones}
-                          onChange={(event) => updateOrderLine(index, { observaciones: event.target.value })}
-                          placeholder="Opcional"
-                        />
-                      </TableCell>
-                      <TableCell className="text-right align-top">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeOrderLine(index)} disabled={orderLines.length <= 1}>
-                          Quitar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={!orderLines.length || !orderProviderId || !orderWarehouseId}>
@@ -2669,6 +2690,7 @@ export function ComprasWorkspace({
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Almacén</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Docs</TableHead>
                   <TableHead>Auditoría</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead className="text-right">Total</TableHead>
@@ -2678,7 +2700,7 @@ export function ComprasWorkspace({
             <TableBody>
               {!ordenes.length ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
                 </TableRow>
@@ -2696,6 +2718,34 @@ export function ComprasWorkspace({
                       >
                         {getOrderStatusBadge(orden.estado).label}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const summary = getOrderDocumentsSummary(orden)
+                        return (
+                          <Button
+                            type="button"
+                            variant={summary.total > 0 ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-10 min-w-16 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
+                            onClick={() => openOrderDocuments(orden)}
+                            title={
+                              summary.total > 0
+                                ? `${summary.proforma} PI · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}`
+                                : "Sin documentos"
+                            }
+                          >
+                            <span className="flex items-center gap-1 text-[11px] font-semibold">
+                              <Paperclip className="size-3.5" />
+                              {summary.total}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {summary.proforma > 0 ? `${summary.proforma} PI` : "Sin PI"}
+                              {summary.anexos > 0 ? ` · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}` : ""}
+                            </span>
+                          </Button>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1 text-xs">
