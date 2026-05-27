@@ -3221,6 +3221,7 @@ export function ComprasWorkspace({
                             <TableHead>Estado</TableHead>
                             <TableHead>Evento</TableHead>
                             <TableHead>Monto</TableHead>
+                            <TableHead>Tipo cambio</TableHead>
                             <TableHead>Monto MXN</TableHead>
                             <TableHead>Fecha recepción</TableHead>
                             <TableHead>Fecha pago</TableHead>
@@ -3249,6 +3250,16 @@ export function ComprasWorkspace({
                                 <TableCell className="min-w-40">{eventLabel}</TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {(() => {
+                                    const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
+                                    const normalized = paymentMxnLookupByKey[lookupKey]
+                                    if (!normalized || !asString(normalized.tipoCambio, "")) {
+                                      return "—"
+                                    }
+                                    return normalized.tipoCambio
+                                  })()}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {(() => {
