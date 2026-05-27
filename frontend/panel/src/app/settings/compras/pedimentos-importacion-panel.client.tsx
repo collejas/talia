@@ -1005,6 +1005,8 @@ export function PedimentosImportacionPanel({
                       <TableHead className="text-right">Costo unitario de OC en MXN</TableHead>
                       <TableHead className="text-right">Costo Total (Cantidad x Costo unitario de OC en MXN)</TableHead>
                       <TableHead className="text-right">Costo extra unitario MXN</TableHead>
+                      <TableHead className="text-right">Costo extra unitario %</TableHead>
+                      <TableHead className="text-right">Costo extra total %</TableHead>
                       <TableHead className="text-right">Costo total unitario MXN</TableHead>
                       <TableHead className="text-right">Costo total línea MXN</TableHead>
                     </TableRow>
@@ -1012,7 +1014,7 @@ export function PedimentosImportacionPanel({
                   <TableBody>
                     {!selectedProrrateos.length ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="py-6 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={12} className="py-6 text-center text-sm text-muted-foreground">
                           No hay prorrateo calculado todavía.
                         </TableCell>
                       </TableRow>
@@ -1024,8 +1026,11 @@ export function PedimentosImportacionPanel({
                         const baseTotalMxn = asNumber(prorrateo.base_total_mxn, 0)
                         const baseUnitMxn = quantity > 0 ? baseTotalMxn / quantity : 0
                         const extraUnitMxn = asNumber(prorrateo.costo_unitario_adicional, 0)
+                        const extraUnitPercent = baseUnitMxn > 0 ? (extraUnitMxn / baseUnitMxn) * 100 : 0
                         const totalUnitMxn = baseUnitMxn + extraUnitMxn
                         const totalLineMxn = totalUnitMxn * quantity
+                        const extraTotalMxn = extraUnitMxn * quantity
+                        const extraTotalPercent = baseTotalMxn > 0 ? (extraTotalMxn / baseTotalMxn) * 100 : 0
                         return (
                           <TableRow key={String(prorrateo.id)}>
                             <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
@@ -1036,6 +1041,8 @@ export function PedimentosImportacionPanel({
                             <TableCell className="text-right">{formatMoney(baseUnitMxn, "MXN")}</TableCell>
                             <TableCell className="text-right">{formatMoney(baseTotalMxn, "MXN")}</TableCell>
                             <TableCell className="text-right">{formatMoney(extraUnitMxn, "MXN")}</TableCell>
+                            <TableCell className="text-right">{extraUnitPercent.toFixed(4)}%</TableCell>
+                            <TableCell className="text-right">{extraTotalPercent.toFixed(4)}%</TableCell>
                             <TableCell className="text-right">{formatMoney(totalUnitMxn, "MXN")}</TableCell>
                             <TableCell className="text-right">{formatMoney(totalLineMxn, "MXN")}</TableCell>
                           </TableRow>
