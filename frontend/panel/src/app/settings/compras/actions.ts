@@ -634,12 +634,14 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
 
 export async function saveOrdenCompraPagosProgramadosAction(ordenId: string, formData: FormData): Promise<void> {
   const pagosProgramados = buildOrdenCompraPagosProgramados(formData)
-  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/pagos-programados`, {
-    method: "PUT",
-    body: pagosProgramados,
-  })
-  if (!response.ok) {
-    throw new Error(response.error)
+  for (const pago of pagosProgramados) {
+    const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/pagos-programados`, {
+      method: "POST",
+      body: pago,
+    })
+    if (!response.ok) {
+      throw new Error(response.error)
+    }
   }
   revalidatePath(SETTINGS_PATH)
   redirect(`/compras?vista=pagos&orden_id=${encodeURIComponent(ordenId)}`)

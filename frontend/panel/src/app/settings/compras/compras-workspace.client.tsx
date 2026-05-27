@@ -827,6 +827,18 @@ export function ComprasWorkspace({
     }
     return map
   }, [selectedOrderPaymentSchedules])
+  const selectedOrderHasSaldoPayment = useMemo(
+    () => selectedOrderPaymentSchedules.some((pago) => asString(pago?.tipo_pago, "") === "saldo"),
+    [selectedOrderPaymentSchedules],
+  )
+  const firstRegisteredSaldoIndex = useMemo(
+    () => selectedOrderPaymentSchedules.findIndex((pago) => asString(pago?.tipo_pago, "") === "saldo"),
+    [selectedOrderPaymentSchedules],
+  )
+  const firstEditableSaldoIndex = useMemo(
+    () => orderPaymentSchedules.findIndex((row) => row.tipo_pago === "saldo"),
+    [orderPaymentSchedules],
+  )
   const getOrderDocumentsSummary = (orden: AnyRecord): { total: number; proforma: number; anexos: number } => {
     const documentos = Array.isArray(orden.documentos)
       ? orden.documentos.filter((documento) => Boolean(documento) && typeof documento === "object")
@@ -3086,7 +3098,9 @@ export function ComprasWorkspace({
                           paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
                           asString(row.evento_base, "")
                         const dueLabel = getPaymentDisplayDueLabel(row)
+                        const isSaldo = asString(row.tipo_pago, "") === "saldo"
                         const paymentDate = getPaymentDisplayDate(row, "Pendiente")
+                        const receiptDate = asString(row.fecha_evento_real, "") || "Pendiente"
                         return (
                           <div key={String(row.id ?? `${row.tipo_pago}-${index}`)} className="rounded-md border border-border/60 bg-muted/20 p-3">
                             <div className="mb-2 flex items-center justify-between gap-2">
@@ -3106,10 +3120,23 @@ export function ComprasWorkspace({
                                   {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
                                 </div>
                               </div>
-                              <div className="rounded-md bg-background/70 p-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
-                                <div className="mt-1 font-medium">{paymentDate}</div>
-                              </div>
+                              {isSaldo && index === firstRegisteredSaldoIndex ? (
+                                <>
+                                  <div className="rounded-md bg-background/70 p-2">
+                                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha recepción</div>
+                                    <div className="mt-1 font-medium">{receiptDate}</div>
+                                  </div>
+                                  <div className="rounded-md bg-background/70 p-2">
+                                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
+                                    <div className="mt-1 font-medium">{paymentDate}</div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="rounded-md bg-background/70 p-2">
+                                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
+                                  <div className="mt-1 font-medium">{paymentDate}</div>
+                                </div>
+                              )}
                               <div className="rounded-md bg-background/70 p-2">
                                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
                                 <div className="mt-1 font-medium">{dueLabel}</div>
@@ -3142,6 +3169,8 @@ export function ComprasWorkspace({
                     </div>
                     {orderPaymentSchedules.length > 0 ? (
                       orderPaymentSchedules.map((row, index) => {
+                        const isSaldoRow = row.tipo_pago === "saldo"
+                        const showSaldoReceiptFields = isSaldoRow && !selectedOrderHasSaldoPayment && index === firstEditableSaldoIndex
                         return (
                           <div key={`${row.tipo_pago}-${index}`} className="rounded-lg border border-border/60 bg-muted/20 p-3 mb-3 last:mb-0">
                           <div className="mb-3 flex items-center justify-between gap-3">
@@ -3200,15 +3229,52 @@ export function ComprasWorkspace({
                                   placeholder="0.00"
                                 />
                               </div>
-                              <div className="space-y-2 md:col-span-2">
-                                <label className="text-xs font-medium">Fecha de pago</label>
-                                <Input
-                                  name="pagos_programados_fecha_pago_real"
-                                  type="date"
-                                  value={row.fecha_pago_real}
-                                  onChange={(event) => updateOrderPaymentSchedule(index, { fecha_pago_real: event.target.value })}
-                                />
-                              </div>
+                              {showSaldoReceiptFields ? (
+                                <>
+                                  <div className="space-y-2 md:col-span-2">
+                                    <label className="text-xs font-medium">Fecha recepción</label>
+                                    <Input
+                                      name="pagos_programados_fecha_evento_real"
+                                      type="date"
+                                      value={row.fecha_evento_real}
+                                      onChange={(event) =>
+                                        updateOrderPaymentSchedule(index, {
+                                          fecha_evento_real: event.target.value,
+                                          fecha_vencimiento_calculada: calculatePaymentScheduleDueDate(
+                                            event.target.value,
+                                            row.dias_credito,
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="space-y-2 md:col-span-2">
+                                    <label className="text-xs font-medium">Fecha pago</label>
+                                    <Input
+                                      name="pagos_programados_fecha_pago_real"
+                                      type="date"
+                                      value={row.fecha_pago_real}
+                                      onChange={(event) => updateOrderPaymentSchedule(index, { fecha_pago_real: event.target.value })}
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="space-y-2 md:col-span-2">
+                                  <label className="text-xs font-medium">Fecha pago</label>
+                                  <Input
+                                    name="pagos_programados_fecha_pago_real"
+                                    type="date"
+                                    value={row.fecha_pago_real}
+                                    onChange={(event) => updateOrderPaymentSchedule(index, { fecha_pago_real: event.target.value })}
+                                  />
+                                  <Input
+                                    name="pagos_programados_fecha_evento_real"
+                                    type="hidden"
+                                    value=""
+                                    readOnly
+                                  />
+                                </div>
+                              )}
                               <div className="space-y-2 md:col-span-2">
                                 <label className="text-xs font-medium">Referencia</label>
                                 <Input
