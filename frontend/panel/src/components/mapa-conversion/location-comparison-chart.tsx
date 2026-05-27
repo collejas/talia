@@ -897,7 +897,6 @@ export function LocationComparisonChart({
       datasetMap,
       displayedChannelKeys,
       handleFeatureClick,
-      nivel,
       setHoveredKey,
       showConversationMetrics,
       showWhatsappConversationMetrics,

@@ -599,13 +599,6 @@ function buildFullName(persona: PersonaDraft): string {
     .trim();
 }
 
-function formatSummaryLine(parts: Array<string | null | undefined>, fallback: string): string {
-  const cleaned = parts
-    .map((part) => (typeof part === "string" ? part.trim() : ""))
-    .filter((part) => Boolean(part));
-  return cleaned.length ? cleaned.join(" · ") : fallback;
-}
-
 function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
   const next = Object.entries(input).reduce<Record<string, unknown>>((acc, [key, value]) => {
     if (typeof value === "string") {
@@ -933,24 +926,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     run();
     return () => controller.abort();
   }, [deferredAccountQuery, state.mode]);
-
-  const review = React.useMemo(() => {
-    const nombreCompleto = buildFullName(state.persona);
-    const cuentaNombre =
-      state.mode === "empresa_existente"
-        ? state.cuenta.nombre_comercial
-        : state.cuenta.nombre_comercial || state.cuenta.razon_social;
-    return {
-      persona: nombreCompleto,
-      cuenta: cuentaNombre,
-      relacion:
-        state.mode === "persona_fisica_actividad_empresarial"
-          ? "Automática"
-          : state.mode === "solo_persona"
-            ? ""
-            : state.relacion.rol_en_cuenta,
-    };
-  }, [state]);
 
   const dedupeClipboardText = React.useMemo(() => buildDedupeClipboardText(pendingDedupe), [pendingDedupe]);
 

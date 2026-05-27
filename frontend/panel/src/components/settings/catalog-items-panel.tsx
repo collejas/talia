@@ -296,6 +296,11 @@ export function CatalogItemsPanel({
   const lineaWatch = useWatch({ control: form.control, name: "lineaId" }) ?? ""
   const familiaWatch = useWatch({ control: form.control, name: "familiaId" }) ?? ""
   const modeloWatch = useWatch({ control: form.control, name: "modeloId" }) ?? ""
+  const unidadWatch = useWatch({ control: form.control, name: "unidad" }) ?? ""
+  const manejaInventarioWatch = useWatch({ control: form.control, name: "manejaInventario" }) as boolean | undefined
+  const activoCompraWatch = useWatch({ control: form.control, name: "activoCompra" }) as boolean | undefined
+  const requiereLoteWatch = useWatch({ control: form.control, name: "requiereLote" }) as boolean | undefined
+  const requiereSerieWatch = useWatch({ control: form.control, name: "requiereSerie" }) as boolean | undefined
 
   const filteredFamilias = useMemo(() => {
     if (!lineaWatch) {
@@ -1109,12 +1114,7 @@ const handleDelete = useCallback(
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="catalog-unidad">Unidad</Label>
-                <Select
-                  value={form.watch("unidad")}
-                  onValueChange={(value) => {
-                    form.setValue("unidad", value)
-                  }}
-                >
+                <Select value={unidadWatch} onValueChange={(value) => form.setValue("unidad", value)} >
                   <SelectTrigger id="catalog-unidad">
                     <SelectValue placeholder="Selecciona una unidad" />
                   </SelectTrigger>
@@ -1146,7 +1146,7 @@ const handleDelete = useCallback(
                 <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
                   <Checkbox
                     id="catalog-maneja-inventario"
-                    checked={form.watch("manejaInventario")}
+                    checked={manejaInventarioWatch}
                     onCheckedChange={(checked) => form.setValue("manejaInventario", Boolean(checked))}
                   />
                   <Label htmlFor="catalog-maneja-inventario" className="text-sm font-normal">
@@ -1156,7 +1156,7 @@ const handleDelete = useCallback(
                 <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
                   <Checkbox
                     id="catalog-activo-compra"
-                    checked={form.watch("activoCompra")}
+                    checked={activoCompraWatch}
                     onCheckedChange={(checked) => form.setValue("activoCompra", Boolean(checked))}
                   />
                   <Label htmlFor="catalog-activo-compra" className="text-sm font-normal">
@@ -1166,7 +1166,7 @@ const handleDelete = useCallback(
                 <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
                   <Checkbox
                     id="catalog-requiere-lote"
-                    checked={form.watch("requiereLote")}
+                    checked={requiereLoteWatch}
                     onCheckedChange={(checked) => form.setValue("requiereLote", Boolean(checked))}
                   />
                   <Label htmlFor="catalog-requiere-lote" className="text-sm font-normal">
@@ -1176,7 +1176,7 @@ const handleDelete = useCallback(
                 <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
                   <Checkbox
                     id="catalog-requiere-serie"
-                    checked={form.watch("requiereSerie")}
+                    checked={requiereSerieWatch}
                     onCheckedChange={(checked) => form.setValue("requiereSerie", Boolean(checked))}
                   />
                   <Label htmlFor="catalog-requiere-serie" className="text-sm font-normal">

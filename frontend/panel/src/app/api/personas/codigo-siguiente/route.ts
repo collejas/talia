@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-
 import { callCrmApi } from "@/lib/api/crm";
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const result = await callCrmApi<{ codigo_contacto?: string | null }>("/crm/personas/codigo-siguiente", {
     withUserToken: true,
   });

@@ -795,7 +795,7 @@ export function ComprasWorkspace({
   const [orderPermiteEmbarquesParciales, setOrderPermiteEmbarquesParciales] = useState(true)
   const [orderPermiteTransbordos, setOrderPermiteTransbordos] = useState(true)
   const [orderGastosBancarios, setOrderGastosBancarios] = useState("")
-  const [orderCondicionesComercialesObservaciones, setOrderCondicionesComercialesObservaciones] = useState("")
+  const [, setOrderCondicionesComercialesObservaciones] = useState("")
   const [orderFormaPago, setOrderFormaPago] = useState("")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
   const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
@@ -850,9 +850,13 @@ export function ComprasWorkspace({
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
-  const selectedOrderDocuments = Array.isArray((selectedOrder as AnyRecord | null)?.documentos)
-    ? ((selectedOrder as AnyRecord).documentos as AnyRecord[])
-    : []
+  const selectedOrderDocuments = useMemo(
+    () =>
+      Array.isArray((selectedOrder as AnyRecord | null)?.documentos)
+        ? ((selectedOrder as AnyRecord).documentos as AnyRecord[])
+        : [],
+    [selectedOrder],
+  )
   const selectedOrderDocumentsByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
     for (const documento of selectedOrderDocuments) {
@@ -867,9 +871,13 @@ export function ComprasWorkspace({
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
   const selectedOrderProformaHref = selectedOrderHasProforma && selectedOrder ? `/api/compras/ordenes/${selectedOrder.id}/proforma` : null
-  const selectedOrderPaymentSchedules = Array.isArray((selectedOrder as AnyRecord | null)?.pagos_programados)
-    ? ((selectedOrder as AnyRecord).pagos_programados as AnyRecord[])
-    : []
+  const selectedOrderPaymentSchedules = useMemo(
+    () =>
+      Array.isArray((selectedOrder as AnyRecord | null)?.pagos_programados)
+        ? ((selectedOrder as AnyRecord).pagos_programados as AnyRecord[])
+        : [],
+    [selectedOrder],
+  )
   const selectedOrderPaymentScheduleByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
     for (const pago of selectedOrderPaymentSchedules) {
@@ -1163,26 +1171,6 @@ export function ComprasWorkspace({
     })
   }, [orderMomentoPagoSaldoSuggested])
 
-  useEffect(() => {
-    if (activeView !== "pagos") {
-      return
-    }
-    const targetOrderId = defaultPaymentOrderId || selectedOrderId || defaultOrderId
-    if (!targetOrderId) {
-      return
-    }
-    const targetOrder = openOrders.find((orden) => String(orden.id) === targetOrderId) ?? null
-    if (!targetOrder) {
-      return
-    }
-    if (String(targetOrder.id) !== selectedOrderId) {
-      setSelectedOrderId(String(targetOrder.id))
-    }
-    if (String(targetOrder.id) !== editingOrderId) {
-      startEditOrder(targetOrder)
-    }
-  }, [activeView, defaultPaymentOrderId, defaultOrderId, editingOrderId, openOrders, selectedOrderId])
-
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
       current.map((line, currentIndex) => (currentIndex === index ? { ...line, ...patch } : line)),
@@ -1351,7 +1339,7 @@ export function ComprasWorkspace({
     setProviderFormActive(Boolean(proveedor.activo))
   }
 
-  const startEditOrder = (orden: AnyRecord) => {
+  const startEditOrder = useCallback((orden: AnyRecord) => {
     orderHydratingRef.current = true
     setEditingOrderId(String(orden.id))
     setOrderProformaInputKey((current) => current + 1)
@@ -1429,7 +1417,27 @@ export function ComprasWorkspace({
     } else {
       orderHydratingRef.current = false
     }
-  }
+  }, [defaultOrderEmissionIso, defaultOrderFolio, defaultWarehouseId])
+
+  useEffect(() => {
+    if (activeView !== "pagos") {
+      return
+    }
+    const targetOrderId = defaultPaymentOrderId || selectedOrderId || defaultOrderId
+    if (!targetOrderId) {
+      return
+    }
+    const targetOrder = openOrders.find((orden) => String(orden.id) === targetOrderId) ?? null
+    if (!targetOrder) {
+      return
+    }
+    if (String(targetOrder.id) !== selectedOrderId) {
+      setSelectedOrderId(String(targetOrder.id))
+    }
+    if (String(targetOrder.id) !== editingOrderId) {
+      startEditOrder(targetOrder)
+    }
+  }, [activeView, defaultPaymentOrderId, defaultOrderId, editingOrderId, openOrders, selectedOrderId, startEditOrder])
 
   const clearOrderForm = () => {
     orderHydratingRef.current = true
@@ -1615,7 +1623,7 @@ export function ComprasWorkspace({
 
     void run()
     return () => abortController.abort()
-  }, [orderCurrency, selectedOrderPaymentSchedules, showPagos])
+  }, [orderCurrency, orderEmissionIso, selectedOrderPaymentSchedules, showPagos])
 
   const rootGridClassName = showResumen ? "grid gap-4 xl:grid-cols-3" : "grid gap-4"
 

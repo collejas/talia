@@ -1447,47 +1447,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Actualiza la relación principal de la persona con su negocio."
       : "Actualiza la vinculación de la persona con la empresa.";
-  const businessSummary = formatSummaryLine(
-    [
-      state.cuenta.nombre_comercial || state.cuenta.razon_social,
-      state.cuenta.codigo_cuenta,
-      state.cuenta.tipo_persona,
-      state.cuenta.tamano,
-      state.cuenta.tipo_establecimiento,
-    ],
-    "Sin datos de empresa",
-  );
-  const fiscalSummary = formatSummaryLine(
-    [state.cuenta.rfc, state.extras.uso_cfdi, state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion],
-    "Sin datos fiscales",
-  );
-  const locationSummary = formatSummaryLine(
-    [state.extras.pais || "MX", state.extras.entidad, state.extras.municipio, state.extras.localidad, state.extras.codigo_postal],
-    "Sin ubicación",
-  );
-  const domicileSummary = formatSummaryLine(
-    [
-      state.extras.tipo_vialidad,
-      state.extras.nombre_vialidad,
-      state.extras.numero_exterior,
-      state.extras.letra_exterior,
-      state.extras.numero_interior,
-      state.extras.letra_interior,
-      state.extras.edificio,
-      state.extras.edificio_piso,
-      state.extras.tipo_asentamiento,
-      state.extras.nombre_asentamiento,
-      state.extras.tipo_centro_comercial,
-      state.extras.corredor_industrial,
-      state.extras.numero_local,
-    ],
-    "Sin domicilio",
-  );
-  const georeferenceSummary = formatSummaryLine(
-    [state.cuenta.fecha_incorporacion, state.cuenta.latitud, state.cuenta.longitud],
-    "Sin georreferencia",
-  );
-
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
