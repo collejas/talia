@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -63,27 +64,11 @@ function formatMoney(value: unknown, currency = "MXN"): string {
 function formatDate(value: unknown): string {
   const raw = asString(value)
   if (!raw) return "—"
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return raw
-  return new Intl.DateTimeFormat("es-MX", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date)
-}
-
-function formatDateTime(value: unknown): string {
-  const raw = asString(value)
-  if (!raw) return "—"
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return raw
-  return new Intl.DateTimeFormat("es-MX", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date)
+  const datePart = raw.includes("T") ? raw.slice(0, 10) : raw.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return raw
+  const [year, month, day] = datePart.split("-")
+  if (!year || !month || !day) return raw
+  return `${day}/${month}/${year}`
 }
 
 function getPedimentoOrders(pedimento: AnyRecord | null): AnyRecord[] {
@@ -1012,38 +997,47 @@ export function PedimentosImportacionPanel({
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>#</TableHead>
                       <TableHead>Orden</TableHead>
                       <TableHead>Partida</TableHead>
+                      <TableHead className="text-right">Cantidad</TableHead>
                       <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Base OC</TableHead>
-                      <TableHead className="text-right">Base MXN</TableHead>
-                      <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-right">Asignado MXN</TableHead>
-                      <TableHead className="text-right">Adicional unitario MXN</TableHead>
+                      <TableHead className="text-right">Costo unitario de OC en MXN</TableHead>
+                      <TableHead className="text-right">Costo Total (Cantidad x Costo unitario de OC en MXN)</TableHead>
+                      <TableHead className="text-right">Costo extra unitario MXN</TableHead>
+                      <TableHead className="text-right">Costo total unitario MXN</TableHead>
+                      <TableHead className="text-right">Costo total línea MXN</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {!selectedProrrateos.length ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={10} className="py-6 text-center text-sm text-muted-foreground">
                           No hay prorrateo calculado todavía.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      selectedProrrateos.map((prorrateo) => {
+                      selectedProrrateos.map((prorrateo, index) => {
                         const item = prorrateo.orden_compra_item && typeof prorrateo.orden_compra_item === "object" ? (prorrateo.orden_compra_item as AnyRecord) : null
                         const order = prorrateo.orden_compra && typeof prorrateo.orden_compra === "object" ? (prorrateo.orden_compra as AnyRecord) : null
-                        const orderCurrency = asString(order?.moneda, "MXN")
+                        const quantity = asNumber(item?.cantidad_solicitada, asNumber(item?.cantidad_recibida, 0))
+                        const baseTotalMxn = asNumber(prorrateo.base_total_mxn, 0)
+                        const baseUnitMxn = quantity > 0 ? baseTotalMxn / quantity : 0
+                        const extraUnitMxn = asNumber(prorrateo.costo_unitario_adicional, 0)
+                        const totalUnitMxn = baseUnitMxn + extraUnitMxn
+                        const totalLineMxn = totalUnitMxn * quantity
                         return (
                           <TableRow key={String(prorrateo.id)}>
+                            <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
                             <TableCell className="font-mono text-xs">{asString(order?.folio, "—")}</TableCell>
                             <TableCell>{asString(item?.numero_partida, "—")}</TableCell>
+                            <TableCell className="text-right">{quantity.toFixed(3)}</TableCell>
                             <TableCell>{asString(item?.descripcion, "—")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.base_item, orderCurrency)}</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.base_item_mxn ?? prorrateo.base_item, "MXN")}</TableCell>
-                            <TableCell className="text-right">{(asNumber(prorrateo.porcentaje_prorrateo) * 100).toFixed(4)}%</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.costo_total_asignado, "MXN")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.costo_unitario_adicional, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(baseUnitMxn, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(baseTotalMxn, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(extraUnitMxn, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(totalUnitMxn, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(totalLineMxn, "MXN")}</TableCell>
                           </TableRow>
                         )
                       })

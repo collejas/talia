@@ -10759,7 +10759,7 @@ class CRMRepository:
                 "id,organizacion_id,pedimento_id,orden_compra_id,orden_compra_item_id,base_prorrateo,base_item,base_total,base_item_mxn,base_total_mxn,"
                 "porcentaje_prorrateo,costo_pedimento_asignado,costo_orden_asignado,costo_total_asignado,costo_unitario_adicional,"
                 "observaciones,creado_en,actualizado_en,"
-                "orden_compra:ordenes_compra(id,folio,estado,tipo_operacion,moneda,subtotal,total),"
+                "orden_compra:ordenes_compra(id,folio,estado,tipo_operacion,moneda,tipo_cambio_referencia,subtotal,total),"
                 "orden_compra_item:ordenes_compra_items(id,numero_partida,descripcion,cantidad_solicitada,cantidad_recibida,unidad,costo_unitario,subtotal,total)"
             ),
         }

@@ -205,7 +205,7 @@ async function syncPedimentoOrdenesImportacion(
     method: "GET",
   })
   if (!response.ok || !response.data || typeof response.data !== "object") {
-    throw new Error(response.error || "pedimento_importacion_not_found")
+    throw new Error(response.ok ? "pedimento_importacion_not_found" : response.error || "pedimento_importacion_not_found")
   }
 
   const currentOrdenes = Array.isArray((response.data as Record<string, unknown>).ordenes_compra)
