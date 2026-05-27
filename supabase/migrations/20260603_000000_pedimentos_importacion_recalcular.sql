@@ -60,6 +60,10 @@ BEGIN
 
     v_costo_total := round(COALESCE(v_gastos_pedimento, 0) + COALESCE(v_gastos_ordenes, 0), 4);
 
+    DELETE FROM public.pedimentos_importacion_prorrateos
+    WHERE organizacion_id = p_organizacion_id
+      AND pedimento_id = p_pedimento_id;
+
     WITH raw_items AS (
         SELECT
             rel.organizacion_id,
@@ -108,12 +112,6 @@ BEGIN
             r.cantidad_recibida
         FROM raw_items r
         CROSS JOIN totals t
-    ),
-    deleted AS (
-        DELETE FROM public.pedimentos_importacion_prorrateos
-        WHERE organizacion_id = p_organizacion_id
-          AND pedimento_id = p_pedimento_id
-        RETURNING 1
     )
     INSERT INTO public.pedimentos_importacion_prorrateos (
         organizacion_id,
