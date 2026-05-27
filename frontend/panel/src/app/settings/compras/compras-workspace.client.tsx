@@ -112,6 +112,13 @@ type OrderPaymentScheduleLine = {
   observaciones: string
 }
 
+type PaymentMxnLookupState = {
+  loading: boolean
+  tipoCambio: string
+  montoMxn: string
+  fechaTipoCambio: string
+}
+
 type OrderDocumentDefinition = {
   tipoDocumento: string
   label: string
@@ -753,6 +760,7 @@ export function ComprasWorkspace({
   const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
   const [orderPaymentSchedules, setOrderPaymentSchedules] = useState<OrderPaymentScheduleLine[]>([])
+  const [paymentMxnLookupByKey, setPaymentMxnLookupByKey] = useState<Record<string, PaymentMxnLookupState>>({})
   const [orderModoTransporteCodigo, setOrderModoTransporteCodigo] = useState("")
   const [orderFechaRequeridaEmbarque, setOrderFechaRequeridaEmbarque] = useState("")
   const [orderFechaEstimadaEmbarque, setOrderFechaEstimadaEmbarque] = useState("")
@@ -794,6 +802,7 @@ export function ComprasWorkspace({
   const [expandedOrderLineIndex, setExpandedOrderLineIndex] = useState<number | null>(null)
   const orderHydratingRef = useRef(false)
   const orderExchangeRateRequestIdRef = useRef(0)
+  const paymentMxnLookupRequestIdRef = useRef(0)
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
@@ -1444,6 +1453,87 @@ export function ComprasWorkspace({
   const showPagos = activeView === "pagos"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
+
+  useEffect(() => {
+    if (!showPagos || selectedOrderPaymentSchedules.length === 0) {
+      setPaymentMxnLookupByKey({})
+      return
+    }
+
+    const requestId = ++paymentMxnLookupRequestIdRef.current
+    const abortController = new AbortController()
+
+    const run = async () => {
+      const entries = await Promise.all(
+        selectedOrderPaymentSchedules.map(async (row, index) => {
+          const key = String(row.id ?? `${row.tipo_pago}-${index}`)
+          const currency = asString(row.moneda_codigo, orderCurrency).trim().toUpperCase()
+          const amount = asNumber(row.monto)
+          const paymentDate = asString(row.fecha_pago_real, "") || asString(row.fecha_evento_real, "")
+
+          if (!Number.isFinite(amount) || amount <= 0 || !currency) {
+            return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
+          }
+
+          if (currency === "MXN") {
+            return [
+              key,
+              {
+                loading: false,
+                tipoCambio: "1",
+                montoMxn: amount.toFixed(2),
+                fechaTipoCambio: paymentDate,
+              },
+            ] as const
+          }
+
+          if (!paymentDate) {
+            return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
+          }
+
+          try {
+            const response = await fetch(
+              `/api/compras/tipo-cambio?moneda=${encodeURIComponent(currency)}&fecha=${encodeURIComponent(paymentDate)}`,
+              {
+                cache: "no-store",
+                signal: abortController.signal,
+              },
+            )
+            const data = (await response.json().catch(() => null)) as BanxicoTipoCambioResponse | { error?: string } | null
+            const payload = isBanxicoTipoCambioResponse(data) ? data : null
+            if (!response.ok || !payload) {
+              return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
+            }
+            const rate = Number(payload.tipo_cambio)
+            if (!Number.isFinite(rate) || rate <= 0) {
+              return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
+            }
+            const amountMxn = amount * rate
+            return [
+              key,
+              {
+                loading: false,
+                tipoCambio: rate.toFixed(6).replace(/\.?0+$/, ""),
+                montoMxn: amountMxn.toFixed(2),
+                fechaTipoCambio: asString(payload.fecha, paymentDate),
+              },
+            ] as const
+          } catch {
+            return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
+          }
+        }),
+      )
+
+      if (requestId !== paymentMxnLookupRequestIdRef.current || abortController.signal.aborted) {
+        return
+      }
+      setPaymentMxnLookupByKey(Object.fromEntries(entries))
+    }
+
+    void run()
+    return () => abortController.abort()
+  }, [orderCurrency, selectedOrderPaymentSchedules, showPagos])
+
   const rootGridClassName = showResumen ? "grid gap-4 xl:grid-cols-3" : "grid gap-4"
 
   return (
@@ -3131,6 +3221,7 @@ export function ComprasWorkspace({
                             <TableHead>Estado</TableHead>
                             <TableHead>Evento</TableHead>
                             <TableHead>Monto</TableHead>
+                            <TableHead>Monto MXN</TableHead>
                             <TableHead>Fecha recepción</TableHead>
                             <TableHead>Fecha pago</TableHead>
                             <TableHead>Vencimiento</TableHead>
@@ -3158,6 +3249,16 @@ export function ComprasWorkspace({
                                 <TableCell className="min-w-40">{eventLabel}</TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {(() => {
+                                    const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
+                                    const normalized = paymentMxnLookupByKey[lookupKey]
+                                    if (!normalized || !asString(normalized.montoMxn, "")) {
+                                      return "—"
+                                    }
+                                    return formatCurrency(normalized.montoMxn, "MXN")
+                                  })()}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">{showReceipt ? receiptDate : "—"}</TableCell>
                                 <TableCell className="whitespace-nowrap">{paymentDate}</TableCell>

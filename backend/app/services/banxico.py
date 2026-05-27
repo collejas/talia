@@ -129,6 +129,10 @@ def _parse_banxico_point(payload: Any) -> tuple[Decimal, date]:
 
 
 async def fetch_banxico_tipo_cambio(moneda: str) -> BanxicoTipoCambio:
+    return await fetch_banxico_tipo_cambio_at_date(moneda)
+
+
+async def fetch_banxico_tipo_cambio_at_date(moneda: str, fecha: date | None = None) -> BanxicoTipoCambio:
     normalized_currency = _normalize_currency(moneda)
     if not normalized_currency:
         raise BanxicoError("banxico_currency_required")
@@ -153,7 +157,8 @@ async def fetch_banxico_tipo_cambio(moneda: str) -> BanxicoTipoCambio:
     if not token:
         raise BanxicoError("banxico_token_missing")
 
-    cached = _BANXICO_CACHE.get(normalized_currency)
+    cache_key = normalized_currency if fecha is None else f"{normalized_currency}:{fecha.isoformat()}"
+    cached = _BANXICO_CACHE.get(cache_key)
     now_ts = datetime.now(timezone.utc).timestamp()
     if cached and now_ts - cached[0] <= _BANXICO_CACHE_TTL_SECONDS:
         cached_payload = cached[1]
@@ -169,7 +174,11 @@ async def fetch_banxico_tipo_cambio(moneda: str) -> BanxicoTipoCambio:
         )
 
     serie, descripcion = series_info
-    url = f"{settings.banxico_base_url.rstrip('/')}/{serie}/datos/oportuno"
+    if fecha is None:
+        url = f"{settings.banxico_base_url.rstrip('/')}/{serie}/datos/oportuno"
+    else:
+        fecha_iso = fecha.isoformat()
+        url = f"{settings.banxico_base_url.rstrip('/')}/{serie}/datos/{fecha_iso}/{fecha_iso}"
     client = _get_banxico_http_client()
     try:
         response = await client.get(

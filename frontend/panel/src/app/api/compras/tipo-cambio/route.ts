@@ -16,9 +16,10 @@ type BanxicoTipoCambioResponse = {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const moneda = (searchParams.get("moneda") ?? "USD").trim().toUpperCase()
+  const fecha = (searchParams.get("fecha") ?? "").trim()
 
   const response = await callCrmApi<BanxicoTipoCambioResponse>("/crm/compras/tipo-cambio", {
-    searchParams: { moneda },
+    searchParams: fecha ? { moneda, fecha } : { moneda },
     withUserToken: true,
   })
 

@@ -109,7 +109,7 @@ from app.services.brevo_templates import (
     list_brevo_smtp_templates,
 )
 from app.services.brevo_quota import fetch_brevo_daily_quota
-from app.services.banxico import BanxicoError, BanxicoTipoCambio, fetch_banxico_tipo_cambio
+from app.services.banxico import BanxicoError, BanxicoTipoCambio, fetch_banxico_tipo_cambio, fetch_banxico_tipo_cambio_at_date
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos as list_fraccionamientos,
@@ -15590,11 +15590,12 @@ async def list_compras_ordenes_para_recepcion(
 async def get_compras_tipo_cambio(
     *,
     moneda: str = Query(default="USD", min_length=3, max_length=3),
+    fecha: date | None = Query(default=None),
     _: str = Depends(require_permission("settings.view")),
 ) -> CRMBanxicoTipoCambioResponse:
     normalized_currency = moneda.strip().upper()
     try:
-        resultado: BanxicoTipoCambio = await fetch_banxico_tipo_cambio(normalized_currency)
+        resultado: BanxicoTipoCambio = await fetch_banxico_tipo_cambio_at_date(normalized_currency, fecha)
     except BanxicoError as exc:
         message = str(exc)
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
