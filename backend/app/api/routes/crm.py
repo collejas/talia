@@ -12104,6 +12104,8 @@ class CRMOrdenCompraPagoProgramado(BaseModel):
     porcentaje: float | None = None
     monto: float | None = None
     moneda_codigo: str
+    tipo_cambio_aplicado: float | None = None
+    monto_mxn: float | None = None
     dias_credito: int | None = None
     fecha_vencimiento_calculada: date | None = None
     fecha_evento_real: date | None = None
@@ -12443,6 +12445,49 @@ def _normalize_orden_compra_pago_programado_rows(
     return normalized
 
 
+def _resolve_pago_programado_tipo_cambio_fecha(row: Mapping[str, Any]) -> date | None:
+    for field in ("fecha_pago_real", "fecha_evento_real", "fecha_vencimiento_calculada"):
+        parsed = _parse_date(row.get(field))
+        if parsed is not None:
+            return parsed
+    return date.today()
+
+
+async def _enrich_orden_compra_pago_programado_row(
+    *,
+    row: dict[str, Any],
+    fallback_currency: str | None = None,
+) -> dict[str, Any]:
+    normalized = dict(row)
+    currency = (_clean_text(normalized.get("moneda_codigo")) or _clean_text(fallback_currency) or "MXN").upper()
+    normalized["moneda_codigo"] = currency
+
+    amount = _decimal_from_value(normalized.get("monto"))
+    if amount is None:
+        normalized["tipo_cambio_aplicado"] = 1.0 if currency == "MXN" else None
+        return normalized
+
+    if currency == "MXN":
+        normalized["tipo_cambio_aplicado"] = 1.0
+        return normalized
+
+    fecha_tipo_cambio = _resolve_pago_programado_tipo_cambio_fecha(normalized)
+    try:
+        resultado = await fetch_banxico_tipo_cambio_at_date(currency, fecha_tipo_cambio)
+    except BanxicoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    tipo_cambio = float(resultado.tipo_cambio)
+    if not tipo_cambio or tipo_cambio <= 0:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="tipo_cambio_invalido")
+
+    normalized["tipo_cambio_aplicado"] = tipo_cambio
+    return normalized
+
+
 async def _replace_orden_compra_pagos_programados(
     *,
     repo: CRMRepository,
@@ -12457,14 +12502,46 @@ async def _replace_orden_compra_pagos_programados(
         default_moneda_codigo=moneda_codigo or "MXN",
         subtotal=subtotal,
     )
+    enriched_rows: list[dict[str, Any]] = []
+    for row in normalized_rows:
+        enriched_rows.append(
+            await _enrich_orden_compra_pago_programado_row(
+                row=row,
+                fallback_currency=moneda_codigo,
+            )
+        )
     try:
         await repo.replace_orden_compra_pagos_programados(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
-            pagos_programados=normalized_rows,
+            pagos_programados=enriched_rows,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+async def _resolve_orden_compra_tipo_cambio_referencia(
+    *,
+    moneda: str | None,
+    fecha_emision: Any,
+    tipo_cambio_referencia: float | None,
+) -> float:
+    currency = (_clean_text(moneda) or "MXN").upper()
+    if currency == "MXN":
+        return float(tipo_cambio_referencia or 1)
+    if tipo_cambio_referencia is not None and tipo_cambio_referencia > 0:
+        return float(tipo_cambio_referencia)
+
+    fecha_emision_dt = fecha_emision if isinstance(fecha_emision, datetime) else _parse_iso_datetime(fecha_emision)
+    fecha_tipo_cambio = fecha_emision_dt.date() if isinstance(fecha_emision_dt, datetime) else date.today()
+    try:
+        resultado = await fetch_banxico_tipo_cambio_at_date(currency, fecha_tipo_cambio)
+    except BanxicoError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    rate = float(resultado.tipo_cambio)
+    if not rate or rate <= 0:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="tipo_cambio_invalido")
+    return rate
 
 
 # existing classes...
@@ -16308,6 +16385,16 @@ async def create_compras_orden(
     pagos_programados = body.pop("pagos_programados", None)
     if usuario_id:
         body.setdefault("solicitado_por_usuario_id", str(usuario_id))
+    fecha_emision = body.get("fecha_emision")
+    if not _clean_text(body.get("moneda")):
+        body["moneda"] = "MXN"
+    else:
+        body["moneda"] = _clean_text(body.get("moneda")).upper()
+    body["tipo_cambio_referencia"] = await _resolve_orden_compra_tipo_cambio_referencia(
+        moneda=_clean_text(body.get("moneda")),
+        fecha_emision=fecha_emision,
+        tipo_cambio_referencia=_decimal_from_value(body.get("tipo_cambio_referencia")),
+    )
     try:
         orden_id = await repo.create_orden_compra(
             organizacion_id=organizacion_id,
@@ -16362,6 +16449,24 @@ async def update_compras_orden(
     body = payload.model_dump(mode="json", exclude_unset=True)
     pagos_programados = body.pop("pagos_programados", None)
     try:
+        current_order = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if current_order is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        merged_moneda = _clean_text(body.get("moneda")) or _clean_text(current_order.get("moneda")) or "MXN"
+        merged_fecha_emision = body.get("fecha_emision")
+        if merged_fecha_emision is None:
+            merged_fecha_emision = current_order.get("fecha_emision")
+        body["moneda"] = merged_moneda.upper()
+        body["tipo_cambio_referencia"] = await _resolve_orden_compra_tipo_cambio_referencia(
+            moneda=merged_moneda,
+            fecha_emision=merged_fecha_emision,
+            tipo_cambio_referencia=_decimal_from_value(body.get("tipo_cambio_referencia"))
+            if body.get("tipo_cambio_referencia") is not None
+            else _decimal_from_value(current_order.get("tipo_cambio_referencia")),
+        )
         orden_id_result = await repo.update_orden_compra_transactional(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
@@ -16687,6 +16792,10 @@ async def create_compras_orden_pago_programado(
             subtotal = _decimal_from_value(orden.get("subtotal"))
             if subtotal and subtotal > 0:
                 body["porcentaje"] = float(((_decimal_from_value(body.get("monto")) or Decimal("0")) / subtotal * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        body = await _enrich_orden_compra_pago_programado_row(
+            row=body,
+            fallback_currency=_clean_text(orden.get("moneda")) or "MXN",
+        )
         row = await repo.create_orden_compra_pago_programado(
             organizacion_id=organizacion_id,
             payload={
@@ -16762,6 +16871,10 @@ async def update_compras_orden_pago_programado(
             subtotal = _decimal_from_value(orden.get("subtotal"))
             if subtotal and subtotal > 0:
                 body["porcentaje"] = float(((_decimal_from_value(body.get("monto")) or Decimal("0")) / subtotal * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        body = await _enrich_orden_compra_pago_programado_row(
+            row=body,
+            fallback_currency=_clean_text(orden.get("moneda")) or "MXN",
+        )
         row = await repo.update_orden_compra_pago_programado(
             organizacion_id=organizacion_id,
             orden_id=orden_id,

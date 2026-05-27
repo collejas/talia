@@ -983,9 +983,31 @@ export function PedimentosImportacionPanel({
           <Card>
             <CardHeader>
               <CardTitle>Prorrateo por item</CardTitle>
-              <CardDescription>Todos los items de las órdenes ligadas comparten el mismo costo aduanal total.</CardDescription>
+              <CardDescription>
+                Todos los items de las órdenes ligadas comparten el mismo costo aduanal total normalizado a MXN.
+              </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
+                  <div className="mt-1 text-sm font-semibold">
+                    {formatMoney(asNumber(selectedPedimento?.gastos_pedimento_total), "MXN")}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos órdenes</div>
+                  <div className="mt-1 text-sm font-semibold">
+                    {formatMoney(asNumber(selectedPedimento?.gastos_ordenes_total), "MXN")}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total prorrateable</div>
+                  <div className="mt-1 text-sm font-semibold">
+                    {formatMoney(asNumber(selectedPedimento?.costo_total_prorrateable), "MXN")}
+                  </div>
+                </div>
+              </div>
               <div className="overflow-hidden rounded-lg border">
                 <Table>
                   <TableHeader>
@@ -993,16 +1015,17 @@ export function PedimentosImportacionPanel({
                       <TableHead>Orden</TableHead>
                       <TableHead>Partida</TableHead>
                       <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Base</TableHead>
+                      <TableHead className="text-right">Base OC</TableHead>
+                      <TableHead className="text-right">Base MXN</TableHead>
                       <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-right">Asignado</TableHead>
-                      <TableHead className="text-right">Adicional unitario</TableHead>
+                      <TableHead className="text-right">Asignado MXN</TableHead>
+                      <TableHead className="text-right">Adicional unitario MXN</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {!selectedProrrateos.length ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
                           No hay prorrateo calculado todavía.
                         </TableCell>
                       </TableRow>
@@ -1010,15 +1033,17 @@ export function PedimentosImportacionPanel({
                       selectedProrrateos.map((prorrateo) => {
                         const item = prorrateo.orden_compra_item && typeof prorrateo.orden_compra_item === "object" ? (prorrateo.orden_compra_item as AnyRecord) : null
                         const order = prorrateo.orden_compra && typeof prorrateo.orden_compra === "object" ? (prorrateo.orden_compra as AnyRecord) : null
+                        const orderCurrency = asString(order?.moneda, "MXN")
                         return (
                           <TableRow key={String(prorrateo.id)}>
                             <TableCell className="font-mono text-xs">{asString(order?.folio, "—")}</TableCell>
                             <TableCell>{asString(item?.numero_partida, "—")}</TableCell>
                             <TableCell>{asString(item?.descripcion, "—")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.base_item, asString(selectedPedimento.moneda, "MXN"))}</TableCell>
+                            <TableCell className="text-right">{formatMoney(prorrateo.base_item, orderCurrency)}</TableCell>
+                            <TableCell className="text-right">{formatMoney(prorrateo.base_item_mxn ?? prorrateo.base_item, "MXN")}</TableCell>
                             <TableCell className="text-right">{(asNumber(prorrateo.porcentaje_prorrateo) * 100).toFixed(4)}%</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.costo_total_asignado, asString(selectedPedimento.moneda, "MXN"))}</TableCell>
-                            <TableCell className="text-right">{formatMoney(prorrateo.costo_unitario_adicional, asString(selectedPedimento.moneda, "MXN"))}</TableCell>
+                            <TableCell className="text-right">{formatMoney(prorrateo.costo_total_asignado, "MXN")}</TableCell>
+                            <TableCell className="text-right">{formatMoney(prorrateo.costo_unitario_adicional, "MXN")}</TableCell>
                           </TableRow>
                         )
                       })

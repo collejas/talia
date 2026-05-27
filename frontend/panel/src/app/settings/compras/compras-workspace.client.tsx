@@ -110,6 +110,8 @@ type OrderPaymentScheduleLine = {
   porcentaje: string
   monto: string
   moneda_codigo: string
+  tipo_cambio_aplicado?: string | number
+  monto_mxn?: string | number
   dias_credito: string
   fecha_vencimiento_calculada: string
   fecha_evento_real: string
@@ -1593,6 +1595,27 @@ export function ComprasWorkspace({
           const currency = asString(row.moneda_codigo, orderCurrency).trim().toUpperCase()
           const amount = asNumber(row.monto)
           const paymentDate = getPaymentNormalizationDate(row, orderEmissionIso)
+          const storedTipoCambio = asNumber(row.tipo_cambio_aplicado)
+          const storedMontoMxn = asNumber(row.monto_mxn)
+
+          if (
+            Number.isFinite(amount) &&
+            amount > 0 &&
+            Number.isFinite(storedTipoCambio) &&
+            storedTipoCambio > 0 &&
+            Number.isFinite(storedMontoMxn) &&
+            storedMontoMxn > 0
+          ) {
+            return [
+              key,
+              {
+                loading: false,
+                tipoCambio: storedTipoCambio.toFixed(6).replace(/\.?0+$/, ""),
+                montoMxn: storedMontoMxn.toFixed(2),
+                fechaTipoCambio: paymentDate,
+              },
+            ] as const
+          }
 
           if (!Number.isFinite(amount) || amount <= 0 || !currency) {
             return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const

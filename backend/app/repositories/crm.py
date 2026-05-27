@@ -2289,7 +2289,7 @@ class CRMRepository:
             "orden_compra_id": f"eq.{orden_id}",
             "order": "creado_en.asc",
             "select": (
-                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,"
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,tipo_cambio_aplicado,monto_mxn,"
                 "dias_credito,fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
             ),
         }
@@ -10165,7 +10165,7 @@ class CRMRepository:
                 "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
                 "),"
                 "pagos_programados:ordenes_compra_pagos_programados("
-                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,tipo_cambio_aplicado,monto_mxn,dias_credito,"
                 "fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
                 "),"
                 "logistica:ordenes_compra_logistica("
@@ -10226,7 +10226,7 @@ class CRMRepository:
                 "momento_pago_saldo,dias_credito,comisiones_bancarias,observaciones,creado_en,actualizado_en"
                 "),"
                 "pagos_programados:ordenes_compra_pagos_programados("
-                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,dias_credito,"
+                "id,organizacion_id,orden_compra_id,tipo_pago,evento_base,porcentaje,monto,moneda_codigo,tipo_cambio_aplicado,monto_mxn,dias_credito,"
                 "fecha_vencimiento_calculada,fecha_evento_real,fecha_pago_real,referencia_pago,estado,observaciones,creado_en,actualizado_en"
                 "),"
                 "logistica:ordenes_compra_logistica("
@@ -10756,7 +10756,7 @@ class CRMRepository:
             "pedimento_id": f"eq.{pedimento_id}",
             "order": "orden_compra_id.asc,orden_compra_item_id.asc",
             "select": (
-                "id,organizacion_id,pedimento_id,orden_compra_id,orden_compra_item_id,base_prorrateo,base_item,base_total,"
+                "id,organizacion_id,pedimento_id,orden_compra_id,orden_compra_item_id,base_prorrateo,base_item,base_total,base_item_mxn,base_total_mxn,"
                 "porcentaje_prorrateo,costo_pedimento_asignado,costo_orden_asignado,costo_total_asignado,costo_unitario_adicional,"
                 "observaciones,creado_en,actualizado_en,"
                 "orden_compra:ordenes_compra(id,folio,estado,tipo_operacion,moneda,subtotal,total),"
