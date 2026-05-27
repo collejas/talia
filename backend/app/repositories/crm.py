@@ -10432,7 +10432,8 @@ class CRMRepository:
                 "id,organizacion_id,numero_pedimento,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
                 "fecha_liberacion,moneda,tipo_cambio,subtotal_aduanal,gastos_pedimento_total,gastos_ordenes_total,"
                 "costo_total_prorrateable,observaciones,creado_en,actualizado_en,"
-                "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en)"
+                "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en),"
+                "ordenes_compra:pedimentos_importacion_ordenes_compra(id,pedimento_id,orden_compra_id,rol,observaciones,creado_en,actualizado_en)"
             ),
         }
         if not include_cancelled:

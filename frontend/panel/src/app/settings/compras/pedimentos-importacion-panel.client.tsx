@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 
 import {
-  attachPedimentoOrdenAction,
   createAgenteAduanalAction,
   createPedimentoGastoAction,
   createPedimentoImportacionAction,
@@ -102,6 +101,18 @@ function getPedimentoProrrateos(pedimento: AnyRecord | null): AnyRecord[] {
   return Array.isArray(value) ? value.filter((item) => Boolean(item) && typeof item === "object") as AnyRecord[] : []
 }
 
+function getRecordId(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return ""
+  }
+  const record = value as AnyRecord
+  const directId = asString(record.id)
+  if (directId) {
+    return directId
+  }
+  return ""
+}
+
 function buildAgentFormState(agent?: AnyRecord | null) {
   return {
     nombre: asString(agent?.nombre),
@@ -146,12 +157,22 @@ function buildGastoFormState() {
   }
 }
 
-function buildLinkFormState() {
-  return {
-    orden_compra_id: "",
-    rol: "principal",
-    observaciones: "",
+function extractPedimentoOrdenIds(pedimento?: AnyRecord | null): string[] {
+  const value = pedimento?.ordenes_compra
+  if (!Array.isArray(value)) {
+    return []
   }
+  return Array.from(
+    new Set(
+      value
+        .filter((item) => Boolean(item) && typeof item === "object")
+        .map((item) => {
+          const record = item as AnyRecord
+          return String(record.orden_compra_id ?? getRecordId(record.orden_compra) ?? "").trim()
+        })
+        .filter((id) => id.length > 0),
+    ),
+  )
 }
 
 export function PedimentosImportacionPanel({
@@ -167,8 +188,10 @@ export function PedimentosImportacionPanel({
   const [agentForm, setAgentForm] = useState(() => buildAgentFormState())
   const [editingPedimentoId, setEditingPedimentoId] = useState<string | null>(null)
   const [pedimentoForm, setPedimentoForm] = useState(() => buildPedimentoFormState())
+  const [pedimentoOrdenIds, setPedimentoOrdenIds] = useState<string[]>([])
+  const [availableOrderSelection, setAvailableOrderSelection] = useState<string[]>([])
+  const [associatedOrderSelection, setAssociatedOrderSelection] = useState<string[]>([])
   const [gastoForm, setGastoForm] = useState(() => buildGastoFormState())
-  const [linkForm, setLinkForm] = useState(() => buildLinkFormState())
 
   useEffect(() => {
     if (editingAgentId) {
@@ -183,29 +206,37 @@ export function PedimentosImportacionPanel({
     if (editingPedimentoId) {
       const current = pedimentos.find((row) => String(row.id) === editingPedimentoId) ?? null
       setPedimentoForm(buildPedimentoFormState(current))
+      setPedimentoOrdenIds(extractPedimentoOrdenIds(current))
     } else {
       setPedimentoForm(buildPedimentoFormState())
+      setPedimentoOrdenIds([])
     }
+    setAvailableOrderSelection([])
+    setAssociatedOrderSelection([])
   }, [editingPedimentoId, pedimentos])
 
   useEffect(() => {
     setGastoForm(buildGastoFormState())
-    setLinkForm(buildLinkFormState())
   }, [selectedPedimentoId])
 
   const selectedOrders = useMemo(() => getPedimentoOrders(selectedPedimento), [selectedPedimento])
   const selectedGastos = useMemo(() => getPedimentoGastos(selectedPedimento), [selectedPedimento])
   const selectedProrrateos = useMemo(() => getPedimentoProrrateos(selectedPedimento), [selectedPedimento])
-  const selectedOrderIds = useMemo(() => new Set(selectedOrders.map((row) => String(row.orden_compra_id ?? row.orden_compra?.id ?? ""))), [selectedOrders])
-  const selectableOrders = useMemo(
+  const internationalOrders = useMemo(
+    () => ordenes.filter((orden) => String(orden.tipo_operacion ?? "").toLowerCase() === "internacional"),
+    [ordenes],
+  )
+  const selectedPedimentoOrderSet = useMemo(() => new Set(pedimentoOrdenIds), [pedimentoOrdenIds])
+  const availablePedimentoOrders = useMemo(
+    () => internationalOrders.filter((orden) => !selectedPedimentoOrderSet.has(String(orden.id))),
+    [internationalOrders, selectedPedimentoOrderSet],
+  )
+  const associatedPedimentoOrders = useMemo(
     () =>
-      ordenes.filter((orden) => {
-        if (String(orden.tipo_operacion ?? "").toLowerCase() !== "internacional") {
-          return false
-        }
-        return !selectedOrderIds.has(String(orden.id))
-      }),
-    [ordenes, selectedOrderIds],
+      pedimentoOrdenIds
+        .map((ordenId) => internationalOrders.find((orden) => String(orden.id) === ordenId))
+        .filter((orden): orden is AnyRecord => Boolean(orden)),
+    [internationalOrders, pedimentoOrdenIds],
   )
 
   const moneyOptions = monedas.length ? monedas : [{ codigo: "MXN", nombre: "Peso mexicano" }]
@@ -366,6 +397,177 @@ export function PedimentosImportacionPanel({
                 </select>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="pedimento-ordenes-compra">Ordenes internacionales a ligar</Label>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                <div className="rounded-lg border bg-background">
+                  <div className="border-b px-3 py-2">
+                    <div className="text-sm font-medium">Órdenes disponibles</div>
+                    <p className="text-xs text-muted-foreground">Selecciona una o varias órdenes para moverlas a la derecha.</p>
+                  </div>
+                  <div className="max-h-72 overflow-auto p-2">
+                    {!availablePedimentoOrders.length ? (
+                      <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                        No hay órdenes disponibles para agregar.
+                      </div>
+                    ) : (
+                      <div className="grid gap-2">
+                        {availablePedimentoOrders.map((orden) => {
+                          const ordenId = String(orden.id)
+                          const checked = availableOrderSelection.includes(ordenId)
+                          return (
+                            <label
+                              key={ordenId}
+                              className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                checked ? "border-primary bg-primary/5" : "hover:bg-muted/40"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  setAvailableOrderSelection((prev) =>
+                                    event.target.checked
+                                      ? Array.from(new Set([...prev, ordenId]))
+                                      : prev.filter((id) => id !== ordenId),
+                                  )
+                                }}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium">
+                                  {asString(orden.folio)} · {formatMoney(orden.total, asString(orden.moneda, "MXN"))}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Estado: {asString(orden.estado)} · Tipo: {asString(orden.tipo_operacion)}
+                                </div>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-row items-center justify-center gap-2 xl:flex-col">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (!availableOrderSelection.length) return
+                      setPedimentoOrdenIds((prev) =>
+                        Array.from(new Set([...prev, ...availableOrderSelection])),
+                      )
+                      setAvailableOrderSelection([])
+                    }}
+                    disabled={!availableOrderSelection.length}
+                  >
+                    Agregar &gt;
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (!associatedOrderSelection.length) return
+                      setPedimentoOrdenIds((prev) => prev.filter((id) => !associatedOrderSelection.includes(id)))
+                      setAssociatedOrderSelection([])
+                    }}
+                    disabled={!associatedOrderSelection.length}
+                  >
+                    &lt; Quitar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPedimentoOrdenIds(internationalOrders.map((orden) => String(orden.id)))
+                      setAvailableOrderSelection([])
+                      setAssociatedOrderSelection([])
+                    }}
+                    disabled={!internationalOrders.length}
+                  >
+                    Todas
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPedimentoOrdenIds([])
+                      setAvailableOrderSelection([])
+                      setAssociatedOrderSelection([])
+                    }}
+                    disabled={!pedimentoOrdenIds.length}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border bg-background">
+                  <div className="border-b px-3 py-2">
+                    <div className="text-sm font-medium">Órdenes de compra asociadas</div>
+                    <p className="text-xs text-muted-foreground">Estas se guardarán al crear o actualizar el pedimento.</p>
+                  </div>
+                  <div className="max-h-72 overflow-auto p-2">
+                    {!associatedPedimentoOrders.length ? (
+                      <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                        Aún no hay órdenes asociadas.
+                      </div>
+                    ) : (
+                      <div className="grid gap-2">
+                        {associatedPedimentoOrders.map((orden) => {
+                          const ordenId = String(orden.id)
+                          const checked = associatedOrderSelection.includes(ordenId)
+                          return (
+                            <label
+                              key={ordenId}
+                              className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                checked ? "border-primary bg-primary/5" : "hover:bg-muted/40"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  setAssociatedOrderSelection((prev) =>
+                                    event.target.checked
+                                      ? Array.from(new Set([...prev, ordenId]))
+                                      : prev.filter((id) => id !== ordenId),
+                                  )
+                                }}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium">
+                                  {asString(orden.folio)} · {formatMoney(orden.total, asString(orden.moneda, "MXN"))}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Estado: {asString(orden.estado)} · Tipo: {asString(orden.tipo_operacion)}
+                                </div>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {pedimentoOrdenIds.length ? (
+                <div className="hidden">
+                  {pedimentoOrdenIds.map((ordenId) => (
+                    <input key={ordenId} type="hidden" name="ordenes_compra_ids" value={ordenId} />
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Selecciona una o varias órdenes internacionales. Al guardar el pedimento se ligarán automáticamente.
+              </p>
+            </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="pedimento-fecha">Fecha pedimento</Label>
@@ -397,7 +599,14 @@ export function PedimentosImportacionPanel({
             <div className="flex gap-2">
               <Button type="submit">{editingPedimentoId ? "Actualizar pedimento" : "Guardar pedimento"}</Button>
               {editingPedimentoId ? (
-                <Button type="button" variant="outline" onClick={() => setEditingPedimentoId(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingPedimentoId(null)
+                    setPedimentoOrdenIds([])
+                  }}
+                >
                   Cancelar
                 </Button>
               ) : null}
@@ -450,6 +659,7 @@ export function PedimentosImportacionPanel({
                             <Button type="button" variant="outline" size="sm" onClick={() => {
                               setEditingPedimentoId(currentId)
                               setPedimentoForm(buildPedimentoFormState(pedimento))
+                              setPedimentoOrdenIds(extractPedimentoOrdenIds(pedimento))
                             }}>
                               Editar
                             </Button>
@@ -507,38 +717,9 @@ export function PedimentosImportacionPanel({
           <Card>
             <CardHeader>
               <CardTitle>Órdenes ligadas</CardTitle>
-              <CardDescription>Solo se permiten órdenes internacionales de la misma organización.</CardDescription>
+              <CardDescription>Vista de consulta de las órdenes ya ligadas al pedimento.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form action={attachPedimentoOrdenAction.bind(null, String(selectedPedimento.id))} className="grid gap-4 md:grid-cols-4">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="pedimento-orden">Orden internacional</Label>
-                  <select id="pedimento-orden" name="orden_compra_id" value={linkForm.orden_compra_id} onChange={(event) => setLinkForm((prev) => ({ ...prev, orden_compra_id: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-                    <option value="">Selecciona una orden</option>
-                    {selectableOrders.map((orden) => (
-                      <option key={String(orden.id)} value={String(orden.id)}>
-                        {asString(orden.folio)} · {formatMoney(orden.total, asString(orden.moneda, "MXN"))}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pedimento-rol">Rol</Label>
-                  <select id="pedimento-rol" name="rol" value={linkForm.rol} onChange={(event) => setLinkForm((prev) => ({ ...prev, rol: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    <option value="principal">Principal</option>
-                    <option value="complementaria">Complementaria</option>
-                    <option value="parcial">Parcial</option>
-                  </select>
-                </div>
-                <div className="space-y-2 md:col-span-4">
-                  <Label htmlFor="pedimento-orden-observaciones">Observaciones</Label>
-                  <Input id="pedimento-orden-observaciones" name="observaciones" value={linkForm.observaciones} onChange={(event) => setLinkForm((prev) => ({ ...prev, observaciones: event.target.value }))} />
-                </div>
-                <div className="md:col-span-4">
-                  <Button type="submit">Ligar orden</Button>
-                </div>
-              </form>
-
               <div className="overflow-hidden rounded-lg border">
                 <Table>
                   <TableHeader>

@@ -69,6 +69,26 @@ function getFormDataOptionalNumberArray(formData: FormData, name: string): Array
   return formData.getAll(name).map((value) => parseOptionalNumber(value))
 }
 
+function getFormDataUniqueTextArray(formData: FormData, name: string): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(name)
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value) => value.length > 0),
+    ),
+  )
+}
+
+function getRecordText(value: unknown, key: string): string {
+  if (!value || typeof value !== "object") {
+    return ""
+  }
+  const record = value as Record<string, unknown>
+  const nested = record[key]
+  return typeof nested === "string" ? nested.trim() : ""
+}
+
 function zipOrderItems(formData: FormData): Record<string, unknown>[] {
   const catalogItemIds = getFormDataTextArray(formData, "items_catalog_item_id")
   const proveedorItemIds = getFormDataTextArray(formData, "items_proveedor_item_id")
@@ -175,6 +195,54 @@ function normalizeDateInput(value: FormDataEntryValue | null): string | undefine
     return undefined
   }
   return raw.includes("T") ? raw.slice(0, 10) : raw.slice(0, 10)
+}
+
+async function syncPedimentoOrdenesImportacion(
+  pedimentoId: string,
+  selectedOrdenesIds: string[],
+): Promise<void> {
+  const response = await callCrmApi<Record<string, unknown>>(`/crm/compras/pedimentos/${pedimentoId}`, {
+    method: "GET",
+  })
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    throw new Error(response.error || "pedimento_importacion_not_found")
+  }
+
+  const currentOrdenes = Array.isArray((response.data as Record<string, unknown>).ordenes_compra)
+    ? ((response.data as Record<string, unknown>).ordenes_compra as Record<string, unknown>[])
+    : []
+  const currentIds = new Set(
+    currentOrdenes
+      .map((row) => String(row.orden_compra_id ?? getRecordText(row.orden_compra, "id") ?? "").trim())
+      .filter((value) => value.length > 0),
+  )
+  const desiredIds = new Set(selectedOrdenesIds.map((value) => value.trim()).filter((value) => value.length > 0))
+
+  for (const ordenId of currentIds) {
+    if (!desiredIds.has(ordenId)) {
+      const responseDetach = await callCrmApi(`/crm/compras/pedimentos/${pedimentoId}/ordenes/${ordenId}`, {
+        method: "DELETE",
+      })
+      if (!responseDetach.ok) {
+        throw new Error(responseDetach.error)
+      }
+    }
+  }
+
+  for (const ordenId of desiredIds) {
+    if (!currentIds.has(ordenId)) {
+      const responseAttach = await callCrmApi(`/crm/compras/pedimentos/${pedimentoId}/ordenes`, {
+        method: "POST",
+        body: {
+          orden_compra_id: ordenId,
+          rol: "principal",
+        },
+      })
+      if (!responseAttach.ok) {
+        throw new Error(responseAttach.error)
+      }
+    }
+  }
 }
 
 function buildOrdenCompraCondicionesComerciales(formData: FormData, tipoOperacion: string): Record<string, unknown> | null {
@@ -591,6 +659,7 @@ export async function deleteAgenteAduanalAction(agenteId: string): Promise<void>
 }
 
 export async function createPedimentoImportacionAction(formData: FormData): Promise<void> {
+  const ordenesCompraIds = getFormDataUniqueTextArray(formData, "ordenes_compra_ids")
   const payload = {
     numero_pedimento: parseRequiredText(formData.get("numero_pedimento"), "numero_pedimento"),
     agente_aduanal_id: parseOptionalText(formData.get("agente_aduanal_id")),
@@ -617,10 +686,15 @@ export async function createPedimentoImportacionAction(formData: FormData): Prom
   if (!response.ok) {
     throw new Error(response.error)
   }
+  const pedimentoId = typeof response.data === "object" && response.data !== null ? String((response.data as { id?: string }).id ?? "") : ""
+  if (pedimentoId && ordenesCompraIds.length > 0) {
+    await syncPedimentoOrdenesImportacion(pedimentoId, ordenesCompraIds)
+  }
   revalidatePath(SETTINGS_PATH)
 }
 
 export async function updatePedimentoImportacionAction(pedimentoId: string, formData: FormData): Promise<void> {
+  const ordenesCompraIds = getFormDataUniqueTextArray(formData, "ordenes_compra_ids")
   const payload = {
     numero_pedimento: parseOptionalText(formData.get("numero_pedimento")),
     agente_aduanal_id: parseOptionalText(formData.get("agente_aduanal_id")),
@@ -648,6 +722,7 @@ export async function updatePedimentoImportacionAction(pedimentoId: string, form
   if (!response.ok) {
     throw new Error(response.error)
   }
+  await syncPedimentoOrdenesImportacion(pedimentoId, ordenesCompraIds)
   revalidatePath(SETTINGS_PATH)
 }
 
