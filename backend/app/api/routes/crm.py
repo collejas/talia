@@ -12177,6 +12177,7 @@ class CRMPedimentoImportacionGasto(BaseModel):
     id: UUID
     organizacion_id: UUID
     pedimento_id: UUID
+    agente_aduanal_id: UUID | None = None
     tipo_gasto: str
     descripcion: str | None = None
     monto: float
@@ -12190,6 +12191,7 @@ class CRMPedimentoImportacionGasto(BaseModel):
     observaciones: str | None = None
     creado_en: datetime
     actualizado_en: datetime
+    agente_aduanal: dict[str, Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -12253,6 +12255,7 @@ class CRMPedimentoImportacionOrdenCompraCreate(BaseModel):
 
 
 class CRMPedimentoImportacionGastoCreate(BaseModel):
+    agente_aduanal_id: UUID | None = None
     tipo_gasto: str = Field(..., min_length=1, max_length=120)
     descripcion: str | None = Field(default=None, max_length=2000)
     monto: float = Field(..., ge=0)
@@ -12266,6 +12269,7 @@ class CRMPedimentoImportacionGastoCreate(BaseModel):
 
 
 class CRMPedimentoImportacionGastoUpdate(BaseModel):
+    agente_aduanal_id: UUID | None = None
     tipo_gasto: str | None = Field(default=None, min_length=1, max_length=120)
     descripcion: str | None = Field(default=None, max_length=2000)
     monto: float | None = Field(default=None, ge=0)

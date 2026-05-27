@@ -145,6 +145,7 @@ function buildPedimentoFormState(pedimento?: AnyRecord | null) {
 
 function buildGastoFormState() {
   return {
+    agente_aduanal_id: "",
     tipo_gasto: "",
     descripcion: "",
     monto: "",
@@ -217,14 +218,28 @@ export function PedimentosImportacionPanel({
   }, [editingPedimentoId, pedimentos])
 
   useEffect(() => {
-    setGastoForm(buildGastoFormState())
-  }, [pedimentos, selectedPedimentoId])
+    setGastoForm({
+      ...buildGastoFormState(),
+      agente_aduanal_id: asString(selectedPedimento?.agente_aduanal_id),
+    })
+  }, [selectedPedimento, selectedPedimentoId])
 
   useEffect(() => {
     if (selectedPedimentoId) {
       setGastoPedimentoId(selectedPedimentoId)
     }
   }, [selectedPedimentoId])
+
+  useEffect(() => {
+    if (!gastoPedimentoId) {
+      return
+    }
+    const currentPedimento = pedimentos.find((row) => String(row.id) === gastoPedimentoId) ?? null
+    setGastoForm((prev) => ({
+      ...prev,
+      agente_aduanal_id: asString(currentPedimento?.agente_aduanal_id),
+    }))
+  }, [gastoPedimentoId, pedimentos])
 
   const selectedOrders = useMemo(() => getPedimentoOrders(selectedPedimento), [selectedPedimento])
   const selectedGastos = useMemo(() => getPedimentoGastos(selectedPedimento), [selectedPedimento])
@@ -847,6 +862,27 @@ export function PedimentosImportacionPanel({
                   </select>
                   <p className="text-xs text-muted-foreground">
                     Este gasto se registrará en el pedimento que selecciones aquí.
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="gasto-agente">Agente aduanal</Label>
+                  <select
+                    id="gasto-agente"
+                    name="agente_aduanal_id"
+                    value={gastoForm.agente_aduanal_id}
+                    onChange={(event) => setGastoForm((prev) => ({ ...prev, agente_aduanal_id: event.target.value }))}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    disabled={!agentes.length}
+                  >
+                    <option value="">Sin agente</option>
+                    {agentes.map((agente) => (
+                      <option key={String(agente.id)} value={String(agente.id)}>
+                        {asString(agente.nombre)}{asString(agente.patente) ? ` · ${asString(agente.patente)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Selecciona el agente que generó o gestionó este gasto.
                   </p>
                 </div>
                 <div className="space-y-2">

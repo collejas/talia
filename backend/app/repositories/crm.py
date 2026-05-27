@@ -10653,6 +10653,11 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "pedimento_id": f"eq.{pedimento_id}",
             "order": "fecha_gasto.desc,creado_en.desc",
+            "select": (
+                "id,organizacion_id,pedimento_id,agente_aduanal_id,tipo_gasto,descripcion,monto,moneda,tipo_cambio,"
+                "monto_mxn,fecha_gasto,referencia_factura,archivo_id,estado,observaciones,creado_en,actualizado_en,"
+                "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en)"
+            ),
         }
         resp = await self._request("GET", "/rest/v1/pedimentos_importacion_gastos", params=params)
         data = resp.json()
@@ -10672,6 +10677,8 @@ class CRMRepository:
             "pedimento_id": str(pedimento_id),
             **payload,
         }
+        if "agente_aduanal_id" in body and body["agente_aduanal_id"] is not None:
+            body["agente_aduanal_id"] = str(body["agente_aduanal_id"])
         if "moneda" in body and isinstance(body["moneda"], str):
             body["moneda"] = body["moneda"].upper()
         resp = await self._request(
@@ -10698,6 +10705,8 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = dict(payload)
+        if "agente_aduanal_id" in body and body["agente_aduanal_id"] is not None:
+            body["agente_aduanal_id"] = str(body["agente_aduanal_id"])
         if "moneda" in body and isinstance(body["moneda"], str):
             body["moneda"] = body["moneda"].upper()
         resp = await self._request(

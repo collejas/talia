@@ -775,6 +775,7 @@ export async function detachPedimentoOrdenAction(pedimentoId: string, ordenCompr
 
 export async function createPedimentoGastoAction(pedimentoId: string, formData: FormData): Promise<void> {
   const payload = {
+    agente_aduanal_id: parseOptionalText(formData.get("agente_aduanal_id")),
     tipo_gasto: parseRequiredText(formData.get("tipo_gasto"), "tipo_gasto"),
     descripcion: parseOptionalText(formData.get("descripcion")),
     monto: parseRequiredNumber(formData.get("monto"), "monto"),
