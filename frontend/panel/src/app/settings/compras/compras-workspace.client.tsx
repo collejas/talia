@@ -831,6 +831,21 @@ export function ComprasWorkspace({
     () => selectedOrderPaymentSchedules.some((pago) => asString(pago?.tipo_pago, "") === "saldo"),
     [selectedOrderPaymentSchedules],
   )
+  const selectedOrderHasAnticipoPayment = useMemo(
+    () =>
+      selectedOrderPaymentSchedules.some(
+        (pago) => asString(pago?.tipo_pago, "") === "anticipo" && asString(pago?.estado, "") === "pagado",
+      ),
+    [selectedOrderPaymentSchedules],
+  )
+  const selectedOrderHasSaldoCompliancePaid = useMemo(
+    () =>
+      selectedOrderPaymentSchedules.some(
+        (pago) => asString(pago?.tipo_pago, "") === "saldo" && asString(pago?.estado, "") === "pagado",
+      ),
+    [selectedOrderPaymentSchedules],
+  )
+  const selectedOrderCompliancePaymentsSettled = selectedOrderHasAnticipoPayment && selectedOrderHasSaldoCompliancePaid
   const firstRegisteredSaldoIndex = useMemo(
     () => selectedOrderPaymentSchedules.findIndex((pago) => asString(pago?.tipo_pago, "") === "saldo"),
     [selectedOrderPaymentSchedules],
@@ -848,6 +863,22 @@ export function ComprasWorkspace({
       total: documentos.length,
       proforma,
       anexos: Math.max(documentos.length - proforma, 0),
+    }
+  }
+  const getOrderPaymentsSummary = (
+    orden: AnyRecord,
+  ): { total: number; anticipo: number; saldo: number; parciales: number; pagados: number } => {
+    const pagos = Array.isArray(orden.pagos_programados) ? orden.pagos_programados.filter((pago) => Boolean(pago) && typeof pago === "object") : []
+    const anticipo = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "anticipo").length
+    const saldo = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "saldo").length
+    const parciales = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "parcial").length
+    const pagados = pagos.filter((pago) => String((pago as AnyRecord).estado || "").toLowerCase() === "pagado").length
+    return {
+      total: pagos.length,
+      anticipo,
+      saldo,
+      parciales,
+      pagados,
     }
   }
   const openOrderDocuments = (orden: AnyRecord) => {
@@ -3092,63 +3123,51 @@ export function ComprasWorkspace({
                     </span>
                   </div>
                   {selectedOrderPaymentSchedules.length > 0 ? (
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {selectedOrderPaymentSchedules.map((row, index) => {
-                        const eventLabel =
-                          paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
-                          asString(row.evento_base, "")
-                        const dueLabel = getPaymentDisplayDueLabel(row)
-                        const isSaldo = asString(row.tipo_pago, "") === "saldo"
-                        const paymentDate = getPaymentDisplayDate(row, "Pendiente")
-                        const receiptDate = asString(row.fecha_evento_real, "") || "Pendiente"
-                        return (
-                          <div key={String(row.id ?? `${row.tipo_pago}-${index}`)} className="rounded-md border border-border/60 bg-muted/20 p-3">
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold capitalize">{asString(row.tipo_pago, "pago")}</div>
-                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                                {asString(row.estado, "programado")}
-                              </span>
-                            </div>
-                            <div className="grid gap-2 text-xs sm:grid-cols-2">
-                              <div className="rounded-md bg-background/70 p-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Evento</div>
-                                <div className="mt-1 font-medium">{eventLabel}</div>
-                              </div>
-                              <div className="rounded-md bg-background/70 p-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Monto</div>
-                                <div className="mt-1 font-medium">
+                    <div className="overflow-x-auto rounded-md border border-border/60 bg-background/60">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead>Evento</TableHead>
+                            <TableHead>Monto</TableHead>
+                            <TableHead>Fecha recepción</TableHead>
+                            <TableHead>Fecha pago</TableHead>
+                            <TableHead>Vencimiento</TableHead>
+                            <TableHead>Referencia</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedOrderPaymentSchedules.map((row, index) => {
+                            const eventLabel =
+                              paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
+                              asString(row.evento_base, "")
+                            const dueLabel = getPaymentDisplayDueLabel(row)
+                            const isSaldo = asString(row.tipo_pago, "") === "saldo"
+                            const paymentDate = getPaymentDisplayDate(row, "—")
+                            const receiptDate = asString(row.fecha_evento_real, "") || "—"
+                            const showReceipt = isSaldo && index === firstRegisteredSaldoIndex
+                            return (
+                              <TableRow key={String(row.id ?? `${row.tipo_pago}-${index}`)}>
+                                <TableCell className="whitespace-nowrap capitalize">{asString(row.tipo_pago, "pago")}</TableCell>
+                                <TableCell>
+                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                    {asString(row.estado, "programado")}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="min-w-40">{eventLabel}</TableCell>
+                                <TableCell className="whitespace-nowrap">
                                   {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
-                                </div>
-                              </div>
-                              {isSaldo && index === firstRegisteredSaldoIndex ? (
-                                <>
-                                  <div className="rounded-md bg-background/70 p-2">
-                                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha recepción</div>
-                                    <div className="mt-1 font-medium">{receiptDate}</div>
-                                  </div>
-                                  <div className="rounded-md bg-background/70 p-2">
-                                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
-                                    <div className="mt-1 font-medium">{paymentDate}</div>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="rounded-md bg-background/70 p-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Fecha pago</div>
-                                  <div className="mt-1 font-medium">{paymentDate}</div>
-                                </div>
-                              )}
-                              <div className="rounded-md bg-background/70 p-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
-                                <div className="mt-1 font-medium">{dueLabel}</div>
-                              </div>
-                              <div className="rounded-md bg-background/70 p-2 sm:col-span-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Referencia</div>
-                                <div className="mt-1 font-medium">{asString(row.referencia_pago, "—")}</div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">{showReceipt ? receiptDate : "—"}</TableCell>
+                                <TableCell className="whitespace-nowrap">{paymentDate}</TableCell>
+                                <TableCell className="whitespace-nowrap">{dueLabel}</TableCell>
+                                <TableCell className="min-w-44">{asString(row.referencia_pago, "—")}</TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
@@ -3161,9 +3180,13 @@ export function ComprasWorkspace({
                   <div className="rounded-lg border border-border/60 bg-background/80 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagos y gastos</div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {selectedOrderCompliancePaymentsSettled ? "Gastos" : "Pagos y gastos"}
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                          Selecciona la orden y registra aquí pagos de cumplimiento, abonos parciales o gastos ligados a esa O.C.
+                          {selectedOrderCompliancePaymentsSettled
+                            ? "Registra aquí gastos ligados a la orden ya cumplida."
+                            : "Selecciona la orden y registra aquí pagos de cumplimiento, abonos parciales o gastos ligados a esa O.C."}
                         </div>
                       </div>
                     </div>
@@ -3197,9 +3220,9 @@ export function ComprasWorkspace({
                                   }
                                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 >
-                                  <option value="anticipo">Anticipo</option>
-                                  <option value="saldo">Saldo</option>
-                                  <option value="parcial">Parcial / gasto</option>
+                                  {!selectedOrderCompliancePaymentsSettled ? <option value="anticipo">Anticipo</option> : null}
+                                  {!selectedOrderCompliancePaymentsSettled ? <option value="saldo">Saldo</option> : null}
+                                  <option value="parcial">Gasto</option>
                                 </select>
                               </div>
                               <div className="space-y-2 md:col-span-4">
@@ -3229,6 +3252,30 @@ export function ComprasWorkspace({
                                   placeholder="0.00"
                                 />
                               </div>
+                              {row.tipo_pago === "parcial" ? (
+                                <div className="space-y-2 md:col-span-2">
+                                  <label className="text-xs font-medium">Moneda</label>
+                                  <select
+                                    name="pagos_programados_moneda_codigo"
+                                    value={row.moneda_codigo}
+                                    onChange={(event) => updateOrderPaymentSchedule(index, { moneda_codigo: event.target.value })}
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  >
+                                    {monedasOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ) : (
+                                <input
+                                  type="hidden"
+                                  name="pagos_programados_moneda_codigo"
+                                  value={orderCurrency}
+                                  readOnly
+                                />
+                              )}
                               {showSaldoReceiptFields ? (
                                 <>
                                   <div className="space-y-2 md:col-span-2">
@@ -3816,13 +3863,14 @@ export function ComprasWorkspace({
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
+              <TableHeader>
                 <TableRow>
                   <TableHead>Folio</TableHead>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Almacén</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-center">Docs</TableHead>
+                  <TableHead className="text-center">Pagos</TableHead>
                   <TableHead>Auditoría</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead className="text-right">Total</TableHead>
@@ -3832,7 +3880,7 @@ export function ComprasWorkspace({
             <TableBody>
               {!ordenes.length ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
                 </TableRow>
@@ -3874,6 +3922,32 @@ export function ComprasWorkspace({
                             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                               {summary.proforma > 0 ? `${summary.proforma} PI` : "Sin PI"}
                               {summary.anexos > 0 ? ` · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}` : ""}
+                            </span>
+                          </Button>
+                        )
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const summary = getOrderPaymentsSummary(orden)
+                        const detailParts = [
+                          summary.anticipo ? `${summary.anticipo} anticipo${summary.anticipo === 1 ? "" : "s"}` : null,
+                          summary.saldo ? `${summary.saldo} saldo${summary.saldo === 1 ? "" : "s"}` : null,
+                          summary.parciales ? `${summary.parciales} parcial${summary.parciales === 1 ? "" : "es"}` : null,
+                        ].filter(Boolean)
+                        const label = detailParts.length ? detailParts.join(" · ") : "Sin pagos"
+                        return (
+                          <Button
+                            type="button"
+                            variant={summary.total > 0 ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-10 min-w-20 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
+                            onClick={() => openOrderPayments(orden)}
+                            title={summary.total > 0 ? label : "Sin pagos"}
+                          >
+                            <span className="text-[11px] font-semibold">{summary.total}</span>
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {summary.total > 0 ? label : "Sin pagos"}
                             </span>
                           </Button>
                         )
