@@ -11828,6 +11828,51 @@ class CRMProveedorUpdate(BaseModel):
     observaciones: str | None = Field(default=None, max_length=2000)
 
 
+class CRMAgenteAduanal(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    patente: str | None = None
+    razon_social: str | None = None
+    rfc: str | None = None
+    contacto: str | None = None
+    telefono: str | None = None
+    email: str | None = None
+    direccion: str | None = None
+    activo: bool
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMAgenteAduanalCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=255)
+    patente: str | None = Field(default=None, max_length=80)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=20)
+    contacto: str | None = Field(default=None, max_length=255)
+    telefono: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=254)
+    direccion: str | None = Field(default=None, max_length=1000)
+    activo: bool = True
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMAgenteAduanalUpdate(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=255)
+    patente: str | None = Field(default=None, max_length=80)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=20)
+    contacto: str | None = Field(default=None, max_length=255)
+    telefono: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=254)
+    direccion: str | None = Field(default=None, max_length=1000)
+    activo: bool | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
 class CRMInventarioExistencia(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -12114,6 +12159,125 @@ class CRMOrdenCompraRecepcion(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CRMPedimentoImportacionOrdenCompra(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    pedimento_id: UUID
+    orden_compra_id: UUID
+    rol: str
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    orden_compra: dict[str, Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMPedimentoImportacionGasto(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    pedimento_id: UUID
+    tipo_gasto: str
+    descripcion: str | None = None
+    monto: float
+    moneda: str
+    tipo_cambio: float
+    monto_mxn: float
+    fecha_gasto: date | None = None
+    referencia_factura: str | None = None
+    archivo_id: UUID | None = None
+    estado: str
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMPedimentoImportacion(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    numero_pedimento: str
+    agente_aduanal_id: UUID | None = None
+    estado: str
+    fecha_pedimento: date | None = None
+    fecha_presentacion: date | None = None
+    fecha_liberacion: date | None = None
+    moneda: str
+    tipo_cambio: float | None = None
+    subtotal_aduanal: float
+    gastos_pedimento_total: float
+    gastos_ordenes_total: float
+    costo_total_prorrateable: float
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    agente_aduanal: dict[str, Any] | None = None
+    ordenes_compra: list[dict[str, Any]] = Field(default_factory=list)
+    gastos: list[dict[str, Any]] = Field(default_factory=list)
+    prorrateos: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMPedimentoImportacionCreate(BaseModel):
+    numero_pedimento: str = Field(..., min_length=1, max_length=80)
+    agente_aduanal_id: UUID | None = None
+    estado: Literal["borrador", "en_integracion", "presentado", "pagado", "cerrado", "cancelado"] = "borrador"
+    fecha_pedimento: date | None = None
+    fecha_presentacion: date | None = None
+    fecha_liberacion: date | None = None
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    tipo_cambio: float | None = Field(default=None, gt=0)
+    subtotal_aduanal: float = Field(default=0, ge=0)
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMPedimentoImportacionUpdate(BaseModel):
+    numero_pedimento: str | None = Field(default=None, min_length=1, max_length=80)
+    agente_aduanal_id: UUID | None = None
+    estado: Literal["borrador", "en_integracion", "presentado", "pagado", "cerrado", "cancelado"] | None = None
+    fecha_pedimento: date | None = None
+    fecha_presentacion: date | None = None
+    fecha_liberacion: date | None = None
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    tipo_cambio: float | None = Field(default=None, gt=0)
+    subtotal_aduanal: float | None = Field(default=None, ge=0)
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMPedimentoImportacionOrdenCompraCreate(BaseModel):
+    orden_compra_id: UUID
+    rol: Literal["principal", "complementaria", "parcial"] = "principal"
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMPedimentoImportacionGastoCreate(BaseModel):
+    tipo_gasto: str = Field(..., min_length=1, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    monto: float = Field(..., ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    tipo_cambio: float = Field(default=1, gt=0)
+    fecha_gasto: date | None = None
+    referencia_factura: str | None = Field(default=None, max_length=120)
+    archivo_id: UUID | None = None
+    estado: Literal["pendiente", "registrado", "pagado", "cancelado"] = "registrado"
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMPedimentoImportacionGastoUpdate(BaseModel):
+    tipo_gasto: str | None = Field(default=None, min_length=1, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    monto: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    tipo_cambio: float | None = Field(default=None, gt=0)
+    fecha_gasto: date | None = None
+    referencia_factura: str | None = Field(default=None, max_length=120)
+    archivo_id: UUID | None = None
+    estado: Literal["pendiente", "registrado", "pagado", "cancelado"] | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
 class CRMBanxicoTipoCambioResponse(BaseModel):
     moneda: str
     tipo_cambio: float
@@ -12133,6 +12297,65 @@ def _normalize_orden_compra_row(row: Mapping[str, Any]) -> dict[str, Any]:
         normalized[field] = _single_related(normalized.get(field))
     normalized["pagos_programados"] = _ensure_concept_list(normalized.get("pagos_programados"))
     return normalized
+
+
+def _normalize_pedimento_importacion_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(row)
+    normalized["agente_aduanal"] = _single_related(normalized.get("agente_aduanal"))
+    normalized["ordenes_compra"] = _ensure_concept_list(normalized.get("ordenes_compra"))
+    normalized["gastos"] = _ensure_concept_list(normalized.get("gastos"))
+    normalized["prorrateos"] = _ensure_concept_list(normalized.get("prorrateos"))
+    return normalized
+
+
+async def _load_pedimento_importacion_detail(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    pedimento_id: UUID,
+) -> dict[str, Any] | None:
+    row = await repo.get_pedimento_importacion(
+        organizacion_id=organizacion_id,
+        pedimento_id=pedimento_id,
+    )
+    if row is None:
+        return None
+    row["ordenes_compra"] = await repo.list_pedimento_ordenes_importacion(
+        organizacion_id=organizacion_id,
+        pedimento_id=pedimento_id,
+    )
+    row["gastos"] = await repo.list_pedimento_gastos_importacion(
+        organizacion_id=organizacion_id,
+        pedimento_id=pedimento_id,
+    )
+    row["prorrateos"] = await repo.list_pedimento_prorrateos_importacion(
+        organizacion_id=organizacion_id,
+        pedimento_id=pedimento_id,
+    )
+    return _normalize_pedimento_importacion_row(row)
+
+
+async def _recalculate_pedimento_importacion_or_raise(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    pedimento_id: UUID,
+) -> dict[str, Any]:
+    try:
+        await repo.recalcular_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        row = await _load_pedimento_importacion_detail(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+    return row
 
 
 def _normalize_orden_compra_pago_programado_rows(
@@ -15566,6 +15789,448 @@ async def delete_compras_almacen(
     return CRMAlmacen.model_validate(row)
 
 
+@router.get("/compras/agentes-aduanales", response_model=list[CRMAgenteAduanal])
+async def list_compras_agentes_aduanales(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    incluir_inactivos: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMAgenteAduanal]:
+    try:
+        rows = await repo.list_agentes_aduanales(
+            organizacion_id=organizacion_id,
+            include_inactive=incluir_inactivos,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMAgenteAduanal.model_validate(row) for row in rows]
+
+
+@router.post("/compras/agentes-aduanales", response_model=CRMAgenteAduanal, status_code=status.HTTP_201_CREATED)
+async def create_compras_agente_aduanal(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMAgenteAduanalCreate,
+) -> CRMAgenteAduanal:
+    try:
+        row = await repo.create_agente_aduanal(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMAgenteAduanal.model_validate(row)
+
+
+@router.patch("/compras/agentes-aduanales/{agente_id}", response_model=CRMAgenteAduanal)
+async def update_compras_agente_aduanal(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    agente_id: UUID,
+    payload: CRMAgenteAduanalUpdate,
+) -> CRMAgenteAduanal:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_agente_aduanal(
+            organizacion_id=organizacion_id,
+            agente_id=agente_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMAgenteAduanal.model_validate(row)
+
+
+@router.delete("/compras/agentes-aduanales/{agente_id}", response_model=CRMAgenteAduanal)
+async def delete_compras_agente_aduanal(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    agente_id: UUID,
+) -> CRMAgenteAduanal:
+    try:
+        row = await repo.delete_agente_aduanal(
+            organizacion_id=organizacion_id,
+            agente_id=agente_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "foreign key" in detail.lower() or "restrict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMAgenteAduanal.model_validate(row)
+
+
+@router.get("/compras/pedimentos", response_model=list[CRMPedimentoImportacion])
+async def list_compras_pedimentos_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    incluir_cancelados: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMPedimentoImportacion]:
+    try:
+        rows = await repo.list_pedimentos_importacion(
+            organizacion_id=organizacion_id,
+            include_cancelled=incluir_cancelados,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMPedimentoImportacion.model_validate(_normalize_pedimento_importacion_row(row)) for row in rows]
+
+
+@router.get("/compras/pedimentos/{pedimento_id}", response_model=CRMPedimentoImportacion)
+async def get_compras_pedimento_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    pedimento_id: UUID,
+) -> CRMPedimentoImportacion:
+    try:
+        row = await _load_pedimento_importacion_detail(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+    return CRMPedimentoImportacion.model_validate(row)
+
+
+@router.post("/compras/pedimentos", response_model=CRMPedimentoImportacion, status_code=status.HTTP_201_CREATED)
+async def create_compras_pedimento_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMPedimentoImportacionCreate,
+) -> CRMPedimentoImportacion:
+    try:
+        row = await repo.create_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+        row = await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=UUID(str(row["id"])),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPedimentoImportacion.model_validate(row)
+
+
+@router.patch("/compras/pedimentos/{pedimento_id}", response_model=CRMPedimentoImportacion)
+async def update_compras_pedimento_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    payload: CRMPedimentoImportacionUpdate,
+) -> CRMPedimentoImportacion:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            payload=body,
+        )
+        row = await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPedimentoImportacion.model_validate(row)
+
+
+@router.delete("/compras/pedimentos/{pedimento_id}", response_model=CRMPedimentoImportacion)
+async def delete_compras_pedimento_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+) -> CRMPedimentoImportacion:
+    try:
+        row = await repo.delete_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "foreign key" in detail.lower() or "restrict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMPedimentoImportacion.model_validate(_normalize_pedimento_importacion_row(row))
+
+
+@router.post("/compras/pedimentos/{pedimento_id}/recalcular", response_model=CRMPedimentoImportacion)
+async def recalcular_compras_pedimento_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+) -> CRMPedimentoImportacion:
+    row = await _recalculate_pedimento_importacion_or_raise(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        pedimento_id=pedimento_id,
+    )
+    return CRMPedimentoImportacion.model_validate(row)
+
+
+@router.get("/compras/pedimentos/{pedimento_id}/ordenes", response_model=list[CRMPedimentoImportacionOrdenCompra])
+async def list_compras_pedimento_ordenes_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    pedimento_id: UUID,
+) -> list[CRMPedimentoImportacionOrdenCompra]:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        rows = await repo.list_pedimento_ordenes_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMPedimentoImportacionOrdenCompra.model_validate(row) for row in rows]
+
+
+@router.post("/compras/pedimentos/{pedimento_id}/ordenes", response_model=CRMPedimentoImportacionOrdenCompra, status_code=status.HTTP_201_CREATED)
+async def create_compras_pedimento_orden_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    payload: CRMPedimentoImportacionOrdenCompraCreate,
+) -> CRMPedimentoImportacionOrdenCompra:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=payload.orden_compra_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        if _clean_text(orden.get("tipo_operacion")).lower() != "internacional":
+            raise HTTPException(status_code=409, detail="solo_se_pueden_ligar_ordenes_internacionales")
+        row = await repo.attach_pedimento_orden_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+        await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPedimentoImportacionOrdenCompra.model_validate(row)
+
+
+@router.delete("/compras/pedimentos/{pedimento_id}/ordenes/{orden_compra_id}", response_model=CRMPedimentoImportacionOrdenCompra)
+async def delete_compras_pedimento_orden_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    orden_compra_id: UUID,
+) -> CRMPedimentoImportacionOrdenCompra:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        row = await repo.detach_pedimento_orden_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            orden_compra_id=orden_compra_id,
+        )
+        await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMPedimentoImportacionOrdenCompra.model_validate(row)
+
+
+@router.get("/compras/pedimentos/{pedimento_id}/gastos", response_model=list[CRMPedimentoImportacionGasto])
+async def list_compras_pedimento_gastos_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    pedimento_id: UUID,
+) -> list[CRMPedimentoImportacionGasto]:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        rows = await repo.list_pedimento_gastos_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMPedimentoImportacionGasto.model_validate(row) for row in rows]
+
+
+@router.post("/compras/pedimentos/{pedimento_id}/gastos", response_model=CRMPedimentoImportacionGasto, status_code=status.HTTP_201_CREATED)
+async def create_compras_pedimento_gasto_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    payload: CRMPedimentoImportacionGastoCreate,
+) -> CRMPedimentoImportacionGasto:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        body = payload.model_dump(mode="json", exclude_unset=True)
+        if not _clean_text(body.get("moneda")):
+            body["moneda"] = _clean_text(pedimento.get("moneda")) or "MXN"
+        else:
+            body["moneda"] = _clean_text(body["moneda"]).upper()
+        row = await repo.create_pedimento_gasto_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            payload=body,
+        )
+        await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPedimentoImportacionGasto.model_validate(row)
+
+
+@router.patch("/compras/pedimentos/{pedimento_id}/gastos/{gasto_id}", response_model=CRMPedimentoImportacionGasto)
+async def update_compras_pedimento_gasto_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    gasto_id: UUID,
+    payload: CRMPedimentoImportacionGastoUpdate,
+) -> CRMPedimentoImportacionGasto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        row = await repo.update_pedimento_gasto_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            gasto_id=gasto_id,
+            payload=body,
+        )
+        await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPedimentoImportacionGasto.model_validate(row)
+
+
+@router.delete("/compras/pedimentos/{pedimento_id}/gastos/{gasto_id}", response_model=CRMPedimentoImportacionGasto)
+async def delete_compras_pedimento_gasto_importacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    pedimento_id: UUID,
+    gasto_id: UUID,
+) -> CRMPedimentoImportacionGasto:
+    try:
+        pedimento = await repo.get_pedimento_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+        if pedimento is None:
+            raise HTTPException(status_code=404, detail="pedimento_importacion_not_found")
+        row = await repo.delete_pedimento_gasto_importacion(
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+            gasto_id=gasto_id,
+        )
+        await _recalculate_pedimento_importacion_or_raise(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            pedimento_id=pedimento_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMPedimentoImportacionGasto.model_validate(row)
+
+
 @router.get("/compras/ordenes", response_model=list[CRMOrdenCompraRecepcion])
 async def list_compras_ordenes_para_recepcion(
     *,
@@ -15707,6 +16372,30 @@ async def update_compras_orden(
                 organizacion_id=organizacion_id,
                 orden_id=orden_id_result,
             )
+        pedimentos = await repo.list_pedimentos_importacion_por_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_compra_id=orden_id_result,
+        )
+        for pedimento_rel in pedimentos:
+            pedimento_id = pedimento_rel.get("pedimento_id")
+            if pedimento_id is None:
+                continue
+            try:
+                await _recalculate_pedimento_importacion_or_raise(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    pedimento_id=UUID(str(pedimento_id)),
+                )
+            except HTTPException as exc:
+                logger.warning(
+                    "crm.pedimentos_importacion.recalculo_post_orden_failed",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "orden_compra_id": str(orden_id_result),
+                        "pedimento_id": str(pedimento_id),
+                        "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+                    },
+                )
     except CRMRepositoryError as exc:
         detail = str(exc)
         if "No se puede editar" in detail or "no se puede editar" in detail.lower():

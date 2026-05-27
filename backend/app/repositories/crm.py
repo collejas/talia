@@ -10333,6 +10333,432 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al eliminar almacén: {row!r}")
         return row
 
+    async def list_agentes_aduanales(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "activo.desc,nombre.asc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request("GET", "/rest/v1/agentes_aduanales", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar agentes aduanales: {data!r}")
+        return data
+
+    async def create_agente_aduanal(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/agentes_aduanales",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("agente_aduanal_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear agente aduanal: {row!r}")
+        return row
+
+    async def update_agente_aduanal(
+        self,
+        *,
+        organizacion_id: UUID,
+        agente_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/agentes_aduanales?id=eq.{agente_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("agente_aduanal_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar agente aduanal: {row!r}")
+        return row
+
+    async def delete_agente_aduanal(
+        self,
+        *,
+        organizacion_id: UUID,
+        agente_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/agentes_aduanales?id=eq.{agente_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("agente_aduanal_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar agente aduanal: {row!r}")
+        return row
+
+    async def list_pedimentos_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_cancelled: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "fecha_pedimento.desc,creado_en.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "select": (
+                "id,organizacion_id,numero_pedimento,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
+                "fecha_liberacion,moneda,tipo_cambio,subtotal_aduanal,gastos_pedimento_total,gastos_ordenes_total,"
+                "costo_total_prorrateable,observaciones,creado_en,actualizado_en,"
+                "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en)"
+            ),
+        }
+        if not include_cancelled:
+            params["estado"] = "neq.cancelado"
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar pedimentos de importacion: {data!r}")
+        return data
+
+    async def get_pedimento_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{pedimento_id}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,numero_pedimento,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
+                "fecha_liberacion,moneda,tipo_cambio,subtotal_aduanal,gastos_pedimento_total,gastos_ordenes_total,"
+                "costo_total_prorrateable,observaciones,creado_en,actualizado_en,"
+                "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en)"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar pedimento de importacion: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta invalida al buscar pedimento de importacion: {row!r}")
+        return row
+
+    async def create_pedimento_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        if "moneda" in body and isinstance(body["moneda"], str):
+            body["moneda"] = body["moneda"].upper()
+        resp = await self._request(
+            "POST",
+            "/rest/v1/pedimentos_importacion",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_importacion_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear pedimento de importacion: {row!r}")
+        return row
+
+    async def update_pedimento_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = dict(payload)
+        if "moneda" in body and isinstance(body["moneda"], str):
+            body["moneda"] = body["moneda"].upper()
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/pedimentos_importacion?id=eq.{pedimento_id}",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_importacion_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar pedimento de importacion: {row!r}")
+        return row
+
+    async def delete_pedimento_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/pedimentos_importacion?id=eq.{pedimento_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_importacion_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar pedimento de importacion: {row!r}")
+        return row
+
+    async def list_pedimento_ordenes_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "pedimento_id": f"eq.{pedimento_id}",
+            "order": "creado_en.asc",
+            "select": (
+                "id,organizacion_id,pedimento_id,orden_compra_id,rol,observaciones,creado_en,actualizado_en,"
+                "orden_compra:ordenes_compra(id,folio,estado,tipo_operacion,moneda,subtotal,total,proveedor_id,almacen_destino_id,creado_en,actualizado_en)"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion_ordenes_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar ordenes del pedimento: {data!r}")
+        return data
+
+    async def attach_pedimento_orden_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "pedimento_id": str(pedimento_id),
+            **payload,
+        }
+        if "orden_compra_id" in body:
+            body["orden_compra_id"] = str(body["orden_compra_id"])
+        resp = await self._request(
+            "POST",
+            "/rest/v1/pedimentos_importacion_ordenes_compra",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_orden_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al ligar orden al pedimento: {row!r}")
+        return row
+
+    async def detach_pedimento_orden_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        orden_compra_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/pedimentos_importacion_ordenes_compra?pedimento_id=eq.{pedimento_id}&orden_compra_id=eq.{orden_compra_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_orden_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al desligar orden del pedimento: {row!r}")
+        return row
+
+    async def list_pedimentos_importacion_por_orden_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_compra_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "orden_compra_id": f"eq.{orden_compra_id}",
+            "select": "pedimento_id,pedimento:pedimentos_importacion(id,organizacion_id,numero_pedimento,estado,fecha_pedimento,moneda,tipo_cambio,gastos_pedimento_total,gastos_ordenes_total,costo_total_prorrateable,actualizado_en)",
+        }
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion_ordenes_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar pedimentos por orden: {data!r}")
+        return data
+
+    async def recalcular_pedimento_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> None:
+        await self._rpc(
+            "crm_recalcular_pedimento_importacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_pedimento_id": str(pedimento_id),
+            },
+        )
+
+    async def list_pedimento_gastos_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "pedimento_id": f"eq.{pedimento_id}",
+            "order": "fecha_gasto.desc,creado_en.desc",
+        }
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion_gastos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar gastos de pedimento: {data!r}")
+        return data
+
+    async def create_pedimento_gasto_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "pedimento_id": str(pedimento_id),
+            **payload,
+        }
+        if "moneda" in body and isinstance(body["moneda"], str):
+            body["moneda"] = body["moneda"].upper()
+        resp = await self._request(
+            "POST",
+            "/rest/v1/pedimentos_importacion_gastos",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_gasto_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear gasto de pedimento: {row!r}")
+        return row
+
+    async def update_pedimento_gasto_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        gasto_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = dict(payload)
+        if "moneda" in body and isinstance(body["moneda"], str):
+            body["moneda"] = body["moneda"].upper()
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/pedimentos_importacion_gastos?id=eq.{gasto_id}&pedimento_id=eq.{pedimento_id}",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_gasto_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar gasto de pedimento: {row!r}")
+        return row
+
+    async def delete_pedimento_gasto_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+        gasto_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/pedimentos_importacion_gastos?id=eq.{gasto_id}&pedimento_id=eq.{pedimento_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("pedimento_gasto_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar gasto de pedimento: {row!r}")
+        return row
+
+    async def list_pedimento_prorrateos_importacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedimento_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "pedimento_id": f"eq.{pedimento_id}",
+            "order": "orden_compra_id.asc,orden_compra_item_id.asc",
+            "select": (
+                "id,organizacion_id,pedimento_id,orden_compra_id,orden_compra_item_id,base_prorrateo,base_item,base_total,"
+                "porcentaje_prorrateo,costo_pedimento_asignado,costo_orden_asignado,costo_total_asignado,costo_unitario_adicional,"
+                "observaciones,creado_en,actualizado_en,"
+                "orden_compra:ordenes_compra(id,folio,estado,tipo_operacion,moneda,subtotal,total),"
+                "orden_compra_item:ordenes_compra_items(id,numero_partida,descripcion,cantidad_solicitada,cantidad_recibida,unidad,costo_unitario,subtotal,total)"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/pedimentos_importacion_prorrateos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar prorrateos de pedimento: {data!r}")
+        return data
+
     async def list_ordenes_compra_para_recepcion(
         self,
         *,

@@ -266,6 +266,13 @@ gastos_pedimento_total = suma(gastos del pedimento)
 costo_total_prorrateable = gastos_ordenes_total + gastos_pedimento_total
 ```
 
+El recálculo debe ejecutarse automáticamente cuando:
+
+- se liga o se desliga una orden;
+- se crea, edita o elimina un gasto del pedimento;
+- se actualiza una orden que ya está ligada a un pedimento;
+- y también debe existir un endpoint manual para recalcular cuando el usuario lo requiera.
+
 ### 2. Base de reparto
 
 La base recomendada para repartir entre items es el valor del item:
@@ -325,6 +332,7 @@ La nueva capa de pedimentos debe montarse encima de eso, sin romper el flujo act
 - crear pedimento;
 - editar pedimento;
 - consultar pedimento con sus ordenes y gastos;
+- recalcular totales y prorrateo del pedimento;
 - vincular y desvincular ordenes de compra al pedimento;
 - registrar gasto del pedimento;
 - actualizar gasto del pedimento;
