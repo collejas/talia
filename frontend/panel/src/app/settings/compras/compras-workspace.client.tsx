@@ -3244,6 +3244,7 @@ export function ComprasWorkspace({
             </div>
 
             {editingOrderId && selectedOrder ? (
+              <>
               <form action={saveOrdenCompraPagosProgramadosAction.bind(null, editingOrderId)} className="space-y-5">
                 <div className="rounded-lg border border-border/60 bg-background/80 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -3370,26 +3371,27 @@ export function ComprasWorkspace({
                                         Editar
                                       </Button>
                                       {rowId ? (
-                                        <form
-                                          action={deleteOrdenCompraPagoProgramadoAction.bind(null, String(selectedOrder.id), rowId)}
+                                        <Button
+                                          type="submit"
+                                          formAction={deleteOrdenCompraPagoProgramadoAction.bind(
+                                            null,
+                                            String(selectedOrder.id),
+                                            rowId,
+                                          )}
+                                          variant="destructive"
+                                          size="sm"
+                                          className="h-8 px-2 text-xs"
+                                          onClick={(event) => {
+                                            const confirmed = window.confirm(
+                                              "¿Eliminar este movimiento de pago? Esta acción no se puede deshacer.",
+                                            )
+                                            if (!confirmed) {
+                                              event.preventDefault()
+                                            }
+                                          }}
                                         >
-                                          <Button
-                                            type="submit"
-                                            variant="destructive"
-                                            size="sm"
-                                            className="h-8 px-2 text-xs"
-                                            onClick={(event) => {
-                                              const confirmed = window.confirm(
-                                                "¿Eliminar este movimiento de pago? Esta acción no se puede deshacer.",
-                                              )
-                                              if (!confirmed) {
-                                                event.preventDefault()
-                                              }
-                                            }}
-                                          >
-                                            Eliminar
-                                          </Button>
-                                        </form>
+                                          Eliminar
+                                        </Button>
                                       ) : null}
                                     </div>
                                   </TableCell>
@@ -3410,189 +3412,6 @@ export function ComprasWorkspace({
                     </div>
                   )}
                 </div>
-
-                {editingPaymentScheduleRecord ? (
-                  <form
-                    action={updateOrdenCompraPagoProgramadoAction.bind(null, String(selectedOrder.id), editingPaymentScheduleRecord.id)}
-                    className="rounded-lg border border-border/60 bg-background/80 p-3"
-                  >
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Editar movimiento</div>
-                        <div className="text-xs text-muted-foreground">
-                          Modifica el pago registrado y vuelve a guardar.
-                        </div>
-                      </div>
-                      <Button type="button" variant="ghost" size="sm" onClick={cancelEditRegisteredPayment}>
-                        Cancelar
-                      </Button>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-12">
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-medium">Tipo</label>
-                        <select
-                          name="pago_tipo_pago"
-                          value={editingPaymentScheduleRecord.tipo_pago}
-                          onChange={(event) =>
-                            updateEditingRegisteredPayment({
-                              tipo_pago: event.target.value as OrderPaymentScheduleLine["tipo_pago"],
-                            })
-                          }
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          <option value="anticipo">Anticipo</option>
-                          <option value="saldo">Saldo</option>
-                          <option value="parcial">Gasto</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2 md:col-span-4">
-                        <label className="text-xs font-medium">Evento base</label>
-                        <select
-                          name="pago_evento_base"
-                          value={editingPaymentScheduleRecord.evento_base}
-                          onChange={(event) => updateEditingRegisteredPayment({ evento_base: event.target.value })}
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          {paymentEventOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-medium">Monto</label>
-                        <Input
-                          name="pago_monto"
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          value={editingPaymentScheduleRecord.monto}
-                          onChange={(event) => updateEditingRegisteredPayment({ monto: event.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {editingPaymentScheduleRecord.tipo_pago === "parcial" ? (
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="text-xs font-medium">Moneda</label>
-                          <select
-                            name="pago_moneda_codigo"
-                            value={editingPaymentScheduleRecord.moneda_codigo}
-                            onChange={(event) => updateEditingRegisteredPayment({ moneda_codigo: event.target.value })}
-                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          >
-                            {monedasOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : (
-                        <input type="hidden" name="pago_moneda_codigo" value={orderCurrency} readOnly />
-                      )}
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-medium">Fecha recepción</label>
-                        <Input
-                          name="pago_fecha_evento_real"
-                          type="date"
-                          value={editingPaymentScheduleRecord.fecha_evento_real}
-                          onChange={(event) =>
-                            updateEditingRegisteredPayment({
-                              fecha_evento_real: event.target.value,
-                              fecha_vencimiento_calculada: calculatePaymentScheduleDueDate(
-                                event.target.value,
-                                editingPaymentScheduleRecord.dias_credito,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-medium">Fecha pago</label>
-                        <Input
-                          name="pago_fecha_pago_real"
-                          type="date"
-                          value={editingPaymentScheduleRecord.fecha_pago_real}
-                          onChange={(event) => updateEditingRegisteredPayment({ fecha_pago_real: event.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-medium">Días crédito</label>
-                        <Input
-                          name="pago_dias_credito"
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={editingPaymentScheduleRecord.dias_credito}
-                          onChange={(event) =>
-                            updateEditingRegisteredPayment({
-                              dias_credito: event.target.value,
-                              fecha_vencimiento_calculada: calculatePaymentScheduleDueDate(
-                                editingPaymentScheduleRecord.fecha_evento_real,
-                                event.target.value,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-3">
-                        <label className="text-xs font-medium">Vencimiento</label>
-                        <Input
-                          name="pago_fecha_vencimiento_calculada"
-                          type="date"
-                          value={editingPaymentScheduleRecord.fecha_vencimiento_calculada}
-                          onChange={(event) => updateEditingRegisteredPayment({ fecha_vencimiento_calculada: event.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-3">
-                        <label className="text-xs font-medium">Referencia</label>
-                        <Input
-                          name="pago_referencia_pago"
-                          value={editingPaymentScheduleRecord.referencia_pago}
-                          onChange={(event) => updateEditingRegisteredPayment({ referencia_pago: event.target.value })}
-                          placeholder="Transferencia, folio, nota"
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-3">
-                        <label className="text-xs font-medium">Estado</label>
-                        <select
-                          name="pago_estado"
-                          value={editingPaymentScheduleRecord.estado}
-                          onChange={(event) =>
-                            updateEditingRegisteredPayment({
-                              estado: event.target.value as OrderPaymentScheduleLine["estado"],
-                            })
-                          }
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          <option value="programado">Programado</option>
-                          <option value="pendiente">Pendiente</option>
-                          <option value="parcial">Parcial</option>
-                          <option value="pagado">Pagado</option>
-                          <option value="vencido">Vencido</option>
-                          <option value="cancelado">Cancelado</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2 md:col-span-12">
-                        <label className="text-xs font-medium">Observaciones</label>
-                        <Textarea
-                          name="pago_observaciones"
-                          value={editingPaymentScheduleRecord.observaciones}
-                          onChange={(event) => updateEditingRegisteredPayment({ observaciones: event.target.value })}
-                          rows={2}
-                          placeholder="Notas del movimiento"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={cancelEditRegisteredPayment}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit">Guardar cambios</Button>
-                    </div>
-                  </form>
-                ) : null}
 
                 <div className="space-y-3">
                   <div className="rounded-lg border border-border/60 bg-background/80 p-3">
@@ -3797,7 +3616,190 @@ export function ComprasWorkspace({
                     Guardar movimientos
                   </Button>
                 </div>
-              </form>
+                </form>
+              {editingPaymentScheduleRecord ? (
+                <form
+                  action={updateOrdenCompraPagoProgramadoAction.bind(null, String(selectedOrder.id), editingPaymentScheduleRecord.id)}
+                  className="mt-4 rounded-lg border border-border/60 bg-background/80 p-3"
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Editar movimiento</div>
+                      <div className="text-xs text-muted-foreground">
+                        Modifica el pago registrado y vuelve a guardar.
+                      </div>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={cancelEditRegisteredPayment}>
+                      Cancelar
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-12">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-medium">Tipo</label>
+                      <select
+                        name="pago_tipo_pago"
+                        value={editingPaymentScheduleRecord.tipo_pago}
+                        onChange={(event) =>
+                          updateEditingRegisteredPayment({
+                            tipo_pago: event.target.value as OrderPaymentScheduleLine["tipo_pago"],
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="anticipo">Anticipo</option>
+                        <option value="saldo">Saldo</option>
+                        <option value="parcial">Gasto</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 md:col-span-4">
+                      <label className="text-xs font-medium">Evento base</label>
+                      <select
+                        name="pago_evento_base"
+                        value={editingPaymentScheduleRecord.evento_base}
+                        onChange={(event) => updateEditingRegisteredPayment({ evento_base: event.target.value })}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        {paymentEventOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-medium">Monto</label>
+                      <Input
+                        name="pago_monto"
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        value={editingPaymentScheduleRecord.monto}
+                        onChange={(event) => updateEditingRegisteredPayment({ monto: event.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {editingPaymentScheduleRecord.tipo_pago === "parcial" ? (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-medium">Moneda</label>
+                        <select
+                          name="pago_moneda_codigo"
+                          value={editingPaymentScheduleRecord.moneda_codigo}
+                          onChange={(event) => updateEditingRegisteredPayment({ moneda_codigo: event.target.value })}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          {monedasOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <input type="hidden" name="pago_moneda_codigo" value={orderCurrency} readOnly />
+                    )}
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-medium">Fecha recepción</label>
+                      <Input
+                        name="pago_fecha_evento_real"
+                        type="date"
+                        value={editingPaymentScheduleRecord.fecha_evento_real}
+                        onChange={(event) =>
+                          updateEditingRegisteredPayment({
+                            fecha_evento_real: event.target.value,
+                            fecha_vencimiento_calculada: calculatePaymentScheduleDueDate(
+                              event.target.value,
+                              editingPaymentScheduleRecord.dias_credito,
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-medium">Fecha pago</label>
+                      <Input
+                        name="pago_fecha_pago_real"
+                        type="date"
+                        value={editingPaymentScheduleRecord.fecha_pago_real}
+                        onChange={(event) => updateEditingRegisteredPayment({ fecha_pago_real: event.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-medium">Días crédito</label>
+                      <Input
+                        name="pago_dias_credito"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editingPaymentScheduleRecord.dias_credito}
+                        onChange={(event) =>
+                          updateEditingRegisteredPayment({
+                            dias_credito: event.target.value,
+                            fecha_vencimiento_calculada: calculatePaymentScheduleDueDate(
+                              editingPaymentScheduleRecord.fecha_evento_real,
+                              event.target.value,
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-3">
+                      <label className="text-xs font-medium">Vencimiento</label>
+                      <Input
+                        name="pago_fecha_vencimiento_calculada"
+                        type="date"
+                        value={editingPaymentScheduleRecord.fecha_vencimiento_calculada}
+                        onChange={(event) => updateEditingRegisteredPayment({ fecha_vencimiento_calculada: event.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-3">
+                      <label className="text-xs font-medium">Referencia</label>
+                      <Input
+                        name="pago_referencia_pago"
+                        value={editingPaymentScheduleRecord.referencia_pago}
+                        onChange={(event) => updateEditingRegisteredPayment({ referencia_pago: event.target.value })}
+                        placeholder="Transferencia, folio, nota"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-3">
+                      <label className="text-xs font-medium">Estado</label>
+                      <select
+                        name="pago_estado"
+                        value={editingPaymentScheduleRecord.estado}
+                        onChange={(event) =>
+                          updateEditingRegisteredPayment({
+                            estado: event.target.value as OrderPaymentScheduleLine["estado"],
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="programado">Programado</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="parcial">Parcial</option>
+                        <option value="pagado">Pagado</option>
+                        <option value="vencido">Vencido</option>
+                        <option value="cancelado">Cancelado</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 md:col-span-12">
+                      <label className="text-xs font-medium">Observaciones</label>
+                      <Textarea
+                        name="pago_observaciones"
+                        value={editingPaymentScheduleRecord.observaciones}
+                        onChange={(event) => updateEditingRegisteredPayment({ observaciones: event.target.value })}
+                        rows={2}
+                        placeholder="Notas del movimiento"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={cancelEditRegisteredPayment}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Guardar cambios</Button>
+                  </div>
+                </form>
+              ) : null}
+              </>
             ) : (
               <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
                 Selecciona una orden para administrar sus pagos y gastos.
