@@ -677,6 +677,23 @@ function getPaymentDisplayDate(row: AnyRecord, fallback: string): string {
   return fallback
 }
 
+function getPaymentNormalizationDate(row: AnyRecord, fallback: string): string {
+  const candidates = [
+    asString(row.fecha_pago_real, ""),
+    asString(row.fecha_evento_real, ""),
+    asString(row.creado_en, ""),
+    asString(row.actualizado_en, ""),
+    fallback,
+  ]
+  for (const candidate of candidates) {
+    const normalized = formatDateOnly(candidate)
+    if (normalized) {
+      return normalized
+    }
+  }
+  return ""
+}
+
 export function ComprasWorkspace({
   almacenes,
   proveedores,
@@ -1485,10 +1502,7 @@ export function ComprasWorkspace({
           const key = String(row.id ?? `${row.tipo_pago}-${index}`)
           const currency = asString(row.moneda_codigo, orderCurrency).trim().toUpperCase()
           const amount = asNumber(row.monto)
-          const paymentDate =
-            asString(row.fecha_pago_real, "") ||
-            asString(row.fecha_evento_real, "") ||
-            formatDateOnly(asString(row.creado_en, ""))
+          const paymentDate = getPaymentNormalizationDate(row, orderEmissionIso)
 
           if (!Number.isFinite(amount) || amount <= 0 || !currency) {
             return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
