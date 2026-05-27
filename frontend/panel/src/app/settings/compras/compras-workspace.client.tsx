@@ -657,6 +657,14 @@ function getPaymentDisplayDueLabel(row: AnyRecord): string {
   return "Pendiente"
 }
 
+function getPaymentTypeLabel(tipoPago: unknown): string {
+  const normalized = String(tipoPago ?? "").toLowerCase()
+  if (normalized === "anticipo") return "Anticipo"
+  if (normalized === "saldo") return "Saldo"
+  if (normalized === "parcial") return "Gasto"
+  return asString(tipoPago, "Pago")
+}
+
 function getPaymentDisplayDate(row: AnyRecord, fallback: string): string {
   const paymentDate = asString(row.fecha_pago_real, "")
   if (paymentDate) {
@@ -855,6 +863,14 @@ export function ComprasWorkspace({
     [selectedOrderPaymentSchedules],
   )
   const selectedOrderCompliancePaymentsSettled = selectedOrderHasAnticipoPayment && selectedOrderHasSaldoCompliancePaid
+  const selectedOrderPaymentsTotalMxn = useMemo(() => {
+    return selectedOrderPaymentSchedules.reduce((sum, row, index) => {
+      const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
+      const normalized = paymentMxnLookupByKey[lookupKey]
+      const amountMxn = normalized ? asNumber(normalized.montoMxn) : 0
+      return sum + amountMxn
+    }, 0)
+  }, [paymentMxnLookupByKey, selectedOrderPaymentSchedules])
   const firstRegisteredSaldoIndex = useMemo(
     () => selectedOrderPaymentSchedules.findIndex((pago) => asString(pago?.tipo_pago, "") === "saldo"),
     [selectedOrderPaymentSchedules],
@@ -1469,7 +1485,10 @@ export function ComprasWorkspace({
           const key = String(row.id ?? `${row.tipo_pago}-${index}`)
           const currency = asString(row.moneda_codigo, orderCurrency).trim().toUpperCase()
           const amount = asNumber(row.monto)
-          const paymentDate = asString(row.fecha_pago_real, "") || asString(row.fecha_evento_real, "")
+          const paymentDate =
+            asString(row.fecha_pago_real, "") ||
+            asString(row.fecha_evento_real, "") ||
+            formatDateOnly(asString(row.creado_en, ""))
 
           if (!Number.isFinite(amount) || amount <= 0 || !currency) {
             return [key, { loading: false, tipoCambio: "", montoMxn: "", fechaTipoCambio: "" }] as const
@@ -3213,74 +3232,68 @@ export function ComprasWorkspace({
                     </span>
                   </div>
                   {selectedOrderPaymentSchedules.length > 0 ? (
-                    <div className="overflow-x-auto rounded-md border border-border/60 bg-background/60">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Evento</TableHead>
-                            <TableHead>Monto</TableHead>
-                            <TableHead>Tipo cambio</TableHead>
-                            <TableHead>Monto MXN</TableHead>
-                            <TableHead>Fecha recepción</TableHead>
-                            <TableHead>Fecha pago</TableHead>
-                            <TableHead>Vencimiento</TableHead>
-                            <TableHead>Referencia</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedOrderPaymentSchedules.map((row, index) => {
-                            const eventLabel =
-                              paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
-                              asString(row.evento_base, "")
-                            const dueLabel = getPaymentDisplayDueLabel(row)
-                            const isSaldo = asString(row.tipo_pago, "") === "saldo"
-                            const paymentDate = getPaymentDisplayDate(row, "—")
-                            const receiptDate = asString(row.fecha_evento_real, "") || "—"
-                            const showReceipt = isSaldo && index === firstRegisteredSaldoIndex
-                            return (
-                              <TableRow key={String(row.id ?? `${row.tipo_pago}-${index}`)}>
-                                <TableCell className="whitespace-nowrap capitalize">{asString(row.tipo_pago, "pago")}</TableCell>
-                                <TableCell>
-                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                                    {asString(row.estado, "programado")}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="min-w-40">{eventLabel}</TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {(() => {
-                                    const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
-                                    const normalized = paymentMxnLookupByKey[lookupKey]
-                                    if (!normalized || !asString(normalized.tipoCambio, "")) {
-                                      return "—"
-                                    }
-                                    return normalized.tipoCambio
-                                  })()}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {(() => {
-                                    const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
-                                    const normalized = paymentMxnLookupByKey[lookupKey]
-                                    if (!normalized || !asString(normalized.montoMxn, "")) {
-                                      return "—"
-                                    }
-                                    return formatCurrency(normalized.montoMxn, "MXN")
-                                  })()}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">{showReceipt ? receiptDate : "—"}</TableCell>
-                                <TableCell className="whitespace-nowrap">{paymentDate}</TableCell>
-                                <TableCell className="whitespace-nowrap">{dueLabel}</TableCell>
-                                <TableCell className="min-w-44">{asString(row.referencia_pago, "—")}</TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
+                    <>
+                      <div className="overflow-x-auto rounded-md border border-border/60 bg-background/60">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Estado</TableHead>
+                              <TableHead>Evento</TableHead>
+                              <TableHead>Monto</TableHead>
+                              <TableHead>Tipo cambio</TableHead>
+                              <TableHead>Monto MXN</TableHead>
+                              <TableHead>Fecha recepción</TableHead>
+                              <TableHead>Fecha pago</TableHead>
+                              <TableHead>Vencimiento</TableHead>
+                              <TableHead>Referencia</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedOrderPaymentSchedules.map((row, index) => {
+                              const eventLabel =
+                                paymentEventOptions.find((option) => option.value === asString(row.evento_base, ""))?.label ??
+                                asString(row.evento_base, "")
+                              const dueLabel = getPaymentDisplayDueLabel(row)
+                              const isSaldo = asString(row.tipo_pago, "") === "saldo"
+                              const paymentDate = getPaymentDisplayDate(row, "—")
+                              const receiptDate = asString(row.fecha_evento_real, "") || "—"
+                              const showReceipt = isSaldo && index === firstRegisteredSaldoIndex
+                              const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
+                              const normalized = paymentMxnLookupByKey[lookupKey]
+                              return (
+                                <TableRow key={String(row.id ?? `${row.tipo_pago}-${index}`)}>
+                                  <TableCell className="whitespace-nowrap capitalize">{getPaymentTypeLabel(row.tipo_pago)}</TableCell>
+                                  <TableCell>
+                                    <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                      {asString(row.estado, "programado")}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="min-w-40">{eventLabel}</TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {asString(row.monto, "") ? formatCurrency(asNumber(row.monto), asString(row.moneda_codigo, orderCurrency)) : "—"}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {normalized && asString(normalized.tipoCambio, "") ? normalized.tipoCambio : "—"}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {normalized && asString(normalized.montoMxn, "") ? formatCurrency(normalized.montoMxn, "MXN") : "—"}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">{showReceipt ? receiptDate : "—"}</TableCell>
+                                  <TableCell className="whitespace-nowrap">{paymentDate}</TableCell>
+                                  <TableCell className="whitespace-nowrap">{dueLabel}</TableCell>
+                                  <TableCell className="min-w-44">{asString(row.referencia_pago, "—")}</TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="mt-3 flex items-center justify-end gap-3 rounded-md border border-border/60 bg-background/70 px-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Total normalizado en MXN</span>
+                        <span className="font-semibold">{formatCurrency(selectedOrderPaymentsTotalMxn, "MXN")}</span>
+                      </div>
+                    </>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-5 text-sm text-muted-foreground">
                       No hay pagos registrados todavía para esta orden.
