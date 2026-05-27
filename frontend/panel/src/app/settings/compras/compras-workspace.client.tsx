@@ -916,6 +916,27 @@ export function ComprasWorkspace({
     [selectedOrderPaymentSchedules],
   )
   const selectedOrderCompliancePaymentsSettled = selectedOrderHasAnticipoPayment && selectedOrderHasSaldoCompliancePaid
+  const orderPedimentoByOrderId = useMemo(() => {
+    const map = new Map<string, { pedimento_id: string; numero_pedimento: string; estado: string }>()
+    for (const pedimento of pedimentosImportacion) {
+      const linkedOrders = Array.isArray((pedimento as AnyRecord).ordenes_compra)
+        ? ((pedimento as AnyRecord).ordenes_compra as AnyRecord[])
+        : []
+      for (const rel of linkedOrders) {
+        const ordenId = asString(rel.orden_compra_id)
+        if (!ordenId || map.has(ordenId)) {
+          continue
+        }
+        map.set(ordenId, {
+          pedimento_id: asString(pedimento.id),
+          numero_pedimento: asString(pedimento.numero_pedimento, "Sin número"),
+          estado: asString(pedimento.estado),
+        })
+      }
+    }
+    return map
+  }, [pedimentosImportacion])
+  const selectedOrderPedimento = selectedOrder ? orderPedimentoByOrderId.get(String(selectedOrder.id)) ?? null : null
   const selectedOrderPaymentsTotalMxn = useMemo(() => {
     return selectedOrderPaymentSchedules.reduce((sum, row, index) => {
       const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
@@ -3253,6 +3274,19 @@ export function ComprasWorkspace({
                 <Input value={selectedOrder ? getOrderStatusBadge(selectedOrder.estado).label : "—"} readOnly className="bg-muted/40" />
               </div>
             </div>
+            {selectedOrderPedimento ? (
+              <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Pedimento asociado</div>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-sm">{selectedOrderPedimento.numero_pedimento}</span>
+                  {selectedOrderPedimento.estado ? (
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {selectedOrderPedimento.estado}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {editingOrderId && selectedOrder ? (
               <>
@@ -4293,11 +4327,12 @@ export function ComprasWorkspace({
           <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Folio</TableHead>
                   <TableHead>Proveedor</TableHead>
+                  <TableHead>Pedimento</TableHead>
                   <TableHead>Almacén</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-center">Docs</TableHead>
@@ -4311,7 +4346,7 @@ export function ComprasWorkspace({
             <TableBody>
               {!ordenes.length ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
                 </TableRow>
@@ -4320,6 +4355,16 @@ export function ComprasWorkspace({
                   <TableRow key={String(orden.id)}>
                     <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
                     <TableCell>{asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}</TableCell>
+                    <TableCell>
+                      {orderPedimentoByOrderId.get(String(orden.id)) ? (
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs">{orderPedimentoByOrderId.get(String(orden.id))?.numero_pedimento}</span>
+                          <span className="text-[11px] text-muted-foreground">{orderPedimentoByOrderId.get(String(orden.id))?.estado}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Sin pedimento</span>
+                      )}
+                    </TableCell>
                     <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
                     <TableCell>
                       <span
