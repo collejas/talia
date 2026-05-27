@@ -12,6 +12,13 @@ Construir un modulo simple pero muy util para:
 - registrar recepciones,
 - descontar o reservar inventario al vender.
 
+## Siguiente fase documental
+
+- `2026-05-27_pedimentos_importacion.md`
+- Define la capa de pedimentos de importacion encima de las ordenes de compra internacionales.
+- Incluye la regla de prorrateo global de gastos del pedimento y gastos asociados a las ordenes ligadas.
+- Incluye tambien el catalogo y la vista de `agentes_aduanales`.
+
 ## Principios de diseno
 
 - Usar columnas reales para los datos operativos mas importantes.
