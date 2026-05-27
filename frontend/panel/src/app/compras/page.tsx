@@ -14,6 +14,14 @@ async function fetchList(path: string, searchParams?: Record<string, string | nu
   return response.data
 }
 
+async function fetchOne(path: string) {
+  const response = await callCrmApi<AnyRecord>(path)
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    return null
+  }
+  return response.data
+}
+
 function asString(value: unknown, fallback = ""): string {
   if (typeof value === "string") {
     const trimmed = value.trim()
@@ -66,7 +74,7 @@ function makeDefaultReceptionNumber(): string {
   ].join("")
 }
 
-const COMPRAS_VIEWS = ["resumen", "almacenes", "proveedores", "ordenes", "inventario", "recepciones", "pagos"] as const
+const COMPRAS_VIEWS = ["resumen", "almacenes", "proveedores", "ordenes", "pedimentos", "agentes", "inventario", "recepciones", "pagos"] as const
 type ComprasView = (typeof COMPRAS_VIEWS)[number]
 
 type ComprasPageProps = {
@@ -87,7 +95,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       : Array.isArray(ordenIdParam)
         ? ordenIdParam[0] ?? ""
         : ""
-  const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises] = await Promise.all([
+  const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
     fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
@@ -98,6 +106,8 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
     fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
     fetchList("/crm/compras/catalogos/modos-transporte", { limit: 200 }),
     fetchList("/crm/compras/catalogos/paises", { limit: 250 }),
+    fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
+    fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
   ])
   const inventoryCatalogItems = catalogItems.filter(isInventoryCatalogItem)
 
@@ -122,12 +132,23 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
     String(new Date().getSeconds()).padStart(2, "0"),
   ].join("")
   const defaultOrderEmissionIso = new Date().toISOString()
+  const pedimentoIdParam = resolvedSearchParams.pedimento_id
+  const requestedPedimentoId =
+    typeof pedimentoIdParam === "string"
+      ? pedimentoIdParam
+      : Array.isArray(pedimentoIdParam)
+        ? pedimentoIdParam[0] ?? ""
+        : ""
+  const effectivePedimentoId = requestedPedimentoId || (activeView === "pedimentos" ? asString(pedimentosImportacion[0]?.id) : "")
+  const selectedPedimento = effectivePedimentoId ? await fetchOne(`/crm/compras/pedimentos/${encodeURIComponent(effectivePedimentoId)}`) : null
 
   const views: Array<{ value: ComprasView; label: string }> = [
     { value: "resumen", label: "Resumen" },
     { value: "almacenes", label: "Almacenes" },
     { value: "proveedores", label: "Proveedores" },
     { value: "ordenes", label: "Órdenes" },
+    { value: "pedimentos", label: "Pedimentos" },
+    { value: "agentes", label: "Agentes" },
     { value: "pagos", label: "Pagos" },
     { value: "inventario", label: "Inventario" },
     { value: "recepciones", label: "Recepciones" },
@@ -172,6 +193,10 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
           monedas={monedas}
           modosTransporte={modosTransporte}
           paises={paises}
+          agentesAduanales={agentesAduanales}
+          pedimentosImportacion={pedimentosImportacion}
+          selectedPedimento={selectedPedimento}
+          selectedPedimentoId={effectivePedimentoId}
           defaultOrderId={defaultOrderId}
           defaultWarehouseId={defaultWarehouseId}
           defaultWarehouseCode={defaultWarehouseCode}

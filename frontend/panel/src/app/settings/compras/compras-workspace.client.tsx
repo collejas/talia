@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
+import { PedimentosImportacionPanel } from "./pedimentos-importacion-panel.client"
 
 import {
   createAlmacenAction,
@@ -47,6 +48,10 @@ type ComprasWorkspaceProps = {
   monedas: AnyRecord[]
   modosTransporte: AnyRecord[]
   paises: AnyRecord[]
+  agentesAduanales: AnyRecord[]
+  pedimentosImportacion: AnyRecord[]
+  selectedPedimento: AnyRecord | null
+  selectedPedimentoId: string
   defaultOrderId: string
   defaultWarehouseId: string
   defaultWarehouseCode: string
@@ -55,7 +60,7 @@ type ComprasWorkspaceProps = {
   defaultOrderFolio: string
   defaultOrderEmissionIso: string
   defaultPaymentOrderId: string
-  activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "inventario" | "recepciones" | "pagos"
+  activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "pedimentos" | "agentes" | "inventario" | "recepciones" | "pagos"
 }
 
 type ReceptionLine = {
@@ -723,6 +728,10 @@ export function ComprasWorkspace({
   monedas,
   modosTransporte,
   paises,
+  agentesAduanales,
+  pedimentosImportacion,
+  selectedPedimento,
+  selectedPedimentoId,
   defaultOrderId,
   defaultWarehouseId,
   defaultWarehouseCode,
@@ -1541,6 +1550,8 @@ export function ComprasWorkspace({
   const showAlmacenes = activeView === "almacenes"
   const showProveedores = activeView === "proveedores"
   const showOrdenes = activeView === "ordenes"
+  const showPedimentos = activeView === "pedimentos"
+  const showAgentes = activeView === "agentes"
   const showPagos = activeView === "pagos"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
@@ -4443,6 +4454,30 @@ export function ComprasWorkspace({
           </Table>
         </CardContent>
       </Card>
+      ) : null}
+
+      {showAgentes ? (
+        <PedimentosImportacionPanel
+          mode="agentes"
+          agentes={agentesAduanales}
+          pedimentos={pedimentosImportacion}
+          ordenes={ordenes}
+          monedas={monedas}
+          selectedPedimento={selectedPedimento}
+          selectedPedimentoId={selectedPedimentoId}
+        />
+      ) : null}
+
+      {showPedimentos ? (
+        <PedimentosImportacionPanel
+          mode="pedimentos"
+          agentes={agentesAduanales}
+          pedimentos={pedimentosImportacion}
+          ordenes={ordenes}
+          monedas={monedas}
+          selectedPedimento={selectedPedimento}
+          selectedPedimentoId={selectedPedimentoId}
+        />
       ) : null}
 
       {showRecepciones ? (
