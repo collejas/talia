@@ -17,6 +17,7 @@ export type CreateAuthUserInput = {
 
 export type CreateAuthUserResult = {
   id: string
+  recoveryEmailSent: boolean
 }
 
 const DEFAULT_TELEFONO_E164 = "+00000000000"
@@ -112,9 +113,9 @@ export async function createSupabaseAuthUser(
     throw new Error(errorText || "No se pudo actualizar la información del usuario invitado.")
   }
 
-  await triggerSupabaseRecovery(baseUrl, serviceKey, input.email)
+  const recoveryEmailSent = await triggerSupabaseRecovery(baseUrl, serviceKey, input.email)
 
-  return { id: invitedUserId }
+  return { id: invitedUserId, recoveryEmailSent }
 }
 
 function getServiceRoleKey(): string | null {
@@ -138,7 +139,11 @@ async function getErrorMessage(response: Response): Promise<string> {
   }
 }
 
-async function triggerSupabaseRecovery(baseUrl: string, serviceKey: string, email: string) {
+async function triggerSupabaseRecovery(
+  baseUrl: string,
+  serviceKey: string,
+  email: string,
+): Promise<boolean> {
   const response = await fetch(`${baseUrl}/auth/v1/recover`, {
     method: "POST",
     headers: {
@@ -155,11 +160,14 @@ async function triggerSupabaseRecovery(baseUrl: string, serviceKey: string, emai
 
   if (!response.ok) {
     const errorText = await getErrorMessage(response)
-    throw new Error(
-      errorText ||
-        "Usuario registrado, pero no pudimos enviar el correo de acceso. Pide restablecer contraseña.",
-    )
+    console.warn("[settings/hr] recovery email failed", {
+      email,
+      error: errorText,
+    })
+    return false
   }
+
+  return true
 }
 
 export async function deleteSupabaseAuthUser(userId: string): Promise<void> {

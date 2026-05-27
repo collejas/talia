@@ -234,6 +234,7 @@ export const createDepartmentAction: CrudActionHandler = async (_, formData) => 
         organizacion_id: orgId,
       },
       prefer: "return=representation",
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.departamentos)
     return success("Departamento creado.")
@@ -265,6 +266,7 @@ export const updateDepartmentAction: CrudActionHandler = async (_, formData) => 
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.departamentos)
     return success("Departamento actualizado.")
@@ -282,6 +284,7 @@ export const deleteDepartmentAction: CrudActionHandler = async (_, formData) => 
         id: `eq.${deptId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.departamentos)
     return success("Departamento eliminado.")
@@ -306,6 +309,7 @@ export const createPositionAction: CrudActionHandler = async (_, formData) => {
         organizacion_id: orgId,
       },
       prefer: "return=representation",
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.puestos)
     return success("Puesto registrado.")
@@ -340,6 +344,7 @@ export const updatePositionAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.puestos)
     return success("Puesto actualizado.")
@@ -357,6 +362,7 @@ export const deletePositionAction: CrudActionHandler = async (_, formData) => {
         id: `eq.${puestoId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.puestos)
     return success("Puesto eliminado.")
@@ -467,6 +473,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     const puestoId = puestoIdInput === null || puestoIdInput === "" ? null : puestoIdInput
 
     let userId = idInput && idInput.length ? idInput : null
+    let recoveryEmailSent = false
     if (!userId) {
       if (!correo) {
         throw new Error("Proporciona un correo para crear la cuenta.")
@@ -480,6 +487,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
         organizacion_id: orgId,
       })
       userId = authUser.id
+      recoveryEmailSent = authUser.recoveryEmailSent
     }
 
     await callAndValidate("/rest/v1/usuarios", {
@@ -508,7 +516,9 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     }
 
     const message = correo
-      ? "Usuario registrado. Enviamos un correo para que establezca su contraseña."
+      ? recoveryEmailSent
+        ? "Usuario registrado. Enviamos un correo para que establezca su contraseña."
+        : "Usuario registrado, pero no pudimos enviar el correo de activación."
       : "Usuario registrado."
     revalidatePath(PATHS.usuarios)
     return success(message)
