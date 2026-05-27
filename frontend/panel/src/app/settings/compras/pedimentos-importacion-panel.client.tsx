@@ -192,6 +192,7 @@ export function PedimentosImportacionPanel({
   const [availableOrderSelection, setAvailableOrderSelection] = useState<string[]>([])
   const [associatedOrderSelection, setAssociatedOrderSelection] = useState<string[]>([])
   const [gastoForm, setGastoForm] = useState(() => buildGastoFormState())
+  const [gastoPedimentoId, setGastoPedimentoId] = useState<string>(() => selectedPedimentoId || String(pedimentos[0]?.id ?? ""))
 
   useEffect(() => {
     if (editingAgentId) {
@@ -217,6 +218,12 @@ export function PedimentosImportacionPanel({
 
   useEffect(() => {
     setGastoForm(buildGastoFormState())
+  }, [pedimentos, selectedPedimentoId])
+
+  useEffect(() => {
+    if (selectedPedimentoId) {
+      setGastoPedimentoId(selectedPedimentoId)
+    }
   }, [selectedPedimentoId])
 
   const selectedOrders = useMemo(() => getPedimentoOrders(selectedPedimento), [selectedPedimento])
@@ -818,7 +825,30 @@ export function PedimentosImportacionPanel({
               <CardDescription>Estos gastos se suman a los gastos de las órdenes para el total prorrateable.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form action={createPedimentoGastoAction.bind(null, String(selectedPedimento.id))} className="grid gap-4 md:grid-cols-4">
+              <form action={createPedimentoGastoAction.bind(null, gastoPedimentoId || String(selectedPedimento?.id ?? ""))} className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2 md:col-span-4">
+                  <Label htmlFor="gasto-pedimento">Pedimento de importación</Label>
+                  <select
+                    id="gasto-pedimento"
+                    value={gastoPedimentoId || String(selectedPedimento?.id ?? "")}
+                    onChange={(event) => setGastoPedimentoId(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    required
+                    disabled={!pedimentos.length}
+                  >
+                    <option value="" disabled>
+                      Selecciona un pedimento
+                    </option>
+                    {pedimentos.map((pedimento) => (
+                      <option key={String(pedimento.id)} value={String(pedimento.id)}>
+                        {asString(pedimento.numero_pedimento)} · {asString(pedimento.estado)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Este gasto se registrará en el pedimento que selecciones aquí.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="gasto-tipo">Tipo</Label>
                   <Input id="gasto-tipo" name="tipo_gasto" value={gastoForm.tipo_gasto} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_gasto: event.target.value }))} placeholder="Agente aduanal, maniobras..." required />
@@ -867,7 +897,9 @@ export function PedimentosImportacionPanel({
                   <Textarea id="gasto-observaciones" name="observaciones" value={gastoForm.observaciones} onChange={(event) => setGastoForm((prev) => ({ ...prev, observaciones: event.target.value }))} />
                 </div>
                 <div className="md:col-span-4">
-                  <Button type="submit">Agregar gasto</Button>
+                  <Button type="submit" disabled={!pedimentos.length || !gastoPedimentoId}>
+                    Agregar gasto
+                  </Button>
                 </div>
               </form>
 
