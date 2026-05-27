@@ -197,6 +197,9 @@ COMMENT ON TABLE public.pedimentos_importacion_ordenes_compra IS 'Relacion entre
 CREATE UNIQUE INDEX IF NOT EXISTS pedimentos_importacion_ordenes_compra_unq
     ON public.pedimentos_importacion_ordenes_compra (pedimento_id, orden_compra_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS pedimentos_importacion_ordenes_compra_org_orden_unq
+    ON public.pedimentos_importacion_ordenes_compra (organizacion_id, orden_compra_id);
+
 CREATE INDEX IF NOT EXISTS pedimentos_importacion_ordenes_compra_org_pedimento_idx
     ON public.pedimentos_importacion_ordenes_compra (organizacion_id, pedimento_id, creado_en DESC);
 

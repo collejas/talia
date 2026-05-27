@@ -16048,6 +16048,14 @@ async def create_compras_pedimento_orden_importacion(
             raise HTTPException(status_code=404, detail="orden_compra_not_found")
         if _clean_text(orden.get("tipo_operacion")).lower() != "internacional":
             raise HTTPException(status_code=409, detail="solo_se_pueden_ligar_ordenes_internacionales")
+        existing_links = await repo.list_pedimentos_importacion_por_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_compra_id=payload.orden_compra_id,
+        )
+        for link in existing_links:
+            linked_pedimento_id = link.get("pedimento_id")
+            if linked_pedimento_id and UUID(str(linked_pedimento_id)) != pedimento_id:
+                raise HTTPException(status_code=409, detail="orden_compra_ya_asignada_a_otro_pedimento")
         row = await repo.attach_pedimento_orden_importacion(
             organizacion_id=organizacion_id,
             pedimento_id=pedimento_id,

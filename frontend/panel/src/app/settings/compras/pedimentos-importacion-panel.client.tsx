@@ -226,10 +226,44 @@ export function PedimentosImportacionPanel({
     () => ordenes.filter((orden) => String(orden.tipo_operacion ?? "").toLowerCase() === "internacional"),
     [ordenes],
   )
+  const otherLinkedOrderIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const pedimento of pedimentos) {
+      if (editingPedimentoId && String(pedimento.id) === editingPedimentoId) {
+        continue
+      }
+      for (const ordenId of extractPedimentoOrdenIds(pedimento)) {
+        ids.add(ordenId)
+      }
+    }
+    return ids
+  }, [editingPedimentoId, pedimentos])
+  const otherLinkedOrderDetails = useMemo(() => {
+    const rows: Array<{ ordenId: string; folio: string; pedimentoNumero: string }> = []
+    for (const pedimento of pedimentos) {
+      if (editingPedimentoId && String(pedimento.id) === editingPedimentoId) {
+        continue
+      }
+      const pedimentoNumero = asString(pedimento.numero_pedimento, "Sin número")
+      for (const ordenId of extractPedimentoOrdenIds(pedimento)) {
+        const orden = internationalOrders.find((row) => String(row.id) === ordenId) ?? ordenes.find((row) => String(row.id) === ordenId) ?? null
+        rows.push({
+          ordenId,
+          folio: asString(orden?.folio, ordenId),
+          pedimentoNumero,
+        })
+      }
+    }
+    return rows
+  }, [editingPedimentoId, internationalOrders, ordenes, pedimentos])
   const selectedPedimentoOrderSet = useMemo(() => new Set(pedimentoOrdenIds), [pedimentoOrdenIds])
   const availablePedimentoOrders = useMemo(
-    () => internationalOrders.filter((orden) => !selectedPedimentoOrderSet.has(String(orden.id))),
-    [internationalOrders, selectedPedimentoOrderSet],
+    () =>
+      internationalOrders.filter((orden) => {
+        const ordenId = String(orden.id)
+        return !otherLinkedOrderIds.has(ordenId) && !selectedPedimentoOrderSet.has(ordenId)
+      }),
+    [internationalOrders, otherLinkedOrderIds, selectedPedimentoOrderSet],
   )
   const associatedPedimentoOrders = useMemo(
     () =>
@@ -448,6 +482,20 @@ export function PedimentosImportacionPanel({
                       </div>
                     )}
                   </div>
+                  {otherLinkedOrderDetails.length ? (
+                    <div className="border-t px-3 py-2">
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Ya asignadas a otro pedimento
+                      </div>
+                      <div className="mt-2 grid gap-2">
+                        {otherLinkedOrderDetails.map((row) => (
+                          <div key={row.ordenId} className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                            {row.folio} ya está asignada al pedimento {row.pedimentoNumero}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-row items-center justify-center gap-2 xl:flex-col">
