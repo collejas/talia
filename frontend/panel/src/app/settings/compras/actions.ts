@@ -298,6 +298,24 @@ function buildOrdenCompraPagosProgramados(formData: FormData): Record<string, un
   return rows
 }
 
+function buildOrdenCompraPagoProgramadoPayload(formData: FormData, fallbackCurrency: string): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    tipo_pago: parseOptionalText(formData.get("pago_tipo_pago")),
+    evento_base: parseOptionalText(formData.get("pago_evento_base")),
+    porcentaje: parseOptionalNumber(formData.get("pago_porcentaje")),
+    monto: parseOptionalNumber(formData.get("pago_monto")),
+    moneda_codigo: parseOptionalText(formData.get("pago_moneda_codigo")) || fallbackCurrency,
+    dias_credito: parseOptionalNumber(formData.get("pago_dias_credito")),
+    fecha_vencimiento_calculada: normalizeDateInput(formData.get("pago_fecha_vencimiento_calculada")),
+    fecha_evento_real: normalizeDateInput(formData.get("pago_fecha_evento_real")),
+    fecha_pago_real: normalizeDateInput(formData.get("pago_fecha_pago_real")),
+    referencia_pago: parseOptionalText(formData.get("pago_referencia_pago")),
+    estado: parseOptionalText(formData.get("pago_estado")),
+    observaciones: parseOptionalText(formData.get("pago_observaciones")),
+  }
+  return payload
+}
+
 async function uploadOrdenCompraDocumentAttachment(ordenId: string, tipoDocumento: string, file: File): Promise<void> {
   const payload = new FormData()
   payload.append("file", file, file.name || "documento.pdf")
@@ -642,6 +660,42 @@ export async function saveOrdenCompraPagosProgramadosAction(ordenId: string, for
     if (!response.ok) {
       throw new Error(response.error)
     }
+  }
+  revalidatePath(SETTINGS_PATH)
+  redirect(`/compras?vista=pagos&orden_id=${encodeURIComponent(ordenId)}`)
+}
+
+export async function updateOrdenCompraPagoProgramadoAction(
+  ordenId: string,
+  pagoId: string,
+  formData: FormData,
+): Promise<void> {
+  const responseOrder = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {
+    method: "GET",
+  })
+  if (!responseOrder.ok) {
+    throw new Error(responseOrder.error)
+  }
+  const order = responseOrder.data as Record<string, unknown> | null
+  const fallbackCurrency = String(order?.moneda ?? "MXN").trim().toUpperCase() || "MXN"
+  const payload = buildOrdenCompraPagoProgramadoPayload(formData, fallbackCurrency)
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/pagos-programados/${pagoId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+  redirect(`/compras?vista=pagos&orden_id=${encodeURIComponent(ordenId)}`)
+}
+
+export async function deleteOrdenCompraPagoProgramadoAction(ordenId: string, pagoId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/pagos-programados/${pagoId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
   }
   revalidatePath(SETTINGS_PATH)
   redirect(`/compras?vista=pagos&orden_id=${encodeURIComponent(ordenId)}`)

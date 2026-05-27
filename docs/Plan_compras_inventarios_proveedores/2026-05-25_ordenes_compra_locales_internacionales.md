@@ -925,3 +925,78 @@ Conviene una sola orden de compra con:
 - UI condicional por tipo de operacion.
 
 Eso mantiene el modulo simple, util y escalable.
+
+## Estado de implementacion
+
+### Base de datos
+
+Ya se aplicaron las migraciones principales para soportar el flujo de compras y pagos:
+
+- `public.incoterms`
+- `public.monedas`
+- `public.modos_transporte`
+- reutilizacion de `public.geo_paises`
+- extensiones a `public.ordenes_compra`
+- extensiones a `public.ordenes_compra_items`
+- tablas satelite:
+  - `public.ordenes_compra_condiciones_comerciales`
+  - `public.ordenes_compra_condiciones_pago`
+  - `public.ordenes_compra_pagos_programados`
+  - `public.ordenes_compra_logistica`
+  - `public.ordenes_compra_documentos`
+  - `public.ordenes_compra_autorizaciones`
+  - `public.ordenes_compra_eventos`
+
+### Backend
+
+Ya quedo implementado el soporte para:
+
+- crear, editar, listar y cerrar ordenes de compra;
+- guardar condiciones comerciales, de pago y logistica;
+- persistir y consultar documentos adjuntos;
+- administrar pagos programados por orden;
+- editar y eliminar pagos individuales;
+- normalizar el pago a moneda local usando tipo de cambio historico Banxico;
+- sugerir eventos base de pago y vencimiento segun el tipo de orden.
+
+### UI
+
+Ya quedo implementada la vista principal de `Compras` con:
+
+- sidebar propio fuera de `Settings`;
+- vista por secciones:
+  - `Resumen`
+  - `Almacenes`
+  - `Proveedores`
+  - `Ordenes`
+  - `Inventario`
+  - `Recepciones`
+  - `Pagos`
+- formulario de orden con:
+  - partida internacional;
+  - proforma adjunta;
+  - documentos por tipo de orden;
+  - Incoterms y condiciones comerciales;
+  - condiciones de pago;
+  - calculo de tipo de cambio Banxico;
+  - total en moneda de la orden y total normalizado en MXN.
+
+### Pagos
+
+La vista de `Pagos` ya separa:
+
+- `Pagos derivados` como resumen calculado desde las condiciones;
+- `Pagos registrados` como historial real guardado;
+- `Pagos y gastos` como captura operativa de nuevos movimientos;
+- edicion y eliminacion de movimientos por fila;
+- conversion a MXN con tipo de cambio historico del dia del movimiento.
+
+## Siguiente enfoque recomendado
+
+1. Consolidar el resumen de pagos por orden en el listado principal.
+2. Seguir afinando recepciones e inventario ligado a ordenes recibidas.
+3. Completar reportes operativos por:
+   - orden abierta;
+   - pago pendiente;
+   - saldo por vencer;
+   - gasto adicional por orden.

@@ -81,3 +81,46 @@ La migracion de base de datos para soportar ordenes de compra locales e internac
 ## Nota
 
 Esta base de datos ya no requiere un catalogo nuevo de paises: la referencia oficial es `public.geo_paises`.
+
+## Avance adicional ya implementado
+
+### Backend
+
+El backend ya quedo conectado para:
+
+- crear y editar ordenes de compra;
+- registrar documentos y proforma;
+- administrar pagos programados por orden;
+- editar y eliminar pagos individuales;
+- normalizar montos a MXN con tipo de cambio historico de Banxico;
+- separar pagos de cumplimiento y gastos adicionales;
+- validar eventos base, vencimientos y moneda por movimiento.
+
+### UI
+
+La interfaz de `Compras` ya quedo reorganizada con:
+
+- acceso directo principal fuera de `Settings`;
+- vistas internas por modulo;
+- formulario de orden separado del flujo de pagos;
+- tabla de pagos registrados con:
+  - tipo;
+  - estado;
+  - evento;
+  - monto original;
+  - tipo de cambio;
+  - monto en MXN;
+  - fecha de recepcion;
+  - fecha de pago;
+  - vencimiento;
+  - referencia;
+  - acciones de editar y eliminar.
+
+### Flujo operativo actual
+
+1. Se crea la orden de compra.
+2. Se guardan condiciones, logistica y documentos.
+3. Se registra el pago de anticipo o saldo.
+4. Se registran pagos parciales y gastos adicionales.
+5. Cada movimiento puede editarse o eliminarse individualmente.
+6. Cada movimiento se normaliza a MXN con el tipo de cambio del dia de pago.
