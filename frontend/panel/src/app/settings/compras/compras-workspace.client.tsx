@@ -309,6 +309,23 @@ function formatCurrency(value: unknown, currency = "MXN"): string {
   }
 }
 
+function parseCurrencyInput(value: string): number {
+  const cleaned = value
+    .replace(/[^\d.,-]/g, "")
+    .replace(/,/g, "")
+    .replace(/(?!^)-/g, "")
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatCurrencyInput(value: unknown, currency = "MXN", editing = false): string {
+  const numberValue = asNumber(value)
+  if (editing) {
+    return numberValue > 0 ? String(numberValue) : ""
+  }
+  return numberValue > 0 ? formatCurrency(numberValue, currency) : ""
+}
+
 function formatDecimalInput(value: number | null, fractionDigits = 2): string {
   if (value === null || !Number.isFinite(value)) {
     return ""
@@ -803,6 +820,7 @@ export function ComprasWorkspace({
   const [orderObservations, setOrderObservations] = useState("")
   const [orderInstructions, setOrderInstructions] = useState("")
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
+  const [editingOrderLineCostIndex, setEditingOrderLineCostIndex] = useState<number | null>(null)
   const [orderIncotermCodigo, setOrderIncotermCodigo] = useState("")
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
   const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
@@ -1394,6 +1412,7 @@ export function ComprasWorkspace({
 
   const startEditOrder = useCallback((orden: AnyRecord) => {
     orderHydratingRef.current = true
+    setEditingOrderLineCostIndex(null)
     setEditingOrderId(String(orden.id))
     setOrderProformaInputKey((current) => current + 1)
     setOrderFolio(asString(orden.folio, defaultOrderFolio))
@@ -1495,6 +1514,7 @@ export function ComprasWorkspace({
 
   const clearOrderForm = () => {
     orderHydratingRef.current = true
+    setEditingOrderLineCostIndex(null)
     setEditingOrderId(null)
     setOrderFolio(defaultOrderFolio)
     setOrderProviderId(String(proveedores[0]?.id ?? ""))
@@ -2216,12 +2236,23 @@ export function ComprasWorkspace({
                       </TableCell>
                       <TableCell className="w-36 align-top">
                         <Input
-                          name="items_costo_unitario"
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           min="0"
-                          step="0.0001"
+                          value={formatCurrencyInput(line.costo_unitario, orderCurrency, editingOrderLineCostIndex === index)}
+                          onFocus={() => setEditingOrderLineCostIndex(index)}
+                          onBlur={() =>
+                            setEditingOrderLineCostIndex((current) => (current === index ? null : current))
+                          }
+                          onChange={(event) => updateOrderLine(index, { costo_unitario: parseCurrencyInput(event.target.value) })}
+                          placeholder={formatCurrency(0, orderCurrency)}
+                          className="text-right tabular-nums"
+                        />
+                        <input
+                          type="hidden"
+                          name="items_costo_unitario"
                           value={Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0}
-                          onChange={(event) => updateOrderLine(index, { costo_unitario: Number(event.target.value) })}
+                          readOnly
                         />
                       </TableCell>
                       <TableCell className="w-28 align-top">
