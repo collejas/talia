@@ -3437,12 +3437,27 @@ export function ComprasWorkspace({
                                   documentoArchivo?.nombre_original ?? documentoMetadata?.nombre_original ?? "archivo",
                                 )
                                 const documentoId = asString(documento.id, "")
+                                const documentoHref = selectedOrderRecord?.id && documentoId
+                                  ? `/api/compras/ordenes/${selectedOrderRecord.id}/documentos/${documentoId}`
+                                  : null
                                 return (
                                   <div
                                     key={`${definition.tipoDocumento}-${index}`}
                                     className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1"
                                   >
-                                    <span className="truncate">{nombreDocumento}</span>
+                                    {documentoHref ? (
+                                      <a
+                                        href={documentoHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="truncate text-primary underline-offset-4 hover:underline"
+                                        title="Abrir documento"
+                                      >
+                                        {nombreDocumento}
+                                      </a>
+                                    ) : (
+                                      <span className="truncate">{nombreDocumento}</span>
+                                    )}
                                     {documentoId ? (
                                       <Button
                                         type="submit"

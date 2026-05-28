@@ -16618,12 +16618,21 @@ async def _get_compras_orden_document_url(
     archivo_path: str | None = None
     archivo_created_at = ""
     normalized_tipo = tipo_documento.lower().strip()
+    documento_uuid: UUID | None = None
+    try:
+        documento_uuid = UUID(normalized_tipo)
+    except ValueError:
+        documento_uuid = None
     if isinstance(documentos, list):
         for documento in documentos:
             if not isinstance(documento, dict):
                 continue
             documento_tipo = _clean_text(documento.get("tipo_documento")).lower()
-            if documento_tipo != normalized_tipo and not documento_tipo.startswith(f"{normalized_tipo}__"):
+            documento_id = _clean_text(documento.get("id")).lower()
+            if documento_uuid is not None:
+                if documento_id != str(documento_uuid):
+                    continue
+            elif documento_tipo != normalized_tipo and not documento_tipo.startswith(f"{normalized_tipo}__"):
                 continue
             archivo = documento.get("archivo")
             if isinstance(archivo, dict):
