@@ -2957,13 +2957,16 @@ export function ComprasWorkspace({
                   </label>
                   <Input
                     id="orden-monto-anticipo"
-                    name="condiciones_pago_monto_anticipo"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formatDecimalInput(orderMontoAnticipoCalculated)}
+                    type="text"
+                    value={formatCurrency(orderMontoAnticipoCalculated, orderCurrency)}
                     readOnly
-                    className="bg-muted/40"
+                    className="bg-muted/40 text-right tabular-nums"
+                  />
+                  <input
+                    type="hidden"
+                    name="condiciones_pago_monto_anticipo"
+                    value={Number.isFinite(orderMontoAnticipoCalculated) ? orderMontoAnticipoCalculated.toFixed(4) : "0"}
+                    readOnly
                   />
                 </div>
                 <div className="space-y-2 md:col-span-1">
@@ -2988,13 +2991,16 @@ export function ComprasWorkspace({
                   </label>
                   <Input
                     id="orden-monto-saldo"
-                    name="condiciones_pago_monto_saldo"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formatDecimalInput(orderMontoSaldoCalculated)}
+                    type="text"
+                    value={formatCurrency(orderMontoSaldoCalculated, orderCurrency)}
                     readOnly
-                    className="bg-muted/40"
+                    className="bg-muted/40 text-right tabular-nums"
+                  />
+                  <input
+                    type="hidden"
+                    name="condiciones_pago_monto_saldo"
+                    value={Number.isFinite(orderMontoSaldoCalculated) ? orderMontoSaldoCalculated.toFixed(4) : "0"}
+                    readOnly
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -3318,25 +3324,28 @@ export function ComprasWorkspace({
                   <label className="text-sm font-medium" htmlFor="orden-monto-asegurado">
                     Monto asegurado
                   </label>
-                  <Input
-                    id="orden-monto-asegurado"
-                    type="text"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={formatCurrencyInput(orderMontoAsegurado, orderCurrency, editingOrderMontoAsegurado)}
-                    onFocus={() => setEditingOrderMontoAsegurado(true)}
-                    onBlur={() => setEditingOrderMontoAsegurado(false)}
-                    onChange={(event) => setOrderMontoAsegurado(String(parseCurrencyInput(event.target.value)))}
-                    placeholder={formatCurrency(0, orderCurrency)}
-                    className="text-right tabular-nums"
-                  />
-                  <input
-                    type="hidden"
-                    name="logistica_monto_asegurado"
-                    value={Number.isFinite(asNumber(orderMontoAsegurado)) ? asNumber(orderMontoAsegurado) : 0}
-                    readOnly
-                  />
+                <Input
+                  id="orden-monto-asegurado"
+                  type="text"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={editingOrderMontoAsegurado ? orderMontoAsegurado : formatCurrency(asNumber(orderMontoAsegurado), orderCurrency)}
+                  onFocus={() => setEditingOrderMontoAsegurado(true)}
+                  onBlur={() => {
+                    setEditingOrderMontoAsegurado(false)
+                    setOrderMontoAsegurado(String(parseCurrencyInput(orderMontoAsegurado)))
+                  }}
+                  onChange={(event) => setOrderMontoAsegurado(event.target.value)}
+                  placeholder={formatCurrency(0, orderCurrency)}
+                  className="text-right tabular-nums"
+                />
+                <input
+                  type="hidden"
+                  name="logistica_monto_asegurado"
+                  value={parseCurrencyInput(orderMontoAsegurado)}
+                  readOnly
+                />
                 </div>
                 <div className="md:col-span-6 space-y-2">
                   <Label htmlFor="orden-logistica-observaciones">Observaciones logísticas</Label>
