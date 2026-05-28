@@ -273,7 +273,7 @@ function buildOrdenCompraCondicionesPago(formData: FormData, fallbackCurrency: s
     monto_saldo: parseOptionalNumber(formData.get("condiciones_pago_monto_saldo")),
     momento_pago_saldo: parseOptionalText(formData.get("condiciones_pago_momento_pago_saldo")),
     dias_credito: parseOptionalNumber(formData.get("condiciones_pago_dias_credito")),
-    comisiones_bancarias: parseOptionalText(formData.get("condiciones_pago_comisiones_bancarias")),
+    datos_bancarios_proveedor: parseOptionalText(formData.get("condiciones_pago_datos_bancarios_proveedor")),
     observaciones: parseOptionalText(formData.get("condiciones_pago_observaciones")),
   }
   const hasMeaningfulValue = hasAnyValue([
@@ -284,7 +284,7 @@ function buildOrdenCompraCondicionesPago(formData: FormData, fallbackCurrency: s
     payload.monto_saldo,
     payload.momento_pago_saldo,
     payload.dias_credito,
-    payload.comisiones_bancarias,
+    payload.datos_bancarios_proveedor,
     payload.observaciones,
   ])
   return hasMeaningfulValue ? payload : null

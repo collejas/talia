@@ -837,7 +837,7 @@ export function ComprasWorkspace({
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
   const [orderMomentoPagoSaldo, setOrderMomentoPagoSaldo] = useState("")
   const [orderDiasCredito, setOrderDiasCredito] = useState("")
-  const [orderComisionesBancarias, setOrderComisionesBancarias] = useState("")
+  const [orderDatosBancariosProveedor, setOrderDatosBancariosProveedor] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
   const [orderPaymentSchedules, setOrderPaymentSchedules] = useState<OrderPaymentScheduleLine[]>([])
   const [paymentMxnLookupByKey, setPaymentMxnLookupByKey] = useState<Record<string, PaymentMxnLookupState>>({})
@@ -1455,7 +1455,9 @@ export function ComprasWorkspace({
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
     setOrderMomentoPagoSaldo(asString(pago.momento_pago_saldo, ""))
     setOrderDiasCredito(asString(pago.dias_credito, ""))
-    setOrderComisionesBancarias(asString(pago.comisiones_bancarias, ""))
+    setOrderDatosBancariosProveedor(
+      asString((pago.datos_bancarios_proveedor ?? pago.comisiones_bancarias) as unknown, ""),
+    )
     setOrderCondicionesPagoObservaciones(asString(pago.observaciones, ""))
     setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(orden))
     setOrderModoTransporteCodigo(asString(logistica.modo_transporte_codigo, ""))
@@ -2938,10 +2940,10 @@ export function ComprasWorkspace({
                     Datos bancarios proveedor
                   </label>
                   <Input
-                    id="orden-comisiones-bancarias"
-                    name="condiciones_pago_comisiones_bancarias"
-                    value={orderComisionesBancarias}
-                    onChange={(event) => setOrderComisionesBancarias(event.target.value)}
+                    id="orden-datos-bancarios-proveedor"
+                    name="condiciones_pago_datos_bancarios_proveedor"
+                    value={orderDatosBancariosProveedor}
+                    onChange={(event) => setOrderDatosBancariosProveedor(event.target.value)}
                     placeholder="Cuenta, banco, CLABE, SWIFT"
                   />
                 </div>
