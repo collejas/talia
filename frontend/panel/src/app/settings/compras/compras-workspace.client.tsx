@@ -1401,6 +1401,7 @@ export function ComprasWorkspace({
     setOrderWarehouseId(asString(orden.almacen_destino_id, defaultWarehouseId))
     setOrderEmissionIso(formatDateOnly(asString(orden.fecha_emision, defaultOrderEmissionIso)))
     setOrderDueDate(asString(orden.fecha_entrega_estimada, ""))
+    setOrderFechaEstimadaArribo(asString(orden.fecha_entrega_estimada, ""))
     setOrderType((asString(orden.tipo_operacion, "nacional") as "nacional" | "internacional") || "nacional")
     setOrderCurrency(asString(orden.moneda, "MXN"))
     setOrderExchangeRate(asString(orden.tipo_cambio_referencia, ""))
@@ -2071,7 +2072,17 @@ export function ComprasWorkspace({
                 <label className="text-sm font-medium" htmlFor="orden-entrega">
                   F. Estimada de Recepcion
                 </label>
-                <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
+                <Input
+                  id="orden-entrega"
+                  name="fecha_entrega_estimada"
+                  type="date"
+                  value={orderDueDate}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setOrderDueDate(nextValue)
+                    setOrderFechaEstimadaArribo(nextValue)
+                  }}
+                />
               </div>
               <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-instrucciones">
@@ -2969,14 +2980,15 @@ export function ComprasWorkspace({
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-fecha-arribo">
-                    Fecha estimada arribo
+                    F. Estimada de Recepcion
                   </label>
                   <Input
                     id="orden-fecha-arribo"
                     name="logistica_fecha_estimada_arribo"
                     type="date"
-                    value={orderFechaEstimadaArribo}
-                    onChange={(event) => setOrderFechaEstimadaArribo(event.target.value)}
+                    value={orderFechaEstimadaArribo || orderDueDate}
+                    readOnly
+                    className="bg-muted/40"
                   />
                 </div>
               </div>
