@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -200,10 +201,12 @@ export function PedimentosImportacionPanel({
   selectedPedimento,
   selectedPedimentoId,
 }: PedimentosImportacionPanelProps) {
+  const router = useRouter()
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
   const [agentForm, setAgentForm] = useState(() => buildAgentFormState())
   const [editingPedimentoId, setEditingPedimentoId] = useState<string | null>(null)
   const [pedimentoModalOpen, setPedimentoModalOpen] = useState(false)
+  const [pedimentoDetailOpen, setPedimentoDetailOpen] = useState(Boolean(selectedPedimento))
   const [editingPedimentoSubtotal, setEditingPedimentoSubtotal] = useState(false)
   const [pedimentoForm, setPedimentoForm] = useState(() => buildPedimentoFormState())
   const [pedimentoOrdenIds, setPedimentoOrdenIds] = useState<string[]>([])
@@ -247,6 +250,10 @@ export function PedimentosImportacionPanel({
       setGastoPedimentoId(selectedPedimentoId)
     }
   }, [selectedPedimentoId])
+
+  useEffect(() => {
+    setPedimentoDetailOpen(Boolean(selectedPedimento))
+  }, [selectedPedimento, selectedPedimentoId])
 
   useEffect(() => {
     if (!gastoPedimentoId) {
@@ -320,6 +327,7 @@ export function PedimentosImportacionPanel({
     setPedimentoForm(buildPedimentoFormState())
     setPedimentoOrdenIds([])
     setEditingPedimentoSubtotal(false)
+    setGastoPedimentoId("")
     setAvailableOrderSelection([])
     setAssociatedOrderSelection([])
     setPedimentoModalOpen(true)
@@ -330,6 +338,7 @@ export function PedimentosImportacionPanel({
     setPedimentoForm(buildPedimentoFormState(pedimento))
     setPedimentoOrdenIds(extractPedimentoOrdenIds(pedimento))
     setEditingPedimentoSubtotal(false)
+    setGastoPedimentoId(String(pedimento.id))
     setAvailableOrderSelection([])
     setAssociatedOrderSelection([])
     setPedimentoModalOpen(true)
@@ -344,6 +353,13 @@ export function PedimentosImportacionPanel({
       setEditingPedimentoSubtotal(false)
       setAvailableOrderSelection([])
       setAssociatedOrderSelection([])
+    }
+  }
+
+  const handlePedimentoDetailOpenChange = (open: boolean) => {
+    setPedimentoDetailOpen(open)
+    if (!open) {
+      router.replace("/compras?vista=pedimentos")
     }
   }
 
@@ -757,6 +773,119 @@ export function PedimentosImportacionPanel({
           </form>
             </CardContent>
           </Card>
+
+          <Card className="border-0 shadow-none">
+            <CardHeader>
+              <CardTitle>Gastos del pedimento</CardTitle>
+              <CardDescription>Captura un gasto ligado al pedimento que estés editando.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {editingPedimentoId || selectedPedimentoId ? (
+                <form
+                  action={createPedimentoGastoAction.bind(null, gastoPedimentoId || editingPedimentoId || selectedPedimentoId)}
+                  className="grid gap-4 md:grid-cols-4"
+                >
+                  <div className="space-y-2 md:col-span-4">
+                    <Label htmlFor="gasto-pedimento-modal">Pedimento de importación</Label>
+                    <select
+                      id="gasto-pedimento-modal"
+                      value={gastoPedimentoId || editingPedimentoId || selectedPedimentoId}
+                      onChange={(event) => setGastoPedimentoId(event.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      required
+                      disabled={!pedimentos.length}
+                    >
+                      <option value="" disabled>
+                        Selecciona un pedimento
+                      </option>
+                      {pedimentos.map((pedimento) => (
+                        <option key={String(pedimento.id)} value={String(pedimento.id)}>
+                          {asString(pedimento.numero_pedimento)} · {asString(pedimento.estado)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Este gasto se registrará en el pedimento que selecciones aquí.
+                    </p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="gasto-agente-modal">Agente aduanal</Label>
+                    <select
+                      id="gasto-agente-modal"
+                      name="agente_aduanal_id"
+                      value={gastoForm.agente_aduanal_id}
+                      onChange={(event) => setGastoForm((prev) => ({ ...prev, agente_aduanal_id: event.target.value }))}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      disabled={!agentes.length}
+                    >
+                      <option value="">Sin agente</option>
+                      {agentes.map((agente) => (
+                        <option key={String(agente.id)} value={String(agente.id)}>
+                          {asString(agente.nombre)}{asString(agente.patente) ? ` · ${asString(agente.patente)}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-tipo-modal">Tipo</Label>
+                    <Input id="gasto-tipo-modal" name="tipo_gasto" value={gastoForm.tipo_gasto} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_gasto: event.target.value }))} placeholder="Agente aduanal, maniobras..." required />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="gasto-descripcion-modal">Descripción</Label>
+                    <Input id="gasto-descripcion-modal" name="descripcion" value={gastoForm.descripcion} onChange={(event) => setGastoForm((prev) => ({ ...prev, descripcion: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-monto-modal">Monto</Label>
+                    <Input id="gasto-monto-modal" name="monto" type="number" step="0.0001" min="0" value={gastoForm.monto} onChange={(event) => setGastoForm((prev) => ({ ...prev, monto: event.target.value }))} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-moneda-modal">Moneda</Label>
+                    <select id="gasto-moneda-modal" name="moneda" value={gastoForm.moneda} onChange={(event) => setGastoForm((prev) => ({ ...prev, moneda: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                      {moneyOptions.map((moneda) => (
+                        <option key={String(moneda.codigo)} value={String(moneda.codigo)}>
+                          {asString(moneda.codigo)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-tipo-cambio-modal">Tipo cambio</Label>
+                    <Input id="gasto-tipo-cambio-modal" name="tipo_cambio" type="number" step="0.000001" min="0" value={gastoForm.tipo_cambio} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_cambio: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-fecha-modal">Fecha</Label>
+                    <Input id="gasto-fecha-modal" name="fecha_gasto" type="date" value={gastoForm.fecha_gasto} onChange={(event) => setGastoForm((prev) => ({ ...prev, fecha_gasto: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-factura-modal">Factura</Label>
+                    <Input id="gasto-factura-modal" name="referencia_factura" value={gastoForm.referencia_factura} onChange={(event) => setGastoForm((prev) => ({ ...prev, referencia_factura: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gasto-estado-modal">Estado</Label>
+                    <select id="gasto-estado-modal" name="estado" value={gastoForm.estado} onChange={(event) => setGastoForm((prev) => ({ ...prev, estado: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                      <option value="pendiente">Pendiente</option>
+                      <option value="registrado">Registrado</option>
+                      <option value="pagado">Pagado</option>
+                      <option value="cancelado">Cancelado</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 md:col-span-4">
+                    <Label htmlFor="gasto-observaciones-modal">Observaciones</Label>
+                    <Textarea id="gasto-observaciones-modal" name="observaciones" value={gastoForm.observaciones} onChange={(event) => setGastoForm((prev) => ({ ...prev, observaciones: event.target.value }))} />
+                  </div>
+                  <div className="md:col-span-4">
+                    <Button type="submit" disabled={!pedimentos.length || !Boolean(gastoPedimentoId || editingPedimentoId || selectedPedimentoId)}>
+                      Agregar gasto
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                  Guarda primero el pedimento para poder agregar gastos.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </DialogContent>
       </Dialog>
 
@@ -853,327 +982,254 @@ export function PedimentosImportacionPanel({
         </CardContent>
       </Card>
 
-      {selectedPedimento ? (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalle del pedimento</CardTitle>
-              <CardDescription>Los totales se recalculan con los gastos del pedimento y los gastos tipo gasto de las órdenes ligadas.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-5">
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Número</div>
-                  <div className="mt-1 font-mono text-sm">{asString(selectedPedimento.numero_pedimento)}</div>
+      <Dialog open={pedimentoDetailOpen && Boolean(selectedPedimento)} onOpenChange={handlePedimentoDetailOpenChange}>
+        <DialogContent className="max-h-[92vh] w-[95vw] max-w-7xl overflow-y-auto p-0">
+          {selectedPedimento ? (
+            <div className="flex h-full flex-col">
+              <DialogHeader className="border-b bg-background/95 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <DialogTitle className="text-2xl">
+                      Pedimento {asString(selectedPedimento.numero_pedimento)}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Vista completa del pedimento, sus órdenes, gastos y prorrateo.
+                    </DialogDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => openEditPedimentoModal(selectedPedimento)}>
+                      Editar
+                    </Button>
+                    <form action={recalcularPedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
+                      <Button type="submit" variant="secondary">
+                        Recalcular
+                      </Button>
+                    </form>
+                    <Button type="button" variant="ghost" onClick={() => handlePedimentoDetailOpenChange(false)}>
+                      Cerrar
+                    </Button>
+                  </div>
                 </div>
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Embarque</div>
-                  <div className="mt-1 text-sm font-semibold">{asString(selectedPedimento.embarque, "—")}</div>
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
-                  <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.gastos_pedimento_total, asString(selectedPedimento.moneda, "MXN"))}</div>
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Gastos órdenes</div>
-                  <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.gastos_ordenes_total, asString(selectedPedimento.moneda, "MXN"))}</div>
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Total prorrateable</div>
-                  <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.costo_total_prorrateable, asString(selectedPedimento.moneda, "MXN"))}</div>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <form action={recalcularPedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
-                  <Button type="submit">Recalcular</Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
+              </DialogHeader>
+              <div className="space-y-4 px-4 py-4 pb-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Detalle del pedimento</CardTitle>
+                    <CardDescription>Resumen operativo del pedimento seleccionado.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-5">
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Número</div>
+                        <div className="mt-1 font-mono text-sm">{asString(selectedPedimento.numero_pedimento)}</div>
+                      </div>
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Embarque</div>
+                        <div className="mt-1 text-sm font-semibold">{asString(selectedPedimento.embarque, "—")}</div>
+                      </div>
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
+                        <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.gastos_pedimento_total, asString(selectedPedimento.moneda, "MXN"))}</div>
+                      </div>
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Gastos órdenes</div>
+                        <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.gastos_ordenes_total, asString(selectedPedimento.moneda, "MXN"))}</div>
+                      </div>
+                      <div className="rounded-lg border bg-muted/20 p-4">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Total prorrateable</div>
+                        <div className="mt-1 text-sm font-semibold">{formatMoney(selectedPedimento.costo_total_prorrateable, asString(selectedPedimento.moneda, "MXN"))}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Órdenes ligadas</CardTitle>
-              <CardDescription>Vista de consulta de las órdenes ya ligadas al pedimento.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Folio</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {!selectedOrders.length ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                          No hay órdenes ligadas todavía.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      selectedOrders.map((row) => {
-                        const order = row.orden_compra && typeof row.orden_compra === "object" ? (row.orden_compra as AnyRecord) : null
-                        return (
-                          <TableRow key={String(row.id)}>
-                            <TableCell className="font-mono text-xs">{asString(order?.folio)}</TableCell>
-                            <TableCell>{asString(row.rol)}</TableCell>
-                            <TableCell>{asString(order?.estado)}</TableCell>
-                            <TableCell className="text-right">{formatMoney(order?.total, asString(order?.moneda, "MXN"))}</TableCell>
-                            <TableCell className="text-right">
-                              <form action={detachPedimentoOrdenAction.bind(null, String(selectedPedimento.id), String(row.orden_compra_id))}>
-                                <Button type="submit" variant="ghost" size="sm">
-                                  Quitar
-                                </Button>
-                              </form>
-                            </TableCell>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Órdenes ligadas</CardTitle>
+                    <CardDescription>Órdenes internacionales asociadas a este pedimento.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Folio</TableHead>
+                            <TableHead>Rol</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                           </TableRow>
-                        )
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {!selectedOrders.length ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                                No hay órdenes ligadas todavía.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            selectedOrders.map((row) => {
+                              const order = row.orden_compra && typeof row.orden_compra === "object" ? (row.orden_compra as AnyRecord) : null
+                              return (
+                                <TableRow key={String(row.id)}>
+                                  <TableCell className="font-mono text-xs">{asString(order?.folio)}</TableCell>
+                                  <TableCell>{asString(row.rol)}</TableCell>
+                                  <TableCell>{asString(order?.estado)}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(order?.total, asString(order?.moneda, "MXN"))}</TableCell>
+                                  <TableCell className="text-right">
+                                    <form action={detachPedimentoOrdenAction.bind(null, String(selectedPedimento.id), String(row.orden_compra_id))}>
+                                      <Button type="submit" variant="ghost" size="sm">
+                                        Quitar
+                                      </Button>
+                                    </form>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Gastos del pedimento</CardTitle>
-              <CardDescription>Estos gastos se suman a los gastos de las órdenes para el total prorrateable.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <form action={createPedimentoGastoAction.bind(null, gastoPedimentoId || String(selectedPedimento?.id ?? ""))} className="grid gap-4 md:grid-cols-4">
-                <div className="space-y-2 md:col-span-4">
-                  <Label htmlFor="gasto-pedimento">Pedimento de importación</Label>
-                  <select
-                    id="gasto-pedimento"
-                    value={gastoPedimentoId || String(selectedPedimento?.id ?? "")}
-                    onChange={(event) => setGastoPedimentoId(event.target.value)}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    required
-                    disabled={!pedimentos.length}
-                  >
-                    <option value="" disabled>
-                      Selecciona un pedimento
-                    </option>
-                    {pedimentos.map((pedimento) => (
-                      <option key={String(pedimento.id)} value={String(pedimento.id)}>
-                        {asString(pedimento.numero_pedimento)} · {asString(pedimento.estado)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Este gasto se registrará en el pedimento que selecciones aquí.
-                  </p>
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="gasto-agente">Agente aduanal</Label>
-                  <select
-                    id="gasto-agente"
-                    name="agente_aduanal_id"
-                    value={gastoForm.agente_aduanal_id}
-                    onChange={(event) => setGastoForm((prev) => ({ ...prev, agente_aduanal_id: event.target.value }))}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    disabled={!agentes.length}
-                  >
-                    <option value="">Sin agente</option>
-                    {agentes.map((agente) => (
-                      <option key={String(agente.id)} value={String(agente.id)}>
-                        {asString(agente.nombre)}{asString(agente.patente) ? ` · ${asString(agente.patente)}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Selecciona el agente que generó o gestionó este gasto.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-tipo">Tipo</Label>
-                  <Input id="gasto-tipo" name="tipo_gasto" value={gastoForm.tipo_gasto} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_gasto: event.target.value }))} placeholder="Agente aduanal, maniobras..." required />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="gasto-descripcion">Descripción</Label>
-                  <Input id="gasto-descripcion" name="descripcion" value={gastoForm.descripcion} onChange={(event) => setGastoForm((prev) => ({ ...prev, descripcion: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-monto">Monto</Label>
-                  <Input id="gasto-monto" name="monto" type="number" step="0.0001" min="0" value={gastoForm.monto} onChange={(event) => setGastoForm((prev) => ({ ...prev, monto: event.target.value }))} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-moneda">Moneda</Label>
-                  <select id="gasto-moneda" name="moneda" value={gastoForm.moneda} onChange={(event) => setGastoForm((prev) => ({ ...prev, moneda: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {moneyOptions.map((moneda) => (
-                      <option key={String(moneda.codigo)} value={String(moneda.codigo)}>
-                        {asString(moneda.codigo)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-tipo-cambio">Tipo cambio</Label>
-                  <Input id="gasto-tipo-cambio" name="tipo_cambio" type="number" step="0.000001" min="0" value={gastoForm.tipo_cambio} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_cambio: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-fecha">Fecha</Label>
-                  <Input id="gasto-fecha" name="fecha_gasto" type="date" value={gastoForm.fecha_gasto} onChange={(event) => setGastoForm((prev) => ({ ...prev, fecha_gasto: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-factura">Factura</Label>
-                  <Input id="gasto-factura" name="referencia_factura" value={gastoForm.referencia_factura} onChange={(event) => setGastoForm((prev) => ({ ...prev, referencia_factura: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gasto-estado">Estado</Label>
-                  <select id="gasto-estado" name="estado" value={gastoForm.estado} onChange={(event) => setGastoForm((prev) => ({ ...prev, estado: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    <option value="pendiente">Pendiente</option>
-                    <option value="registrado">Registrado</option>
-                    <option value="pagado">Pagado</option>
-                    <option value="cancelado">Cancelado</option>
-                  </select>
-                </div>
-                <div className="space-y-2 md:col-span-4">
-                  <Label htmlFor="gasto-observaciones">Observaciones</Label>
-                  <Textarea id="gasto-observaciones" name="observaciones" value={gastoForm.observaciones} onChange={(event) => setGastoForm((prev) => ({ ...prev, observaciones: event.target.value }))} />
-                </div>
-                <div className="md:col-span-4">
-                  <Button type="submit" disabled={!pedimentos.length || !gastoPedimentoId}>
-                    Agregar gasto
-                  </Button>
-                </div>
-              </form>
-
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Monto</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {!selectedGastos.length ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                          No hay gastos capturados.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      selectedGastos.map((gasto) => (
-                        <TableRow key={String(gasto.id)}>
-                          <TableCell>{asString(gasto.tipo_gasto)}</TableCell>
-                          <TableCell>{asString(gasto.descripcion, "—")}</TableCell>
-                          <TableCell>{formatDate(gasto.fecha_gasto)}</TableCell>
-                          <TableCell className="text-right">{formatMoney(gasto.monto_mxn ?? gasto.monto, "MXN")}</TableCell>
-                          <TableCell className="text-right">
-                            <form action={deletePedimentoGastoAction.bind(null, String(selectedPedimento.id), String(gasto.id))}>
-                              <Button type="submit" variant="ghost" size="sm">
-                                Eliminar
-                              </Button>
-                            </form>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Prorrateo por item</CardTitle>
-              <CardDescription>
-                Todos los items de las órdenes ligadas comparten el mismo costo aduanal total normalizado a MXN.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
-                  <div className="mt-1 text-sm font-semibold">
-                    {formatMoney(asNumber(selectedPedimento?.gastos_pedimento_total), "MXN")}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos órdenes</div>
-                  <div className="mt-1 text-sm font-semibold">
-                    {formatMoney(asNumber(selectedPedimento?.gastos_ordenes_total), "MXN")}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total prorrateable</div>
-                  <div className="mt-1 text-sm font-semibold">
-                    {formatMoney(asNumber(selectedPedimento?.costo_total_prorrateable), "MXN")}
-                  </div>
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Orden</TableHead>
-                      <TableHead>Partida</TableHead>
-                      <TableHead className="text-right">Cantidad</TableHead>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Base OC MXN</TableHead>
-                      <TableHead className="text-right">Base total MXN</TableHead>
-                      <TableHead className="text-right">Inc %</TableHead>
-                      <TableHead className="text-right">Inc. unit. MXN</TableHead>
-                      <TableHead className="text-right">Total unit. MXN</TableHead>
-                      <TableHead className="text-right">Total línea MXN</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {!selectedProrrateos.length ? (
-                      <TableRow>
-                        <TableCell colSpan={11} className="py-6 text-center text-sm text-muted-foreground">
-                          No hay prorrateo calculado todavía.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      selectedProrrateos.map((prorrateo, index) => {
-                        const item = prorrateo.orden_compra_item && typeof prorrateo.orden_compra_item === "object" ? (prorrateo.orden_compra_item as AnyRecord) : null
-                        const order = prorrateo.orden_compra && typeof prorrateo.orden_compra === "object" ? (prorrateo.orden_compra as AnyRecord) : null
-                        const quantity = asNumber(item?.cantidad_solicitada, asNumber(item?.cantidad_recibida, 0))
-                        const baseTotalMxn = asNumber(prorrateo.base_total_mxn, 0)
-                        const baseUnitMxn = quantity > 0 ? baseTotalMxn / quantity : 0
-                        const extraUnitMxn = asNumber(prorrateo.costo_unitario_adicional, 0)
-                        const extraUnitPercent = baseUnitMxn > 0 ? (extraUnitMxn / baseUnitMxn) * 100 : 0
-                        const totalUnitMxn = baseUnitMxn + extraUnitMxn
-                        const totalLineMxn = totalUnitMxn * quantity
-                        return (
-                          <TableRow key={String(prorrateo.id)}>
-                            <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
-                            <TableCell className="font-mono text-xs">{asString(order?.folio, "—")}</TableCell>
-                            <TableCell>{asString(item?.numero_partida, "—")}</TableCell>
-                            <TableCell className="text-right">{quantity.toFixed(3)}</TableCell>
-                            <TableCell>{asString(item?.descripcion, "—")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(baseUnitMxn, "MXN")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(baseTotalMxn, "MXN")}</TableCell>
-                            <TableCell className="text-right">{extraUnitPercent.toFixed(4)}%</TableCell>
-                            <TableCell className="text-right">{formatMoney(extraUnitMxn, "MXN")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(totalUnitMxn, "MXN")}</TableCell>
-                            <TableCell className="text-right">{formatMoney(totalLineMxn, "MXN")}</TableCell>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Gastos del pedimento</CardTitle>
+                    <CardDescription>Listado de gastos ya capturados para este pedimento.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Descripción</TableHead>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead className="text-right">Monto</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                           </TableRow>
-                        )
-                      })
-                    )}
-                  </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {!selectedGastos.length ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                                No hay gastos capturados.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            selectedGastos.map((gasto) => (
+                              <TableRow key={String(gasto.id)}>
+                                <TableCell>{asString(gasto.tipo_gasto)}</TableCell>
+                                <TableCell>{asString(gasto.descripcion, "—")}</TableCell>
+                                <TableCell>{formatDate(gasto.fecha_gasto)}</TableCell>
+                                <TableCell className="text-right">{formatMoney(gasto.monto_mxn ?? gasto.monto, "MXN")}</TableCell>
+                                <TableCell className="text-right">
+                                  <form action={deletePedimentoGastoAction.bind(null, String(selectedPedimento.id), String(gasto.id))}>
+                                    <Button type="submit" variant="ghost" size="sm">
+                                      Eliminar
+                                    </Button>
+                                  </form>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Prorrateo por item</CardTitle>
+                    <CardDescription>
+                      Todos los items de las órdenes ligadas comparten el mismo costo aduanal total normalizado a MXN.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {formatMoney(asNumber(selectedPedimento?.gastos_pedimento_total), "MXN")}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Gastos órdenes</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {formatMoney(asNumber(selectedPedimento?.gastos_ordenes_total), "MXN")}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total prorrateable</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {formatMoney(asNumber(selectedPedimento?.costo_total_prorrateable), "MXN")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>#</TableHead>
+                            <TableHead>Orden</TableHead>
+                            <TableHead>Partida</TableHead>
+                            <TableHead className="text-right">Cantidad</TableHead>
+                            <TableHead>Item</TableHead>
+                            <TableHead className="text-right">Base OC MXN</TableHead>
+                            <TableHead className="text-right">Base total MXN</TableHead>
+                            <TableHead className="text-right">Inc %</TableHead>
+                            <TableHead className="text-right">Inc. unit. MXN</TableHead>
+                            <TableHead className="text-right">Total unit. MXN</TableHead>
+                            <TableHead className="text-right">Total línea MXN</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {!selectedProrrateos.length ? (
+                            <TableRow>
+                              <TableCell colSpan={11} className="py-6 text-center text-sm text-muted-foreground">
+                                No hay prorrateo calculado todavía.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            selectedProrrateos.map((prorrateo, index) => {
+                              const item = prorrateo.orden_compra_item && typeof prorrateo.orden_compra_item === "object" ? (prorrateo.orden_compra_item as AnyRecord) : null
+                              const order = prorrateo.orden_compra && typeof prorrateo.orden_compra === "object" ? (prorrateo.orden_compra as AnyRecord) : null
+                              const quantity = asNumber(item?.cantidad_solicitada, asNumber(item?.cantidad_recibida, 0))
+                              const baseTotalMxn = asNumber(prorrateo.base_total_mxn, 0)
+                              const baseUnitMxn = quantity > 0 ? baseTotalMxn / quantity : 0
+                              const extraUnitMxn = asNumber(prorrateo.costo_unitario_adicional, 0)
+                              const extraUnitPercent = baseUnitMxn > 0 ? (extraUnitMxn / baseUnitMxn) * 100 : 0
+                              const totalUnitMxn = baseUnitMxn + extraUnitMxn
+                              const totalLineMxn = totalUnitMxn * quantity
+                              return (
+                                <TableRow key={String(prorrateo.id)}>
+                                  <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
+                                  <TableCell className="font-mono text-xs">{asString(order?.folio, "—")}</TableCell>
+                                  <TableCell>{asString(item?.numero_partida, "—")}</TableCell>
+                                  <TableCell className="text-right">{quantity.toFixed(3)}</TableCell>
+                                  <TableCell>{asString(item?.descripcion, "—")}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(baseUnitMxn, "MXN")}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(baseTotalMxn, "MXN")}</TableCell>
+                                  <TableCell className="text-right">{extraUnitPercent.toFixed(4)}%</TableCell>
+                                  <TableCell className="text-right">{formatMoney(extraUnitMxn, "MXN")}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(totalUnitMxn, "MXN")}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(totalLineMxn, "MXN")}</TableCell>
+                                </TableRow>
+                              )
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

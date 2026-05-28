@@ -139,7 +139,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       : Array.isArray(pedimentoIdParam)
         ? pedimentoIdParam[0] ?? ""
         : ""
-  const effectivePedimentoId = requestedPedimentoId || (activeView === "pedimentos" ? asString(pedimentosImportacion[0]?.id) : "")
+  const effectivePedimentoId = requestedPedimentoId
   const selectedPedimento = effectivePedimentoId ? await fetchOne(`/crm/compras/pedimentos/${encodeURIComponent(effectivePedimentoId)}`) : null
 
   const views: Array<{ value: ComprasView; label: string }> = [
