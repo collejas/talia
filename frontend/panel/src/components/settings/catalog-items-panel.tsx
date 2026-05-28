@@ -214,7 +214,7 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
     descripcionCorta: values.descripcionCorta || null,
     descripcionLarga: values.descripcionLarga || null,
     unidad: values.unidad || "unidad",
-    precioBase: values.precioBase.trim().length ? Number(values.precioBase) : null,
+    precioBase: values.precioBase.trim().length ? parseCurrencyInput(values.precioBase) : null,
     moneda: values.moneda || "MXN",
     impuestos: impuestos ?? [],
     activo: values.activo,
@@ -1088,9 +1088,8 @@ const handleDelete = useCallback(
                 <Label htmlFor="catalog-precio">Precio base</Label>
                 <Input
                   id="catalog-precio"
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   {...form.register("precioBase")}
                   placeholder="0.00"
                 />
