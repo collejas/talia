@@ -6,6 +6,14 @@ import { Info, Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,7 +28,6 @@ import {
   createOrdenCompraAction,
   createProveedorAction,
   createRecepcionAction,
-  cancelOrdenCompraAction,
   approveOrdenCompraAction,
   saveOrdenCompraPagosProgramadosAction,
   updateOrdenCompraPagoProgramadoAction,
@@ -757,6 +764,7 @@ export function ComprasWorkspace({
     [defaultOrderId, openOrders],
   )
   const [selectedOrderId, setSelectedOrderId] = useState<string>(String(initialOrder?.id ?? ""))
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
@@ -860,13 +868,18 @@ export function ComprasWorkspace({
   const paymentMxnLookupRequestIdRef = useRef(0)
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
-  const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
+  const selectedOrderRecord = useMemo(
+    () => ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null,
+    [ordenes, selectedOrderId],
+  )
+  const selectedOrderStatus = String(selectedOrderRecord?.estado ?? "").toLowerCase()
+  const selectedProvider = selectedOrderRecord && typeof selectedOrderRecord.proveedor === "object" ? (selectedOrderRecord.proveedor as AnyRecord) : null
   const selectedOrderDocuments = useMemo(
     () =>
-      Array.isArray((selectedOrder as AnyRecord | null)?.documentos)
-        ? ((selectedOrder as AnyRecord).documentos as AnyRecord[])
+      Array.isArray((selectedOrderRecord as AnyRecord | null)?.documentos)
+        ? ((selectedOrderRecord as AnyRecord).documentos as AnyRecord[])
         : [],
-    [selectedOrder],
+    [selectedOrderRecord],
   )
   const selectedOrderDocumentsByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
@@ -881,13 +894,13 @@ export function ComprasWorkspace({
   const selectedOrderHasProforma = selectedOrderDocuments.some(
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
-  const selectedOrderProformaHref = selectedOrderHasProforma && selectedOrder ? `/api/compras/ordenes/${selectedOrder.id}/proforma` : null
+  const selectedOrderProformaHref = selectedOrderHasProforma && selectedOrderRecord ? `/api/compras/ordenes/${selectedOrderRecord.id}/proforma` : null
   const selectedOrderPaymentSchedules = useMemo(
     () =>
-      Array.isArray((selectedOrder as AnyRecord | null)?.pagos_programados)
-        ? ((selectedOrder as AnyRecord).pagos_programados as AnyRecord[])
+      Array.isArray((selectedOrderRecord as AnyRecord | null)?.pagos_programados)
+        ? ((selectedOrderRecord as AnyRecord).pagos_programados as AnyRecord[])
         : [],
-    [selectedOrder],
+    [selectedOrderRecord],
   )
   const selectedOrderPaymentScheduleByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
@@ -938,7 +951,7 @@ export function ComprasWorkspace({
     }
     return map
   }, [pedimentosImportacion])
-  const selectedOrderPedimento = selectedOrder ? orderPedimentoByOrderId.get(String(selectedOrder.id)) ?? null : null
+  const selectedOrderPedimento = selectedOrderRecord ? orderPedimentoByOrderId.get(String(selectedOrderRecord.id)) ?? null : null
   const selectedOrderPaymentsTotalMxn = useMemo(() => {
     return selectedOrderPaymentSchedules.reduce((sum, row, index) => {
       const lookupKey = String(row.id ?? `${row.tipo_pago}-${index}`)
@@ -982,18 +995,26 @@ export function ComprasWorkspace({
       pagados,
     }
   }
-  const openOrderDocuments = (orden: AnyRecord) => {
-    startEditOrder(orden)
-    setSelectedOrderId(String(orden.id))
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" })
-      })
-    }
-  }
-
   const openOrderPayments = (orden: AnyRecord) => {
     router.push(`/compras?vista=pagos&orden_id=${encodeURIComponent(String(orden.id))}`)
+  }
+
+  const openCreateOrderModal = () => {
+    clearOrderForm()
+    setIsOrderModalOpen(true)
+  }
+
+  const openEditOrderModal = (orden: AnyRecord) => {
+    setSelectedOrderId(String(orden.id))
+    startEditOrder(orden)
+    setIsOrderModalOpen(true)
+  }
+
+  const handleOrderModalOpenChange = (open: boolean) => {
+    setIsOrderModalOpen(open)
+    if (!open) {
+      clearOrderForm()
+    }
   }
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
@@ -1943,7 +1964,7 @@ export function ComprasWorkspace({
                   proveedores.map((proveedor) => (
                     <TableRow key={String(proveedor.id)}>
                       <TableCell className="font-mono text-xs">{asString(proveedor.codigo_proveedor)}</TableCell>
-                      <TableCell>{asString(proveedor.razon_social)}</TableCell>
+                      <TableCell>{asString(proveedor.nombre_comercial ?? proveedor.razon_social)}</TableCell>
                       <TableCell>{Boolean(proveedor.activo) ? "Sí" : "No"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -1968,7 +1989,15 @@ export function ComprasWorkspace({
       ) : null}
 
       {showOrdenes ? (
-      <Card>
+        <Dialog open={isOrderModalOpen} onOpenChange={handleOrderModalOpenChange}>
+          <DialogContent className="max-h-[92vh] max-w-7xl overflow-y-auto p-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</DialogTitle>
+              <DialogDescription>
+                Formulario de alta y edición de órdenes de compra.
+              </DialogDescription>
+            </DialogHeader>
+            <Card className="border-0 shadow-none">
         <CardHeader>
           <CardTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</CardTitle>
           <CardDescription>Selecciona proveedor, almacén y productos. Todo se guarda en una sola operación.</CardDescription>
@@ -2058,7 +2087,7 @@ export function ComprasWorkspace({
                   <option value="">Selecciona un proveedor</option>
                   {proveedores.map((proveedor) => (
                     <option key={String(proveedor.id)} value={String(proveedor.id)}>
-                      {asString(proveedor.codigo_proveedor)} · {asString(proveedor.razon_social)}
+                      {asString(proveedor.codigo_proveedor)} · {asString(proveedor.nombre_comercial ?? proveedor.razon_social)}
                     </option>
                   ))}
                 </select>
@@ -3190,8 +3219,8 @@ export function ComprasWorkspace({
                     selectedDocumentFile?.metadata && typeof selectedDocumentFile.metadata === "object"
                       ? (selectedDocumentFile.metadata as AnyRecord)
                       : null
-                  const documentHref = selectedOrder?.id
-                    ? `/api/compras/ordenes/${selectedOrder.id}/documentos/${definition.tipoDocumento}`
+                  const documentHref = selectedOrderRecord?.id
+                    ? `/api/compras/ordenes/${selectedOrderRecord.id}/documentos/${definition.tipoDocumento}`
                     : null
                   return (
                     <div key={definition.tipoDocumento} className="rounded-lg border border-border/60 bg-background p-3">
@@ -3253,6 +3282,8 @@ export function ComprasWorkspace({
           </form>
         </CardContent>
       </Card>
+          </DialogContent>
+        </Dialog>
       ) : null}
 
       {showPagos ? (
@@ -3287,7 +3318,7 @@ export function ComprasWorkspace({
                   </option>
                   {openOrders.map((orden) => (
                     <option key={String(orden.id)} value={String(orden.id)}>
-                      {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}
+                      {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.nombre_comercial ?? (orden.proveedor as AnyRecord | undefined)?.razon_social, "Proveedor")}
                     </option>
                   ))}
                 </select>
@@ -3906,13 +3937,13 @@ export function ComprasWorkspace({
                   </option>
                   {openOrders.map((orden) => (
                     <option key={String(orden.id)} value={String(orden.id)}>
-                      {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}
+                      {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.nombre_comercial ?? (orden.proveedor as AnyRecord | undefined)?.razon_social, "Proveedor")}
                     </option>
                   ))}
                 </select>
                   {selectedProvider ? (
                     <p className="text-xs text-muted-foreground">
-                      Proveedor: <span className="font-medium text-foreground">{asString(selectedProvider.razon_social ?? selectedProvider.nombre_comercial)}</span>
+                      Proveedor: <span className="font-medium text-foreground">{asString(selectedProvider.nombre_comercial ?? selectedProvider.razon_social)}</span>
                     </p>
                   ) : null}
               </div>
@@ -4344,184 +4375,203 @@ export function ComprasWorkspace({
       ) : null}
 
       {showOrdenes ? (
-      <Card>
-        <CardHeader>
-          <CardTitle>Órdenes de compra recientes</CardTitle>
-          <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
-        </CardHeader>
-        <CardContent>
-              <Table>
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <CardTitle>Órdenes de compra</CardTitle>
+                <CardDescription />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" onClick={openCreateOrderModal}>
+                  Crear Orden de Compra
+                </Button>
+                <Button type="button" variant="outline" onClick={() => selectedOrderRecord && openEditOrderModal(selectedOrderRecord)} disabled={!selectedOrderRecord}>
+                  Editar
+                </Button>
+                {selectedOrderRecord && selectedOrderStatus === "borrador" ? (
+                  <form action={sendOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                    <Button type="submit" variant="secondary">
+                      Enviar
+                    </Button>
+                  </form>
+                ) : (
+                  <Button type="button" variant="secondary" disabled>
+                    Enviar
+                  </Button>
+                )}
+                {selectedOrderRecord && selectedOrderStatus === "enviada" ? (
+                  <form action={approveOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                    <Button type="submit" variant="secondary">
+                      Aprobar
+                    </Button>
+                  </form>
+                ) : (
+                  <Button type="button" variant="secondary" disabled>
+                    Aprobar
+                  </Button>
+                )}
+                {selectedOrderRecord ? (
+                  <form action={deleteOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                    <Button type="submit" variant="ghost">
+                      Eliminar
+                    </Button>
+                  </form>
+                ) : (
+                  <Button type="button" variant="ghost" disabled>
+                    Eliminar
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Folio</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead>Pedimento</TableHead>
-                  <TableHead>Almacén</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Seleccion</TableHead>
+                  <TableHead className="text-center">Tipo de O.C.</TableHead>
+                  <TableHead className="text-center">Folio</TableHead>
+                  <TableHead className="text-center">Proveedor</TableHead>
+                  <TableHead className="text-center">Pedimento</TableHead>
+                  <TableHead className="text-center">Almacén</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Docs</TableHead>
                   <TableHead className="text-center">Pagos</TableHead>
-                  <TableHead>Auditoría</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead className="text-center">Fecha</TableHead>
+                  <TableHead className="text-center">Auditoría</TableHead>
                 </TableRow>
               </TableHeader>
-            <TableBody>
-              {!ordenes.length ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
-                    Aún no hay órdenes de compra registradas.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                ordenes.map((orden) => (
-                  <TableRow key={String(orden.id)}>
-                    <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
-                    <TableCell>{asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}</TableCell>
-                    <TableCell>
-                      {orderPedimentoByOrderId.get(String(orden.id)) ? (
-                        <div className="flex flex-col">
-                          <span className="font-mono text-xs">{orderPedimentoByOrderId.get(String(orden.id))?.numero_pedimento}</span>
-                          <span className="text-[11px] text-muted-foreground">{orderPedimentoByOrderId.get(String(orden.id))?.estado}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Sin pedimento</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getOrderStatusBadge(
-                          orden.estado,
-                        ).className}`}
-                      >
-                        {getOrderStatusBadge(orden.estado).label}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const summary = getOrderDocumentsSummary(orden)
-                        return (
-                          <Button
-                            type="button"
-                            variant={summary.total > 0 ? "secondary" : "outline"}
-                            size="sm"
-                            className="h-10 min-w-16 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
-                            onClick={() => openOrderDocuments(orden)}
-                            title={
-                              summary.total > 0
-                                ? `${summary.proforma} PI · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}`
-                                : "Sin documentos"
-                            }
-                          >
-                            <span className="flex items-center gap-1 text-[11px] font-semibold">
-                              <Paperclip className="size-3.5" />
-                              {summary.total}
-                            </span>
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {summary.proforma > 0 ? `${summary.proforma} PI` : "Sin PI"}
-                              {summary.anexos > 0 ? ` · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}` : ""}
-                            </span>
-                          </Button>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const summary = getOrderPaymentsSummary(orden)
-                        const detailParts = [
-                          summary.anticipo ? `${summary.anticipo} anticipo${summary.anticipo === 1 ? "" : "s"}` : null,
-                          summary.saldo ? `${summary.saldo} saldo${summary.saldo === 1 ? "" : "s"}` : null,
-                          summary.parciales ? `${summary.parciales} parcial${summary.parciales === 1 ? "" : "es"}` : null,
-                        ].filter(Boolean)
-                        const label = detailParts.length ? detailParts.join(" · ") : "Sin pagos"
-                        return (
-                          <Button
-                            type="button"
-                            variant={summary.total > 0 ? "secondary" : "outline"}
-                            size="sm"
-                            className="h-10 min-w-20 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
-                            onClick={() => openOrderPayments(orden)}
-                            title={summary.total > 0 ? label : "Sin pagos"}
-                          >
-                            <span className="text-[11px] font-semibold">{summary.total}</span>
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {summary.total > 0 ? label : "Sin pagos"}
-                            </span>
-                          </Button>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1 text-xs">
-                        <div className="space-y-0.5">
-                          <div className="font-medium text-foreground">Enviado</div>
-                          <div>{getAuditLabel(orden.enviada_por_usuario)}</div>
-                          <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.enviada_en)}</div>
-                        </div>
-                        <div className="space-y-0.5">
-                          <div className="font-medium text-foreground">Aprobado</div>
-                          <div>{getAuditLabel(orden.aprobado_por_usuario)}</div>
-                          <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.aprobada_en)}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatDateTime(orden.fecha_emision)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(orden.total)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {String(orden.estado ?? "").toLowerCase() === "borrador" ? (
-                          <form action={sendOrdenCompraAction.bind(null, String(orden.id))}>
-                            <Button type="submit" variant="secondary" size="sm">
-                              Enviar
-                            </Button>
-                          </form>
-                        ) : null}
-                        {String(orden.estado ?? "").toLowerCase() === "enviada" ? (
-                          <form action={approveOrdenCompraAction.bind(null, String(orden.id))}>
-                            <Button type="submit" variant="secondary" size="sm">
-                              Aprobar
-                            </Button>
-                          </form>
-                        ) : null}
-                        {String(orden.estado ?? "").toLowerCase() === "recibida" ? (
-                          <form action={closeOrdenCompraAction.bind(null, String(orden.id))}>
-                            <Button type="submit" variant="secondary" size="sm">
-                              Cerrar
-                            </Button>
-                          </form>
-                        ) : null}
-                        {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
-                          <Button type="button" variant="secondary" size="sm" onClick={() => openOrderPayments(orden)}>
-                            Pagos
-                          </Button>
-                        ) : null}
-                        {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
-                          <Button type="button" variant="outline" size="sm" onClick={() => openOrderDocuments(orden)}>
-                            Editar
-                          </Button>
-                        ) : null}
-                        {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
-                          <form action={cancelOrdenCompraAction.bind(null, String(orden.id))}>
-                            <Button type="submit" variant="outline" size="sm">
-                              Cancelar
-                            </Button>
-                          </form>
-                        ) : null}
-                        <form action={deleteOrdenCompraAction.bind(null, String(orden.id))}>
-                          <Button type="submit" variant="ghost" size="sm">
-                            Eliminar
-                          </Button>
-                        </form>
-                      </div>
+              <TableBody>
+                {!ordenes.length ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
+                      Aún no hay órdenes de compra registradas.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ) : (
+                  ordenes.map((orden) => {
+                    const orderId = String(orden.id)
+                    const isSelected = selectedOrderId === orderId
+                    const orderTypeLabel = String(orden.tipo_operacion ?? "").toLowerCase() === "internacional" ? "Internacional" : "Nacional"
+                    const orderStatus = getOrderStatusBadge(orden.estado)
+                    return (
+                      <TableRow key={orderId} className={isSelected ? "bg-muted/40" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            aria-label={`Seleccionar orden ${asString(orden.folio)}`}
+                            onCheckedChange={(checked) => {
+                              setSelectedOrderId(checked === true ? orderId : "")
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">
+                            {orderTypeLabel}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
+                        <TableCell>
+                          {asString(
+                            (orden.proveedor as AnyRecord | undefined)?.nombre_comercial ??
+                              (orden.proveedor as AnyRecord | undefined)?.razon_social,
+                            "Proveedor",
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {orderPedimentoByOrderId.get(orderId) ? (
+                            <div className="flex flex-col">
+                              <span className="font-mono text-xs">{orderPedimentoByOrderId.get(orderId)?.numero_pedimento}</span>
+                              <span className="text-[11px] text-muted-foreground">{orderPedimentoByOrderId.get(orderId)?.estado}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Sin pedimento</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${orderStatus.className}`}>
+                            {orderStatus.label}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const summary = getOrderDocumentsSummary(orden)
+                            return (
+                              <Button
+                                type="button"
+                                variant={summary.total > 0 ? "secondary" : "outline"}
+                                size="sm"
+                                className="h-10 min-w-16 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
+                                onClick={() => openEditOrderModal(orden)}
+                                title={
+                                  summary.total > 0
+                                    ? `${summary.proforma} PI · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}`
+                                    : "Sin documentos"
+                                }
+                              >
+                                <span className="flex items-center gap-1 text-[11px] font-semibold">
+                                  <Paperclip className="size-3.5" />
+                                  {summary.total}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  {summary.proforma > 0 ? `${summary.proforma} PI` : "Sin PI"}
+                                  {summary.anexos > 0 ? ` · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}` : ""}
+                                </span>
+                              </Button>
+                            )
+                          })()}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const summary = getOrderPaymentsSummary(orden)
+                            const detailParts = [
+                              summary.anticipo ? `${summary.anticipo} anticipo${summary.anticipo === 1 ? "" : "s"}` : null,
+                              summary.saldo ? `${summary.saldo} saldo${summary.saldo === 1 ? "" : "s"}` : null,
+                              summary.parciales ? `${summary.parciales} parcial${summary.parciales === 1 ? "" : "es"}` : null,
+                            ].filter(Boolean)
+                            const label = detailParts.length ? detailParts.join(" · ") : "Sin pagos"
+                            return (
+                              <Button
+                                type="button"
+                                variant={summary.total > 0 ? "secondary" : "outline"}
+                                size="sm"
+                                className="h-10 min-w-20 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
+                                onClick={() => openOrderPayments(orden)}
+                                title={summary.total > 0 ? label : "Sin pagos"}
+                              >
+                                <span className="text-[11px] font-semibold">{summary.total}</span>
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  {summary.total > 0 ? label : "Sin pagos"}
+                                </span>
+                              </Button>
+                            )
+                          })()}
+                        </TableCell>
+                        <TableCell>{formatDateTime(orden.creado_en)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-xs">
+                            <div className="space-y-0.5">
+                              <div className="font-medium text-foreground">Enviado</div>
+                              <div>{getAuditLabel(orden.enviada_por_usuario)}</div>
+                              <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.enviada_en)}</div>
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="font-medium text-foreground">Aprobado</div>
+                              <div>{getAuditLabel(orden.aprobado_por_usuario)}</div>
+                              <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.aprobada_en)}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       ) : null}
 
       {showAgentes ? (
