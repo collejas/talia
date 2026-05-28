@@ -3324,24 +3324,27 @@ export function ComprasWorkspace({
                                   >
                                     <span className="truncate">{nombreDocumento}</span>
                                     {documentoId ? (
-                                      <form action={deleteOrdenCompraDocumentoAction.bind(null, String(selectedOrderRecord?.id ?? ""), documentoId)}>
-                                        <Button
-                                          type="submit"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 px-2 text-[11px] text-destructive hover:text-destructive"
-                                          onClick={(event) => {
-                                            const confirmed = window.confirm(
-                                              "¿Eliminar este archivo adjunto? Esta acción no se puede deshacer.",
-                                            )
-                                            if (!confirmed) {
-                                              event.preventDefault()
-                                            }
-                                          }}
-                                        >
-                                          Eliminar
-                                        </Button>
-                                      </form>
+                                      <Button
+                                        type="submit"
+                                        formAction={deleteOrdenCompraDocumentoAction.bind(
+                                          null,
+                                          String(selectedOrderRecord?.id ?? ""),
+                                          documentoId,
+                                        )}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px] text-destructive hover:text-destructive"
+                                        onClick={(event) => {
+                                          const confirmed = window.confirm(
+                                            "¿Eliminar este archivo adjunto? Esta acción no se puede deshacer.",
+                                          )
+                                          if (!confirmed) {
+                                            event.preventDefault()
+                                          }
+                                        }}
+                                      >
+                                        Eliminar
+                                      </Button>
                                     ) : null}
                                   </div>
                                 )
