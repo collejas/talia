@@ -31,3 +31,29 @@ export async function GET(_request: Request, context: RouteContext) {
   }
   return NextResponse.redirect(response.data.url, 307)
 }
+
+export async function POST(request: Request, context: RouteContext) {
+  const { ordenId, tipoDocumento } = await context.params
+  const formData = await request.formData()
+  const file = formData.get("file")
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "file_required" }, { status: 400 })
+  }
+
+  const payload = new FormData()
+  payload.append("file", file, file.name || "documento.pdf")
+
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/documentos/${tipoDocumento}`, {
+    method: "POST",
+    body: payload,
+  })
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { error: response.error ?? "document_upload_failed" },
+      { status: response.status ?? 500 },
+    )
+  }
+
+  return NextResponse.json(response.data ?? { ok: true })
+}

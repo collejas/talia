@@ -815,6 +815,7 @@ export function ComprasWorkspace({
   })
   const [orderVigenciaHasta, setOrderVigenciaHasta] = useState("")
   const [orderProformaReferencia, setOrderProformaReferencia] = useState("")
+  const [orderProformaFile, setOrderProformaFile] = useState<File | null>(null)
   const [orderProformaFileName, setOrderProformaFileName] = useState("")
   const [orderProformaInputKey, setOrderProformaInputKey] = useState(0)
   const [orderReferenceExternal, setOrderReferenceExternal] = useState("")
@@ -885,6 +886,13 @@ export function ComprasWorkspace({
   const orderHydratingRef = useRef(false)
   const orderExchangeRateRequestIdRef = useRef(0)
   const paymentMxnLookupRequestIdRef = useRef(0)
+  const createEmptyDocumentUploadSlot = useCallback(
+    () => ({ id: crypto.randomUUID(), file: null as File | null, fileName: "" }),
+    [],
+  )
+  const [orderDocumentUploadSlots, setOrderDocumentUploadSlots] = useState<
+    Record<string, Array<{ id: string; file: File | null; fileName: string }>>
+  >({})
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedOrderRecord = useMemo(
@@ -901,10 +909,17 @@ export function ComprasWorkspace({
         : [],
     [selectedOrderRecord],
   )
+  const normalizeOrderDocumentBaseType = useCallback((value: unknown) => {
+    const raw = asString(value, "").trim().toLowerCase()
+    if (!raw) {
+      return ""
+    }
+    return raw.split("__")[0] ?? ""
+  }, [])
   const selectedOrderDocumentsByType = useMemo(() => {
     const map = new Map<string, AnyRecord[]>()
     for (const documento of selectedOrderDocuments) {
-      const tipoDocumento = asString(documento?.tipo_documento, "").toLowerCase()
+      const tipoDocumento = normalizeOrderDocumentBaseType(documento?.tipo_documento)
       if (tipoDocumento) {
         const current = map.get(tipoDocumento) ?? []
         current.push(documento)
@@ -912,7 +927,7 @@ export function ComprasWorkspace({
       }
     }
     return map
-  }, [selectedOrderDocuments])
+  }, [normalizeOrderDocumentBaseType, selectedOrderDocuments])
   const selectedOrderHasProforma = selectedOrderDocuments.some(
     (documento) => String(documento?.tipo_documento || "").toLowerCase() === "proforma",
   )
@@ -1023,12 +1038,14 @@ export function ComprasWorkspace({
 
   const openCreateOrderModal = () => {
     clearOrderForm()
+    resetOrderDocumentUploadSlots()
     setIsOrderModalOpen(true)
   }
 
   const openEditOrderModal = (orden: AnyRecord) => {
     setSelectedOrderId(String(orden.id))
     startEditOrder(orden)
+    resetOrderDocumentUploadSlots()
     setIsOrderModalOpen(true)
   }
 
@@ -1078,6 +1095,36 @@ export function ComprasWorkspace({
     [filteredExistencias],
   )
   const orderDocumentDefinitions = useMemo(() => getOrderDocumentDefinitions(orderType), [orderType])
+  const resetOrderDocumentUploadSlots = useCallback(() => {
+    const nextSlots = Object.fromEntries(
+      orderDocumentDefinitions.map((definition) => [definition.tipoDocumento, [createEmptyDocumentUploadSlot()]]),
+    )
+    setOrderDocumentUploadSlots(nextSlots)
+  }, [createEmptyDocumentUploadSlot, orderDocumentDefinitions])
+
+  useEffect(() => {
+    if (!isOrderModalOpen) {
+      return
+    }
+    setOrderDocumentUploadSlots((current) => {
+      const next: Record<string, Array<{ id: string; file: File | null; fileName: string }>> = {}
+      let changed = false
+      for (const definition of orderDocumentDefinitions) {
+        const existing = current[definition.tipoDocumento]
+        if (Array.isArray(existing) && existing.length > 0) {
+          next[definition.tipoDocumento] = existing
+        } else {
+          next[definition.tipoDocumento] = [createEmptyDocumentUploadSlot()]
+          changed = true
+        }
+      }
+      const currentKeys = Object.keys(current)
+      if (currentKeys.some((key) => !orderDocumentDefinitions.some((definition) => definition.tipoDocumento === key))) {
+        changed = true
+      }
+      return changed ? next : current
+    })
+  }, [createEmptyDocumentUploadSlot, isOrderModalOpen, orderDocumentDefinitions])
   const adjustmentExistencia = useMemo(
     () =>
       existencias.find(
@@ -1375,9 +1422,46 @@ export function ComprasWorkspace({
   const providerFormAction = editingProviderId
     ? updateProveedorAction.bind(null, editingProviderId)
     : createProveedorAction
-  const orderFormAction = editingOrderId
-    ? updateOrdenCompraAction.bind(null, editingOrderId)
-    : createOrdenCompraAction
+  const uploadOrderAttachment = async (orderId: string, tipoDocumento: string, file: File) => {
+    const payload = new FormData()
+    payload.append("file", file, file.name || "documento.pdf")
+    const endpoint =
+      tipoDocumento === "proforma"
+        ? `/api/compras/ordenes/${encodeURIComponent(orderId)}/proforma`
+        : `/api/compras/ordenes/${encodeURIComponent(orderId)}/documentos/${encodeURIComponent(tipoDocumento)}`
+    const response = await fetch(endpoint, {
+      method: "POST",
+      body: payload,
+      cache: "no-store",
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error((body as { error?: string })?.error ?? `upload_failed:${tipoDocumento}`)
+    }
+  }
+  const handleOrderFormAction = async (formData: FormData) => {
+    const savedOrderId = editingOrderId
+      ? await updateOrdenCompraAction(editingOrderId, formData)
+      : await createOrdenCompraAction(formData)
+    if (savedOrderId) {
+      if (orderProformaFile instanceof File && orderProformaFile.size > 0) {
+        await uploadOrderAttachment(savedOrderId, "proforma", orderProformaFile)
+      }
+      for (const [tipoDocumento, slots] of Object.entries(orderDocumentUploadSlots)) {
+        for (const slot of slots) {
+          if (!(slot.file instanceof File) || slot.file.size <= 0) {
+            continue
+          }
+          await uploadOrderAttachment(savedOrderId, `${tipoDocumento}__${slot.id}`, slot.file)
+        }
+      }
+    }
+    router.refresh()
+    setOrderProformaFile(null)
+    setOrderProformaFileName("")
+    setOrderProformaInputKey((current) => current + 1)
+    resetOrderDocumentUploadSlots()
+  }
 
   const startEditWarehouse = (almacen: AnyRecord) => {
     setEditingWarehouseId(String(almacen.id))
@@ -1436,6 +1520,7 @@ export function ComprasWorkspace({
     })
     setOrderVigenciaHasta(asString(orden.vigencia_hasta, ""))
     setOrderProformaReferencia(asString(orden.proforma_referencia, ""))
+    setOrderProformaFile(null)
     setOrderProformaFileName("")
     setOrderReferenceExternal(asString(orden.referencia_externa, ""))
     setOrderObservations(asString(orden.observaciones, ""))
@@ -1538,6 +1623,7 @@ export function ComprasWorkspace({
     })
     setOrderVigenciaHasta("")
     setOrderProformaReferencia("")
+    setOrderProformaFile(null)
     setOrderProformaFileName("")
     setOrderProformaInputKey((current) => current + 1)
     setOrderReferenceExternal("")
@@ -1587,6 +1673,7 @@ export function ComprasWorkspace({
     setOrderMontoAsegurado("")
     setOrderLogisticaObservaciones("")
     setOrderLines([createEmptyOrderLine()])
+    setOrderDocumentUploadSlots({})
     if (typeof window !== "undefined") {
       window.setTimeout(() => {
         orderHydratingRef.current = false
@@ -2031,7 +2118,7 @@ export function ComprasWorkspace({
           <CardDescription>Selecciona proveedor, almacén y productos. Todo se guarda en una sola operación.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={orderFormAction} className="space-y-5">
+          <form action={handleOrderFormAction} className="space-y-5">
             <input type="hidden" name="fecha_emision" value={formatDateOnly(orderEmissionIso)} readOnly />
             <div className="grid gap-4 md:grid-cols-6">
               <div className="space-y-2 md:col-span-1">
@@ -2055,7 +2142,11 @@ export function ComprasWorkspace({
                   id="orden-tipo-operacion"
                   name="tipo_operacion"
                   value={orderType}
-                  onChange={(event) => setOrderType(event.target.value as "nacional" | "internacional")}
+                  onChange={(event) => {
+                    const nextType = event.target.value as "nacional" | "internacional"
+                    setOrderType(nextType)
+                    setOrderDocumentUploadSlots({})
+                  }}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="nacional">Nacional</option>
@@ -2631,11 +2722,11 @@ export function ComprasWorkspace({
                   <Input
                     key={orderProformaInputKey}
                     id="orden-proforma-file"
-                    name="proforma_file"
                     type="file"
                     accept=".pdf,application/pdf"
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null
+                      setOrderProformaFile(file)
                       setOrderProformaFileName(file?.name ?? "")
                     }}
                   />
@@ -3253,6 +3344,7 @@ export function ComprasWorkspace({
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {orderDocumentDefinitions.map((definition) => {
                   const selectedDocuments = selectedOrderDocumentsByType.get(definition.tipoDocumento) ?? []
+                  const uploadSlots = orderDocumentUploadSlots[definition.tipoDocumento] ?? []
                   const documentHref = selectedOrderRecord?.id
                     ? `/api/compras/ordenes/${selectedOrderRecord.id}/documentos/${definition.tipoDocumento}`
                     : null
@@ -3282,15 +3374,43 @@ export function ComprasWorkspace({
                       </div>
                       <div className="mt-3 space-y-2">
                         <div className="text-xs text-muted-foreground">
-                          Puedes adjuntar uno o varios archivos PDF.
+                          Agrega uno o varios archivos PDF. Cada fila guarda un archivo.
                         </div>
-                        <Input
-                          id={`orden-doc-${definition.tipoDocumento}`}
-                          name={`documento_file_${definition.tipoDocumento}`}
-                          type="file"
-                          accept=".pdf,application/pdf"
-                          multiple
-                        />
+                        <div className="space-y-2">
+                          {uploadSlots.map((slot, index) => {
+                            return (
+                              <div key={slot.id} className="space-y-1 rounded-md border border-dashed border-border/60 bg-muted/20 p-2">
+                                <input
+                                  id={`orden-doc-${definition.tipoDocumento}-${slot.id}`}
+                                  type="file"
+                                  accept=".pdf,application/pdf"
+                                  className="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                                  onChange={(event) => {
+                                    const file = event.currentTarget.files?.[0] ?? null
+                                    const fileName = file?.name ?? ""
+                                    setOrderDocumentUploadSlots((current) => {
+                                      const currentSlots = current[definition.tipoDocumento] ?? []
+                                      const nextSlots = currentSlots.map((currentSlot) =>
+                                        currentSlot.id === slot.id ? { ...currentSlot, file, fileName } : currentSlot,
+                                      )
+                                      const isLastSlot = index === currentSlots.length - 1
+                                      if (file && isLastSlot) {
+                                        nextSlots.push(createEmptyDocumentUploadSlot())
+                                      }
+                                      return {
+                                        ...current,
+                                        [definition.tipoDocumento]: nextSlots,
+                                      }
+                                    })
+                                  }}
+                                />
+                                <div className="text-[11px] text-muted-foreground">
+                                  {slot.fileName ? `Seleccionado: ${slot.fileName}` : "Sin archivo seleccionado"}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                         {selectedDocuments.length ? (
                           <div className="space-y-2 text-xs text-muted-foreground">
                             <div className="flex items-center justify-between gap-2">

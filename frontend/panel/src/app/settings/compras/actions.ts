@@ -402,17 +402,27 @@ async function uploadOrdenCompraFormDocuments(ordenId: string, formData: FormDat
   if (proformaFile instanceof File && proformaFile.size > 0) {
     uploads.push({ tipoDocumento: "proforma", file: proformaFile })
   }
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith("documento_file_")) continue
-    if (!(value instanceof File) || value.size <= 0) continue
-    const tipoDocumento = key.slice("documento_file_".length).trim().toLowerCase()
+  for (const key of Array.from(new Set(formData.keys()))) {
+    if (!key.startsWith("documento_file::")) continue
+    const [, tipoDocumentoRaw] = key.split("::")
+    const tipoDocumento = (tipoDocumentoRaw || "").trim().toLowerCase()
     if (!tipoDocumento) continue
+    const value = formData.get(key)
+    if (!(value instanceof File) || value.size <= 0) continue
     uploads.push({ tipoDocumento, file: value })
   }
 
   for (const upload of uploads) {
     await uploadOrdenCompraDocumentAttachment(ordenId, upload.tipoDocumento, upload.file)
   }
+}
+
+export async function uploadOrdenCompraDocumentAttachmentsAction(
+  ordenId: string,
+  formData: FormData,
+): Promise<void> {
+  await uploadOrdenCompraFormDocuments(ordenId, formData)
+  revalidatePath(SETTINGS_PATH)
 }
 
 function buildOrdenCompraLogistica(formData: FormData, tipoOperacion: string): Record<string, unknown> | null {
@@ -853,7 +863,7 @@ export async function createInventarioAjusteAction(formData: FormData): Promise<
   revalidatePath(SETTINGS_PATH)
 }
 
-export async function createOrdenCompraAction(formData: FormData): Promise<void> {
+export async function createOrdenCompraAction(formData: FormData): Promise<string> {
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
@@ -887,13 +897,11 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
     throw new Error(response.error)
   }
   const createdOrderId = typeof response.data === "object" && response.data !== null ? String((response.data as { id?: string }).id ?? "") : ""
-  if (createdOrderId) {
-    await uploadOrdenCompraFormDocuments(createdOrderId, formData)
-  }
   revalidatePath(SETTINGS_PATH)
+  return createdOrderId
 }
 
-export async function updateOrdenCompraAction(ordenId: string, formData: FormData): Promise<void> {
+export async function updateOrdenCompraAction(ordenId: string, formData: FormData): Promise<string> {
   const items = zipOrderItems(formData)
   const tipoOperacion = (parseOptionalText(formData.get("tipo_operacion")) || "nacional").toLowerCase()
   const moneda = parseOptionalText(formData.get("moneda")) || "MXN"
@@ -926,8 +934,8 @@ export async function updateOrdenCompraAction(ordenId: string, formData: FormDat
   if (!response.ok) {
     throw new Error(response.error)
   }
-  await uploadOrdenCompraFormDocuments(ordenId, formData)
   revalidatePath(SETTINGS_PATH)
+  return ordenId
 }
 
 export async function saveOrdenCompraPagosProgramadosAction(ordenId: string, formData: FormData): Promise<void> {

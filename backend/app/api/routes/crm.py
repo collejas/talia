@@ -16617,11 +16617,13 @@ async def _get_compras_orden_document_url(
     documentos = orden.get("documentos")
     archivo_path: str | None = None
     archivo_created_at = ""
+    normalized_tipo = tipo_documento.lower().strip()
     if isinstance(documentos, list):
         for documento in documentos:
             if not isinstance(documento, dict):
                 continue
-            if str(documento.get("tipo_documento") or "").lower() != tipo_documento.lower():
+            documento_tipo = _clean_text(documento.get("tipo_documento")).lower()
+            if documento_tipo != normalized_tipo and not documento_tipo.startswith(f"{normalized_tipo}__"):
                 continue
             archivo = documento.get("archivo")
             if isinstance(archivo, dict):
