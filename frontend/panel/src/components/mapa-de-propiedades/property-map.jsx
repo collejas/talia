@@ -39,7 +39,7 @@ const STATUS_COLORS = {
 
 const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
 const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
-const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_SOURCE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function getDevelopmentPolygonColor(properties) {
   if (!properties || typeof properties !== "object") {
@@ -2155,16 +2155,33 @@ export function PropertyMap() {
         const props = f?.properties ?? {};
         const kind = inferFeatureKind(f);
         const featureDevId =
-          kind === "desarrollo"
-            ? props.target_id ?? props.desarrollo_id ?? f.id ?? null
-            : props.target_id ?? props.desarrollo_id ?? null;
+          props.target_id ?? props.desarrollo_id ?? props.id ?? f.id ?? null;
+        return featureDevId && String(featureDevId) === normalized && ["desarrollo", "mix"].includes(kind);
+      });
+      if (exact) return exact;
+      const normalizedName = normalizeLooseString(String(devId));
+      const byName = list.find((f) => {
+        const props = f?.properties ?? {};
+        const candidateName = normalizeLooseString(
+          props.desarrollo_nombre ??
+            props.nombre ??
+            props.fraccionamiento ??
+            props.fraccionamiento_nombre,
+        );
+        return Boolean(candidateName && normalizedName && candidateName === normalizedName);
+      });
+      if (byName) return byName;
+      const fallback = list.find((f) => {
+        const props = f?.properties ?? {};
+        const kind = inferFeatureKind(f);
+        const featureDevId = props.target_id ?? props.desarrollo_id ?? props.id ?? f.id ?? null;
         return (
           featureDevId &&
           String(featureDevId) === normalized &&
-          kind === "desarrollo"
+          ["desarrollo", "mix", "capa", "unidad"].includes(kind)
         );
       });
-      if (exact) return exact;
+      if (fallback) return fallback;
       return null;
     },
     [],
@@ -2329,6 +2346,7 @@ export function PropertyMap() {
     mapInstanceRef.current = map;
     const tileLayer = leaflet.tileLayer(TILE_SOURCE, {
       attribution: "&copy; OpenStreetMap contributors",
+      crossOrigin: true,
     });
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
@@ -3452,7 +3470,7 @@ export function PropertyMap() {
       mapboxFeatureRef.current = null;
       setMapboxFeature(null);
       setMapboxActive(true);
-      setMapboxLoading(false);
+      setMapboxLoading(true);
       setActiveNode(feature);
       setParentStack([]);
       zoomToFeature(feature);
@@ -3467,11 +3485,15 @@ export function PropertyMap() {
   );
 
   const handleDevelopmentSelect = useCallback(
-    (developmentFeature) => {
-      if (!developmentFeature?.geometry) {
+    (developmentFeatureOrId) => {
+      const resolvedFeature =
+        typeof developmentFeatureOrId === "string"
+          ? findFeatureForDevelopment(developmentFeatureOrId)
+          : developmentFeatureOrId;
+      if (!resolvedFeature?.geometry) {
         return;
       }
-      const children = getChildrenForNode(developmentFeature).filter(
+      const children = getChildrenForNode(resolvedFeature).filter(
         (child) => inferFeatureKind(child) === "capa",
       );
       pendingPayloadRef.current = null;
@@ -3481,24 +3503,30 @@ export function PropertyMap() {
       suppressTreeCapaFallbackRef.current = true;
       selectedMapboxUnitIdRef.current = null;
       hoveredMapboxIdRef.current = null;
-      mapboxRootFeatureRef.current = developmentFeature;
-      setSelectedId(String(developmentFeature.id ?? ""));
-      setActiveMarkerFeature(developmentFeature);
+      mapboxRootFeatureRef.current = resolvedFeature;
+      setSelectedId(String(resolvedFeature.id ?? ""));
+      setActiveMarkerFeature(resolvedFeature);
       mapboxFeatureRef.current = null;
       setMapboxFeature(null);
       setMapboxActive(true);
-      setMapboxLoading(false);
-      setActiveNode(developmentFeature);
+      setMapboxLoading(true);
+      setActiveNode(resolvedFeature);
       setParentStack([]);
-      zoomToFeature(developmentFeature);
+      zoomToFeature(resolvedFeature);
       if (children.length) {
         sendFeaturesToMapbox(children, "desarrollo", true);
       }
       if (mapboxInstanceRef.current) {
-        applyMapboxNavigationLimits(mapboxInstanceRef.current, developmentFeature);
+        applyMapboxNavigationLimits(mapboxInstanceRef.current, resolvedFeature);
       }
     },
-    [applyMapboxNavigationLimits, getChildrenForNode, sendFeaturesToMapbox, zoomToFeature],
+    [
+      applyMapboxNavigationLimits,
+      findFeatureForDevelopment,
+      getChildrenForNode,
+      sendFeaturesToMapbox,
+      zoomToFeature,
+    ],
   );
 
   const PolygonContainer = ({ geom, children }) => (
@@ -3735,9 +3763,7 @@ export function PropertyMap() {
                             type="button"
                             className="flex items-center gap-2 text-left font-semibold text-slate-800 transition hover:text-slate-950"
                             onClick={() => {
-                              if (developmentFeature) {
-                                handleDevelopmentSelect(developmentFeature);
-                              }
+                              handleDevelopmentSelect(developmentFeature ?? dev.id);
                             }}
                           >
                             <IconBuilding className="size-4 text-slate-400" />
