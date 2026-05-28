@@ -2230,8 +2230,12 @@ export function ComprasWorkspace({
                           type="number"
                           min="0"
                           step="0.001"
-                          value={Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0}
-                          onChange={(event) => updateOrderLine(index, { cantidad_solicitada: Number(event.target.value) })}
+                          value={Number.isFinite(line.cantidad_solicitada) && line.cantidad_solicitada > 0 ? line.cantidad_solicitada : ""}
+                          onChange={(event) =>
+                            updateOrderLine(index, {
+                              cantidad_solicitada: event.target.value === "" ? 0 : Number(event.target.value),
+                            })
+                          }
                         />
                       </TableCell>
                       <TableCell className="w-36 align-top">
