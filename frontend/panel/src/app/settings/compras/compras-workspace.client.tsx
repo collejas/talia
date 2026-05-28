@@ -1555,7 +1555,7 @@ export function ComprasWorkspace({
     setOrderPorcentajeAnticipo("")
     setOrderMomentoPagoSaldo("")
     setOrderDiasCredito("")
-    setOrderComisionesBancarias("")
+    setOrderDatosBancariosProveedor("")
     setOrderCondicionesPagoObservaciones("")
     setOrderPaymentSchedules([])
     setOrderModoTransporteCodigo("")
