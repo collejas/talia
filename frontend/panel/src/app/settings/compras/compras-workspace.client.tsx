@@ -3345,9 +3345,6 @@ export function ComprasWorkspace({
                 {orderDocumentDefinitions.map((definition) => {
                   const selectedDocuments = selectedOrderDocumentsByType.get(definition.tipoDocumento) ?? []
                   const uploadSlots = orderDocumentUploadSlots[definition.tipoDocumento] ?? []
-                  const documentHref = selectedOrderRecord?.id
-                    ? `/api/compras/ordenes/${selectedOrderRecord.id}/documentos/${definition.tipoDocumento}`
-                    : null
                   return (
                     <div key={definition.tipoDocumento} className="rounded-lg border border-border/60 bg-background p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -3415,13 +3412,6 @@ export function ComprasWorkspace({
                           <div className="space-y-2 text-xs text-muted-foreground">
                             <div className="flex items-center justify-between gap-2">
                               <span>{selectedDocuments.length} archivo(s) cargado(s)</span>
-                              {documentHref ? (
-                                <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                                  <a href={documentHref} target="_blank" rel="noreferrer">
-                                    Ver último
-                                  </a>
-                                </Button>
-                              ) : null}
                             </div>
                             <div className="space-y-1">
                               {selectedDocuments.map((documento, index) => {
