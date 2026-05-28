@@ -824,6 +824,7 @@ export function ComprasWorkspace({
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
   const [editingOrderLineCostIndex, setEditingOrderLineCostIndex] = useState<number | null>(null)
   const [editingReceptionLineCostIndex, setEditingReceptionLineCostIndex] = useState<number | null>(null)
+  const [editingOrderMontoAsegurado, setEditingOrderMontoAsegurado] = useState(false)
   const [orderIncotermCodigo, setOrderIncotermCodigo] = useState("")
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
   const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
@@ -1572,6 +1573,7 @@ export function ComprasWorkspace({
     setOrderMarcasEmbarque(asString(logistica.marcas_embarque, ""))
     setOrderRequiereSeguro(Boolean(logistica.requiere_seguro ?? false))
     setOrderMontoAsegurado(asString(logistica.monto_asegurado, ""))
+    setEditingOrderMontoAsegurado(false)
     setOrderLogisticaObservaciones(asString(logistica.observaciones, ""))
     setOrderLines(buildOrderLinesFromOrder(orden))
     if (typeof window !== "undefined") {
@@ -1671,6 +1673,7 @@ export function ComprasWorkspace({
     setOrderMarcasEmbarque("")
     setOrderRequiereSeguro(false)
     setOrderMontoAsegurado("")
+    setEditingOrderMontoAsegurado(false)
     setOrderLogisticaObservaciones("")
     setOrderLines([createEmptyOrderLine()])
     setOrderDocumentUploadSlots({})
@@ -3315,7 +3318,25 @@ export function ComprasWorkspace({
                   <label className="text-sm font-medium" htmlFor="orden-monto-asegurado">
                     Monto asegurado
                   </label>
-                  <Input id="orden-monto-asegurado" name="logistica_monto_asegurado" type="number" min="0" step="0.01" value={orderMontoAsegurado} onChange={(event) => setOrderMontoAsegurado(event.target.value)} />
+                  <Input
+                    id="orden-monto-asegurado"
+                    type="text"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={formatCurrencyInput(orderMontoAsegurado, orderCurrency, editingOrderMontoAsegurado)}
+                    onFocus={() => setEditingOrderMontoAsegurado(true)}
+                    onBlur={() => setEditingOrderMontoAsegurado(false)}
+                    onChange={(event) => setOrderMontoAsegurado(String(parseCurrencyInput(event.target.value)))}
+                    placeholder={formatCurrency(0, orderCurrency)}
+                    className="text-right tabular-nums"
+                  />
+                  <input
+                    type="hidden"
+                    name="logistica_monto_asegurado"
+                    value={Number.isFinite(asNumber(orderMontoAsegurado)) ? asNumber(orderMontoAsegurado) : 0}
+                    readOnly
+                  />
                 </div>
                 <div className="md:col-span-6 space-y-2">
                   <Label htmlFor="orden-logistica-observaciones">Observaciones logísticas</Label>
