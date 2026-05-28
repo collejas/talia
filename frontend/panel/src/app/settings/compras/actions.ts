@@ -672,6 +672,7 @@ export async function createPedimentoImportacionAction(formData: FormData): Prom
   const ordenesCompraIds = getFormDataUniqueTextArray(formData, "ordenes_compra_ids")
   const payload = {
     numero_pedimento: parseRequiredText(formData.get("numero_pedimento"), "numero_pedimento"),
+    embarque: parseOptionalText(formData.get("embarque")),
     agente_aduanal_id: parseOptionalText(formData.get("agente_aduanal_id")),
     estado: (parseOptionalText(formData.get("estado")) || "borrador") as
       | "borrador"
@@ -707,6 +708,7 @@ export async function updatePedimentoImportacionAction(pedimentoId: string, form
   const ordenesCompraIds = getFormDataUniqueTextArray(formData, "ordenes_compra_ids")
   const payload = {
     numero_pedimento: parseOptionalText(formData.get("numero_pedimento")),
+    embarque: parseOptionalText(formData.get("embarque")),
     agente_aduanal_id: parseOptionalText(formData.get("agente_aduanal_id")),
     estado: parseOptionalText(formData.get("estado")) as
       | "borrador"

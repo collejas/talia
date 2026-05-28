@@ -10460,8 +10460,8 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "fecha_pedimento.desc,creado_en.desc",
             "limit": str(max(1, min(limit, 5000))),
-            "select": (
-                "id,organizacion_id,numero_pedimento,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
+                "select": (
+                "id,organizacion_id,numero_pedimento,embarque,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
                 "fecha_liberacion,moneda,tipo_cambio,subtotal_aduanal,gastos_pedimento_total,gastos_ordenes_total,"
                 "costo_total_prorrateable,observaciones,creado_en,actualizado_en,"
                 "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en),"
@@ -10486,8 +10486,8 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{pedimento_id}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,numero_pedimento,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
+                "select": (
+                "id,organizacion_id,numero_pedimento,embarque,agente_aduanal_id,estado,fecha_pedimento,fecha_presentacion,"
                 "fecha_liberacion,moneda,tipo_cambio,subtotal_aduanal,gastos_pedimento_total,gastos_ordenes_total,"
                 "costo_total_prorrateable,observaciones,creado_en,actualizado_en,"
                 "agente_aduanal:agentes_aduanales(id,nombre,patente,razon_social,rfc,contacto,telefono,email,direccion,activo,observaciones,creado_en,actualizado_en)"

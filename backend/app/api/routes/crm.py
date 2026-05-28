@@ -12202,6 +12202,7 @@ class CRMPedimentoImportacion(BaseModel):
     id: UUID
     organizacion_id: UUID
     numero_pedimento: str
+    embarque: str | None = None
     agente_aduanal_id: UUID | None = None
     estado: str
     fecha_pedimento: date | None = None
@@ -12226,6 +12227,7 @@ class CRMPedimentoImportacion(BaseModel):
 
 class CRMPedimentoImportacionCreate(BaseModel):
     numero_pedimento: str = Field(..., min_length=1, max_length=80)
+    embarque: str | None = Field(default=None, max_length=200)
     agente_aduanal_id: UUID | None = None
     estado: Literal["borrador", "en_integracion", "presentado", "pagado", "cerrado", "cancelado"] = "borrador"
     fecha_pedimento: date | None = None
@@ -12239,6 +12241,7 @@ class CRMPedimentoImportacionCreate(BaseModel):
 
 class CRMPedimentoImportacionUpdate(BaseModel):
     numero_pedimento: str | None = Field(default=None, min_length=1, max_length=80)
+    embarque: str | None = Field(default=None, max_length=200)
     agente_aduanal_id: UUID | None = None
     estado: Literal["borrador", "en_integracion", "presentado", "pagado", "cerrado", "cancelado"] | None = None
     fecha_pedimento: date | None = None

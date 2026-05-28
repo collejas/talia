@@ -6,6 +6,7 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -59,6 +60,34 @@ function formatMoney(value: unknown, currency = "MXN"): string {
     currency: currency || "MXN",
     maximumFractionDigits: 2,
   }).format(amount)
+}
+
+function parseCurrencyInput(value: string): number {
+  const raw = value.replace(/\s+/g, "").replace(/[^0-9,.-]/g, "")
+  if (!raw) {
+    return 0
+  }
+  const lastComma = raw.lastIndexOf(",")
+  const lastDot = raw.lastIndexOf(".")
+  const decimalSeparator = lastComma > lastDot ? "," : lastDot > -1 ? "." : null
+  const normalized = decimalSeparator
+    ? (() => {
+        const parts = raw.split(decimalSeparator)
+        const whole = parts.slice(0, -1).join("").replace(/[.,-]/g, "")
+        const fraction = parts.at(-1)?.replace(/[.,-]/g, "") ?? ""
+        return `${whole || "0"}.${fraction}`
+      })()
+    : raw.replace(/[^\d-]/g, "")
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatCurrencyInput(value: unknown, currency: string, editing: boolean): string {
+  const amount = asNumber(value, 0)
+  if (editing) {
+    return Number.isFinite(amount) ? String(amount) : ""
+  }
+  return formatMoney(amount, currency)
 }
 
 function formatDate(value: unknown): string {
@@ -116,6 +145,7 @@ function buildAgentFormState(agent?: AnyRecord | null) {
 function buildPedimentoFormState(pedimento?: AnyRecord | null) {
   return {
     numero_pedimento: asString(pedimento?.numero_pedimento),
+    embarque: asString(pedimento?.embarque),
     agente_aduanal_id: asString(pedimento?.agente_aduanal_id),
     estado: asString(pedimento?.estado, "borrador"),
     fecha_pedimento: asString(pedimento?.fecha_pedimento),
@@ -173,6 +203,8 @@ export function PedimentosImportacionPanel({
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
   const [agentForm, setAgentForm] = useState(() => buildAgentFormState())
   const [editingPedimentoId, setEditingPedimentoId] = useState<string | null>(null)
+  const [pedimentoModalOpen, setPedimentoModalOpen] = useState(false)
+  const [editingPedimentoSubtotal, setEditingPedimentoSubtotal] = useState(false)
   const [pedimentoForm, setPedimentoForm] = useState(() => buildPedimentoFormState())
   const [pedimentoOrdenIds, setPedimentoOrdenIds] = useState<string[]>([])
   const [availableOrderSelection, setAvailableOrderSelection] = useState<string[]>([])
@@ -198,6 +230,7 @@ export function PedimentosImportacionPanel({
       setPedimentoForm(buildPedimentoFormState())
       setPedimentoOrdenIds([])
     }
+    setEditingPedimentoSubtotal(false)
     setAvailableOrderSelection([])
     setAssociatedOrderSelection([])
   }, [editingPedimentoId, pedimentos])
@@ -281,6 +314,38 @@ export function PedimentosImportacionPanel({
   )
 
   const moneyOptions = monedas.length ? monedas : [{ codigo: "MXN", nombre: "Peso mexicano" }]
+
+  const openCreatePedimentoModal = () => {
+    setEditingPedimentoId(null)
+    setPedimentoForm(buildPedimentoFormState())
+    setPedimentoOrdenIds([])
+    setEditingPedimentoSubtotal(false)
+    setAvailableOrderSelection([])
+    setAssociatedOrderSelection([])
+    setPedimentoModalOpen(true)
+  }
+
+  const openEditPedimentoModal = (pedimento: AnyRecord) => {
+    setEditingPedimentoId(String(pedimento.id))
+    setPedimentoForm(buildPedimentoFormState(pedimento))
+    setPedimentoOrdenIds(extractPedimentoOrdenIds(pedimento))
+    setEditingPedimentoSubtotal(false)
+    setAvailableOrderSelection([])
+    setAssociatedOrderSelection([])
+    setPedimentoModalOpen(true)
+  }
+
+  const handlePedimentoModalOpenChange = (open: boolean) => {
+    setPedimentoModalOpen(open)
+    if (!open) {
+      setEditingPedimentoId(null)
+      setPedimentoForm(buildPedimentoFormState())
+      setPedimentoOrdenIds([])
+      setEditingPedimentoSubtotal(false)
+      setAvailableOrderSelection([])
+      setAssociatedOrderSelection([])
+    }
+  }
 
   if (mode === "agentes") {
     return (
@@ -393,17 +458,27 @@ export function PedimentosImportacionPanel({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Pedimentos de importación</CardTitle>
-          <CardDescription>Centraliza el número de pedimento, los agentes y los costos compartidos por importación.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Dialog open={pedimentoModalOpen} onOpenChange={handlePedimentoModalOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-7xl overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{editingPedimentoId ? "Editar pedimento" : "Crear pedimento"}</DialogTitle>
+            <DialogDescription>Formulario de alta y edición de pedimentos de importación.</DialogDescription>
+          </DialogHeader>
+          <Card className="border-0 shadow-none">
+            <CardHeader>
+              <CardTitle>{editingPedimentoId ? "Editar pedimento" : "Crear pedimento"}</CardTitle>
+              <CardDescription>Centraliza el número de pedimento, los agentes y los costos compartidos por importación.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
           <form action={editingPedimentoId ? updatePedimentoImportacionAction.bind(null, editingPedimentoId) : createPedimentoImportacionAction} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="pedimento-numero">Número de pedimento</Label>
                 <Input id="pedimento-numero" name="numero_pedimento" value={pedimentoForm.numero_pedimento} onChange={(event) => setPedimentoForm((prev) => ({ ...prev, numero_pedimento: event.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pedimento-embarque">Embarque</Label>
+                <Input id="pedimento-embarque" name="embarque" value={pedimentoForm.embarque} onChange={(event) => setPedimentoForm((prev) => ({ ...prev, embarque: event.target.value }))} placeholder="Referencia o identificador del embarque" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pedimento-agente">Agente aduanal</Label>
@@ -644,7 +719,23 @@ export function PedimentosImportacionPanel({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pedimento-subtotal">Subtotal aduanal</Label>
-                <Input id="pedimento-subtotal" name="subtotal_aduanal" type="number" step="0.0001" min="0" value={pedimentoForm.subtotal_aduanal} onChange={(event) => setPedimentoForm((prev) => ({ ...prev, subtotal_aduanal: event.target.value }))} />
+                <Input
+                  id="pedimento-subtotal"
+                  type="text"
+                  inputMode="decimal"
+                  value={formatCurrencyInput(pedimentoForm.subtotal_aduanal, pedimentoForm.moneda, editingPedimentoSubtotal)}
+                  onFocus={() => setEditingPedimentoSubtotal(true)}
+                  onBlur={() => setEditingPedimentoSubtotal(false)}
+                  onChange={(event) => setPedimentoForm((prev) => ({ ...prev, subtotal_aduanal: String(parseCurrencyInput(event.target.value)) }))}
+                  placeholder={formatMoney(0, pedimentoForm.moneda)}
+                  className="text-right tabular-nums"
+                />
+                <input
+                  type="hidden"
+                  name="subtotal_aduanal"
+                  value={Number.isFinite(asNumber(pedimentoForm.subtotal_aduanal)) ? asNumber(pedimentoForm.subtotal_aduanal) : 0}
+                  readOnly
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pedimento-observaciones">Observaciones</Label>
@@ -657,23 +748,62 @@ export function PedimentosImportacionPanel({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setEditingPedimentoId(null)
-                    setPedimentoOrdenIds([])
-                  }}
+                  onClick={() => handlePedimentoModalOpenChange(false)}
                 >
                   Cancelar
                 </Button>
               ) : null}
             </div>
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
-          <CardTitle>Listado de pedimentos</CardTitle>
-          <CardDescription>Selecciona un pedimento para ver órdenes, gastos y prorrateo.</CardDescription>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <CardTitle>Listado de pedimentos</CardTitle>
+              <CardDescription>Selecciona un pedimento para ver órdenes, gastos y prorrateo.</CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={openCreatePedimentoModal}>
+                Crear pedimento
+              </Button>
+              {selectedPedimento ? (
+                <Button type="button" variant="outline" onClick={() => openEditPedimentoModal(selectedPedimento)}>
+                  Editar
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" disabled>
+                  Editar
+                </Button>
+              )}
+              {selectedPedimento ? (
+                <form action={recalcularPedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
+                  <Button type="submit" variant="secondary">
+                    Recalcular
+                  </Button>
+                </form>
+              ) : (
+                <Button type="button" variant="secondary" disabled>
+                  Recalcular
+                </Button>
+              )}
+              {selectedPedimento ? (
+                <form action={deletePedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
+                  <Button type="submit" variant="ghost">
+                    Eliminar
+                  </Button>
+                </form>
+              ) : (
+                <Button type="button" variant="ghost" disabled>
+                  Eliminar
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-lg border">
@@ -681,6 +811,7 @@ export function PedimentosImportacionPanel({
               <TableHeader>
                 <TableRow>
                   <TableHead>Número</TableHead>
+                  <TableHead>Embarque</TableHead>
                   <TableHead>Agente</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha</TableHead>
@@ -691,7 +822,7 @@ export function PedimentosImportacionPanel({
               <TableBody>
                 {!pedimentos.length ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
                       Aún no hay pedimentos registrados.
                     </TableCell>
                   </TableRow>
@@ -702,28 +833,15 @@ export function PedimentosImportacionPanel({
                     return (
                       <TableRow key={currentId} className={currentId === selectedPedimentoId ? "bg-muted/30" : undefined}>
                         <TableCell className="font-mono text-xs">{asString(pedimento.numero_pedimento)}</TableCell>
+                        <TableCell>{asString(pedimento.embarque, "—")}</TableCell>
                         <TableCell>{agente ? `${asString(agente.nombre)}${asString(agente.patente) ? ` · ${asString(agente.patente)}` : ""}` : "Sin agente"}</TableCell>
                         <TableCell>{asString(pedimento.estado)}</TableCell>
                         <TableCell>{formatDate(pedimento.fecha_pedimento)}</TableCell>
                         <TableCell className="text-right">{formatMoney(pedimento.costo_total_prorrateable, asString(pedimento.moneda, "MXN"))}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Link href={`/compras?vista=pedimentos&pedimento_id=${encodeURIComponent(currentId)}`} className="inline-flex items-center rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted">
-                              Ver
-                            </Link>
-                            <Button type="button" variant="outline" size="sm" onClick={() => {
-                              setEditingPedimentoId(currentId)
-                              setPedimentoForm(buildPedimentoFormState(pedimento))
-                              setPedimentoOrdenIds(extractPedimentoOrdenIds(pedimento))
-                            }}>
-                              Editar
-                            </Button>
-                            <form action={deletePedimentoImportacionAction.bind(null, currentId)}>
-                              <Button type="submit" variant="ghost" size="sm">
-                                Eliminar
-                              </Button>
-                            </form>
-                          </div>
+                          <Link href={`/compras?vista=pedimentos&pedimento_id=${encodeURIComponent(currentId)}`} className="inline-flex items-center rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted">
+                            Ver
+                          </Link>
                         </TableCell>
                       </TableRow>
                     )
@@ -743,10 +861,14 @@ export function PedimentosImportacionPanel({
               <CardDescription>Los totales se recalculan con los gastos del pedimento y los gastos tipo gasto de las órdenes ligadas.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-5">
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">Número</div>
                   <div className="mt-1 font-mono text-sm">{asString(selectedPedimento.numero_pedimento)}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Embarque</div>
+                  <div className="mt-1 text-sm font-semibold">{asString(selectedPedimento.embarque, "—")}</div>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">Gastos pedimento</div>
