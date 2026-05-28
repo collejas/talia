@@ -2257,6 +2257,21 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear archivo: {row!r}")
         return row
 
+    async def delete_file(
+        self,
+        *,
+        organizacion_id: UUID,
+        archivo_id: UUID,
+    ) -> None:
+        await self._request(
+            "DELETE",
+            "/rest/v1/archivos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{archivo_id}",
+            },
+        )
+
     async def create_orden_compra_documento(
         self,
         *,
@@ -2277,6 +2292,23 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear documento de orden: {row!r}")
         return row
+
+    async def delete_orden_compra_documento(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        documento_id: UUID,
+    ) -> None:
+        await self._request(
+            "DELETE",
+            "/rest/v1/ordenes_compra_documentos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "orden_compra_id": f"eq.{orden_id}",
+                "id": f"eq.{documento_id}",
+            },
+        )
 
     async def list_orden_compra_pagos_programados(
         self,
@@ -20040,6 +20072,59 @@ class CRMRepository:
             prefix = f"{bucket_name}/"
             public_path = f"{prefix}{key}" if not key.startswith(prefix) else key
         return public_path
+
+    async def delete_storage_object(
+        self,
+        *,
+        bucket: str,
+        object_path: str,
+    ) -> None:
+        bucket_name = bucket.strip().strip("/")
+        if not bucket_name:
+            raise CRMRepositoryError("bucket_required")
+        normalized_path = object_path.strip().lstrip("/")
+        if not normalized_path:
+            raise CRMRepositoryError("object_key_required")
+
+        candidate_paths: list[str] = []
+
+        def add_candidate(value: str) -> None:
+            candidate = value.strip().lstrip("/")
+            if candidate and candidate not in candidate_paths:
+                candidate_paths.append(candidate)
+
+        add_candidate(normalized_path)
+
+        stripped = normalized_path
+        prefix = f"{bucket_name}/"
+        while stripped.startswith(prefix):
+            stripped = stripped[len(prefix) :]
+            add_candidate(stripped)
+
+        if not normalized_path.startswith(prefix):
+            add_candidate(f"{bucket_name}/{normalized_path}")
+
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+        }
+        for candidate in candidate_paths:
+            url = f"{self._base_url}/storage/v1/object/{bucket_name}/{candidate}"
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.delete(url, headers=headers)
+            except httpx.RequestError as exc:
+                raise CRMRepositoryError(
+                    f"Error de red al borrar objeto {bucket_name}/{candidate}: {exc}"
+                ) from exc
+            if resp.status_code < 400:
+                return
+            payload_text = resp.text or ""
+            if "not_found" in payload_text.lower() or "object not found" in payload_text.lower():
+                continue
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} al borrar objeto {bucket_name}/{candidate}: {resp.text}"
+            )
 
     async def download_storage_object(
         self,

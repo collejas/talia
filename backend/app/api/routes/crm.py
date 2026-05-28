@@ -16737,6 +16737,59 @@ async def get_compras_orden_documento_url(
     )
 
 
+@router.delete("/compras/ordenes/{orden_id}/documentos/{documento_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_compras_orden_documento(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    documento_id: UUID,
+) -> Response:
+    try:
+        orden = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        if orden is None:
+            raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        documentos = orden.get("documentos")
+        documento_obj: dict[str, Any] | None = None
+        if isinstance(documentos, list):
+            for documento in documentos:
+                if not isinstance(documento, dict):
+                    continue
+                if str(documento.get("id") or "") == str(documento_id):
+                    documento_obj = documento
+                    break
+        if documento_obj is None:
+            raise HTTPException(status_code=404, detail="orden_documento_not_found")
+
+        archivo_obj = documento_obj.get("archivo")
+        archivo_row = archivo_obj if isinstance(archivo_obj, dict) else None
+        archivo_id = _clean_text(documento_obj.get("archivo_id"))
+        storage_path = _clean_text(archivo_row.get("storage_path")) if archivo_row else ""
+        metadata = archivo_row.get("metadata") if archivo_row else None
+        bucket = "quotes"
+        if isinstance(metadata, dict):
+            bucket = _clean_text(metadata.get("bucket")) or bucket
+        if storage_path:
+            await repo.delete_storage_object(bucket=bucket, object_path=storage_path)
+        if archivo_id:
+            await repo.delete_file(
+                organizacion_id=organizacion_id,
+                archivo_id=UUID(archivo_id),
+            )
+        await repo.delete_orden_compra_documento(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            documento_id=documento_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/compras/ordenes/{orden_id}/pagos-programados", response_model=list[CRMOrdenCompraPagoProgramado])
 async def list_compras_orden_pagos_programados(
     *,

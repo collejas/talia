@@ -1031,3 +1031,13 @@ export async function deleteOrdenCompraAction(ordenId: string): Promise<void> {
   }
   revalidatePath(SETTINGS_PATH)
 }
+
+export async function deleteOrdenCompraDocumentoAction(ordenId: string, documentoId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/documentos/${documentoId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}

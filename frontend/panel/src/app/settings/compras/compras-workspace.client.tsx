@@ -29,6 +29,7 @@ import {
   createProveedorAction,
   createRecepcionAction,
   approveOrdenCompraAction,
+  deleteOrdenCompraDocumentoAction,
   saveOrdenCompraPagosProgramadosAction,
   updateOrdenCompraPagoProgramadoAction,
   deleteOrdenCompraPagoProgramadoAction,
@@ -3315,9 +3316,33 @@ export function ComprasWorkspace({
                                 const nombreDocumento = asString(
                                   documentoArchivo?.nombre_original ?? documentoMetadata?.nombre_original ?? "archivo",
                                 )
+                                const documentoId = asString(documento.id, "")
                                 return (
-                                  <div key={`${definition.tipoDocumento}-${index}`} className="truncate rounded-md bg-muted/40 px-2 py-1">
-                                    {nombreDocumento}
+                                  <div
+                                    key={`${definition.tipoDocumento}-${index}`}
+                                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1"
+                                  >
+                                    <span className="truncate">{nombreDocumento}</span>
+                                    {documentoId ? (
+                                      <form action={deleteOrdenCompraDocumentoAction.bind(null, String(selectedOrderRecord?.id ?? ""), documentoId)}>
+                                        <Button
+                                          type="submit"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-[11px] text-destructive hover:text-destructive"
+                                          onClick={(event) => {
+                                            const confirmed = window.confirm(
+                                              "¿Eliminar este archivo adjunto? Esta acción no se puede deshacer.",
+                                            )
+                                            if (!confirmed) {
+                                              event.preventDefault()
+                                            }
+                                          }}
+                                        >
+                                          Eliminar
+                                        </Button>
+                                      </form>
+                                    ) : null}
                                   </div>
                                 )
                               })}
