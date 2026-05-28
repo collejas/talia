@@ -832,7 +832,6 @@ export function ComprasWorkspace({
   const [orderResponsableImpuestosImportacion, setOrderResponsableImpuestosImportacion] = useState("")
   const [orderPermiteEmbarquesParciales, setOrderPermiteEmbarquesParciales] = useState(true)
   const [orderPermiteTransbordos, setOrderPermiteTransbordos] = useState(true)
-  const [orderGastosBancarios, setOrderGastosBancarios] = useState("")
   const [, setOrderCondicionesComercialesObservaciones] = useState("")
   const [orderFormaPago, setOrderFormaPago] = useState("")
   const [orderPorcentajeAnticipo, setOrderPorcentajeAnticipo] = useState("")
@@ -1451,7 +1450,6 @@ export function ComprasWorkspace({
     setOrderResponsableImpuestosImportacion(asString(comercial.responsable_impuestos_importacion, ""))
     setOrderPermiteEmbarquesParciales(Boolean(comercial.permite_embarques_parciales ?? true))
     setOrderPermiteTransbordos(Boolean(comercial.permite_transbordos ?? true))
-    setOrderGastosBancarios(asString(comercial.gastos_bancarios, ""))
     setOrderCondicionesComercialesObservaciones(asString(comercial.observaciones, ""))
     setOrderFormaPago(asString(pago.forma_pago, ""))
     setOrderPorcentajeAnticipo(asString(pago.porcentaje_anticipo, ""))
@@ -1550,7 +1548,6 @@ export function ComprasWorkspace({
     setOrderResponsableImpuestosImportacion("")
     setOrderPermiteEmbarquesParciales(true)
     setOrderPermiteTransbordos(true)
-    setOrderGastosBancarios("")
     setOrderCondicionesComercialesObservaciones("")
     setOrderFormaPago("")
     setOrderPorcentajeAnticipo("")
@@ -2807,18 +2804,6 @@ export function ComprasWorkspace({
                       <option value="vendedor">Vendedor</option>
                     </select>
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium" htmlFor="orden-gastos-bancarios">
-                      Gastos bancarios
-                    </label>
-                    <Input
-                      id="orden-gastos-bancarios"
-                      name="condiciones_comerciales_gastos_bancarios"
-                      value={orderGastosBancarios}
-                      onChange={(event) => setOrderGastosBancarios(event.target.value)}
-                      placeholder="OUR / SHA / BEN"
-                    />
-                  </div>
                   <label className="flex items-center gap-2 text-sm md:col-span-3">
                     <input
                       type="checkbox"
@@ -2950,14 +2935,14 @@ export function ComprasWorkspace({
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-comisiones-bancarias">
-                    Comisiones bancarias
+                    Datos bancarios proveedor
                   </label>
                   <Input
                     id="orden-comisiones-bancarias"
                     name="condiciones_pago_comisiones_bancarias"
                     value={orderComisionesBancarias}
                     onChange={(event) => setOrderComisionesBancarias(event.target.value)}
-                    placeholder="OUR / SHA / BEN"
+                    placeholder="Cuenta, banco, CLABE, SWIFT"
                   />
                 </div>
                 <div className="md:col-span-6 space-y-2">
