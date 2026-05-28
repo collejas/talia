@@ -74,7 +74,7 @@ function parseCurrencyInput(value: string): number {
     ? (() => {
         const parts = raw.split(decimalSeparator)
         const whole = parts.slice(0, -1).join("").replace(/[.,-]/g, "")
-        const fraction = parts.at(-1)?.replace(/[.,-]/g, "") ?? ""
+        const fraction = parts[parts.length - 1]?.replace(/[.,-]/g, "") ?? ""
         return `${whole || "0"}.${fraction}`
       })()
     : raw.replace(/[^\d-]/g, "")
