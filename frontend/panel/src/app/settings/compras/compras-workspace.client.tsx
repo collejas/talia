@@ -4111,8 +4111,12 @@ export function ComprasWorkspace({
                             type="number"
                             min="0"
                             step="0.001"
-                            value={Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0}
-                            onChange={(event) => updateLine(index, { cantidad_recibida: Number(event.target.value) })}
+                            value={Number.isFinite(line.cantidad_recibida) && line.cantidad_recibida > 0 ? line.cantidad_recibida : ""}
+                            onChange={(event) =>
+                              updateLine(index, {
+                                cantidad_recibida: event.target.value === "" ? 0 : Number(event.target.value),
+                              })
+                            }
                             aria-label={`Recibido ${line.nombre}`}
                           />
                         </TableCell>
