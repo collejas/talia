@@ -206,9 +206,11 @@ export function PedimentosImportacionPanel({
   const [agentForm, setAgentForm] = useState(() => buildAgentFormState())
   const [editingPedimentoId, setEditingPedimentoId] = useState<string | null>(null)
   const [pedimentoModalOpen, setPedimentoModalOpen] = useState(false)
+  const [pedimentoGastoModalOpen, setPedimentoGastoModalOpen] = useState(false)
   const [pedimentoDetailOpen, setPedimentoDetailOpen] = useState(Boolean(selectedPedimento))
   const [editingPedimentoSubtotal, setEditingPedimentoSubtotal] = useState(false)
   const [pedimentoForm, setPedimentoForm] = useState(() => buildPedimentoFormState())
+  const [selectedPedimentoRowId, setSelectedPedimentoRowId] = useState<string>(selectedPedimentoId || "")
   const [pedimentoOrdenIds, setPedimentoOrdenIds] = useState<string[]>([])
   const [availableOrderSelection, setAvailableOrderSelection] = useState<string[]>([])
   const [associatedOrderSelection, setAssociatedOrderSelection] = useState<string[]>([])
@@ -256,6 +258,12 @@ export function PedimentosImportacionPanel({
   }, [selectedPedimento, selectedPedimentoId])
 
   useEffect(() => {
+    if (selectedPedimentoId) {
+      setSelectedPedimentoRowId(selectedPedimentoId)
+    }
+  }, [selectedPedimentoId])
+
+  useEffect(() => {
     if (!gastoPedimentoId) {
       return
     }
@@ -269,6 +277,24 @@ export function PedimentosImportacionPanel({
   const selectedOrders = useMemo(() => getPedimentoOrders(selectedPedimento), [selectedPedimento])
   const selectedGastos = useMemo(() => getPedimentoGastos(selectedPedimento), [selectedPedimento])
   const selectedProrrateos = useMemo(() => getPedimentoProrrateos(selectedPedimento), [selectedPedimento])
+  const selectedPedimentoForActions = useMemo(() => {
+    if (selectedPedimento) {
+      return selectedPedimento
+    }
+    if (!selectedPedimentoRowId) {
+      return null
+    }
+    return pedimentos.find((row) => String(row.id) === selectedPedimentoRowId) ?? null
+  }, [pedimentos, selectedPedimento, selectedPedimentoRowId])
+  const selectedPedimentoForActionsGastos = useMemo(() => getPedimentoGastos(selectedPedimentoForActions), [selectedPedimentoForActions])
+  const selectedPedimentoForActionsGastosTotal = useMemo(
+    () =>
+      selectedPedimentoForActionsGastos.reduce((sum, gasto) => {
+        const amount = asNumber(gasto.monto_mxn ?? gasto.monto, 0)
+        return sum + amount
+      }, 0),
+    [selectedPedimentoForActionsGastos],
+  )
   const internationalOrders = useMemo(
     () => ordenes.filter((orden) => String(orden.tipo_operacion ?? "").toLowerCase() === "internacional"),
     [ordenes],
@@ -353,6 +379,23 @@ export function PedimentosImportacionPanel({
       setEditingPedimentoSubtotal(false)
       setAvailableOrderSelection([])
       setAssociatedOrderSelection([])
+    }
+  }
+
+  const openPedimentoGastosModal = () => {
+    const currentPedimentoId = selectedPedimento ? String(selectedPedimento.id) : selectedPedimentoRowId
+    setGastoPedimentoId(currentPedimentoId)
+    setGastoForm({
+      ...buildGastoFormState(),
+      agente_aduanal_id: asString(selectedPedimento?.agente_aduanal_id),
+    })
+    setPedimentoGastoModalOpen(true)
+  }
+
+  const handlePedimentoGastoModalOpenChange = (open: boolean) => {
+    setPedimentoGastoModalOpen(open)
+    if (!open) {
+      setGastoForm(buildGastoFormState())
     }
   }
 
@@ -777,19 +820,40 @@ export function PedimentosImportacionPanel({
           <Card className="border-0 shadow-none">
             <CardHeader>
               <CardTitle>Gastos del pedimento</CardTitle>
-              <CardDescription>Captura un gasto ligado al pedimento que estés editando.</CardDescription>
+              <CardDescription>Los gastos se administran desde el detalle del pedimento.</CardDescription>
             </CardHeader>
             <CardContent>
-              {editingPedimentoId || selectedPedimentoId ? (
-                <form
-                  action={createPedimentoGastoAction.bind(null, gastoPedimentoId || editingPedimentoId || selectedPedimentoId)}
+              <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                Abre el detalle del pedimento y usa el botón de gastos para capturar o revisar sus gastos.
+              </div>
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pedimentoGastoModalOpen} onOpenChange={handlePedimentoGastoModalOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto p-0">
+          <DialogHeader className="border-b px-4 py-4">
+            <DialogTitle>Gastos del pedimento</DialogTitle>
+            <DialogDescription>Captura un gasto ligado al pedimento seleccionado.</DialogDescription>
+          </DialogHeader>
+          <Card className="border-0 shadow-none">
+            <CardHeader>
+              <CardTitle>Nuevo gasto</CardTitle>
+              <CardDescription>Registra agente, tipo, monto y estado del gasto del pedimento.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedPedimentoForActions || gastoPedimentoId ? (
+                <>
+                  <form
+                  action={createPedimentoGastoAction.bind(null, gastoPedimentoId || selectedPedimentoId)}
                   className="grid gap-4 md:grid-cols-4"
                 >
                   <div className="space-y-2 md:col-span-4">
                     <Label htmlFor="gasto-pedimento-modal">Pedimento de importación</Label>
                     <select
                       id="gasto-pedimento-modal"
-                      value={gastoPedimentoId || editingPedimentoId || selectedPedimentoId}
+                      value={gastoPedimentoId || selectedPedimentoId}
                       onChange={(event) => setGastoPedimentoId(event.target.value)}
                       className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       required
@@ -873,15 +937,76 @@ export function PedimentosImportacionPanel({
                     <Label htmlFor="gasto-observaciones-modal">Observaciones</Label>
                     <Textarea id="gasto-observaciones-modal" name="observaciones" value={gastoForm.observaciones} onChange={(event) => setGastoForm((prev) => ({ ...prev, observaciones: event.target.value }))} />
                   </div>
-                  <div className="md:col-span-4">
-                    <Button type="submit" disabled={!pedimentos.length || !Boolean(gastoPedimentoId || editingPedimentoId || selectedPedimentoId)}>
+                  <div className="md:col-span-4 flex gap-2">
+                    <Button type="submit" disabled={!pedimentos.length || !Boolean(gastoPedimentoId || selectedPedimentoId)}>
                       Agregar gasto
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => handlePedimentoGastoModalOpenChange(false)}>
+                      Cerrar
                     </Button>
                   </div>
                 </form>
+                  <div className="mt-6 space-y-3 border-t pt-6">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                      <h3 className="text-sm font-semibold">Gastos capturados</h3>
+                      <p className="text-xs text-muted-foreground">Estos son los gastos ya guardados para este pedimento.</p>
+                      </div>
+                      <div className="rounded-lg border bg-muted/20 px-3 py-2 text-right">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total gastos</div>
+                        <div className="text-sm font-semibold">{formatMoney(selectedPedimentoForActionsGastosTotal, "MXN")}</div>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Descripción</TableHead>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead className="text-right">Monto</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {!selectedPedimentoForActionsGastos.length ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                                No hay gastos capturados todavía.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            selectedPedimentoForActionsGastos.map((gasto) => (
+                              <TableRow key={String(gasto.id)}>
+                                <TableCell>{asString(gasto.tipo_gasto)}</TableCell>
+                                <TableCell>{asString(gasto.descripcion, "—")}</TableCell>
+                                <TableCell>{formatDate(gasto.fecha_gasto)}</TableCell>
+                                <TableCell className="text-right">{formatMoney(gasto.monto_mxn ?? gasto.monto, "MXN")}</TableCell>
+                                <TableCell className="text-right">
+                                  <form
+                                    action={deletePedimentoGastoAction.bind(null, String(selectedPedimentoForActions.id), String(gasto.id))}
+                                    onSubmit={(event) => {
+                                      if (!window.confirm("¿Eliminar este gasto del pedimento? Esta acción no se puede deshacer.")) {
+                                        event.preventDefault()
+                                      }
+                                    }}
+                                  >
+                                    <Button type="submit" variant="ghost" size="sm">
+                                      Eliminar
+                                    </Button>
+                                  </form>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
-                  Guarda primero el pedimento para poder agregar gastos.
+                  Selecciona un pedimento para capturar gastos.
                 </div>
               )}
             </CardContent>
@@ -900,8 +1025,8 @@ export function PedimentosImportacionPanel({
               <Button type="button" onClick={openCreatePedimentoModal}>
                 Crear pedimento
               </Button>
-              {selectedPedimento ? (
-                <Button type="button" variant="outline" onClick={() => openEditPedimentoModal(selectedPedimento)}>
+              {selectedPedimentoForActions ? (
+                <Button type="button" variant="outline" onClick={() => openEditPedimentoModal(selectedPedimentoForActions)}>
                   Editar
                 </Button>
               ) : (
@@ -909,8 +1034,17 @@ export function PedimentosImportacionPanel({
                   Editar
                 </Button>
               )}
-              {selectedPedimento ? (
-                <form action={recalcularPedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
+              {selectedPedimentoForActions ? (
+                <Button type="button" onClick={openPedimentoGastosModal}>
+                  Gastos pedimento
+                </Button>
+              ) : (
+                <Button type="button" disabled>
+                  Gastos pedimento
+                </Button>
+              )}
+              {selectedPedimentoForActions ? (
+                <form action={recalcularPedimentoImportacionAction.bind(null, String(selectedPedimentoForActions.id))}>
                   <Button type="submit" variant="secondary">
                     Recalcular
                   </Button>
@@ -920,8 +1054,8 @@ export function PedimentosImportacionPanel({
                   Recalcular
                 </Button>
               )}
-              {selectedPedimento ? (
-                <form action={deletePedimentoImportacionAction.bind(null, String(selectedPedimento.id))}>
+              {selectedPedimentoForActions ? (
+                <form action={deletePedimentoImportacionAction.bind(null, String(selectedPedimentoForActions.id))}>
                   <Button type="submit" variant="ghost">
                     Eliminar
                   </Button>
@@ -960,7 +1094,7 @@ export function PedimentosImportacionPanel({
                     const agente = pedimento.agente_aduanal && typeof pedimento.agente_aduanal === "object" ? (pedimento.agente_aduanal as AnyRecord) : null
                     const currentId = String(pedimento.id)
                     return (
-                      <TableRow key={currentId} className={currentId === selectedPedimentoId ? "bg-muted/30" : undefined}>
+                      <TableRow key={currentId} className={currentId === (selectedPedimentoRowId || selectedPedimentoId) ? "bg-muted/30" : undefined}>
                         <TableCell className="font-mono text-xs">{asString(pedimento.numero_pedimento)}</TableCell>
                         <TableCell>{asString(pedimento.embarque, "—")}</TableCell>
                         <TableCell>{agente ? `${asString(agente.nombre)}${asString(agente.patente) ? ` · ${asString(agente.patente)}` : ""}` : "Sin agente"}</TableCell>
@@ -968,9 +1102,14 @@ export function PedimentosImportacionPanel({
                         <TableCell>{formatDate(pedimento.fecha_pedimento)}</TableCell>
                         <TableCell className="text-right">{formatMoney(pedimento.costo_total_prorrateable, asString(pedimento.moneda, "MXN"))}</TableCell>
                         <TableCell className="text-right">
-                          <Link href={`/compras?vista=pedimentos&pedimento_id=${encodeURIComponent(currentId)}`} className="inline-flex items-center rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted">
-                            Ver
-                          </Link>
+                          <div className="inline-flex gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setSelectedPedimentoRowId(currentId)}>
+                              Seleccionar
+                            </Button>
+                            <Link href={`/compras?vista=pedimentos&pedimento_id=${encodeURIComponent(currentId)}`} className="inline-flex items-center rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted">
+                              Ver
+                            </Link>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
