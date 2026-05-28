@@ -2069,7 +2069,7 @@ export function ComprasWorkspace({
               </div>
               <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium" htmlFor="orden-entrega">
-                  Fecha estimada
+                  F. Estimada de Recepcion
                 </label>
                 <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
               </div>
