@@ -2983,7 +2983,7 @@ export function ComprasWorkspace({
               <div className="grid gap-3 md:grid-cols-6 md:col-span-6">
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium" htmlFor="orden-fecha-embarque">
-                    Fecha requerida embarque
+                    Fecha de recoleccion
                   </label>
                   <Input
                     id="orden-fecha-embarque"
