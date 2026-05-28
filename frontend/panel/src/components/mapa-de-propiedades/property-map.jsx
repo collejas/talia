@@ -1500,6 +1500,37 @@ export function PropertyMap() {
     return map;
   }, [features, getStatusCategory, normalizeStateCode, normalizeMunicipioCode]);
 
+  const buildRegionTooltipContent = useCallback(
+    (feature) => {
+      const props = feature?.properties ?? {};
+      const key = resolveRegionKey(feature);
+      const stats = regionStatusCounts.get(key) ?? {
+        vendidas: 0,
+        apartadas: 0,
+        disponibles: 0,
+      };
+      const title =
+        mapLevel === "pais"
+          ? props.ADMIN ?? props.NAME ?? props.nombre_largo ?? props.pais_nombre ?? props.name ?? "País"
+          : mapLevel === "estado"
+          ? props.nom_ent ?? props.estado_nombre ?? props.nombre ?? props.name ?? "Estado"
+          : props.nom_mun ?? props.municipio_nombre ?? props.nombre ?? props.name ?? "Municipio";
+      return `
+        <div class="min-w-[180px]">
+          <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">${escapeHtml(
+            title,
+          )}</div>
+          <div class="mt-1 space-y-0.5 text-[0.7rem] text-slate-700">
+            <div><span class="font-semibold text-emerald-700">Vendidas:</span> ${stats.vendidas ?? 0}</div>
+            <div><span class="font-semibold text-amber-700">Apartadas:</span> ${stats.apartadas ?? 0}</div>
+            <div><span class="font-semibold text-sky-700">Disponibles:</span> ${stats.disponibles ?? 0}</div>
+          </div>
+        </div>
+      `;
+    },
+    [mapLevel, regionStatusCounts],
+  );
+
   const datasetMap = useMemo(() => {
     const map = new Map();
     for (const entry of demografiaDataset) {
@@ -2536,36 +2567,7 @@ export function PropertyMap() {
     });
   }, [applyRegionStyleRef, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey, leafletMountVersion]);
 
-  const buildRegionTooltipContent = useCallback(
-    (feature) => {
-      const props = feature?.properties ?? {};
-      const key = resolveRegionKey(feature);
-      const stats = regionStatusCounts.get(key) ?? {
-        vendidas: 0,
-        apartadas: 0,
-        disponibles: 0,
-      };
-      const title =
-        mapLevel === "pais"
-          ? props.ADMIN ?? props.NAME ?? props.nombre_largo ?? props.pais_nombre ?? props.name ?? "País"
-          : mapLevel === "estado"
-          ? props.nom_ent ?? props.estado_nombre ?? props.nombre ?? props.name ?? "Estado"
-          : props.nom_mun ?? props.municipio_nombre ?? props.nombre ?? props.name ?? "Municipio";
-      return `
-        <div class="min-w-[180px]">
-          <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">${escapeHtml(
-            title,
-          )}</div>
-          <div class="mt-1 space-y-0.5 text-[0.7rem] text-slate-700">
-            <div><span class="font-semibold text-emerald-700">Vendidas:</span> ${stats.vendidas ?? 0}</div>
-            <div><span class="font-semibold text-amber-700">Apartadas:</span> ${stats.apartadas ?? 0}</div>
-            <div><span class="font-semibold text-sky-700">Disponibles:</span> ${stats.disponibles ?? 0}</div>
-          </div>
-        </div>
-      `;
-    },
-    [mapLevel, regionStatusCounts],
-  );
+
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
