@@ -821,6 +821,7 @@ export function ComprasWorkspace({
   const [orderInstructions, setOrderInstructions] = useState("")
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
   const [editingOrderLineCostIndex, setEditingOrderLineCostIndex] = useState<number | null>(null)
+  const [editingReceptionLineCostIndex, setEditingReceptionLineCostIndex] = useState<number | null>(null)
   const [orderIncotermCodigo, setOrderIncotermCodigo] = useState("")
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
   const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
@@ -890,6 +891,7 @@ export function ComprasWorkspace({
     () => ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null,
     [ordenes, selectedOrderId],
   )
+  const selectedOrderCurrency = asString(selectedOrderRecord?.moneda, "MXN")
   const selectedOrderStatus = String(selectedOrderRecord?.estado ?? "").toLowerCase()
   const selectedProvider = selectedOrderRecord && typeof selectedOrderRecord.proveedor === "object" ? (selectedOrderRecord.proveedor as AnyRecord) : null
   const selectedOrderDocuments = useMemo(
@@ -1413,6 +1415,7 @@ export function ComprasWorkspace({
   const startEditOrder = useCallback((orden: AnyRecord) => {
     orderHydratingRef.current = true
     setEditingOrderLineCostIndex(null)
+    setEditingReceptionLineCostIndex(null)
     setEditingOrderId(String(orden.id))
     setOrderProformaInputKey((current) => current + 1)
     setOrderFolio(asString(orden.folio, defaultOrderFolio))
@@ -1515,6 +1518,7 @@ export function ComprasWorkspace({
   const clearOrderForm = () => {
     orderHydratingRef.current = true
     setEditingOrderLineCostIndex(null)
+    setEditingReceptionLineCostIndex(null)
     setEditingOrderId(null)
     setOrderFolio(defaultOrderFolio)
     setOrderProviderId(String(proveedores[0]?.id ?? ""))
@@ -1606,6 +1610,7 @@ export function ComprasWorkspace({
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrderId(orderId)
     setEditingPaymentScheduleRecord(null)
+    setEditingReceptionLineCostIndex(null)
     const currentOrder = openOrders.find((orden) => String(orden.id) === orderId) ?? null
     setLines(buildLinesFromOrder(currentOrder))
     setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
@@ -4122,13 +4127,31 @@ export function ComprasWorkspace({
                         </TableCell>
                         <TableCell className="w-36">
                           <Input
-                            name="items_costo_unitario_real"
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             min="0"
                             step="0.0001"
-                            value={Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0}
-                            onChange={(event) => updateLine(index, { costo_unitario_real: Number(event.target.value) })}
+                            value={formatCurrencyInput(
+                              line.costo_unitario_real,
+                              selectedOrderCurrency,
+                              editingReceptionLineCostIndex === index,
+                            )}
+                            onFocus={() => setEditingReceptionLineCostIndex(index)}
+                            onBlur={() =>
+                              setEditingReceptionLineCostIndex((current) => (current === index ? null : current))
+                            }
+                            onChange={(event) =>
+                              updateLine(index, { costo_unitario_real: parseCurrencyInput(event.target.value) })
+                            }
+                            placeholder={formatCurrency(0, selectedOrderCurrency)}
+                            className="text-right tabular-nums"
                             aria-label={`Costo unitario ${line.nombre}`}
+                          />
+                          <input
+                            type="hidden"
+                            name="items_costo_unitario_real"
+                            value={Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0}
+                            readOnly
                           />
                         </TableCell>
                         <TableCell className="min-w-64">
