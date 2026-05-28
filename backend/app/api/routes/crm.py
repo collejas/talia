@@ -16578,11 +16578,6 @@ async def _upload_compras_orden_document(
         if archivo_id is None:
             raise HTTPException(status_code=502, detail=f"{tipo_documento}_archivo_not_created")
 
-        await repo.delete_orden_compra_documentos(
-            organizacion_id=organizacion_id,
-            orden_id=orden_id,
-            tipo_documento=tipo_documento,
-        )
         await repo.create_orden_compra_documento(
             organizacion_id=organizacion_id,
             payload={
@@ -16621,6 +16616,7 @@ async def _get_compras_orden_document_url(
 
     documentos = orden.get("documentos")
     archivo_path: str | None = None
+    archivo_created_at = ""
     if isinstance(documentos, list):
         for documento in documentos:
             if not isinstance(documento, dict):
@@ -16629,9 +16625,11 @@ async def _get_compras_orden_document_url(
                 continue
             archivo = documento.get("archivo")
             if isinstance(archivo, dict):
-                archivo_path = _clean_text(archivo.get("storage_path"))
-                if archivo_path:
-                    break
+                candidate_path = _clean_text(archivo.get("storage_path"))
+                candidate_created_at = _clean_text(documento.get("creado_en"))
+                if candidate_path and (not archivo_path or candidate_created_at >= archivo_created_at):
+                    archivo_path = candidate_path
+                    archivo_created_at = candidate_created_at
 
     if not archivo_path:
         raise HTTPException(status_code=404, detail=f"orden_{tipo_documento}_not_found")

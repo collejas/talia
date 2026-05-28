@@ -901,11 +901,13 @@ export function ComprasWorkspace({
     [selectedOrderRecord],
   )
   const selectedOrderDocumentsByType = useMemo(() => {
-    const map = new Map<string, AnyRecord>()
+    const map = new Map<string, AnyRecord[]>()
     for (const documento of selectedOrderDocuments) {
       const tipoDocumento = asString(documento?.tipo_documento, "").toLowerCase()
-      if (tipoDocumento && !map.has(tipoDocumento)) {
-        map.set(tipoDocumento, documento)
+      if (tipoDocumento) {
+        const current = map.get(tipoDocumento) ?? []
+        current.push(documento)
+        map.set(tipoDocumento, current)
       }
     }
     return map
@@ -3249,15 +3251,7 @@ export function ComprasWorkspace({
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {orderDocumentDefinitions.map((definition) => {
-                  const selectedDocument = selectedOrderDocumentsByType.get(definition.tipoDocumento) ?? null
-                  const selectedDocumentFile =
-                    selectedDocument?.archivo && typeof selectedDocument.archivo === "object"
-                      ? (selectedDocument.archivo as AnyRecord)
-                      : null
-                  const selectedDocumentMetadata =
-                    selectedDocumentFile?.metadata && typeof selectedDocumentFile.metadata === "object"
-                      ? (selectedDocumentFile.metadata as AnyRecord)
-                      : null
+                  const selectedDocuments = selectedOrderDocumentsByType.get(definition.tipoDocumento) ?? []
                   const documentHref = selectedOrderRecord?.id
                     ? `/api/compras/ordenes/${selectedOrderRecord.id}/documentos/${definition.tipoDocumento}`
                     : null
@@ -3271,37 +3265,67 @@ export function ComprasWorkspace({
                         <div
                           className={[
                             "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
-                            selectedDocument
+                            selectedDocuments.length
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                               : definition.requiredByDefault
                                 ? "border-amber-200 bg-amber-50 text-amber-700"
                                 : "border-border bg-muted text-muted-foreground",
                           ].join(" ")}
                         >
-                          {selectedDocument ? "Cargado" : definition.requiredByDefault ? "Base" : "Opcional"}
+                          {selectedDocuments.length
+                            ? `Cargado ${selectedDocuments.length}`
+                            : definition.requiredByDefault
+                              ? "Base"
+                              : "Opcional"}
                         </div>
                       </div>
                       <div className="mt-3 space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Puedes adjuntar uno o varios archivos PDF.
+                        </div>
                         <Input
                           id={`orden-doc-${definition.tipoDocumento}`}
                           name={`documento_file_${definition.tipoDocumento}`}
                           type="file"
                           accept=".pdf,application/pdf"
+                          multiple
                         />
-                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <span className="truncate">
-                            {selectedDocument
-                              ? `Adjunto actual: ${asString(selectedDocumentFile?.nombre_original ?? selectedDocumentMetadata?.nombre_original ?? "archivo")}`
-                              : "Sin archivo adjunto."}
-                          </span>
-                          {documentHref ? (
-                            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                              <a href={documentHref} target="_blank" rel="noreferrer">
-                                Ver
-                              </a>
-                            </Button>
-                          ) : null}
-                        </div>
+                        {selectedDocuments.length ? (
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <div className="flex items-center justify-between gap-2">
+                              <span>{selectedDocuments.length} archivo(s) cargado(s)</span>
+                              {documentHref ? (
+                                <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                                  <a href={documentHref} target="_blank" rel="noreferrer">
+                                    Ver último
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </div>
+                            <div className="space-y-1">
+                              {selectedDocuments.map((documento, index) => {
+                                const documentoArchivo =
+                                  documento.archivo && typeof documento.archivo === "object"
+                                    ? (documento.archivo as AnyRecord)
+                                    : null
+                                const documentoMetadata =
+                                  documentoArchivo?.metadata && typeof documentoArchivo.metadata === "object"
+                                    ? (documentoArchivo.metadata as AnyRecord)
+                                    : null
+                                const nombreDocumento = asString(
+                                  documentoArchivo?.nombre_original ?? documentoMetadata?.nombre_original ?? "archivo",
+                                )
+                                return (
+                                  <div key={`${definition.tipoDocumento}-${index}`} className="truncate rounded-md bg-muted/40 px-2 py-1">
+                                    {nombreDocumento}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">Sin archivos adjuntos.</div>
+                        )}
                       </div>
                     </div>
                   )
