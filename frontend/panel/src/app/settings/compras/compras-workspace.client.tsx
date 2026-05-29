@@ -311,11 +311,22 @@ function formatCurrency(value: unknown, currency = "MXN"): string {
 }
 
 function parseCurrencyInput(value: string): number {
-  const cleaned = value
-    .replace(/[^\d.,-]/g, "")
-    .replace(/,/g, "")
-    .replace(/(?!^)-/g, "")
-  const parsed = Number(cleaned)
+  const raw = value.replace(/\s+/g, "").replace(/[^0-9,.-]/g, "")
+  if (!raw) {
+    return 0
+  }
+  const lastComma = raw.lastIndexOf(",")
+  const lastDot = raw.lastIndexOf(".")
+  const decimalSeparator = lastComma > lastDot ? "," : lastDot > -1 ? "." : null
+  const normalized = decimalSeparator
+    ? (() => {
+        const parts = raw.split(decimalSeparator)
+        const whole = parts.slice(0, -1).join("").replace(/[.,-]/g, "")
+        const fraction = parts[parts.length - 1]?.replace(/[.,-]/g, "") ?? ""
+        return `${whole || "0"}.${fraction}`
+      })()
+    : raw.replace(/[^\d-]/g, "")
+  const parsed = Number.parseFloat(normalized)
   return Number.isFinite(parsed) ? parsed : 0
 }
 
