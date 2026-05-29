@@ -869,6 +869,7 @@ export function ComprasWorkspace({
   )
   const [selectedOrderId, setSelectedOrderId] = useState<string>("")
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
+  const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false)
   const [isOrderPaymentsModalOpen, setIsOrderPaymentsModalOpen] = useState(false)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
@@ -997,6 +998,13 @@ export function ComprasWorkspace({
     () =>
       Array.isArray((selectedOrderRecord as AnyRecord | null)?.documentos)
         ? ((selectedOrderRecord as AnyRecord).documentos as AnyRecord[])
+        : [],
+    [selectedOrderRecord],
+  )
+  const selectedOrderItems = useMemo(
+    () =>
+      Array.isArray((selectedOrderRecord as AnyRecord | null)?.items)
+        ? ((selectedOrderRecord as AnyRecord).items as AnyRecord[])
         : [],
     [selectedOrderRecord],
   )
@@ -1154,11 +1162,20 @@ export function ComprasWorkspace({
     setIsOrderModalOpen(true)
   }
 
+  const openOrderDetail = (orden: AnyRecord) => {
+    setSelectedOrderId(String(orden.id))
+    setIsOrderDetailOpen(true)
+  }
+
   const handleOrderModalOpenChange = (open: boolean) => {
     setIsOrderModalOpen(open)
     if (!open) {
       clearOrderForm()
     }
+  }
+
+  const handleOrderDetailOpenChange = (open: boolean) => {
+    setIsOrderDetailOpen(open)
   }
 
   const handleOrderPaymentsModalOpenChange = (open: boolean) => {
@@ -3663,6 +3680,149 @@ export function ComprasWorkspace({
         </Dialog>
       ) : null}
 
+      <Dialog open={isOrderDetailOpen && Boolean(selectedOrderRecord)} onOpenChange={handleOrderDetailOpenChange}>
+        <DialogContent className="max-h-[92vh] w-[95vw] max-w-7xl overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Detalle de orden de compra</DialogTitle>
+            <DialogDescription>Vista de solo lectura con la información completa de la orden seleccionada.</DialogDescription>
+          </DialogHeader>
+          {selectedOrderRecord ? (
+            <Card className="border-0 shadow-none">
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Detalle de O.C.</CardTitle>
+                    <CardDescription>Información completa de la orden seleccionada.</CardDescription>
+                  </div>
+                  <Button type="button" variant="ghost" onClick={() => handleOrderDetailOpenChange(false)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Folio</div>
+                    <div className="mt-1 font-mono text-sm">{asString(selectedOrderRecord.folio, "—")}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Tipo</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {String(selectedOrderRecord.tipo_operacion ?? "").toLowerCase() === "internacional" ? "Internacional" : "Nacional"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Estado</div>
+                    <div className="mt-1 text-sm font-semibold">{getOrderStatusBadge(selectedOrderRecord.estado).label}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Fecha</div>
+                    <div className="mt-1 text-sm font-semibold">{formatDateTime(selectedOrderRecord.creado_en)}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Proveedor</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {selectedProvider ? asString(selectedProvider.nombre_comercial ?? selectedProvider.razon_social, "Proveedor") : "Proveedor"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Almacén</div>
+                    <div className="mt-1 text-sm font-semibold">{asString((selectedOrderRecord.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Pedimento</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {selectedOrderPedimento ? selectedOrderPedimento.numero_pedimento : "Sin pedimento"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Total MXN</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {(() => {
+                        const totalMxn = getOrderTotalMxn(selectedOrderRecord)
+                        return totalMxn !== null ? formatCurrency(totalMxn, "MXN") : "—"
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal moneda</div>
+                    <div className="mt-1 text-sm font-semibold">{formatCurrency(asNumber(selectedOrderRecord.subtotal), selectedOrderCurrency)}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Tipo de cambio referencia</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {selectedOrderCurrency === "MXN" ? "1" : asString(selectedOrderRecord.tipo_cambio_referencia, "—")}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Documentos</div>
+                    <div className="mt-1 text-sm font-semibold">{selectedOrderDocuments.length}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Pagos</div>
+                    <div className="mt-1 text-sm font-semibold">{selectedOrderPaymentSchedules.length}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Auditoría</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {selectedOrderStatus === "borrador"
+                        ? "En captura"
+                        : selectedOrderStatus === "enviada"
+                          ? "Emitida"
+                          : selectedOrderStatus === "aprobada"
+                            ? "Aprobada"
+                            : selectedOrderStatus}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Costo</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedOrderItems.length ? (
+                        selectedOrderItems.map((item, index) => (
+                          <TableRow key={String(item.id ?? `${index}`)}>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="font-medium">{asString(item.nombre, "Producto")}</div>
+                                <div className="text-xs text-muted-foreground">{asString(item.unidad, "unidad")}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{asNumber(item.cantidad_solicitada).toFixed(3)}</TableCell>
+                            <TableCell>{formatCurrency(item.costo_unitario, selectedOrderCurrency)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(asNumber(item.subtotal ?? item.total), selectedOrderCurrency)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                            La orden no tiene partidas visibles en esta vista.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isOrderPaymentsModalOpen && Boolean(selectedOrderRecord)} onOpenChange={handleOrderPaymentsModalOpenChange}>
         <DialogContent className="max-h-[92vh] w-[95vw] max-w-7xl overflow-y-auto p-0">
           <DialogHeader className="sr-only">
@@ -4989,7 +5149,7 @@ export function ComprasWorkspace({
                             <Button
                               type="button"
                               size="sm"
-                              onClick={() => openEditOrderModal(orden)}
+                              onClick={() => openOrderDetail(orden)}
                             >
                               Ver
                             </Button>
