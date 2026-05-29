@@ -285,7 +285,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       if (permissionContext.es_admin || permissionContext.es_owner) return true;
       if (!canEditAny || !currentUserId) return false;
       const ownerId = getContactOwnerId(row.raw as Record<string, unknown> | undefined);
-      return ownerId === currentUserId;
+      return !ownerId || ownerId === currentUserId;
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );

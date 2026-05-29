@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   getRfcLengthMessage,
   isValidRfcLength,
@@ -623,13 +624,14 @@ function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
   return next as Partial<T>;
 }
 
-function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
+function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, currentUserId?: string | null) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
     correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
     correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
+    propietario_usuario_id: state.persona.propietario_usuario_id || currentUserId || undefined,
   });
 
   const cuentaBase = cleanObject({
@@ -652,9 +654,9 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
     tipo:
-    state.mode === "persona_fisica_actividad_empresarial"
-      ? "persona_fisica_actividad_empresarial"
-      : state.cuenta.tipo,
+      state.mode === "persona_fisica_actividad_empresarial"
+        ? "persona_fisica_actividad_empresarial"
+        : state.cuenta.tipo,
     rfc: sanitizeRfcInput(state.cuenta.rfc),
     tamano: state.cuenta.tamano,
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
@@ -678,6 +680,7 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
     fecha_incorporacion: state.cuenta.fecha_incorporacion || undefined,
     latitud: state.cuenta.latitud || undefined,
     longitud: state.cuenta.longitud || undefined,
+    propietario_usuario_id: currentUserId || undefined,
   });
 
   const relacion =
@@ -832,6 +835,7 @@ function Field({
 
 export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_existente" }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
+  const { context: permissionContext } = usePermissions();
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
   const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
@@ -839,6 +843,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const [copyingDedupe, setCopyingDedupe] = React.useState(false);
   const [validationNotice, setValidationNotice] = React.useState<ValidationNoticeState | null>(null);
   const tenantCatalogs = useTenantContactCatalogs();
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
 
   React.useEffect(() => {
     if (!open) {
@@ -1062,7 +1067,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     dispatch({ type: "saving/set", value: true });
     dispatch({ type: "error/set", value: null });
     try {
-      const payload = buildPayload(state, dedupeDecision);
+      const payload = buildPayload(state, dedupeDecision, currentUserId);
       if (!dedupeDecision) {
         const previewResponse = await fetch("/api/personas/alta/validar", {
           method: "POST",

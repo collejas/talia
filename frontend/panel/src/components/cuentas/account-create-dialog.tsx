@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   getRfcLengthMessage,
   isValidRfcLength,
@@ -149,6 +150,7 @@ type Props = {
 
 export function AccountCreateDialog({ onCreated }: Props) {
   const router = useRouter();
+  const { context: permissionContext } = usePermissions();
   const tenantCatalogs = useTenantContactCatalogs();
   const [open, setOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -156,6 +158,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const [extrasOpen, setExtrasOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CreateAccountForm>(INITIAL_FORM);
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
 
   const openDialog = React.useCallback(() => {
     setForm(INITIAL_FORM);
@@ -282,6 +285,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
           corredor_industrial: form.corredor_industrial.trim() || null,
           numero_local: form.numero_local.trim() || null,
           codigo_postal: form.codigo_postal.trim() || null,
+          propietario_usuario_id: currentUserId || null,
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };

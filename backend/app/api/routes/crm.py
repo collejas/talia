@@ -5057,6 +5057,8 @@ async def _require_edit_scope(
 
     allowed_target_ids = [candidate for candidate in (owner_user_id, assigned_user_id) if candidate is not None]
     if current_user_id not in allowed_target_ids:
+        if owner_user_id is None and _is_sales_level_context(permission_context):
+            return
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
 
     if "contacts.write" in _permission_context_permission_codes(permission_context):

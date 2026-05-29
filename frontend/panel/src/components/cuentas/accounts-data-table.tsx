@@ -284,7 +284,7 @@ export function AccountsDataTable({ rows }: Props) {
       if (permissionContext.es_admin || permissionContext.es_owner) return true;
       if (!canEditAny || !currentUserId) return false;
       const ownerId = getText((row.raw as Record<string, unknown> | undefined)?.propietario_usuario_id);
-      return ownerId === currentUserId;
+      return !ownerId || ownerId === currentUserId;
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );

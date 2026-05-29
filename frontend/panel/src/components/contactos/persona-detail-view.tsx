@@ -222,7 +222,10 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
     hasSalesRole;
   const contactOwnerId = getText(detail?.propietario_usuario_id);
   const canEditPersona =
-    canEditAny && (permissionContext.es_admin || permissionContext.es_owner || (Boolean(currentUserId) && Boolean(contactOwnerId) && currentUserId === contactOwnerId));
+    canEditAny &&
+    (permissionContext.es_admin ||
+      permissionContext.es_owner ||
+      (Boolean(currentUserId) && (!contactOwnerId || currentUserId === contactOwnerId)));
   const relationCount = relations.length.toLocaleString("es-MX");
 
   const handleMerge = async () => {

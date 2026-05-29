@@ -284,7 +284,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const accountOwnerId = getInputText(detail?.propietario_usuario_id);
   const canEditAccount =
-    canEditAny && (permissionContext.es_admin || permissionContext.es_owner || (Boolean(currentUserId) && Boolean(accountOwnerId) && currentUserId === accountOwnerId));
+    canEditAny &&
+    (permissionContext.es_admin ||
+      permissionContext.es_owner ||
+      (Boolean(currentUserId) && (!accountOwnerId || currentUserId === accountOwnerId)));
   const canDeleteAccount = canDeleteAny;
 
   const tenantCatalogs = useTenantContactCatalogs();
