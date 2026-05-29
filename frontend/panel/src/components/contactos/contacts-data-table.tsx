@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
 import {
   IconArrowsLeftRight,
   IconBuilding,
@@ -189,6 +190,7 @@ const contactColumnLabels = {
 } as const;
 
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
+  const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = React.useMemo(
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
@@ -356,13 +358,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     setEditOpen(true);
   };
 
-  const openDetailAfterSave = React.useCallback((personaId: string) => {
-    if (!personaId) return;
-    setEditPersonaId(personaId);
+  const handleCreated = React.useCallback(() => {
     setError(null);
     setSuccess(null);
-    setEditOpen(true);
-  }, []);
+    router.refresh();
+  }, [router]);
 
   const openLinkFlow = (row?: TableRow | null) => {
     if (!row) {
@@ -447,7 +447,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     try {
       await fn();
       setSuccess("Operación realizada.");
-      setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => router.refresh(), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Operación fallida.");
     } finally {
@@ -691,21 +691,21 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         initialMode={createInitialMode}
-        onCreated={openDetailAfterSave}
+        onCreated={handleCreated}
       />
 
       <ContactEditFlow
         open={editOpen}
         onOpenChange={setEditOpen}
         personaId={editPersonaId}
-        onSaved={() => window.location.reload()}
+        onSaved={() => router.refresh()}
       />
 
       <ContactLinkFlow
         open={linkOpen}
         onOpenChange={setLinkOpen}
         initialContact={linkInitialContact}
-        onLinked={() => window.location.reload()}
+        onLinked={() => router.refresh()}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
