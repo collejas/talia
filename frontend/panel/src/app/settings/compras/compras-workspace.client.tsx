@@ -834,7 +834,9 @@ export function ComprasWorkspace({
   const [orderInstructions, setOrderInstructions] = useState("")
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
   const [editingOrderLineCostIndex, setEditingOrderLineCostIndex] = useState<number | null>(null)
+  const [editingOrderLineCostDraft, setEditingOrderLineCostDraft] = useState("")
   const [editingReceptionLineCostIndex, setEditingReceptionLineCostIndex] = useState<number | null>(null)
+  const [editingReceptionLineCostDraft, setEditingReceptionLineCostDraft] = useState("")
   const [editingOrderMontoAsegurado, setEditingOrderMontoAsegurado] = useState(false)
   const [orderIncotermCodigo, setOrderIncotermCodigo] = useState("")
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
@@ -2361,12 +2363,25 @@ export function ComprasWorkspace({
                           type="text"
                           inputMode="decimal"
                           min="0"
-                          value={formatCurrencyInput(line.costo_unitario, orderCurrency, editingOrderLineCostIndex === index)}
-                          onFocus={() => setEditingOrderLineCostIndex(index)}
-                          onBlur={() =>
-                            setEditingOrderLineCostIndex((current) => (current === index ? null : current))
+                          value={
+                            editingOrderLineCostIndex === index
+                              ? editingOrderLineCostDraft
+                              : formatCurrencyInput(line.costo_unitario, orderCurrency, false)
                           }
-                          onChange={(event) => updateOrderLine(index, { costo_unitario: parseCurrencyInput(event.target.value) })}
+                          onFocus={() => {
+                            setEditingOrderLineCostIndex(index)
+                            setEditingOrderLineCostDraft(
+                              Number.isFinite(line.costo_unitario) && line.costo_unitario > 0
+                                ? String(line.costo_unitario)
+                                : "",
+                            )
+                          }}
+                          onBlur={(event) => {
+                            setEditingOrderLineCostIndex((current) => (current === index ? null : current))
+                            setEditingOrderLineCostDraft("")
+                            updateOrderLine(index, { costo_unitario: parseCurrencyInput(event.currentTarget.value) })
+                          }}
+                          onChange={(event) => setEditingOrderLineCostDraft(event.target.value)}
                           placeholder={formatCurrency(0, orderCurrency)}
                           className="text-right tabular-nums"
                         />
@@ -4367,27 +4382,36 @@ export function ComprasWorkspace({
                           />
                         </TableCell>
                         <TableCell className="w-36">
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.0001"
-                            value={formatCurrencyInput(
-                              line.costo_unitario_real,
-                              selectedOrderCurrency,
-                              editingReceptionLineCostIndex === index,
-                            )}
-                            onFocus={() => setEditingReceptionLineCostIndex(index)}
-                            onBlur={() =>
-                              setEditingReceptionLineCostIndex((current) => (current === index ? null : current))
-                            }
-                            onChange={(event) =>
-                              updateLine(index, { costo_unitario_real: parseCurrencyInput(event.target.value) })
-                            }
-                            placeholder={formatCurrency(0, selectedOrderCurrency)}
-                            className="text-right tabular-nums"
-                            aria-label={`Costo unitario ${line.nombre}`}
-                          />
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.0001"
+                              value={
+                                editingReceptionLineCostIndex === index
+                                  ? editingReceptionLineCostDraft
+                                  : formatCurrencyInput(line.costo_unitario_real, selectedOrderCurrency, false)
+                              }
+                              onFocus={() => {
+                                setEditingReceptionLineCostIndex(index)
+                                setEditingReceptionLineCostDraft(
+                                  Number.isFinite(line.costo_unitario_real) && line.costo_unitario_real > 0
+                                    ? String(line.costo_unitario_real)
+                                    : "",
+                                )
+                              }}
+                              onBlur={(event) => {
+                                setEditingReceptionLineCostIndex((current) => (current === index ? null : current))
+                                setEditingReceptionLineCostDraft("")
+                                updateLine(index, {
+                                  costo_unitario_real: parseCurrencyInput(event.currentTarget.value),
+                                })
+                              }}
+                              onChange={(event) => setEditingReceptionLineCostDraft(event.target.value)}
+                              placeholder={formatCurrency(0, selectedOrderCurrency)}
+                              className="text-right tabular-nums"
+                              aria-label={`Costo unitario ${line.nombre}`}
+                            />
                           <input
                             type="hidden"
                             name="items_costo_unitario_real"
