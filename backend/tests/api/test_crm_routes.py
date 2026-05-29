@@ -32,6 +32,15 @@ class DummyCRMRepository(CRMRepository):
         self.updated_propiedad_unidades: list[dict[str, Any]] = []
         self.updated_catalog_items: list[dict[str, Any]] = []
         self.created_propiedad_unidad_movimientos: list[dict[str, Any]] = []
+        self.permission_context: dict[str, Any] = {
+            "usuario_id": str(uuid.uuid4()),
+            "organizacion_id": str(uuid.uuid4()),
+            "es_admin": True,
+            "es_owner": False,
+            "permisos": ["contacts.write", "contacts.delete"],
+        }
+        self.account_owner_id: uuid.UUID | None = None
+        self.persona_owner_id: uuid.UUID | None = None
 
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
@@ -48,6 +57,10 @@ class DummyCRMRepository(CRMRepository):
     async def list_prospectos_by_ids(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_prospectos_by_ids", kwargs))
         return list(self.prospectos_by_ids_result)
+
+    async def get_permission_context(self) -> dict[str, Any]:
+        self.calls.append(("get_permission_context", {}))
+        return dict(self.permission_context)
 
     async def list_accounts(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_accounts", kwargs))
@@ -207,10 +220,43 @@ class DummyCRMRepository(CRMRepository):
             "telefono": None,
             "correo": None,
             "direccion": {},
-            "propietario_usuario_id": None,
+            "propietario_usuario_id": str(self.account_owner_id) if self.account_owner_id else None,
             "metadata": {},
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def get_persona(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_persona", kwargs))
+        if kwargs["persona_id"] == uuid.UUID(int=1):
+            return None
+        return {
+            "id": str(kwargs["persona_id"]),
+            "organizacion_id": str(kwargs.get("organizacion_id") or uuid.uuid4()),
+            "nombre_completo": "Contacto Demo",
+            "correo_principal": "demo@example.com",
+            "correo_secundario": None,
+            "correo_institucional": None,
+            "correo_personal_3": None,
+            "codigo_contacto": None,
+            "telefono_principal_e164": "+521111111111",
+            "telefono_principal_tipo_linea": None,
+            "telefono_principal_extension": None,
+            "telefono_movil_1_e164": "+521111111111",
+            "telefono_movil_1_tipo_linea": None,
+            "telefono_movil_2_e164": None,
+            "telefono_movil_2_tipo_linea": None,
+            "telefono_movil_2_extension": None,
+            "telefono_secundario_e164": None,
+            "telefono_secundario_tipo_linea": None,
+            "telefono_secundario_extension": None,
+            "telefono_empresa_1_e164": None,
+            "telefono_empresa_1_extension": None,
+            "telefono_empresa_2_e164": None,
+            "telefono_empresa_2_extension": None,
+            "company_name": "Demo Inc.",
+            "notas": None,
+            "propietario_usuario_id": str(self.persona_owner_id) if self.persona_owner_id else None,
         }
 
     async def get_persona_by_id(self, **kwargs: Any) -> dict[str, Any] | None:
@@ -263,6 +309,9 @@ class DummyCRMRepository(CRMRepository):
 
     async def delete_persona(self, **kwargs: Any) -> None:
         self.calls.append(("delete_persona", kwargs))
+
+    async def delete_account(self, **kwargs: Any) -> None:
+        self.calls.append(("delete_account", kwargs))
 
     async def list_activities(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_activities", kwargs))
@@ -1502,6 +1551,102 @@ async def test_bulk_delete_contacts_elimina_varios_registros(
     assert payload["deleted_ids"] == [str(value) for value in contact_ids]
     call_names = [name for name, _ in fake_repo.calls]
     assert call_names.count("delete_persona") == 3
+
+
+@pytest.mark.asyncio
+async def test_delete_account_denies_non_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.account_owner_id = uuid.uuid4()
+
+    resp = await client.delete(
+        f"/crm/cuentas/{uuid.uuid4()}",
+        headers=_headers(),
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert any(name == "get_account" for name, _ in fake_repo.calls)
+    assert not any(name == "delete_account" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_delete_account_allows_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.account_owner_id = actor_user
+
+    resp = await client.delete(
+        f"/crm/cuentas/{uuid.uuid4()}",
+        headers=_headers(),
+    )
+
+    assert resp.status_code == 204, resp.text
+    assert any(name == "get_account" for name, _ in fake_repo.calls)
+    assert any(name == "delete_account" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_delete_persona_denies_non_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = uuid.uuid4()
+
+    resp = await client.delete(
+        f"/crm/personas/{uuid.uuid4()}",
+        headers=_headers(),
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert not any(name == "delete_persona" and kwargs.get("persona_id") for name, kwargs in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_delete_persona_allows_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = actor_user
+
+    resp = await client.delete(
+        f"/crm/personas/{uuid.uuid4()}",
+        headers=_headers(),
+    )
+
+    assert resp.status_code == 204, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert any(name == "delete_persona" for name, _ in fake_repo.calls)
 
 
 

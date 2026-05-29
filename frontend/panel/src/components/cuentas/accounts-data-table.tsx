@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClientDataTable } from "@/components/client-data-table";
@@ -67,9 +68,11 @@ function formatDeleteBlockedMessage(error: string | undefined): string | null {
 function AccountRowActions({
   row,
   onDeleteRequest,
+  canDelete,
 }: {
   row: DataTableRow;
   onDeleteRequest: (target: DeleteTarget) => void;
+  canDelete: boolean;
 }) {
   const accountId = getAccountId(row);
 
@@ -90,19 +93,23 @@ function AccountRowActions({
             Editar
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() =>
-            onDeleteRequest({
-              id: accountId,
-              name: getText((row.raw as Record<string, unknown> | undefined)?.nombre),
-            })
-          }
-        >
-          <IconTrash className="mr-2 size-4" />
-          Eliminar
-        </DropdownMenuItem>
+        {canDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() =>
+                onDeleteRequest({
+                  id: accountId,
+                  name: getText((row.raw as Record<string, unknown> | undefined)?.nombre),
+                })
+              }
+            >
+              <IconTrash className="mr-2 size-4" />
+              Eliminar
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -161,6 +168,23 @@ function AccountRowDetails(row: DataTableRow) {
 
 export function AccountsDataTable({ rows }: Props) {
   const router = useRouter();
+  const { context: permissionContext } = usePermissions();
+  const normalizedPerms = React.useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canDeleteAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
+  const canDeleteAccountRow = React.useCallback(
+    (row: DataTableRow) => {
+      if (canDeleteAny) return true;
+      if (!currentUserId) return false;
+      const ownerId = getText((row.raw as Record<string, unknown> | undefined)?.propietario_usuario_id);
+      return ownerId === currentUserId;
+    },
+    [canDeleteAny, currentUserId],
+  );
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
 
@@ -170,12 +194,13 @@ export function AccountsDataTable({ rows }: Props) {
       cell: ({ row }) => (
         <AccountRowActions
           row={row.original}
+          canDelete={canDeleteAccountRow(row.original)}
           onDeleteRequest={(target) => setDeleteTarget(target)}
         />
       ),
       meta: { label: "Acciones", reorderable: false },
     },
-  ], []);
+  ], [canDeleteAccountRow]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;

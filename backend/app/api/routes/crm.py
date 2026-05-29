@@ -4995,6 +4995,49 @@ def get_repository(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+def _permission_context_permission_codes(permission_context: dict[str, Any]) -> set[str]:
+    raw_permissions = permission_context.get("permisos")
+    if not isinstance(raw_permissions, list):
+        return set()
+    return {
+        str(permission).strip().lower()
+        for permission in raw_permissions
+        if str(permission).strip()
+    }
+
+
+async def _get_permission_context_or_raise(repo: CRMRepository) -> dict[str, Any]:
+    try:
+        context = await repo.get_permission_context()
+    except CRMRepositoryError as exc:
+        if _is_jwt_expired_repo_error(exc):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return context if isinstance(context, dict) else {}
+
+
+def _can_delete_any_contact_or_account(permission_context: dict[str, Any]) -> bool:
+    if _coerce_bool(permission_context.get("es_admin")) is True:
+        return True
+    if _coerce_bool(permission_context.get("es_owner")) is True:
+        return True
+    return "contacts.delete" in _permission_context_permission_codes(permission_context)
+
+
+async def _require_delete_scope(
+    *,
+    repo: CRMRepository,
+    owner_user_id: UUID | None,
+) -> None:
+    permission_context = await _get_permission_context_or_raise(repo)
+    if _can_delete_any_contact_or_account(permission_context):
+        return
+
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+    if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+
+
 async def require_organizacion_id(
     x_organizacion_id: Annotated[str, Header(alias="X-Organizacion-Id")],
     request: Request,
@@ -14425,14 +14468,25 @@ async def delete_account(
     cuenta_id: UUID,
 ) -> Response:
     try:
+        existing_row = await repo.get_account(
+            organizacion_id=organizacion_id,
+            account_id=cuenta_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+    await _require_delete_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
+    try:
         await repo.delete_account(
             organizacion_id=organizacion_id,
             account_id=cuenta_id,
         )
     except CRMRepositoryError as exc:
         detail = str(exc)
-        if "cuenta_no_encontrada" in detail:
-            raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
         if "cuenta_tiene_contactos" in detail:
             raise HTTPException(status_code=409, detail=detail) from exc
         if "cuenta_tiene_oportunidades" in detail:
@@ -20091,6 +20145,19 @@ async def delete_persona_legacy(
     contacto_id: UUID,
 ) -> Response:
     try:
+        persona_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not persona_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_delete_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(persona_row.get("propietario_usuario_id")),
+    )
+    try:
         await repo.delete_persona(
             organizacion_id=organizacion_id,
             persona_id=contacto_id,
@@ -20113,6 +20180,19 @@ async def delete_persona(
     persona_id: UUID,
 ) -> Response:
     try:
+        persona_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not persona_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_delete_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(persona_row.get("propietario_usuario_id")),
+    )
+    try:
         await repo.delete_persona(
             organizacion_id=organizacion_id,
             persona_id=persona_id,
@@ -20133,17 +20213,33 @@ async def bulk_delete_contacts(
     _: str = Depends(require_permission("contacts.write")),
     payload: CRMBulkDeleteRequest,
 ) -> CRMBulkDeleteResponse:
+    permission_context = await _get_permission_context_or_raise(repo)
+    can_delete_any = _can_delete_any_contact_or_account(permission_context)
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+
     deleted_ids: list[UUID] = []
     errors: list[CRMBulkDeleteError] = []
 
     for contact_id in payload.ids:
         try:
+            persona_row = await repo.get_persona(
+                organizacion_id=organizacion_id,
+                persona_id=contact_id,
+            )
+            if not persona_row:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="contacto_no_encontrado")
+            if not can_delete_any:
+                owner_user_id = _safe_uuid(persona_row.get("propietario_usuario_id"))
+                if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
             await repo.delete_persona(
                 organizacion_id=organizacion_id,
                 persona_id=contact_id,
             )
         except CRMRepositoryError as exc:
             errors.append(CRMBulkDeleteError(id=contact_id, detail=str(exc)))
+        except HTTPException as exc:
+            errors.append(CRMBulkDeleteError(id=contact_id, detail=str(exc.detail)))
         else:
             deleted_ids.append(contact_id)
 

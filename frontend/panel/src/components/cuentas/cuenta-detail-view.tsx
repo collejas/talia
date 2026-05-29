@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { usePermissions } from "@/hooks/use-permissions";
 import { IconArrowLeft, IconBuilding, IconPencil, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 
@@ -251,6 +252,18 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     notas: "",
     necesidad_proposito: "",
   });
+
+  const { context: permissionContext } = usePermissions();
+  const normalizedPerms = React.useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canDeleteAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
+  const accountOwnerId = getInputText(detail?.propietario_usuario_id);
+  const canDeleteAccount =
+    canDeleteAny || (Boolean(currentUserId) && Boolean(accountOwnerId) && currentUserId === accountOwnerId);
 
   const tenantCatalogs = useTenantContactCatalogs();
   const usoCfdiOptions = React.useMemo(
@@ -694,10 +707,12 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             <IconUsers className="mr-2 size-4" />
             Fusionar
           </Button>
-          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <IconTrash className="mr-2 size-4" />
-            Eliminar
-          </Button>
+          {canDeleteAccount ? (
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <IconTrash className="mr-2 size-4" />
+              Eliminar
+            </Button>
+          ) : null}
         </div>
       </div>
 

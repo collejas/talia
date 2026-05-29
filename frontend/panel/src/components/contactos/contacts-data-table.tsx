@@ -205,6 +205,18 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
 
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canDeleteAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
+  const canDeleteContactRow = React.useCallback(
+    (row: TableRow) => {
+      if (canDeleteAny) return true;
+      if (!currentUserId) return false;
+      const ownerId = extractString(row.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+      return ownerId === currentUserId;
+    },
+    [canDeleteAny, currentUserId],
+  );
   const canReassignAny =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -413,7 +425,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               <span className="sr-only">Reasignar</span>
             </Button>
           ) : null}
-          {canWrite ? (
+          {canDeleteContactRow(row.original) ? (
             <Button
               variant="ghost"
               size="icon"
@@ -435,10 +447,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       meta: { label: "Acciones", reorderable: false },
     };
 
-    if (!canWrite && !canReassign) return contactExtraColumns;
+    if (!canWrite && !canReassign && !canDeleteAny) return contactExtraColumns;
 
     return [actionColumn, ...contactExtraColumns];
-  }, [canWrite, canReassign]);
+  }, [canWrite, canReassign, canDeleteAny, canDeleteContactRow]);
 
   const runAndReload = async (fn: () => Promise<void>) => {
     setPending(true);
@@ -655,6 +667,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         setSuccess(null);
         setReassignOpen(true);
       }}
+      canDelete={canDeleteContactRow(row)}
       onDelete={() => {
         setActiveRow(row);
         setError(null);
@@ -679,6 +692,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         toolbarActions={toolbarActions}
         selectionActions={(selectedRows) => {
           if (!canWrite || !selectedRows.length) return null;
+          if (!selectedRows.every((row) => canDeleteContactRow(row))) return null;
           return (
             <Button type="button" variant="destructive" size="sm" onClick={() => handleOpenBulkDelete(selectedRows)}>
               Eliminar seleccionados
@@ -823,12 +837,14 @@ function ContactDetailPanel({
   onLink,
   onReassign,
   onDelete,
+  canDelete,
 }: {
   row: TableRow;
   onEdit: () => void;
   onLink: () => void;
   onReassign: () => void;
   onDelete: () => void;
+  canDelete: boolean;
 }) {
   const raw = (row.raw ?? {}) as Record<string, unknown>;
 
@@ -880,10 +896,12 @@ function ContactDetailPanel({
           <IconArrowsLeftRight className="size-4" />
           Reasignar
         </Button>
-        <Button type="button" variant="destructive" size="sm" onClick={onDelete}>
-          <IconTrash className="size-4" />
-          Eliminar
-        </Button>
+        {canDelete ? (
+          <Button type="button" variant="destructive" size="sm" onClick={onDelete}>
+            <IconTrash className="size-4" />
+            Eliminar
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-3 rounded-xl border bg-muted/20 p-4">

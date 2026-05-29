@@ -26,8 +26,8 @@ Notas
 
 | Rol | Permisos |
 | --- | --- |
-| Admin | ver_panel, ver_inbox, busquedas.view (nuevo), busquedas.run (nuevo), busquedas.delete (nuevo), prospectos.create (nuevo), conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, role.manage, user.manage, settings.view (nuevo), settings.manage (nuevo) |
-| Supervisor | ver_panel, ver_inbox, busquedas.view (nuevo), busquedas.run (nuevo), prospectos.create (nuevo), conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, leads.view (nuevo), pipeline.view (nuevo), agenda.view (nuevo), propuesta.view (nuevo), clientes.view |
+| Admin | ver_panel, ver_inbox, busquedas.view (nuevo), busquedas.run (nuevo), busquedas.delete (nuevo), prospectos.create (nuevo), conv.read, conv.write, conv.assign, contacts.read, contacts.write, contacts.delete, messages.read, messages.write, calls.read, calls.write, reports.view, role.manage, user.manage, settings.view (nuevo), settings.manage (nuevo) |
+| Supervisor | ver_panel, ver_inbox, busquedas.view (nuevo), busquedas.run (nuevo), prospectos.create (nuevo), conv.read, conv.write, conv.assign, contacts.read, contacts.write, contacts.delete, messages.read, messages.write, calls.read, calls.write, reports.view, leads.view (nuevo), pipeline.view (nuevo), agenda.view (nuevo), propuesta.view (nuevo), clientes.view |
 | Agente | ver_panel, ver_inbox, busquedas.view (nuevo), busquedas.run (nuevo), prospectos.create (nuevo), conv.read, conv.write, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, leads.view (nuevo), pipeline.view (nuevo), agenda.view (nuevo), propuesta.view (nuevo), clientes.view |
 | Invitado | ver_panel, conv.read, contacts.read, messages.read, clientes.view |
 
@@ -87,6 +87,7 @@ Nota
 - busquedas.view
 - busquedas.run
 - busquedas.delete
+- contacts.delete
 - prospectos.create
 - settings.view
 - settings.manage

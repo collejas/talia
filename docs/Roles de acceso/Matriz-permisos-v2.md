@@ -37,7 +37,7 @@ Roles propuestos (códigos sugeridos):
 Estos ya existen o ya se usan en backend/panel:
 - Core panel: `ver_panel`
 - Inbox/Conversaciones: `ver_inbox`, `conv.read`, `conv.write`, `conv.assign`, `messages.read`, `messages.write`
-- CRM: `pipeline.view`, `leads.view`, `contacts.read`, `contacts.write`, `clientes.view`
+- CRM: `pipeline.view`, `leads.view`, `contacts.read`, `contacts.write`, `contacts.delete`, `clientes.view`
 - Agenda/Propuesta: `agenda.view`, `propuesta.view`
 - Reportes: `reports.view`
 - Prospección: `busquedas.view`, `busquedas.run`, `busquedas.delete`, `campaigns.view`
@@ -68,10 +68,10 @@ Regla general: además del permiso, se respeta el “scope” (equipo) salvo `ow
 
 | Rol | Permisos |
 | --- | --- |
-| owner | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, busquedas.delete, campaigns.view, activities.view, notes.view, files.view, tickets.view, audit.view, audit.view_all (nuevo), user.manage, role.manage, settings.view, settings.manage, pipeline.reassign.any (nuevo), contacts.reassign.any (nuevo) |
-| admin_operativo | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, campaigns.view, activities.view, notes.view, files.view, tickets.view, audit.view, pipeline.reassign.any (nuevo), contacts.reassign.any (nuevo), settings.view, user.manage (limitado) |
-| gerente_comercial | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, campaigns.view, tickets.view, audit.view, pipeline.reassign.team (nuevo), contacts.reassign.team (nuevo) |
-| coordinador | ver_panel, ver_inbox, conv.read, conv.write, messages.read, messages.write, contacts.read, contacts.write, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, tickets.view, pipeline.reassign.team (nuevo), contacts.reassign.team (nuevo) |
+| owner | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, contacts.delete, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, busquedas.delete, campaigns.view, activities.view, notes.view, files.view, tickets.view, audit.view, audit.view_all (nuevo), user.manage, role.manage, settings.view, settings.manage, pipeline.reassign.any (nuevo), contacts.reassign.any (nuevo) |
+| admin_operativo | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, contacts.delete, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, campaigns.view, activities.view, notes.view, files.view, tickets.view, audit.view, pipeline.reassign.any (nuevo), contacts.reassign.any (nuevo), settings.view, user.manage (limitado) |
+| gerente_comercial | ver_panel, ver_inbox, conv.read, conv.write, conv.assign, messages.read, messages.write, contacts.read, contacts.write, contacts.delete, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, busquedas.view, busquedas.run, campaigns.view, tickets.view, audit.view, pipeline.reassign.team (nuevo), contacts.reassign.team (nuevo) |
+| coordinador | ver_panel, ver_inbox, conv.read, conv.write, messages.read, messages.write, contacts.read, contacts.write, contacts.delete, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view, reports.view, tickets.view, pipeline.reassign.team (nuevo), contacts.reassign.team (nuevo) |
 | agente | ver_panel, ver_inbox, conv.read, conv.write, messages.read, messages.write, contacts.read, contacts.write, clientes.view, leads.view, pipeline.view, agenda.view, propuesta.view |
 | capturista | ver_panel, contacts.read, contacts.write (limitado), pipeline.view (solo lectura), clientes.view (solo lectura), agenda.view (solo lectura) |
 | marketing | ver_panel, busquedas.view, busquedas.run, campaigns.view, contacts.read, messages.read, reports.view |
