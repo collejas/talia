@@ -85,8 +85,9 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {}
   const vistaParam = resolvedSearchParams.vista
   const requestedView = typeof vistaParam === "string" ? vistaParam : Array.isArray(vistaParam) ? vistaParam[0] : "resumen"
-  const activeView: ComprasView = COMPRAS_VIEWS.includes(requestedView as ComprasView)
-    ? (requestedView as ComprasView)
+  const normalizedRequestedView = requestedView === "pagos" ? "ordenes" : requestedView
+  const activeView: ComprasView = COMPRAS_VIEWS.includes(normalizedRequestedView as ComprasView)
+    ? (normalizedRequestedView as ComprasView)
     : "resumen"
   const ordenIdParam = resolvedSearchParams.orden_id
   const defaultPaymentOrderId =
@@ -149,7 +150,6 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
     { value: "ordenes", label: "Órdenes" },
     { value: "pedimentos", label: "Pedimentos" },
     { value: "agentes", label: "Agentes" },
-    { value: "pagos", label: "Pagos" },
     { value: "inventario", label: "Inventario" },
     { value: "recepciones", label: "Recepciones" },
   ]

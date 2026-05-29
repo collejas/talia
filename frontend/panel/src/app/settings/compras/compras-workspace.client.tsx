@@ -1145,7 +1145,7 @@ export function ComprasWorkspace({
     }
   }
   const openOrderPayments = (orden: AnyRecord) => {
-    router.push(`/compras?vista=pagos&orden_id=${encodeURIComponent(String(orden.id))}`)
+    router.push(`/compras?vista=ordenes&orden_id=${encodeURIComponent(String(orden.id))}`)
   }
 
   const openCreateOrderModal = () => {
@@ -1701,7 +1701,7 @@ export function ComprasWorkspace({
   }, [defaultOrderEmissionIso, defaultOrderFolio, defaultWarehouseId])
 
   useEffect(() => {
-    if (activeView !== "pagos") {
+    if (activeView !== "ordenes") {
       return
     }
     const targetOrderId = defaultPaymentOrderId || selectedOrderId || defaultOrderId
@@ -1829,7 +1829,7 @@ export function ComprasWorkspace({
   const showOrdenes = activeView === "ordenes"
   const showPedimentos = activeView === "pedimentos"
   const showAgentes = activeView === "agentes"
-  const showPagos = activeView === "pagos"
+  const showPagos = activeView === "ordenes"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
 
@@ -3683,7 +3683,7 @@ export function ComprasWorkspace({
                   value={selectedOrderId}
                   onChange={(event) => {
                     const nextOrderId = event.target.value
-                    router.push(`/compras?vista=pagos&orden_id=${encodeURIComponent(nextOrderId)}`)
+                    router.push(`/compras?vista=ordenes&orden_id=${encodeURIComponent(nextOrderId)}`)
                   }}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
