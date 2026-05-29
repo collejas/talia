@@ -870,6 +870,7 @@ export function ComprasWorkspace({
   )
   const [selectedOrderId, setSelectedOrderId] = useState<string>(String(initialOrder?.id ?? ""))
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
+  const [isOrderPaymentsModalOpen, setIsOrderPaymentsModalOpen] = useState(false)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
@@ -986,7 +987,6 @@ export function ComprasWorkspace({
     Record<string, Array<{ id: string; file: File | null; fileName: string }>>
   >({})
 
-  const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedOrderRecord = useMemo(
     () => ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null,
     [ordenes, selectedOrderId],
@@ -1145,7 +1145,13 @@ export function ComprasWorkspace({
     }
   }
   const openOrderPayments = (orden: AnyRecord) => {
-    router.push(`/compras?vista=ordenes&orden_id=${encodeURIComponent(String(orden.id))}`)
+    const orderId = String(orden.id)
+    setSelectedOrderId(orderId)
+    setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(orden))
+    setEditingPaymentScheduleRecord(null)
+    setEditingPaymentScheduleAmountIndex(null)
+    setEditingRegisteredPaymentAmountFocused(false)
+    setIsOrderPaymentsModalOpen(true)
   }
 
   const openCreateOrderModal = () => {
@@ -1165,6 +1171,18 @@ export function ComprasWorkspace({
     setIsOrderModalOpen(open)
     if (!open) {
       clearOrderForm()
+    }
+  }
+
+  const handleOrderPaymentsModalOpenChange = (open: boolean) => {
+    setIsOrderPaymentsModalOpen(open)
+    if (!open) {
+      setEditingPaymentScheduleRecord(null)
+      setEditingPaymentScheduleAmountIndex(null)
+      setEditingRegisteredPaymentAmountFocused(false)
+      if (defaultPaymentOrderId) {
+        router.replace("/compras?vista=ordenes")
+      }
     }
   }
 
@@ -1708,17 +1726,21 @@ export function ComprasWorkspace({
     if (!targetOrderId) {
       return
     }
-    const targetOrder = openOrders.find((orden) => String(orden.id) === targetOrderId) ?? null
+    const targetOrder = ordenes.find((orden) => String(orden.id) === targetOrderId) ?? null
     if (!targetOrder) {
       return
     }
     if (String(targetOrder.id) !== selectedOrderId) {
       setSelectedOrderId(String(targetOrder.id))
     }
-    if (String(targetOrder.id) !== editingOrderId) {
-      startEditOrder(targetOrder)
+    if (defaultPaymentOrderId) {
+      setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(targetOrder))
+      setEditingPaymentScheduleRecord(null)
+      setEditingPaymentScheduleAmountIndex(null)
+      setEditingRegisteredPaymentAmountFocused(false)
+      setIsOrderPaymentsModalOpen(true)
     }
-  }, [activeView, defaultPaymentOrderId, defaultOrderId, editingOrderId, openOrders, selectedOrderId, startEditOrder])
+  }, [activeView, defaultPaymentOrderId, defaultOrderId, ordenes, selectedOrderId])
 
   const clearOrderForm = () => {
     orderHydratingRef.current = true
@@ -1829,12 +1851,11 @@ export function ComprasWorkspace({
   const showOrdenes = activeView === "ordenes"
   const showPedimentos = activeView === "pedimentos"
   const showAgentes = activeView === "agentes"
-  const showPagos = activeView === "ordenes"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
 
   useEffect(() => {
-    if (!showPagos || selectedOrderPaymentSchedules.length === 0) {
+    if (!isOrderPaymentsModalOpen || selectedOrderPaymentSchedules.length === 0) {
       setPaymentMxnLookupByKey({})
       return
     }
@@ -1932,7 +1953,7 @@ export function ComprasWorkspace({
 
     void run()
     return () => abortController.abort()
-  }, [orderCurrency, orderEmissionIso, selectedOrderPaymentSchedules, showPagos])
+  }, [isOrderPaymentsModalOpen, orderCurrency, orderEmissionIso, selectedOrderPaymentSchedules])
 
   const rootGridClassName = showResumen ? "grid gap-4 xl:grid-cols-3" : "grid gap-4"
 
@@ -3660,12 +3681,18 @@ export function ComprasWorkspace({
         </Dialog>
       ) : null}
 
-      {showPagos ? (
-        <Card>
+      <Dialog open={isOrderPaymentsModalOpen && Boolean(selectedOrderRecord)} onOpenChange={handleOrderPaymentsModalOpenChange}>
+        <DialogContent className="max-h-[92vh] w-[95vw] max-w-7xl overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Pagos de O.C.</DialogTitle>
+            <DialogDescription>Gestiona anticipos, saldos, pagos parciales y gastos ligados a la orden seleccionada.</DialogDescription>
+          </DialogHeader>
+          {selectedOrderRecord ? (
+            <Card className="border-0 shadow-none">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Pagos y gastos</CardTitle>
+                <CardTitle>Pagos de O.C.</CardTitle>
                 <CardDescription>
                   Gestiona anticipos, saldos, pagos parciales y otros gastos ligados a una orden ya guardada.
                 </CardDescription>
@@ -3683,14 +3710,21 @@ export function ComprasWorkspace({
                   value={selectedOrderId}
                   onChange={(event) => {
                     const nextOrderId = event.target.value
-                    router.push(`/compras?vista=ordenes&orden_id=${encodeURIComponent(nextOrderId)}`)
+                    setSelectedOrderId(nextOrderId)
+                    const nextOrder = ordenes.find((orden) => String(orden.id) === nextOrderId) ?? null
+                    if (nextOrder) {
+                      setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(nextOrder))
+                      setEditingPaymentScheduleRecord(null)
+                      setEditingPaymentScheduleAmountIndex(null)
+                      setEditingRegisteredPaymentAmountFocused(false)
+                    }
                   }}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="" disabled>
                     Selecciona una orden
                   </option>
-                  {openOrders.map((orden) => (
+                  {ordenes.map((orden) => (
                     <option key={String(orden.id)} value={String(orden.id)}>
                       {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.nombre_comercial ?? (orden.proveedor as AnyRecord | undefined)?.razon_social, "Proveedor")}
                     </option>
@@ -3699,7 +3733,7 @@ export function ComprasWorkspace({
               </div>
               <div className="space-y-2 md:col-span-1">
                 <label className="text-sm font-medium">Tipo</label>
-                <Input value={selectedOrder ? getOrderStatusBadge(selectedOrder.estado).label : "—"} readOnly className="bg-muted/40" />
+                <Input value={selectedOrderRecord ? getOrderStatusBadge(selectedOrderRecord.estado).label : "—"} readOnly className="bg-muted/40" />
               </div>
             </div>
             {selectedOrderPedimento ? (
@@ -3716,9 +3750,9 @@ export function ComprasWorkspace({
               </div>
             ) : null}
 
-            {editingOrderId && selectedOrder ? (
+            {selectedOrderRecord ? (
               <>
-              <form action={saveOrdenCompraPagosProgramadosAction.bind(null, editingOrderId)} className="space-y-5">
+              <form action={saveOrdenCompraPagosProgramadosAction.bind(null, String(selectedOrderRecord.id))} className="space-y-5">
                 <div className="rounded-lg border border-border/60 bg-background/80 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
@@ -3868,7 +3902,7 @@ export function ComprasWorkspace({
                                           type="submit"
                                           formAction={deleteOrdenCompraPagoProgramadoAction.bind(
                                             null,
-                                            String(selectedOrder.id),
+                                            String(selectedOrderRecord.id),
                                             rowId,
                                           )}
                                           variant="destructive"
@@ -3911,7 +3945,7 @@ export function ComprasWorkspace({
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {selectedOrderCompliancePaymentsSettled ? "Gastos" : "Pagos y gastos"}
+                          {selectedOrderCompliancePaymentsSettled ? "Gastos" : "Pagos de O.C."}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {selectedOrderCompliancePaymentsSettled
@@ -4121,14 +4155,14 @@ export function ComprasWorkspace({
                   <Button type="button" variant="secondary" onClick={addOrderPaymentSchedule}>
                     Agregar movimiento
                   </Button>
-                  <Button type="submit" disabled={!editingOrderId}>
+                  <Button type="submit" disabled={!selectedOrderRecord}>
                     Guardar movimientos
                   </Button>
                 </div>
                 </form>
               {editingPaymentScheduleRecord ? (
                 <form
-                  action={updateOrdenCompraPagoProgramadoAction.bind(null, String(selectedOrder.id), editingPaymentScheduleRecord.id)}
+                  action={updateOrdenCompraPagoProgramadoAction.bind(null, String(selectedOrderRecord.id), editingPaymentScheduleRecord.id)}
                   className="mt-4 rounded-lg border border-border/60 bg-background/80 p-3"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -4333,8 +4367,10 @@ export function ComprasWorkspace({
               </div>
             )}
           </CardContent>
-        </Card>
-      ) : null}
+            </Card>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {showRecepciones ? (
 
@@ -4847,6 +4883,9 @@ export function ComprasWorkspace({
                 </Button>
                 <Button type="button" variant="outline" onClick={() => selectedOrderRecord && openEditOrderModal(selectedOrderRecord)} disabled={!selectedOrderRecord}>
                   Editar
+                </Button>
+                <Button type="button" variant="outline" onClick={() => selectedOrderRecord && openOrderPayments(selectedOrderRecord)} disabled={!selectedOrderRecord}>
+                  Pagos
                 </Button>
                 {selectedOrderRecord && selectedOrderStatus === "borrador" ? (
                   <form action={sendOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
