@@ -1008,6 +1008,15 @@ export function ComprasWorkspace({
         : [],
     [selectedOrderRecord],
   )
+  const getOrderItemDisplayName = useCallback((item: AnyRecord): string => {
+    const catalogItem = item.catalog_item && typeof item.catalog_item === "object" ? (item.catalog_item as AnyRecord) : null
+    return (
+      asString(catalogItem?.nombre) ||
+      asString(item.descripcion) ||
+      asString(item.nombre) ||
+      "Producto"
+    )
+  }, [])
   const normalizeOrderDocumentBaseType = useCallback((value: unknown) => {
     const raw = asString(value, "").trim().toLowerCase()
     if (!raw) {
@@ -3798,7 +3807,7 @@ export function ComprasWorkspace({
                           <TableRow key={String(item.id ?? `${index}`)}>
                             <TableCell>
                               <div className="space-y-1">
-                                <div className="font-medium">{asString(item.nombre, "Producto")}</div>
+                                <div className="font-medium">{getOrderItemDisplayName(item)}</div>
                                 <div className="text-xs text-muted-foreground">{asString(item.unidad, "unidad")}</div>
                               </div>
                             </TableCell>
