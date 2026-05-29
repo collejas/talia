@@ -867,7 +867,7 @@ export function ComprasWorkspace({
     () => openOrders.find((orden) => String(orden.id) === defaultOrderId) ?? openOrders[0] ?? null,
     [defaultOrderId, openOrders],
   )
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(String(initialOrder?.id ?? ""))
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("")
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [isOrderPaymentsModalOpen, setIsOrderPaymentsModalOpen] = useState(false)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
@@ -1709,25 +1709,20 @@ export function ComprasWorkspace({
     if (activeView !== "ordenes") {
       return
     }
-    const targetOrderId = defaultPaymentOrderId || selectedOrderId || defaultOrderId
-    if (!targetOrderId) {
+    if (!defaultPaymentOrderId) {
       return
     }
-    const targetOrder = ordenes.find((orden) => String(orden.id) === targetOrderId) ?? null
+    const targetOrder = ordenes.find((orden) => String(orden.id) === defaultPaymentOrderId) ?? null
     if (!targetOrder) {
       return
     }
-    if (String(targetOrder.id) !== selectedOrderId) {
-      setSelectedOrderId(String(targetOrder.id))
-    }
-    if (defaultPaymentOrderId) {
-      setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(targetOrder))
-      setEditingPaymentScheduleRecord(null)
-      setEditingPaymentScheduleAmountIndex(null)
-      setEditingRegisteredPaymentAmountFocused(false)
-      setIsOrderPaymentsModalOpen(true)
-    }
-  }, [activeView, defaultPaymentOrderId, defaultOrderId, ordenes, selectedOrderId])
+    setSelectedOrderId(String(targetOrder.id))
+    setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(targetOrder))
+    setEditingPaymentScheduleRecord(null)
+    setEditingPaymentScheduleAmountIndex(null)
+    setEditingRegisteredPaymentAmountFocused(false)
+    setIsOrderPaymentsModalOpen(true)
+  }, [activeView, defaultPaymentOrderId, ordenes])
 
   const clearOrderForm = () => {
     orderHydratingRef.current = true
