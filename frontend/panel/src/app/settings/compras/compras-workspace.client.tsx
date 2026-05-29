@@ -1116,6 +1116,21 @@ export function ComprasWorkspace({
     () => orderPaymentSchedules.findIndex((row) => row.tipo_pago === "saldo"),
     [orderPaymentSchedules],
   )
+  const getOrderTotalMxn = (orden: AnyRecord): number | null => {
+    const subtotal = asNumber(orden.subtotal)
+    if (!Number.isFinite(subtotal) || subtotal <= 0) {
+      return null
+    }
+    const currency = asString(orden.moneda, "MXN").trim().toUpperCase()
+    if (currency === "MXN") {
+      return subtotal
+    }
+    const rate = asNumber(orden.tipo_cambio_referencia)
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return null
+    }
+    return subtotal * rate
+  }
   const openOrderPayments = (orden: AnyRecord) => {
     const orderId = String(orden.id)
     setSelectedOrderId(orderId)
@@ -4901,6 +4916,7 @@ export function ComprasWorkspace({
                 <TableRow>
                   <TableHead className="text-center">Tipo de O.C.</TableHead>
                   <TableHead className="text-center">Folio</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Pedimento</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
@@ -4911,7 +4927,7 @@ export function ComprasWorkspace({
               <TableBody>
                 {!ordenes.length ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                       Aún no hay órdenes de compra registradas.
                     </TableCell>
                   </TableRow>
@@ -4929,6 +4945,12 @@ export function ComprasWorkspace({
                           </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {(() => {
+                            const totalMxn = getOrderTotalMxn(orden)
+                            return totalMxn !== null ? formatCurrency(totalMxn, "MXN") : "—"
+                          })()}
+                        </TableCell>
                         <TableCell>
                           {orderPedimentoByOrderId.get(orderId) ? (
                             <div className="flex flex-col">
