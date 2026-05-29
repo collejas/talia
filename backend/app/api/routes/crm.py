@@ -12545,7 +12545,7 @@ def _sum_orden_compra_payment_rows(
     return _round_currency_decimal(total)
 
 
-def _ensure_orden_compra_anticipo_limit(
+def _ensure_orden_compra_payment_limit(
     *,
     order: Mapping[str, Any],
     existing_rows: Iterable[Mapping[str, Any]],

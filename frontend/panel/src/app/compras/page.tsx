@@ -131,7 +131,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
     String(new Date().getMinutes()).padStart(2, "0"),
     String(new Date().getSeconds()).padStart(2, "0"),
   ].join("")
-  const defaultOrderEmissionIso = new Date().toISOString()
+  const defaultOrderEmissionIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date())
   const pedimentoIdParam = resolvedSearchParams.pedimento_id
   const requestedPedimentoId =
     typeof pedimentoIdParam === "string"
