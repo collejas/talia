@@ -5024,10 +5024,26 @@ def _can_delete_any_contact_or_account(permission_context: dict[str, Any]) -> bo
     return "contacts.delete" in _permission_context_permission_codes(permission_context)
 
 
+def _is_sales_level_context(permission_context: dict[str, Any]) -> bool:
+    roles = permission_context.get("roles")
+    if not isinstance(roles, list):
+        return False
+    for role in roles:
+        normalized = str(role or "").strip().lower()
+        if not normalized:
+            continue
+        if normalized in {"agente", "vendedor", "sales", "ejecutivo de ventas"}:
+            return True
+        if "agente" in normalized or "vendedor" in normalized or "ejecutivo de ventas" in normalized:
+            return True
+    return False
+
+
 async def _require_edit_scope(
     *,
     repo: CRMRepository,
     owner_user_id: UUID | None,
+    assigned_user_id: UUID | None = None,
 ) -> None:
     permission_context = await _get_permission_context_or_raise(repo)
     if _coerce_bool(permission_context.get("es_admin")) is True:
@@ -5036,8 +5052,18 @@ async def _require_edit_scope(
         return
 
     current_user_id = _safe_uuid(permission_context.get("usuario_id"))
-    if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
+    if not current_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+
+    allowed_target_ids = [candidate for candidate in (owner_user_id, assigned_user_id) if candidate is not None]
+    if current_user_id not in allowed_target_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+
+    if "contacts.write" in _permission_context_permission_codes(permission_context):
+        return
+    if _is_sales_level_context(permission_context):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
 
 
 async def _require_delete_scope(
@@ -15340,6 +15366,11 @@ async def pipeline_update_opportunity(
     current_stage = _safe_uuid(current.get("etapa_id"))
     if payload.expected_etapa_id and current_stage and payload.expected_etapa_id != current_stage:
         raise HTTPException(status_code=409, detail="opportunity_stage_conflict")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(current.get("propietario_usuario_id")),
+        assigned_user_id=_safe_uuid(current.get("asignado_a_usuario_id")),
+    )
     update_body = payload.model_dump(
         mode="json",
         exclude_none=True,
@@ -15399,6 +15430,8 @@ async def pipeline_delete_opportunity(
     _: str = Depends(require_permission("pipeline.view")),
     oportunidad_id: UUID,
 ) -> Response:
+    await _require_delete_scope(repo=repo, owner_user_id=None)
+
     try:
         bookings = await repo.list_calendar_bookings_by_opportunity(
             organizacion_id=organizacion_id,
@@ -19043,20 +19076,6 @@ async def create_persona_alta(
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
     dedupe = payload.dedupe
-
-    try:
-        existing_row = await repo.get_persona(
-            organizacion_id=organizacion_id,
-            persona_id=contacto_id,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if not existing_row:
-        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
-    await _require_edit_scope(
-        repo=repo,
-        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
-    )
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")

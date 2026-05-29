@@ -53,6 +53,21 @@ function formatDate(value: unknown): string {
   return date.toLocaleString("es-MX");
 }
 
+function isSalesLevelRole(roles: string[] | undefined): boolean {
+  return (roles ?? []).some((role) => {
+    const value = (role ?? "").toString().trim().toLowerCase();
+    return (
+      value === "agente" ||
+      value === "vendedor" ||
+      value === "sales" ||
+      value === "ejecutivo de ventas" ||
+      value.includes("agente") ||
+      value.includes("vendedor") ||
+      value.includes("ejecutivo de ventas")
+    );
+  });
+}
+
 export function PersonaDetailView({ personaId }: { personaId: string }) {
   const router = useRouter();
   const [detail, setDetail] = React.useState<PersonaDetail | null>(null);
@@ -199,8 +214,12 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
     [permissionContext.permisos],
   );
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const hasSalesRole = isSalesLevelRole(permissionContext.roles);
   const canEditAny =
-    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.write") ||
+    hasSalesRole;
   const contactOwnerId = getText(detail?.propietario_usuario_id);
   const canEditPersona =
     canEditAny && (permissionContext.es_admin || permissionContext.es_owner || (Boolean(currentUserId) && Boolean(contactOwnerId) && currentUserId === contactOwnerId));

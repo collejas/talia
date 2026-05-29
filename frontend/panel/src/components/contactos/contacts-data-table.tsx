@@ -151,6 +151,21 @@ function getContactIdValue(raw: Record<string, unknown> | undefined): string {
   return extractString(raw, ["codigo_contacto"]) || extractString(raw, ["contacto_id"]) || "—";
 }
 
+function isSalesLevelRole(roles: string[] | undefined): boolean {
+  return (roles ?? []).some((role) => {
+    const value = (role ?? "").toString().trim().toLowerCase();
+    return (
+      value === "agente" ||
+      value === "vendedor" ||
+      value === "sales" ||
+      value === "ejecutivo de ventas" ||
+      value.includes("agente") ||
+      value.includes("vendedor") ||
+      value.includes("ejecutivo de ventas")
+    );
+  });
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
@@ -257,8 +272,12 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const hasSalesRole = isSalesLevelRole(permissionContext.roles);
   const canEditAny =
-    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.write") ||
+    hasSalesRole;
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const canEditContactRow = React.useCallback(

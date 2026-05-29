@@ -59,6 +59,21 @@ function getAccountField(row: DataTableRow, key: string): string {
   return "—";
 }
 
+function isSalesLevelRole(roles: string[] | undefined): boolean {
+  return (roles ?? []).some((role) => {
+    const value = (role ?? "").toString().trim().toLowerCase();
+    return (
+      value === "agente" ||
+      value === "vendedor" ||
+      value === "sales" ||
+      value === "ejecutivo de ventas" ||
+      value.includes("agente") ||
+      value.includes("vendedor") ||
+      value.includes("ejecutivo de ventas")
+    );
+  });
+}
+
 function getAccountOwnerId(row: DataTableRow): string | null {
   const raw = row.raw as Record<string, unknown> | undefined;
   const value = raw?.propietario_usuario_id;
@@ -256,8 +271,12 @@ export function AccountsDataTable({ rows }: Props) {
     [permissionContext.permisos],
   );
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const hasSalesRole = isSalesLevelRole(permissionContext.roles);
   const canEditAny =
-    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.write") ||
+    hasSalesRole;
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const canEditAccountRow = React.useCallback(

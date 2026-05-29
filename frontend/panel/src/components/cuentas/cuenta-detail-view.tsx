@@ -112,6 +112,21 @@ function getText(value: unknown): string {
   return "—";
 }
 
+function isSalesLevelRole(roles: string[] | undefined): boolean {
+  return (roles ?? []).some((role) => {
+    const value = (role ?? "").toString().trim().toLowerCase();
+    return (
+      value === "agente" ||
+      value === "vendedor" ||
+      value === "sales" ||
+      value === "ejecutivo de ventas" ||
+      value.includes("agente") ||
+      value.includes("vendedor") ||
+      value.includes("ejecutivo de ventas")
+    );
+  });
+}
+
 function toDateInputValue(value: string): string {
   const raw = value.trim();
   if (!raw) return "";
@@ -259,8 +274,12 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     [permissionContext.permisos],
   );
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const hasSalesRole = isSalesLevelRole(permissionContext.roles);
   const canEditAny =
-    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.write") ||
+    hasSalesRole;
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const accountOwnerId = getInputText(detail?.propietario_usuario_id);
