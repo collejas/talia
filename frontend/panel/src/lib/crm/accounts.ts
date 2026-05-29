@@ -6,6 +6,7 @@ import { callCrmApi } from "@/lib/api/crm";
 type CRMAccount = {
   id: string;
   organizacion_id: string;
+  codigo_cuenta: string | null;
   nombre: string;
   alias: string | null;
   tipo: string | null;
@@ -27,6 +28,25 @@ type CRMAccountsResponse = {
   offset: number;
 };
 
+type CRMAccountRelation = {
+  es_contacto_principal?: boolean;
+  es_representante_legal?: boolean;
+  activo?: boolean;
+  persona?: {
+    id: string;
+    nombre_completo: string | null;
+    correo_principal: string | null;
+    telefono_principal_e164: string | null;
+    company_name: string | null;
+  } | null;
+};
+
+type CRMUser = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+};
+
 export type CrmAccountsPayload = {
   rows: DataTableRow[];
   total: number;
@@ -34,32 +54,78 @@ export type CrmAccountsPayload = {
 };
 
 export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
-  const result = await callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
-    searchParams: { limit: "100", offset: "0" },
-  });
+  const [accountsResult, usersResult] = await Promise.all([
+    callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
+      searchParams: { limit: "100", offset: "0" },
+    }),
+    callCrmApi<CRMUser[]>("/crm/usuarios", {
+      searchParams: { limit: "500" },
+    }),
+  ]);
 
-  if (!result.ok) {
+  if (!accountsResult.ok) {
     return {
       rows: [],
       total: 0,
-      errors: [result.error],
+      errors: [accountsResult.error],
     };
   }
 
-  const rows = result.data.items.map<DataTableRow>((account, index) => ({
-    id: index + 1,
-    header: account.nombre,
-    type: account.tipo || "Cuenta",
-    status: account.industria || "Sin industria",
-    target: account.sitio_web || "—",
-    limit: account.telefono || account.correo || "—",
-    reviewer: account.alias || "Sin alias",
-    raw: account,
-  }));
+  const ownerMap = new Map<string, string>();
+  if (usersResult.ok && Array.isArray(usersResult.data)) {
+    for (const user of usersResult.data) {
+      if (!user || typeof user !== "object") continue;
+      const id = String(user.id || "").trim();
+      if (!id) continue;
+      ownerMap.set(id, user.nombre_completo?.trim() || user.correo?.trim() || id);
+    }
+  }
+
+  const relationResults = await Promise.all(
+    accountsResult.data.items.map(async (account) => {
+      const response = await callCrmApi<CRMAccountRelation[]>(`/crm/cuentas/${encodeURIComponent(account.id)}/relaciones`, {
+        searchParams: { activo: "true" },
+      });
+      return { account, response };
+    }),
+  );
+
+  const rows = relationResults.map<DataTableRow>(({ account, response }, index) => {
+    const relations = response.ok && Array.isArray(response.data) ? response.data : [];
+    const primaryRelation = relations.find((relation) => relation?.es_contacto_principal) || relations[0] || null;
+    const contact = primaryRelation?.persona ?? null;
+    const ownerName = account.propietario_usuario_id ? ownerMap.get(account.propietario_usuario_id) ?? account.propietario_usuario_id : null;
+
+    return {
+      id: index + 1,
+      header: account.nombre,
+      type: account.tipo || "Cuenta",
+      status: account.industria || "Sin industria",
+      target: account.sitio_web || "—",
+      limit: account.telefono || account.correo || "—",
+      reviewer: account.alias || "Sin alias",
+      raw: {
+        ...account,
+        codigo_cuenta: account.codigo_cuenta,
+        contacto_principal_nombre: contact?.nombre_completo ?? null,
+        contacto_principal_correo: contact?.correo_principal ?? null,
+        contacto_principal_telefono: contact?.telefono_principal_e164 ?? null,
+        propietario_nombre: ownerName,
+      },
+    };
+  });
+
+  const errors = [
+    ...(!usersResult.ok ? [usersResult.error] : []),
+    ...relationResults
+      .filter(({ response }) => !response.ok)
+      .map(({ response }) => (response.ok ? null : response.error))
+      .filter((error): error is string => Boolean(error)),
+  ];
 
   return {
     rows,
-    total: result.data.items.length,
-    errors: [],
+    total: accountsResult.data.items.length,
+    errors: Array.from(new Set(errors)),
   };
 }

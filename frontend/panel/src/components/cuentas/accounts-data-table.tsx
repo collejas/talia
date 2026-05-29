@@ -43,6 +43,28 @@ function getAccountId(row: DataTableRow): string | null {
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+function getAccountCode(row: DataTableRow): string {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const code = raw?.codigo_cuenta;
+  if (typeof code === "string" && code.trim()) return code.trim();
+  if (typeof code === "number" && Number.isFinite(code)) return String(code);
+  return getAccountId(row) || "—";
+}
+
+function getAccountField(row: DataTableRow, key: string): string {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const value = raw?.[key];
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "—";
+}
+
+function getAccountOwnerId(row: DataTableRow): string | null {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const value = raw?.propietario_usuario_id;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function formatDeleteBlockedMessage(error: string | undefined): string | null {
   if (!error) return null;
   const normalized = error.trim();
@@ -64,6 +86,62 @@ function formatDeleteBlockedMessage(error: string | undefined): string | null {
   }
   return null;
 }
+
+const ACCOUNT_COLUMNS: Array<{
+  id: string;
+  label: string;
+  accessor: (row: DataTableRow) => React.ReactNode;
+}> = [
+  {
+    id: "account_id",
+    label: "Id Empresa",
+    accessor: (row) => <span className="font-mono text-xs">{getAccountCode(row)}</span>,
+  },
+  {
+    id: "account_name",
+    label: "Nombre Empresa",
+    accessor: (row) => <span className="font-medium">{getText((row.raw as Record<string, unknown> | undefined)?.nombre)}</span>,
+  },
+  {
+    id: "account_contact",
+    label: "Nombre Contacto",
+    accessor: (row) => <span>{getAccountField(row, "contacto_principal_nombre")}</span>,
+  },
+  {
+    id: "account_phone",
+    label: "Telefono",
+    accessor: (row) => {
+      const value = getAccountField(row, "contacto_principal_telefono");
+      return value !== "—" ? (
+        <a href={`tel:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>
+      ) : (
+        <span>{value}</span>
+      );
+    },
+  },
+  {
+    id: "account_email",
+    label: "Email",
+    accessor: (row) => {
+      const value = getAccountField(row, "contacto_principal_correo");
+      return value !== "—" ? (
+        <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>
+      ) : (
+        <span>{value}</span>
+      );
+    },
+  },
+  {
+    id: "account_rfc",
+    label: "RFC",
+    accessor: (row) => <span>{getText((row.raw as Record<string, unknown> | undefined)?.rfc)}</span>,
+  },
+  {
+    id: "account_owner",
+    label: "Propietario",
+    accessor: (row) => <span>{getAccountField(row, "propietario_nombre")}</span>,
+  },
+];
 
 function AccountRowActions({
   row,
@@ -211,6 +289,15 @@ export function AccountsDataTable({ rows }: Props) {
       ),
       meta: { label: "Acciones", reorderable: false },
     },
+    ...ACCOUNT_COLUMNS.map((column) => ({
+      id: column.id,
+      header: column.label,
+      accessorFn: () => null,
+      cell: ({ row }: { row: { original: DataTableRow } }) => column.accessor(row.original),
+      enableHiding: true,
+      enableSorting: false,
+      meta: { label: column.label },
+    } as ColumnDef<DataTableRow>)),
   ], [canEditAccountRow, canDeleteAccountRow]);
 
   const handleDeleteConfirm = async () => {
@@ -236,6 +323,30 @@ export function AccountsDataTable({ rows }: Props) {
     }
   };
 
+  const accountColumnOrder = React.useMemo(
+    () => ["account_id", "account_name", "account_contact", "account_phone", "account_email", "account_rfc", "account_owner", "actions"],
+    [],
+  );
+
+  const accountVisibility = React.useMemo(
+    () => ({
+      session: false,
+      type: false,
+      chat: false,
+      visits: false,
+      reviewer: false,
+      account_id: true,
+      account_name: true,
+      account_contact: true,
+      account_phone: true,
+      account_email: true,
+      account_rfc: true,
+      account_owner: true,
+      actions: true,
+    }),
+    [],
+  );
+
   return (
     <>
       <AccountCreateDialog onCreated={() => router.refresh()} />
@@ -243,6 +354,8 @@ export function AccountsDataTable({ rows }: Props) {
         rows={rows}
         extraColumns={extraColumns}
         hideDefaultActions
+        forcedColumnOrder={accountColumnOrder}
+        initialVisibility={accountVisibility}
         columnLabels={{
           header: "Empresa",
           type: "Tipo",

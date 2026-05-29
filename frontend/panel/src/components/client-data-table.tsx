@@ -17,6 +17,7 @@ type Props = {
   renderRowDetails?: (row: DataTableRow) => React.ReactNode;
   detailDescription?: string;
   hideDefaultActions?: boolean;
+  forcedColumnOrder?: string[];
 };
 
 export function ClientDataTable({
@@ -29,6 +30,7 @@ export function ClientDataTable({
   renderRowDetails,
   detailDescription,
   hideDefaultActions,
+  forcedColumnOrder,
 }: Props) {
   return (
     <DataTable
@@ -41,6 +43,7 @@ export function ClientDataTable({
       renderRowDetails={renderRowDetails}
       detailDescription={detailDescription}
       hideDefaultActions={hideDefaultActions}
+      forcedColumnOrder={forcedColumnOrder}
     />
   );
 }

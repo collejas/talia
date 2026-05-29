@@ -147,27 +147,74 @@ function getContactOwnerId(raw: Record<string, unknown> | undefined): string | n
   return extractString(raw, ["propietario_usuario_id", "propietario_id"]);
 }
 
+function getContactIdValue(raw: Record<string, unknown> | undefined): string {
+  return extractString(raw, ["codigo_contacto"]) || extractString(raw, ["contacto_id"]) || "—";
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
   accessor: (row: TableRow) => React.ReactNode;
   defaultVisible?: boolean;
 }> = [
-  { id: "contact_codigo", label: "Código contacto", accessor: (row) => renderField(row, "codigo_contacto") },
-  { id: "account_codigo", label: "Código empresa", accessor: (row) => renderField(row, "codigo_cuenta") },
-  { id: "contact_correo", label: "Correo", accessor: (row) => renderField(row, "correo"), defaultVisible: true },
-  { id: "contact_telefono", label: "Teléfono", accessor: (row) => renderField(row, "telefono"), defaultVisible: true },
-  { id: "contact_rfc", label: "RFC", accessor: (row) => renderField(row, "rfc"), defaultVisible: true },
-  { id: "contact_puesto", label: "Puesto", accessor: (row) => renderField(row, "puesto"), defaultVisible: true },
-  { id: "contact_rol", label: "Rol decisión", accessor: (row) => renderField(row, "rol_decision"), defaultVisible: true },
-  { id: "contact_cp", label: "C.P.", accessor: (row) => renderField(row, "codigo_postal"), defaultVisible: true },
-  { id: "contact_origen", label: "Origen", accessor: (row) => renderField(row, "origen"), defaultVisible: true },
-  { id: "contact_estado", label: "Estado", accessor: (row) => renderField(row, "estado") },
-  { id: "contact_captura", label: "Captura", accessor: (row) => renderField(row, "captura_estado") },
-  { id: "contact_company", label: "Empresa", accessor: (row) => renderField(row, "company_name"), defaultVisible: true },
-  { id: "contact_ultimo", label: "Último contacto", accessor: (row) => renderField(row, "ultimo_contacto_en"), defaultVisible: true },
-  { id: "contact_conversaciones", label: "Conversaciones", accessor: (row) => renderField(row, "conversaciones") },
-  { id: "contact_notes", label: "Notas", accessor: (row) => renderField(row, "notes") },
+  {
+    id: "contact_id",
+    label: "Id Contacto",
+    accessor: (row) => <span className="font-mono text-xs">{getContactIdValue(row.raw as Record<string, unknown> | undefined)}</span>,
+    defaultVisible: true,
+  },
+  {
+    id: "contact_name",
+    label: "Nombre contacto",
+    accessor: (row) => <span className="font-medium">{row.header}</span>,
+    defaultVisible: true,
+  },
+  {
+    id: "contact_company",
+    label: "Nombre empresa",
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return <span>{formatContactValue(raw?.company_name)}</span>;
+    },
+    defaultVisible: true,
+  },
+  {
+    id: "contact_phone",
+    label: "Teléfono",
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const phone = formatContactValue(raw?.telefono);
+      return phone !== "—" ? (
+        <a href={`tel:${phone}`} className="text-primary underline-offset-2 hover:underline">{phone}</a>
+      ) : (
+        <span>{phone}</span>
+      );
+    },
+    defaultVisible: true,
+  },
+  {
+    id: "contact_email",
+    label: "Email",
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const email = formatContactValue(raw?.correo);
+      return email !== "—" ? (
+        <a href={`mailto:${email}`} className="text-primary underline-offset-2 hover:underline">{email}</a>
+      ) : (
+        <span>{email}</span>
+      );
+    },
+    defaultVisible: true,
+  },
+  {
+    id: "contact_owner",
+    label: "Propietario",
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return <span>{formatContactValue(raw?.propietario_nombre)}</span>;
+    },
+    defaultVisible: true,
+  },
 ];
 
 const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) => ({
@@ -186,10 +233,10 @@ const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<Visibili
 }, {});
 
 const contactColumnLabels = {
-  header: "Contacto",
-  type: "Estado",
-  status: "Captura",
-  target: "Conversaciones",
+  header: "Nombre contacto",
+  type: "Nombre empresa",
+  status: "Teléfono",
+  target: "Email",
   reviewer: "Propietario",
 } as const;
 
@@ -462,6 +509,29 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     return [actionColumn, ...contactExtraColumns];
   }, [canWrite, canReassign, canEditAny, canDeleteAny, canEditContactRow, canDeleteContactRow]);
 
+  const contactColumnOrder = React.useMemo(
+    () => ["contact_id", "contact_name", "contact_company", "contact_phone", "contact_email", "contact_owner", "acciones"],
+    [],
+  );
+
+  const contactVisibility = React.useMemo(
+    () => ({
+      session: false,
+      type: false,
+      chat: false,
+      visits: false,
+      reviewer: false,
+      contact_id: true,
+      contact_name: true,
+      contact_company: true,
+      contact_phone: true,
+      contact_email: true,
+      contact_owner: true,
+      acciones: true,
+    }),
+    [],
+  );
+
   const runAndReload = async (fn: () => Promise<void>) => {
     setPending(true);
     setError(null);
@@ -694,11 +764,12 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         data={filteredData}
         columnLabels={contactColumnLabels}
         extraColumns={extraColumns}
+        forcedColumnOrder={contactColumnOrder}
         detailDescription="Detalle del contacto"
         toolbarLeadingActions={toolbarLeadingActions}
         renderRowDetails={renderRowDetails}
         hideDefaultActions
-        initialVisibility={contactColumnVisibility}
+        initialVisibility={contactVisibility}
         storageKey="contacts-table-column-order"
         toolbarActions={toolbarActions}
         selectionActions={(selectedRows) => {
