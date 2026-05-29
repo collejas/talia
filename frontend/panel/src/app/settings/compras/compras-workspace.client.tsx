@@ -843,8 +843,10 @@ export function ComprasWorkspace({
   const [orderDatosBancariosProveedor, setOrderDatosBancariosProveedor] = useState("")
   const [orderCondicionesPagoObservaciones, setOrderCondicionesPagoObservaciones] = useState("")
   const [orderPaymentSchedules, setOrderPaymentSchedules] = useState<OrderPaymentScheduleLine[]>([])
+  const [editingPaymentScheduleAmountIndex, setEditingPaymentScheduleAmountIndex] = useState<number | null>(null)
   const [paymentMxnLookupByKey, setPaymentMxnLookupByKey] = useState<Record<string, PaymentMxnLookupState>>({})
   const [editingPaymentScheduleRecord, setEditingPaymentScheduleRecord] = useState<PaymentScheduleRecordDraft | null>(null)
+  const [editingRegisteredPaymentAmountFocused, setEditingRegisteredPaymentAmountFocused] = useState(false)
   const [orderModoTransporteCodigo, setOrderModoTransporteCodigo] = useState("")
   const [orderFechaRequeridaEmbarque, setOrderFechaRequeridaEmbarque] = useState("")
   const [orderFechaEstimadaEmbarque, setOrderFechaEstimadaEmbarque] = useState("")
@@ -1073,6 +1075,8 @@ export function ComprasWorkspace({
     orderMontoAnticipoCalculated !== null
       ? Math.max(orderSubtotal - orderMontoAnticipoCalculated, 0)
       : null
+  const orderMontoAnticipoDisplay = orderMontoAnticipoCalculated ?? 0
+  const orderMontoSaldoDisplay = orderMontoSaldoCalculated ?? 0
   const orderMomentoPagoSaldoSuggested = useMemo(
     () => getSuggestedSaldoEvent(orderType, orderIncotermCodigo),
     [orderType, orderIncotermCodigo],
@@ -1349,6 +1353,7 @@ export function ComprasWorkspace({
       estado: (asString(row.estado, "programado") as OrderPaymentScheduleLine["estado"]) || "programado",
       observaciones: asString(row.observaciones, ""),
     })
+    setEditingRegisteredPaymentAmountFocused(false)
   }
 
   const updateEditingRegisteredPayment = (patch: Partial<PaymentScheduleRecordDraft>) => {
@@ -1357,6 +1362,7 @@ export function ComprasWorkspace({
 
   const cancelEditRegisteredPayment = () => {
     setEditingPaymentScheduleRecord(null)
+    setEditingRegisteredPaymentAmountFocused(false)
   }
 
   const setOrderLineFromCatalog = (index: number, catalogItemId: string) => {
@@ -2958,14 +2964,14 @@ export function ComprasWorkspace({
                   <Input
                     id="orden-monto-anticipo"
                     type="text"
-                    value={formatCurrency(orderMontoAnticipoCalculated, orderCurrency)}
+                    value={formatCurrency(orderMontoAnticipoDisplay, orderCurrency)}
                     readOnly
                     className="bg-muted/40 text-right tabular-nums"
                   />
                   <input
                     type="hidden"
                     name="condiciones_pago_monto_anticipo"
-                    value={Number.isFinite(orderMontoAnticipoCalculated) ? orderMontoAnticipoCalculated.toFixed(4) : "0"}
+                    value={orderMontoAnticipoDisplay.toFixed(4)}
                     readOnly
                   />
                 </div>
@@ -2992,14 +2998,14 @@ export function ComprasWorkspace({
                   <Input
                     id="orden-monto-saldo"
                     type="text"
-                    value={formatCurrency(orderMontoSaldoCalculated, orderCurrency)}
+                    value={formatCurrency(orderMontoSaldoDisplay, orderCurrency)}
                     readOnly
                     className="bg-muted/40 text-right tabular-nums"
                   />
                   <input
                     type="hidden"
                     name="condiciones_pago_monto_saldo"
-                    value={Number.isFinite(orderMontoSaldoCalculated) ? orderMontoSaldoCalculated.toFixed(4) : "0"}
+                    value={orderMontoSaldoDisplay.toFixed(4)}
                     readOnly
                   />
                 </div>
@@ -3825,13 +3831,29 @@ export function ComprasWorkspace({
                               <div className="space-y-2 md:col-span-2">
                                 <label className="text-xs font-medium">Monto</label>
                                 <Input
-                                  name="pagos_programados_monto"
-                                  type="number"
-                                  min="0"
-                                  step="0.0001"
-                                  value={row.monto}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={
+                                    editingPaymentScheduleAmountIndex === index
+                                      ? row.monto
+                                      : formatCurrency(asNumber(row.monto), row.moneda_codigo || orderCurrency)
+                                  }
+                                  onFocus={() => setEditingPaymentScheduleAmountIndex(index)}
+                                  onBlur={() => {
+                                    setEditingPaymentScheduleAmountIndex((current) => (current === index ? null : current))
+                                    updateOrderPaymentSchedule(index, {
+                                      monto: String(parseCurrencyInput(row.monto)),
+                                    })
+                                  }}
                                   onChange={(event) => updateOrderPaymentSchedule(index, { monto: event.target.value })}
-                                  placeholder="0.00"
+                                  placeholder={formatCurrency(0, row.moneda_codigo || orderCurrency)}
+                                  className="text-right tabular-nums"
+                                />
+                                <input
+                                  type="hidden"
+                                  name="pagos_programados_monto"
+                                  value={parseCurrencyInput(row.monto)}
+                                  readOnly
                                 />
                               </div>
                               {row.tipo_pago === "parcial" ? (
@@ -4014,14 +4036,28 @@ export function ComprasWorkspace({
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-xs font-medium">Monto</label>
                       <Input
-                        name="pago_monto"
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        value={editingPaymentScheduleRecord.monto}
+                        type="text"
+                        inputMode="decimal"
+                        value={
+                          editingRegisteredPaymentAmountFocused
+                            ? editingPaymentScheduleRecord.monto
+                            : formatCurrency(
+                                asNumber(editingPaymentScheduleRecord.monto),
+                                editingPaymentScheduleRecord.moneda_codigo || orderCurrency,
+                              )
+                        }
+                        onFocus={() => setEditingRegisteredPaymentAmountFocused(true)}
+                        onBlur={() => {
+                          setEditingRegisteredPaymentAmountFocused(false)
+                          updateEditingRegisteredPayment({
+                            monto: String(parseCurrencyInput(editingPaymentScheduleRecord.monto)),
+                          })
+                        }}
                         onChange={(event) => updateEditingRegisteredPayment({ monto: event.target.value })}
-                        placeholder="0.00"
+                        placeholder={formatCurrency(0, editingPaymentScheduleRecord.moneda_codigo || orderCurrency)}
+                        className="text-right tabular-nums"
                       />
+                      <input type="hidden" name="pago_monto" value={parseCurrencyInput(editingPaymentScheduleRecord.monto)} readOnly />
                     </div>
                     {editingPaymentScheduleRecord.tipo_pago === "parcial" ? (
                       <div className="space-y-2 md:col-span-2">

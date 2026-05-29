@@ -286,6 +286,7 @@ export function PedimentosImportacionPanel({
     }
     return pedimentos.find((row) => String(row.id) === selectedPedimentoRowId) ?? null
   }, [pedimentos, selectedPedimento, selectedPedimentoRowId])
+  const selectedPedimentoForActionsId = selectedPedimentoForActions ? String(selectedPedimentoForActions.id) : ""
   const selectedPedimentoForActionsGastos = useMemo(() => getPedimentoGastos(selectedPedimentoForActions), [selectedPedimentoForActions])
   const selectedPedimentoForActionsGastosTotal = useMemo(
     () =>
@@ -984,7 +985,7 @@ export function PedimentosImportacionPanel({
                                 <TableCell className="text-right">{formatMoney(gasto.monto_mxn ?? gasto.monto, "MXN")}</TableCell>
                                 <TableCell className="text-right">
                                   <form
-                                    action={deletePedimentoGastoAction.bind(null, String(selectedPedimentoForActions.id), String(gasto.id))}
+                                    action={deletePedimentoGastoAction.bind(null, selectedPedimentoForActionsId, String(gasto.id))}
                                     onSubmit={(event) => {
                                       if (!window.confirm("¿Eliminar este gasto del pedimento? Esta acción no se puede deshacer.")) {
                                         event.preventDefault()
