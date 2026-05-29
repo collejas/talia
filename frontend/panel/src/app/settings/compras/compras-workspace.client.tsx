@@ -680,6 +680,38 @@ function buildDerivedPaymentSchedules(
   ]
 }
 
+function resolveOrderAnticipoLimit(order: AnyRecord | undefined | null): number {
+  if (!order || typeof order !== "object") {
+    return 0
+  }
+  const payment = (order.condiciones_pago as AnyRecord | undefined) ?? {}
+  const montoAnticipo = asNumber(payment.monto_anticipo)
+  if (montoAnticipo > 0) {
+    return montoAnticipo
+  }
+  const porcentajeAnticipo = asNumber(payment.porcentaje_anticipo)
+  const subtotal = asNumber(order.subtotal)
+  if (subtotal <= 0 || porcentajeAnticipo <= 0) {
+    return 0
+  }
+  return (subtotal * porcentajeAnticipo) / 100
+}
+
+function sumOrderAnticipoPayments(rows: AnyRecord[]): number {
+  return rows.reduce((sum, row) => {
+    if (!row || typeof row !== "object") {
+      return sum
+    }
+    if (String((row as AnyRecord).tipo_pago || "").toLowerCase() !== "anticipo") {
+      return sum
+    }
+    if (String((row as AnyRecord).estado || "").toLowerCase() === "cancelado") {
+      return sum
+    }
+    return sum + asNumber((row as AnyRecord).monto)
+  }, 0)
+}
+
 function mergePaymentScheduleForDisplay(
   base: OrderPaymentScheduleLine,
   stored?: AnyRecord | null,
@@ -955,6 +987,15 @@ export function ComprasWorkspace({
         : [],
     [selectedOrderRecord],
   )
+  const selectedOrderAnticipoLimit = useMemo(
+    () => resolveOrderAnticipoLimit(selectedOrderRecord),
+    [selectedOrderRecord],
+  )
+  const selectedOrderAnticipoPaid = useMemo(
+    () => sumOrderAnticipoPayments(selectedOrderPaymentSchedules),
+    [selectedOrderPaymentSchedules],
+  )
+  const selectedOrderAnticipoRemaining = Math.max(selectedOrderAnticipoLimit - selectedOrderAnticipoPaid, 0)
   const selectedOrderPaymentScheduleByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
     for (const pago of selectedOrderPaymentSchedules) {
@@ -3662,6 +3703,16 @@ export function ComprasWorkspace({
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
                               <div className="mt-1 font-medium">{getPaymentDisplayDueLabel(row)}</div>
                             </div>
+                            {row.tipo_pago === "anticipo" ? (
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo anticipo</div>
+                                <div className="mt-1 font-medium">
+                                  {selectedOrderAnticipoLimit > 0
+                                    ? formatCurrency(selectedOrderAnticipoRemaining, row.moneda_codigo || selectedOrderCurrency)
+                                    : "—"}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )
