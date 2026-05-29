@@ -996,6 +996,7 @@ export function ComprasWorkspace({
     [selectedOrderPaymentSchedules],
   )
   const selectedOrderAnticipoRemaining = Math.max(selectedOrderAnticipoLimit - selectedOrderAnticipoPaid, 0)
+  const canCreateAnticipoPayment = selectedOrderAnticipoRemaining > 0
   const selectedOrderPaymentScheduleByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
     for (const pago of selectedOrderPaymentSchedules) {
@@ -3885,7 +3886,7 @@ export function ComprasWorkspace({
                                   }
                                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 >
-                                  {!selectedOrderCompliancePaymentsSettled ? <option value="anticipo">Anticipo</option> : null}
+                                  {canCreateAnticipoPayment || row.tipo_pago === "anticipo" ? <option value="anticipo">Anticipo</option> : null}
                                   {!selectedOrderCompliancePaymentsSettled ? <option value="saldo">Saldo</option> : null}
                                   <option value="parcial">Gasto</option>
                                 </select>
@@ -4090,7 +4091,9 @@ export function ComprasWorkspace({
                         }
                         className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        <option value="anticipo">Anticipo</option>
+                        {canCreateAnticipoPayment || editingPaymentScheduleRecord.tipo_pago === "anticipo" ? (
+                          <option value="anticipo">Anticipo</option>
+                        ) : null}
                         <option value="saldo">Saldo</option>
                         <option value="parcial">Gasto</option>
                       </select>
