@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Info, Paperclip } from "lucide-react"
+import { Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -1116,33 +1116,6 @@ export function ComprasWorkspace({
     () => orderPaymentSchedules.findIndex((row) => row.tipo_pago === "saldo"),
     [orderPaymentSchedules],
   )
-  const getOrderDocumentsSummary = (orden: AnyRecord): { total: number; proforma: number; anexos: number } => {
-    const documentos = Array.isArray(orden.documentos)
-      ? orden.documentos.filter((documento) => Boolean(documento) && typeof documento === "object")
-      : []
-    const proforma = documentos.filter((documento) => String((documento as AnyRecord).tipo_documento || "").toLowerCase() === "proforma").length
-    return {
-      total: documentos.length,
-      proforma,
-      anexos: Math.max(documentos.length - proforma, 0),
-    }
-  }
-  const getOrderPaymentsSummary = (
-    orden: AnyRecord,
-  ): { total: number; anticipo: number; saldo: number; parciales: number; pagados: number } => {
-    const pagos = Array.isArray(orden.pagos_programados) ? orden.pagos_programados.filter((pago) => Boolean(pago) && typeof pago === "object") : []
-    const anticipo = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "anticipo").length
-    const saldo = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "saldo").length
-    const parciales = pagos.filter((pago) => String((pago as AnyRecord).tipo_pago || "").toLowerCase() === "parcial").length
-    const pagados = pagos.filter((pago) => String((pago as AnyRecord).estado || "").toLowerCase() === "pagado").length
-    return {
-      total: pagos.length,
-      anticipo,
-      saldo,
-      parciales,
-      pagados,
-    }
-  }
   const openOrderPayments = (orden: AnyRecord) => {
     const orderId = String(orden.id)
     setSelectedOrderId(orderId)
@@ -4928,12 +4901,8 @@ export function ComprasWorkspace({
                 <TableRow>
                   <TableHead className="text-center">Tipo de O.C.</TableHead>
                   <TableHead className="text-center">Folio</TableHead>
-                  <TableHead className="text-center">Proveedor</TableHead>
                   <TableHead className="text-center">Pedimento</TableHead>
-                  <TableHead className="text-center">Almacén</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
-                  <TableHead className="text-center">Docs</TableHead>
-                  <TableHead className="text-center">Pagos</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
                   <TableHead className="text-center">Auditoría</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
@@ -4942,7 +4911,7 @@ export function ComprasWorkspace({
               <TableBody>
                 {!ordenes.length ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                       Aún no hay órdenes de compra registradas.
                     </TableCell>
                   </TableRow>
@@ -4961,13 +4930,6 @@ export function ComprasWorkspace({
                         </TableCell>
                         <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
                         <TableCell>
-                          {asString(
-                            (orden.proveedor as AnyRecord | undefined)?.nombre_comercial ??
-                              (orden.proveedor as AnyRecord | undefined)?.razon_social,
-                            "Proveedor",
-                          )}
-                        </TableCell>
-                        <TableCell>
                           {orderPedimentoByOrderId.get(orderId) ? (
                             <div className="flex flex-col">
                               <span className="font-mono text-xs">{orderPedimentoByOrderId.get(orderId)?.numero_pedimento}</span>
@@ -4977,65 +4939,10 @@ export function ComprasWorkspace({
                             <span className="text-sm text-muted-foreground">Sin pedimento</span>
                           )}
                         </TableCell>
-                        <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
                         <TableCell>
                           <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${orderStatus.className}`}>
                             {orderStatus.label}
                           </span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {(() => {
-                            const summary = getOrderDocumentsSummary(orden)
-                            return (
-                              <Button
-                                type="button"
-                                variant={summary.total > 0 ? "secondary" : "outline"}
-                                size="sm"
-                                className="h-10 min-w-16 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
-                                onClick={() => openEditOrderModal(orden)}
-                                title={
-                                  summary.total > 0
-                                    ? `${summary.proforma} PI · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}`
-                                    : "Sin documentos"
-                                }
-                              >
-                                <span className="flex items-center gap-1 text-[11px] font-semibold">
-                                  <Paperclip className="size-3.5" />
-                                  {summary.total}
-                                </span>
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {summary.proforma > 0 ? `${summary.proforma} PI` : "Sin PI"}
-                                  {summary.anexos > 0 ? ` · ${summary.anexos} anexo${summary.anexos === 1 ? "" : "s"}` : ""}
-                                </span>
-                              </Button>
-                            )
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {(() => {
-                            const summary = getOrderPaymentsSummary(orden)
-                            const detailParts = [
-                              summary.anticipo ? `${summary.anticipo} anticipo${summary.anticipo === 1 ? "" : "s"}` : null,
-                              summary.saldo ? `${summary.saldo} saldo${summary.saldo === 1 ? "" : "s"}` : null,
-                              summary.parciales ? `${summary.parciales} parcial${summary.parciales === 1 ? "" : "es"}` : null,
-                            ].filter(Boolean)
-                            const label = detailParts.length ? detailParts.join(" · ") : "Sin pagos"
-                            return (
-                              <Button
-                                type="button"
-                                variant={summary.total > 0 ? "secondary" : "outline"}
-                                size="sm"
-                                className="h-10 min-w-20 flex-col gap-0.5 px-2.5 text-[10px] leading-none"
-                                onClick={() => openOrderPayments(orden)}
-                                title={summary.total > 0 ? label : "Sin pagos"}
-                              >
-                                <span className="text-[11px] font-semibold">{summary.total}</span>
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {summary.total > 0 ? label : "Sin pagos"}
-                                </span>
-                              </Button>
-                            )
-                          })()}
                         </TableCell>
                         <TableCell>{formatDateTime(orden.creado_en)}</TableCell>
                         <TableCell>
