@@ -11411,6 +11411,7 @@ def _persona_alta_to_contact_payload(
     )
     return {
         "cuenta_id": str(cuenta.cuenta_id) if cuenta and cuenta.cuenta_id else None,
+        "nombre": _persona_alta_clean_text(persona.nombre),
         "nombre_nombres": _persona_alta_clean_text(persona.nombre),
         "apellido_paterno": _persona_alta_clean_text(persona.apellido_paterno),
         "apellido_materno": _persona_alta_clean_text(persona.apellido_materno),

@@ -537,6 +537,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
     ...state.persona,
+    nombre_nombres: state.persona.nombre.trim(),
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
     correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
     correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
