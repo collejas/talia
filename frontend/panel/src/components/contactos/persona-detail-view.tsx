@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePermissions } from "@/hooks/use-permissions";
 import { IconArrowLeft, IconBuilding, IconLink, IconPencil, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 
@@ -192,6 +193,17 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
   const position = getText(detail?.puesto);
   const lastUpdated = formatDate(detail?.actualizado_en);
   const createdAt = formatDate(detail?.creado_en);
+  const { context: permissionContext } = usePermissions();
+  const normalizedPerms = React.useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canEditAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
+  const contactOwnerId = getText(detail?.propietario_usuario_id);
+  const canEditPersona =
+    canEditAny && (permissionContext.es_admin || permissionContext.es_owner || (Boolean(currentUserId) && Boolean(contactOwnerId) && currentUserId === contactOwnerId));
   const relationCount = relations.length.toLocaleString("es-MX");
 
   const handleMerge = async () => {
@@ -266,10 +278,12 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
               Volver al listado
             </Link>
           </Button>
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            <IconPencil className="mr-2 size-4" />
-            Editar
-          </Button>
+          {canEditPersona ? (
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <IconPencil className="mr-2 size-4" />
+              Editar
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => setLinkOpen(true)}>
             <IconLink className="mr-2 size-4" />
             Vincular a empresa
@@ -402,10 +416,12 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
               <CardDescription>Continúa el trabajo desde esta ficha dedicada.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button className="w-full justify-start" variant="outline" onClick={() => setEditOpen(true)}>
-                <IconPencil className="mr-2 size-4" />
-                Editar persona
-              </Button>
+              {canEditPersona ? (
+                <Button className="w-full justify-start" variant="outline" onClick={() => setEditOpen(true)}>
+                  <IconPencil className="mr-2 size-4" />
+                  Editar persona
+                </Button>
+              ) : null}
               <Button className="w-full justify-start" variant="outline" onClick={() => setLinkOpen(true)}>
                 <IconBuilding className="mr-2 size-4" />
                 Vincular a empresa

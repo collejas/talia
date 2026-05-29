@@ -143,6 +143,10 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
+function getContactOwnerId(raw: Record<string, unknown> | undefined): string | null {
+  return extractString(raw, ["propietario_usuario_id", "propietario_id"]);
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
@@ -206,16 +210,22 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canEditAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
-  const canDeleteContactRow = React.useCallback(
+  const canEditContactRow = React.useCallback(
     (row: TableRow) => {
-      if (canDeleteAny) return true;
-      if (!currentUserId) return false;
-      const ownerId = extractString(row.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+      if (permissionContext.es_admin || permissionContext.es_owner) return true;
+      if (!canEditAny || !currentUserId) return false;
+      const ownerId = getContactOwnerId(row.raw as Record<string, unknown> | undefined);
       return ownerId === currentUserId;
     },
-    [canDeleteAny, currentUserId],
+    [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
+  );
+  const canDeleteContactRow = React.useCallback(
+    (_row: TableRow) => canDeleteAny,
+    [canDeleteAny],
   );
   const canReassignAny =
     permissionContext.es_admin ||
@@ -358,7 +368,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
   const activePersonaId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
-  const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
+  const activePropietarioId = getContactOwnerId(activeRaw);
 
   const openEdit = (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
@@ -401,7 +411,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       header: "Acciones",
       cell: ({ row }: { row: { original: TableRow } }) => (
         <div className="flex justify-end gap-1">
-          {canWrite ? (
+          {canEditContactRow(row.original) ? (
             <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
               <IconPencil className="size-4" />
               <span className="sr-only">Editar</span>
@@ -414,7 +424,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               className="size-8"
               onClick={() => {
                 setActiveRow(row.original);
-                const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+                const ownerId = getContactOwnerId(row.original.raw as Record<string, unknown> | undefined);
                 setSelectedVendorId(ownerId ?? "");
                 setError(null);
                 setSuccess(null);
@@ -447,10 +457,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       meta: { label: "Acciones", reorderable: false },
     };
 
-    if (!canWrite && !canReassign && !canDeleteAny) return contactExtraColumns;
+    if (!canWrite && !canReassign && !canEditAny && !canDeleteAny) return contactExtraColumns;
 
     return [actionColumn, ...contactExtraColumns];
-  }, [canWrite, canReassign, canDeleteAny, canDeleteContactRow]);
+  }, [canWrite, canReassign, canEditAny, canDeleteAny, canEditContactRow, canDeleteContactRow]);
 
   const runAndReload = async (fn: () => Promise<void>) => {
     setPending(true);
@@ -658,10 +668,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     <ContactDetailPanel
       row={row}
       onEdit={() => openEdit(row)}
+      canEdit={canEditContactRow(row)}
       onLink={() => openLinkFlow(row)}
       onReassign={() => {
         setActiveRow(row);
-        const ownerId = extractString(row.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+        const ownerId = getContactOwnerId(row.raw as Record<string, unknown> | undefined);
         setSelectedVendorId(ownerId ?? "");
         setError(null);
         setSuccess(null);
@@ -837,6 +848,7 @@ function ContactDetailPanel({
   onLink,
   onReassign,
   onDelete,
+  canEdit,
   canDelete,
 }: {
   row: TableRow;
@@ -844,6 +856,7 @@ function ContactDetailPanel({
   onLink: () => void;
   onReassign: () => void;
   onDelete: () => void;
+  canEdit: boolean;
   canDelete: boolean;
 }) {
   const raw = (row.raw ?? {}) as Record<string, unknown>;
@@ -884,10 +897,12 @@ function ContactDetailPanel({
             <Link href={`/personas/${encodeURIComponent(contactId)}`}>Abrir ficha</Link>
           </Button>
         ) : null}
-        <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-          <IconPencil className="size-4" />
-          Editar
-        </Button>
+        {canEdit ? (
+          <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+            <IconPencil className="size-4" />
+            Editar
+          </Button>
+        ) : null}
         <Button type="button" variant="outline" size="sm" onClick={onLink}>
           <IconLink className="size-4" />
           Vincular a empresa

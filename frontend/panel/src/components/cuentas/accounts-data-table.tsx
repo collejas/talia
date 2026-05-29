@@ -68,10 +68,12 @@ function formatDeleteBlockedMessage(error: string | undefined): string | null {
 function AccountRowActions({
   row,
   onDeleteRequest,
+  canEdit,
   canDelete,
 }: {
   row: DataTableRow;
   onDeleteRequest: (target: DeleteTarget) => void;
+  canEdit: boolean;
   canDelete: boolean;
 }) {
   const accountId = getAccountId(row);
@@ -87,12 +89,14 @@ function AccountRowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem asChild>
-          <Link href={`/empresas/${encodeURIComponent(accountId)}?edit=1`}>
-            <IconPencil className="mr-2 size-4" />
-            Editar
-          </Link>
-        </DropdownMenuItem>
+        {canEdit ? (
+          <DropdownMenuItem asChild>
+            <Link href={`/empresas/${encodeURIComponent(accountId)}?edit=1`}>
+              <IconPencil className="mr-2 size-4" />
+              Editar
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         {canDelete ? (
           <>
             <DropdownMenuSeparator />
@@ -174,16 +178,22 @@ export function AccountsDataTable({ rows }: Props) {
     [permissionContext.permisos],
   );
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canEditAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
-  const canDeleteAccountRow = React.useCallback(
+  const canEditAccountRow = React.useCallback(
     (row: DataTableRow) => {
-      if (canDeleteAny) return true;
-      if (!currentUserId) return false;
+      if (permissionContext.es_admin || permissionContext.es_owner) return true;
+      if (!canEditAny || !currentUserId) return false;
       const ownerId = getText((row.raw as Record<string, unknown> | undefined)?.propietario_usuario_id);
       return ownerId === currentUserId;
     },
-    [canDeleteAny, currentUserId],
+    [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
+  );
+  const canDeleteAccountRow = React.useCallback(
+    (_row: DataTableRow) => canDeleteAny,
+    [canDeleteAny],
   );
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
@@ -194,13 +204,14 @@ export function AccountsDataTable({ rows }: Props) {
       cell: ({ row }) => (
         <AccountRowActions
           row={row.original}
+          canEdit={canEditAccountRow(row.original)}
           canDelete={canDeleteAccountRow(row.original)}
           onDeleteRequest={(target) => setDeleteTarget(target)}
         />
       ),
       meta: { label: "Acciones", reorderable: false },
     },
-  ], [canDeleteAccountRow]);
+  ], [canEditAccountRow, canDeleteAccountRow]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;

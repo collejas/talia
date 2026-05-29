@@ -204,6 +204,27 @@ class DummyCRMRepository(CRMRepository):
         body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
         return body
 
+    async def update_account(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_account", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(kwargs["account_id"]))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body.setdefault("propietario_usuario_id", str(self.account_owner_id) if self.account_owner_id else None)
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
+    async def update_persona(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_persona", kwargs))
+        body = kwargs["payload"].copy()
+        persona_id = kwargs.get("persona_id") or kwargs.get("contacto_id")
+        body.setdefault("id", str(persona_id))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body.setdefault("propietario_usuario_id", str(self.persona_owner_id) if self.persona_owner_id else None)
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
     async def get_account(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(("get_account", kwargs))
         if kwargs["account_id"] == uuid.UUID(int=1):
@@ -1578,7 +1599,7 @@ async def test_delete_account_denies_non_owner_when_not_elevated(
 
 
 @pytest.mark.asyncio
-async def test_delete_account_allows_owner_when_not_elevated(
+async def test_delete_account_denies_owner_when_not_elevated(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:
     actor_user = uuid.uuid4()
@@ -1596,9 +1617,9 @@ async def test_delete_account_allows_owner_when_not_elevated(
         headers=_headers(),
     )
 
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 403, resp.text
     assert any(name == "get_account" for name, _ in fake_repo.calls)
-    assert any(name == "delete_account" for name, _ in fake_repo.calls)
+    assert not any(name == "delete_account" for name, _ in fake_repo.calls)
 
 
 @pytest.mark.asyncio
@@ -1626,7 +1647,7 @@ async def test_delete_persona_denies_non_owner_when_not_elevated(
 
 
 @pytest.mark.asyncio
-async def test_delete_persona_allows_owner_when_not_elevated(
+async def test_delete_persona_denies_owner_when_not_elevated(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:
     actor_user = uuid.uuid4()
@@ -1644,10 +1665,190 @@ async def test_delete_persona_allows_owner_when_not_elevated(
         headers=_headers(),
     )
 
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 403, resp.text
     assert any(name == "get_persona" for name, _ in fake_repo.calls)
-    assert any(name == "delete_persona" for name, _ in fake_repo.calls)
+    assert not any(name == "delete_persona" for name, _ in fake_repo.calls)
 
+
+
+@pytest.mark.asyncio
+async def test_update_account_allows_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    account_id = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.account_owner_id = actor_user
+
+    resp = await client.patch(
+        f"/crm/cuentas/{account_id}",
+        headers=_headers(),
+        json={"nombre": "Cuenta actualizada"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert any(name == "get_account" for name, _ in fake_repo.calls)
+    assert any(name == "update_account" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_account_denies_non_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.account_owner_id = uuid.uuid4()
+
+    resp = await client.patch(
+        f"/crm/cuentas/{uuid.uuid4()}",
+        headers=_headers(),
+        json={"nombre": "Cuenta bloqueada"},
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert any(name == "get_account" for name, _ in fake_repo.calls)
+    assert not any(name == "update_account" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_persona_legacy_allows_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = actor_user
+
+    resp = await client.patch(
+        f"/crm/contacts/{uuid.uuid4()}",
+        headers=_headers(),
+        json={"nombre_completo": "Contacto actualizado"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert any(name == "update_persona" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_persona_legacy_denies_non_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = uuid.uuid4()
+
+    resp = await client.patch(
+        f"/crm/contacts/{uuid.uuid4()}",
+        headers=_headers(),
+        json={"nombre_completo": "Contacto bloqueado"},
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert not any(name == "update_persona" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_persona_edit_flow_allows_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    contact_id = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = actor_user
+
+    resp = await client.patch(
+        f"/crm/personas/{contact_id}",
+        headers=_headers(),
+        json={
+            "persona": {
+                "nombre": "Ana",
+                "apellido_paterno": "Pérez",
+                "nombre_completo": "Ana Pérez",
+                "correo_principal": "ana@example.com",
+                "telefono_principal_e164": "+5215550000001",
+            },
+            "contexto_comercial": {
+                "modo": "solo_persona",
+                "usar_cuenta_existente": False,
+                "crear_cuenta_nueva": False,
+                "es_persona_fisica_actividad_empresarial": False,
+            },
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert any(name == "update_persona" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_persona_edit_flow_denies_non_owner_when_not_elevated(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = uuid.uuid4()
+
+    resp = await client.patch(
+        f"/crm/personas/{uuid.uuid4()}",
+        headers=_headers(),
+        json={
+            "persona": {
+                "nombre": "Ana",
+                "apellido_paterno": "Pérez",
+                "nombre_completo": "Ana Pérez",
+                "correo_principal": "ana@example.com",
+                "telefono_principal_e164": "+5215550000001",
+            },
+            "contexto_comercial": {
+                "modo": "solo_persona",
+                "usar_cuenta_existente": False,
+                "crear_cuenta_nueva": False,
+                "es_persona_fisica_actividad_empresarial": False,
+            },
+        },
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert any(name == "get_persona" for name, _ in fake_repo.calls)
+    assert not any(name == "update_persona" for name, _ in fake_repo.calls)
 
 
 @pytest.mark.asyncio

@@ -259,11 +259,14 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     [permissionContext.permisos],
   );
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const canEditAny =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const accountOwnerId = getInputText(detail?.propietario_usuario_id);
-  const canDeleteAccount =
-    canDeleteAny || (Boolean(currentUserId) && Boolean(accountOwnerId) && currentUserId === accountOwnerId);
+  const canEditAccount =
+    canEditAny && (permissionContext.es_admin || permissionContext.es_owner || (Boolean(currentUserId) && Boolean(accountOwnerId) && currentUserId === accountOwnerId));
+  const canDeleteAccount = canDeleteAny;
 
   const tenantCatalogs = useTenantContactCatalogs();
   const usoCfdiOptions = React.useMemo(
@@ -357,7 +360,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   }, [loadDedupe]);
 
   React.useEffect(() => {
-    if (searchParams.get("edit") === "1" && detail && !editOpen) {
+    if (searchParams.get("edit") === "1" && detail && !editOpen && canEditAccount) {
       openEditDialog();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -693,10 +696,12 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           <p className="mt-1 text-sm text-muted-foreground">{alias !== "—" ? alias : "Sin alias"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={openEditDialog}>
-            <IconPencil className="mr-2 size-4" />
-            Editar
-          </Button>
+          {canEditAccount ? (
+            <Button onClick={openEditDialog}>
+              <IconPencil className="mr-2 size-4" />
+              Editar
+            </Button>
+          ) : null}
           <Button asChild variant="outline">
             <Link href="/empresas">
               <IconArrowLeft className="mr-2 size-4" />

@@ -5024,6 +5024,22 @@ def _can_delete_any_contact_or_account(permission_context: dict[str, Any]) -> bo
     return "contacts.delete" in _permission_context_permission_codes(permission_context)
 
 
+async def _require_edit_scope(
+    *,
+    repo: CRMRepository,
+    owner_user_id: UUID | None,
+) -> None:
+    permission_context = await _get_permission_context_or_raise(repo)
+    if _coerce_bool(permission_context.get("es_admin")) is True:
+        return
+    if _coerce_bool(permission_context.get("es_owner")) is True:
+        return
+
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+    if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+
+
 async def _require_delete_scope(
     *,
     repo: CRMRepository,
@@ -5032,10 +5048,7 @@ async def _require_delete_scope(
     permission_context = await _get_permission_context_or_raise(repo)
     if _can_delete_any_contact_or_account(permission_context):
         return
-
-    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
-    if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
 
 
 async def require_organizacion_id(
@@ -14432,6 +14445,10 @@ async def update_account(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not existing_row:
         raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
     account_type = payload.tipo or str(existing_row.get("tipo") or "")
     expected_rfc_length = _expected_rfc_length_for_account_type(account_type)
     normalized_rfc = _normalize_rfc_text(payload.rfc)
@@ -19027,6 +19044,20 @@ async def create_persona_alta(
     extras = _persona_alta_normalize_extras(payload.extras)
     dedupe = payload.dedupe
 
+    try:
+        existing_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
+
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
     if not _persona_alta_clean_text(persona.correo_principal):
@@ -19261,6 +19292,20 @@ async def update_persona(
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
     dedupe = payload.dedupe
+
+    try:
+        existing_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -20023,6 +20068,19 @@ async def update_persona_legacy(
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
+        existing_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
+    try:
         row = await repo.update_persona(
             organizacion_id=organizacion_id,
             persona_id=contacto_id,
@@ -20084,6 +20142,19 @@ async def update_persona_crud(
     skip_conversation_sync: bool = Query(False),
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        existing_row = await repo.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
+    )
     try:
         row = await repo.update_persona(
             organizacion_id=organizacion_id,
