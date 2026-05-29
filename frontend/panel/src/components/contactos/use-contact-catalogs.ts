@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react"
 
 import type { ContactCatalogOption } from "@/components/contactos/contact-catalog-select"
 
-type SessionResponse = {
-  tenantConfig?: Record<string, unknown> | null
+type CatalogsResponse = {
+  catalogos?: Record<string, unknown> | null
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -55,7 +55,7 @@ export function useTenantContactCatalogs() {
 
     const load = async () => {
       try {
-        const response = await fetch("/api/session", {
+        const response = await fetch("/api/contactos/catalogos/config", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
@@ -72,10 +72,8 @@ export function useTenantContactCatalogs() {
           setLoading(false)
           return
         }
-        const payload = (await response.json()) as SessionResponse
-        const config = asRecord(payload.tenantConfig)
-        const extras = config ? asRecord(config.extras) : null
-        const catalogos = extras ? asRecord(extras.catalogos) : null
+        const payload = (await response.json()) as CatalogsResponse
+        const catalogos = asRecord(payload.catalogos)
         const puestosRaw = catalogos ? catalogos.puesto ?? catalogos.puestos : null
         const rolesRaw =
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null

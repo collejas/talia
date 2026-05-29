@@ -136,6 +136,13 @@ class TenantScopedSettings(BaseModel):
     routes: list[ChannelRoute] = Field(default_factory=list)
 
 
+class TenantContactCatalogsResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    organizacion_id: UUID
+    catalogos: dict[str, Any] = Field(default_factory=dict)
+
+
 class TenantScopedUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -222,6 +229,41 @@ async def get_tenant_settings(
         row["config"] = saved.get("config") if isinstance(saved.get("config"), dict) else ensured_config
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+def _extract_contact_catalogs(config: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(config, dict):
+        return {}
+    extras = config.get("extras")
+    if not isinstance(extras, dict):
+        return {}
+    catalogos = extras.get("catalogos")
+    return catalogos if isinstance(catalogos, dict) else {}
+
+
+@router.get("/me/contactos/catalogos", response_model=TenantContactCatalogsResponse)
+async def get_tenant_contact_catalogs(
+    context: TenantContext = Depends(require_tenant_context),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantContactCatalogsResponse:
+    row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+
+    config = row.get("config") if isinstance(row.get("config"), dict) else None
+    catalogos = _extract_contact_catalogs(config)
+
+    try:
+        puestos = await platform_repo.list_tenant_bootstrap_catalog(tipo="puesto")
+    except PlatformRepositoryError:
+        puestos = []
+    if not catalogos.get("puesto") and puestos:
+        catalogos = {**catalogos, "puesto": puestos}
+
+    return TenantContactCatalogsResponse(
+        organizacion_id=context.organizacion_id,
+        catalogos=catalogos,
+    )
 
 
 @router.put("/me/settings", response_model=TenantScopedSettings)
