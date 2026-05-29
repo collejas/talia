@@ -697,12 +697,44 @@ function resolveOrderAnticipoLimit(order: AnyRecord | undefined | null): number 
   return (subtotal * porcentajeAnticipo) / 100
 }
 
+function resolveOrderSaldoLimit(order: AnyRecord | undefined | null): number {
+  if (!order || typeof order !== "object") {
+    return 0
+  }
+  const payment = (order.condiciones_pago as AnyRecord | undefined) ?? {}
+  const montoSaldo = asNumber(payment.monto_saldo)
+  if (montoSaldo > 0) {
+    return montoSaldo
+  }
+  const porcentajeSaldo = asNumber(payment.porcentaje_saldo)
+  const subtotal = asNumber(order.subtotal)
+  if (subtotal <= 0 || porcentajeSaldo <= 0) {
+    return 0
+  }
+  return (subtotal * porcentajeSaldo) / 100
+}
+
 function sumOrderAnticipoPayments(rows: AnyRecord[]): number {
   return rows.reduce((sum, row) => {
     if (!row || typeof row !== "object") {
       return sum
     }
     if (String((row as AnyRecord).tipo_pago || "").toLowerCase() !== "anticipo") {
+      return sum
+    }
+    if (String((row as AnyRecord).estado || "").toLowerCase() === "cancelado") {
+      return sum
+    }
+    return sum + asNumber((row as AnyRecord).monto)
+  }, 0)
+}
+
+function sumOrderSaldoPayments(rows: AnyRecord[]): number {
+  return rows.reduce((sum, row) => {
+    if (!row || typeof row !== "object") {
+      return sum
+    }
+    if (String((row as AnyRecord).tipo_pago || "").toLowerCase() !== "saldo") {
       return sum
     }
     if (String((row as AnyRecord).estado || "").toLowerCase() === "cancelado") {
@@ -997,6 +1029,16 @@ export function ComprasWorkspace({
   )
   const selectedOrderAnticipoRemaining = Math.max(selectedOrderAnticipoLimit - selectedOrderAnticipoPaid, 0)
   const canCreateAnticipoPayment = selectedOrderAnticipoRemaining > 0
+  const selectedOrderSaldoLimit = useMemo(
+    () => resolveOrderSaldoLimit(selectedOrderRecord),
+    [selectedOrderRecord],
+  )
+  const selectedOrderSaldoPaid = useMemo(
+    () => sumOrderSaldoPayments(selectedOrderPaymentSchedules),
+    [selectedOrderPaymentSchedules],
+  )
+  const selectedOrderSaldoRemaining = Math.max(selectedOrderSaldoLimit - selectedOrderSaldoPaid, 0)
+  const canCreateSaldoPayment = selectedOrderSaldoRemaining > 0
   const selectedOrderPaymentScheduleByType = useMemo(() => {
     const map = new Map<string, AnyRecord>()
     for (const pago of selectedOrderPaymentSchedules) {
@@ -3704,6 +3746,16 @@ export function ComprasWorkspace({
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimiento</div>
                               <div className="mt-1 font-medium">{getPaymentDisplayDueLabel(row)}</div>
                             </div>
+                            {row.tipo_pago === "saldo" ? (
+                              <div className="rounded-md bg-background/70 p-2">
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo restante</div>
+                                <div className="mt-1 font-medium">
+                                  {selectedOrderSaldoLimit > 0
+                                    ? formatCurrency(selectedOrderSaldoRemaining, row.moneda_codigo || selectedOrderCurrency)
+                                    : "—"}
+                                </div>
+                              </div>
+                            ) : null}
                             {row.tipo_pago === "anticipo" ? (
                               <div className="rounded-md bg-background/70 p-2">
                                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo anticipo</div>
@@ -3887,7 +3939,7 @@ export function ComprasWorkspace({
                                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 >
                                   {canCreateAnticipoPayment || row.tipo_pago === "anticipo" ? <option value="anticipo">Anticipo</option> : null}
-                                  {!selectedOrderCompliancePaymentsSettled ? <option value="saldo">Saldo</option> : null}
+                                  {canCreateSaldoPayment || row.tipo_pago === "saldo" ? <option value="saldo">Saldo</option> : null}
                                   <option value="parcial">Gasto</option>
                                 </select>
                               </div>
@@ -4094,7 +4146,9 @@ export function ComprasWorkspace({
                         {canCreateAnticipoPayment || editingPaymentScheduleRecord.tipo_pago === "anticipo" ? (
                           <option value="anticipo">Anticipo</option>
                         ) : null}
-                        <option value="saldo">Saldo</option>
+                        {canCreateSaldoPayment || editingPaymentScheduleRecord.tipo_pago === "saldo" ? (
+                          <option value="saldo">Saldo</option>
+                        ) : null}
                         <option value="parcial">Gasto</option>
                       </select>
                     </div>

@@ -12491,32 +12491,40 @@ async def _enrich_orden_compra_pago_programado_row(
     return normalized
 
 
-def _resolve_orden_compra_anticipo_limit(order: Mapping[str, Any]) -> Decimal | None:
+def _resolve_orden_compra_payment_limit(order: Mapping[str, Any], tipo_pago: str) -> Decimal | None:
     condiciones = order.get("condiciones_pago")
     if not isinstance(condiciones, Mapping):
         return None
 
-    monto_anticipo = _decimal_from_value(condiciones.get("monto_anticipo"))
-    if monto_anticipo is not None:
-        monto_anticipo = _round_currency_decimal(monto_anticipo)
-        if monto_anticipo > 0:
-            return monto_anticipo
+    if tipo_pago == "anticipo":
+        monto = _decimal_from_value(condiciones.get("monto_anticipo"))
+        porcentaje = _decimal_from_value(condiciones.get("porcentaje_anticipo"))
+    elif tipo_pago == "saldo":
+        monto = _decimal_from_value(condiciones.get("monto_saldo"))
+        porcentaje = _decimal_from_value(condiciones.get("porcentaje_saldo"))
+    else:
         return None
 
-    porcentaje_anticipo = _decimal_from_value(condiciones.get("porcentaje_anticipo"))
+    if monto is not None:
+        monto = _round_currency_decimal(monto)
+        if monto > 0:
+            return monto
+        return None
+
     subtotal = _decimal_from_value(order.get("subtotal"))
-    if porcentaje_anticipo is None or subtotal is None or subtotal <= 0:
+    if porcentaje is None or subtotal is None or subtotal <= 0:
         return None
 
-    resolved = subtotal * porcentaje_anticipo / Decimal("100")
+    resolved = subtotal * porcentaje / Decimal("100")
     if resolved <= 0:
         return None
     return _round_currency_decimal(resolved)
 
 
-def _sum_orden_compra_anticipo_rows(
+def _sum_orden_compra_payment_rows(
     rows: Iterable[Mapping[str, Any]],
     *,
+    tipo_pago: str,
     exclude_pago_id: UUID | None = None,
 ) -> Decimal:
     excluded_id = str(exclude_pago_id) if exclude_pago_id is not None else ""
@@ -12526,7 +12534,7 @@ def _sum_orden_compra_anticipo_rows(
             continue
         if excluded_id and str(row.get("id") or "") == excluded_id:
             continue
-        if _clean_text(row.get("tipo_pago")).lower() != "anticipo":
+        if _clean_text(row.get("tipo_pago")).lower() != tipo_pago:
             continue
         if _clean_text(row.get("estado")).lower() == "cancelado":
             continue
@@ -12542,23 +12550,24 @@ def _ensure_orden_compra_anticipo_limit(
     order: Mapping[str, Any],
     existing_rows: Iterable[Mapping[str, Any]],
     pending_rows: Iterable[Mapping[str, Any]],
+    tipo_pago: str,
     exclude_pago_id: UUID | None = None,
 ) -> None:
-    limit = _resolve_orden_compra_anticipo_limit(order)
+    limit = _resolve_orden_compra_payment_limit(order, tipo_pago)
     if limit is None:
         return
 
-    pending_total = _sum_orden_compra_anticipo_rows(pending_rows)
+    pending_total = _sum_orden_compra_payment_rows(pending_rows, tipo_pago=tipo_pago)
     if pending_total <= 0:
         return
 
-    used_total = _sum_orden_compra_anticipo_rows(existing_rows, exclude_pago_id=exclude_pago_id)
+    used_total = _sum_orden_compra_payment_rows(existing_rows, tipo_pago=tipo_pago, exclude_pago_id=exclude_pago_id)
     total_after = _round_currency_decimal(used_total + pending_total)
     if total_after > limit:
         raise HTTPException(
             status_code=409,
             detail=(
-                "El total de anticipos supera el monto pactado para el anticipo. "
+                f"El total de pagos tipo {tipo_pago} supera el monto pactado. "
                 f"Disponible: {float(max(limit - used_total, Decimal('0'))):.4f}, "
                 f"intentas registrar: {float(pending_total):.4f}, "
                 f"tope: {float(limit):.4f}"
@@ -12571,6 +12580,7 @@ async def _replace_orden_compra_pagos_programados(
     repo: CRMRepository,
     organizacion_id: UUID,
     orden_id: UUID,
+    order: Mapping[str, Any],
     pagos_programados: Any,
     subtotal: Decimal | None,
     moneda_codigo: str | None,
@@ -12587,6 +12597,15 @@ async def _replace_orden_compra_pagos_programados(
                 row=row,
                 fallback_currency=moneda_codigo,
             )
+        )
+    for tipo_pago in {str(row.get("tipo_pago") or "").lower() for row in enriched_rows if isinstance(row, dict)}:
+        if tipo_pago not in {"anticipo", "saldo"}:
+            continue
+        _ensure_orden_compra_payment_limit(
+            order=order,
+            existing_rows=[],
+            pending_rows=[row for row in enriched_rows if str(row.get("tipo_pago") or "").lower() == tipo_pago],
+            tipo_pago=tipo_pago,
         )
     try:
         await repo.replace_orden_compra_pagos_programados(
@@ -16940,10 +16959,11 @@ async def create_compras_orden_pago_programado(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
         )
-        _ensure_orden_compra_anticipo_limit(
+        _ensure_orden_compra_payment_limit(
             order=orden,
             existing_rows=current_rows,
             pending_rows=[body],
+            tipo_pago=str(body.get("tipo_pago") or "").lower(),
         )
         row = await repo.create_orden_compra_pago_programado(
             organizacion_id=organizacion_id,
@@ -16973,15 +16993,11 @@ async def replace_compras_orden_pagos_programados(
         )
         if orden is None:
             raise HTTPException(status_code=404, detail="orden_compra_not_found")
-        _ensure_orden_compra_anticipo_limit(
-            order=orden,
-            existing_rows=[],
-            pending_rows=payload,
-        )
         await _replace_orden_compra_pagos_programados(
             repo=repo,
             organizacion_id=organizacion_id,
             orden_id=orden_id,
+            order=orden,
             pagos_programados=payload,
             subtotal=_decimal_from_value(orden.get("subtotal")),
             moneda_codigo=_clean_text(orden.get("moneda")),
@@ -17033,10 +17049,11 @@ async def update_compras_orden_pago_programado(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
         )
-        _ensure_orden_compra_anticipo_limit(
+        _ensure_orden_compra_payment_limit(
             order=orden,
             existing_rows=current_rows,
             pending_rows=[body],
+            tipo_pago=str(body.get("tipo_pago") or "").lower(),
             exclude_pago_id=pago_id,
         )
         row = await repo.update_orden_compra_pago_programado(
