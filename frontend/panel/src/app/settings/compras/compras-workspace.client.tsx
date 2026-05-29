@@ -6,7 +6,6 @@ import { Info, Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -4927,7 +4926,6 @@ export function ComprasWorkspace({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Seleccion</TableHead>
                   <TableHead className="text-center">Tipo de O.C.</TableHead>
                   <TableHead className="text-center">Folio</TableHead>
                   <TableHead className="text-center">Proveedor</TableHead>
@@ -4938,6 +4936,7 @@ export function ComprasWorkspace({
                   <TableHead className="text-center">Pagos</TableHead>
                   <TableHead className="text-center">Fecha</TableHead>
                   <TableHead className="text-center">Auditoría</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -4955,15 +4954,6 @@ export function ComprasWorkspace({
                     const orderStatus = getOrderStatusBadge(orden.estado)
                     return (
                       <TableRow key={orderId} className={isSelected ? "bg-muted/40" : undefined}>
-                        <TableCell>
-                          <Checkbox
-                            checked={isSelected}
-                            aria-label={`Seleccionar orden ${asString(orden.folio)}`}
-                            onCheckedChange={(checked) => {
-                              setSelectedOrderId(checked === true ? orderId : "")
-                            }}
-                          />
-                        </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">
                             {orderTypeLabel}
@@ -5060,6 +5050,25 @@ export function ComprasWorkspace({
                               <div>{getAuditLabel(orden.aprobado_por_usuario)}</div>
                               <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.aprobada_en)}</div>
                             </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="inline-flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedOrderId(orderId)}
+                            >
+                              Seleccionar
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => openEditOrderModal(orden)}
+                            >
+                              Ver
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
