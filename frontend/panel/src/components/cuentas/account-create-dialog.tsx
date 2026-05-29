@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -147,6 +148,7 @@ type Props = {
 };
 
 export function AccountCreateDialog({ onCreated }: Props) {
+  const router = useRouter();
   const tenantCatalogs = useTenantContactCatalogs();
   const [open, setOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -289,6 +291,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
       toast.success("Empresa creada.");
       setOpen(false);
       onCreated?.();
+      router.refresh();
     } catch (createError) {
       const message = createError instanceof Error ? createError.message : "No se pudo crear la empresa.";
       setError(message);
