@@ -18914,8 +18914,6 @@ async def validate_persona_alta(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
-            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None
@@ -18984,8 +18982,6 @@ async def create_persona_alta(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
-            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None
@@ -19221,8 +19217,6 @@ async def update_persona(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
-            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None
@@ -19715,8 +19709,6 @@ async def validate_persona_update(
     if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
         if not cuenta:
             raise HTTPException(status_code=400, detail="cuenta_required")
-        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
-            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None

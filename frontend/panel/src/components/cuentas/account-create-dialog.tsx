@@ -224,10 +224,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
       setError("Selecciona el tipo de persona.");
       return;
     }
-    if (!form.telefono_principal_e164.trim()) {
-      setError("El teléfono principal es obligatorio.");
-      return;
-    }
     if (!isValidRfcLength(form.rfc, form.tipo)) {
       setError(getRfcLengthMessage(form.tipo));
       return;
@@ -389,7 +385,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="create-telefono-1">Teléfono principal *</Label>
+                  <Label htmlFor="create-telefono-1">Teléfono principal</Label>
                   <div className="space-y-2">
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input

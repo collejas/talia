@@ -659,12 +659,6 @@ function validateState(state: ContactEditState): string | null {
   ) {
     return "Selecciona el tipo de persona de la cuenta.";
   }
-  if (
-    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
-    !state.cuenta.telefono_principal_e164.trim()
-  ) {
-    return "El teléfono principal de la cuenta es obligatorio.";
-  }
   if (!isValidRfcLength(state.cuenta.rfc, state.cuenta.tipo)) {
     return getRfcLengthMessage(state.cuenta.tipo);
   }
@@ -1749,7 +1743,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: sanitizeRfcInput(e.target.value) })}
                   />
                 </Field>
-                <Field label="Teléfono principal" required>
+                <Field label="Teléfono principal">
                   <div className="space-y-2">
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
                       <Input
