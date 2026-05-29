@@ -2643,8 +2643,8 @@ class CRMAccountCreate(BaseModel):
     @classmethod
     def _validate_rfc(cls, value: str | None) -> str | None:
         normalized = _normalize_rfc_text(value)
-        if normalized and len(normalized) != 13:
-            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        if normalized and len(normalized) not in {12, 13}:
+            raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
         return normalized
 
 
@@ -2710,8 +2710,8 @@ class CRMAccountUpdate(BaseModel):
     @classmethod
     def _validate_rfc(cls, value: str | None) -> str | None:
         normalized = _normalize_rfc_text(value)
-        if normalized and len(normalized) != 13:
-            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        if normalized and len(normalized) not in {12, 13}:
+            raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
         return normalized
 
 
@@ -9968,8 +9968,8 @@ class CRMContactCreate(BaseModel):
     @classmethod
     def _validate_rfc(cls, value: str | None) -> str | None:
         normalized = _normalize_rfc_text(value)
-        if normalized and len(normalized) != 13:
-            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        if normalized and len(normalized) not in {12, 13}:
+            raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
         return normalized
 
 
@@ -10051,8 +10051,8 @@ class CRMContactUpdate(BaseModel):
     @classmethod
     def _validate_rfc(cls, value: str | None) -> str | None:
         normalized = _normalize_rfc_text(value)
-        if normalized and len(normalized) != 13:
-            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        if normalized and len(normalized) not in {12, 13}:
+            raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
         return normalized
 
 
@@ -10150,8 +10150,8 @@ class CRMPersonaAltaCuenta(BaseModel):
     @classmethod
     def _validate_rfc(cls, value: str | None) -> str | None:
         normalized = _normalize_rfc_text(value)
-        if normalized and len(normalized) != 13:
-            raise ValueError("rfc_must_be_13_alphanumeric_chars")
+        if normalized and len(normalized) not in {12, 13}:
+            raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
         return normalized
 
 
@@ -10497,6 +10497,86 @@ def _normalize_rfc_text(value: str | None) -> str | None:
         return None
     normalized = re.sub(r"[^0-9A-Za-z]+", "", cleaned).upper()
     return normalized or None
+
+
+def _expected_rfc_length_for_account_type(account_type: str | None) -> int | None:
+    normalized = _persona_alta_clean_text(account_type, compact_spaces=True)
+    if not normalized:
+        return None
+    normalized = normalized.casefold()
+    if normalized in {"persona_fisica_actividad_empresarial", "pfae", "fisica"}:
+        return 13
+    if normalized in {"empresa", "empresa_nueva", "moral"}:
+        return 12
+    return None
+
+
+def _validate_rfc_length_for_account_type(rfc: str | None, account_type: str | None) -> str | None:
+    normalized = _normalize_rfc_text(rfc)
+    if not normalized:
+        return None
+    expected = _expected_rfc_length_for_account_type(account_type)
+    if expected is not None and len(normalized) != expected:
+        raise ValueError(
+            "rfc_must_be_12_chars_for_company" if expected == 12 else "rfc_must_be_13_chars_for_physical_person"
+        )
+    if expected is None and len(normalized) not in {12, 13}:
+        raise ValueError("rfc_must_be_12_or_13_alphanumeric_chars")
+    return normalized
+
+
+def _rfc_length_error_message(expected: int | None) -> str:
+    if expected == 13:
+        return "Personas Físicas: Consta de 13 caracteres"
+    if expected == 12:
+        return "Personas Morales (Empresas): Consta de 12 caracteres"
+    return "El RFC debe tener 12 o 13 caracteres alfanuméricos."
+
+
+def _expected_rfc_length_for_persona_alta(
+    contexto: "CRMPersonaAltaContexto",
+    cuenta: "CRMPersonaAltaCuenta | None" = None,
+    existing_account: "CRMAccount | None" = None,
+) -> int | None:
+    if contexto.modo == "persona_fisica_actividad_empresarial":
+        return 13
+    if contexto.modo in {"empresa_nueva", "empresa_existente"}:
+        account_type = None
+        if existing_account and existing_account.tipo:
+            account_type = existing_account.tipo
+        elif cuenta:
+            account_type = cuenta.tipo or cuenta.tipo_cuenta
+            if not account_type and cuenta.tipo_persona == "moral":
+                account_type = "empresa"
+        expected = _expected_rfc_length_for_account_type(account_type)
+        if expected is not None:
+            return expected
+        return 12
+    return None
+
+
+def _validate_persona_alta_rfc_length(
+    *,
+    contexto: "CRMPersonaAltaContexto",
+    rfc: str | None,
+    cuenta: "CRMPersonaAltaCuenta | None" = None,
+    existing_account: "CRMAccount | None" = None,
+) -> str | None:
+    normalized = _normalize_rfc_text(rfc)
+    if not normalized:
+        return None
+    expected = _expected_rfc_length_for_persona_alta(
+        contexto,
+        cuenta=cuenta,
+        existing_account=existing_account,
+    )
+    if expected is not None:
+        if len(normalized) != expected:
+            raise HTTPException(status_code=400, detail=_rfc_length_error_message(expected))
+        return normalized
+    if len(normalized) not in {12, 13}:
+        raise HTTPException(status_code=400, detail=_rfc_length_error_message(None))
+    return normalized
 
 
 def _persona_alta_normalize_phone(value: str | None) -> str | None:
@@ -14257,6 +14337,16 @@ async def create_account(
     _: str = Depends(require_permission("contacts.write")),
     payload: CRMAccountCreate,
 ) -> CRMAccount:
+    expected_rfc_length = _expected_rfc_length_for_account_type(payload.tipo)
+    normalized_rfc = _normalize_rfc_text(payload.rfc)
+    if normalized_rfc:
+        if expected_rfc_length is not None and len(normalized_rfc) != expected_rfc_length:
+            raise HTTPException(status_code=400, detail=_rfc_length_error_message(expected_rfc_length))
+        if expected_rfc_length is None and len(normalized_rfc) not in {12, 13}:
+            raise HTTPException(
+                status_code=400,
+                detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
+            )
     try:
         row = await repo.create_account(
             organizacion_id=organizacion_id,
@@ -14293,6 +14383,23 @@ async def update_account(
     cuenta_id: UUID,
     payload: CRMAccountUpdate,
 ) -> CRMAccount:
+    try:
+        existing_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+    account_type = payload.tipo or str(existing_row.get("tipo") or "")
+    expected_rfc_length = _expected_rfc_length_for_account_type(account_type)
+    normalized_rfc = _normalize_rfc_text(payload.rfc)
+    if normalized_rfc:
+        if expected_rfc_length is not None and len(normalized_rfc) != expected_rfc_length:
+            raise HTTPException(status_code=400, detail=_rfc_length_error_message(expected_rfc_length))
+        if expected_rfc_length is None and len(normalized_rfc) not in {12, 13}:
+            raise HTTPException(
+                status_code=400,
+                detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
+            )
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
         row = await repo.update_account(
@@ -14301,8 +14408,6 @@ async def update_account(
             payload=body,
         )
     except CRMRepositoryError as exc:
-        if "cuenta_no_encontrada" in str(exc):
-            raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMAccount.model_validate(row)
 
@@ -18813,6 +18918,28 @@ async def validate_persona_alta(
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
+    existing_account: CRMAccount | None = None
+    if cuenta and cuenta.cuenta_id:
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+    if contexto.modo == "empresa_existente" and not existing_account:
+        raise HTTPException(status_code=400, detail="cuenta_id_required")
+    if cuenta:
+        cuenta = cuenta.model_copy(
+            update={
+                "rfc": _validate_persona_alta_rfc_length(
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    existing_account=existing_account,
+                    rfc=cuenta.rfc,
+                )
+            }
+        )
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
         await _persona_alta_build_dedupe_preview(
             repo=repo,
@@ -18846,7 +18973,6 @@ async def create_persona_alta(
     cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
-    dedupe = payload.dedupe
     dedupe = payload.dedupe
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
@@ -18939,6 +19065,17 @@ async def create_persona_alta(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if account_row:
             existing_account = CRMAccount.model_validate(account_row)
+    if cuenta:
+        cuenta = cuenta.model_copy(
+            update={
+                "rfc": _validate_persona_alta_rfc_length(
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    existing_account=existing_account,
+                    rfc=cuenta.rfc,
+                )
+            }
+        )
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -19168,6 +19305,17 @@ async def update_persona(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if account_row:
             existing_account = CRMAccount.model_validate(account_row)
+    if cuenta:
+        cuenta = cuenta.model_copy(
+            update={
+                "rfc": _validate_persona_alta_rfc_length(
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    existing_account=existing_account,
+                    rfc=cuenta.rfc,
+                )
+            }
+        )
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -19571,6 +19719,28 @@ async def validate_persona_update(
             raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
     if contexto.modo == "empresa_existente" and not cuenta:
         raise HTTPException(status_code=400, detail="cuenta_required")
+    existing_account: CRMAccount | None = None
+    if cuenta and cuenta.cuenta_id:
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+    if contexto.modo == "empresa_existente" and not existing_account:
+        raise HTTPException(status_code=400, detail="cuenta_id_required")
+    if cuenta:
+        cuenta = cuenta.model_copy(
+            update={
+                "rfc": _validate_persona_alta_rfc_length(
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    existing_account=existing_account,
+                    rfc=cuenta.rfc,
+                )
+            }
+        )
 
     exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (

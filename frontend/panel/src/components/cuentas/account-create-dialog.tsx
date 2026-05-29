@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
-import { sanitizeRfcInput, sanitizePhoneInput } from "@/components/contactos/contact-input-sanitizers";
+import {
+  getRfcLengthMessage,
+  isValidRfcLength,
+  sanitizeRfcInput,
+  sanitizePhoneInput,
+} from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 import { toast } from "sonner";
 
@@ -208,6 +213,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
     () => mergeCatalogOptions(tenantCatalogs.metodoPagoOptions, form.metodo_pago),
     [form.metodo_pago, tenantCatalogs.metodoPagoOptions],
   );
+  const rfcHint = React.useMemo(() => getRfcLengthMessage(form.tipo), [form.tipo]);
 
   const handleCreateConfirm = async () => {
     if (!form.nombre_comercial.trim() && !form.razon_social.trim()) {
@@ -222,8 +228,8 @@ export function AccountCreateDialog({ onCreated }: Props) {
       setError("El teléfono principal es obligatorio.");
       return;
     }
-    if (form.rfc.trim() && sanitizeRfcInput(form.rfc).length !== 13) {
-      setError("El RFC debe tener exactamente 13 caracteres alfanuméricos.");
+    if (!isValidRfcLength(form.rfc, form.tipo)) {
+      setError(getRfcLengthMessage(form.tipo));
       return;
     }
     setSubmitting(true);
@@ -373,6 +379,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-rfc">RFC</Label>
+                  <p className="text-xs text-muted-foreground">{rfcHint}</p>
                   <Input
                     id="create-rfc"
                     value={form.rfc}

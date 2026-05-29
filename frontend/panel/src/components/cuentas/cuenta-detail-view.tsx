@@ -14,7 +14,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
-import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
+import {
+  getRfcLengthMessage,
+  isValidRfcLength,
+  sanitizePhoneInput,
+  sanitizeRfcInput,
+} from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type AccountDetail = Record<string, unknown>;
@@ -411,6 +416,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const name = getText(detail?.nombre);
   const alias = getText(detail?.alias);
   const tipo = getText(detail?.tipo);
+  const rfcHint = React.useMemo(() => getRfcLengthMessage(tipo), [tipo]);
   const rfc = getText(detail?.rfc);
   const industry = getText(detail?.industria);
   const email = getText(detail?.correo ?? detail?.email);
@@ -498,9 +504,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   };
 
   const handleSaveEdit = async () => {
-    const normalizedRfc = sanitizeRfcInput(editForm.rfc);
-    if (editForm.rfc.trim() && normalizedRfc.length !== 13) {
-      const message = "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
+    if (!isValidRfcLength(editForm.rfc, tipo)) {
+      const message = getRfcLengthMessage(tipo);
       setEditError(message);
       toast.error(message);
       return;
@@ -970,6 +975,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-rfc">RFC</Label>
+                <p className="text-xs text-muted-foreground">{rfcHint}</p>
                 <Input
                   id="edit-rfc"
                   value={editForm.rfc}

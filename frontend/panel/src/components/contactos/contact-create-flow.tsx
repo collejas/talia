@@ -25,7 +25,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
-import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
+import {
+  getRfcLengthMessage,
+  isValidRfcLength,
+  sanitizePhoneInput,
+  sanitizeRfcInput,
+} from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type CreateMode =
@@ -775,8 +780,8 @@ function validateState(state: ContactCreateState): string | null {
   ) {
     return "El teléfono principal de la empresa es obligatorio.";
   }
-  if (state.cuenta.rfc.trim() && sanitizeRfcInput(state.cuenta.rfc).length !== 13) {
-    return "El RFC debe tener exactamente 13 caracteres alfanuméricos.";
+  if (!isValidRfcLength(state.cuenta.rfc, state.cuenta.tipo)) {
+    return getRfcLengthMessage(state.cuenta.tipo);
   }
   return null;
 }
@@ -972,6 +977,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const metodoPagoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.metodoPagoOptions, state.extras.metodo_pago),
     [state.extras.metodo_pago, tenantCatalogs.metodoPagoOptions],
+  );
+  const rfcHint = React.useMemo(
+    () => getRfcLengthMessage(isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"),
+    [isPfaeMode],
   );
 
   React.useEffect(() => {
@@ -1403,7 +1412,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
                   Debes completar al menos nombre comercial o razón social.
                 </div>
-                <Field label="RFC">
+                <Field label="RFC" hint={rfcHint}>
                   <Input
                     value={state.cuenta.rfc}
                     maxLength={13}
