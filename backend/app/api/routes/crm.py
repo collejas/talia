@@ -21,7 +21,7 @@ from datetime import date, datetime, time as dt_time, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence, TypeVar
+from typing import Annotated, Any, Awaitable, Callable, Iterable, Literal, Mapping, Sequence, TypeVar
 from uuid import UUID, uuid4
 from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
@@ -12491,6 +12491,81 @@ async def _enrich_orden_compra_pago_programado_row(
     return normalized
 
 
+def _resolve_orden_compra_anticipo_limit(order: Mapping[str, Any]) -> Decimal | None:
+    condiciones = order.get("condiciones_pago")
+    if not isinstance(condiciones, Mapping):
+        return None
+
+    monto_anticipo = _decimal_from_value(condiciones.get("monto_anticipo"))
+    if monto_anticipo is not None:
+        monto_anticipo = _round_currency_decimal(monto_anticipo)
+        if monto_anticipo > 0:
+            return monto_anticipo
+        return None
+
+    porcentaje_anticipo = _decimal_from_value(condiciones.get("porcentaje_anticipo"))
+    subtotal = _decimal_from_value(order.get("subtotal"))
+    if porcentaje_anticipo is None or subtotal is None or subtotal <= 0:
+        return None
+
+    resolved = subtotal * porcentaje_anticipo / Decimal("100")
+    if resolved <= 0:
+        return None
+    return _round_currency_decimal(resolved)
+
+
+def _sum_orden_compra_anticipo_rows(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    exclude_pago_id: UUID | None = None,
+) -> Decimal:
+    excluded_id = str(exclude_pago_id) if exclude_pago_id is not None else ""
+    total = Decimal("0")
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        if excluded_id and str(row.get("id") or "") == excluded_id:
+            continue
+        if _clean_text(row.get("tipo_pago")).lower() != "anticipo":
+            continue
+        if _clean_text(row.get("estado")).lower() == "cancelado":
+            continue
+        monto = _decimal_from_value(row.get("monto"))
+        if monto is None or monto <= 0:
+            continue
+        total += monto
+    return _round_currency_decimal(total)
+
+
+def _ensure_orden_compra_anticipo_limit(
+    *,
+    order: Mapping[str, Any],
+    existing_rows: Iterable[Mapping[str, Any]],
+    pending_rows: Iterable[Mapping[str, Any]],
+    exclude_pago_id: UUID | None = None,
+) -> None:
+    limit = _resolve_orden_compra_anticipo_limit(order)
+    if limit is None:
+        return
+
+    pending_total = _sum_orden_compra_anticipo_rows(pending_rows)
+    if pending_total <= 0:
+        return
+
+    used_total = _sum_orden_compra_anticipo_rows(existing_rows, exclude_pago_id=exclude_pago_id)
+    total_after = _round_currency_decimal(used_total + pending_total)
+    if total_after > limit:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El total de anticipos supera el monto pactado para el anticipo. "
+                f"Disponible: {float(max(limit - used_total, Decimal('0'))):.4f}, "
+                f"intentas registrar: {float(pending_total):.4f}, "
+                f"tope: {float(limit):.4f}"
+            ),
+        )
+
+
 async def _replace_orden_compra_pagos_programados(
     *,
     repo: CRMRepository,
@@ -16861,6 +16936,15 @@ async def create_compras_orden_pago_programado(
             row=body,
             fallback_currency=_clean_text(orden.get("moneda")) or "MXN",
         )
+        current_rows = await repo.list_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        _ensure_orden_compra_anticipo_limit(
+            order=orden,
+            existing_rows=current_rows,
+            pending_rows=[body],
+        )
         row = await repo.create_orden_compra_pago_programado(
             organizacion_id=organizacion_id,
             payload={
@@ -16889,6 +16973,11 @@ async def replace_compras_orden_pagos_programados(
         )
         if orden is None:
             raise HTTPException(status_code=404, detail="orden_compra_not_found")
+        _ensure_orden_compra_anticipo_limit(
+            order=orden,
+            existing_rows=[],
+            pending_rows=payload,
+        )
         await _replace_orden_compra_pagos_programados(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -16939,6 +17028,16 @@ async def update_compras_orden_pago_programado(
         body = await _enrich_orden_compra_pago_programado_row(
             row=body,
             fallback_currency=_clean_text(orden.get("moneda")) or "MXN",
+        )
+        current_rows = await repo.list_orden_compra_pagos_programados(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+        _ensure_orden_compra_anticipo_limit(
+            order=orden,
+            existing_rows=current_rows,
+            pending_rows=[body],
+            exclude_pago_id=pago_id,
         )
         row = await repo.update_orden_compra_pago_programado(
             organizacion_id=organizacion_id,
