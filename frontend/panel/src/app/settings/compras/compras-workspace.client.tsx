@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Info } from "lucide-react"
+import { AlertCircle, Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -327,6 +327,102 @@ function parseCurrencyInput(value: string): number {
     : raw.replace(/[^\d-]/g, "")
   const parsed = Number.parseFloat(normalized)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function getUnknownErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || ""
+  }
+  if (typeof error === "string") {
+    return error
+  }
+  if (error && typeof error === "object") {
+    const candidate = error as { message?: unknown; error?: unknown; detail?: unknown }
+    if (typeof candidate.message === "string" && candidate.message) {
+      return candidate.message
+    }
+    if (typeof candidate.error === "string" && candidate.error) {
+      return candidate.error
+    }
+    if (typeof candidate.detail === "string" && candidate.detail) {
+      return candidate.detail
+    }
+  }
+  return ""
+}
+
+function getFriendlyOrderSaveErrorMessage(error: unknown): string {
+  const rawMessage = getUnknownErrorMessage(error).trim()
+  const normalized = rawMessage.toLowerCase()
+
+  if (!rawMessage) {
+    return "No se pudo guardar la orden. Intenta nuevamente."
+  }
+
+  if (
+    normalized.includes("supera el monto pactado") ||
+    normalized.includes("intentas registrar") ||
+    normalized.includes("tope:") ||
+    normalized.includes("disponible:")
+  ) {
+    if (normalized.includes("tipo anticipo") || normalized.includes("anticipo")) {
+      return "El anticipo capturado supera el anticipo pactado para esta orden."
+    }
+    if (normalized.includes("tipo saldo") || normalized.includes("saldo")) {
+      return "El saldo capturado supera el saldo pactado para esta orden."
+    }
+    return "El pago capturado supera el monto permitido para esta orden."
+  }
+
+  if (normalized.startsWith("upload_failed:") || normalized.includes("upload_failed")) {
+    if (normalized.includes("proforma")) {
+      return "No se pudo guardar la proforma. Revisa el archivo e inténtalo de nuevo."
+    }
+    return "No se pudo guardar uno de los documentos de la orden. Revisa el archivo e inténtalo de nuevo."
+  }
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("typeerror") ||
+    normalized.includes("network request failed")
+  ) {
+    return "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo."
+  }
+
+  if (
+    normalized.includes("service unavailable") ||
+    normalized.includes("gateway timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("503") ||
+    normalized.includes("500")
+  ) {
+    return "El servidor no respondió correctamente. Intenta de nuevo en unos segundos."
+  }
+
+  if (normalized.includes("not found") || normalized.includes("_not_found")) {
+    return "No se encontró la orden o uno de sus registros."
+  }
+
+  if (normalized.includes("_required")) {
+    return "Faltan datos obligatorios para guardar la orden."
+  }
+
+  if (normalized.includes("_invalid")) {
+    return "Hay datos inválidos en la orden. Revisa los campos marcados."
+  }
+
+  if (
+    normalized.includes("duplicate") ||
+    normalized.includes("already exists") ||
+    normalized.includes("unique") ||
+    normalized.includes("exists") ||
+    normalized.includes("409")
+  ) {
+    return "Ya existe un registro con esos datos."
+  }
+
+  return "No se pudo guardar la orden. Revisa la información e inténtalo de nuevo."
 }
 
 function formatCurrencyInput(value: unknown, currency = "MXN", editing = false): string {
@@ -871,6 +967,7 @@ export function ComprasWorkspace({
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false)
   const [isOrderPaymentsModalOpen, setIsOrderPaymentsModalOpen] = useState(false)
+  const [orderSaveErrorMessage, setOrderSaveErrorMessage] = useState("")
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
@@ -1159,12 +1256,14 @@ export function ComprasWorkspace({
   }
 
   const openCreateOrderModal = () => {
+    setOrderSaveErrorMessage("")
     clearOrderForm()
     resetOrderDocumentUploadSlots()
     setIsOrderModalOpen(true)
   }
 
   const openEditOrderModal = (orden: AnyRecord) => {
+    setOrderSaveErrorMessage("")
     setSelectedOrderId(String(orden.id))
     startEditOrder(orden)
     resetOrderDocumentUploadSlots()
@@ -1179,6 +1278,7 @@ export function ComprasWorkspace({
   const handleOrderModalOpenChange = (open: boolean) => {
     setIsOrderModalOpen(open)
     if (!open) {
+      setOrderSaveErrorMessage("")
       clearOrderForm()
     }
   }
@@ -1587,27 +1687,35 @@ export function ComprasWorkspace({
     }
   }
   const handleOrderFormAction = async (formData: FormData) => {
-    const savedOrderId = editingOrderId
-      ? await updateOrdenCompraAction(editingOrderId, formData)
-      : await createOrdenCompraAction(formData)
-    if (savedOrderId) {
-      if (orderProformaFile instanceof File && orderProformaFile.size > 0) {
-        await uploadOrderAttachment(savedOrderId, "proforma", orderProformaFile)
-      }
-      for (const [tipoDocumento, slots] of Object.entries(orderDocumentUploadSlots)) {
-        for (const slot of slots) {
-          if (!(slot.file instanceof File) || slot.file.size <= 0) {
-            continue
+    try {
+      const savedOrderId = editingOrderId
+        ? await updateOrdenCompraAction(editingOrderId, formData)
+        : await createOrdenCompraAction(formData)
+      if (savedOrderId) {
+        if (orderProformaFile instanceof File && orderProformaFile.size > 0) {
+          await uploadOrderAttachment(savedOrderId, "proforma", orderProformaFile)
+        }
+        for (const [tipoDocumento, slots] of Object.entries(orderDocumentUploadSlots)) {
+          for (const slot of slots) {
+            if (!(slot.file instanceof File) || slot.file.size <= 0) {
+              continue
+            }
+            await uploadOrderAttachment(savedOrderId, `${tipoDocumento}__${slot.id}`, slot.file)
           }
-          await uploadOrderAttachment(savedOrderId, `${tipoDocumento}__${slot.id}`, slot.file)
         }
       }
+      router.refresh()
+      setIsOrderModalOpen(false)
+      clearOrderForm()
+      setOrderProformaFile(null)
+      setOrderProformaFileName("")
+      setOrderProformaInputKey((current) => current + 1)
+      resetOrderDocumentUploadSlots()
+      setOrderSaveErrorMessage("")
+    } catch (error) {
+      setOrderSaveErrorMessage(getFriendlyOrderSaveErrorMessage(error))
+      setIsOrderModalOpen(true)
     }
-    router.refresh()
-    setOrderProformaFile(null)
-    setOrderProformaFileName("")
-    setOrderProformaInputKey((current) => current + 1)
-    resetOrderDocumentUploadSlots()
   }
 
   const startEditWarehouse = (almacen: AnyRecord) => {
@@ -3688,6 +3796,25 @@ export function ComprasWorkspace({
           </DialogContent>
         </Dialog>
       ) : null}
+
+      <Dialog open={Boolean(orderSaveErrorMessage)} onOpenChange={(open) => !open && setOrderSaveErrorMessage("")}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="size-5 text-destructive" />
+              No se pudo guardar
+            </DialogTitle>
+            <DialogDescription>
+              {orderSaveErrorMessage || "Ocurrió un error al guardar la orden."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setOrderSaveErrorMessage("")}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isOrderDetailOpen && Boolean(selectedOrderRecord)} onOpenChange={handleOrderDetailOpenChange}>
         <DialogContent className="max-h-[92vh] w-[95vw] max-w-7xl overflow-y-auto p-0">
