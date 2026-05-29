@@ -43,6 +43,7 @@ type AccountRelation = {
     correo_principal: string | null;
     telefono_principal_e164: string | null;
     company_name: string | null;
+    propietario_usuario_id?: string | null;
   } | null;
 };
 type SearchItem = {
@@ -283,11 +284,19 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const accountOwnerId = getInputText(detail?.propietario_usuario_id);
+  const hasOwnedRelation = React.useMemo(
+    () =>
+      relations.some((relation) => {
+        const relationOwner = getInputText(relation.persona?.propietario_usuario_id);
+        return Boolean(currentUserId) && relationOwner === currentUserId;
+      }),
+    [currentUserId, relations],
+  );
   const canEditAccount =
     canEditAny &&
     (permissionContext.es_admin ||
       permissionContext.es_owner ||
-      (Boolean(currentUserId) && (!accountOwnerId || currentUserId === accountOwnerId)));
+      (Boolean(currentUserId) && (!accountOwnerId || currentUserId === accountOwnerId || hasOwnedRelation)));
   const canDeleteAccount = canDeleteAny;
 
   const tenantCatalogs = useTenantContactCatalogs();

@@ -38,6 +38,7 @@ type CRMAccountRelation = {
     correo_principal: string | null;
     telefono_principal_e164: string | null;
     company_name: string | null;
+    propietario_usuario_id: string | null;
   } | null;
 };
 
@@ -110,6 +111,7 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
         contacto_principal_nombre: contact?.nombre_completo ?? null,
         contacto_principal_correo: contact?.correo_principal ?? null,
         contacto_principal_telefono: contact?.telefono_principal_e164 ?? null,
+        contacto_principal_owner_id: contact?.propietario_usuario_id ?? null,
         propietario_nombre: ownerName,
       },
     };

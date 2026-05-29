@@ -7812,7 +7812,7 @@ class CRMRepository:
                 "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
                 "metadata,creado_en,actualizado_en,"
-                "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name)"
+                "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,propietario_usuario_id)"
             ),
         }
         if activo is not None:

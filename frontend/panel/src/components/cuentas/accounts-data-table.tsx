@@ -80,6 +80,12 @@ function getAccountOwnerId(row: DataTableRow): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function getAccountRelatedContactOwnerId(row: DataTableRow): string | null {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const value = raw?.contacto_principal_owner_id;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function formatDeleteBlockedMessage(error: string | undefined): string | null {
   if (!error) return null;
   const normalized = error.trim();
@@ -284,7 +290,8 @@ export function AccountsDataTable({ rows }: Props) {
       if (permissionContext.es_admin || permissionContext.es_owner) return true;
       if (!canEditAny || !currentUserId) return false;
       const ownerId = getText((row.raw as Record<string, unknown> | undefined)?.propietario_usuario_id);
-      return !ownerId || ownerId === currentUserId;
+      const contactOwnerId = getAccountRelatedContactOwnerId(row);
+      return !ownerId || ownerId === currentUserId || contactOwnerId === currentUserId;
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );
