@@ -18,6 +18,14 @@ import {
   sanitizePhoneInput,
 } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
+import {
+  AccountDirectionCard,
+  AccountDirectionDraft,
+  buildDirectionPayload,
+  createEmptyDirectionDraft,
+  directionTypeIncludesFiscal,
+  directionTypeIncludesPrincipal,
+} from "@/components/cuentas/account-directions";
 import { toast } from "sonner";
 
 type CreateAccountForm = {
@@ -97,6 +105,26 @@ function Field({
   );
 }
 
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4 shadow-sm">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold leading-none">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 const INITIAL_FORM: CreateAccountForm = {
   tipo: "empresa",
   tipo_persona: "moral",
@@ -155,15 +183,17 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const [open, setOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [codeLoading, setCodeLoading] = React.useState(false);
-  const [extrasOpen, setExtrasOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CreateAccountForm>(INITIAL_FORM);
+  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<"fiscal" | "principal" | "fiscal_principal">("fiscal");
+  const [extraDirections, setExtraDirections] = React.useState<AccountDirectionDraft[]>([]);
   const currentUserId = permissionContext.usuario_id?.trim() || null;
 
   const openDialog = React.useCallback(() => {
     setForm(INITIAL_FORM);
     setError(null);
-    setExtrasOpen(false);
+    setPrimaryDirectionType("fiscal");
+    setExtraDirections([]);
     setOpen(true);
   }, []);
 
@@ -221,6 +251,40 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const rfcHint = React.useMemo(() => getRfcLengthMessage(form.tipo), [form.tipo]);
 
   const handleCreateConfirm = async () => {
+    const primaryDirection = {
+      key: "primary",
+      tipo: primaryDirectionType,
+      pais: form.pais,
+      clave_entidad: form.clave_entidad,
+      entidad: form.entidad,
+      clave_municipio: form.clave_municipio,
+      municipio: form.municipio,
+      clave_localidad: form.clave_localidad,
+      localidad: form.localidad,
+      tipo_vialidad: form.tipo_vialidad,
+      nombre_vialidad: form.nombre_vialidad,
+      numero_exterior: form.numero_exterior,
+      letra_exterior: form.letra_exterior,
+      edificio: form.edificio,
+      edificio_piso: form.edificio_piso,
+      numero_interior: form.numero_interior,
+      letra_interior: form.letra_interior,
+      tipo_asentamiento: form.tipo_asentamiento,
+      nombre_asentamiento: form.nombre_asentamiento,
+      tipo_centro_comercial: form.tipo_centro_comercial,
+      corredor_industrial: form.corredor_industrial,
+      numero_local: form.numero_local,
+      codigo_postal: form.codigo_postal,
+      latitud: form.latitud,
+      longitud: form.longitud,
+    } satisfies AccountDirectionDraft;
+    const fiscalDirectionsCount =
+      (directionTypeIncludesFiscal(primaryDirection.tipo) ? 1 : 0) +
+      extraDirections.filter((item) => directionTypeIncludesFiscal(item.tipo)).length;
+    if (fiscalDirectionsCount > 1) {
+      setError("No es posible agregar una segunda dirección fiscal. Cambia la dirección existente a principal o sucursal antes de capturar otra fiscal.");
+      return;
+    }
     if (!form.nombre_comercial.trim() && !form.razon_social.trim()) {
       setError("La empresa requiere nombre comercial o razón social.");
       return;
@@ -289,9 +353,52 @@ export function AccountCreateDialog({ onCreated }: Props) {
           propietario_usuario_id: currentUserId || null,
         }),
       });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      const body = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!response.ok) {
         throw new Error(body.error || "No se pudo crear la empresa.");
+      }
+      const createdAccountId = typeof body.id === "string" ? body.id.trim() : "";
+      if (createdAccountId) {
+        const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
+        if (directionTypeIncludesFiscal(primaryDirection.tipo)) {
+          directionsToCreate.push({
+            tipo_relacion: "fiscal",
+            direccion: buildDirectionPayload(primaryDirection, "fiscal"),
+          });
+        }
+        if (directionTypeIncludesPrincipal(primaryDirection.tipo)) {
+          directionsToCreate.push({
+            tipo_relacion: "principal",
+            direccion: buildDirectionPayload(primaryDirection, "principal"),
+          });
+        }
+        for (const direction of extraDirections) {
+          if (direction.tipo === "fiscal_principal") {
+            directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(direction, "fiscal") });
+            directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(direction, "principal") });
+            continue;
+          }
+          directionsToCreate.push({
+            tipo_relacion: direction.tipo,
+            direccion: buildDirectionPayload(direction, direction.tipo),
+          });
+        }
+        for (const entry of directionsToCreate) {
+          const relationResponse = await fetch(`/api/cuentas/${encodeURIComponent(createdAccountId)}/direcciones`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tipo_relacion: entry.tipo_relacion,
+              activo: true,
+              es_principal: entry.tipo_relacion === "principal",
+              direccion: entry.direccion,
+            }),
+          });
+          if (!relationResponse.ok) {
+            const relationBody = (await relationResponse.json().catch(() => ({}))) as { error?: string };
+            throw new Error(relationBody.error || "No se pudieron guardar las direcciones de la empresa.");
+          }
+        }
       }
       toast.success("Empresa creada.");
       setOpen(false);
@@ -317,8 +424,11 @@ export function AccountCreateDialog({ onCreated }: Props) {
           <DialogHeader>
             <DialogTitle>Nueva empresa</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-5">
+          <div className="space-y-5">
+            <FormSection
+              title="Datos de la empresa"
+              description="Captura la identidad comercial, fiscal y de contacto principal."
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="create-tipo">Tipo de alta *</Label>
@@ -502,157 +612,191 @@ export function AccountCreateDialog({ onCreated }: Props) {
                   <Textarea id="create-notas" value={form.notas} onChange={(event) => setForm((prev) => ({ ...prev, notas: event.target.value }))} rows={4} />
                 </div>
               </div>
-            </div>
+            </FormSection>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+            <FormSection
+              title="Direcciones"
+              description="Agrega el domicilio principal y, si aplica, sucursales o una dirección fiscal diferente."
+            >
+              <div className="grid gap-2 md:col-span-2">
+                <Label htmlFor="create-direccion-tipo">Tipo de dirección principal</Label>
+                <select
+                  id="create-direccion-tipo"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  value={primaryDirectionType}
+                  onChange={(event) => setPrimaryDirectionType(event.target.value as "fiscal" | "principal" | "fiscal_principal")}
+                >
+                  <option value="fiscal">Fiscal</option>
+                  <option value="principal">Principal</option>
+                  <option value="fiscal_principal">Fiscal + principal</option>
+                </select>
+                {primaryDirectionType === "fiscal" && extraDirections.some((item) => directionTypeIncludesFiscal(item.tipo)) ? (
+                  <p className="text-xs text-amber-600">
+                    Ya existe una dirección fiscal adicional. Cámbiala a principal o sucursal antes de guardar otra fiscal.
+                  </p>
+                ) : null}
+                {primaryDirectionType !== "fiscal" && extraDirections.some((item) => directionTypeIncludesFiscal(item.tipo)) ? (
+                  <p className="text-xs text-amber-600">
+                    Ya existe una dirección fiscal adicional. Solo puede haber una dirección fiscal activa por empresa.
+                  </p>
+                ) : null}
+              </div>
+              <GeoLocationSelects
+                countryCode={form.pais}
+                stateCode={form.clave_entidad}
+                municipalityCode={form.clave_municipio}
+                onCountryChange={(countryCode) => {
+                  const nextCountry = countryCode || "MX";
+                  setForm((prev) => ({
+                    ...prev,
+                    pais: nextCountry,
+                    ...(nextCountry !== "MX"
+                      ? {
+                          clave_entidad: "",
+                          entidad: "",
+                          clave_municipio: "",
+                          municipio: "",
+                        }
+                      : {}),
+                  }));
+                }}
+                onStateChange={(stateCode, stateName) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    clave_entidad: stateCode,
+                    entidad: stateName,
+                    clave_municipio: "",
+                    municipio: "",
+                  }));
+                }}
+                onMunicipalityChange={(municipalityCode, municipalityName) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    clave_municipio: municipalityCode,
+                    municipio: municipalityName,
+                  }));
+                }}
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Localidad">
+                  <Input value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
+                </Field>
+                <Field label="Tipo de vialidad">
+                  <Input value={form.tipo_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))} />
+                </Field>
+                <Field label="Nombre de vialidad">
+                  <Input value={form.nombre_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))} />
+                </Field>
+                <Field label="Número exterior">
+                  <Input value={form.numero_exterior} onChange={(event) => setForm((prev) => ({ ...prev, numero_exterior: event.target.value }))} />
+                </Field>
+                <Field label="Letra exterior">
+                  <Input value={form.letra_exterior} onChange={(event) => setForm((prev) => ({ ...prev, letra_exterior: event.target.value }))} />
+                </Field>
+                <Field label="Edificio">
+                  <Input value={form.edificio} onChange={(event) => setForm((prev) => ({ ...prev, edificio: event.target.value }))} />
+                </Field>
+                <Field label="Piso / nivel">
+                  <Input value={form.edificio_piso} onChange={(event) => setForm((prev) => ({ ...prev, edificio_piso: event.target.value }))} />
+                </Field>
+                <Field label="Número interior">
+                  <Input value={form.numero_interior} onChange={(event) => setForm((prev) => ({ ...prev, numero_interior: event.target.value }))} />
+                </Field>
+                <Field label="Letra interior">
+                  <Input value={form.letra_interior} onChange={(event) => setForm((prev) => ({ ...prev, letra_interior: event.target.value }))} />
+                </Field>
+                <Field label="Tipo de asentamiento">
+                  <Input value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
+                </Field>
+                <Field label="Colonia">
+                  <Input
+                    id="create-nombre-asentamiento"
+                    value={form.nombre_asentamiento}
+                    onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                  />
+                </Field>
+                <Field label="Tipo de centro comercial">
+                  <Input id="create-tipo-centro-comercial" value={form.tipo_centro_comercial} onChange={(event) => setForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))} />
+                </Field>
+                <Field label="Corredor industrial">
+                  <Input id="create-corredor-industrial" value={form.corredor_industrial} onChange={(event) => setForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))} />
+                </Field>
+                <Field label="Número local">
+                  <Input id="create-numero-local" value={form.numero_local} onChange={(event) => setForm((prev) => ({ ...prev, numero_local: event.target.value }))} />
+                </Field>
+                <Field label="Código postal">
+                  <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
+                </Field>
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-2">
                 <div>
-                  <div className="text-sm font-semibold">Datos Fiscales</div>
-                  <div className="text-xs text-muted-foreground">Datos fiscales, ubicación y domicilio.</div>
+                  <div className="text-sm font-semibold">Direcciones adicionales</div>
+                  <p className="text-xs text-muted-foreground">
+                    Puedes agregar sucursales o una dirección principal distinta. Solo puede haber una fiscal activa.
+                  </p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setExtrasOpen((prev) => !prev)}>
-                  {extrasOpen ? "Ocultar extras" : "Completar extras"}
+                <Button type="button" variant="outline" size="sm" onClick={() => setExtraDirections((prev) => [...prev, createEmptyDirectionDraft()])}>
+                  Agregar dirección
                 </Button>
               </div>
-              {extrasOpen ? (
-                <div className="mt-4 space-y-4">
-                  <Field label="Uso CFDI">
-                    <ContactCatalogSelect
-                      value={form.uso_cfdi}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
-                      options={usoCfdiOptions}
-                      placeholder="Selecciona un uso CFDI"
-                      emptyLabel="Configura los usos CFDI en Extras"
+              {extraDirections.length ? (
+                <div className="space-y-4">
+                  {extraDirections.map((direction, index) => (
+                    <AccountDirectionCard
+                      key={direction.key}
+                      idPrefix={`create-extra-direction-${index}`}
+                      value={direction}
+                      lockFiscal={directionTypeIncludesFiscal(primaryDirectionType)}
+                      onChange={(next) =>
+                        setExtraDirections((prev) => prev.map((item, currentIndex) => (currentIndex === index ? next : item)))
+                      }
+                      onRemove={() =>
+                        setExtraDirections((prev) => prev.filter((_, currentIndex) => currentIndex !== index))
+                      }
                     />
-                  </Field>
-                  <Field label="Forma de pago">
-                    <ContactCatalogSelect
-                      value={form.forma_pago}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
-                      options={formaPagoOptions}
-                      placeholder="Selecciona una forma de pago"
-                      emptyLabel="Configura las formas de pago en Extras"
-                    />
-                  </Field>
-                  <Field label="Método de pago">
-                    <ContactCatalogSelect
-                      value={form.metodo_pago}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
-                      options={metodoPagoOptions}
-                      placeholder="Selecciona un método de pago"
-                      emptyLabel="Configura los métodos de pago en Extras"
-                    />
-                  </Field>
-                  <Field label="Email de facturación">
-                    <Input
-                      id="create-email-facturacion"
-                      value={form.email_facturacion}
-                      onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
-                    />
-                  </Field>
-                  <GeoLocationSelects
-                    countryCode={form.pais}
-                    stateCode={form.clave_entidad}
-                    municipalityCode={form.clave_municipio}
-                    onCountryChange={(countryCode) => {
-                      const nextCountry = countryCode || "MX";
-                      setForm((prev) => ({
-                        ...prev,
-                        pais: nextCountry,
-                        ...(nextCountry !== "MX"
-                          ? {
-                              clave_entidad: "",
-                              entidad: "",
-                              clave_municipio: "",
-                              municipio: "",
-                            }
-                          : {}),
-                      }));
-                    }}
-                    onStateChange={(stateCode, stateName) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        clave_entidad: stateCode,
-                        entidad: stateName,
-                        clave_municipio: "",
-                        municipio: "",
-                      }));
-                    }}
-                    onMunicipalityChange={(municipalityCode, municipalityName) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        clave_municipio: municipalityCode,
-                        municipio: municipalityName,
-                      }));
-                    }}
-                  />
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-localidad">Localidad</Label>
-                    <Input id="create-localidad" value={form.localidad} onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-tipo-vialidad">Tipo de vialidad</Label>
-                    <Input id="create-tipo-vialidad" value={form.tipo_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-nombre-vialidad">Nombre de vialidad</Label>
-                    <Input id="create-nombre-vialidad" value={form.nombre_vialidad} onChange={(event) => setForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-numero-exterior">Número exterior</Label>
-                    <Input id="create-numero-exterior" value={form.numero_exterior} onChange={(event) => setForm((prev) => ({ ...prev, numero_exterior: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-letra-exterior">Letra exterior</Label>
-                    <Input id="create-letra-exterior" value={form.letra_exterior} onChange={(event) => setForm((prev) => ({ ...prev, letra_exterior: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-edificio">Edificio</Label>
-                    <Input id="create-edificio" value={form.edificio} onChange={(event) => setForm((prev) => ({ ...prev, edificio: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-edificio-piso">Piso / nivel</Label>
-                    <Input id="create-edificio-piso" value={form.edificio_piso} onChange={(event) => setForm((prev) => ({ ...prev, edificio_piso: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-numero-interior">Número interior</Label>
-                    <Input id="create-numero-interior" value={form.numero_interior} onChange={(event) => setForm((prev) => ({ ...prev, numero_interior: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-letra-interior">Letra interior</Label>
-                    <Input id="create-letra-interior" value={form.letra_interior} onChange={(event) => setForm((prev) => ({ ...prev, letra_interior: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-tipo-asentamiento">Tipo de asentamiento</Label>
-                    <Input id="create-tipo-asentamiento" value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-nombre-asentamiento">Colonia</Label>
-                    <Input
-                      id="create-nombre-asentamiento"
-                      value={form.nombre_asentamiento}
-                      onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-tipo-centro-comercial">Tipo de centro comercial</Label>
-                    <Input id="create-tipo-centro-comercial" value={form.tipo_centro_comercial} onChange={(event) => setForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-corredor-industrial">Corredor industrial</Label>
-                    <Input id="create-corredor-industrial" value={form.corredor_industrial} onChange={(event) => setForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-numero-local">Número local</Label>
-                    <Input id="create-numero-local" value={form.numero_local} onChange={(event) => setForm((prev) => ({ ...prev, numero_local: event.target.value }))} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="create-codigo-postal">Código postal</Label>
-                    <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
-                  </div>
+                  ))}
                 </div>
               ) : null}
-            </div>
+            </FormSection>
+
+            <FormSection title="Datos fiscales" description="Captura la información de facturación de la empresa.">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Uso CFDI">
+                  <ContactCatalogSelect
+                    value={form.uso_cfdi}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, uso_cfdi: value }))}
+                    options={usoCfdiOptions}
+                    placeholder="Selecciona un uso CFDI"
+                    emptyLabel="Configura los usos CFDI en Extras"
+                  />
+                </Field>
+                <Field label="Forma de pago">
+                  <ContactCatalogSelect
+                    value={form.forma_pago}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, forma_pago: value }))}
+                    options={formaPagoOptions}
+                    placeholder="Selecciona una forma de pago"
+                    emptyLabel="Configura las formas de pago en Extras"
+                  />
+                </Field>
+                <Field label="Método de pago">
+                  <ContactCatalogSelect
+                    value={form.metodo_pago}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, metodo_pago: value }))}
+                    options={metodoPagoOptions}
+                    placeholder="Selecciona un método de pago"
+                    emptyLabel="Configura los métodos de pago en Extras"
+                  />
+                </Field>
+                <Field label="Email de facturación">
+                  <Input
+                    id="create-email-facturacion"
+                    value={form.email_facturacion}
+                    onChange={(event) => setForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
+                  />
+                </Field>
+              </div>
+            </FormSection>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

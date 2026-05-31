@@ -22,6 +22,15 @@ import {
   sanitizeRfcInput,
 } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
+import {
+  AccountDirectionCard,
+  AccountDirectionDraft,
+  buildDirectionPayload,
+  createEmptyDirectionDraft,
+  directionTypeIncludesFiscal,
+  directionTypeIncludesPrincipal,
+  normalizeDirectionType,
+} from "@/components/cuentas/account-directions";
 
 type AccountDetail = Record<string, unknown>;
 type AccountRelation = {
@@ -106,6 +115,127 @@ type AccountEditForm = {
   notas: string;
   necesidad_proposito: string;
 };
+
+function readDirectionText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: string): AccountDirectionDraft {
+  const direction = (row.direccion as Record<string, unknown> | undefined) ?? row;
+  return createEmptyDirectionDraft({
+    key: keyFallback,
+    tipo: normalizeDirectionType(readDirectionText(row.tipo_relacion)),
+    pais: readDirectionText(direction?.pais) || "MX",
+    clave_entidad: readDirectionText(direction?.clave_entidad),
+    entidad: readDirectionText(direction?.entidad),
+    clave_municipio: readDirectionText(direction?.clave_municipio),
+    municipio: readDirectionText(direction?.municipio),
+    clave_localidad: readDirectionText(direction?.clave_localidad),
+    localidad: readDirectionText(direction?.localidad),
+    tipo_vialidad: readDirectionText(direction?.tipo_vialidad),
+    nombre_vialidad: readDirectionText(direction?.nombre_vialidad),
+    numero_exterior: readDirectionText(direction?.numero_exterior),
+    letra_exterior: readDirectionText(direction?.letra_exterior),
+    edificio: readDirectionText(direction?.edificio),
+    edificio_piso: readDirectionText(direction?.edificio_piso),
+    numero_interior: readDirectionText(direction?.numero_interior),
+    letra_interior: readDirectionText(direction?.letra_interior),
+    tipo_asentamiento: readDirectionText(direction?.tipo_asentamiento),
+    nombre_asentamiento: readDirectionText(direction?.colonia ?? direction?.nombre_asentamiento),
+    tipo_centro_comercial: readDirectionText(direction?.tipo_centro_comercial),
+    corredor_industrial: readDirectionText(direction?.corredor_industrial),
+    numero_local: readDirectionText(direction?.numero_local),
+    codigo_postal: readDirectionText(direction?.codigo_postal),
+    latitud: readDirectionText(direction?.latitud),
+    longitud: readDirectionText(direction?.longitud),
+  });
+}
+
+function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: "fiscal" | "principal" | "fiscal_principal"; extras: AccountDirectionDraft[] } {
+  const normalized = rows
+    .filter((row) => row && typeof row === "object")
+    .map((row, index) => ({
+      row,
+      draft: buildDraftFromDirectionRow(row, `row-${index}`),
+      directionId: readDirectionText(row.direccion_id),
+    }));
+  const fiscalRow = normalized.find((item) => directionTypeIncludesFiscal(item.draft.tipo));
+  const principalRow = normalized.find((item) => directionTypeIncludesPrincipal(item.draft.tipo));
+  const sameAddressCombo = fiscalRow && principalRow && fiscalRow.directionId && fiscalRow.directionId === principalRow.directionId;
+  const primaryType: "fiscal" | "principal" | "fiscal_principal" = sameAddressCombo
+    ? "fiscal_principal"
+    : fiscalRow
+      ? "fiscal"
+      : principalRow
+        ? "principal"
+        : "fiscal";
+  const primaryId = sameAddressCombo
+    ? fiscalRow?.directionId || principalRow?.directionId || ""
+    : fiscalRow?.directionId || principalRow?.directionId || "";
+  const extras = normalized
+    .filter((item) => {
+      if (!primaryId) return true;
+      return item.directionId !== primaryId;
+    })
+    .map((item) => item.draft);
+  return { primaryType, extras };
+}
+
+async function syncAccountDirections(
+  cuentaId: string,
+  primaryType: "fiscal" | "principal" | "fiscal_principal",
+  primaryDraft: AccountDirectionDraft,
+  extraDirections: AccountDirectionDraft[],
+) {
+  const currentDirectionsResponse = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones`, {
+    cache: "no-store",
+  });
+  const currentDirectionsBody = (await currentDirectionsResponse.json().catch(() => ({}))) as { items?: Array<Record<string, unknown>>; error?: string };
+  if (currentDirectionsResponse.ok && Array.isArray(currentDirectionsBody.items)) {
+    for (const row of currentDirectionsBody.items) {
+      const relationId = readDirectionText(row.id);
+      if (!relationId) continue;
+      await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones/${encodeURIComponent(relationId)}`, {
+        method: "DELETE",
+      });
+    }
+  }
+
+  const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
+  if (directionTypeIncludesFiscal(primaryType)) {
+    directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(primaryDraft, "fiscal") });
+  }
+  if (directionTypeIncludesPrincipal(primaryType)) {
+    directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(primaryDraft, "principal") });
+  }
+  for (const direction of extraDirections) {
+    if (direction.tipo === "fiscal_principal") {
+      directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(direction, "fiscal") });
+      directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(direction, "principal") });
+      continue;
+    }
+    directionsToCreate.push({ tipo_relacion: direction.tipo, direccion: buildDirectionPayload(direction, direction.tipo) });
+  }
+
+  for (const entry of directionsToCreate) {
+    const relationResponse = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo_relacion: entry.tipo_relacion,
+        activo: true,
+        es_principal: entry.tipo_relacion === "principal",
+        direccion: entry.direccion,
+      }),
+    });
+    if (!relationResponse.ok) {
+      const relationBody = (await relationResponse.json().catch(() => ({}))) as { error?: string };
+      throw new Error(relationBody.error || "No se pudieron guardar las direcciones de la empresa.");
+    }
+  }
+}
 
 function getText(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -223,6 +353,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [editSubmitting, setEditSubmitting] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<"fiscal" | "principal" | "fiscal_principal">("fiscal");
+  const [extraDirections, setExtraDirections] = React.useState<AccountDirectionDraft[]>([]);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -504,6 +636,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   };
 
   const openEditDialog = () => {
+    const rawDirections = Array.isArray(detail?.direcciones) ? (detail?.direcciones as Record<string, unknown>[]) : [];
+    const groupedDirections = groupDirectionRows(rawDirections);
     setEditForm({
       nombre: getInputText(detail?.nombre),
       alias: getInputText(detail?.alias),
@@ -546,6 +680,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       notas: getInputText(detail?.notas),
       necesidad_proposito: getInputText(detail?.necesidad_proposito),
     });
+    setPrimaryDirectionType(groupedDirections.primaryType);
+    setExtraDirections(groupedDirections.extras);
     setEditError(null);
     setEditOpen(true);
   };
@@ -553,6 +689,40 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const handleSaveEdit = async () => {
     if (!isValidRfcLength(editForm.rfc, tipo)) {
       const message = getRfcLengthMessage(tipo);
+      setEditError(message);
+      toast.error(message);
+      return;
+    }
+    const primaryDirection: AccountDirectionDraft = createEmptyDirectionDraft({
+      key: "primary",
+      tipo: primaryDirectionType,
+      pais: editForm.pais,
+      clave_entidad: editForm.clave_entidad,
+      entidad: editForm.entidad,
+      clave_municipio: editForm.clave_municipio,
+      municipio: editForm.municipio,
+      clave_localidad: editForm.clave_localidad,
+      localidad: editForm.localidad,
+      tipo_vialidad: editForm.tipo_vialidad,
+      nombre_vialidad: editForm.nombre_vialidad,
+      numero_exterior: editForm.numero_exterior,
+      letra_exterior: editForm.letra_exterior,
+      edificio: editForm.edificio,
+      edificio_piso: editForm.edificio_piso,
+      numero_interior: editForm.numero_interior,
+      letra_interior: editForm.letra_interior,
+      tipo_asentamiento: editForm.tipo_asentamiento,
+      nombre_asentamiento: editForm.nombre_asentamiento,
+      tipo_centro_comercial: editForm.tipo_centro_comercial,
+      corredor_industrial: editForm.corredor_industrial,
+      numero_local: editForm.numero_local,
+      codigo_postal: editForm.codigo_postal,
+    });
+    const fiscalDirectionsCount =
+      (directionTypeIncludesFiscal(primaryDirectionType) ? 1 : 0) +
+      extraDirections.filter((item) => directionTypeIncludesFiscal(item.tipo)).length;
+    if (fiscalDirectionsCount > 1) {
+      const message = "No es posible agregar una segunda dirección fiscal. Cambia la existente a principal o sucursal antes de capturar otra fiscal.";
       setEditError(message);
       toast.error(message);
       return;
@@ -606,6 +776,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(body.error || "No se pudo actualizar la empresa.");
+      await syncAccountDirections(cuentaId, primaryDirectionType, primaryDirection, extraDirections);
       toast.success("Empresa actualizada.");
       setEditOpen(false);
       await loadData();
@@ -1152,10 +1323,25 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </Field>
             </div>
 
-              <div className="grid gap-4">
-                <GeoLocationSelects
-                  countryCode={editForm.pais || "MX"}
-                  stateCode={editForm.clave_entidad}
+            <div className="grid gap-4">
+              <div className="grid gap-2 md:col-span-2">
+                <Label htmlFor="edit-direccion-tipo">Tipo de dirección principal</Label>
+                <select
+                  id="edit-direccion-tipo"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  value={primaryDirectionType}
+                  onChange={(event) =>
+                    setPrimaryDirectionType(event.target.value as "fiscal" | "principal" | "fiscal_principal")
+                  }
+                >
+                  <option value="fiscal">Fiscal</option>
+                  <option value="principal">Principal</option>
+                  <option value="fiscal_principal">Fiscal + principal</option>
+                </select>
+              </div>
+              <GeoLocationSelects
+                countryCode={editForm.pais || "MX"}
+                stateCode={editForm.clave_entidad}
                 municipalityCode={editForm.clave_municipio}
                 onCountryChange={(countryCode) =>
                   setEditForm((prev) => ({
@@ -1308,6 +1494,35 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 />
               </div>
             </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <div>
+                <div className="text-sm font-semibold">Direcciones adicionales</div>
+                <p className="text-xs text-muted-foreground">
+                  Puedes agregar sucursales o una dirección principal distinta. Solo puede haber una fiscal activa.
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setExtraDirections((prev) => [...prev, createEmptyDirectionDraft()])}>
+                Agregar dirección
+              </Button>
+            </div>
+
+            {extraDirections.length ? (
+              <div className="space-y-4">
+                {extraDirections.map((direction, index) => (
+                  <AccountDirectionCard
+                    key={direction.key}
+                    idPrefix={`edit-extra-direction-${index}`}
+                    value={direction}
+                    lockFiscal={directionTypeIncludesFiscal(primaryDirectionType)}
+                    onChange={(next) =>
+                      setExtraDirections((prev) => prev.map((item, currentIndex) => (currentIndex === index ? next : item)))
+                    }
+                    onRemove={() => setExtraDirections((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                  />
+                ))}
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label htmlFor="edit-notas">Notas</Label>
