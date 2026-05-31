@@ -284,6 +284,26 @@ function Field({
   );
 }
 
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4 shadow-sm">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold leading-none">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function getInputText(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -1282,242 +1302,366 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 </div>
               </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Uso CFDI">
-                <ContactCatalogSelect
-                  value={editForm.uso_cfdi}
-                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, uso_cfdi: value }))}
-                  options={usoCfdiOptions}
-                  placeholder="Selecciona un uso CFDI"
-                  emptyLabel="Configura los usos CFDI en Extras"
-                />
-              </Field>
-              <Field label="Forma de pago">
-                <ContactCatalogSelect
-                  value={editForm.forma_pago}
-                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, forma_pago: value }))}
-                  options={formaPagoOptions}
-                  placeholder="Selecciona una forma de pago"
-                  emptyLabel="Configura las formas de pago en Extras"
-                />
-              </Field>
-              <Field label="Método de pago">
-                <ContactCatalogSelect
-                  value={editForm.metodo_pago}
-                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, metodo_pago: value }))}
-                  options={metodoPagoOptions}
-                  placeholder="Selecciona un método de pago"
-                  emptyLabel="Configura los métodos de pago en Extras"
-                />
-              </Field>
-              <Field label="Email de facturación">
-                <Input
-                  id="edit-email-facturacion"
-                  value={editForm.email_facturacion}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="edit-direccion-tipo">Tipo de dirección principal</Label>
-                <select
-                  id="edit-direccion-tipo"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                  value={primaryDirectionType}
-                  onChange={(event) => setPrimaryDirectionType(event.target.value as AccountDirectionPrimaryType)}
-                >
-                  <option value="fiscal">Fiscal</option>
-                  <option value="principal">Principal</option>
-                  <option value="sucursal">Sucursal</option>
-                  <option value="fiscal_principal">Fiscal + principal</option>
-                </select>
-              </div>
-              <GeoLocationSelects
-                countryCode={editForm.pais || "MX"}
-                stateCode={editForm.clave_entidad}
-                municipalityCode={editForm.clave_municipio}
-                onCountryChange={(countryCode) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    pais: countryCode,
-                    clave_entidad: "",
-                    entidad: "",
-                    clave_municipio: "",
-                    municipio: "",
-                  }))
-                }
-                onStateChange={(stateCode, stateName) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    clave_entidad: stateCode,
-                    entidad: stateName,
-                    clave_municipio: "",
-                    municipio: "",
-                  }))
-                }
-                onMunicipalityChange={(municipalityCode, municipalityName) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    clave_municipio: municipalityCode,
-                    municipio: municipalityName,
-                  }))
-                }
-              />
-              <div className="grid gap-2">
-                <Label htmlFor="edit-localidad">Localidad</Label>
-                <Input
-                  id="edit-localidad"
-                  value={editForm.localidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, localidad: event.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-tipo-vialidad">Tipo de vialidad</Label>
-                <Input
-                  id="edit-tipo-vialidad"
-                  value={editForm.tipo_vialidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-nombre-vialidad">Nombre de vialidad</Label>
-                <Input
-                  id="edit-nombre-vialidad"
-                  value={editForm.nombre_vialidad}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-numero-exterior">Número exterior</Label>
-                <Input
-                  id="edit-numero-exterior"
-                  value={editForm.numero_exterior}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_exterior: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-letra-exterior">Letra exterior</Label>
-                <Input
-                  id="edit-letra-exterior"
-                  value={editForm.letra_exterior}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, letra_exterior: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-numero-interior">Número interior</Label>
-                <Input
-                  id="edit-numero-interior"
-                  value={editForm.numero_interior}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_interior: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-letra-interior">Letra interior</Label>
-                <Input
-                  id="edit-letra-interior"
-                  value={editForm.letra_interior}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, letra_interior: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-edificio">Edificio</Label>
-                <Input
-                  id="edit-edificio"
-                  value={editForm.edificio}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, edificio: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-edificio-piso">Piso / nivel</Label>
-                <Input
-                  id="edit-edificio-piso"
-                  value={editForm.edificio_piso}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, edificio_piso: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-tipo-asentamiento">Tipo de asentamiento</Label>
-                <Input
-                  id="edit-tipo-asentamiento"
-                  value={editForm.tipo_asentamiento}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-nombre-asentamiento">Colonia</Label>
-                <Input
-                  id="edit-nombre-asentamiento"
-                  value={editForm.nombre_asentamiento}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-tipo-centro-comercial">Tipo de centro comercial</Label>
-                <Input
-                  id="edit-tipo-centro-comercial"
-                  value={editForm.tipo_centro_comercial}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-corredor-industrial">Corredor industrial</Label>
-                <Input
-                  id="edit-corredor-industrial"
-                  value={editForm.corredor_industrial}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-numero-local">Número local</Label>
-                <Input
-                  id="edit-numero-local"
-                  value={editForm.numero_local}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_local: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-codigo-postal">Código postal</Label>
-                <Input
-                  id="edit-codigo-postal"
-                  value={editForm.codigo_postal}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <div>
-                <div className="text-sm font-semibold">Direcciones adicionales</div>
-                <p className="text-xs text-muted-foreground">
-                  Puedes agregar sucursales o una dirección principal distinta. Solo puede haber una fiscal activa.
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setExtraDirections((prev) => [...prev, createEmptyDirectionDraft()])}>
-                Agregar dirección
-              </Button>
-            </div>
-
-            {extraDirections.length ? (
-              <div className="space-y-4">
-                {extraDirections.map((direction, index) => (
-                  <AccountDirectionCard
-                    key={direction.key}
-                    idPrefix={`edit-extra-direction-${index}`}
-                    value={direction}
-                    lockFiscal={directionTypeIncludesFiscal(primaryDirectionType)}
-                    onChange={(next) =>
-                      setExtraDirections((prev) => prev.map((item, currentIndex) => (currentIndex === index ? next : item)))
-                    }
-                    onRemove={() => setExtraDirections((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+            <FormSection
+              title="Datos de la empresa"
+              description="Actualiza identidad comercial, RFC y datos generales."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-nombre">Nombre</Label>
+                  <Input
+                    id="edit-nombre"
+                    value={editForm.nombre}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, nombre: event.target.value }))}
                   />
-                ))}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-alias">Alias</Label>
+                  <Input
+                    id="edit-alias"
+                    value={editForm.alias}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, alias: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-razon-social">Razón social</Label>
+                  <Input
+                    id="edit-razon-social"
+                    value={editForm.razon_social}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, razon_social: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-rfc">RFC</Label>
+                  <p className="text-xs text-muted-foreground">{rfcHint}</p>
+                  <Input
+                    id="edit-rfc"
+                    value={editForm.rfc}
+                    maxLength={13}
+                    autoCapitalize="characters"
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, rfc: sanitizeRfcInput(event.target.value) }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-correo">Correo</Label>
+                  <Input
+                    id="edit-correo"
+                    value={editForm.correo}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, correo: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-telefono">Teléfono</Label>
+                  <Input
+                    id="edit-telefono"
+                    value={editForm.telefono}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, telefono: sanitizePhoneInput(event.target.value) }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-industria">Industria</Label>
+                  <Input
+                    id="edit-industria"
+                    value={editForm.industria}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, industria: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-sitio-web">Sitio web</Label>
+                  <Input
+                    id="edit-sitio-web"
+                    value={editForm.website}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, website: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-tamano">Tamaño</Label>
+                  <ContactCatalogSelect
+                    value={editForm.tamano}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, tamano: value }))}
+                    options={tamanoOptions}
+                    placeholder="Selecciona un tamaño"
+                    disabled={tamanoOptions.length === 0}
+                    emptyLabel="Configura tamaños en Extras"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-tipo-establecimiento">Clasificación de negocio</Label>
+                  <Input
+                    id="edit-tipo-establecimiento"
+                    value={editForm.tipo_establecimiento}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_establecimiento: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-fecha-incorporacion">Fecha de incorporación</Label>
+                  <Input id="edit-fecha-incorporacion" type="date" value={toDateInputValue(editForm.fecha_incorporacion)} readOnly disabled className="bg-muted" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-latitud">Latitud</Label>
+                  <Input
+                    id="edit-latitud"
+                    type="number"
+                    step="any"
+                    value={editForm.latitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-longitud">Longitud</Label>
+                  <Input
+                    id="edit-longitud"
+                    type="number"
+                    step="any"
+                    value={editForm.longitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
+                  />
+                </div>
               </div>
-            ) : null}
+            </FormSection>
+
+            <FormSection
+              title="Direcciones"
+              description="Configura la dirección principal y agrega sucursales si aplica."
+            >
+              <div className="grid gap-4">
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="edit-direccion-tipo">Tipo de dirección principal</Label>
+                  <select
+                    id="edit-direccion-tipo"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    value={primaryDirectionType}
+                    onChange={(event) => setPrimaryDirectionType(event.target.value as AccountDirectionPrimaryType)}
+                  >
+                    <option value="fiscal">Fiscal</option>
+                    <option value="principal">Principal</option>
+                    <option value="sucursal">Sucursal</option>
+                    <option value="fiscal_principal">Fiscal + principal</option>
+                  </select>
+                </div>
+                <GeoLocationSelects
+                  countryCode={editForm.pais || "MX"}
+                  stateCode={editForm.clave_entidad}
+                  municipalityCode={editForm.clave_municipio}
+                  onCountryChange={(countryCode) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      pais: countryCode,
+                      clave_entidad: "",
+                      entidad: "",
+                      clave_municipio: "",
+                      municipio: "",
+                    }))
+                  }
+                  onStateChange={(stateCode, stateName) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      clave_entidad: stateCode,
+                      entidad: stateName,
+                      clave_municipio: "",
+                      municipio: "",
+                    }))
+                  }
+                  onMunicipalityChange={(municipalityCode, municipalityName) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      clave_municipio: municipalityCode,
+                      municipio: municipalityName,
+                    }))
+                  }
+                />
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-localidad">Localidad</Label>
+                  <Input
+                    id="edit-localidad"
+                    value={editForm.localidad}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, localidad: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-tipo-vialidad">Tipo de vialidad</Label>
+                    <Input
+                      id="edit-tipo-vialidad"
+                      value={editForm.tipo_vialidad}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-nombre-vialidad">Nombre de vialidad</Label>
+                    <Input
+                      id="edit-nombre-vialidad"
+                      value={editForm.nombre_vialidad}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-numero-exterior">Número exterior</Label>
+                    <Input
+                      id="edit-numero-exterior"
+                      value={editForm.numero_exterior}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, numero_exterior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-letra-exterior">Letra exterior</Label>
+                    <Input
+                      id="edit-letra-exterior"
+                      value={editForm.letra_exterior}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, letra_exterior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-numero-interior">Número interior</Label>
+                    <Input
+                      id="edit-numero-interior"
+                      value={editForm.numero_interior}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, numero_interior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-letra-interior">Letra interior</Label>
+                    <Input
+                      id="edit-letra-interior"
+                      value={editForm.letra_interior}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, letra_interior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-edificio">Edificio</Label>
+                    <Input
+                      id="edit-edificio"
+                      value={editForm.edificio}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, edificio: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-edificio-piso">Piso / nivel</Label>
+                    <Input
+                      id="edit-edificio-piso"
+                      value={editForm.edificio_piso}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, edificio_piso: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-tipo-asentamiento">Tipo de asentamiento</Label>
+                    <Input
+                      id="edit-tipo-asentamiento"
+                      value={editForm.tipo_asentamiento}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-nombre-asentamiento">Colonia</Label>
+                    <Input
+                      id="edit-nombre-asentamiento"
+                      value={editForm.nombre_asentamiento}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-tipo-centro-comercial">Tipo de centro comercial</Label>
+                    <Input
+                      id="edit-tipo-centro-comercial"
+                      value={editForm.tipo_centro_comercial}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-corredor-industrial">Corredor industrial</Label>
+                    <Input
+                      id="edit-corredor-industrial"
+                      value={editForm.corredor_industrial}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-numero-local">Número local</Label>
+                    <Input
+                      id="edit-numero-local"
+                      value={editForm.numero_local}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, numero_local: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-codigo-postal">Código postal</Label>
+                    <Input
+                      id="edit-codigo-postal"
+                      value={editForm.codigo_postal}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <div>
+                    <div className="text-sm font-semibold">Direcciones adicionales</div>
+                    <p className="text-xs text-muted-foreground">
+                      Puedes agregar sucursales o una dirección principal distinta. Solo puede haber una fiscal activa.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setExtraDirections((prev) => [...prev, createEmptyDirectionDraft()])}>
+                    Agregar dirección
+                  </Button>
+                </div>
+                {extraDirections.length ? (
+                  <div className="space-y-4">
+                    {extraDirections.map((direction, index) => (
+                      <AccountDirectionCard
+                        key={direction.key}
+                        idPrefix={`edit-extra-direction-${index}`}
+                        value={direction}
+                        lockFiscal={directionTypeIncludesFiscal(primaryDirectionType)}
+                        onChange={(next) =>
+                          setExtraDirections((prev) => prev.map((item, currentIndex) => (currentIndex === index ? next : item)))
+                        }
+                        onRemove={() => setExtraDirections((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </FormSection>
+
+            <FormSection title="Datos fiscales" description="Captura o ajusta la información de facturación.">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Uso CFDI">
+                  <ContactCatalogSelect
+                    value={editForm.uso_cfdi}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, uso_cfdi: value }))}
+                    options={usoCfdiOptions}
+                    placeholder="Selecciona un uso CFDI"
+                    emptyLabel="Configura los usos CFDI en Extras"
+                  />
+                </Field>
+                <Field label="Forma de pago">
+                  <ContactCatalogSelect
+                    value={editForm.forma_pago}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, forma_pago: value }))}
+                    options={formaPagoOptions}
+                    placeholder="Selecciona una forma de pago"
+                    emptyLabel="Configura las formas de pago en Extras"
+                  />
+                </Field>
+                <Field label="Método de pago">
+                  <ContactCatalogSelect
+                    value={editForm.metodo_pago}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, metodo_pago: value }))}
+                    options={metodoPagoOptions}
+                    placeholder="Selecciona un método de pago"
+                    emptyLabel="Configura los métodos de pago en Extras"
+                  />
+                </Field>
+                <Field label="Email de facturación">
+                  <Input
+                    id="edit-email-facturacion"
+                    value={editForm.email_facturacion}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
+                  />
+                </Field>
+              </div>
+            </FormSection>
 
             <div className="grid gap-2">
               <Label htmlFor="edit-notas">Notas</Label>
