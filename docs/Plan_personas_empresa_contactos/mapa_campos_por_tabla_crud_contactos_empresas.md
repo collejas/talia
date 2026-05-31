@@ -49,6 +49,11 @@ Fecha: 2026-04-29 (UTC)
 
 ## `public.cuentas`
 
+Nota de transición:
+- el bloque de dirección que hoy vive en `cuentas` se mantiene como compatibilidad temporal
+- la fuente de verdad final para domicilios debe ser `cuenta_direcciones`
+- mientras dura la migración, `cuentas.direccion` y los campos planos de domicilio se leen como fallback fiscal/legacy
+
 | Campo | Estado | Notas |
 |---|---|---|
 | `organizacion_id` | Oculto | ID de tenant |
@@ -66,7 +71,7 @@ Fecha: 2026-04-29 (UTC)
 | `telefono_secundario_e164` | Visible | Teléfono 2 |
 | `telefono_secundario_tipo_linea` | Visible | Selector `movil` o `fijo` |
 | `telefono_secundario_extension` | Visible | Aparece si la línea es fija, sin bloquear guardado |
-| `direccion` | Avanzado | JSON base de dirección |
+| `direccion` | Avanzado | Compatibilidad temporal / fallback fiscal legacy |
 | `propietario_usuario_id` | Oculto | Relación interna |
 | `metadata` | Oculto | Datos técnicos o extensión |
 | `creado_en` | Solo lectura | Auditoría |
@@ -81,27 +86,27 @@ Fecha: 2026-04-29 (UTC)
 | `tipo_industria` | Visible | Clasificación de negocio |
 | `notas` | Visible | Notas libres |
 | `necesidad_proposito` | Visible | Intención o motivo |
-| `tipo_vialidad` | Visible | Dirección |
-| `nombre_vialidad` | Visible | Dirección |
-| `numero_exterior` | Visible | Dirección |
-| `letra_exterior` | Visible | Dirección |
-| `edificio` | Visible | Dirección |
-| `edificio_piso` | Visible | Dirección |
-| `numero_interior` | Visible | Dirección |
-| `letra_interior` | Visible | Dirección |
-| `tipo_asentamiento` | Visible | Dirección |
-| `nombre_asentamiento` | Visible | Dirección |
-| `tipo_centro_comercial` | Visible | Dirección |
-| `corredor_industrial` | Visible | Dirección |
-| `numero_local` | Visible | Dirección |
-| `codigo_postal` | Visible | Dirección |
-| `clave_entidad` | Visible | Dirección |
-| `entidad` | Visible | Dirección |
-| `clave_municipio` | Visible | Dirección |
-| `municipio` | Visible | Dirección |
-| `clave_localidad` | Visible | Dirección |
-| `localidad` | Visible | Dirección |
-| `pais` | Visible | Dirección |
+| `tipo_vialidad` | Visible | Dirección legacy temporal |
+| `nombre_vialidad` | Visible | Dirección legacy temporal |
+| `numero_exterior` | Visible | Dirección legacy temporal |
+| `letra_exterior` | Visible | Dirección legacy temporal |
+| `edificio` | Visible | Dirección legacy temporal |
+| `edificio_piso` | Visible | Dirección legacy temporal |
+| `numero_interior` | Visible | Dirección legacy temporal |
+| `letra_interior` | Visible | Dirección legacy temporal |
+| `tipo_asentamiento` | Visible | Dirección legacy temporal |
+| `nombre_asentamiento` | Visible | Dirección legacy temporal |
+| `tipo_centro_comercial` | Visible | Dirección legacy temporal |
+| `corredor_industrial` | Visible | Dirección legacy temporal |
+| `numero_local` | Visible | Dirección legacy temporal |
+| `codigo_postal` | Visible | Dirección legacy temporal |
+| `clave_entidad` | Visible | Dirección legacy temporal |
+| `entidad` | Visible | Dirección legacy temporal |
+| `clave_municipio` | Visible | Dirección legacy temporal |
+| `municipio` | Visible | Dirección legacy temporal |
+| `clave_localidad` | Visible | Dirección legacy temporal |
+| `localidad` | Visible | Dirección legacy temporal |
+| `pais` | Visible | Dirección legacy temporal |
 | `email` | Oculto | Compatibilidad |
 | `website` | Oculto | Compatibilidad |
 | `tipo_establecimiento` | Visible | Dirección / sucursal |

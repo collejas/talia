@@ -21,6 +21,8 @@ Nota de archivo:
 - el flujo activo ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 - el cierre operativo y documental completo vive en:
   - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
+- el plan específico para separar direcciones fiscales, operativas y sucursales vive en:
+  - `docs/Plan_personas_empresa_contactos/plan_direcciones_cuentas_y_sucursales.md`
 
 Ver progreso detallado en:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
