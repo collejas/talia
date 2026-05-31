@@ -1420,6 +1420,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                     <option value="sucursal">Sucursal</option>
                     <option value="fiscal_principal">Fiscal + principal</option>
                   </select>
+                  <div className="pt-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPrimaryDirectionType("fiscal_principal")}>
+                      Usar mismo domicilio para fiscal y principal
+                    </Button>
+                  </div>
                 </div>
                 <GeoLocationSelects
                   countryCode={editForm.pais || "MX"}

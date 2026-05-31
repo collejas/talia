@@ -319,10 +319,10 @@ La ejecución debe seguir este orden:
 
 ### 10.3 UI
 
-- [ ] Separar el formulario de alta/edición en `Datos fiscales` y `Dirección de la empresa`
-- [ ] Capturar `colonia` de forma explícita en la dirección de la empresa y mostrarla en detalle/listado donde aplique
-- [ ] Agregar una opción para copiar datos de fiscal a principal cuando sean iguales
-- [ ] Mostrar las sucursales en la ficha de empresa
+- [x] Separar el formulario de alta/edición en `Datos fiscales` y `Dirección de la empresa`
+- [x] Capturar `colonia` de forma explícita en la dirección de la empresa y mostrarla en detalle/listado donde aplique
+- [x] Agregar una opción para copiar datos de fiscal a principal cuando sean iguales
+- [x] Mostrar las sucursales en la ficha de empresa
 - [ ] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
 - [ ] Evitar que la UI dependa de los campos legacy una vez que el backend nuevo esté listo
 

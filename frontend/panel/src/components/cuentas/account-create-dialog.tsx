@@ -616,6 +616,11 @@ export function AccountCreateDialog({ onCreated }: Props) {
                       <option value="sucursal">Sucursal</option>
                       <option value="fiscal_principal">Fiscal + principal</option>
                   </select>
+                  <div className="pt-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPrimaryDirectionType("fiscal_principal")}>
+                      Usar mismo domicilio para fiscal y principal
+                    </Button>
+                  </div>
                 {primaryDirectionType === "fiscal" && extraDirections.some((item) => directionTypeIncludesFiscal(item.tipo)) ? (
                   <p className="text-xs text-amber-600">
                     Ya existe una dirección fiscal adicional. Cámbiala a principal o sucursal antes de guardar otra fiscal.
