@@ -78,6 +78,7 @@ const ACCOUNT_KEYS = [
   "letra_interior",
   "tipo_asentamiento",
   "nombre_asentamiento",
+  "colonia",
   "tipo_centro_comercial",
   "corredor_industrial",
   "numero_local",

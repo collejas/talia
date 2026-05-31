@@ -1653,11 +1653,8 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 </Field>
                 <Field label="Colonia">
                   <Input
-                    value={state.extras.colonia || state.extras.nombre_asentamiento}
-                    onChange={(e) => {
-                      dispatch({ type: "extras/set", field: "colonia", value: e.target.value });
-                      dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value });
-                    }}
+                    value={state.extras.colonia}
+                    onChange={(e) => dispatch({ type: "extras/set", field: "colonia", value: e.target.value })}
                   />
                 </Field>
                 <Field label="Tipo de centro comercial">
