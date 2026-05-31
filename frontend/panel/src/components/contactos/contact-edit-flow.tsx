@@ -617,7 +617,6 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       numero_exterior: state.extras.numero_exterior,
       numero_interior: state.extras.numero_interior,
       colonia: state.extras.colonia || null,
-      nombre_asentamiento: state.extras.colonia || null,
       codigo_postal: state.extras.codigo_postal,
     }, { keepEmptyStringsAsNull: true }),
   }, { keepEmptyStringsAsNull: true });

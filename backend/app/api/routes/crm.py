@@ -11716,6 +11716,8 @@ def _persona_alta_to_contact_payload(
         "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
         "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
         "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
+        "colonia": _persona_alta_clean_text(direccion.colonia if direccion else None)
+        or _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
         "persona_datos": {
             "source": "personas_alta",
             "contexto_modo": contexto.modo,
@@ -11823,7 +11825,12 @@ def _persona_alta_to_account_payload(
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
         "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo")),
         "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
-        "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("nombre_asentamiento")),
+        "colonia": (
+            _persona_alta_clean_text(direccion.colonia if direccion else None)
+            or _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None)
+            or _persona_alta_clean_text(existing_values.get("colonia"))
+            or _persona_alta_clean_text(existing_values.get("nombre_asentamiento"))
+        ),
         "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),
         "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None) or _persona_alta_clean_text(existing_values.get("corredor_industrial")),
         "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_local")),

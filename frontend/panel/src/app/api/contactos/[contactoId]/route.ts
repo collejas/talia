@@ -57,7 +57,6 @@ const CONTACT_UPDATE_KEYS = [
   "numero_interior",
   "letra_interior",
   "tipo_asentamiento",
-  "nombre_asentamiento",
   "colonia",
   "tipo_centro_comercial",
   "corredor_industrial",

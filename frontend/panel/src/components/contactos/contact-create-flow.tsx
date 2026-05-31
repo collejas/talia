@@ -729,7 +729,6 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
       numero_interior: state.extras.numero_interior,
       letra_interior: state.extras.letra_interior,
       tipo_asentamiento: state.extras.tipo_asentamiento,
-      nombre_asentamiento: state.extras.colonia || null,
       colonia: state.extras.colonia || null,
       tipo_centro_comercial: state.extras.tipo_centro_comercial,
       corredor_industrial: state.extras.corredor_industrial,
