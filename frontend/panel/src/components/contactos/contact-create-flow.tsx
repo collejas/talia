@@ -139,7 +139,6 @@ type ExtrasDraft = {
   numero_interior: string;
   letra_interior: string;
   tipo_asentamiento: string;
-  nombre_asentamiento: string;
   colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
@@ -433,7 +432,6 @@ const INITIAL_STATE: ContactCreateState = {
     numero_interior: "",
     letra_interior: "",
     tipo_asentamiento: "",
-    nombre_asentamiento: "",
     colonia: "",
     tipo_centro_comercial: "",
     corredor_industrial: "",
@@ -731,8 +729,8 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
       numero_interior: state.extras.numero_interior,
       letra_interior: state.extras.letra_interior,
       tipo_asentamiento: state.extras.tipo_asentamiento,
-      nombre_asentamiento: state.extras.colonia || state.extras.nombre_asentamiento,
-      colonia: state.extras.colonia || state.extras.nombre_asentamiento,
+      nombre_asentamiento: state.extras.colonia || null,
+      colonia: state.extras.colonia || null,
       tipo_centro_comercial: state.extras.tipo_centro_comercial,
       corredor_industrial: state.extras.corredor_industrial,
       numero_local: state.extras.numero_local,

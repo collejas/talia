@@ -138,7 +138,6 @@ type ExtrasDraft = {
   numero_interior: string;
   letra_interior: string;
   tipo_asentamiento: string;
-  nombre_asentamiento: string;
   colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
@@ -452,7 +451,6 @@ const INITIAL_STATE: ContactEditState = {
     numero_interior: "",
     letra_interior: "",
     tipo_asentamiento: "",
-    nombre_asentamiento: "",
     colonia: "",
     tipo_centro_comercial: "",
     corredor_industrial: "",
@@ -618,8 +616,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       nombre_vialidad: state.extras.nombre_vialidad,
       numero_exterior: state.extras.numero_exterior,
       numero_interior: state.extras.numero_interior,
-      colonia: state.extras.colonia || state.extras.nombre_asentamiento,
-      nombre_asentamiento: state.extras.colonia || state.extras.nombre_asentamiento,
+      colonia: state.extras.colonia || null,
+      nombre_asentamiento: state.extras.colonia || null,
       codigo_postal: state.extras.codigo_postal,
     }, { keepEmptyStringsAsNull: true }),
   }, { keepEmptyStringsAsNull: true });
@@ -818,7 +816,6 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           numero_interior: readString(detail, "numero_interior"),
           letra_interior: readString(detail, "letra_interior"),
           tipo_asentamiento: readString(detail, "tipo_asentamiento"),
-          nombre_asentamiento: readString(detail, "nombre_asentamiento") || readString(detail, "colonia"),
           colonia: readString(detail, "colonia") || readString(detail, "nombre_asentamiento"),
           tipo: readString(detail, "tipo") || "principal",
           tipo_centro_comercial: readString(detail, "tipo_centro_comercial"),
