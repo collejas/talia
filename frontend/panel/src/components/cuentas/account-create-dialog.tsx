@@ -21,8 +21,10 @@ import { useTenantContactCatalogs } from "@/components/contactos/use-contact-cat
 import {
   AccountDirectionCard,
   AccountDirectionDraft,
+  AccountDirectionPrimaryType,
   buildDirectionPayload,
   createEmptyDirectionDraft,
+  expandDirectionRelationTypes,
   directionTypeIncludesFiscal,
   directionTypeIncludesPrincipal,
 } from "@/components/cuentas/account-directions";
@@ -185,7 +187,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const [codeLoading, setCodeLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CreateAccountForm>(INITIAL_FORM);
-  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<"fiscal" | "principal" | "fiscal_principal">("fiscal");
+  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<AccountDirectionPrimaryType>("fiscal");
   const [extraDirections, setExtraDirections] = React.useState<AccountDirectionDraft[]>([]);
   const currentUserId = permissionContext.usuario_id?.trim() || null;
 
@@ -360,28 +362,19 @@ export function AccountCreateDialog({ onCreated }: Props) {
       const createdAccountId = typeof body.id === "string" ? body.id.trim() : "";
       if (createdAccountId) {
         const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
-        if (directionTypeIncludesFiscal(primaryDirection.tipo)) {
+        for (const relationType of expandDirectionRelationTypes(primaryDirection.tipo)) {
           directionsToCreate.push({
-            tipo_relacion: "fiscal",
-            direccion: buildDirectionPayload(primaryDirection, "fiscal"),
-          });
-        }
-        if (directionTypeIncludesPrincipal(primaryDirection.tipo)) {
-          directionsToCreate.push({
-            tipo_relacion: "principal",
-            direccion: buildDirectionPayload(primaryDirection, "principal"),
+            tipo_relacion: relationType,
+            direccion: buildDirectionPayload(primaryDirection, relationType),
           });
         }
         for (const direction of extraDirections) {
-          if (direction.tipo === "fiscal_principal") {
-            directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(direction, "fiscal") });
-            directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(direction, "principal") });
-            continue;
+          for (const relationType of expandDirectionRelationTypes(direction.tipo)) {
+            directionsToCreate.push({
+              tipo_relacion: relationType,
+              direccion: buildDirectionPayload(direction, relationType),
+            });
           }
-          directionsToCreate.push({
-            tipo_relacion: direction.tipo,
-            direccion: buildDirectionPayload(direction, direction.tipo),
-          });
         }
         for (const entry of directionsToCreate) {
           const relationResponse = await fetch(`/api/cuentas/${encodeURIComponent(createdAccountId)}/direcciones`, {
@@ -620,16 +613,17 @@ export function AccountCreateDialog({ onCreated }: Props) {
             >
               <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="create-direccion-tipo">Tipo de dirección principal</Label>
-                <select
-                  id="create-direccion-tipo"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                  value={primaryDirectionType}
-                  onChange={(event) => setPrimaryDirectionType(event.target.value as "fiscal" | "principal" | "fiscal_principal")}
-                >
-                  <option value="fiscal">Fiscal</option>
-                  <option value="principal">Principal</option>
-                  <option value="fiscal_principal">Fiscal + principal</option>
-                </select>
+                  <select
+                    id="create-direccion-tipo"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    value={primaryDirectionType}
+                      onChange={(event) => setPrimaryDirectionType(event.target.value as AccountDirectionPrimaryType)}
+                    >
+                      <option value="fiscal">Fiscal</option>
+                      <option value="principal">Principal</option>
+                      <option value="sucursal">Sucursal</option>
+                      <option value="fiscal_principal">Fiscal + principal</option>
+                  </select>
                 {primaryDirectionType === "fiscal" && extraDirections.some((item) => directionTypeIncludesFiscal(item.tipo)) ? (
                   <p className="text-xs text-amber-600">
                     Ya existe una dirección fiscal adicional. Cámbiala a principal o sucursal antes de guardar otra fiscal.

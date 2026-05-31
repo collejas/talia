@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 
 export type AccountDirectionType = "fiscal" | "principal" | "sucursal" | "fiscal_principal";
+export type AccountDirectionPrimaryType = "fiscal" | "principal" | "sucursal" | "fiscal_principal";
 
 export type AccountDirectionDraft = {
   key: string;
@@ -89,6 +90,13 @@ export function directionTypeIncludesFiscal(value: AccountDirectionType): boolea
 
 export function directionTypeIncludesPrincipal(value: AccountDirectionType): boolean {
   return value === "principal" || value === "fiscal_principal";
+}
+
+export function expandDirectionRelationTypes(value: AccountDirectionType): Array<"fiscal" | "principal" | "sucursal"> {
+  if (value === "fiscal_principal") {
+    return ["fiscal", "principal"];
+  }
+  return [value === "fiscal" || value === "principal" || value === "sucursal" ? value : "sucursal"];
 }
 
 export function buildDirectionPayload(direction: AccountDirectionDraft, relationType?: "fiscal" | "principal" | "sucursal") {

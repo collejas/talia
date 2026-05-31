@@ -25,8 +25,10 @@ import { useTenantContactCatalogs } from "@/components/contactos/use-contact-cat
 import {
   AccountDirectionCard,
   AccountDirectionDraft,
+  AccountDirectionPrimaryType,
   buildDirectionPayload,
   createEmptyDirectionDraft,
+  expandDirectionRelationTypes,
   directionTypeIncludesFiscal,
   directionTypeIncludesPrincipal,
   normalizeDirectionType,
@@ -153,7 +155,7 @@ function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: s
   });
 }
 
-function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: "fiscal" | "principal" | "fiscal_principal"; extras: AccountDirectionDraft[] } {
+function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: AccountDirectionPrimaryType; extras: AccountDirectionDraft[] } {
   const normalized = rows
     .filter((row) => row && typeof row === "object")
     .map((row, index) => ({
@@ -164,13 +166,13 @@ function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: "fi
   const fiscalRow = normalized.find((item) => directionTypeIncludesFiscal(item.draft.tipo));
   const principalRow = normalized.find((item) => directionTypeIncludesPrincipal(item.draft.tipo));
   const sameAddressCombo = fiscalRow && principalRow && fiscalRow.directionId && fiscalRow.directionId === principalRow.directionId;
-  const primaryType: "fiscal" | "principal" | "fiscal_principal" = sameAddressCombo
+  const primaryType: AccountDirectionPrimaryType = sameAddressCombo
     ? "fiscal_principal"
     : fiscalRow
       ? "fiscal"
       : principalRow
         ? "principal"
-        : "fiscal";
+        : normalized[0]?.draft.tipo || "sucursal";
   const primaryId = sameAddressCombo
     ? fiscalRow?.directionId || principalRow?.directionId || ""
     : fiscalRow?.directionId || principalRow?.directionId || "";
@@ -185,7 +187,7 @@ function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: "fi
 
 async function syncAccountDirections(
   cuentaId: string,
-  primaryType: "fiscal" | "principal" | "fiscal_principal",
+  primaryType: AccountDirectionPrimaryType,
   primaryDraft: AccountDirectionDraft,
   extraDirections: AccountDirectionDraft[],
 ) {
@@ -204,19 +206,13 @@ async function syncAccountDirections(
   }
 
   const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
-  if (directionTypeIncludesFiscal(primaryType)) {
-    directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(primaryDraft, "fiscal") });
-  }
-  if (directionTypeIncludesPrincipal(primaryType)) {
-    directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(primaryDraft, "principal") });
+  for (const relationType of expandDirectionRelationTypes(primaryType)) {
+    directionsToCreate.push({ tipo_relacion: relationType, direccion: buildDirectionPayload(primaryDraft, relationType) });
   }
   for (const direction of extraDirections) {
-    if (direction.tipo === "fiscal_principal") {
-      directionsToCreate.push({ tipo_relacion: "fiscal", direccion: buildDirectionPayload(direction, "fiscal") });
-      directionsToCreate.push({ tipo_relacion: "principal", direccion: buildDirectionPayload(direction, "principal") });
-      continue;
+    for (const relationType of expandDirectionRelationTypes(direction.tipo)) {
+      directionsToCreate.push({ tipo_relacion: relationType, direccion: buildDirectionPayload(direction, relationType) });
     }
-    directionsToCreate.push({ tipo_relacion: direction.tipo, direccion: buildDirectionPayload(direction, direction.tipo) });
   }
 
   for (const entry of directionsToCreate) {
@@ -353,7 +349,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [editSubmitting, setEditSubmitting] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
-  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<"fiscal" | "principal" | "fiscal_principal">("fiscal");
+  const [primaryDirectionType, setPrimaryDirectionType] = React.useState<AccountDirectionPrimaryType>("fiscal");
   const [extraDirections, setExtraDirections] = React.useState<AccountDirectionDraft[]>([]);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
@@ -1330,12 +1326,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   id="edit-direccion-tipo"
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                   value={primaryDirectionType}
-                  onChange={(event) =>
-                    setPrimaryDirectionType(event.target.value as "fiscal" | "principal" | "fiscal_principal")
-                  }
+                  onChange={(event) => setPrimaryDirectionType(event.target.value as AccountDirectionPrimaryType)}
                 >
                   <option value="fiscal">Fiscal</option>
                   <option value="principal">Principal</option>
+                  <option value="sucursal">Sucursal</option>
                   <option value="fiscal_principal">Fiscal + principal</option>
                 </select>
               </div>
