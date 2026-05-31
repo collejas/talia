@@ -104,7 +104,7 @@ Uso:
 
 Compatibilidad temporal:
 
-- `operativa` se mantiene como alias interno mientras termina la migración
+- `operativa` se mantiene como alias interno solo mientras termina la migración
 - la combinación fiscal + principal no necesita un cuarto tipo; puede representarse con la misma `direccion_id` ligada dos veces, una como `fiscal` y otra como `principal`
 
 Regla:
@@ -261,6 +261,7 @@ La ejecución debe seguir este orden:
 - [x] Confirmar/crear `direcciones` con columnas explícitas
 - [x] Confirmar/crear `cuenta_direcciones` con columnas explícitas
 - [x] Definir tipos válidos de `tipo_relacion` como `fiscal`, `principal` y `sucursal`
+- [x] Eliminar `operativa` como valor canónico del backend y dejarlo solo como alias temporal de lectura
 - [x] Definir restricción de una sola dirección fiscal activa por cuenta
 - [x] Definir índices por `cuenta_id`, `direccion_id`, `tipo_relacion` y `activo`
 

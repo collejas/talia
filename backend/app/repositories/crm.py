@@ -161,10 +161,7 @@ def _normalize_account_direction_relation_type(value: Any) -> str:
 
 
 def _account_direction_relation_type_for_storage(value: Any) -> str:
-    canonical = _normalize_account_direction_relation_type(value)
-    if canonical == "principal":
-        return "operativa"
-    return canonical
+    return _normalize_account_direction_relation_type(value)
 
 
 def _ensure_metadata(value: Any) -> dict[str, Any]:

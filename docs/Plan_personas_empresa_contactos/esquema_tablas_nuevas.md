@@ -224,7 +224,7 @@ Guarda direcciones reutilizables para personas o cuentas.
 
 ### 6.3 Restricciones sugeridas
 
-- `check (tipo in ('fiscal', 'operativa', 'facturacion', 'envio', 'personal', 'otro'))`
+- `check (tipo in ('fiscal', 'principal', 'operativa', 'facturacion', 'envio', 'sucursal', 'personal', 'otro'))`
 
 ### 6.4 Índices sugeridos
 
@@ -267,6 +267,7 @@ Resolver múltiples direcciones por cuenta sin acoplar la cuenta a dos campos fi
 ### 7.3 Restricciones sugeridas
 
 - `check (tipo_relacion in ('fiscal', 'principal', 'sucursal'))`
+- `operativa` queda únicamente como alias interno durante la transición y no como valor canónico
 - `unique (cuenta_id, direccion_id, tipo_relacion)`
 
 Nota:
