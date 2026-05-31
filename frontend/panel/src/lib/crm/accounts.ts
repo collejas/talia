@@ -59,9 +59,7 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
     callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
       searchParams: { limit: "100", offset: "0" },
     }),
-    callCrmApi<CRMUser[]>("/crm/usuarios", {
-      searchParams: { limit: "500" },
-    }),
+    loadAllUsers(),
   ]);
 
   if (!accountsResult.ok) {
@@ -78,14 +76,14 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
       if (!user || typeof user !== "object") continue;
       const id = String(user.id || "").trim();
       if (!id) continue;
-      ownerMap.set(id, user.nombre_completo?.trim() || user.correo?.trim() || id);
+      ownerMap.set(id, user.nombre_completo?.trim() || user.correo?.trim() || "Sin asignar");
     }
   }
 
   const relationResults = await Promise.all(
     accountsResult.data.items.map(async (account) => {
       const response = await callCrmApi<CRMAccountRelation[]>(`/crm/cuentas/${encodeURIComponent(account.id)}/relaciones`, {
-        searchParams: { activo: "true" },
+        searchParams: {},
       });
       return { account, response };
     }),
@@ -93,9 +91,19 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
 
   const rows = relationResults.map<DataTableRow>(({ account, response }, index) => {
     const relations = response.ok && Array.isArray(response.data) ? response.data : [];
-    const primaryRelation = relations.find((relation) => relation?.es_contacto_principal) || relations[0] || null;
+    const activeRelations = relations.filter((relation) => relation?.activo !== false);
+    const primaryRelation =
+      activeRelations.find((relation) => relation?.es_contacto_principal) ||
+      relations.find((relation) => relation?.es_contacto_principal) ||
+      activeRelations[0] ||
+      relations[0] ||
+      null;
     const contact = primaryRelation?.persona ?? null;
-    const ownerName = account.propietario_usuario_id ? ownerMap.get(account.propietario_usuario_id) ?? account.propietario_usuario_id : null;
+    const contactOwnerId = contact?.propietario_usuario_id?.trim() || null;
+    const relationOwnerId =
+      relations.find((relation) => relation?.persona?.propietario_usuario_id?.trim())?.persona?.propietario_usuario_id?.trim() || null;
+    const ownerId = account.propietario_usuario_id?.trim() || contactOwnerId || relationOwnerId;
+    const ownerName = ownerId ? ownerMap.get(ownerId) ?? null : null;
 
     return {
       id: index + 1,
@@ -130,4 +138,29 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
     total: accountsResult.data.items.length,
     errors: Array.from(new Set(errors)),
   };
+}
+
+async function loadAllUsers(): Promise<{ ok: true; data: CRMUser[] } | { ok: false; error: string }> {
+  const items: CRMUser[] = [];
+  const pageSize = 500;
+  let offset = 0;
+
+  while (true) {
+    const response = await callCrmApi<CRMUser[]>("/crm/usuarios", {
+      searchParams: {
+        limit: String(pageSize),
+        offset: String(offset),
+      },
+    });
+    if (!response.ok) {
+      return response;
+    }
+
+    const page = Array.isArray(response.data) ? response.data : [];
+    items.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return { ok: true, data: items };
 }
