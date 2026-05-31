@@ -2509,6 +2509,16 @@ def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
     return None
 
 
+def _display_name_from_user_like(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    for key in ("nombre_completo", "nombre", "correo"):
+        candidate = str(value.get(key) or "").strip()
+        if candidate:
+            return candidate
+    return None
+
+
 class CRMAccount(BaseModel):
     """Representación pública de una cuenta."""
 
@@ -2569,6 +2579,12 @@ class CRMAccount(BaseModel):
     longitud: float | None = None
     fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
+    propietario_nombre: str | None = None
+    propietario: dict[str, Any] | None = None
+    contacto_principal_nombre: str | None = None
+    contacto_principal_correo: str | None = None
+    contacto_principal_telefono: str | None = None
+    contacto_principal_owner_id: UUID | None = None
     archived_at: datetime | None = None
     merged_into_cuenta_id: UUID | None = None
     merge_metadata: dict[str, Any] | None = None
@@ -14381,7 +14397,86 @@ async def list_accounts(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    items = [CRMAccount.model_validate(row) for row in rows]
+
+    items: list[CRMAccount] = []
+    account_ids = [account_id for account_id in (_safe_uuid(row.get("id")) for row in rows) if account_id]
+    relation_rows = []
+    if account_ids:
+        try:
+            relation_rows = await repo.list_account_person_relations_by_cuenta_ids(
+                organizacion_id=organizacion_id,
+                cuenta_ids=account_ids,
+                activo=None,
+            )
+        except CRMRepositoryError:
+            relation_rows = []
+    relations_by_account_id: dict[str, list[dict[str, Any]]] = {}
+    for relation in relation_rows:
+        account_id = str(relation.get("cuenta_id") or "").strip()
+        if not account_id:
+            continue
+        relations_by_account_id.setdefault(account_id, []).append(relation)
+
+    owner_candidate_ids: set[UUID] = set()
+    owner_candidate_id_by_account_id: dict[str, UUID] = {}
+    for row in rows:
+        owner_id = _safe_uuid(row.get("propietario_usuario_id"))
+        relations = relations_by_account_id.get(str(row.get("id") or "").strip(), [])
+        primary_relation = (
+            next((relation for relation in relations if relation.get("es_contacto_principal")), None)
+            or next((relation for relation in relations if relation.get("es_representante_legal")), None)
+            or next((relation for relation in relations if relation.get("activo") is not False), None)
+            or (relations[0] if relations else None)
+        )
+        contact = primary_relation.get("persona") if isinstance(primary_relation, dict) else None
+        contact_owner_id = _safe_uuid(contact.get("propietario_usuario_id")) if isinstance(contact, dict) else None
+        if not owner_id and contact_owner_id:
+            owner_id = contact_owner_id
+        if owner_id:
+            owner_candidate_ids.add(owner_id)
+            account_key = str(row.get("id") or "").strip()
+            if account_key and account_key not in owner_candidate_id_by_account_id:
+                owner_candidate_id_by_account_id[account_key] = owner_id
+        payload = dict(row)
+        existing_owner_name = str(payload.get("propietario_nombre") or "").strip() or None
+        if contact:
+            payload["contacto_principal_nombre"] = contact.get("nombre_completo")
+            payload["contacto_principal_correo"] = contact.get("correo_principal")
+            payload["contacto_principal_telefono"] = contact.get("telefono_principal_e164")
+            payload["contacto_principal_owner_id"] = contact_owner_id
+        payload["propietario_nombre"] = existing_owner_name
+        if payload.get("propietario") is None and isinstance(row.get("propietario"), dict):
+            payload["propietario"] = row.get("propietario")
+        items.append(CRMAccount.model_validate(payload))
+
+    users_by_id: dict[str, str] = {}
+    if owner_candidate_ids:
+        try:
+            lookup_repo = CRMRepository()
+            user_rows = await lookup_repo.list_users_by_ids(
+                organizacion_id=organizacion_id,
+                user_ids=list(owner_candidate_ids),
+            )
+        except CRMRepositoryError:
+            user_rows = []
+        for user in user_rows:
+            if not isinstance(user, dict):
+                continue
+            user_id = str(user.get("id") or "").strip()
+            if not user_id:
+                continue
+            display_name = str(user.get("nombre_completo") or user.get("correo") or "").strip()
+            if display_name:
+                users_by_id[user_id] = display_name
+
+    for item in items:
+        candidate_id = owner_candidate_id_by_account_id.get(str(item.id))
+        if candidate_id:
+            owner_name = users_by_id.get(str(candidate_id))
+            if owner_name:
+                item.propietario_nombre = owner_name
+        if item.propietario_nombre is None and item.propietario is not None:
+            item.propietario_nombre = _display_name_from_user_like(item.propietario)
     return CRMAccountsResponse(items=items, limit=limit, offset=offset)
 
 

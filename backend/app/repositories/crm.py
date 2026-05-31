@@ -876,6 +876,16 @@ class CRMRepository:
             "order": order,
             "limit": str(limit),
             "offset": str(offset),
+            "select": (
+                "id,organizacion_id,nombre,alias,tipo,industria,tamano,sitio_web,telefono,correo,direccion,"
+                "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
+                "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
+                "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
+                "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,"
+                "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
+                "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
+                "archived_at,merged_into_cuenta_id,merge_metadata"
+            ),
         }
         resp = await self._request("GET", "/rest/v1/cuentas", params=params)
         data = resp.json()
@@ -7811,9 +7821,10 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
-                "metadata,creado_en,actualizado_en,"
-                "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,propietario_usuario_id)"
-            ),
+            "metadata,creado_en,actualizado_en,"
+            "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,propietario_usuario_id,"
+            "propietario:usuarios!personas_propietario_usuario_org_fkey(id,nombre_completo,correo))"
+        ),
         }
         if activo is not None:
             params["activo"] = "eq.true" if activo else "eq.false"
@@ -7822,6 +7833,52 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError("cuenta_personas_list_invalid_response")
         return [row for row in data if isinstance(row, dict)]
+
+    async def list_account_person_relations_by_cuenta_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_ids: Sequence[UUID],
+        activo: bool | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        unique_ids = sorted({str(cuenta_id) for cuenta_id in cuenta_ids if cuenta_id})
+        if not unique_ids:
+            return []
+        select_fields = (
+            "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
+            "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
+            "metadata,creado_en,actualizado_en,"
+            "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,propietario_usuario_id,"
+            "propietario:usuarios!personas_propietario_usuario_org_fkey(id,nombre_completo,correo))"
+        )
+        rows: list[dict[str, Any]] = []
+        page_size = max(1, min(limit, 500))
+        current_offset = max(0, offset)
+        while True:
+            params: dict[str, str] = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "cuenta_id": f"in.({','.join(unique_ids)})",
+                "order": "cuenta_id.asc,es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
+                "limit": str(page_size),
+                "offset": str(current_offset),
+                "select": select_fields,
+            }
+            if activo is not None:
+                params["activo"] = "eq.true" if activo else "eq.false"
+            resp = await self._request("GET", "/rest/v1/cuenta_personas", params=params)
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError("cuenta_personas_list_invalid_response")
+            batch = [row for row in data if isinstance(row, dict)]
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            current_offset += page_size
+            if current_offset >= 5000:
+                break
+        return rows
 
     async def count_account_opportunities(
         self,
