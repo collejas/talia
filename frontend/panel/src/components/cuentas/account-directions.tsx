@@ -293,6 +293,24 @@ export function AccountDirectionCard({
         <Field label="Código postal">
           <Input value={value.codigo_postal} onChange={(event) => onChange({ ...value, codigo_postal: event.target.value })} disabled={disabled} />
         </Field>
+        <Field label="Latitud">
+          <Input
+            type="number"
+            step="any"
+            value={value.latitud}
+            onChange={(event) => onChange({ ...value, latitud: event.target.value })}
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Longitud">
+          <Input
+            type="number"
+            step="any"
+            value={value.longitud}
+            onChange={(event) => onChange({ ...value, longitud: event.target.value })}
+            disabled={disabled}
+          />
+        </Field>
       </div>
     </div>
   );

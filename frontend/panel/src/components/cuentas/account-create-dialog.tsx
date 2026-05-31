@@ -713,12 +713,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 <Field label="Código postal">
                   <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
                 </Field>
-                <Field label="Latitud">
-                  <Input id="create-latitud" type="number" step="any" value={form.latitud} onChange={(event) => setForm((prev) => ({ ...prev, latitud: event.target.value }))} />
-                </Field>
-                <Field label="Longitud">
-                  <Input id="create-longitud" type="number" step="any" value={form.longitud} onChange={(event) => setForm((prev) => ({ ...prev, longitud: event.target.value }))} />
-                </Field>
               </div>
               <div className="flex items-center justify-between gap-3 pt-2">
                 <div>
@@ -749,6 +743,14 @@ export function AccountCreateDialog({ onCreated }: Props) {
                   ))}
                 </div>
               ) : null}
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Latitud">
+                  <Input id="create-latitud" type="number" step="any" value={form.latitud} onChange={(event) => setForm((prev) => ({ ...prev, latitud: event.target.value }))} />
+                </Field>
+                <Field label="Longitud">
+                  <Input id="create-longitud" type="number" step="any" value={form.longitud} onChange={(event) => setForm((prev) => ({ ...prev, longitud: event.target.value }))} />
+                </Field>
+              </div>
             </FormSection>
 
             <FormSection title="Datos fiscales" description="Captura la información de facturación de la empresa.">

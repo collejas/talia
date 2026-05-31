@@ -1573,26 +1573,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                     onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-latitud">Latitud</Label>
-                  <Input
-                    id="edit-latitud"
-                    type="number"
-                    step="any"
-                    value={editForm.latitud}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-longitud">Longitud</Label>
-                  <Input
-                    id="edit-longitud"
-                    type="number"
-                    step="any"
-                    value={editForm.longitud}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
-                  />
-                </div>
               </div>
                 <div className="flex items-center justify-between gap-3 pt-2">
                   <div>
@@ -1621,6 +1601,28 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                     ))}
                   </div>
                 ) : null}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-latitud">Latitud</Label>
+                    <Input
+                      id="edit-latitud"
+                      type="number"
+                      step="any"
+                      value={editForm.latitud}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-longitud">Longitud</Label>
+                    <Input
+                      id="edit-longitud"
+                      type="number"
+                      step="any"
+                      value={editForm.longitud}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
+                    />
+                  </div>
+                </div>
               </div>
             </FormSection>
 
