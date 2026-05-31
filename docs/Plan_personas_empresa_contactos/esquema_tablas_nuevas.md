@@ -211,6 +211,7 @@ Guarda direcciones reutilizables para personas o cuentas.
 - `letra_interior text`
 - `tipo_asentamiento text`
 - `nombre_asentamiento text`
+- `colonia text`
 - `tipo_centro_comercial text`
 - `corredor_industrial text`
 - `numero_local text`
@@ -241,6 +242,7 @@ Guarda direcciones reutilizables para personas o cuentas.
   - `tipo_relacion`
   - `es_principal`
 - `direcciones` debe ser la tabla base reutilizable.
+- `colonia` es el campo canónico de colonia; `nombre_asentamiento` se conserva como compatibilidad/alias mientras dure la transición.
 
 ## 7. Tabla `cuenta_direcciones`
 

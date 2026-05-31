@@ -61,6 +61,7 @@ Los siguientes campos siguen existiendo en `cuentas` mientras dura la migración
 - `letra_interior`
 - `tipo_asentamiento`
 - `nombre_asentamiento`
+- `colonia`
 - `tipo_centro_comercial`
 - `corredor_industrial`
 - `numero_local`
@@ -89,6 +90,7 @@ Uso:
 - almacena el bloque estructurado de domicilio
 - puede reutilizarse por cuenta, contacto o futuros módulos
 - los datos de dirección deben existir como columnas explícitas, no como JSON en `metadata`
+- `colonia` es el campo canónico; `nombre_asentamiento` queda como compatibilidad/alias durante la transición
 
 ### 4.2 `cuenta_direcciones`
 
@@ -223,6 +225,7 @@ Las columnas a retirar al final del refactor son las de domicilio legacy de `cue
 - `letra_interior`
 - `tipo_asentamiento`
 - `nombre_asentamiento`
+- `colonia`
 - `tipo_centro_comercial`
 - `corredor_industrial`
 - `numero_local`
@@ -252,11 +255,11 @@ La ejecución debe seguir este orden:
 
 #### 10.1.1 Crear tablas nuevas
 
-- [ ] Confirmar/crear `direcciones` con columnas explícitas
-- [ ] Confirmar/crear `cuenta_direcciones` con columnas explícitas
-- [ ] Definir tipos válidos de `tipo_relacion`
-- [ ] Definir restricción de una sola dirección fiscal activa por cuenta
-- [ ] Definir índices por `cuenta_id`, `direccion_id`, `tipo_relacion` y `activo`
+- [x] Confirmar/crear `direcciones` con columnas explícitas
+- [x] Confirmar/crear `cuenta_direcciones` con columnas explícitas
+- [x] Definir tipos válidos de `tipo_relacion`
+- [x] Definir restricción de una sola dirección fiscal activa por cuenta
+- [x] Definir índices por `cuenta_id`, `direccion_id`, `tipo_relacion` y `activo`
 
 #### 10.1.2 Campos explícitos esperados en `direcciones`
 
@@ -286,16 +289,20 @@ La ejecución debe seguir este orden:
 
 #### 10.1.3 Backfill
 
-- [ ] Identificar todas las cuentas con dirección legacy cargada
-- [ ] Diseñar el criterio para decidir si la dirección legacy representa fiscal, principal o ambas
-- [ ] Preparar script de backfill de `cuentas` hacia `direcciones`
-- [ ] Preparar script de backfill de `cuentas` hacia `cuenta_direcciones`
-- [ ] Validar que el backfill preserve `pais`, `entidad`, `municipio`, `codigo_postal` y geolocalización si existe
-- [ ] Validar que cada cuenta quede con exactamente una fiscal activa
+- [x] Identificar todas las cuentas con dirección legacy cargada
+- [x] Diseñar el criterio para decidir si la dirección legacy representa fiscal, principal o ambas
+- [x] Preparar script de backfill de `cuentas` hacia `direcciones`
+- [x] Preparar script de backfill de `cuentas` hacia `cuenta_direcciones`
+- [x] Validar que el backfill preserve `pais`, `entidad`, `municipio`, `codigo_postal` y geolocalización si existe
+- [x] Validar que cada cuenta quede con exactamente una fiscal activa
+
+> Nota de ejecución:
+> La migracion `20260531_010000_direcciones_cuentas_backfill_phase1.sql` ya fue aplicada en Supabase y materializa las direcciones fiscales legacy en `direcciones` y `cuenta_direcciones`.
 
 ### 10.2 Backend
 
 - [ ] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
+- [ ] Exponer `colonia` como campo canónico en `direcciones` y mapear `nombre_asentamiento` solo como alias de compatibilidad
 - [ ] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
 - [ ] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
 - [ ] Mantener compatibilidad con el payload legacy mientras dura la migración
@@ -309,6 +316,7 @@ La ejecución debe seguir este orden:
 ### 10.3 UI
 
 - [ ] Separar el formulario de alta/edición en `Datos fiscales` y `Dirección de la empresa`
+- [ ] Capturar `colonia` de forma explícita en la dirección de la empresa y mostrarla en detalle/listado donde aplique
 - [ ] Agregar una opción para copiar datos de fiscal a operativa cuando sean iguales
 - [ ] Mostrar las sucursales en la ficha de empresa
 - [ ] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
