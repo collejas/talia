@@ -280,6 +280,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
           numero_interior: form.numero_interior.trim() || null,
           letra_interior: form.letra_interior.trim() || null,
           tipo_asentamiento: form.tipo_asentamiento.trim() || null,
+          colonia: form.nombre_asentamiento.trim() || null,
           nombre_asentamiento: form.nombre_asentamiento.trim() || null,
           tipo_centro_comercial: form.tipo_centro_comercial.trim() || null,
           corredor_industrial: form.corredor_industrial.trim() || null,
@@ -626,8 +627,12 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     <Input id="create-tipo-asentamiento" value={form.tipo_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="create-nombre-asentamiento">Nombre de asentamiento</Label>
-                    <Input id="create-nombre-asentamiento" value={form.nombre_asentamiento} onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))} />
+                    <Label htmlFor="create-nombre-asentamiento">Colonia</Label>
+                    <Input
+                      id="create-nombre-asentamiento"
+                      value={form.nombre_asentamiento}
+                      onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="create-tipo-centro-comercial">Tipo de centro comercial</Label>

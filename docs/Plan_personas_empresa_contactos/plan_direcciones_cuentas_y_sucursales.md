@@ -101,8 +101,11 @@ Uso:
 - `fiscal`
 - `principal`
 - `sucursal`
-- `envio`
-- `otro`
+
+Compatibilidad temporal:
+
+- `operativa` se mantiene como alias interno mientras termina la migración
+- la combinación fiscal + principal no necesita un cuarto tipo; puede representarse con la misma `direccion_id` ligada dos veces, una como `fiscal` y otra como `principal`
 
 Regla:
 
@@ -257,7 +260,7 @@ La ejecución debe seguir este orden:
 
 - [x] Confirmar/crear `direcciones` con columnas explícitas
 - [x] Confirmar/crear `cuenta_direcciones` con columnas explícitas
-- [x] Definir tipos válidos de `tipo_relacion`
+- [x] Definir tipos válidos de `tipo_relacion` como `fiscal`, `principal` y `sucursal`
 - [x] Definir restricción de una sola dirección fiscal activa por cuenta
 - [x] Definir índices por `cuenta_id`, `direccion_id`, `tipo_relacion` y `activo`
 
@@ -301,23 +304,23 @@ La ejecución debe seguir este orden:
 
 ### 10.2 Backend
 
-- [ ] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
+- [x] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
 - [x] Exponer `colonia` como campo canónico en `direcciones` y mapear `nombre_asentamiento` solo como alias de compatibilidad
-- [ ] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
-- [ ] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
-- [ ] Mantener compatibilidad con el payload legacy mientras dura la migración
-- [ ] Ajustar `GET /cuentas/{id}` para devolver la estructura nueva
-- [ ] Ajustar `GET /cuentas/{id}/direcciones` para listar fiscal, principal y sucursales
-- [ ] Ajustar `POST /cuentas/{id}/direcciones` para crear sucursales
-- [ ] Ajustar `PATCH /cuentas/{id}/direcciones/{relacion_id}` para edición de sucursales
-- [ ] Ajustar `DELETE /cuentas/{id}/direcciones/{relacion_id}` para baja lógica o física según el modelo final
-- [ ] Mantener escritura dual solo mientras exista compatibilidad
+- [x] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
+- [x] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
+- [x] Mantener compatibilidad con el payload legacy mientras dura la migración
+- [x] Ajustar `GET /cuentas/{id}` para devolver la estructura nueva
+- [x] Ajustar `GET /cuentas/{id}/direcciones` para listar fiscal, principal y sucursales
+- [x] Ajustar `POST /cuentas/{id}/direcciones` para crear sucursales
+- [x] Ajustar `PATCH /cuentas/{id}/direcciones/{relacion_id}` para edición de sucursales
+- [x] Ajustar `DELETE /cuentas/{id}/direcciones/{relacion_id}` para baja lógica o física según el modelo final
+- [x] Mantener escritura dual solo mientras exista compatibilidad
 
 ### 10.3 UI
 
 - [ ] Separar el formulario de alta/edición en `Datos fiscales` y `Dirección de la empresa`
 - [ ] Capturar `colonia` de forma explícita en la dirección de la empresa y mostrarla en detalle/listado donde aplique
-- [ ] Agregar una opción para copiar datos de fiscal a operativa cuando sean iguales
+- [ ] Agregar una opción para copiar datos de fiscal a principal cuando sean iguales
 - [ ] Mostrar las sucursales en la ficha de empresa
 - [ ] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
 - [ ] Evitar que la UI dependa de los campos legacy una vez que el backend nuevo esté listo

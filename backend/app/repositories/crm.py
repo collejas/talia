@@ -141,6 +141,32 @@ def _coerce_uuid(value: Any, *, field: str) -> UUID:
         raise CRMRepositoryError(f"{field}_invalid") from exc
 
 
+def _normalize_account_direction_relation_type(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "sucursal"
+    normalized = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    alias_map = {
+        "operativa": "principal",
+        "principal": "principal",
+        "fiscal": "fiscal",
+        "facturacion": "fiscal",
+        "sucursal": "sucursal",
+        "envio": "sucursal",
+        "historial": "sucursal",
+        "otro": "sucursal",
+    }
+    return alias_map.get(normalized, normalized if normalized in {"fiscal", "principal", "sucursal"} else "sucursal")
+
+
+def _account_direction_relation_type_for_storage(value: Any) -> str:
+    canonical = _normalize_account_direction_relation_type(value)
+    if canonical == "principal":
+        return "operativa"
+    return canonical
+
+
 def _ensure_metadata(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
@@ -892,7 +918,7 @@ class CRMRepository:
                 "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
                 "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,"
-                "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
+                "colonia:nombre_asentamiento,tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
                 "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
                 "archived_at,merged_into_cuenta_id,merge_metadata"
             ),
@@ -1519,6 +1545,9 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        if "colonia" in body and "nombre_asentamiento" not in body:
+            body["nombre_asentamiento"] = body.get("colonia")
+        body.pop("colonia", None)
         body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
         if not str(body.get("codigo_cuenta") or "").strip():
             body["codigo_cuenta"] = await self.preview_account_code(
@@ -1553,6 +1582,9 @@ class CRMRepository:
             return existing
 
         body = {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
+        if "colonia" in body and "nombre_asentamiento" not in body:
+            body["nombre_asentamiento"] = body.get("colonia")
+        body.pop("colonia", None)
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{account_id}",
@@ -8014,17 +8046,64 @@ class CRMRepository:
         cuenta_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        direccion_id = payload.get("direccion_id")
-        if not direccion_id:
-            raise CRMRepositoryError("direccion_id_required")
         cuenta_row = await self.get_account(organizacion_id=organizacion_id, account_id=cuenta_id)
         if not cuenta_row:
             raise CRMRepositoryError("cuenta_no_encontrada_para_relacion")
+        direccion_id = payload.get("direccion_id")
+        direccion_payload = payload.get("direccion")
+        if not direccion_id and not isinstance(direccion_payload, dict):
+            raise CRMRepositoryError("direccion_id_required")
+        if not direccion_id and isinstance(direccion_payload, dict):
+            direccion_body = {
+                "organizacion_id": str(organizacion_id),
+                "tipo": _account_direction_relation_type_for_storage(
+                    direccion_payload.get("tipo") or payload.get("tipo_relacion") or "fiscal"
+                ),
+                "pais": direccion_payload.get("pais"),
+                "clave_entidad": direccion_payload.get("clave_entidad"),
+                "entidad": direccion_payload.get("entidad"),
+                "clave_municipio": direccion_payload.get("clave_municipio"),
+                "municipio": direccion_payload.get("municipio"),
+                "clave_localidad": direccion_payload.get("clave_localidad"),
+                "localidad": direccion_payload.get("localidad"),
+                "tipo_vialidad": direccion_payload.get("tipo_vialidad"),
+                "nombre_vialidad": direccion_payload.get("nombre_vialidad"),
+                "numero_exterior": direccion_payload.get("numero_exterior"),
+                "letra_exterior": direccion_payload.get("letra_exterior"),
+                "edificio": direccion_payload.get("edificio"),
+                "edificio_piso": direccion_payload.get("edificio_piso"),
+                "numero_interior": direccion_payload.get("numero_interior"),
+                "letra_interior": direccion_payload.get("letra_interior"),
+                "tipo_asentamiento": direccion_payload.get("tipo_asentamiento"),
+                "nombre_asentamiento": direccion_payload.get("nombre_asentamiento") or direccion_payload.get("colonia"),
+                "colonia": direccion_payload.get("colonia") or direccion_payload.get("nombre_asentamiento"),
+                "tipo_centro_comercial": direccion_payload.get("tipo_centro_comercial"),
+                "corredor_industrial": direccion_payload.get("corredor_industrial"),
+                "numero_local": direccion_payload.get("numero_local"),
+                "codigo_postal": direccion_payload.get("codigo_postal"),
+                "latitud": direccion_payload.get("latitud"),
+                "longitud": direccion_payload.get("longitud"),
+                "metadata": _ensure_metadata(direccion_payload.get("metadata")),
+            }
+            direccion_resp = await self._request(
+                "POST",
+                "/rest/v1/direcciones",
+                params={"select": "id"},
+                json=direccion_body,
+                prefer="return=representation",
+            )
+            direccion_data = direccion_resp.json()
+            if not isinstance(direccion_data, list) or not direccion_data or not isinstance(direccion_data[0], dict):
+                raise CRMRepositoryError("direccion_create_failed")
+            direccion_row = direccion_data[0]
+            direccion_id = direccion_row.get("id")
+        if not direccion_id:
+            raise CRMRepositoryError("direccion_id_required")
         relation_body = {
             "organizacion_id": str(organizacion_id),
             "cuenta_id": str(cuenta_id),
             "direccion_id": str(_coerce_uuid(str(direccion_id), field="direccion_id")),
-            "tipo_relacion": str(payload.get("tipo_relacion") or "").strip() or "otro",
+            "tipo_relacion": _account_direction_relation_type_for_storage(payload.get("tipo_relacion")),
             "es_principal": bool(payload.get("es_principal", False)),
             "activo": bool(payload.get("activo", True)),
             "notas": payload.get("notas"),
@@ -8052,7 +8131,8 @@ class CRMRepository:
     ) -> dict[str, Any]:
         update_body = dict(payload)
         if "tipo_relacion" in update_body:
-            update_body["tipo_relacion"] = str(update_body.get("tipo_relacion") or "").strip() or "otro"
+            update_body["tipo_relacion"] = _account_direction_relation_type_for_storage(update_body.get("tipo_relacion"))
+        direccion_update = update_body.pop("direccion", None)
         if "metadata" in update_body:
             update_body["metadata"] = _ensure_metadata(update_body.get("metadata"))
         resp = await self._request(
@@ -8070,7 +8150,57 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise CRMRepositoryError("cuenta_direccion_no_encontrada")
-        return data[0]
+        row = data[0]
+        if isinstance(direccion_update, dict):
+            direccion_id = row.get("direccion_id")
+            if direccion_id:
+                direccion_body = {
+                    "organizacion_id": str(organizacion_id),
+                    "tipo": _account_direction_relation_type_for_storage(
+                        direccion_update.get("tipo") or row.get("tipo_relacion") or "otro"
+                    ),
+                    "pais": direccion_update.get("pais"),
+                    "clave_entidad": direccion_update.get("clave_entidad"),
+                    "entidad": direccion_update.get("entidad"),
+                    "clave_municipio": direccion_update.get("clave_municipio"),
+                    "municipio": direccion_update.get("municipio"),
+                    "clave_localidad": direccion_update.get("clave_localidad"),
+                    "localidad": direccion_update.get("localidad"),
+                    "tipo_vialidad": direccion_update.get("tipo_vialidad"),
+                    "nombre_vialidad": direccion_update.get("nombre_vialidad"),
+                    "numero_exterior": direccion_update.get("numero_exterior"),
+                    "letra_exterior": direccion_update.get("letra_exterior"),
+                    "edificio": direccion_update.get("edificio"),
+                    "edificio_piso": direccion_update.get("edificio_piso"),
+                    "numero_interior": direccion_update.get("numero_interior"),
+                    "letra_interior": direccion_update.get("letra_interior"),
+                    "tipo_asentamiento": direccion_update.get("tipo_asentamiento"),
+                    "nombre_asentamiento": direccion_update.get("nombre_asentamiento") or direccion_update.get("colonia"),
+                    "colonia": direccion_update.get("colonia") or direccion_update.get("nombre_asentamiento"),
+                    "tipo_centro_comercial": direccion_update.get("tipo_centro_comercial"),
+                    "corredor_industrial": direccion_update.get("corredor_industrial"),
+                    "numero_local": direccion_update.get("numero_local"),
+                    "codigo_postal": direccion_update.get("codigo_postal"),
+                    "latitud": direccion_update.get("latitud"),
+                    "longitud": direccion_update.get("longitud"),
+                    "metadata": _ensure_metadata(direccion_update.get("metadata")),
+                }
+                direccion_resp = await self._request(
+                    "PATCH",
+                    "/rest/v1/direcciones",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{direccion_id}",
+                    },
+                    json=direccion_body,
+                    prefer="return=representation",
+                )
+                direccion_data = direccion_resp.json()
+                if isinstance(direccion_data, list) and direccion_data and isinstance(direccion_data[0], dict):
+                    row["direccion"] = direccion_data[0]
+        if "tipo_relacion" in row:
+            row["tipo_relacion"] = _normalize_account_direction_relation_type(row.get("tipo_relacion"))
+        return row
 
     async def delete_account_address_relation(
         self,
@@ -8110,6 +8240,45 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError("cuenta_direcciones_list_invalid_response")
         return [row for row in data if isinstance(row, dict)]
+
+    async def list_account_address_relations_by_cuenta_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_ids: Sequence[UUID],
+        activo: bool | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        unique_ids = sorted({str(cuenta_id) for cuenta_id in cuenta_ids if cuenta_id})
+        if not unique_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        page_size = max(1, min(limit, 500))
+        current_offset = max(0, offset)
+        while True:
+            params: dict[str, str] = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "cuenta_id": f"in.({','.join(unique_ids)})",
+                "order": "cuenta_id.asc,es_principal.desc,activo.desc,creado_en.asc",
+                "limit": str(page_size),
+                "offset": str(current_offset),
+                "select": self._ACCOUNT_DIRECTION_SELECT,
+            }
+            if activo is not None:
+                params["activo"] = "eq.true" if activo else "eq.false"
+            resp = await self._request("GET", "/rest/v1/cuenta_direcciones", params=params)
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError("cuenta_direcciones_list_invalid_response")
+            batch = [row for row in data if isinstance(row, dict)]
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            current_offset += page_size
+            if current_offset >= 5000:
+                break
+        return rows
 
     async def merge_account(
         self,
@@ -8278,7 +8447,7 @@ class CRMRepository:
             activo=None,
         )
         target_addresses_by_key = {
-            f"{str(row.get('direccion_id') or '')}:{str(row.get('tipo_relacion') or '')}": row
+            f"{str(row.get('direccion_id') or '')}:{_normalize_account_direction_relation_type(row.get('tipo_relacion'))}": row
             for row in target_addresses
             if str(row.get("direccion_id") or "").strip()
         }
@@ -8287,7 +8456,7 @@ class CRMRepository:
         for link in source_addresses:
             link_id = link.get("id")
             direccion_key = str(link.get("direccion_id") or "").strip()
-            tipo_relacion = str(link.get("tipo_relacion") or "").strip()
+            tipo_relacion = _normalize_account_direction_relation_type(link.get("tipo_relacion"))
             if not link_id or not direccion_key:
                 continue
             target_link = target_addresses_by_key.get(f"{direccion_key}:{tipo_relacion}")

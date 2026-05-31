@@ -538,7 +538,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       edificio: getInputText(detail?.edificio),
       edificio_piso: getInputText(detail?.edificio_piso),
       tipo_asentamiento: getInputText(detail?.tipo_asentamiento),
-      nombre_asentamiento: getInputText(detail?.nombre_asentamiento),
+      nombre_asentamiento: getInputText(detail?.colonia ?? detail?.nombre_asentamiento),
       tipo_centro_comercial: getInputText(detail?.tipo_centro_comercial),
       corredor_industrial: getInputText(detail?.corredor_industrial),
       numero_local: getInputText(detail?.numero_local),
@@ -594,6 +594,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           edificio: editForm.edificio.trim(),
           edificio_piso: editForm.edificio_piso.trim(),
           tipo_asentamiento: editForm.tipo_asentamiento.trim(),
+          colonia: editForm.nombre_asentamiento.trim(),
           nombre_asentamiento: editForm.nombre_asentamiento.trim(),
           tipo_centro_comercial: editForm.tipo_centro_comercial.trim(),
           corredor_industrial: editForm.corredor_industrial.trim(),
@@ -1267,7 +1268,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-nombre-asentamiento">Nombre de asentamiento</Label>
+                <Label htmlFor="edit-nombre-asentamiento">Colonia</Label>
                 <Input
                   id="edit-nombre-asentamiento"
                   value={editForm.nombre_asentamiento}

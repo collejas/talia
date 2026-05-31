@@ -2541,6 +2541,9 @@ class CRMAccount(BaseModel):
     telefono_secundario_tipo_linea: str | None = None
     telefono_secundario_extension: str | None = None
     direccion: dict | None = Field(default=None)
+    direccion_fiscal: dict | None = Field(default=None)
+    direccion_principal: dict | None = Field(default=None)
+    direcciones: list[dict[str, Any]] | None = Field(default=None)
     codigo_cuenta: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
@@ -2561,6 +2564,7 @@ class CRMAccount(BaseModel):
     letra_interior: str | None = None
     tipo_asentamiento: str | None = None
     nombre_asentamiento: str | None = None
+    colonia: str | None = None
     tipo_centro_comercial: str | None = None
     corredor_industrial: str | None = None
     numero_local: str | None = None
@@ -2615,6 +2619,8 @@ class CRMAccountCreate(BaseModel):
     telefono_secundario_tipo_linea: str | None = Field(default=None, max_length=32)
     telefono_secundario_extension: str | None = Field(default=None, max_length=16)
     direccion: dict | None = Field(default=None)
+    direccion_fiscal: dict | None = Field(default=None)
+    direccion_principal: dict | None = Field(default=None)
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
@@ -2635,6 +2641,7 @@ class CRMAccountCreate(BaseModel):
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
     nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -2682,6 +2689,8 @@ class CRMAccountUpdate(BaseModel):
     telefono_secundario_tipo_linea: str | None = Field(default=None, max_length=32)
     telefono_secundario_extension: str | None = Field(default=None, max_length=16)
     direccion: dict | None = Field(default=None)
+    direccion_fiscal: dict | None = Field(default=None)
+    direccion_principal: dict | None = Field(default=None)
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
@@ -2702,6 +2711,7 @@ class CRMAccountUpdate(BaseModel):
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
     nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10439,7 +10449,8 @@ class CRMCuentaDireccionRelacion(BaseModel):
 
 
 class CRMCuentaDireccionRelacionCreate(BaseModel):
-    direccion_id: UUID
+    direccion_id: UUID | None = None
+    direccion: dict[str, Any] | None = None
     tipo_relacion: str | None = Field(default=None, max_length=120)
     es_principal: bool = False
     activo: bool = True
@@ -10449,6 +10460,7 @@ class CRMCuentaDireccionRelacionCreate(BaseModel):
 
 class CRMCuentaDireccionRelacionUpdate(BaseModel):
     direccion_id: UUID | None = None
+    direccion: dict[str, Any] | None = None
     tipo_relacion: str | None = Field(default=None, max_length=120)
     es_principal: bool | None = None
     activo: bool | None = None
@@ -10475,6 +10487,212 @@ def _safe_model_from_row(
             },
         )
         return model_cls.model_construct(**row)
+
+
+_ACCOUNT_DIRECTION_LEGACY_FIELDS = (
+    "pais",
+    "clave_entidad",
+    "entidad",
+    "clave_municipio",
+    "municipio",
+    "clave_localidad",
+    "localidad",
+    "tipo_vialidad",
+    "nombre_vialidad",
+    "numero_exterior",
+    "letra_exterior",
+    "edificio",
+    "edificio_piso",
+    "numero_interior",
+    "letra_interior",
+    "tipo_asentamiento",
+    "nombre_asentamiento",
+    "colonia",
+    "tipo_centro_comercial",
+    "corredor_industrial",
+    "numero_local",
+    "codigo_postal",
+    "latitud",
+    "longitud",
+    "tipo_establecimiento",
+)
+
+
+def _legacy_account_direction_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    existing = row.get("direccion")
+    if isinstance(existing, dict) and existing:
+        return dict(existing)
+    direction: dict[str, Any] = {}
+    for field in _ACCOUNT_DIRECTION_LEGACY_FIELDS:
+        value = row.get(field)
+        if value not in (None, "", [], {}):
+            direction[field] = value
+    return direction or None
+
+
+def _normalize_account_direction_relation_type(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "sucursal"
+    normalized = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    alias_map = {
+        "operativa": "principal",
+        "principal": "principal",
+        "fiscal": "fiscal",
+        "facturacion": "fiscal",
+        "sucursal": "sucursal",
+        "envio": "sucursal",
+        "historial": "sucursal",
+        "otro": "sucursal",
+    }
+    return alias_map.get(normalized, normalized if normalized in {"fiscal", "principal", "sucursal"} else "sucursal")
+
+
+def _normalize_account_direction_relation_row(row: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return row
+    normalized = dict(row)
+    normalized["tipo_relacion"] = _normalize_account_direction_relation_type(row.get("tipo_relacion"))
+    direction = normalized.get("direccion")
+    if isinstance(direction, dict):
+        direction_copy = dict(direction)
+        if "tipo" in direction_copy:
+            direction_copy["tipo"] = _normalize_account_direction_relation_type(direction_copy.get("tipo"))
+        normalized["direccion"] = direction_copy
+    return normalized
+
+
+def _account_direction_from_relation(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    direction = row.get("direccion")
+    if isinstance(direction, dict) and direction:
+        normalized = dict(direction)
+        if "tipo" in normalized:
+            normalized["tipo"] = _normalize_account_direction_relation_type(normalized.get("tipo"))
+        return normalized
+    return None
+
+
+def _select_account_direction_relation(
+    rows: list[dict[str, Any]] | None,
+    *,
+    tipo_relacion: str,
+) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    normalized_tipo = _normalize_account_direction_relation_type(tipo_relacion)
+    if not normalized_tipo:
+        return None
+    candidates = [
+        row
+        for row in rows
+        if _normalize_account_direction_relation_type(row.get("tipo_relacion")) == normalized_tipo
+    ]
+    if not candidates:
+        return None
+
+    def _sort_key(row: dict[str, Any]) -> tuple[int, int, str]:
+        return (
+            0 if bool(row.get("activo", True)) else 1,
+            0 if bool(row.get("es_principal", False)) else 1,
+            str(row.get("creado_en") or ""),
+        )
+
+    candidates.sort(key=_sort_key)
+    return candidates[0]
+
+
+def _materialize_account_directions(
+    row: dict[str, Any],
+    *,
+    relation_rows: list[dict[str, Any]] | None = None,
+    include_direcciones: bool = False,
+) -> dict[str, Any]:
+    payload = dict(row)
+    legacy_direction = _legacy_account_direction_from_row(row)
+    fiscal_relation = _select_account_direction_relation(relation_rows, tipo_relacion="fiscal")
+    principal_relation = _select_account_direction_relation(relation_rows, tipo_relacion="principal")
+    fiscal_direction = _account_direction_from_relation(fiscal_relation) or legacy_direction
+    principal_direction = _account_direction_from_relation(principal_relation) or fiscal_direction or legacy_direction
+    payload["direccion_fiscal"] = fiscal_direction
+    payload["direccion_principal"] = principal_direction
+    if include_direcciones:
+        payload["direcciones"] = [
+            _normalize_account_direction_relation_row(relation)
+            for relation in (relation_rows or [])
+            if isinstance(relation, dict)
+        ]
+    else:
+        payload.pop("direcciones", None)
+    if payload.get("direccion") is None and fiscal_direction is not None:
+        payload["direccion"] = fiscal_direction
+    return payload
+
+
+def _extract_account_direction_blocks(payload: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    legacy_direction = payload.get("direccion")
+    fiscal_direction = payload.pop("direccion_fiscal", None)
+    principal_direction = payload.pop("direccion_principal", None)
+    if fiscal_direction is None and principal_direction is None and isinstance(legacy_direction, dict):
+        fiscal_direction = legacy_direction
+        principal_direction = legacy_direction
+    elif fiscal_direction is None and isinstance(legacy_direction, dict):
+        fiscal_direction = legacy_direction
+    return (
+        fiscal_direction if isinstance(fiscal_direction, dict) else None,
+        principal_direction if isinstance(principal_direction, dict) else None,
+    )
+
+
+async def _sync_account_direction_block(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    cuenta_id: UUID,
+    direction_payload: dict[str, Any] | None,
+    tipo_relacion: str,
+    relation_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    if not isinstance(direction_payload, dict):
+        return None
+    normalized_tipo = _normalize_account_direction_relation_type(tipo_relacion)
+    if not normalized_tipo:
+        return None
+    rows = relation_rows
+    if rows is None:
+        try:
+            rows = await repo.list_account_address_relations(
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                activo=None,
+            )
+        except CRMRepositoryError:
+            rows = []
+    existing_relation = _select_account_direction_relation(rows, tipo_relacion=normalized_tipo)
+    relation_payload: dict[str, Any] = {
+        "tipo_relacion": normalized_tipo,
+        "es_principal": normalized_tipo == "principal",
+        "activo": True,
+        "direccion": direction_payload,
+    }
+    if existing_relation and existing_relation.get("id"):
+        relation_row = await repo.update_account_address_relation(
+            organizacion_id=organizacion_id,
+            cuenta_id=cuenta_id,
+            relacion_id=_safe_uuid(existing_relation.get("id")) or _safe_uuid(str(existing_relation.get("id"))),
+            payload=relation_payload,
+        )
+        return relation_row
+    relation_row = await repo.create_account_address_relation(
+        organizacion_id=organizacion_id,
+        cuenta_id=cuenta_id,
+        payload=relation_payload,
+    )
+    return relation_row
 
 
 class CRMPersonaAltaResponse(BaseModel):
@@ -14401,22 +14619,37 @@ async def list_accounts(
 
     items: list[CRMAccount] = []
     account_ids = [account_id for account_id in (_safe_uuid(row.get("id")) for row in rows) if account_id]
-    relation_rows = []
+    relation_rows: list[dict[str, Any]] = []
+    direction_rows: list[dict[str, Any]] = []
     if account_ids:
         try:
-            relation_rows = await repo.list_account_person_relations_by_cuenta_ids(
-                organizacion_id=organizacion_id,
-                cuenta_ids=account_ids,
-                activo=None,
+            relation_rows, direction_rows = await asyncio.gather(
+                repo.list_account_person_relations_by_cuenta_ids(
+                    organizacion_id=organizacion_id,
+                    cuenta_ids=account_ids,
+                    activo=None,
+                ),
+                repo.list_account_address_relations_by_cuenta_ids(
+                    organizacion_id=organizacion_id,
+                    cuenta_ids=account_ids,
+                    activo=None,
+                ),
             )
         except CRMRepositoryError:
             relation_rows = []
+            direction_rows = []
     relations_by_account_id: dict[str, list[dict[str, Any]]] = {}
     for relation in relation_rows:
         account_id = str(relation.get("cuenta_id") or "").strip()
         if not account_id:
             continue
         relations_by_account_id.setdefault(account_id, []).append(relation)
+    directions_by_account_id: dict[str, list[dict[str, Any]]] = {}
+    for relation in direction_rows:
+        account_id = str(relation.get("cuenta_id") or "").strip()
+        if not account_id:
+            continue
+        directions_by_account_id.setdefault(account_id, []).append(relation)
 
     owner_candidate_ids: set[UUID] = set()
     owner_candidate_id_by_account_id: dict[str, UUID] = {}
@@ -14438,7 +14671,11 @@ async def list_accounts(
             account_key = str(row.get("id") or "").strip()
             if account_key and account_key not in owner_candidate_id_by_account_id:
                 owner_candidate_id_by_account_id[account_key] = owner_id
-        payload = dict(row)
+        payload = _materialize_account_directions(
+            row,
+            relation_rows=directions_by_account_id.get(str(row.get("id") or "").strip(), []),
+            include_direcciones=False,
+        )
         existing_owner_name = str(payload.get("propietario_nombre") or "").strip() or None
         if contact:
             payload["contacto_principal_nombre"] = contact.get("nombre_completo")
@@ -14528,14 +14765,55 @@ async def create_account(
                 status_code=400,
                 detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
             )
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    direccion_fiscal, direccion_principal = _extract_account_direction_blocks(body)
     try:
         row = await repo.create_account(
             organizacion_id=organizacion_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=body,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMAccount.model_validate(row)
+    cuenta_id = _safe_uuid(row.get("id"))
+    if cuenta_id:
+        try:
+            if direccion_fiscal:
+                await _sync_account_direction_block(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    cuenta_id=cuenta_id,
+                    direction_payload=direccion_fiscal,
+                    tipo_relacion="fiscal",
+                )
+            if direccion_principal:
+                await _sync_account_direction_block(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    cuenta_id=cuenta_id,
+                    direction_payload=direccion_principal,
+                    tipo_relacion="principal",
+                )
+        except CRMRepositoryError:
+            pass
+    try:
+        direction_rows = (
+            await repo.list_account_address_relations(
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                activo=None,
+            )
+            if cuenta_id
+            else []
+        )
+    except CRMRepositoryError:
+        direction_rows = []
+    return CRMAccount.model_validate(
+        _materialize_account_directions(
+            row,
+            relation_rows=direction_rows,
+            include_direcciones=True,
+        )
+    )
 
 
 @router.get("/cuentas/{cuenta_id}", response_model=CRMAccount)
@@ -14552,7 +14830,21 @@ async def get_account(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cuenta_no_encontrada")
-    return CRMAccount.model_validate(row)
+    try:
+        direction_rows = await repo.list_account_address_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=cuenta_id,
+            activo=None,
+        )
+    except CRMRepositoryError:
+        direction_rows = []
+    return CRMAccount.model_validate(
+        _materialize_account_directions(
+            row,
+            relation_rows=direction_rows,
+            include_direcciones=True,
+        )
+    )
 
 
 @router.patch("/cuentas/{cuenta_id}", response_model=CRMAccount)
@@ -14586,6 +14878,7 @@ async def update_account(
                 detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
             )
     body = payload.model_dump(mode="json", exclude_unset=True)
+    direccion_fiscal, direccion_principal = _extract_account_direction_blocks(body)
     try:
         row = await repo.update_account(
             organizacion_id=organizacion_id,
@@ -14594,7 +14887,40 @@ async def update_account(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMAccount.model_validate(row)
+    try:
+        if direccion_fiscal:
+            await _sync_account_direction_block(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                direction_payload=direccion_fiscal,
+                tipo_relacion="fiscal",
+            )
+        if direccion_principal:
+            await _sync_account_direction_block(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                direction_payload=direccion_principal,
+                tipo_relacion="principal",
+            )
+    except CRMRepositoryError:
+        pass
+    try:
+        direction_rows = await repo.list_account_address_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=cuenta_id,
+            activo=None,
+        )
+    except CRMRepositoryError:
+        direction_rows = []
+    return CRMAccount.model_validate(
+        _materialize_account_directions(
+            row,
+            relation_rows=direction_rows,
+            include_direcciones=True,
+        )
+    )
 
 
 @router.delete(
@@ -14867,7 +15193,7 @@ async def list_cuenta_direcciones(
         if "cuenta_no_encontrada" in str(exc):
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada_para_relacion") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMCuentaDireccionRelacion.model_validate(row) for row in rows]
+    return [CRMCuentaDireccionRelacion.model_validate(_normalize_account_direction_relation_row(row)) for row in rows]
 
 
 @router.post(
@@ -14896,7 +15222,7 @@ async def create_cuenta_direccion_relacion(
         if "direccion_id_required" in detail:
             raise HTTPException(status_code=400, detail="direccion_id_required") from exc
         raise HTTPException(status_code=502, detail=detail) from exc
-    return CRMCuentaDireccionRelacion.model_validate(row)
+    return CRMCuentaDireccionRelacion.model_validate(_normalize_account_direction_relation_row(row))
 
 
 @router.patch(
@@ -14926,7 +15252,7 @@ async def update_cuenta_direccion_relacion(
         if "cuenta_direccion_no_encontrada" in detail:
             raise HTTPException(status_code=404, detail="cuenta_direccion_no_encontrada") from exc
         raise HTTPException(status_code=502, detail=detail) from exc
-    return CRMCuentaDireccionRelacion.model_validate(row)
+    return CRMCuentaDireccionRelacion.model_validate(_normalize_account_direction_relation_row(row))
 
 
 @router.delete(

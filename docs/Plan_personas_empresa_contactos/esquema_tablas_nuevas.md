@@ -266,8 +266,12 @@ Resolver múltiples direcciones por cuenta sin acoplar la cuenta a dos campos fi
 
 ### 7.3 Restricciones sugeridas
 
-- `check (tipo_relacion in ('fiscal', 'operativa', 'envio', 'sucursal', 'historial', 'otro'))`
+- `check (tipo_relacion in ('fiscal', 'principal', 'sucursal'))`
 - `unique (cuenta_id, direccion_id, tipo_relacion)`
+
+Nota:
+- `operativa` queda solo como alias de compatibilidad mientras termina la transición.
+- Si fiscal y principal comparten la misma dirección, se almacenan como dos relaciones distintas sobre el mismo `direccion_id`.
 
 ### 7.4 Regla de uso
 
