@@ -1399,26 +1399,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   <Label htmlFor="edit-fecha-incorporacion">Fecha de incorporación</Label>
                   <Input id="edit-fecha-incorporacion" type="date" value={toDateInputValue(editForm.fecha_incorporacion)} readOnly disabled className="bg-muted" />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-latitud">Latitud</Label>
-                  <Input
-                    id="edit-latitud"
-                    type="number"
-                    step="any"
-                    value={editForm.latitud}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-longitud">Longitud</Label>
-                  <Input
-                    id="edit-longitud"
-                    type="number"
-                    step="any"
-                    value={editForm.longitud}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
-                  />
-                </div>
               </div>
             </FormSection>
 
@@ -1585,15 +1565,35 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                       onChange={(event) => setEditForm((prev) => ({ ...prev, numero_local: event.target.value }))}
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-codigo-postal">Código postal</Label>
-                    <Input
-                      id="edit-codigo-postal"
-                      value={editForm.codigo_postal}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
-                    />
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-codigo-postal">Código postal</Label>
+                  <Input
+                    id="edit-codigo-postal"
+                    value={editForm.codigo_postal}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
+                  />
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-latitud">Latitud</Label>
+                  <Input
+                    id="edit-latitud"
+                    type="number"
+                    step="any"
+                    value={editForm.latitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, latitud: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-longitud">Longitud</Label>
+                  <Input
+                    id="edit-longitud"
+                    type="number"
+                    step="any"
+                    value={editForm.longitud}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, longitud: event.target.value }))}
+                  />
+                </div>
+              </div>
                 <div className="flex items-center justify-between gap-3 pt-2">
                   <div>
                     <div className="text-sm font-semibold">Direcciones adicionales</div>

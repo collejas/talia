@@ -592,14 +592,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
                   <Label htmlFor="create-fecha">Fecha de incorporación</Label>
                   <Input id="create-fecha" type="date" value={form.fecha_incorporacion || getTodayIsoDate()} readOnly disabled className="bg-muted" />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="create-latitud">Latitud</Label>
-                  <Input id="create-latitud" type="number" step="any" value={form.latitud} onChange={(event) => setForm((prev) => ({ ...prev, latitud: event.target.value }))} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="create-longitud">Longitud</Label>
-                  <Input id="create-longitud" type="number" step="any" value={form.longitud} onChange={(event) => setForm((prev) => ({ ...prev, longitud: event.target.value }))} />
-                </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="create-notas">Notas</Label>
                   <Textarea id="create-notas" value={form.notas} onChange={(event) => setForm((prev) => ({ ...prev, notas: event.target.value }))} rows={4} />
@@ -720,6 +712,12 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </Field>
                 <Field label="Código postal">
                   <Input id="create-codigo-postal" value={form.codigo_postal} onChange={(event) => setForm((prev) => ({ ...prev, codigo_postal: event.target.value }))} />
+                </Field>
+                <Field label="Latitud">
+                  <Input id="create-latitud" type="number" step="any" value={form.latitud} onChange={(event) => setForm((prev) => ({ ...prev, latitud: event.target.value }))} />
+                </Field>
+                <Field label="Longitud">
+                  <Input id="create-longitud" type="number" step="any" value={form.longitud} onChange={(event) => setForm((prev) => ({ ...prev, longitud: event.target.value }))} />
                 </Field>
               </div>
               <div className="flex items-center justify-between gap-3 pt-2">

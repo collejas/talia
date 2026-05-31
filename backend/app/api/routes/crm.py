@@ -10285,6 +10285,7 @@ class CRMPersonaAltaExtrasFiscales(BaseModel):
 
 
 class CRMPersonaAltaExtrasDireccion(BaseModel):
+    tipo: str | None = Field(default=None, max_length=120)
     pais: str | None = Field(default=None, max_length=120)
     clave_entidad: str | None = Field(default=None, max_length=16)
     entidad: str | None = Field(default=None, max_length=120)
@@ -11041,6 +11042,7 @@ def _persona_alta_normalize_extras(payload: CRMPersonaAltaExtras | None) -> CRMP
         direccion.model_copy(
             update={
                 "pais": _persona_alta_clean_text(direccion.pais, compact_spaces=True),
+                "tipo": _persona_alta_clean_text(direccion.tipo, compact_spaces=True),
                 "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad, compact_spaces=True),
                 "entidad": _persona_alta_clean_text(direccion.entidad, compact_spaces=True),
                 "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio, compact_spaces=True),
@@ -11706,6 +11708,7 @@ def _persona_alta_to_contact_payload(
         "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
         "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+        "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None),
         "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
         "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
         "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
@@ -11818,6 +11821,7 @@ def _persona_alta_to_account_payload(
         "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("clave_localidad")),
         "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("localidad")),
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
+        "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo")),
         "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
         "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("nombre_asentamiento")),
         "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),

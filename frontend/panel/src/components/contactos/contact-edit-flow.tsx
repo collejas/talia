@@ -117,6 +117,7 @@ type RelacionDraft = {
 };
 
 type ExtrasDraft = {
+  tipo: string;
   uso_cfdi: string;
   forma_pago: string;
   metodo_pago: string;
@@ -138,6 +139,7 @@ type ExtrasDraft = {
   letra_interior: string;
   tipo_asentamiento: string;
   nombre_asentamiento: string;
+  colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
   numero_local: string;
@@ -429,6 +431,7 @@ const INITIAL_STATE: ContactEditState = {
     notas: "",
   },
   extras: {
+    tipo: "principal",
     uso_cfdi: "",
     forma_pago: "",
     metodo_pago: "",
@@ -450,6 +453,7 @@ const INITIAL_STATE: ContactEditState = {
     letra_interior: "",
     tipo_asentamiento: "",
     nombre_asentamiento: "",
+    colonia: "",
     tipo_centro_comercial: "",
     corredor_industrial: "",
     numero_local: "",
@@ -606,6 +610,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       email_facturacion: state.extras.email_facturacion,
     }, { keepEmptyStringsAsNull: true }),
     direccion: cleanObject({
+      tipo: state.extras.tipo,
       pais: state.extras.pais,
       entidad: state.extras.entidad,
       municipio: state.extras.municipio,
@@ -613,6 +618,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       nombre_vialidad: state.extras.nombre_vialidad,
       numero_exterior: state.extras.numero_exterior,
       numero_interior: state.extras.numero_interior,
+      colonia: state.extras.colonia || state.extras.nombre_asentamiento,
+      nombre_asentamiento: state.extras.colonia || state.extras.nombre_asentamiento,
       codigo_postal: state.extras.codigo_postal,
     }, { keepEmptyStringsAsNull: true }),
   }, { keepEmptyStringsAsNull: true });
@@ -695,6 +702,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         "letra_interior",
         "tipo_asentamiento",
         "nombre_asentamiento",
+        "colonia",
         "tipo_centro_comercial",
         "corredor_industrial",
         "numero_local",
@@ -810,7 +818,9 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           numero_interior: readString(detail, "numero_interior"),
           letra_interior: readString(detail, "letra_interior"),
           tipo_asentamiento: readString(detail, "tipo_asentamiento"),
-          nombre_asentamiento: readString(detail, "nombre_asentamiento"),
+          nombre_asentamiento: readString(detail, "nombre_asentamiento") || readString(detail, "colonia"),
+          colonia: readString(detail, "colonia") || readString(detail, "nombre_asentamiento"),
+          tipo: readString(detail, "tipo") || "principal",
           tipo_centro_comercial: readString(detail, "tipo_centro_comercial"),
           corredor_industrial: readString(detail, "corredor_industrial"),
           numero_local: readString(detail, "numero_local"),
@@ -1855,12 +1865,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label="Fecha de incorporación">
                   <Input type="date" value={toDateInputValue(state.cuenta.fecha_incorporacion)} readOnly disabled className="bg-muted" />
                 </Field>
-                <Field label="Latitud">
-                  <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />
-                </Field>
-                <Field label="Longitud">
-                  <Input type="number" step="any" value={state.cuenta.longitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "longitud", value: e.target.value })} />
-                </Field>
                 <Field label="Notas">
                   <Textarea value={state.cuenta.notas} onChange={(e) => dispatch({ type: "cuenta/set", field: "notas", value: e.target.value })} />
                 </Field>
@@ -2136,62 +2140,23 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
             </FormSection>
           ) : null}
 
-          <FormSection title="Datos fiscales y dirección" description="Completa ahora o revisa los valores persistidos.">
+          <FormSection title="Direcciones" description="Captura la dirección principal, fiscal o sucursal del registro.">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field label="Uso CFDI">
-                <ContactCatalogSelect
-                  value={state.extras.uso_cfdi}
-                  onValueChange={(value) => dispatch({ type: "extras/set", field: "uso_cfdi", value })}
-                  options={usoCfdiOptions}
-                  placeholder="Selecciona un uso CFDI"
-                  emptyLabel="Configura los usos CFDI en Extras"
-                />
-              </Field>
-              <Field label="Forma de pago">
-                <ContactCatalogSelect
-                  value={state.extras.forma_pago}
-                  onValueChange={(value) => dispatch({ type: "extras/set", field: "forma_pago", value })}
-                  options={formaPagoOptions}
-                  placeholder="Selecciona una forma de pago"
-                  emptyLabel="Configura las formas de pago en Extras"
-                />
-              </Field>
-              <Field label="Método de pago">
-                <ContactCatalogSelect
-                  value={state.extras.metodo_pago}
-                  onValueChange={(value) => dispatch({ type: "extras/set", field: "metodo_pago", value })}
-                  options={metodoPagoOptions}
-                  placeholder="Selecciona un método de pago"
-                  emptyLabel="Configura los métodos de pago en Extras"
-                />
-              </Field>
-              <Field label="Email facturación">
-                <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
+              <Field label="Tipo de dirección">
+                <Select value={state.extras.tipo || "principal"} onValueChange={(value) => dispatch({ type: "extras/set", field: "tipo", value })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="principal">Principal</SelectItem>
+                    <SelectItem value="fiscal">Fiscal</SelectItem>
+                    <SelectItem value="sucursal">Sucursal</SelectItem>
+                    <SelectItem value="fiscal_principal">Fiscal + principal</SelectItem>
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal</div>
-                <div className="mt-2 text-sm font-medium">{state.extras.uso_cfdi || "Sin uso CFDI"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {[state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion].filter(Boolean).join(" · ") || "Sin datos de facturación"}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ubicación</div>
-                <div className="mt-2 text-sm font-medium">{state.extras.pais || "MX"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {[state.extras.entidad, state.extras.municipio, state.extras.codigo_postal].filter(Boolean).join(" · ") || "Sin ubicación"}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domicilio</div>
-                <div className="mt-2 text-sm font-medium">{state.extras.nombre_vialidad || "Sin vialidad"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {[state.extras.numero_exterior, state.extras.numero_interior, state.extras.localidad].filter(Boolean).join(" · ") || "Sin detalle de domicilio"}
-                </div>
-              </div>
-            </div>
+            <div className="mt-4">
             <GeoLocationSelects
               countryCode={state.extras.pais}
               stateCode={state.extras.clave_entidad}
@@ -2247,8 +2212,14 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               <Field label="Tipo de asentamiento">
                 <Input value={state.extras.tipo_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_asentamiento", value: e.target.value })} />
               </Field>
-              <Field label="Nombre de asentamiento">
-                <Input value={state.extras.nombre_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value })} />
+              <Field label="Colonia">
+                <Input
+                  value={state.extras.colonia || state.extras.nombre_asentamiento}
+                  onChange={(e) => {
+                    dispatch({ type: "extras/set", field: "colonia", value: e.target.value });
+                    dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value });
+                  }}
+                />
               </Field>
               <Field label="Tipo de centro comercial">
                 <Input value={state.extras.tipo_centro_comercial} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_centro_comercial", value: e.target.value })} />
@@ -2261,6 +2232,48 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               </Field>
               <Field label="Código postal">
                 <Input value={state.extras.codigo_postal} onChange={(e) => dispatch({ type: "extras/set", field: "codigo_postal", value: e.target.value })} />
+              </Field>
+              <Field label="Latitud">
+                <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />
+              </Field>
+              <Field label="Longitud">
+                <Input type="number" step="any" value={state.cuenta.longitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "longitud", value: e.target.value })} />
+              </Field>
+            </div>
+            </div>
+          </FormSection>
+
+          <FormSection title="Datos fiscales" description="Completa ahora o revisa los valores persistidos.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Uso CFDI">
+                <ContactCatalogSelect
+                  value={state.extras.uso_cfdi}
+                  onValueChange={(value) => dispatch({ type: "extras/set", field: "uso_cfdi", value })}
+                  options={usoCfdiOptions}
+                  placeholder="Selecciona un uso CFDI"
+                  emptyLabel="Configura los usos CFDI en Extras"
+                />
+              </Field>
+              <Field label="Forma de pago">
+                <ContactCatalogSelect
+                  value={state.extras.forma_pago}
+                  onValueChange={(value) => dispatch({ type: "extras/set", field: "forma_pago", value })}
+                  options={formaPagoOptions}
+                  placeholder="Selecciona una forma de pago"
+                  emptyLabel="Configura las formas de pago en Extras"
+                />
+              </Field>
+              <Field label="Método de pago">
+                <ContactCatalogSelect
+                  value={state.extras.metodo_pago}
+                  onValueChange={(value) => dispatch({ type: "extras/set", field: "metodo_pago", value })}
+                  options={metodoPagoOptions}
+                  placeholder="Selecciona un método de pago"
+                  emptyLabel="Configura los métodos de pago en Extras"
+                />
+              </Field>
+              <Field label="Email facturación">
+                <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
               </Field>
             </div>
           </FormSection>
