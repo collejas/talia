@@ -23,6 +23,12 @@ type CRMAccount = {
     nombre_completo: string | null;
     correo: string | null;
   } | null;
+  contacto_principal_nombre?: string | null;
+  contacto_principal_correo?: string | null;
+  contacto_principal_telefono?: string | null;
+  contacto_principal_owner_id?: string | null;
+  direccion_fiscal?: Record<string, unknown> | null;
+  direccion_principal?: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string;
@@ -54,6 +60,33 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
   }
 
   const rows = accountsResult.data.items.map<DataTableRow>((account, index) => {
+    const rawAccount = {
+      id: account.id,
+      organizacion_id: account.organizacion_id,
+      codigo_cuenta: account.codigo_cuenta,
+      nombre: account.nombre,
+      alias: account.alias,
+      tipo: account.tipo,
+      industria: account.industria,
+      tamano: account.tamano,
+      sitio_web: account.sitio_web,
+      telefono: account.telefono,
+      correo: account.correo,
+      propietario_usuario_id: account.propietario_usuario_id,
+      propietario_nombre: account.propietario_nombre,
+      propietario: account.propietario,
+      contacto_principal_nombre: account.contacto_principal_nombre,
+      contacto_principal_correo: account.contacto_principal_correo,
+      contacto_principal_telefono: account.contacto_principal_telefono,
+      contacto_principal_owner_id: account.contacto_principal_owner_id,
+      rfc: (account as { rfc?: string | null }).rfc ?? null,
+      uso_cfdi: (account as { uso_cfdi?: string | null }).uso_cfdi ?? null,
+      metodo_pago: (account as { metodo_pago?: string | null }).metodo_pago ?? null,
+      forma_pago: (account as { forma_pago?: string | null }).forma_pago ?? null,
+      email_facturacion: (account as { email_facturacion?: string | null }).email_facturacion ?? null,
+      direccion_fiscal: (account as { direccion_fiscal?: Record<string, unknown> | null }).direccion_fiscal ?? null,
+      direccion_principal: (account as { direccion_principal?: Record<string, unknown> | null }).direccion_principal ?? null,
+    };
     return {
       id: index + 1,
       header: account.nombre,
@@ -62,10 +95,7 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
       target: account.sitio_web || "—",
       limit: account.telefono || account.correo || "—",
       reviewer: account.alias || "Sin alias",
-      raw: {
-        ...account,
-        codigo_cuenta: account.codigo_cuenta,
-      },
+      raw: rawAccount,
     };
   });
 
