@@ -27,6 +27,7 @@ La decisión propuesta es:
 - usar `cuenta_direcciones` como pivote canónica para asociar varias direcciones a una cuenta
 - reservar una dirección fiscal única por cuenta
 - permitir una dirección principal de empresa y múltiples sucursales
+- no guardar los campos de dirección de negocio en `metadata`; deben existir como columnas explícitas
 
 ## 3. Qué hacemos con los campos actuales de `cuentas`
 
@@ -87,6 +88,7 @@ Uso:
 
 - almacena el bloque estructurado de domicilio
 - puede reutilizarse por cuenta, contacto o futuros módulos
+- los datos de dirección deben existir como columnas explícitas, no como JSON en `metadata`
 
 ### 4.2 `cuenta_direcciones`
 
@@ -237,3 +239,102 @@ Antes de tocar UI, definir:
 2. cuál será el payload nuevo de alta/edición
 3. cómo se representará la dirección fiscal vs la principal en backend
 4. cómo se crea la sucursal desde la ficha de empresa
+
+## 10. Checklist de implementación ordenado
+
+La ejecución debe seguir este orden:
+
+1. Base de datos.
+2. Backend.
+3. UI.
+
+### 10.1 Base de datos
+
+#### 10.1.1 Crear tablas nuevas
+
+- [ ] Confirmar/crear `direcciones` con columnas explícitas
+- [ ] Confirmar/crear `cuenta_direcciones` con columnas explícitas
+- [ ] Definir tipos válidos de `tipo_relacion`
+- [ ] Definir restricción de una sola dirección fiscal activa por cuenta
+- [ ] Definir índices por `cuenta_id`, `direccion_id`, `tipo_relacion` y `activo`
+
+#### 10.1.2 Campos explícitos esperados en `direcciones`
+
+- [ ] `pais`
+- [ ] `clave_entidad`
+- [ ] `entidad`
+- [ ] `clave_municipio`
+- [ ] `municipio`
+- [ ] `clave_localidad`
+- [ ] `localidad`
+- [ ] `tipo_vialidad`
+- [ ] `nombre_vialidad`
+- [ ] `numero_exterior`
+- [ ] `letra_exterior`
+- [ ] `edificio`
+- [ ] `edificio_piso`
+- [ ] `numero_interior`
+- [ ] `letra_interior`
+- [ ] `tipo_asentamiento`
+- [ ] `nombre_asentamiento`
+- [ ] `tipo_centro_comercial`
+- [ ] `corredor_industrial`
+- [ ] `numero_local`
+- [ ] `codigo_postal`
+- [ ] `latitud`
+- [ ] `longitud`
+
+#### 10.1.3 Backfill
+
+- [ ] Identificar todas las cuentas con dirección legacy cargada
+- [ ] Diseñar el criterio para decidir si la dirección legacy representa fiscal, principal o ambas
+- [ ] Preparar script de backfill de `cuentas` hacia `direcciones`
+- [ ] Preparar script de backfill de `cuentas` hacia `cuenta_direcciones`
+- [ ] Validar que el backfill preserve `pais`, `entidad`, `municipio`, `codigo_postal` y geolocalización si existe
+- [ ] Validar que cada cuenta quede con exactamente una fiscal activa
+
+### 10.2 Backend
+
+- [ ] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
+- [ ] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
+- [ ] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
+- [ ] Mantener compatibilidad con el payload legacy mientras dura la migración
+- [ ] Ajustar `GET /cuentas/{id}` para devolver la estructura nueva
+- [ ] Ajustar `GET /cuentas/{id}/direcciones` para listar fiscal, principal y sucursales
+- [ ] Ajustar `POST /cuentas/{id}/direcciones` para crear sucursales
+- [ ] Ajustar `PATCH /cuentas/{id}/direcciones/{relacion_id}` para edición de sucursales
+- [ ] Ajustar `DELETE /cuentas/{id}/direcciones/{relacion_id}` para baja lógica o física según el modelo final
+- [ ] Mantener escritura dual solo mientras exista compatibilidad
+
+### 10.3 UI
+
+- [ ] Separar el formulario de alta/edición en `Datos fiscales` y `Dirección de la empresa`
+- [ ] Agregar una opción para copiar datos de fiscal a operativa cuando sean iguales
+- [ ] Mostrar las sucursales en la ficha de empresa
+- [ ] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
+- [ ] Evitar que la UI dependa de los campos legacy una vez que el backend nuevo esté listo
+
+### 10.4 Verificación y corte
+
+- [ ] Validar que no hay datos perdidos después del backfill
+- [ ] Validar que la edición de dirección fiscal no rompe la dirección operativa
+- [ ] Validar que la creación de sucursales funciona con permisos correctos
+- [ ] Validar que los listados de empresas siguen rápidos
+- [ ] Marcar columnas legacy como obsoletas en documentación y código
+- [ ] Programar la eliminación final de columnas legacy de `cuentas`
+
+### 10.5 Eliminación final
+
+- [ ] Retirar campos de dirección legacy de `cuentas`
+- [ ] Dejar `cuenta_direcciones` y `direcciones` como fuente de verdad
+- [ ] Limpiar código muerto relacionado con los fallbacks
+- [ ] Actualizar documentación final del dominio de direcciones
+
+## 11. Criterio de salida
+
+Este anexo se considera completo cuando:
+
+- la cuenta puede tener dirección fiscal, dirección principal y múltiples sucursales
+- la UI permite capturar y editar esas piezas sin ambigüedad
+- el backend no depende del bloque legacy para operar
+- los campos de dirección en `cuentas` pueden eliminarse sin pérdida funcional ni de datos
