@@ -14624,20 +14624,12 @@ async def list_accounts(
     items: list[CRMAccount] = []
     account_ids = [account_id for account_id in (_safe_uuid(row.get("id")) for row in rows) if account_id]
     relation_rows: list[dict[str, Any]] = []
-    direction_rows: list[dict[str, Any]] = []
     if account_ids:
         try:
-            relation_rows, direction_rows = await asyncio.gather(
-                repo.list_account_person_relations_by_cuenta_ids(
-                    organizacion_id=organizacion_id,
-                    cuenta_ids=account_ids,
-                    activo=None,
-                ),
-                repo.list_account_address_relations_by_cuenta_ids(
-                    organizacion_id=organizacion_id,
-                    cuenta_ids=account_ids,
-                    activo=None,
-                ),
+            relation_rows = await repo.list_account_person_relations_by_cuenta_ids(
+                organizacion_id=organizacion_id,
+                cuenta_ids=account_ids,
+                activo=None,
             )
         except CRMRepositoryError:
             relation_rows = []
@@ -14648,13 +14640,6 @@ async def list_accounts(
         if not account_id:
             continue
         relations_by_account_id.setdefault(account_id, []).append(relation)
-    directions_by_account_id: dict[str, list[dict[str, Any]]] = {}
-    for relation in direction_rows:
-        account_id = str(relation.get("cuenta_id") or "").strip()
-        if not account_id:
-            continue
-        directions_by_account_id.setdefault(account_id, []).append(relation)
-
     owner_candidate_ids: set[UUID] = set()
     owner_candidate_id_by_account_id: dict[str, UUID] = {}
     for row in rows:
@@ -14675,11 +14660,7 @@ async def list_accounts(
             account_key = str(row.get("id") or "").strip()
             if account_key and account_key not in owner_candidate_id_by_account_id:
                 owner_candidate_id_by_account_id[account_key] = owner_id
-        payload = _materialize_account_directions(
-            row,
-            relation_rows=directions_by_account_id.get(str(row.get("id") or "").strip(), []),
-            include_direcciones=False,
-        )
+        payload = _materialize_account_directions(row, relation_rows=None, include_direcciones=False)
         existing_owner_name = str(payload.get("propietario_nombre") or "").strip() or None
         if contact:
             payload["contacto_principal_nombre"] = contact.get("nombre_completo")

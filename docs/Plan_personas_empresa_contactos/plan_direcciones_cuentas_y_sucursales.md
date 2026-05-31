@@ -323,7 +323,7 @@ La ejecución debe seguir este orden:
 - [x] Capturar `colonia` de forma explícita en la dirección de la empresa y mostrarla en detalle/listado donde aplique
 - [x] Agregar una opción para copiar datos de fiscal a principal cuando sean iguales
 - [x] Mostrar las sucursales en la ficha de empresa
-- [ ] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
+- [x] Mantener la vista de listado leyendo solo lo necesario para no añadir latencia
 - [ ] Evitar que la UI dependa de los campos legacy una vez que el backend nuevo esté listo
 
 ### 10.4 Verificación y corte
