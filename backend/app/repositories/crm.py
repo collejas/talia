@@ -855,6 +855,16 @@ class CRMRepository:
         ]
     )
 
+    _ACCOUNT_DIRECTION_SELECT = (
+        "id,organizacion_id,cuenta_id,direccion_id,tipo_relacion,es_principal,activo,notas,"
+        "metadata,creado_en,actualizado_en,"
+        "direccion:direcciones!cuenta_direcciones_direccion_org_fkey("
+        "id,organizacion_id,tipo,pais,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,"
+        "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,numero_interior,"
+        "letra_interior,tipo_asentamiento,nombre_asentamiento,colonia,tipo_centro_comercial,corredor_industrial,"
+        "numero_local,codigo_postal,latitud,longitud,metadata,creado_en,actualizado_en)"
+    )
+
     def __init__(self, *, timeout: float = 10.0, user_token: str | None = None) -> None:
         if not settings.supabase_url or not settings.supabase_service_role:
             raise CRMRepositoryError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
@@ -8023,6 +8033,7 @@ class CRMRepository:
         resp = await self._request(
             "POST",
             "/rest/v1/cuenta_direcciones",
+            params={"select": self._ACCOUNT_DIRECTION_SELECT},
             json=relation_body,
             prefer="return=representation",
         )
@@ -8051,6 +8062,7 @@ class CRMRepository:
                 "organizacion_id": f"eq.{organizacion_id}",
                 "cuenta_id": f"eq.{cuenta_id}",
                 "id": f"eq.{relacion_id}",
+                "select": self._ACCOUNT_DIRECTION_SELECT,
             },
             json=update_body,
             prefer="return=representation",
@@ -8089,10 +8101,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "cuenta_id": f"eq.{cuenta_id}",
             "order": "es_principal.desc,activo.desc,creado_en.asc",
-            "select": (
-                "id,organizacion_id,cuenta_id,direccion_id,tipo_relacion,es_principal,activo,notas,"
-                "metadata,creado_en,actualizado_en"
-            ),
+            "select": self._ACCOUNT_DIRECTION_SELECT,
         }
         if activo is not None:
             params["activo"] = "eq.true" if activo else "eq.false"

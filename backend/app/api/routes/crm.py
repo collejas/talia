@@ -10433,6 +10433,7 @@ class CRMCuentaDireccionRelacion(BaseModel):
     activo: bool = True
     notas: str | None = None
     metadata: dict[str, Any] | None = None
+    direccion: dict[str, Any] | None = None
     creado_en: datetime | None = None
     actualizado_en: datetime | None = None
 

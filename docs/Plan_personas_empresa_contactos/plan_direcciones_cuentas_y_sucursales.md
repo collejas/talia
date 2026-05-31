@@ -302,7 +302,7 @@ La ejecución debe seguir este orden:
 ### 10.2 Backend
 
 - [ ] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
-- [ ] Exponer `colonia` como campo canónico en `direcciones` y mapear `nombre_asentamiento` solo como alias de compatibilidad
+- [x] Exponer `colonia` como campo canónico en `direcciones` y mapear `nombre_asentamiento` solo como alias de compatibilidad
 - [ ] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
 - [ ] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
 - [ ] Mantener compatibilidad con el payload legacy mientras dura la migración
