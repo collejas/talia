@@ -1,6 +1,7 @@
 "use server";
 
 import { callCrmApi } from "@/lib/api/crm";
+import type { ContactCards, ContactTableRow } from "@/lib/contactos/types";
 
 type CrmContactSummary = {
   total?: number;
@@ -43,28 +44,6 @@ type CrmContactListRow = {
   tipo_establecimiento: string | null;
   fecha_incorporacion: string | null;
   total_rows: number;
-};
-
-export type ContactCards = {
-  total: number;
-  completos: number;
-  incompletos: number;
-  activos: number;
-  leads: number;
-  webchat: number;
-  propietarios: number;
-  ultimo?: string | null;
-};
-
-export type ContactTableRow = {
-  id: number;
-  header: string;
-  type: string;
-  status: string;
-  target: string;
-  limit: string;
-  reviewer: string;
-  raw?: Record<string, unknown>;
 };
 
 export type ContactosPayload = {

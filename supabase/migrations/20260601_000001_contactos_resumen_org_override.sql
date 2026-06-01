@@ -5,7 +5,8 @@ CREATE OR REPLACE FUNCTION public.panel_contactos_resumen(
     p_to timestamptz DEFAULT NULL,
     p_propietario uuid DEFAULT NULL,
     p_origen text DEFAULT NULL,
-    p_organizacion uuid DEFAULT NULL
+    p_organizacion uuid DEFAULT NULL,
+    p_search text DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE sql
 STABLE
@@ -25,6 +26,16 @@ WITH base AS (
       AND (p_to IS NULL OR p.creado_en <= p_to)
       AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
       AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
+      AND (
+        p_search IS NULL OR p_search = '' OR
+        p.nombre_completo ILIKE '%' || p_search || '%' OR
+        p.correo_principal ILIKE '%' || p_search || '%' OR
+        p.telefono_principal_e164 ILIKE '%' || p_search || '%' OR
+        COALESCE(p.metadata->>'legacy_company_name', '') ILIKE '%' || p_search || '%' OR
+        COALESCE(p.notas, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(p.metadata->>'legacy_contacto_codigo', '') ILIKE '%' || p_search || '%' OR
+        COALESCE(p.metadata->>'legacy_rfc', '') ILIKE '%' || p_search || '%'
+      )
       AND (
         (
           p_organizacion IS NOT NULL
@@ -71,7 +82,8 @@ GRANT EXECUTE ON FUNCTION public.panel_contactos_resumen(
     timestamptz,
     uuid,
     text,
-    uuid
+    uuid,
+    text
 ) TO authenticated, service_role;
 
 COMMIT;

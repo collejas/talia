@@ -1,8 +1,7 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { ContactSectionCards } from "@/components/contactos/section-cards"
-import { ContactsDataTable } from "@/components/contactos/contacts-data-table"
 import { SessionRecovery } from "@/components/session-recovery"
 import { loadContactosData } from "@/lib/contactos/data"
+import ContactosPageClient from "./contactos-page.client"
 
 export const dynamic = "force-dynamic"
 
@@ -11,7 +10,6 @@ export default async function Page() {
 
   return (
     <AppViewLayout title="Contactos">
-      <ContactSectionCards data={contactosData.cards} />
       <SessionRecovery errors={contactosData.errors} />
       {contactosData.errors.length ? (
         <div className="px-4 lg:px-6">
@@ -25,9 +23,7 @@ export default async function Page() {
           </div>
         </div>
       ) : null}
-      <div className="px-4 lg:px-6">
-        <ContactsDataTable data={contactosData.table} />
-      </div>
+      <ContactosPageClient initialCards={contactosData.cards} table={contactosData.table} />
     </AppViewLayout>
   )
 }

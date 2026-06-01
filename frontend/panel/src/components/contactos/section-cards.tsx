@@ -1,3 +1,5 @@
+"use client";
+
 import {
   IconAddressBook,
   IconCheck,
@@ -14,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { ContactCards } from "@/lib/contactos/data";
+import type { ContactCards } from "@/lib/contactos/types";
 
 type ContactSectionCardsProps = {
   data: ContactCards;

@@ -21477,9 +21477,22 @@ async def get_personas_summary_legacy(
     _: str = Depends(require_permission("contacts.read")),
     organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
+    search: str | None = Query(default=None, min_length=1),
+    propietario: UUID | None = Query(default=None),
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: datetime | None = None,
+    origen: str | None = Query(default=None),
 ) -> CRMPersonaSummary:
     try:
-        row = await repo.personas_resumen(usuario_token=user_token, organizacion_id=organizacion_id)
+        row = await repo.personas_resumen(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            search=search,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+            origen=origen,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersonaSummary.model_validate(row)
@@ -21492,12 +21505,22 @@ async def get_personas_summary(
     _: str = Depends(require_permission("contacts.read")),
     organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
+    search: str | None = Query(default=None, min_length=1),
+    propietario: UUID | None = Query(default=None),
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: datetime | None = None,
+    origen: str | None = Query(default=None),
 ) -> CRMPersonaSummary:
     row = await get_personas_summary_legacy(
         repo=repo,
         _=_,
         organizacion_id=organizacion_id,
         user_token=user_token,
+        search=search,
+        propietario=propietario,
+        date_from=date_from,
+        date_to=date_to,
+        origen=origen,
     )
     return CRMPersonaSummary.model_validate(row.model_dump())
 

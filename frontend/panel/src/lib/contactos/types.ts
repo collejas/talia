@@ -1,0 +1,28 @@
+export type ContactCards = {
+  total: number;
+  completos: number;
+  incompletos: number;
+  activos: number;
+  leads: number;
+  webchat: number;
+  propietarios: number;
+  ultimo?: string | null;
+};
+
+export type ContactTableRow = {
+  id: number;
+  header: string;
+  type: string;
+  status: string;
+  target: string;
+  limit: string;
+  reviewer: string;
+  raw?: Record<string, unknown>;
+};
+
+export type ContactFilters = {
+  search: string;
+  owner: string;
+  createdFrom: string;
+  createdTo: string;
+};

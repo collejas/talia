@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { usePermissions } from "@/hooks/use-permissions";
-import type { ContactTableRow } from "@/lib/contactos/data";
+import type { ContactFilters, ContactTableRow } from "@/lib/contactos/types";
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
 import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
 import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
@@ -71,6 +71,8 @@ type SalesRepOption = {
   telefono_e164: string | null;
   label: string;
 };
+
+export type { ContactFilters } from "@/lib/contactos/types";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -256,7 +258,13 @@ const contactColumnLabels = {
   reviewer: "Propietario",
 } as const;
 
-export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
+export function ContactsDataTable({
+  data,
+  onFiltersChange,
+}: {
+  data: ContactTableRow[];
+  onFiltersChange?: (filters: ContactFilters) => void;
+}) {
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = React.useMemo(
@@ -336,6 +344,15 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const searchQuery = searchTerm.trim();
+
+  React.useEffect(() => {
+    onFiltersChange?.({
+      search: searchQuery,
+      owner: ownerFilter,
+      createdFrom: createdFromFilter,
+      createdTo: createdToFilter,
+    });
+  }, [createdFromFilter, createdToFilter, onFiltersChange, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
     const term = searchQuery;

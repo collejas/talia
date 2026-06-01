@@ -11706,12 +11706,29 @@ class CRMRepository:
         *,
         usuario_token: str | None = None,
         organizacion_id: UUID | None = None,
+        search: str | None = None,
+        propietario: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        origen: str | None = None,
     ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if search and search.strip():
+            payload["p_search"] = search.strip()
+        if propietario is not None:
+            payload["p_propietario"] = str(propietario)
+        if date_from is not None:
+            payload["p_from"] = date_from.astimezone(timezone.utc).isoformat()
+        if date_to is not None:
+            payload["p_to"] = date_to.astimezone(timezone.utc).isoformat()
+        if origen and origen.strip():
+            payload["p_origen"] = origen.strip()
         if organizacion_id is not None:
+            payload["p_organizacion"] = str(organizacion_id)
             resp = await self._request_service_role(
                 "POST",
                 "/rest/v1/rpc/panel_contactos_resumen",
-                json={"p_organizacion": str(organizacion_id)},
+                json=payload,
                 organizacion_id=organizacion_id,
             )
         else:
@@ -11721,7 +11738,7 @@ class CRMRepository:
                 "POST",
                 "/rest/v1/rpc/panel_contactos_resumen",
                 token=usuario_token,
-                json={},
+                json=payload,
             )
         data = resp.json()
         if isinstance(data, dict):
@@ -11737,10 +11754,20 @@ class CRMRepository:
         *,
         usuario_token: str | None = None,
         organizacion_id: UUID | None = None,
+        search: str | None = None,
+        propietario: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        origen: str | None = None,
     ) -> dict[str, Any]:
         return await self.personas_resumen(
             usuario_token=usuario_token,
             organizacion_id=organizacion_id,
+            search=search,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+            origen=origen,
         )
 
     async def personas_list(
