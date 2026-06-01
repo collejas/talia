@@ -347,7 +347,6 @@ export function AccountCreateDialog({ onCreated }: Props) {
           letra_interior: form.letra_interior.trim() || null,
           tipo_asentamiento: form.tipo_asentamiento.trim() || null,
           colonia: form.colonia.trim() || null,
-          nombre_asentamiento: form.colonia.trim() || null,
           tipo_centro_comercial: form.tipo_centro_comercial.trim() || null,
           corredor_industrial: form.corredor_industrial.trim() || null,
           numero_local: form.numero_local.trim() || null,

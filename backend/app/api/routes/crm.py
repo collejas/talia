@@ -2563,8 +2563,12 @@ class CRMAccount(BaseModel):
     numero_interior: str | None = None
     letra_interior: str | None = None
     tipo_asentamiento: str | None = None
-    nombre_asentamiento: str | None = None
-    colonia: str | None = None
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = None
     corredor_industrial: str | None = None
     numero_local: str | None = None
@@ -2640,8 +2644,12 @@ class CRMAccountCreate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    nombre_asentamiento: str | None = Field(default=None, max_length=255)
-    colonia: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -2710,8 +2718,12 @@ class CRMAccountUpdate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    nombre_asentamiento: str | None = Field(default=None, max_length=255)
-    colonia: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -9946,7 +9958,12 @@ class CRMContact(BaseModel):
     numero_interior: str | None = None
     letra_interior: str | None = None
     tipo_asentamiento: str | None = None
-    nombre_asentamiento: str | None = None
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = None
     corredor_industrial: str | None = None
     numero_local: str | None = None
@@ -10043,7 +10060,12 @@ class CRMContactCreate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10126,7 +10148,12 @@ class CRMContactUpdate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10302,8 +10329,12 @@ class CRMPersonaAltaExtrasDireccion(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    nombre_asentamiento: str | None = Field(default=None, max_length=255)
-    colonia: str | None = Field(default=None, max_length=255)
+    colonia: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
+        serialization_alias="colonia",
+    )
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -11059,9 +11090,7 @@ def _persona_alta_normalize_extras(payload: CRMPersonaAltaExtras | None) -> CRMP
                 "numero_interior": _persona_alta_clean_text(direccion.numero_interior, compact_spaces=True),
                 "letra_interior": _persona_alta_clean_text(direccion.letra_interior, compact_spaces=True),
                 "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento, compact_spaces=True),
-                "colonia": _persona_alta_clean_text(direccion.colonia, compact_spaces=True)
-                or _persona_alta_clean_text(direccion.nombre_asentamiento, compact_spaces=True),
-                "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento, compact_spaces=True),
+                "colonia": _persona_alta_clean_text(direccion.colonia, compact_spaces=True),
                 "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial, compact_spaces=True),
                 "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial, compact_spaces=True),
                 "numero_local": _persona_alta_clean_text(direccion.numero_local, compact_spaces=True),
@@ -11719,10 +11748,7 @@ def _persona_alta_to_contact_payload(
         "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
         "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
         "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
-        "colonia": _persona_alta_clean_text(direccion.colonia if direccion else None)
-        or _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
-        "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None)
-        or _persona_alta_clean_text(direccion.colonia if direccion else None),
+        "colonia": _persona_alta_clean_text(direccion.colonia if direccion else None),
         "persona_datos": {
             "source": "personas_alta",
             "contexto_modo": contexto.modo,
@@ -11830,18 +11856,8 @@ def _persona_alta_to_account_payload(
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
         "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo")),
         "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
-        "colonia": (
-            _persona_alta_clean_text(direccion.colonia if direccion else None)
-            or _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None)
-            or _persona_alta_clean_text(existing_values.get("colonia"))
-            or _persona_alta_clean_text(existing_values.get("nombre_asentamiento"))
-        ),
-        "nombre_asentamiento": (
-            _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None)
-            or _persona_alta_clean_text(direccion.colonia if direccion else None)
-            or _persona_alta_clean_text(existing_values.get("nombre_asentamiento"))
-            or _persona_alta_clean_text(existing_values.get("colonia"))
-        ),
+        "colonia": _persona_alta_clean_text(direccion.colonia if direccion else None)
+        or _persona_alta_clean_text(existing_values.get("colonia")),
         "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),
         "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None) or _persona_alta_clean_text(existing_values.get("corredor_industrial")),
         "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_local")),

@@ -814,7 +814,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           numero_interior: readString(detail, "numero_interior"),
           letra_interior: readString(detail, "letra_interior"),
           tipo_asentamiento: readString(detail, "tipo_asentamiento"),
-          colonia: readString(detail, "colonia") || readString(detail, "nombre_asentamiento"),
+          colonia: readString(detail, "colonia"),
           tipo: readString(detail, "tipo") || "principal",
           tipo_centro_comercial: readString(detail, "tipo_centro_comercial"),
           corredor_industrial: readString(detail, "corredor_industrial"),

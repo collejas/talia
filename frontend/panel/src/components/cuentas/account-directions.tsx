@@ -120,7 +120,6 @@ export function buildDirectionPayload(direction: AccountDirectionDraft, relation
     letra_interior: direction.letra_interior.trim() || null,
     tipo_asentamiento: direction.tipo_asentamiento.trim() || null,
     colonia: direction.colonia.trim() || null,
-    nombre_asentamiento: direction.colonia.trim() || null,
     tipo_centro_comercial: direction.tipo_centro_comercial.trim() || null,
     corredor_industrial: direction.corredor_industrial.trim() || null,
     numero_local: direction.numero_local.trim() || null,
