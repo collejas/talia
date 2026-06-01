@@ -10,7 +10,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
 
-import { createProveedorConRelacionesAction } from "./actions"
+import {
+  createProveedorConRelacionesAction,
+  createProveedorContactoAction,
+  createProveedorCuentaBancariaAction,
+  deleteProveedorContactoAction,
+  deleteProveedorCuentaBancariaAction,
+  updateProveedorAction,
+} from "./actions"
 
 type AnyRecord = Record<string, unknown>
 
@@ -19,6 +26,10 @@ type ProveedorCreateModalProps = {
   onOpenChange: (open: boolean) => void
   defaultCode: string
   personas: AnyRecord[]
+  mode: "create" | "edit"
+  proveedor: AnyRecord | null
+  proveedorContactos: AnyRecord[]
+  proveedorCuentasBancarias: AnyRecord[]
 }
 
 type ContactDraft = {
@@ -100,7 +111,52 @@ function newBankDraft(): BankDraft {
   }
 }
 
-export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas }: ProveedorCreateModalProps) {
+function contactDraftFromRecord(record: AnyRecord): ContactDraft {
+  return {
+    id: String(record.id ?? crypto.randomUUID()),
+    persona_id: asString(record.persona_id, ""),
+    rol_en_proveedor: asString(record.rol_en_proveedor, "general"),
+    es_principal: Boolean(record.es_principal),
+    es_compras: Boolean(record.es_compras),
+    es_facturacion: Boolean(record.es_facturacion),
+    es_logistica: Boolean(record.es_logistica),
+    activo: Boolean(record.activo ?? true),
+    fecha_inicio: asString(record.fecha_inicio, ""),
+    fecha_fin: asString(record.fecha_fin, ""),
+    notas: asString(record.notas, ""),
+  }
+}
+
+function bankDraftFromRecord(record: AnyRecord): BankDraft {
+  return {
+    id: String(record.id ?? crypto.randomUUID()),
+    alias: asString(record.alias, ""),
+    banco_nombre: asString(record.banco_nombre, ""),
+    banco_clave: asString(record.banco_clave, ""),
+    pais: asString(record.pais, "MX"),
+    moneda: asString(record.moneda, "MXN"),
+    tipo_cuenta: asString(record.tipo_cuenta, ""),
+    titular: asString(record.titular, ""),
+    numero_cuenta: asString(record.numero_cuenta, ""),
+    clabe: asString(record.clabe, ""),
+    swift: asString(record.swift, ""),
+    iban: asString(record.iban, ""),
+    es_principal: Boolean(record.es_principal),
+    activo: Boolean(record.activo ?? true),
+    observaciones: asString(record.observaciones, ""),
+  }
+}
+
+export function ProveedorCreateModal({
+  open,
+  onOpenChange,
+  defaultCode,
+  personas,
+  mode,
+  proveedor,
+  proveedorContactos,
+  proveedorCuentasBancarias,
+}: ProveedorCreateModalProps) {
   const router = useRouter()
   const [tab, setTab] = useState("general")
   const [saving, setSaving] = useState(false)
@@ -119,6 +175,8 @@ export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas
   const [observaciones, setObservaciones] = useState("")
   const [contacts, setContacts] = useState<ContactDraft[]>([])
   const [banks, setBanks] = useState<BankDraft[]>([])
+  const [originalContactIds, setOriginalContactIds] = useState<string[]>([])
+  const [originalBankIds, setOriginalBankIds] = useState<string[]>([])
 
   const personaOptions = useMemo(
     () =>
@@ -157,13 +215,40 @@ export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas
     setObservaciones("")
     setContacts([])
     setBanks([])
+    setOriginalContactIds([])
+    setOriginalBankIds([])
   }
 
   useEffect(() => {
     if (open) {
-      resetForm()
+      if (mode === "edit" && proveedor) {
+        setTab("general")
+        setSaving(false)
+        setErrorMessage("")
+        setCodigoProveedor(asString(proveedor.codigo_proveedor, defaultCode))
+        setRazonSocial(asString(proveedor.razon_social, ""))
+        setNombreComercial(asString(proveedor.nombre_comercial, ""))
+        setRfc(asString(proveedor.rfc, ""))
+        setCorreo(asString(proveedor.correo, ""))
+        setTelefono(asString(proveedor.telefono, ""))
+        setPlazoPagoDias(asString(proveedor.plazo_pago_dias, ""))
+        setPlazoEntregaDias(asString(proveedor.plazo_entrega_dias, ""))
+        setLimiteCredito(asString(proveedor.limite_credito, ""))
+        setMonedaPreferida(asString(proveedor.moneda_preferida, "MXN"))
+        setActivo(Boolean(proveedor.activo ?? true))
+        setObservaciones(asString(proveedor.observaciones, ""))
+        const providerId = String(proveedor.id ?? "")
+        const providerContacts = proveedorContactos.filter((item) => String(item.proveedor_id) === providerId)
+        const providerBanks = proveedorCuentasBancarias.filter((item) => String(item.proveedor_id) === providerId)
+        setContacts(providerContacts.map(contactDraftFromRecord))
+        setBanks(providerBanks.map(bankDraftFromRecord))
+        setOriginalContactIds(providerContacts.map((item) => String(item.id)))
+        setOriginalBankIds(providerBanks.map((item) => String(item.id)))
+      } else {
+        resetForm()
+      }
     }
-  }, [open, defaultCode])
+  }, [open, defaultCode, mode, proveedor, proveedorContactos, proveedorCuentasBancarias])
 
   const handleClose = (nextOpen: boolean) => {
     onOpenChange(nextOpen)
@@ -240,12 +325,54 @@ export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas
             })),
         ),
       )
-      const response = await createProveedorConRelacionesAction(formData)
-      void response
+      if (mode === "edit" && proveedor?.id) {
+        await updateProveedorAction(String(proveedor.id), formData)
+        for (const contactoId of originalContactIds) {
+          await deleteProveedorContactoAction(contactoId)
+        }
+        for (const cuentaId of originalBankIds) {
+          await deleteProveedorCuentaBancariaAction(cuentaId)
+        }
+        for (const contacto of contacts.filter((row) => row.persona_id.trim().length > 0)) {
+          const contactoFormData = new FormData()
+          contactoFormData.set("persona_id", contacto.persona_id)
+          contactoFormData.set("rol_en_proveedor", contacto.rol_en_proveedor || "general")
+          contactoFormData.set("es_principal", String(contacto.es_principal))
+          contactoFormData.set("es_compras", String(contacto.es_compras))
+          contactoFormData.set("es_facturacion", String(contacto.es_facturacion))
+          contactoFormData.set("es_logistica", String(contacto.es_logistica))
+          contactoFormData.set("activo", String(contacto.activo))
+          if (contacto.fecha_inicio) contactoFormData.set("fecha_inicio", contacto.fecha_inicio)
+          if (contacto.fecha_fin) contactoFormData.set("fecha_fin", contacto.fecha_fin)
+          if (contacto.notas) contactoFormData.set("notas", contacto.notas)
+          await createProveedorContactoAction(String(proveedor.id), contactoFormData)
+        }
+        for (const cuenta of banks.filter((row) => row.banco_nombre.trim().length > 0)) {
+          const cuentaFormData = new FormData()
+          if (cuenta.alias) cuentaFormData.set("alias", cuenta.alias)
+          cuentaFormData.set("banco_nombre", cuenta.banco_nombre)
+          if (cuenta.banco_clave) cuentaFormData.set("banco_clave", cuenta.banco_clave)
+          cuentaFormData.set("pais", cuenta.pais || "MX")
+          cuentaFormData.set("moneda", cuenta.moneda || "MXN")
+          if (cuenta.tipo_cuenta) cuentaFormData.set("tipo_cuenta", cuenta.tipo_cuenta)
+          if (cuenta.titular) cuentaFormData.set("titular", cuenta.titular)
+          if (cuenta.numero_cuenta) cuentaFormData.set("numero_cuenta", cuenta.numero_cuenta)
+          if (cuenta.clabe) cuentaFormData.set("clabe", cuenta.clabe)
+          if (cuenta.swift) cuentaFormData.set("swift", cuenta.swift)
+          if (cuenta.iban) cuentaFormData.set("iban", cuenta.iban)
+          cuentaFormData.set("es_principal", String(cuenta.es_principal))
+          cuentaFormData.set("activo", String(cuenta.activo))
+          if (cuenta.observaciones) cuentaFormData.set("observaciones", cuenta.observaciones)
+          await createProveedorCuentaBancariaAction(String(proveedor.id), cuentaFormData)
+        }
+      } else {
+        const response = await createProveedorConRelacionesAction(formData)
+        void response
+      }
       handleClose(false)
       router.refresh()
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo crear el proveedor")
+      setErrorMessage(error instanceof Error ? error.message : mode === "edit" ? "No se pudo actualizar el proveedor" : "No se pudo crear el proveedor")
     } finally {
       setSaving(false)
     }
@@ -255,8 +382,10 @@ export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Crear proveedor</DialogTitle>
-          <DialogDescription>Captura la información general, condiciones, contactos y cuentas bancarias en un solo flujo.</DialogDescription>
+          <DialogTitle>{mode === "edit" ? "Editar proveedor" : "Crear proveedor"}</DialogTitle>
+          <DialogDescription>
+            Captura la información general, condiciones, contactos y cuentas bancarias en un solo flujo.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -522,7 +651,7 @@ export function ProveedorCreateModal({ open, onOpenChange, defaultCode, personas
               Cancelar
             </Button>
             <Button type="submit" disabled={saving || !razonSocial.trim()}>
-              {saving ? "Guardando..." : "Crear proveedor"}
+              {saving ? "Guardando..." : mode === "edit" ? "Guardar cambios" : "Crear proveedor"}
             </Button>
           </div>
         </form>

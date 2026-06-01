@@ -46,6 +46,8 @@ type AnyRecord = Record<string, unknown>
 type ComprasWorkspaceProps = {
   almacenes: AnyRecord[]
   proveedores: AnyRecord[]
+  proveedorContactos: AnyRecord[]
+  proveedorCuentasBancarias: AnyRecord[]
   personas: AnyRecord[]
   catalogItems: AnyRecord[]
   ordenes: AnyRecord[]
@@ -929,6 +931,8 @@ function getPaymentNormalizationDate(row: AnyRecord, fallback: string): string {
 export function ComprasWorkspace({
   almacenes,
   proveedores,
+  proveedorContactos,
+  proveedorCuentasBancarias,
   personas,
   catalogItems,
   ordenes,
@@ -992,6 +996,8 @@ export function ComprasWorkspace({
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [isProveedorModalOpen, setIsProveedorModalOpen] = useState(false)
+  const [providerModalMode, setProviderModalMode] = useState<"create" | "edit">("create")
+  const [providerModalProveedorId, setProviderModalProveedorId] = useState<string | null>(null)
   const [orderFolio, setOrderFolio] = useState(defaultOrderFolio)
   const [orderProviderId, setOrderProviderId] = useState<string>(String(proveedores[0]?.id ?? ""))
   const [orderWarehouseId, setOrderWarehouseId] = useState<string>(defaultWarehouseId)
@@ -1949,6 +1955,18 @@ export function ComprasWorkspace({
   const showAgentes = activeView === "agentes"
   const showInventario = activeView === "inventario"
   const showRecepciones = activeView === "recepciones"
+  const providerModalProveedor =
+    providerModalMode === "edit" && providerModalProveedorId
+      ? proveedores.find((proveedor) => String(proveedor.id) === providerModalProveedorId) ?? null
+      : null
+  const providerModalContacts =
+    providerModalMode === "edit" && providerModalProveedorId
+      ? proveedorContactos.filter((contacto) => String(contacto.proveedor_id) === providerModalProveedorId)
+      : []
+  const providerModalBanks =
+    providerModalMode === "edit" && providerModalProveedorId
+      ? proveedorCuentasBancarias.filter((cuenta) => String(cuenta.proveedor_id) === providerModalProveedorId)
+      : []
 
   useEffect(() => {
     if (!isOrderPaymentsModalOpen || selectedOrderPaymentSchedules.length === 0) {
@@ -2221,7 +2239,14 @@ export function ComprasWorkspace({
                 <CardTitle>Proveedores</CardTitle>
                 <CardDescription>Registra un proveedor y administra sus relaciones desde un modal estructurado.</CardDescription>
               </div>
-              <Button type="button" onClick={() => setIsProveedorModalOpen(true)}>
+              <Button
+                type="button"
+                onClick={() => {
+                  setProviderModalMode("create")
+                  setProviderModalProveedorId(null)
+                  setIsProveedorModalOpen(true)
+                }}
+              >
                 Crear proveedor
               </Button>
             </div>
@@ -2252,8 +2277,20 @@ export function ComprasWorkspace({
                         <TableCell>{Boolean(proveedor.activo) ? "Sí" : "No"}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setProviderModalMode("edit")
+                                setProviderModalProveedorId(String(proveedor.id))
+                                setIsProveedorModalOpen(true)
+                              }}
+                            >
+                              Editar
+                            </Button>
                             <form action={deleteProveedorAction.bind(null, String(proveedor.id))}>
-                              <Button type="submit" variant="ghost" size="sm">
+                              <Button type="submit" variant="destructive" size="sm">
                                 Eliminar
                               </Button>
                             </form>
@@ -2270,9 +2307,19 @@ export function ComprasWorkspace({
 
         <ProveedorCreateModal
           open={isProveedorModalOpen}
-          onOpenChange={setIsProveedorModalOpen}
+          onOpenChange={(nextOpen) => {
+            setIsProveedorModalOpen(nextOpen)
+            if (!nextOpen) {
+              setProviderModalMode("create")
+              setProviderModalProveedorId(null)
+            }
+          }}
           defaultCode={defaultProviderCode}
           personas={personas}
+          mode={providerModalMode}
+          proveedor={providerModalProveedor}
+          proveedorContactos={providerModalContacts}
+          proveedorCuentasBancarias={providerModalBanks}
         />
       </div>
       ) : null}
