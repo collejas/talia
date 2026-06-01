@@ -562,6 +562,7 @@ export function DataTable({
   detailDescription,
   toolbarLeadingActions,
   toolbarActions,
+  toolbarBelowActions,
   selectionActions,
   forcedColumnOrder,
   hideDefaultActions = false,
@@ -576,6 +577,7 @@ export function DataTable({
   detailDescription?: string
   toolbarLeadingActions?: React.ReactNode
   toolbarActions?: React.ReactNode
+  toolbarBelowActions?: React.ReactNode
   selectionActions?: (selectedRows: TableRowData[]) => React.ReactNode
   forcedColumnOrder?: string[]
   hideDefaultActions?: boolean
@@ -813,6 +815,9 @@ export function DataTable({
           </DropdownMenu>
         </div>
       </div>
+      {toolbarBelowActions ? (
+        <div className="px-4 lg:px-6">{toolbarBelowActions}</div>
+      ) : null}
       <TabsContent
         value="outline"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"

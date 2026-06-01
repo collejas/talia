@@ -23,6 +23,7 @@ import { DataTable, schema } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -263,6 +264,9 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     [permissionContext.permisos],
   );
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [ownerFilter, setOwnerFilter] = React.useState("all");
+  const [createdFromFilter, setCreatedFromFilter] = React.useState("");
+  const [createdToFilter, setCreatedToFilter] = React.useState("");
   const [remoteSearchData, setRemoteSearchData] = React.useState<ContactTableRow[] | null>(null);
   const [remoteSearchTotalRows, setRemoteSearchTotalRows] = React.useState<number | null>(null);
   const [remoteSearchQuery, setRemoteSearchQuery] = React.useState("");
@@ -331,9 +335,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const searchQuery = searchTerm.trim();
 
   React.useEffect(() => {
-    const term = searchTerm.trim();
+    const term = searchQuery;
     if (term.length < 2) {
       setRemoteSearchData(null);
       setRemoteSearchTotalRows(null);
@@ -380,7 +385,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [searchTerm]);
+  }, [searchQuery]);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
@@ -626,19 +631,58 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     });
   };
 
-  const filteredData = React.useMemo(() => {
-    const normalizedTerm = normalizeSearch(searchTerm);
-    if (!normalizedTerm) return data;
-
-    if (remoteSearchQuery === searchTerm.trim()) {
+  const sourceData = React.useMemo(() => {
+    if (!searchQuery) return data;
+    if (remoteSearchQuery === searchQuery) {
       return remoteSearchData ?? [];
     }
-
     return [];
-  }, [data, remoteSearchData, remoteSearchQuery, searchTerm]);
+  }, [data, remoteSearchData, remoteSearchQuery, searchQuery]);
+
+  const ownerOptions = React.useMemo(() => {
+    const options = new Map<string, string>();
+    for (const row of sourceData) {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const ownerKey = getOwnerFilterKey(raw);
+      if (!ownerKey || options.has(ownerKey)) continue;
+      options.set(ownerKey, getOwnerFilterLabel(raw));
+    }
+    if (ownerFilter !== "all" && ownerFilter !== "unassigned" && !options.has(ownerFilter)) {
+      options.set(ownerFilter, ownerFilter);
+    }
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label, "es"));
+  }, [ownerFilter, sourceData]);
+
+  const filteredData = React.useMemo(() => {
+    const createdFrom = parseDateInput(createdFromFilter, "start");
+    const createdTo = parseDateInput(createdToFilter, "end");
+
+    return sourceData.filter((row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      if (ownerFilter !== "all" && getOwnerFilterKey(raw) !== ownerFilter) {
+        return false;
+      }
+      const createdAt = getRowCreatedAt(raw);
+      if (createdFrom !== null && createdAt !== null && createdAt < createdFrom) {
+        return false;
+      }
+      if (createdFrom !== null && createdAt === null) {
+        return false;
+      }
+      if (createdTo !== null && createdAt !== null && createdAt > createdTo) {
+        return false;
+      }
+      if (createdTo !== null && createdAt === null) {
+        return false;
+      }
+      return true;
+    });
+  }, [createdFromFilter, createdToFilter, ownerFilter, sourceData]);
 
   const resultsLabel =
-    searchTerm.trim().length > 0
+    searchQuery.length > 0
       ? remoteSearchLoading
         ? "Buscando contactos..."
         : remoteSearchError
@@ -646,31 +690,97 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           : remoteSearchTotalRows !== null
             ? `${filteredData.length} de ${remoteSearchTotalRows} contactos`
             : `${filteredData.length} contactos`
-      : `${data.length} contactos`;
+      : createdFromFilter || createdToFilter || ownerFilter !== "all"
+        ? `${filteredData.length} de ${sourceData.length} contactos`
+        : `${data.length} contactos`;
 
   const toolbarLeadingActions = (
     <div className="flex w-full flex-wrap items-center gap-2">
-      <div className="relative w-full lg:w-[340px]">
-        <Input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Buscar contacto por nombre, correo, teléfono, empresa o código"
-          aria-label="Buscar contacto"
-          className="pr-24"
-        />
-        {searchTerm ? (
+      <div className="text-sm text-muted-foreground">{resultsLabel}</div>
+    </div>
+  );
+
+  const toolbarBelowActions = (
+    <div className="rounded-xl border bg-muted/20 p-3 shadow-sm">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px]">
+        <div className="grid gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Búsqueda</Label>
+          <div className="relative">
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Nombre, correo, teléfono, empresa o código"
+              aria-label="Buscar contacto"
+              className="pr-24"
+            />
+            {searchTerm ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1 h-8 px-3 text-xs text-muted-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                Limpiar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Propietario</Label>
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="unassigned">Sin asignar</SelectItem>
+              {ownerOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="created-from-filter" className="text-xs font-medium text-muted-foreground">
+            Creado desde
+          </Label>
+          <Input
+            id="created-from-filter"
+            type="date"
+            value={createdFromFilter}
+            onChange={(event) => setCreatedFromFilter(event.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="created-to-filter" className="text-xs font-medium text-muted-foreground">
+            Creado hasta
+          </Label>
+          <Input
+            id="created-to-filter"
+            type="date"
+            value={createdToFilter}
+            onChange={(event) => setCreatedToFilter(event.target.value)}
+          />
+        </div>
+        <div className="flex items-end gap-2">
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1 h-8 px-3 text-xs text-muted-foreground"
-            onClick={() => setSearchTerm("")}
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setOwnerFilter("all");
+              setCreatedFromFilter("");
+              setCreatedToFilter("");
+              setSearchTerm("");
+            }}
           >
-            Limpiar
+            Limpiar filtros
           </Button>
-        ) : null}
+        </div>
       </div>
-      <div className="text-sm text-muted-foreground">{resultsLabel}</div>
     </div>
   );
 
@@ -786,6 +896,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         forcedColumnOrder={contactColumnOrder}
         detailDescription="Detalle del contacto"
         toolbarLeadingActions={toolbarLeadingActions}
+        toolbarBelowActions={toolbarBelowActions}
         renderRowDetails={renderRowDetails}
         hideDefaultActions
         initialVisibility={contactVisibility}
@@ -922,6 +1033,40 @@ function normalizeSearch(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getOwnerFilterKey(raw: Record<string, unknown> | undefined): string {
+  const ownerId = extractString(raw, ["propietario_id", "propietario_usuario_id"]);
+  if (ownerId) return ownerId;
+  const ownerName = extractString(raw, ["propietario_nombre"]);
+  if (ownerName) return ownerName;
+  return "unassigned";
+}
+
+function getOwnerFilterLabel(raw: Record<string, unknown> | undefined): string {
+  return extractString(raw, ["propietario_nombre"]) || extractString(raw, ["propietario_id", "propietario_usuario_id"]) || "Sin asignar";
+}
+
+function getRowCreatedAt(raw: Record<string, unknown> | undefined): number | null {
+  const createdAt = extractString(raw, ["creado_en"]);
+  if (!createdAt) return null;
+  const timestamp = Date.parse(createdAt);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function parseDateInput(value: string, boundary: "start" | "end"): number | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  const parts = raw.split("-").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) {
+    return null;
+  }
+  const [year, month, day] = parts;
+  const date = boundary === "start"
+    ? new Date(year, month - 1, day, 0, 0, 0, 0)
+    : new Date(year, month - 1, day, 23, 59, 59, 999);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 function formatContactValue(value: unknown): string {
