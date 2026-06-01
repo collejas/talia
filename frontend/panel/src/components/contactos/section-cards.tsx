@@ -137,6 +137,7 @@ function formatDateRelative(value: string | null | undefined): string {
   const formatter = new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   });
   return formatter.format(date);
 }
