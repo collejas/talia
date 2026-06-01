@@ -154,7 +154,6 @@ Estas columnas deben vivir en `cuentas`:
   - `numero_interior`
   - `letra_interior`
   - `tipo_asentamiento`
-  - `nombre_asentamiento`
   - `tipo_centro_comercial`
   - `corredor_industrial`
   - `numero_local`
@@ -351,7 +350,6 @@ Normalizar direcciones para persona o cuenta sin repetir columnas en múltiples 
 - `edificio`
 - `edificio_piso`
 - `tipo_asentamiento`
-- `nombre_asentamiento`
 - `tipo_centro_comercial`
 - `corredor_industrial`
 - `numero_local`

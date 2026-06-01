@@ -199,7 +199,6 @@ Campos sugeridos:
 - `numero_interior`
 - `codigo_postal`
 - `tipo_asentamiento`
-- `nombre_asentamiento`
 - `tipo_establecimiento`
 - `latitud`
 - `longitud`

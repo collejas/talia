@@ -60,7 +60,6 @@ Los siguientes campos siguen existiendo en `cuentas` mientras dura la migración
 - `numero_interior`
 - `letra_interior`
 - `tipo_asentamiento`
-- `nombre_asentamiento`
 - `colonia`
 - `tipo_centro_comercial`
 - `corredor_industrial`
@@ -90,7 +89,7 @@ Uso:
 - almacena el bloque estructurado de domicilio
 - puede reutilizarse por cuenta, contacto o futuros módulos
 - los datos de dirección deben existir como columnas explícitas, no como JSON en `metadata`
-- `colonia` es el campo canónico; `nombre_asentamiento` queda como compatibilidad/alias durante la transición
+- `colonia` es el campo canónico
 
 ### 4.2 `cuenta_direcciones`
 
@@ -227,7 +226,6 @@ Las columnas a retirar al final del refactor son las de domicilio legacy de `cue
 - `numero_interior`
 - `letra_interior`
 - `tipo_asentamiento`
-- `nombre_asentamiento`
 - `colonia`
 - `tipo_centro_comercial`
 - `corredor_industrial`
@@ -283,7 +281,6 @@ La ejecución debe seguir este orden:
 - [ ] `numero_interior`
 - [ ] `letra_interior`
 - [ ] `tipo_asentamiento`
-- [ ] `nombre_asentamiento`
 - [ ] `tipo_centro_comercial`
 - [ ] `corredor_industrial`
 - [ ] `numero_local`
@@ -306,7 +303,7 @@ La ejecución debe seguir este orden:
 ### 10.2 Backend
 
 - [x] Extender los modelos de cuenta para exponer `direccion_fiscal`, `direccion_principal` y `direcciones`
-- [x] Exponer `colonia` como campo canónico en `direcciones` y mapear `nombre_asentamiento` solo como alias de compatibilidad
+- [x] Exponer `colonia` como campo canónico en `direcciones`
 - [x] Ajustar `POST /cuentas` para aceptar dirección fiscal y dirección principal
 - [x] Ajustar `PATCH /cuentas/{id}` para editar ambos bloques por separado
 - [x] Mantener compatibilidad con el payload legacy mientras dura la migración

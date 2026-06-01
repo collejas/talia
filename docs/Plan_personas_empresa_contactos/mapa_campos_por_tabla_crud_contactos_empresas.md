@@ -95,7 +95,6 @@ Nota de transición:
 | `numero_interior` | Visible | Dirección legacy temporal |
 | `letra_interior` | Visible | Dirección legacy temporal |
 | `tipo_asentamiento` | Visible | Dirección legacy temporal |
-| `nombre_asentamiento` | Visible | Dirección legacy temporal (alias de colonia) |
 | `colonia` | Visible | Dirección canónica |
 | `tipo_centro_comercial` | Visible | Dirección legacy temporal |
 | `corredor_industrial` | Visible | Dirección legacy temporal |
@@ -137,7 +136,6 @@ Nota de transición:
 | `numero_interior` | Visible | Interior |
 | `letra_interior` | Visible | Interior |
 | `tipo_asentamiento` | Visible | Colonia / asentamiento |
-| `nombre_asentamiento` | Visible | Colonia / asentamiento (alias legacy) |
 | `colonia` | Visible | Colonia canónica |
 | `tipo_centro_comercial` | Visible | Centro comercial |
 | `corredor_industrial` | Visible | Corredor industrial |
@@ -230,7 +228,6 @@ Esta tabla sigue existiendo como compatibilidad y referencia histórica, pero ya
 | `numero_interior` | Visible | Dirección |
 | `letra_interior` | Visible | Dirección |
 | `tipo_asentamiento` | Visible | Dirección |
-| `nombre_asentamiento` | Visible | Dirección (alias de colonia) |
 | `colonia` | Visible | Dirección |
 | `tipo_centro_comercial` | Visible | Dirección |
 | `corredor_industrial` | Visible | Dirección |
