@@ -21,9 +21,18 @@ export function mergeCatalogOptions(
   currentValue: string | null | undefined,
   currentLabelPrefix = "Actual",
 ): ContactCatalogOption[] {
-  const normalized = options.filter((option) => option.value.trim())
-  const current = (currentValue ?? "").trim()
+  const normalized = options
+    .map((option) => ({
+      value: String(option?.value ?? "").trim(),
+      label: String(option?.label ?? "").trim(),
+    }))
+    .filter((option) => option.value.length > 0 && option.value !== "undefined" && option.value !== "null")
+    .filter((option, index, array) => array.findIndex((item) => item.value === option.value) === index)
+  const current = String(currentValue ?? "").trim()
   if (!current) {
+    return normalized
+  }
+  if (current === "undefined" || current === "null") {
     return normalized
   }
   if (normalized.some((option) => option.value === current)) {
@@ -47,11 +56,16 @@ export function ContactCatalogSelect({
       </SelectTrigger>
       <SelectContent>
         {options.length ? (
-          options.map((option) => (
+          options
+            .filter((option, index, array) => {
+              const value = String(option?.value ?? "").trim()
+              return value.length > 0 && value !== "undefined" && value !== "null" && array.findIndex((item) => String(item?.value ?? "").trim() === value) === index
+            })
+            .map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
-          ))
+            ))
         ) : (
           <SelectItem value="__no_options__" disabled>
             {emptyLabel}
