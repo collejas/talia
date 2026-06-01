@@ -15,12 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
-import {
-  getRfcLengthMessage,
-  isValidRfcLength,
-  sanitizePhoneInput,
-  sanitizeRfcInput,
-} from "@/components/contactos/contact-input-sanitizers";
+import { sanitizePhoneInput, sanitizeRfcInput } from "@/components/contactos/contact-input-sanitizers";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 import {
   AccountDirectionCard,
@@ -123,6 +118,7 @@ function readDirectionText(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "";
 }
+
 
 function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: string): AccountDirectionDraft {
   const direction = (row.direccion as Record<string, unknown> | undefined) ?? row;
@@ -610,8 +606,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
   const name = getText(detail?.nombre);
   const alias = getText(detail?.alias);
-  const tipo = getText(detail?.tipo);
-  const rfcHint = React.useMemo(() => getRfcLengthMessage(tipo), [tipo]);
+  const accountTypeLabel = getText(detail?.tipo) === "persona_fisica_actividad_empresarial" ? "Persona física con actividad empresarial" : "Empresa";
+  const rfcHint = "RFC (12 o 13 caracteres)";
   const rfc = getText(detail?.rfc);
   const industry = getText(detail?.industria);
   const email = getText(detail?.correo ?? detail?.email);
@@ -706,12 +702,6 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   };
 
   const handleSaveEdit = async () => {
-    if (!isValidRfcLength(editForm.rfc, tipo)) {
-      const message = getRfcLengthMessage(tipo);
-      setEditError(message);
-      toast.error(message);
-      return;
-    }
     const primaryDirection: AccountDirectionDraft = createEmptyDirectionDraft({
       key: "primary",
       tipo: primaryDirectionType,
@@ -951,7 +941,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           <CardContent className="grid gap-4 text-sm">
             <div className="grid gap-1">
               <span className="text-muted-foreground">Tipo</span>
-              <span>{tipo}</span>
+              <span>{accountTypeLabel}</span>
             </div>
             <div className="grid gap-1">
               <span className="text-muted-foreground">Industria</span>

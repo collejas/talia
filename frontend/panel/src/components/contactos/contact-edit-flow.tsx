@@ -535,6 +535,21 @@ function cleanObject<T extends Record<string, unknown>>(
   return next as Partial<T>;
 }
 
+function getAccountTypeFromMode(mode: CreateMode): "empresa" | "persona_fisica_actividad_empresarial" {
+  return mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
+}
+
+function resolveAccountType(
+  mode: CreateMode,
+  accountType: string,
+): "empresa" | "persona_fisica_actividad_empresarial" {
+  return accountType === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : getAccountTypeFromMode(mode);
+}
+
+function getPersonaTypeFromAccountType(accountType: "empresa" | "persona_fisica_actividad_empresarial") {
+  return accountType === "persona_fisica_actividad_empresarial" ? "fisica" : "moral";
+}
+
 function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
@@ -545,24 +560,19 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
     correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
   }, { keepEmptyStringsAsNull: true });
 
+  const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
   const cuentaBase = cleanObject({
     ...state.cuenta,
     razon_social:
-      state.mode === "persona_fisica_actividad_empresarial"
+      accountType === "persona_fisica_actividad_empresarial"
         ? state.cuenta.razon_social || nombreCompleto
         : state.cuenta.razon_social,
     nombre_comercial:
-      state.mode === "persona_fisica_actividad_empresarial"
+      accountType === "persona_fisica_actividad_empresarial"
         ? state.cuenta.nombre_comercial || nombreCompleto
         : state.cuenta.nombre_comercial,
-    tipo_persona:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "fisica"
-        : state.cuenta.tipo_persona,
-    tipo_cuenta:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "persona_fisica_actividad_empresarial"
-        : state.cuenta.tipo_cuenta,
+    tipo_persona: getPersonaTypeFromAccountType(accountType),
+    tipo_cuenta: accountType,
     rfc: sanitizeRfcInput(state.cuenta.rfc),
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
     correo_secundario: state.cuenta.correo_secundario,
@@ -658,11 +668,9 @@ function validateState(state: ContactEditState): string | null {
   ) {
     return "La cuenta requiere nombre comercial o razón social.";
   }
-  if (state.mode === "empresa_nueva" && !state.cuenta.tipo_persona.trim()) {
-    return "Selecciona el tipo de persona de la cuenta.";
-  }
-  if (!isValidRfcLength(state.cuenta.rfc, state.cuenta.tipo)) {
-    return getRfcLengthMessage(state.cuenta.tipo);
+  const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
+  if (!isValidRfcLength(state.cuenta.rfc, accountType)) {
+    return getRfcLengthMessage(accountType);
   }
   return null;
 }
@@ -751,9 +759,11 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           alias: readString(detail, "alias"),
           tipo_persona:
             (readString(detail, "persona_fisica_moral") as CuentaDraft["tipo_persona"]) ||
-            (mode === "persona_fisica_actividad_empresarial" ? "fisica" : ""),
-          tipo_cuenta: readString(detail, "cuenta_tipo") || "empresa",
-          tipo: readString(detail, "tipo") || "empresa",
+            (readString(detail, "cuenta_tipo") === "persona_fisica_actividad_empresarial" || mode === "persona_fisica_actividad_empresarial" ? "fisica" : ""),
+          tipo_cuenta: readString(detail, "cuenta_tipo") || (mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa"),
+          tipo:
+            readString(detail, "cuenta_tipo") ||
+            (mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa"),
           codigo_cuenta: readString(detail, "codigo_cuenta"),
           rfc: sanitizeRfcInput(readString(detail, "rfc")),
           industria: readString(detail, "tipo_industria"),
@@ -823,21 +833,26 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         extrasOpen: hasFiscalOrAddressData,
       };
     }
-    case "mode/set":
+    case "mode/set": {
+      const nextType = action.mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
       return {
         ...state,
         mode: action.mode,
         cuenta:
-          action.mode === "empresa_nueva" || action.mode === "empresa_existente"
-            ? {
+          action.mode === "solo_persona"
+            ? { ...INITIAL_STATE.cuenta }
+            : {
                 ...state.cuenta,
                 cuenta_id: action.mode === "empresa_nueva" ? "" : state.cuenta.cuenta_id,
                 codigo_cuenta: action.mode === "empresa_nueva" ? "" : state.cuenta.codigo_cuenta,
-              }
-            : state.cuenta,
+                tipo: nextType,
+                tipo_cuenta: nextType,
+                tipo_persona: getPersonaTypeFromAccountType(nextType),
+              },
         error: null,
         accountError: null,
       };
+    }
     case "persona/set":
       return { ...state, persona: { ...state.persona, [action.field]: action.value } };
     case "cuenta/set":
@@ -856,7 +871,8 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
       return { ...state, accountLoading: false, accountResults: action.items, accountError: null };
     case "account-search/error":
       return { ...state, accountLoading: false, accountError: action.message };
-    case "account/select":
+    case "account/select": {
+      const selectedType = action.account.tipo === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
       return {
         ...state,
         cuenta: {
@@ -864,6 +880,9 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
           codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
+          tipo: selectedType,
+          tipo_cuenta: selectedType,
+          tipo_persona: getPersonaTypeFromAccountType(selectedType),
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
           telefono_principal_e164: sanitizePhoneInput(
@@ -879,6 +898,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           rol_en_cuenta: state.relacion.rol_en_cuenta || "contacto_principal",
         },
       };
+    }
     case "loading/set":
       return { ...state, loading: action.value };
     case "saving/set":
@@ -1120,6 +1140,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
   const isCompanyMode = state.mode === "empresa_nueva";
   const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
+  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Empresa";
   const rfcHint = React.useMemo(
     () => getRfcLengthMessage(isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"),
     [isPfaeMode],
@@ -1725,20 +1746,8 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label={isPfaeMode ? "ID de empresa propia" : "ID de empresa"}>
                   <Input value={state.cuenta.codigo_cuenta || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
                 </Field>
-                <Field label="Tipo">
-                  <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
-                </Field>
-                <Field label="Tipo persona">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.cuenta.tipo_persona || ""}
-                    onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_persona", value: e.target.value })}
-                    disabled={state.mode === "persona_fisica_actividad_empresarial"}
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="fisica">Física</option>
-                    <option value="moral">Moral</option>
-                  </select>
+                <Field label="Tipo de cuenta">
+                  <Input value={accountTypeLabel} readOnly disabled className="bg-muted" />
                 </Field>
                 <Field label="RFC" hint={rfcHint}>
                   <Input

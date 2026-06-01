@@ -7208,10 +7208,10 @@ class CRMRepository:
                 apellido_paterno = split_apellido_paterno
                 apellido_materno = split_apellido_materno
 
-        contact_kind_raw = self._pick_text(merged, "persona_fisica_moral")
-        contact_kind = contact_kind_raw.casefold() if contact_kind_raw else ""
-        contact_is_physical = contact_kind == "fisica"
-        contact_is_moral = contact_kind == "moral"
+        account_type_raw = self._pick_text(merged, "tipo") or self._pick_text(merged, "tipo_cuenta")
+        account_type = account_type_raw.casefold() if account_type_raw else ""
+        contact_is_physical = account_type == "persona_fisica_actividad_empresarial"
+        contact_is_moral = account_type == "empresa"
 
         company_name = self._pick_text(merged, "company_name")
         reason_name = self._pick_text(merged, "razon_social")
@@ -7370,7 +7370,7 @@ class CRMRepository:
             account_body = {
                 "nombre": account_name or full_name or "Cuenta sin nombre",
                 "alias": company_name or reason_name,
-                "tipo": "persona_fisica_actividad_empresarial" if contact_is_physical else "empresa",
+                "tipo": account_type if account_type in {"persona_fisica_actividad_empresarial", "empresa"} else "empresa",
                 "industria": self._pick_text(merged, "tipo_industria"),
                 "tamano": self._pick_text(merged, "tamano"),
                 "sitio_web": self._pick_text(merged, "sitio_web", "website"),

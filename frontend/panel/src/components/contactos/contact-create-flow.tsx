@@ -452,11 +452,32 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
     case "reset":
       return INITIAL_STATE;
     case "mode/set": {
+      const nextType = action.mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
       const nextState: ContactCreateState = {
         ...state,
         mode: action.mode,
         error: null,
         accountError: null,
+        cuenta: {
+          ...state.cuenta,
+          cuenta_id: action.mode === "solo_persona" ? "" : action.mode === "empresa_nueva" ? "" : state.cuenta.cuenta_id,
+          codigo_cuenta: action.mode === "solo_persona" || action.mode === "empresa_nueva" ? "" : state.cuenta.codigo_cuenta,
+          tipo: action.mode === "solo_persona" ? "" : nextType,
+          tipo_cuenta: action.mode === "solo_persona" ? "" : nextType,
+          tipo_persona: action.mode === "solo_persona" ? "" : getPersonaTypeFromAccountType(nextType),
+          alias:
+            action.mode === "persona_fisica_actividad_empresarial"
+              ? state.cuenta.alias || buildFullName(state.persona)
+              : state.cuenta.alias,
+          razon_social:
+            action.mode === "persona_fisica_actividad_empresarial"
+              ? state.cuenta.razon_social || buildFullName(state.persona)
+              : state.cuenta.razon_social,
+          nombre_comercial:
+            action.mode === "persona_fisica_actividad_empresarial"
+              ? state.cuenta.nombre_comercial || buildFullName(state.persona)
+              : state.cuenta.nombre_comercial,
+        },
       };
       if (action.mode === "solo_persona") {
         nextState.cuenta = { ...INITIAL_STATE.cuenta };
@@ -465,18 +486,6 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         nextState.accountResults = [];
       }
       if (action.mode === "persona_fisica_actividad_empresarial") {
-        const nombreCompleto = buildFullName(state.persona);
-        nextState.cuenta = {
-          ...state.cuenta,
-          cuenta_id: "",
-          codigo_cuenta: "",
-          alias: state.cuenta.alias || nombreCompleto,
-          razon_social: nombreCompleto || state.cuenta.razon_social,
-          nombre_comercial: state.cuenta.nombre_comercial || nombreCompleto,
-          tipo_persona: "fisica",
-          tipo_cuenta: "persona_fisica_actividad_empresarial",
-          tipo: "persona_fisica_actividad_empresarial",
-        };
         nextState.relacion = {
           ...state.relacion,
           rol_en_cuenta: state.relacion.rol_en_cuenta || "dueno",
@@ -485,27 +494,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           activo: true,
         };
       }
-      if (action.mode === "empresa_nueva") {
-        nextState.cuenta = {
-          ...state.cuenta,
-          cuenta_id: "",
-          codigo_cuenta: "",
-          tipo: "empresa",
-          tipo_cuenta: "empresa",
-        };
-        nextState.relacion = {
-          ...state.relacion,
-          rol_en_cuenta: state.relacion.rol_en_cuenta || "contacto_principal",
-        };
-      }
-      if (action.mode === "empresa_existente") {
-        nextState.cuenta = {
-          ...state.cuenta,
-          cuenta_id: "",
-          codigo_cuenta: "",
-          tipo: "empresa",
-          tipo_cuenta: "empresa",
-        };
+      if (action.mode === "empresa_nueva" || action.mode === "empresa_existente") {
         nextState.relacion = {
           ...state.relacion,
           rol_en_cuenta: state.relacion.rol_en_cuenta || "contacto_principal",
@@ -562,7 +551,8 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         accountLoading: false,
         accountError: action.message,
       };
-    case "account/select":
+    case "account/select": {
+      const selectedType = action.account.tipo === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
       return {
         ...state,
         cuenta: {
@@ -570,6 +560,9 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
           codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
+          tipo: selectedType,
+          tipo_cuenta: selectedType,
+          tipo_persona: getPersonaTypeFromAccountType(selectedType),
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
           telefono_principal_e164: sanitizePhoneInput(
@@ -585,6 +578,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           rol_en_cuenta: state.relacion.rol_en_cuenta || "contacto_principal",
         },
       };
+    }
     case "saving/set":
       return {
         ...state,
@@ -626,6 +620,21 @@ function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
   return next as Partial<T>;
 }
 
+function getAccountTypeFromMode(mode: CreateMode): "empresa" | "persona_fisica_actividad_empresarial" {
+  return mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
+}
+
+function resolveAccountType(
+  mode: CreateMode,
+  accountType: string,
+): "empresa" | "persona_fisica_actividad_empresarial" {
+  return accountType === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : getAccountTypeFromMode(mode);
+}
+
+function getPersonaTypeFromAccountType(accountType: "empresa" | "persona_fisica_actividad_empresarial") {
+  return accountType === "persona_fisica_actividad_empresarial" ? "fisica" : "moral";
+}
+
 function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, currentUserId?: string | null) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
@@ -637,29 +646,21 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
     propietario_usuario_id: state.persona.propietario_usuario_id || currentUserId || undefined,
   });
 
+  const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
   const cuentaBase = cleanObject({
     ...state.cuenta,
     razon_social:
-      state.mode === "persona_fisica_actividad_empresarial"
+      accountType === "persona_fisica_actividad_empresarial"
         ? state.cuenta.razon_social || nombreCompleto
         : state.cuenta.razon_social,
     nombre_comercial:
-      state.mode === "persona_fisica_actividad_empresarial"
+      accountType === "persona_fisica_actividad_empresarial"
         ? state.cuenta.nombre_comercial || nombreCompleto
         : state.cuenta.nombre_comercial,
     alias: state.cuenta.alias,
-    tipo_persona:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "fisica"
-        : state.cuenta.tipo_persona,
-    tipo_cuenta:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "persona_fisica_actividad_empresarial"
-        : state.cuenta.tipo_cuenta,
-    tipo:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "persona_fisica_actividad_empresarial"
-        : state.cuenta.tipo,
+    tipo_persona: getPersonaTypeFromAccountType(accountType),
+    tipo_cuenta: accountType,
+    tipo: accountType,
     rfc: sanitizeRfcInput(state.cuenta.rfc),
     tamano: state.cuenta.tamano,
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
@@ -775,14 +776,9 @@ function validateState(state: ContactCreateState): string | null {
   ) {
     return "La empresa requiere nombre comercial o razón social.";
   }
-  if (
-    state.mode === "empresa_nueva" &&
-    !state.cuenta.tipo_persona.trim()
-  ) {
-    return "Selecciona el tipo de persona de la empresa.";
-  }
-  if (!isValidRfcLength(state.cuenta.rfc, state.cuenta.tipo)) {
-    return getRfcLengthMessage(state.cuenta.tipo);
+  const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
+  if (!isValidRfcLength(state.cuenta.rfc, accountType)) {
+    return getRfcLengthMessage(accountType);
   }
   return null;
 }
@@ -953,6 +949,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const isContactMode = state.mode === "empresa_existente";
   const isCompanyMode = state.mode === "empresa_nueva";
   const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
+  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Empresa";
   const puestoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.puestoOptions, state.persona.puesto),
     [state.persona.puesto, tenantCatalogs.puestoOptions],
@@ -1397,23 +1394,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     className="bg-muted"
                   />
                 </Field>
-                <Field label="Tipo">
-                  <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
-                </Field>
-                <Field label="Tipo persona" required>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.cuenta.tipo_persona || ""}
-                    onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_persona", value: e.target.value })}
-                    disabled={isPfaeMode}
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="fisica">Física</option>
-                    <option value="moral">Moral</option>
-                  </select>
+                <Field label="Tipo de cuenta">
+                  <Input value={accountTypeLabel} readOnly disabled className="bg-muted" />
                 </Field>
                 <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
-                  Debes completar al menos nombre comercial o razón social.
+                  El tipo se define por el modo seleccionado arriba.
                 </div>
                 <Field label="RFC" hint={rfcHint}>
                   <Input
