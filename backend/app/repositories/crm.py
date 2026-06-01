@@ -6886,7 +6886,7 @@ class CRMRepository:
             "persona_id": f"eq.{persona_id}",
             "order": "es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
             "limit": "1",
-            "select": "cuenta_id,rol_en_cuenta,es_contacto_principal,es_contacto_facturacion,es_representante_legal,activo",
+            "select": "cuenta_id,rol_en_cuenta,es_contacto_principal,es_contacto_facturacion,es_representante_legal,activo,metadata",
         }
         relation_resp = await self._request("GET", "/rest/v1/cuenta_personas", params=relation_params)
         relation_data = relation_resp.json()
@@ -6987,6 +6987,7 @@ class CRMRepository:
         relation = relation_bundle if isinstance(relation_bundle, dict) else None
 
         metadata = persona.get("metadata") if isinstance(persona.get("metadata"), dict) else {}
+        relation_metadata = _ensure_metadata(relation.get("metadata")) if isinstance(relation, dict) else {}
         persona_datos = _ensure_metadata(persona.get("persona_datos"))
         contacto_datos = _ensure_metadata(persona.get("contacto_datos"))
         if persona_datos:
@@ -7072,6 +7073,7 @@ class CRMRepository:
             "tipo_industria": account.get("tipo_industria") if isinstance(account, dict) else None,
             "tamano": account.get("tamano") if isinstance(account, dict) else None,
             "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
+            "contexto_modo": relation_metadata.get("contexto_modo") if isinstance(relation_metadata, dict) else None,
             "puesto": persona.get("puesto"),
             "rol_en_cuenta": relation.get("rol_en_cuenta") if isinstance(relation, dict) else None,
             "es_contacto_principal": relation.get("es_contacto_principal") if isinstance(relation, dict) else None,

@@ -498,8 +498,21 @@ function toDateInputValue(value: string): string {
 function inferMode(detail: ContactDetail): CreateMode {
   const cuentaId = readString(detail, "cuenta_id").trim();
   if (!cuentaId) return "solo_persona";
-  const tipo = readString(detail, "cuenta_tipo").trim();
-  if (tipo === "persona_fisica_actividad_empresarial") return "persona_fisica_actividad_empresarial";
+
+  const contextoModo = readString(detail, "contexto_modo").trim();
+  if (contextoModo === "solo_persona" || contextoModo === "empresa_existente" || contextoModo === "empresa_nueva" || contextoModo === "persona_fisica_actividad_empresarial") {
+    return contextoModo;
+  }
+
+  const accountType = (
+    readString(detail, "cuenta_tipo") ||
+    readString(detail, "tipo") ||
+    readString(detail, "tipo_cuenta")
+  ).trim().toLowerCase();
+
+  if (accountType === "persona_fisica_actividad_empresarial") {
+    return "persona_fisica_actividad_empresarial";
+  }
   return "empresa_existente";
 }
 

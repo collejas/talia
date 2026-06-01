@@ -9987,6 +9987,7 @@ class CRMContact(BaseModel):
     es_representante_legal: bool | None = None
     relacion_activa: bool | None = None
     cuenta_tipo: str | None = None
+    contexto_modo: str | None = None
     metadata: dict[str, Any] | None = None
     persona_datos: dict[str, Any] | None = Field(
         default=None,
