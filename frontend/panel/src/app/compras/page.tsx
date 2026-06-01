@@ -96,11 +96,9 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       : Array.isArray(ordenIdParam)
         ? ordenIdParam[0] ?? ""
         : ""
-  const [almacenes, proveedores, proveedorContactos, proveedorCuentasBancarias, personas, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] = await Promise.all([
+  const [almacenes, proveedores, personas, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
-    fetchList("/crm/compras/proveedores-relaciones/contactos", { include_inactive: false, limit: 500 }),
-    fetchList("/crm/compras/proveedores-relaciones/cuentas-bancarias", { include_inactive: false, limit: 500 }),
     fetchList("/crm/personas/list", { limit: 500 }),
     fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
     fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
@@ -188,8 +186,6 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
         <ComprasWorkspace
           almacenes={almacenes}
           proveedores={proveedores}
-          proveedorContactos={proveedorContactos}
-          proveedorCuentasBancarias={proveedorCuentasBancarias}
           personas={personas}
           catalogItems={inventoryCatalogItems}
           ordenes={ordenes}

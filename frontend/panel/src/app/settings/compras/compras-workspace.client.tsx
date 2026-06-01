@@ -20,13 +20,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
 import { PedimentosImportacionPanel } from "./pedimentos-importacion-panel.client"
-import { ProveedorDetailPanel } from "./proveedor-detail-panel.client"
+import { ProveedorCreateModal } from "./proveedor-create-modal.client"
 
 import {
   createAlmacenAction,
   createInventarioAjusteAction,
   createOrdenCompraAction,
-  createProveedorAction,
   createRecepcionAction,
   approveOrdenCompraAction,
   deleteOrdenCompraDocumentoAction,
@@ -40,7 +39,6 @@ import {
   sendOrdenCompraAction,
   updateAlmacenAction,
   updateOrdenCompraAction,
-  updateProveedorAction,
 } from "./actions"
 
 type AnyRecord = Record<string, unknown>
@@ -48,8 +46,6 @@ type AnyRecord = Record<string, unknown>
 type ComprasWorkspaceProps = {
   almacenes: AnyRecord[]
   proveedores: AnyRecord[]
-  proveedorContactos: AnyRecord[]
-  proveedorCuentasBancarias: AnyRecord[]
   personas: AnyRecord[]
   catalogItems: AnyRecord[]
   ordenes: AnyRecord[]
@@ -933,8 +929,6 @@ function getPaymentNormalizationDate(row: AnyRecord, fallback: string): string {
 export function ComprasWorkspace({
   almacenes,
   proveedores,
-  proveedorContactos,
-  proveedorCuentasBancarias,
   personas,
   catalogItems,
   ordenes,
@@ -996,18 +990,8 @@ export function ComprasWorkspace({
   const [referenceExternal, setReferenceExternal] = useState("")
   const [observations, setObservations] = useState("")
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
-  const [providerFormCode, setProviderFormCode] = useState(defaultProviderCode)
-  const [providerFormName, setProviderFormName] = useState("")
-  const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
-  const [providerFormEmail, setProviderFormEmail] = useState("")
-  const [providerFormPhone, setProviderFormPhone] = useState("")
-  const [providerFormTax, setProviderFormTax] = useState("")
-  const [providerFormPayDays, setProviderFormPayDays] = useState("")
-  const [providerFormLeadDays, setProviderFormLeadDays] = useState("")
-  const [providerFormActive, setProviderFormActive] = useState(true)
-  const [selectedProviderId, setSelectedProviderId] = useState<string>(String(proveedores[0]?.id ?? ""))
+  const [isProveedorModalOpen, setIsProveedorModalOpen] = useState(false)
   const [orderFolio, setOrderFolio] = useState(defaultOrderFolio)
   const [orderProviderId, setOrderProviderId] = useState<string>(String(proveedores[0]?.id ?? ""))
   const [orderWarehouseId, setOrderWarehouseId] = useState<string>(defaultWarehouseId)
@@ -1690,9 +1674,6 @@ export function ComprasWorkspace({
   const warehouseFormAction = editingWarehouseId
     ? updateAlmacenAction.bind(null, editingWarehouseId)
     : createAlmacenAction
-  const providerFormAction = editingProviderId
-    ? updateProveedorAction.bind(null, editingProviderId)
-    : createProveedorAction
   const uploadOrderAttachment = async (orderId: string, tipoDocumento: string, file: File) => {
     const payload = new FormData()
     payload.append("file", file, file.name || "documento.pdf")
@@ -1762,20 +1743,6 @@ export function ComprasWorkspace({
     setWarehouseFormEmail("")
     setWarehouseFormActive(true)
     setWarehouseFormPrincipal(false)
-  }
-
-  const startEditProvider = (proveedor: AnyRecord) => {
-    setSelectedProviderId(String(proveedor.id))
-    setEditingProviderId(String(proveedor.id))
-    setProviderFormCode(asString(proveedor.codigo_proveedor, ""))
-    setProviderFormName(asString(proveedor.razon_social, ""))
-    setProviderFormCommercialName(asString(proveedor.nombre_comercial, ""))
-    setProviderFormEmail(asString(proveedor.correo, ""))
-    setProviderFormPhone(asString(proveedor.telefono, ""))
-    setProviderFormTax(asString(proveedor.rfc, ""))
-    setProviderFormPayDays(asString(proveedor.plazo_pago_dias, ""))
-    setProviderFormLeadDays(asString(proveedor.plazo_entrega_dias, ""))
-    setProviderFormActive(Boolean(proveedor.activo))
   }
 
   const startEditOrder = useCallback((orden: AnyRecord) => {
@@ -1964,18 +1931,6 @@ export function ComprasWorkspace({
     }
   }
 
-  const clearProviderForm = () => {
-    setEditingProviderId(null)
-    setProviderFormCode(defaultProviderCode)
-    setProviderFormName("")
-    setProviderFormCommercialName("")
-    setProviderFormEmail("")
-    setProviderFormPhone("")
-    setProviderFormTax("")
-    setProviderFormPayDays("")
-    setProviderFormLeadDays("")
-    setProviderFormActive(true)
-  }
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrderId(orderId)
@@ -1985,17 +1940,6 @@ export function ComprasWorkspace({
     setLines(buildLinesFromOrder(currentOrder))
     setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
   }
-
-  useEffect(() => {
-    if (!proveedores.length) {
-      setSelectedProviderId("")
-      return
-    }
-    const exists = proveedores.some((proveedor) => String(proveedor.id) === selectedProviderId)
-    if (!exists) {
-      setSelectedProviderId(String(proveedores[0]?.id ?? ""))
-    }
-  }, [proveedores, selectedProviderId])
 
   const showResumen = activeView === "resumen"
   const showAlmacenes = activeView === "almacenes"
@@ -2270,141 +2214,66 @@ export function ComprasWorkspace({
 
       {showProveedores ? (
       <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Alta rápida de proveedor</CardTitle>
-          <CardDescription>Registra un proveedor para poder generar órdenes de compra.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={providerFormAction} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-6">
-              <div className="space-y-2 md:col-span-1">
-                <label className="text-sm font-medium" htmlFor="proveedor-codigo">
-                  Código automático
-                </label>
-                <Input
-                  id="proveedor-codigo"
-                  name="codigo_proveedor"
-                  value={providerFormCode}
-                  readOnly
-                  placeholder="Prov-001"
-                  className="bg-muted/40"
-                />
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>Proveedores</CardTitle>
+                <CardDescription>Registra un proveedor y administra sus relaciones desde un modal estructurado.</CardDescription>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-razon">
-                  Razón social
-                </label>
-                <Input id="proveedor-razon" name="razon_social" value={providerFormName} onChange={(event) => setProviderFormName(event.target.value)} placeholder="Proveedor SA de CV" required />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-comercial">
-                  Nombre comercial
-                </label>
-                <Input id="proveedor-comercial" name="nombre_comercial" value={providerFormCommercialName} onChange={(event) => setProviderFormCommercialName(event.target.value)} placeholder="Proveedor visible" />
-              </div>
-              <div className="space-y-2 md:col-span-1">
-                <label className="text-sm font-medium" htmlFor="proveedor-rfc">
-                  RFC
-                </label>
-                <Input id="proveedor-rfc" name="rfc" value={providerFormTax} onChange={(event) => setProviderFormTax(event.target.value)} placeholder="RFC del proveedor" />
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-correo">
-                  Correo
-                </label>
-                <Input id="proveedor-correo" name="correo" type="email" value={providerFormEmail} onChange={(event) => setProviderFormEmail(event.target.value)} placeholder="ventas@proveedor.com" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-telefono">
-                  Teléfono
-                </label>
-                <Input id="proveedor-telefono" name="telefono" value={providerFormPhone} onChange={(event) => setProviderFormPhone(event.target.value)} placeholder="55 5555 5555" />
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-plazo-pago">
-                  Plazo pago
-                </label>
-                <Input id="proveedor-plazo-pago" name="plazo_pago_dias" type="number" min="0" value={providerFormPayDays} onChange={(event) => setProviderFormPayDays(event.target.value)} placeholder="30" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium" htmlFor="proveedor-plazo-entrega">
-                  Plazo entrega
-                </label>
-                <Input id="proveedor-plazo-entrega" name="plazo_entrega_dias" type="number" min="0" value={providerFormLeadDays} onChange={(event) => setProviderFormLeadDays(event.target.value)} placeholder="5" />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="activo" checked={providerFormActive} onChange={(event) => setProviderFormActive(event.target.checked)} />
-              Activo
-            </label>
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1">
-                {editingProviderId ? "Actualizar proveedor" : "Guardar proveedor"}
+              <Button type="button" onClick={() => setIsProveedorModalOpen(true)}>
+                Crear proveedor
               </Button>
-              {editingProviderId ? (
-                <Button type="button" variant="outline" onClick={clearProviderForm}>
-                  Cancelar
-                </Button>
-              ) : null}
             </div>
-          </form>
-          <div className="mt-4 overflow-hidden rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Razón social</TableHead>
-                  <TableHead>Activo</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {!proveedores.length ? (
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                      Aún no hay proveedores.
-                    </TableCell>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Razón social</TableHead>
+                    <TableHead>Activo</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
-                ) : (
-                  proveedores.map((proveedor) => (
-                    <TableRow key={String(proveedor.id)}>
-                      <TableCell className="font-mono text-xs">{asString(proveedor.codigo_proveedor)}</TableCell>
-                      <TableCell>{asString(proveedor.nombre_comercial ?? proveedor.razon_social)}</TableCell>
-                      <TableCell>{Boolean(proveedor.activo) ? "Sí" : "No"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => startEditProvider(proveedor)}>
-                            Editar
-                          </Button>
-                          <form action={deleteProveedorAction.bind(null, String(proveedor.id))}>
-                            <Button type="submit" variant="ghost" size="sm">
-                              Eliminar
-                            </Button>
-                          </form>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {!proveedores.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                        Aún no hay proveedores.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <ProveedorDetailPanel
-            proveedores={proveedores}
-            proveedorContactos={proveedorContactos}
-            proveedorCuentasBancarias={proveedorCuentasBancarias}
-            personas={personas}
-            selectedProviderId={selectedProviderId}
-            onSelectedProviderIdChange={setSelectedProviderId}
-            onEditProvider={startEditProvider}
-          />
-        </CardContent>
-      </Card>
+                  ) : (
+                    proveedores.map((proveedor) => (
+                      <TableRow key={String(proveedor.id)}>
+                        <TableCell className="font-mono text-xs">{asString(proveedor.codigo_proveedor)}</TableCell>
+                        <TableCell>{asString(proveedor.nombre_comercial ?? proveedor.razon_social)}</TableCell>
+                        <TableCell>{Boolean(proveedor.activo) ? "Sí" : "No"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <form action={deleteProveedorAction.bind(null, String(proveedor.id))}>
+                              <Button type="submit" variant="ghost" size="sm">
+                                Eliminar
+                              </Button>
+                            </form>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <ProveedorCreateModal
+          open={isProveedorModalOpen}
+          onOpenChange={setIsProveedorModalOpen}
+          defaultCode={defaultProviderCode}
+          personas={personas}
+        />
       </div>
       ) : null}
 

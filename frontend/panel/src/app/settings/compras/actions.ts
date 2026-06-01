@@ -575,6 +575,111 @@ export async function createProveedorAction(formData: FormData): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+type ProveedorContactoDraft = {
+  persona_id: string
+  rol_en_proveedor: string
+  es_principal: boolean
+  es_compras: boolean
+  es_facturacion: boolean
+  es_logistica: boolean
+  activo: boolean
+  fecha_inicio: string | null
+  fecha_fin: string | null
+  notas: string | null
+}
+
+type ProveedorCuentaDraft = {
+  alias: string | null
+  banco_nombre: string
+  banco_clave: string | null
+  pais: string
+  moneda: string
+  tipo_cuenta: string | null
+  titular: string | null
+  numero_cuenta: string | null
+  clabe: string | null
+  swift: string | null
+  iban: string | null
+  es_principal: boolean
+  activo: boolean
+  observaciones: string | null
+}
+
+function parseJsonDraft<T>(value: FormDataEntryValue | null, fallback: T): T {
+  if (typeof value !== "string" || !value.trim()) {
+    return fallback
+  }
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+export async function createProveedorConRelacionesAction(formData: FormData): Promise<void> {
+  const proveedorPayload = {
+    razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
+    nombre_comercial: parseOptionalText(formData.get("nombre_comercial")),
+    rfc: parseOptionalText(formData.get("rfc")),
+    correo: parseOptionalText(formData.get("correo")),
+    telefono: parseOptionalText(formData.get("telefono")),
+    plazo_pago_dias: parseOptionalNumber(formData.get("plazo_pago_dias")),
+    plazo_entrega_dias: parseOptionalNumber(formData.get("plazo_entrega_dias")),
+    limite_credito: parseOptionalNumber(formData.get("limite_credito")),
+    moneda_preferida: parseOptionalText(formData.get("moneda_preferida")) || "MXN",
+    activo: parseBoolean(formData.get("activo"), true),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+  }
+  const contactos = parseJsonDraft<ProveedorContactoDraft[]>(formData.get("contactos_json"), [])
+  const cuentas = parseJsonDraft<ProveedorCuentaDraft[]>(formData.get("cuentas_json"), [])
+
+  const response = await callCrmApi<{ id: string }>("/crm/compras/proveedores", {
+    method: "POST",
+    body: proveedorPayload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  const proveedorId = response.data?.id
+  if (!proveedorId) {
+    throw new Error("proveedor_created_without_id")
+  }
+
+  for (const contacto of contactos) {
+    if (!contacto.persona_id) {
+      continue
+    }
+    const contactoResponse = await callCrmApi(`/crm/compras/proveedores/${proveedorId}/contactos`, {
+      method: "POST",
+      body: {
+        ...contacto,
+        proveedor_id: proveedorId,
+      },
+    })
+    if (!contactoResponse.ok) {
+      throw new Error(contactoResponse.error)
+    }
+  }
+
+  for (const cuenta of cuentas) {
+    if (!cuenta.banco_nombre) {
+      continue
+    }
+    const cuentaResponse = await callCrmApi(`/crm/compras/proveedores/${proveedorId}/cuentas-bancarias`, {
+      method: "POST",
+      body: {
+        ...cuenta,
+        proveedor_id: proveedorId,
+      },
+    })
+    if (!cuentaResponse.ok) {
+      throw new Error(cuentaResponse.error)
+    }
+  }
+
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function updateProveedorAction(proveedorId: string, formData: FormData): Promise<void> {
   const payload = {
     razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
