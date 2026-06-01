@@ -70,7 +70,7 @@ type CreateAccountForm = {
   numero_interior: string;
   letra_interior: string;
   tipo_asentamiento: string;
-  nombre_asentamiento: string;
+  colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
   numero_local: string;
@@ -167,7 +167,7 @@ const INITIAL_FORM: CreateAccountForm = {
   numero_interior: "",
   letra_interior: "",
   tipo_asentamiento: "",
-  nombre_asentamiento: "",
+  colonia: "",
   tipo_centro_comercial: "",
   corredor_industrial: "",
   numero_local: "",
@@ -272,7 +272,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
       numero_interior: form.numero_interior,
       letra_interior: form.letra_interior,
       tipo_asentamiento: form.tipo_asentamiento,
-      nombre_asentamiento: form.nombre_asentamiento,
+      colonia: form.colonia,
       tipo_centro_comercial: form.tipo_centro_comercial,
       corredor_industrial: form.corredor_industrial,
       numero_local: form.numero_local,
@@ -346,8 +346,8 @@ export function AccountCreateDialog({ onCreated }: Props) {
           numero_interior: form.numero_interior.trim() || null,
           letra_interior: form.letra_interior.trim() || null,
           tipo_asentamiento: form.tipo_asentamiento.trim() || null,
-          colonia: form.nombre_asentamiento.trim() || null,
-          nombre_asentamiento: form.nombre_asentamiento.trim() || null,
+          colonia: form.colonia.trim() || null,
+          nombre_asentamiento: form.colonia.trim() || null,
           tipo_centro_comercial: form.tipo_centro_comercial.trim() || null,
           corredor_industrial: form.corredor_industrial.trim() || null,
           numero_local: form.numero_local.trim() || null,
@@ -701,9 +701,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </Field>
                 <Field label="Colonia">
                   <Input
-                    id="create-nombre-asentamiento"
-                    value={form.nombre_asentamiento}
-                    onChange={(event) => setForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                    id="create-colonia"
+                    value={form.colonia}
+                    onChange={(event) => setForm((prev) => ({ ...prev, colonia: event.target.value }))}
                   />
                 </Field>
                 <Field label="Tipo de centro comercial">

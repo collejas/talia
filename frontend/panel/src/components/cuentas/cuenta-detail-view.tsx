@@ -109,7 +109,7 @@ type AccountEditForm = {
   edificio: string;
   edificio_piso: string;
   tipo_asentamiento: string;
-  nombre_asentamiento: string;
+  colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
   numero_local: string;
@@ -145,7 +145,7 @@ function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: s
     numero_interior: readDirectionText(direction?.numero_interior),
     letra_interior: readDirectionText(direction?.letra_interior),
     tipo_asentamiento: readDirectionText(direction?.tipo_asentamiento),
-    nombre_asentamiento: readDirectionText(direction?.colonia ?? direction?.nombre_asentamiento),
+    colonia: readDirectionText(direction?.colonia ?? direction?.nombre_asentamiento),
     tipo_centro_comercial: readDirectionText(direction?.tipo_centro_comercial),
     corredor_industrial: readDirectionText(direction?.corredor_industrial),
     numero_local: readDirectionText(direction?.numero_local),
@@ -405,7 +405,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     edificio: "",
     edificio_piso: "",
     tipo_asentamiento: "",
-    nombre_asentamiento: "",
+    colonia: "",
     tipo_centro_comercial: "",
     corredor_industrial: "",
     numero_local: "",
@@ -691,7 +691,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       edificio: getInputText(preferredDirection?.edificio),
       edificio_piso: getInputText(preferredDirection?.edificio_piso),
       tipo_asentamiento: getInputText(preferredDirection?.tipo_asentamiento),
-      nombre_asentamiento: getInputText(preferredDirection?.colonia ?? preferredDirection?.nombre_asentamiento),
+      colonia: getInputText(preferredDirection?.colonia ?? preferredDirection?.nombre_asentamiento),
       tipo_centro_comercial: getInputText(preferredDirection?.tipo_centro_comercial),
       corredor_industrial: getInputText(preferredDirection?.corredor_industrial),
       numero_local: getInputText(preferredDirection?.numero_local),
@@ -731,7 +731,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       numero_interior: editForm.numero_interior,
       letra_interior: editForm.letra_interior,
       tipo_asentamiento: editForm.tipo_asentamiento,
-      nombre_asentamiento: editForm.nombre_asentamiento,
+      colonia: editForm.colonia,
       tipo_centro_comercial: editForm.tipo_centro_comercial,
       corredor_industrial: editForm.corredor_industrial,
       numero_local: editForm.numero_local,
@@ -783,8 +783,8 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           edificio: editForm.edificio.trim(),
           edificio_piso: editForm.edificio_piso.trim(),
           tipo_asentamiento: editForm.tipo_asentamiento.trim(),
-          colonia: editForm.nombre_asentamiento.trim(),
-          nombre_asentamiento: editForm.nombre_asentamiento.trim(),
+          colonia: editForm.colonia.trim(),
+          nombre_asentamiento: editForm.colonia.trim(),
           tipo_centro_comercial: editForm.tipo_centro_comercial.trim(),
           corredor_industrial: editForm.corredor_industrial.trim(),
           numero_local: editForm.numero_local.trim(),
@@ -1542,11 +1542,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-nombre-asentamiento">Colonia</Label>
+                    <Label htmlFor="edit-colonia">Colonia</Label>
                     <Input
-                      id="edit-nombre-asentamiento"
-                      value={editForm.nombre_asentamiento}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                      id="edit-colonia"
+                      value={editForm.colonia}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, colonia: event.target.value }))}
                     />
                   </div>
                   <div className="grid gap-2">

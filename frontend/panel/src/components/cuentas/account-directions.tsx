@@ -30,7 +30,7 @@ export type AccountDirectionDraft = {
   numero_interior: string;
   letra_interior: string;
   tipo_asentamiento: string;
-  nombre_asentamiento: string;
+  colonia: string;
   tipo_centro_comercial: string;
   corredor_industrial: string;
   numero_local: string;
@@ -59,7 +59,7 @@ export function createEmptyDirectionDraft(overrides?: Partial<AccountDirectionDr
     numero_interior: "",
     letra_interior: "",
     tipo_asentamiento: "",
-    nombre_asentamiento: "",
+    colonia: "",
     tipo_centro_comercial: "",
     corredor_industrial: "",
     numero_local: "",
@@ -119,8 +119,8 @@ export function buildDirectionPayload(direction: AccountDirectionDraft, relation
     numero_interior: direction.numero_interior.trim() || null,
     letra_interior: direction.letra_interior.trim() || null,
     tipo_asentamiento: direction.tipo_asentamiento.trim() || null,
-    nombre_asentamiento: direction.nombre_asentamiento.trim() || null,
-    colonia: direction.nombre_asentamiento.trim() || null,
+    colonia: direction.colonia.trim() || null,
+    nombre_asentamiento: direction.colonia.trim() || null,
     tipo_centro_comercial: direction.tipo_centro_comercial.trim() || null,
     corredor_industrial: direction.corredor_industrial.trim() || null,
     numero_local: direction.numero_local.trim() || null,
@@ -276,8 +276,8 @@ export function AccountDirectionCard({
         </Field>
         <Field label="Colonia">
           <Input
-            value={value.nombre_asentamiento}
-            onChange={(event) => onChange({ ...value, nombre_asentamiento: event.target.value })}
+            value={value.colonia}
+            onChange={(event) => onChange({ ...value, colonia: event.target.value })}
             disabled={disabled}
           />
         </Field>

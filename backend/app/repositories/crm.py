@@ -884,7 +884,7 @@ class CRMRepository:
         "direccion:direcciones!cuenta_direcciones_direccion_org_fkey("
         "id,organizacion_id,tipo,pais,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,"
         "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,numero_interior,"
-        "letra_interior,tipo_asentamiento,nombre_asentamiento,colonia,tipo_centro_comercial,corredor_industrial,"
+        "letra_interior,tipo_asentamiento,colonia,nombre_asentamiento,tipo_centro_comercial,corredor_industrial,"
         "numero_local,codigo_postal,latitud,longitud,metadata,creado_en,actualizado_en)"
     )
 
@@ -914,8 +914,8 @@ class CRMRepository:
                 "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
                 "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
-                "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,"
-                "colonia:nombre_asentamiento,tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
+                "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,colonia,nombre_asentamiento,"
+                "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
                 "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
                 "archived_at,merged_into_cuenta_id,merge_metadata"
             ),
@@ -1542,9 +1542,10 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
-        if "colonia" in body and "nombre_asentamiento" not in body:
-            body["nombre_asentamiento"] = body.get("colonia")
-        body.pop("colonia", None)
+        colonia_value = body.get("colonia") or body.get("nombre_asentamiento")
+        if colonia_value:
+            body["colonia"] = colonia_value
+            body["nombre_asentamiento"] = body.get("nombre_asentamiento") or colonia_value
         body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
         if not str(body.get("codigo_cuenta") or "").strip():
             body["codigo_cuenta"] = await self.preview_account_code(
@@ -1579,9 +1580,10 @@ class CRMRepository:
             return existing
 
         body = {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
-        if "colonia" in body and "nombre_asentamiento" not in body:
-            body["nombre_asentamiento"] = body.get("colonia")
-        body.pop("colonia", None)
+        colonia_value = body.get("colonia") or body.get("nombre_asentamiento")
+        if colonia_value:
+            body["colonia"] = colonia_value
+            body["nombre_asentamiento"] = body.get("nombre_asentamiento") or colonia_value
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{account_id}",
@@ -6882,7 +6884,7 @@ class CRMRepository:
                     "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
                     "email_facturacion,tipo_industria,tamano,sitio_web,website,telefono,correo,"
                     "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,"
-                    "numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,tipo_centro_comercial,"
+                    "numero_interior,letra_interior,tipo_asentamiento,colonia,nombre_asentamiento,tipo_centro_comercial,"
                     "corredor_industrial,numero_local,tipo_establecimiento,latitud,longitud,pais,clave_entidad,"
                     "entidad,clave_municipio,municipio,clave_localidad,localidad,codigo_postal,notas,necesidad_proposito,"
                     "fecha_incorporacion,propietario_usuario_id"
@@ -7066,7 +7068,8 @@ class CRMRepository:
             "numero_interior": account.get("numero_interior") if isinstance(account, dict) else None,
             "letra_interior": account.get("letra_interior") if isinstance(account, dict) else None,
             "tipo_asentamiento": account.get("tipo_asentamiento") if isinstance(account, dict) else None,
-            "nombre_asentamiento": account.get("nombre_asentamiento") if isinstance(account, dict) else None,
+            "colonia": (account.get("colonia") if isinstance(account, dict) else None) or (account.get("nombre_asentamiento") if isinstance(account, dict) else None),
+            "nombre_asentamiento": (account.get("nombre_asentamiento") if isinstance(account, dict) else None) or (account.get("colonia") if isinstance(account, dict) else None),
             "tipo_centro_comercial": account.get("tipo_centro_comercial") if isinstance(account, dict) else None,
             "corredor_industrial": account.get("corredor_industrial") if isinstance(account, dict) else None,
             "numero_local": account.get("numero_local") if isinstance(account, dict) else None,
@@ -7429,7 +7432,8 @@ class CRMRepository:
                 "numero_interior": self._pick_text(merged, "numero_interior"),
                 "letra_interior": self._pick_text(merged, "letra_interior"),
                 "tipo_asentamiento": self._pick_text(merged, "tipo_asentamiento"),
-                "nombre_asentamiento": self._pick_text(merged, "nombre_asentamiento"),
+                "colonia": self._pick_text(merged, "colonia", "nombre_asentamiento"),
+                "nombre_asentamiento": self._pick_text(merged, "nombre_asentamiento", "colonia"),
                 "tipo_centro_comercial": self._pick_text(merged, "tipo_centro_comercial"),
                 "corredor_industrial": self._pick_text(merged, "corredor_industrial"),
                 "numero_local": self._pick_text(merged, "numero_local"),
@@ -8072,8 +8076,8 @@ class CRMRepository:
                 "numero_interior": direccion_payload.get("numero_interior"),
                 "letra_interior": direccion_payload.get("letra_interior"),
                 "tipo_asentamiento": direccion_payload.get("tipo_asentamiento"),
-                "nombre_asentamiento": direccion_payload.get("nombre_asentamiento") or direccion_payload.get("colonia"),
                 "colonia": direccion_payload.get("colonia") or direccion_payload.get("nombre_asentamiento"),
+                "nombre_asentamiento": direccion_payload.get("nombre_asentamiento") or direccion_payload.get("colonia"),
                 "tipo_centro_comercial": direccion_payload.get("tipo_centro_comercial"),
                 "corredor_industrial": direccion_payload.get("corredor_industrial"),
                 "numero_local": direccion_payload.get("numero_local"),
@@ -8172,8 +8176,8 @@ class CRMRepository:
                     "numero_interior": direccion_update.get("numero_interior"),
                     "letra_interior": direccion_update.get("letra_interior"),
                     "tipo_asentamiento": direccion_update.get("tipo_asentamiento"),
-                    "nombre_asentamiento": direccion_update.get("nombre_asentamiento") or direccion_update.get("colonia"),
                     "colonia": direccion_update.get("colonia") or direccion_update.get("nombre_asentamiento"),
+                    "nombre_asentamiento": direccion_update.get("nombre_asentamiento") or direccion_update.get("colonia"),
                     "tipo_centro_comercial": direccion_update.get("tipo_centro_comercial"),
                     "corredor_industrial": direccion_update.get("corredor_industrial"),
                     "numero_local": direccion_update.get("numero_local"),
@@ -8329,6 +8333,7 @@ class CRMRepository:
             "numero_interior",
             "letra_interior",
             "tipo_asentamiento",
+            "colonia",
             "nombre_asentamiento",
             "tipo_centro_comercial",
             "corredor_industrial",
