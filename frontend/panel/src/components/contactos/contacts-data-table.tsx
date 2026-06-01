@@ -261,9 +261,11 @@ const contactColumnLabels = {
 export function ContactsDataTable({
   data,
   onFiltersChange,
+  onVisibleRowsChange,
 }: {
   data: ContactTableRow[];
   onFiltersChange?: (filters: ContactFilters) => void;
+  onVisibleRowsChange?: (rows: ContactTableRow[]) => void;
 }) {
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
@@ -697,6 +699,10 @@ export function ContactsDataTable({
       return true;
     });
   }, [createdFromFilter, createdToFilter, ownerFilter, sourceData]);
+
+  React.useEffect(() => {
+    onVisibleRowsChange?.(filteredData);
+  }, [filteredData, onVisibleRowsChange]);
 
   const resultsLabel =
     searchQuery.length > 0
