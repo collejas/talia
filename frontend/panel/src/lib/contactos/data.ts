@@ -9,8 +9,9 @@ type CrmContactSummary = {
   incompletos?: number;
   activos?: number;
   leads?: number;
-  webchat?: number;
   propietarios?: number;
+  topPropietarioNombre?: string | null;
+  topPropietarioTotal?: number;
   ultimo?: string | null;
 };
 
@@ -71,7 +72,10 @@ export async function loadContactosData(): Promise<ContactosPayload> {
 
   const listRows = listado.ok ? listado.data : undefined;
   const cards = shouldUseSummary(resumen.ok ? resumen.data : undefined, listRows)
-    ? mapCardsFromSummary(resumen.ok ? resumen.data : undefined)
+    ? mergeCardsWithTopOwner(
+        mapCardsFromSummary(resumen.ok ? resumen.data : undefined),
+        mapCardsFromList(listRows),
+      )
     : mapCardsFromList(listRows);
   const table = mapTable(listRows);
   const totalRows =
@@ -95,8 +99,9 @@ function shouldUseSummary(payload: CrmContactSummary | undefined, rows: CrmConta
     Number(payload.incompletos ?? 0) > 0 ||
     Number(payload.activos ?? 0) > 0 ||
     Number(payload.leads ?? 0) > 0 ||
-    Number(payload.webchat ?? 0) > 0 ||
     Number(payload.propietarios ?? 0) > 0 ||
+    Number(payload.topPropietarioTotal ?? 0) > 0 ||
+    Boolean(payload.topPropietarioNombre) ||
     Boolean(payload.ultimo);
   if (hasSummaryValue) return true;
   return !rows || rows.length === 0;
@@ -109,8 +114,9 @@ function mapCardsFromSummary(payload?: CrmContactSummary): ContactCards {
     incompletos: payload?.incompletos ?? 0,
     activos: payload?.activos ?? 0,
     leads: payload?.leads ?? 0,
-    webchat: payload?.webchat ?? 0,
     propietarios: payload?.propietarios ?? 0,
+    topPropietarioNombre: payload?.topPropietarioNombre ?? null,
+    topPropietarioTotal: payload?.topPropietarioTotal ?? 0,
     ultimo: payload?.ultimo ?? null,
   };
 }
@@ -123,24 +129,31 @@ function mapCardsFromList(payload?: CrmContactListRow[] | null): ContactCards {
       incompletos: 0,
       activos: 0,
       leads: 0,
-      webchat: 0,
       propietarios: 0,
+      topPropietarioNombre: null,
+      topPropietarioTotal: 0,
       ultimo: null,
     };
   }
 
+  const ownerCounts = new Map<string, { label: string; count: number }>();
   const counts = payload.reduce(
     (acc, row) => {
       const estado = normalizeLabel(row.estado).trim().toLowerCase();
       const captura = (row.captura_estado || "").trim().toLowerCase();
-      const origen = (row.origen || "").trim().toLowerCase();
       if (captura === "completo") acc.completos += 1;
       else acc.incompletos += 1;
       if (estado === "activo") acc.activos += 1;
       if (estado === "lead") acc.leads += 1;
-      if (origen === "webchat") acc.webchat += 1;
-      if (row.propietario_id || row.propietario_nombre) {
-        acc.propietarios.add(row.propietario_id || row.propietario_nombre || "");
+      const ownerId = (row.propietario_id || "").trim();
+      const ownerName = (row.propietario_nombre || "").trim();
+      if (ownerId) {
+        acc.propietarios.add(ownerId);
+        const current = ownerCounts.get(ownerId);
+        ownerCounts.set(ownerId, {
+          label: ownerName || ownerId,
+          count: (current?.count ?? 0) + 1,
+        });
       }
       const createdAt = row.creado_en && !Number.isNaN(Date.parse(row.creado_en)) ? new Date(row.creado_en).getTime() : null;
       if (createdAt !== null && (acc.ultimo === null || createdAt > acc.ultimo)) {
@@ -153,11 +166,15 @@ function mapCardsFromList(payload?: CrmContactListRow[] | null): ContactCards {
       incompletos: 0,
       activos: 0,
       leads: 0,
-      webchat: 0,
       propietarios: new Set<string>(),
       ultimo: null as number | null,
     },
   );
+
+  const topOwner = Array.from(ownerCounts.values()).sort((left, right) => {
+    if (right.count !== left.count) return right.count - left.count;
+    return left.label.localeCompare(right.label, "es");
+  })[0];
 
   return {
     total: payload.length,
@@ -165,9 +182,18 @@ function mapCardsFromList(payload?: CrmContactListRow[] | null): ContactCards {
     incompletos: counts.incompletos,
     activos: counts.activos,
     leads: counts.leads,
-    webchat: counts.webchat,
     propietarios: counts.propietarios.size,
+    topPropietarioNombre: topOwner?.label ?? null,
+    topPropietarioTotal: topOwner?.count ?? 0,
     ultimo: counts.ultimo ? new Date(counts.ultimo).toISOString() : null,
+  };
+}
+
+function mergeCardsWithTopOwner(base: ContactCards, topOwner: ContactCards): ContactCards {
+  return {
+    ...base,
+    topPropietarioNombre: topOwner.topPropietarioNombre,
+    topPropietarioTotal: topOwner.topPropietarioTotal,
   };
 }
 

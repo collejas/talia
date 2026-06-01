@@ -4,8 +4,9 @@ export type ContactCards = {
   incompletos: number;
   activos: number;
   leads: number;
-  webchat: number;
   propietarios: number;
+  topPropietarioNombre: string | null;
+  topPropietarioTotal: number;
   ultimo?: string | null;
 };
 

@@ -58,32 +58,39 @@ function mapCardsFromRows(rows: ContactTableRow[]): ContactCards {
       incompletos: 0,
       activos: 0,
       leads: 0,
-      webchat: 0,
       propietarios: 0,
+      topPropietarioNombre: null,
+      topPropietarioTotal: 0,
       ultimo: null,
     }
   }
 
   const ownerSet = new Set<string>()
+  const ownerCounts = new Map<string, { label: string; count: number }>()
   let completos = 0
   let incompletos = 0
   let activos = 0
   let leads = 0
-  let webchat = 0
   let ultimo: number | null = null
 
   for (const row of rows) {
     const raw = row.raw as Record<string, unknown> | undefined
     const captura = textValue(raw?.captura_estado).toLowerCase()
     const estado = textValue(raw?.estado).toLowerCase()
-    const origen = textValue(raw?.origen).toLowerCase()
     if (captura === "completo") completos += 1
     else incompletos += 1
     if (estado === "activo") activos += 1
     if (estado === "lead") leads += 1
-    if (origen === "webchat") webchat += 1
-    const ownerId = textValue(raw?.propietario_id) || textValue(raw?.propietario_nombre)
-    if (ownerId) ownerSet.add(ownerId)
+    const ownerId = textValue(raw?.propietario_id)
+    const ownerName = textValue(raw?.propietario_nombre)
+    if (ownerId) {
+      ownerSet.add(ownerId)
+      const current = ownerCounts.get(ownerId)
+      ownerCounts.set(ownerId, {
+        label: ownerName || ownerId,
+        count: (current?.count ?? 0) + 1,
+      })
+    }
     const createdAtRaw = textValue(raw?.creado_en)
     const createdAt = createdAtRaw ? Date.parse(createdAtRaw) : NaN
     if (!Number.isNaN(createdAt) && (ultimo === null || createdAt > ultimo)) {
@@ -91,14 +98,20 @@ function mapCardsFromRows(rows: ContactTableRow[]): ContactCards {
     }
   }
 
+  const topOwner = Array.from(ownerCounts.values()).sort((left, right) => {
+    if (right.count !== left.count) return right.count - left.count
+    return left.label.localeCompare(right.label, "es")
+  })[0]
+
   return {
     total: rows.length,
     completos,
     incompletos,
     activos,
     leads,
-    webchat,
     propietarios: ownerSet.size,
+    topPropietarioNombre: topOwner?.label ?? null,
+    topPropietarioTotal: topOwner?.count ?? 0,
     ultimo: ultimo ? new Date(ultimo).toISOString() : null,
   }
 }

@@ -3,8 +3,8 @@
 import {
   IconAddressBook,
   IconCheck,
-  IconMessageCircle,
   IconUserCheck,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -93,23 +93,25 @@ export function ContactSectionCards({ data }: ContactSectionCardsProps) {
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Origen webchat</CardDescription>
+          <CardDescription>Propietario con más contactos</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.webchat)}
+            {formatNumber(data.topPropietarioTotal)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconMessageCircle />
-              {formatPercent(data.webchat, data.total)}%
+              <IconUsersGroup />
+              {data.topPropietarioNombre || "Sin asignar"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Contactos creados desde el chat
+            Concentración por propietario
           </div>
           <div className="text-muted-foreground">
-            Incluye leads convertidos desde visitas
+            {data.topPropietarioTotal > 0
+              ? `${formatNumber(data.topPropietarioTotal)} contactos asignados`
+              : "Sin contactos asignados"}
           </div>
         </CardFooter>
       </Card>
