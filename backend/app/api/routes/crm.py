@@ -2563,12 +2563,7 @@ class CRMAccount(BaseModel):
     numero_interior: str | None = None
     letra_interior: str | None = None
     tipo_asentamiento: str | None = None
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = None
     corredor_industrial: str | None = None
     numero_local: str | None = None
@@ -2644,12 +2639,7 @@ class CRMAccountCreate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -2718,12 +2708,7 @@ class CRMAccountUpdate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -9958,12 +9943,7 @@ class CRMContact(BaseModel):
     numero_interior: str | None = None
     letra_interior: str | None = None
     tipo_asentamiento: str | None = None
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = None
     corredor_industrial: str | None = None
     numero_local: str | None = None
@@ -10060,12 +10040,7 @@ class CRMContactCreate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10148,12 +10123,7 @@ class CRMContactUpdate(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10329,12 +10299,7 @@ class CRMPersonaAltaExtrasDireccion(BaseModel):
     numero_interior: str | None = Field(default=None, max_length=64)
     letra_interior: str | None = Field(default=None, max_length=16)
     tipo_asentamiento: str | None = Field(default=None, max_length=120)
-    colonia: str | None = Field(
-        default=None,
-        max_length=255,
-        validation_alias=AliasChoices("colonia", "nombre_asentamiento"),
-        serialization_alias="colonia",
-    )
+    colonia: str | None = Field(default=None, max_length=255)
     tipo_centro_comercial: str | None = Field(default=None, max_length=120)
     corredor_industrial: str | None = Field(default=None, max_length=255)
     numero_local: str | None = Field(default=None, max_length=64)
@@ -10539,7 +10504,6 @@ _ACCOUNT_DIRECTION_LEGACY_FIELDS = (
     "numero_interior",
     "letra_interior",
     "tipo_asentamiento",
-    "nombre_asentamiento",
     "colonia",
     "tipo_centro_comercial",
     "corredor_industrial",
