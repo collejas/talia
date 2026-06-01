@@ -776,7 +776,7 @@ function validateState(state: ContactCreateState): string | null {
     return "La empresa requiere nombre comercial o razón social.";
   }
   if (
-    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
+    state.mode === "empresa_nueva" &&
     !state.cuenta.tipo_persona.trim()
   ) {
     return "Selecciona el tipo de persona de la empresa.";

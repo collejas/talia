@@ -658,10 +658,7 @@ function validateState(state: ContactEditState): string | null {
   ) {
     return "La cuenta requiere nombre comercial o razón social.";
   }
-  if (
-    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
-    !state.cuenta.tipo_persona.trim()
-  ) {
+  if (state.mode === "empresa_nueva" && !state.cuenta.tipo_persona.trim()) {
     return "Selecciona el tipo de persona de la cuenta.";
   }
   if (!isValidRfcLength(state.cuenta.rfc, state.cuenta.tipo)) {
@@ -752,7 +749,9 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           nombre_comercial: readString(detail, "company_name"),
           razon_social: readString(detail, "razon_social"),
           alias: readString(detail, "alias"),
-          tipo_persona: (readString(detail, "persona_fisica_moral") as CuentaDraft["tipo_persona"]) || "",
+          tipo_persona:
+            (readString(detail, "persona_fisica_moral") as CuentaDraft["tipo_persona"]) ||
+            (mode === "persona_fisica_actividad_empresarial" ? "fisica" : ""),
           tipo_cuenta: readString(detail, "cuenta_tipo") || "empresa",
           tipo: readString(detail, "tipo") || "empresa",
           codigo_cuenta: readString(detail, "codigo_cuenta"),
