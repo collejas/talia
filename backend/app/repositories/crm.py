@@ -914,7 +914,7 @@ class CRMRepository:
                 "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
                 "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
-                "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,colonia,"
+                "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,"
                 "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
                 "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
                 "archived_at,merged_into_cuenta_id,merge_metadata"
@@ -1542,8 +1542,7 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
-        if body.get("colonia") is None:
-            body.pop("colonia", None)
+        body.pop("colonia", None)
         body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
         if not str(body.get("codigo_cuenta") or "").strip():
             body["codigo_cuenta"] = await self.preview_account_code(
@@ -1578,8 +1577,7 @@ class CRMRepository:
             return existing
 
         body = {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
-        if body.get("colonia") is None:
-            body.pop("colonia", None)
+        body.pop("colonia", None)
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{account_id}",
@@ -6877,10 +6875,10 @@ class CRMRepository:
                 "id": f"eq.{account_uuid}",
                 "limit": "1",
                 "select": (
-                    "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
-                    "email_facturacion,tipo_industria,tamano,sitio_web,website,telefono,correo,"
+                "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
+                "email_facturacion,tipo_industria,tamano,sitio_web,website,telefono,correo,"
                     "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,"
-                    "numero_interior,letra_interior,tipo_asentamiento,colonia,tipo_centro_comercial,"
+                    "numero_interior,letra_interior,tipo_asentamiento,tipo_centro_comercial,"
                     "corredor_industrial,numero_local,tipo_establecimiento,latitud,longitud,pais,clave_entidad,"
                     "entidad,clave_municipio,municipio,clave_localidad,localidad,codigo_postal,notas,necesidad_proposito,"
                     "fecha_incorporacion,propietario_usuario_id"
