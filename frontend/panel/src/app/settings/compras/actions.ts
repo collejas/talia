@@ -610,6 +610,136 @@ export async function deleteProveedorAction(proveedorId: string): Promise<void> 
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function createProveedorContactoAction(proveedorId: string, formData: FormData): Promise<void> {
+  const payload = {
+    persona_id: parseRequiredText(formData.get("persona_id"), "persona_id"),
+    rol_en_proveedor: parseOptionalText(formData.get("rol_en_proveedor")) || "general",
+    es_principal: parseBoolean(formData.get("es_principal"), false),
+    es_compras: parseBoolean(formData.get("es_compras"), false),
+    es_facturacion: parseBoolean(formData.get("es_facturacion"), false),
+    es_logistica: parseBoolean(formData.get("es_logistica"), false),
+    activo: parseBoolean(formData.get("activo"), true),
+    fecha_inicio: parseOptionalText(formData.get("fecha_inicio")),
+    fecha_fin: parseOptionalText(formData.get("fecha_fin")),
+    notas: parseOptionalText(formData.get("notas")),
+    metadata: {},
+  }
+
+  const response = await callCrmApi(`/crm/compras/proveedores/${proveedorId}/contactos`, {
+    method: "POST",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function updateProveedorContactoAction(contactoId: string, formData: FormData): Promise<void> {
+  const payload = {
+    proveedor_id: parseOptionalText(formData.get("proveedor_id")),
+    persona_id: parseOptionalText(formData.get("persona_id")),
+    rol_en_proveedor: parseOptionalText(formData.get("rol_en_proveedor")),
+    es_principal: parseBoolean(formData.get("es_principal"), false),
+    es_compras: parseBoolean(formData.get("es_compras"), false),
+    es_facturacion: parseBoolean(formData.get("es_facturacion"), false),
+    es_logistica: parseBoolean(formData.get("es_logistica"), false),
+    activo: parseBoolean(formData.get("activo"), true),
+    fecha_inicio: parseOptionalText(formData.get("fecha_inicio")),
+    fecha_fin: parseOptionalText(formData.get("fecha_fin")),
+    notas: parseOptionalText(formData.get("notas")),
+    metadata: {},
+  }
+
+  const response = await callCrmApi(`/crm/compras/proveedores-relaciones/contactos/${contactoId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteProveedorContactoAction(contactoId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/proveedores-relaciones/contactos/${contactoId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function createProveedorCuentaBancariaAction(proveedorId: string, formData: FormData): Promise<void> {
+  const payload = {
+    alias: parseOptionalText(formData.get("alias")),
+    banco_nombre: parseRequiredText(formData.get("banco_nombre"), "banco_nombre"),
+    banco_clave: parseOptionalText(formData.get("banco_clave")),
+    pais: parseOptionalText(formData.get("pais")) || "MX",
+    moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    tipo_cuenta: parseOptionalText(formData.get("tipo_cuenta")),
+    titular: parseOptionalText(formData.get("titular")),
+    numero_cuenta: parseOptionalText(formData.get("numero_cuenta")),
+    clabe: parseOptionalText(formData.get("clabe")),
+    swift: parseOptionalText(formData.get("swift")),
+    iban: parseOptionalText(formData.get("iban")),
+    es_principal: parseBoolean(formData.get("es_principal"), false),
+    activo: parseBoolean(formData.get("activo"), true),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+    metadata: {},
+  }
+
+  const response = await callCrmApi(`/crm/compras/proveedores/${proveedorId}/cuentas-bancarias`, {
+    method: "POST",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function updateProveedorCuentaBancariaAction(cuentaId: string, formData: FormData): Promise<void> {
+  const payload = {
+    proveedor_id: parseOptionalText(formData.get("proveedor_id")),
+    alias: parseOptionalText(formData.get("alias")),
+    banco_nombre: parseOptionalText(formData.get("banco_nombre")),
+    banco_clave: parseOptionalText(formData.get("banco_clave")),
+    pais: parseOptionalText(formData.get("pais")),
+    moneda: parseOptionalText(formData.get("moneda")),
+    tipo_cuenta: parseOptionalText(formData.get("tipo_cuenta")),
+    titular: parseOptionalText(formData.get("titular")),
+    numero_cuenta: parseOptionalText(formData.get("numero_cuenta")),
+    clabe: parseOptionalText(formData.get("clabe")),
+    swift: parseOptionalText(formData.get("swift")),
+    iban: parseOptionalText(formData.get("iban")),
+    es_principal: parseBoolean(formData.get("es_principal"), false),
+    activo: parseBoolean(formData.get("activo"), true),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+    metadata: {},
+  }
+
+  const response = await callCrmApi(`/crm/compras/proveedores-relaciones/cuentas-bancarias/${cuentaId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteProveedorCuentaBancariaAction(cuentaId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/proveedores-relaciones/cuentas-bancarias/${cuentaId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function createAgenteAduanalAction(formData: FormData): Promise<void> {
   const payload = {
     nombre: parseRequiredText(formData.get("nombre"), "nombre"),

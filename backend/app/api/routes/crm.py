@@ -12230,6 +12230,119 @@ class CRMProveedorUpdate(BaseModel):
     observaciones: str | None = Field(default=None, max_length=2000)
 
 
+class CRMProveedorContacto(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    proveedor_id: UUID
+    persona_id: UUID
+    rol_en_proveedor: str
+    es_principal: bool
+    es_compras: bool
+    es_facturacion: bool
+    es_logistica: bool
+    activo: bool
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    notas: str | None = None
+    metadata: dict[str, Any] | None = None
+    persona: CRMContactSummary | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMProveedorContactoCreate(BaseModel):
+    persona_id: UUID
+    rol_en_proveedor: str = Field(default="general", max_length=120)
+    es_principal: bool = False
+    es_compras: bool = False
+    es_facturacion: bool = False
+    es_logistica: bool = False
+    activo: bool = True
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    notas: str | None = Field(default=None, max_length=2000)
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class CRMProveedorContactoUpdate(BaseModel):
+    proveedor_id: UUID | None = None
+    persona_id: UUID | None = None
+    rol_en_proveedor: str | None = Field(default=None, max_length=120)
+    es_principal: bool | None = None
+    es_compras: bool | None = None
+    es_facturacion: bool | None = None
+    es_logistica: bool | None = None
+    activo: bool | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    notas: str | None = Field(default=None, max_length=2000)
+    metadata: dict[str, Any] | None = None
+
+
+class CRMProveedorCuentaBancaria(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    proveedor_id: UUID
+    alias: str | None = None
+    banco_nombre: str
+    banco_clave: str | None = None
+    pais: str
+    moneda: str
+    tipo_cuenta: str | None = None
+    titular: str | None = None
+    numero_cuenta: str | None = None
+    clabe: str | None = None
+    swift: str | None = None
+    iban: str | None = None
+    es_principal: bool
+    activo: bool
+    observaciones: str | None = None
+    metadata: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMProveedorCuentaBancariaCreate(BaseModel):
+    alias: str | None = Field(default=None, max_length=120)
+    banco_nombre: str = Field(..., min_length=1, max_length=255)
+    banco_clave: str | None = Field(default=None, max_length=32)
+    pais: str = Field(default="MX", min_length=2, max_length=2)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    tipo_cuenta: str | None = Field(default=None, max_length=120)
+    titular: str | None = Field(default=None, max_length=255)
+    numero_cuenta: str | None = Field(default=None, max_length=120)
+    clabe: str | None = Field(default=None, max_length=32)
+    swift: str | None = Field(default=None, max_length=32)
+    iban: str | None = Field(default=None, max_length=64)
+    es_principal: bool = False
+    activo: bool = True
+    observaciones: str | None = Field(default=None, max_length=2000)
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class CRMProveedorCuentaBancariaUpdate(BaseModel):
+    proveedor_id: UUID | None = None
+    alias: str | None = Field(default=None, max_length=120)
+    banco_nombre: str | None = Field(default=None, max_length=255)
+    banco_clave: str | None = Field(default=None, max_length=32)
+    pais: str | None = Field(default=None, min_length=2, max_length=2)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    tipo_cuenta: str | None = Field(default=None, max_length=120)
+    titular: str | None = Field(default=None, max_length=255)
+    numero_cuenta: str | None = Field(default=None, max_length=120)
+    clabe: str | None = Field(default=None, max_length=32)
+    swift: str | None = Field(default=None, max_length=32)
+    iban: str | None = Field(default=None, max_length=64)
+    es_principal: bool | None = None
+    activo: bool | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
+    metadata: dict[str, Any] | None = None
+
+
 class CRMAgenteAduanal(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -16519,6 +16632,186 @@ async def delete_compras_proveedor(
             raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=502, detail=detail) from exc
     return CRMProveedor.model_validate(row)
+
+
+@router.get("/compras/proveedores-relaciones/contactos", response_model=list[CRMProveedorContacto])
+async def list_compras_proveedores_contactos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    proveedor_id: UUID | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> list[CRMProveedorContacto]:
+    try:
+        rows = await repo.list_proveedor_contactos(
+            organizacion_id=organizacion_id,
+            proveedor_id=proveedor_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMProveedorContacto.model_validate(row) for row in rows]
+
+
+@router.post("/compras/proveedores/{proveedor_id}/contactos", response_model=CRMProveedorContacto, status_code=status.HTTP_201_CREATED)
+async def create_compras_proveedor_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_id: UUID,
+    payload: CRMProveedorContactoCreate,
+) -> CRMProveedorContacto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body["proveedor_id"] = str(proveedor_id)
+    try:
+        row = await repo.create_proveedor_contacto(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "unique" in detail.lower() or "principal" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMProveedorContacto.model_validate(row)
+
+
+@router.patch("/compras/proveedores-relaciones/contactos/{contacto_id}", response_model=CRMProveedorContacto)
+async def update_compras_proveedor_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    contacto_id: UUID,
+    payload: CRMProveedorContactoUpdate,
+) -> CRMProveedorContacto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_proveedor_contacto(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "unique" in detail.lower() or "principal" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMProveedorContacto.model_validate(row)
+
+
+@router.delete("/compras/proveedores-relaciones/contactos/{contacto_id}", response_model=CRMProveedorContacto)
+async def delete_compras_proveedor_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    contacto_id: UUID,
+) -> CRMProveedorContacto:
+    try:
+        row = await repo.delete_proveedor_contacto(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProveedorContacto.model_validate(row)
+
+
+@router.get("/compras/proveedores-relaciones/cuentas-bancarias", response_model=list[CRMProveedorCuentaBancaria])
+async def list_compras_proveedores_cuentas_bancarias(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    proveedor_id: UUID | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> list[CRMProveedorCuentaBancaria]:
+    try:
+        rows = await repo.list_proveedor_cuentas_bancarias(
+            organizacion_id=organizacion_id,
+            proveedor_id=proveedor_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMProveedorCuentaBancaria.model_validate(row) for row in rows]
+
+
+@router.post("/compras/proveedores/{proveedor_id}/cuentas-bancarias", response_model=CRMProveedorCuentaBancaria, status_code=status.HTTP_201_CREATED)
+async def create_compras_proveedor_cuenta_bancaria(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_id: UUID,
+    payload: CRMProveedorCuentaBancariaCreate,
+) -> CRMProveedorCuentaBancaria:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body["proveedor_id"] = str(proveedor_id)
+    try:
+        row = await repo.create_proveedor_cuenta_bancaria(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "unique" in detail.lower() or "principal" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMProveedorCuentaBancaria.model_validate(row)
+
+
+@router.patch("/compras/proveedores-relaciones/cuentas-bancarias/{cuenta_bancaria_id}", response_model=CRMProveedorCuentaBancaria)
+async def update_compras_proveedor_cuenta_bancaria(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    cuenta_bancaria_id: UUID,
+    payload: CRMProveedorCuentaBancariaUpdate,
+) -> CRMProveedorCuentaBancaria:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_proveedor_cuenta_bancaria(
+            organizacion_id=organizacion_id,
+            cuenta_bancaria_id=cuenta_bancaria_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "unique" in detail.lower() or "principal" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMProveedorCuentaBancaria.model_validate(row)
+
+
+@router.delete("/compras/proveedores-relaciones/cuentas-bancarias/{cuenta_bancaria_id}", response_model=CRMProveedorCuentaBancaria)
+async def delete_compras_proveedor_cuenta_bancaria(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    cuenta_bancaria_id: UUID,
+) -> CRMProveedorCuentaBancaria:
+    try:
+        row = await repo.delete_proveedor_cuenta_bancaria(
+            organizacion_id=organizacion_id,
+            cuenta_bancaria_id=cuenta_bancaria_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProveedorCuentaBancaria.model_validate(row)
 
 
 @router.post("/compras/almacenes", response_model=CRMAlmacen, status_code=status.HTTP_201_CREATED)
