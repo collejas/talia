@@ -69,6 +69,15 @@ def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: 
             continue
     return f"{prefix_clean}{highest + 1:0{width}d}"
 
+
+def _is_account_code_duplicate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "cuentas_org_codigo_cuenta_uidx" in message
+        or 'unique constraint "cuentas_org_codigo_cuenta_uidx"' in message
+        or ("duplicate key value violates unique constraint" in message and "codigo_cuenta" in message)
+    )
+
 PERSONA_SELECT_FIELDS = (
     "id,organizacion_id,codigo_contacto,nombre,apellido_paterno,apellido_materno,nombre_completo,"
     "correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
@@ -1544,24 +1553,48 @@ class CRMRepository:
         body = {"organizacion_id": str(organizacion_id), **payload}
         body.pop("colonia", None)
         body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
-        if not str(body.get("codigo_cuenta") or "").strip():
-            body["codigo_cuenta"] = await self.preview_account_code(
-                organizacion_id=organizacion_id,
-                tipo=str(body.get("tipo") or body.get("tipo_cuenta") or ""),
-            )
-        resp = await self._request(
-            "POST",
-            "/rest/v1/cuentas",
-            json=body,
-            prefer="return=representation",
-        )
-        data = resp.json()
-        if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió la cuenta creada")
-        row = data[0]
-        if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear cuenta: {row!r}")
-        return row
+        tipo_code = str(body.get("tipo") or body.get("tipo_cuenta") or "")
+        codigo_original = str(body.get("codigo_cuenta") or "").strip()
+        last_exc: CRMRepositoryError | None = None
+        for attempt in range(3):
+            if not str(body.get("codigo_cuenta") or "").strip():
+                body["codigo_cuenta"] = await self.preview_account_code(
+                    organizacion_id=organizacion_id,
+                    tipo=tipo_code,
+                )
+            try:
+                resp = await self._request(
+                    "POST",
+                    "/rest/v1/cuentas",
+                    json=body,
+                    prefer="return=representation",
+                )
+                data = resp.json()
+                if not isinstance(data, list) or not data:
+                    raise CRMRepositoryError("Supabase no devolvió la cuenta creada")
+                row = data[0]
+                if not isinstance(row, dict):
+                    raise CRMRepositoryError(f"Respuesta inválida al crear cuenta: {row!r}")
+                return row
+            except CRMRepositoryError as exc:
+                last_exc = exc
+                if not _is_account_code_duplicate_error(exc) or attempt >= 2:
+                    raise
+                logger.warning(
+                    "crm.create_account_retry_codigo",
+                    extra={
+                        "attempt": attempt + 1,
+                        "organizacion_id": str(organizacion_id),
+                        "codigo_cuenta": str(body.get("codigo_cuenta") or ""),
+                        "codigo_original": codigo_original,
+                        "error": str(exc),
+                    },
+                )
+                body["codigo_cuenta"] = await self.preview_account_code(
+                    organizacion_id=organizacion_id,
+                    tipo=tipo_code,
+                )
+        raise last_exc or CRMRepositoryError("cuenta_creation_retry_exhausted")
 
     async def update_account(
         self,
