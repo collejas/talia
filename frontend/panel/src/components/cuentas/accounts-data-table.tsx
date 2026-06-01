@@ -74,12 +74,6 @@ function isSalesLevelRole(roles: string[] | undefined): boolean {
   });
 }
 
-function getAccountOwnerId(row: DataTableRow): string | null {
-  const raw = row.raw as Record<string, unknown> | undefined;
-  const value = raw?.propietario_usuario_id;
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 function getAccountRelatedContactOwnerId(row: DataTableRow): string | null {
   const raw = row.raw as Record<string, unknown> | undefined;
   const value = raw?.contacto_principal_owner_id;
@@ -296,7 +290,10 @@ export function AccountsDataTable({ rows }: Props) {
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );
   const canDeleteAccountRow = React.useCallback(
-    (_row: DataTableRow) => canDeleteAny,
+    (row: DataTableRow) => {
+      void row;
+      return canDeleteAny;
+    },
     [canDeleteAny],
   );
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);

@@ -26,7 +26,6 @@ import {
   createEmptyDirectionDraft,
   expandDirectionRelationTypes,
   directionTypeIncludesFiscal,
-  directionTypeIncludesPrincipal,
 } from "@/components/cuentas/account-directions";
 import { toast } from "sonner";
 

@@ -32,7 +32,6 @@ import {
   saveOrdenCompraPagosProgramadosAction,
   updateOrdenCompraPagoProgramadoAction,
   deleteOrdenCompraPagoProgramadoAction,
-  closeOrdenCompraAction,
   deleteAlmacenAction,
   deleteOrdenCompraAction,
   deleteProveedorAction,
@@ -967,21 +966,6 @@ export function ComprasWorkspace({
   const initialOrder = useMemo(
     () => openOrders.find((orden) => String(orden.id) === defaultOrderId) ?? openOrders[0] ?? null,
     [defaultOrderId, openOrders],
-  )
-  const personaOptions = useMemo(
-    () =>
-      personas
-        .map((persona) => ({
-          value: String(persona.id),
-          label: [
-            asString(persona.nombre_completo, "Sin nombre"),
-            asString(persona.company_name, ""),
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        }))
-        .filter((option) => option.value.trim().length > 0),
-    [personas],
   )
   const [selectedOrderId, setSelectedOrderId] = useState<string>("")
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
@@ -2306,6 +2290,7 @@ export function ComprasWorkspace({
         </Card>
 
         <ProveedorCreateModal
+          key={providerModalProveedorId ?? `provider-modal-${providerModalMode}`}
           open={isProveedorModalOpen}
           onOpenChange={(nextOpen) => {
             setIsProveedorModalOpen(nextOpen)

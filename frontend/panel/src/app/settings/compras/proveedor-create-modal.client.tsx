@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -197,7 +197,7 @@ export function ProveedorCreateModal({
     [personas],
   )
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setTab("general")
     setSaving(false)
     setErrorMessage("")
@@ -217,7 +217,7 @@ export function ProveedorCreateModal({
     setBanks([])
     setOriginalContactIds([])
     setOriginalBankIds([])
-  }
+  }, [defaultCode])
 
   useEffect(() => {
     if (open) {
@@ -248,7 +248,7 @@ export function ProveedorCreateModal({
         resetForm()
       }
     }
-  }, [open, defaultCode, mode, proveedor, proveedorContactos, proveedorCuentasBancarias])
+  }, [open, defaultCode, mode, proveedor, proveedorContactos, proveedorCuentasBancarias, resetForm])
 
   const handleClose = (nextOpen: boolean) => {
     onOpenChange(nextOpen)
@@ -485,7 +485,7 @@ export function ProveedorCreateModal({
               </div>
               {!contacts.length ? (
                 <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-                  Aún no has agregado contactos. Usa "Agregar contacto" si quieres capturarlos en este momento.
+                  Aún no has agregado contactos. Usa &quot;Agregar contacto&quot; si quieres capturarlos en este momento.
                 </div>
               ) : (
                 <div className="space-y-4">

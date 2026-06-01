@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -186,10 +186,6 @@ export function ProveedorDetailPanel({
     ? updateProveedorCuentaBancariaAction.bind(null, editingProviderBankId)
     : createProveedorCuentaBancariaAction.bind(null, String(selectedProviderId))
 
-  useEffect(() => {
-    resetProviderContactForm()
-    resetProviderBankForm()
-  }, [selectedProviderId])
 
   return (
     <Card>

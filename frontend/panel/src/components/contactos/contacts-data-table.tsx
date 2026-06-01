@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import {
   IconArrowsLeftRight,
@@ -47,23 +47,6 @@ import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
 
 type TableRow = z.infer<typeof schema>;
 
-type ContactField =
-  | "codigo_contacto"
-  | "codigo_cuenta"
-  | "correo"
-  | "telefono"
-  | "origen"
-  | "estado"
-  | "captura_estado"
-  | "company_name"
-  | "ultimo_contacto_en"
-  | "conversaciones"
-  | "notes"
-  | "rfc"
-  | "puesto"
-  | "rol_decision"
-  | "codigo_postal";
-
 type SalesRepOption = {
   id: string;
   nombre_completo: string | null;
@@ -79,55 +62,11 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   timeStyle: "short",
 });
 
-function getRawValue(row: TableRow, key: ContactField): unknown {
-  const raw = row.raw as Record<string, unknown> | undefined;
-  if (!raw) return null;
-  return raw[key] ?? null;
-}
-
 function formatDate(value: unknown): string {
   if (typeof value !== "string") return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return DATE_FORMATTER.format(date);
-}
-
-function formatNumber(value: unknown): string {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value.toLocaleString("es-MX");
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toLocaleString("es-MX") : "—";
-}
-
-function renderField(row: TableRow, key: ContactField): React.ReactNode {
-  const value = getRawValue(row, key);
-  if (value === null || value === undefined || value === "") return <span className="text-muted-foreground">—</span>;
-
-  switch (key) {
-    case "correo":
-      return (
-        <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">
-          {String(value)}
-        </a>
-      );
-    case "telefono":
-      return (
-        <a href={`tel:${value}`} className="text-primary underline-offset-2 hover:underline">
-          {String(value)}
-        </a>
-      );
-    case "ultimo_contacto_en":
-      return (
-        <span className="whitespace-nowrap" suppressHydrationWarning>
-          {formatDate(value)}
-        </span>
-      );
-    case "conversaciones":
-      return <span className="tabular-nums">{formatNumber(value)}</span>;
-    default:
-      return <span className="break-words">{String(value)}</span>;
-  }
 }
 
 function extractUnknown(raw: Record<string, unknown> | undefined, path: string[]): unknown {
@@ -245,11 +184,6 @@ const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) 
   meta: { label: column.label },
 }));
 
-const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<VisibilityState>((visibility, column) => {
-  visibility[column.id] = column.defaultVisible ?? false;
-  return visibility;
-}, {});
-
 const contactColumnLabels = {
   header: "Nombre contacto",
   type: "Nombre empresa",
@@ -303,10 +237,10 @@ export function ContactsDataTable({
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );
-  const canDeleteContactRow = React.useCallback(
-    (_row: TableRow) => canDeleteAny,
-    [canDeleteAny],
-  );
+  const canDeleteContactRow = React.useCallback((row: TableRow) => {
+    void row;
+    return canDeleteAny;
+  }, [canDeleteAny]);
   const canReassignAny =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -1048,14 +982,6 @@ export function ContactsDataTable({
       </Dialog>
     </>
   );
-}
-
-function normalizeSearch(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function getOwnerFilterKey(raw: Record<string, unknown> | undefined): string {
