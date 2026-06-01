@@ -11704,14 +11704,25 @@ class CRMRepository:
     async def personas_resumen(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any]:
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/panel_contactos_resumen",
-            token=usuario_token,
-            json={},
-        )
+        if organizacion_id is not None:
+            resp = await self._request_service_role(
+                "POST",
+                "/rest/v1/rpc/panel_contactos_resumen",
+                json={"p_organizacion": str(organizacion_id)},
+                organizacion_id=organizacion_id,
+            )
+        else:
+            if not usuario_token:
+                raise CRMRepositoryError("contacts_summary_missing_token")
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_contactos_resumen",
+                token=usuario_token,
+                json={},
+            )
         data = resp.json()
         if isinstance(data, dict):
             return data
@@ -11724,9 +11735,13 @@ class CRMRepository:
     async def contactos_resumen(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any]:
-        return await self.personas_resumen(usuario_token=usuario_token)
+        return await self.personas_resumen(
+            usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
+        )
 
     async def personas_list(
         self,

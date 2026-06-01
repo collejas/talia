@@ -90,11 +90,14 @@ export async function loadContactosData(): Promise<ContactosPayload> {
   if (!resumen.ok) errors.push(resumen.error);
   if (!listado.ok) errors.push(listado.error);
 
-  const cards = mapCards(resumen.ok ? resumen.data : undefined);
-  const table = mapTable(listado.ok ? listado.data : undefined);
+  const listRows = listado.ok ? listado.data : undefined;
+  const cards = shouldUseSummary(resumen.ok ? resumen.data : undefined, listRows)
+    ? mapCardsFromSummary(resumen.ok ? resumen.data : undefined)
+    : mapCardsFromList(listRows);
+  const table = mapTable(listRows);
   const totalRows =
-    listado.ok && Array.isArray(listado.data) && listado.data.length
-      ? listado.data[0].total_rows ?? listado.data.length
+    Array.isArray(listRows) && listRows.length
+      ? listRows[0].total_rows ?? listRows.length
       : 0;
 
   return {
@@ -105,7 +108,22 @@ export async function loadContactosData(): Promise<ContactosPayload> {
   };
 }
 
-function mapCards(payload?: CrmContactSummary): ContactCards {
+function shouldUseSummary(payload: CrmContactSummary | undefined, rows: CrmContactListRow[] | undefined): boolean {
+  if (!payload) return false;
+  const hasSummaryValue =
+    Number(payload.total ?? 0) > 0 ||
+    Number(payload.completos ?? 0) > 0 ||
+    Number(payload.incompletos ?? 0) > 0 ||
+    Number(payload.activos ?? 0) > 0 ||
+    Number(payload.leads ?? 0) > 0 ||
+    Number(payload.webchat ?? 0) > 0 ||
+    Number(payload.propietarios ?? 0) > 0 ||
+    Boolean(payload.ultimo);
+  if (hasSummaryValue) return true;
+  return !rows || rows.length === 0;
+}
+
+function mapCardsFromSummary(payload?: CrmContactSummary): ContactCards {
   return {
     total: payload?.total ?? 0,
     completos: payload?.completos ?? 0,
@@ -115,6 +133,62 @@ function mapCards(payload?: CrmContactSummary): ContactCards {
     webchat: payload?.webchat ?? 0,
     propietarios: payload?.propietarios ?? 0,
     ultimo: payload?.ultimo ?? null,
+  };
+}
+
+function mapCardsFromList(payload?: CrmContactListRow[] | null): ContactCards {
+  if (!payload || !payload.length) {
+    return {
+      total: 0,
+      completos: 0,
+      incompletos: 0,
+      activos: 0,
+      leads: 0,
+      webchat: 0,
+      propietarios: 0,
+      ultimo: null,
+    };
+  }
+
+  const counts = payload.reduce(
+    (acc, row) => {
+      const estado = normalizeLabel(row.estado).trim().toLowerCase();
+      const captura = (row.captura_estado || "").trim().toLowerCase();
+      const origen = (row.origen || "").trim().toLowerCase();
+      if (captura === "completo") acc.completos += 1;
+      else acc.incompletos += 1;
+      if (estado === "activo") acc.activos += 1;
+      if (estado === "lead") acc.leads += 1;
+      if (origen === "webchat") acc.webchat += 1;
+      if (row.propietario_id || row.propietario_nombre) {
+        acc.propietarios.add(row.propietario_id || row.propietario_nombre || "");
+      }
+      const createdAt = row.creado_en && !Number.isNaN(Date.parse(row.creado_en)) ? new Date(row.creado_en).getTime() : null;
+      if (createdAt !== null && (acc.ultimo === null || createdAt > acc.ultimo)) {
+        acc.ultimo = createdAt;
+      }
+      return acc;
+    },
+    {
+      completos: 0,
+      incompletos: 0,
+      activos: 0,
+      leads: 0,
+      webchat: 0,
+      propietarios: new Set<string>(),
+      ultimo: null as number | null,
+    },
+  );
+
+  return {
+    total: payload.length,
+    completos: counts.completos,
+    incompletos: counts.incompletos,
+    activos: counts.activos,
+    leads: counts.leads,
+    webchat: counts.webchat,
+    propietarios: counts.propietarios.size,
+    ultimo: counts.ultimo ? new Date(counts.ultimo).toISOString() : null,
   };
 }
 

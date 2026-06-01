@@ -21475,10 +21475,11 @@ async def get_personas_summary_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
 ) -> CRMPersonaSummary:
     try:
-        row = await repo.personas_resumen(usuario_token=user_token)
+        row = await repo.personas_resumen(usuario_token=user_token, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersonaSummary.model_validate(row)
@@ -21489,9 +21490,15 @@ async def get_personas_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
 ) -> CRMPersonaSummary:
-    row = await get_personas_summary_legacy(repo=repo, _=_, user_token=user_token)
+    row = await get_personas_summary_legacy(
+        repo=repo,
+        _=_,
+        organizacion_id=organizacion_id,
+        user_token=user_token,
+    )
     return CRMPersonaSummary.model_validate(row.model_dump())
 
 
