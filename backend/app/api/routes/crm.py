@@ -13534,7 +13534,6 @@ class CRMPersonaListRow(CRMContactListRow):
 
 
 _CONTACTS_EXPORT_HEADERS = [
-    "ID contacto",
     "Código contacto",
     "Código empresa",
     "Nombre",
@@ -13816,7 +13815,6 @@ def _render_contacts_csv(rows: Sequence[Mapping[str, Any]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                _contact_export_value(row.get("contacto_id")),
                 _contact_export_value(row.get("codigo_contacto")),
                 _contact_export_value(row.get("codigo_cuenta")),
                 _contact_export_value(row.get("nombre")),
