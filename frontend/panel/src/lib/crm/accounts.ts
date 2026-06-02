@@ -30,6 +30,7 @@ type CRMAccount = {
   direccion_fiscal?: Record<string, unknown> | null;
   direccion_principal?: Record<string, unknown> | null;
   can_view_sensitive_fields?: boolean | null;
+  regimen_capital?: string | null;
   metadata: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string;
@@ -82,6 +83,7 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
       contacto_principal_owner_id: account.contacto_principal_owner_id,
       can_view_sensitive_fields: account.can_view_sensitive_fields,
       rfc: (account as { rfc?: string | null }).rfc ?? null,
+      regimen_capital: (account as { regimen_capital?: string | null }).regimen_capital ?? null,
       uso_cfdi: (account as { uso_cfdi?: string | null }).uso_cfdi ?? null,
       metodo_pago: (account as { metodo_pago?: string | null }).metodo_pago ?? null,
       forma_pago: (account as { forma_pago?: string | null }).forma_pago ?? null,

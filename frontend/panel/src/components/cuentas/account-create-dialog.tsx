@@ -49,6 +49,7 @@ type CreateAccountForm = {
   telefono_secundario_tipo_linea: string;
   telefono_secundario_extension: string;
   notas: string;
+  regimen_capital: string;
   uso_cfdi: string;
   forma_pago: string;
   metodo_pago: string;
@@ -146,6 +147,7 @@ const INITIAL_FORM: CreateAccountForm = {
   telefono_secundario_tipo_linea: "movil",
   telefono_secundario_extension: "",
   notas: "",
+  regimen_capital: "",
   uso_cfdi: "",
   forma_pago: "",
   metodo_pago: "",
@@ -325,6 +327,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
           telefono_secundario_tipo_linea: form.telefono_secundario_tipo_linea || null,
           telefono_secundario_extension: sanitizePhoneInput(form.telefono_secundario_extension) || null,
           notas: form.notas.trim() || null,
+          regimen_capital: form.regimen_capital.trim() || null,
           uso_cfdi: form.uso_cfdi.trim() || null,
           forma_pago: form.forma_pago.trim() || null,
           metodo_pago: form.metodo_pago.trim() || null,
@@ -758,6 +761,14 @@ export function AccountCreateDialog({ onCreated }: Props) {
 
             <FormSection title="Datos fiscales" description="Captura la información de facturación de la empresa.">
               <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Régimen de capital">
+                  <Input
+                    id="create-regimen-capital"
+                    value={form.regimen_capital}
+                    onChange={(event) => setForm((prev) => ({ ...prev, regimen_capital: event.target.value }))}
+                    placeholder="Ej. Capital variable"
+                  />
+                </Field>
                 <Field label="Uso CFDI">
                   <ContactCatalogSelect
                     value={form.uso_cfdi}

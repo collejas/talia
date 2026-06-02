@@ -118,6 +118,7 @@ type RelacionDraft = {
 
 type ExtrasDraft = {
   tipo: string;
+  regimen_capital: string;
   uso_cfdi: string;
   forma_pago: string;
   metodo_pago: string;
@@ -433,6 +434,7 @@ const INITIAL_STATE: ContactEditState = {
   },
   extras: {
     tipo: "principal",
+    regimen_capital: "",
     uso_cfdi: "",
     forma_pago: "",
     metodo_pago: "",
@@ -628,6 +630,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
 
   const extras = cleanObject({
     fiscales: cleanObject({
+      regimen_capital: state.extras.regimen_capital,
       uso_cfdi: state.extras.uso_cfdi,
       forma_pago: state.extras.forma_pago,
       metodo_pago: state.extras.metodo_pago,
@@ -699,6 +702,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
       const detail = action.detail;
       const mode = inferMode(detail);
       const hasFiscalOrAddressData = [
+        "regimen_capital",
         "uso_cfdi",
         "forma_pago",
         "metodo_pago",
@@ -819,6 +823,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         },
         extras: {
           ...INITIAL_STATE.extras,
+          regimen_capital: readString(detail, "regimen_capital"),
           uso_cfdi: readString(detail, "uso_cfdi"),
           forma_pago: readString(detail, "forma_pago"),
           metodo_pago: readString(detail, "metodo_pago"),
@@ -2261,6 +2266,13 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
           <FormSection title="Datos fiscales" description="Completa ahora o revisa los valores persistidos.">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Régimen de capital">
+                <Input
+                  value={state.extras.regimen_capital}
+                  onChange={(e) => dispatch({ type: "extras/set", field: "regimen_capital", value: e.target.value })}
+                  placeholder="Ej. Capital variable"
+                />
+              </Field>
               <Field label="Uso CFDI">
                 <ContactCatalogSelect
                   value={state.extras.uso_cfdi}

@@ -2547,6 +2547,7 @@ class CRMAccount(BaseModel):
     codigo_cuenta: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
+    regimen_capital: str | None = None
     uso_cfdi: str | None = None
     metodo_pago: str | None = None
     forma_pago: str | None = None
@@ -2624,6 +2625,7 @@ class CRMAccountCreate(BaseModel):
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
+    regimen_capital: str | None = Field(default=None, max_length=120)
     uso_cfdi: str | None = Field(default=None, max_length=120)
     metodo_pago: str | None = Field(default=None, max_length=120)
     forma_pago: str | None = Field(default=None, max_length=120)
@@ -2693,6 +2695,7 @@ class CRMAccountUpdate(BaseModel):
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
+    regimen_capital: str | None = Field(default=None, max_length=120)
     uso_cfdi: str | None = Field(default=None, max_length=120)
     metodo_pago: str | None = Field(default=None, max_length=120)
     forma_pago: str | None = Field(default=None, max_length=120)
@@ -9938,6 +9941,7 @@ class CRMContact(BaseModel):
     persona_fisica_moral: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
+    regimen_capital: str | None = None
     uso_cfdi: str | None = None
     metodo_pago: str | None = None
     forma_pago: str | None = None
@@ -10026,6 +10030,7 @@ class CRMContactCreate(BaseModel):
     persona_fisica_moral: str | None = Field(default=None, max_length=20)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
+    regimen_capital: str | None = Field(default=None, max_length=120)
     uso_cfdi: str | None = Field(default=None, max_length=120)
     metodo_pago: str | None = Field(default=None, max_length=120)
     forma_pago: str | None = Field(default=None, max_length=120)
@@ -10109,6 +10114,7 @@ class CRMContactUpdate(BaseModel):
     persona_fisica_moral: str | None = Field(default=None, max_length=20)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
+    regimen_capital: str | None = Field(default=None, max_length=120)
     uso_cfdi: str | None = Field(default=None, max_length=120)
     metodo_pago: str | None = Field(default=None, max_length=120)
     forma_pago: str | None = Field(default=None, max_length=120)
@@ -10294,6 +10300,7 @@ class CRMPersonaAltaRelacion(BaseModel):
 
 
 class CRMPersonaAltaExtrasFiscales(BaseModel):
+    regimen_capital: str | None = Field(default=None, max_length=120)
     uso_cfdi: str | None = Field(default=None, max_length=120)
     forma_pago: str | None = Field(default=None, max_length=120)
     metodo_pago: str | None = Field(default=None, max_length=120)
@@ -11044,6 +11051,7 @@ def _persona_alta_normalize_extras(payload: CRMPersonaAltaExtras | None) -> CRMP
     fiscales_norm = (
         fiscales.model_copy(
             update={
+                "regimen_capital": _persona_alta_clean_text(fiscales.regimen_capital),
                 "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi),
                 "forma_pago": _persona_alta_clean_text(fiscales.forma_pago),
                 "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago),
@@ -11719,6 +11727,7 @@ def _persona_alta_to_contact_payload(
         "tipo_industria": _persona_alta_clean_text(cuenta.industria if cuenta else None) or (existing_account.industria if existing_account else None),
         "website": _persona_alta_clean_text(cuenta.sitio_web if cuenta else None) or (existing_account.sitio_web if existing_account else None),
         "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None),
+        "regimen_capital": _persona_alta_clean_text(fiscales.regimen_capital if fiscales else None),
         "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None),
         "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
         "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
@@ -11814,6 +11823,8 @@ def _persona_alta_to_account_payload(
         or _persona_alta_clean_text(existing_values.get("razon_social"))
         or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
         "rfc": _persona_alta_clean_text(cuenta.rfc) or _persona_alta_clean_text(existing_values.get("rfc")),
+        "regimen_capital": _persona_alta_clean_text(fiscales.regimen_capital if fiscales else None)
+        or _persona_alta_clean_text(existing_values.get("regimen_capital")),
         "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None) or _persona_alta_clean_text(existing_values.get("uso_cfdi")),
         "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None) or _persona_alta_clean_text(existing_values.get("metodo_pago")),
         "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None) or _persona_alta_clean_text(existing_values.get("forma_pago")),

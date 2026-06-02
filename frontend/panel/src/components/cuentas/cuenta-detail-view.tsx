@@ -85,6 +85,7 @@ type AccountEditForm = {
   fecha_incorporacion: string;
   latitud: string;
   longitud: string;
+  regimen_capital: string;
   uso_cfdi: string;
   metodo_pago: string;
   forma_pago: string;
@@ -386,6 +387,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     metodo_pago: "",
     forma_pago: "",
     email_facturacion: "",
+    regimen_capital: "",
     pais: "",
     clave_entidad: "",
     entidad: "",
@@ -658,6 +660,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       fecha_incorporacion: getInputText(detail?.fecha_incorporacion),
       latitud: getInputText(detail?.latitud),
       longitud: getInputText(detail?.longitud),
+      regimen_capital: getInputText(detail?.regimen_capital),
       uso_cfdi: getInputText(detail?.uso_cfdi),
       metodo_pago: getInputText(detail?.metodo_pago),
       forma_pago: getInputText(detail?.forma_pago),
@@ -744,6 +747,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           industria: editForm.industria.trim(),
           tamano: editForm.tamano.trim(),
           tipo_establecimiento: editForm.tipo_establecimiento.trim(),
+          regimen_capital: editForm.regimen_capital.trim(),
           uso_cfdi: editForm.uso_cfdi.trim(),
           metodo_pago: editForm.metodo_pago.trim(),
           forma_pago: editForm.forma_pago.trim(),
@@ -1629,6 +1633,14 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
 
             <FormSection title="Datos fiscales" description="Captura o ajusta la información de facturación.">
               <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Régimen de capital">
+                  <Input
+                    id="edit-regimen-capital"
+                    value={editForm.regimen_capital}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, regimen_capital: event.target.value }))}
+                    placeholder="Ej. Capital variable"
+                  />
+                </Field>
                 <Field label="Uso CFDI">
                   <ContactCatalogSelect
                     value={editForm.uso_cfdi}

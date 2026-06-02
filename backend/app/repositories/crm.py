@@ -921,7 +921,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,alias,tipo,industria,tamano,sitio_web,telefono,correo,direccion,"
                 "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
-                "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
+                "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,regimen_capital,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
                 "letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,"
                 "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
@@ -6908,7 +6908,7 @@ class CRMRepository:
                 "id": f"eq.{account_uuid}",
                 "limit": "1",
                 "select": (
-                "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
+                "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,regimen_capital,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,tamano,sitio_web,website,telefono,correo,"
                     "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,"
                     "numero_interior,letra_interior,tipo_asentamiento,tipo_centro_comercial,"
@@ -7066,6 +7066,7 @@ class CRMRepository:
             "cuenta_telefono_secundario_extension": account.get("telefono_secundario_extension") if isinstance(account, dict) else None,
             "razon_social": account.get("razon_social") if isinstance(account, dict) else None,
             "rfc": account.get("rfc") if isinstance(account, dict) else None,
+            "regimen_capital": account.get("regimen_capital") if isinstance(account, dict) else None,
             "uso_cfdi": account.get("uso_cfdi") if isinstance(account, dict) else None,
             "metodo_pago": account.get("metodo_pago") if isinstance(account, dict) else None,
             "forma_pago": account.get("forma_pago") if isinstance(account, dict) else None,
@@ -7225,6 +7226,7 @@ class CRMRepository:
                 "company_name",
                 "razon_social",
                 "rfc",
+                "regimen_capital",
                 "cuenta_correo_principal",
                 "cuenta_correo_secundario",
                 "cuenta_telefono_principal_e164",
@@ -7442,6 +7444,7 @@ class CRMRepository:
                 "codigo_cuenta": self._pick_text(merged, "codigo_cuenta"),
                 "razon_social": reason_name,
                 "rfc": self._pick_text(merged, "rfc"),
+                "regimen_capital": self._pick_text(merged, "regimen_capital"),
                 "uso_cfdi": self._pick_text(merged, "uso_cfdi"),
                 "metodo_pago": self._pick_text(merged, "metodo_pago"),
                 "forma_pago": self._pick_text(merged, "forma_pago"),

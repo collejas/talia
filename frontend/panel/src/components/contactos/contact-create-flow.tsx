@@ -119,6 +119,7 @@ type RelacionDraft = {
 
 type ExtrasDraft = {
   tipo: string;
+  regimen_capital: string;
   uso_cfdi: string;
   forma_pago: string;
   metodo_pago: string;
@@ -413,6 +414,7 @@ const INITIAL_STATE: ContactCreateState = {
   },
   extras: {
     tipo: "principal",
+    regimen_capital: "",
     uso_cfdi: "",
     forma_pago: "",
     metodo_pago: "",
@@ -709,6 +711,7 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
 
   const extras = cleanObject({
     fiscales: cleanObject({
+      regimen_capital: state.extras.regimen_capital,
       uso_cfdi: state.extras.uso_cfdi,
       forma_pago: state.extras.forma_pago,
       metodo_pago: state.extras.metodo_pago,
@@ -1673,6 +1676,13 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </div>
             {state.extrasOpen ? (
               <div className="space-y-4">
+                <Field label="Régimen de capital">
+                  <Input
+                    value={state.extras.regimen_capital}
+                    onChange={(e) => dispatch({ type: "extras/set", field: "regimen_capital", value: e.target.value })}
+                    placeholder="Ej. Capital variable"
+                  />
+                </Field>
                 <Field label="Uso CFDI">
                   <ContactCatalogSelect
                     value={state.extras.uso_cfdi}
