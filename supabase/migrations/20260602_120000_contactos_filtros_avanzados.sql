@@ -73,6 +73,7 @@ WITH person_accounts AS (
         p.telefono_principal_e164 ILIKE '%' || p_search || '%' OR
         p.notas ILIKE '%' || p_search || '%' OR
         COALESCE(account.nombre, account.razon_social, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(account.razon_social, '') ILIKE '%' || p_search || '%' OR
         COALESCE(account.rfc, '') ILIKE '%' || p_search || '%' OR
         COALESCE(p.metadata->>'legacy_contacto_codigo', '') ILIKE '%' || p_search || '%'
       )
@@ -311,6 +312,7 @@ WITH person_accounts AS (
         p.telefono_principal_e164 ILIKE '%' || p_search || '%' OR
         p.notas ILIKE '%' || p_search || '%' OR
         COALESCE(account.nombre, account.razon_social, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(account.razon_social, '') ILIKE '%' || p_search || '%' OR
         COALESCE(account.rfc, '') ILIKE '%' || p_search || '%' OR
         COALESCE(p.metadata->>'legacy_contacto_codigo', '') ILIKE '%' || p_search || '%'
       )
