@@ -2527,6 +2527,7 @@ class CRMAccount(BaseModel):
     nombre: str
     alias: str | None = None
     tipo: str | None = None
+    estado: str | None = None
     industria: str | None = None
     tamano: str | None = Field(default=None, alias="tamano")
     sitio_web: str | None = None

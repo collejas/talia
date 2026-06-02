@@ -1,5 +1,5 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { AccountsDataTable } from "@/components/cuentas/accounts-data-table";
+import { EmpresasPageClient } from "@/components/cuentas/empresas-page.client";
 import { loadCrmAccounts } from "@/lib/crm/accounts";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +10,20 @@ export default async function EmpresasPage() {
   return (
     <AppViewLayout title="Empresas">
       {payload.errors.length > 0 ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          {payload.errors.map((error) => (
-            <p key={error}>{error}</p>
-          ))}
+        <div className="px-4 lg:px-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <p className="font-medium">No se pudieron cargar todos los datos:</p>
+            <ul className="list-disc pl-5">
+              {payload.errors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : (
-        <AccountsDataTable rows={payload.rows} />
+        null
       )}
+      <EmpresasPageClient rows={payload.rows} />
     </AppViewLayout>
   );
 }

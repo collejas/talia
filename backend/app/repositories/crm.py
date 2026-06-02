@@ -919,7 +919,7 @@ class CRMRepository:
             "limit": str(limit),
             "offset": str(offset),
             "select": (
-                "id,organizacion_id,nombre,alias,tipo,industria,tamano,sitio_web,telefono,correo,direccion,"
+                "id,organizacion_id,nombre,alias,tipo,estado,industria,tamano,sitio_web,telefono,correo,direccion,"
                 "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
                 "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,regimen_capital,uso_cfdi,metodo_pago,forma_pago,"
                 "email_facturacion,tipo_industria,notas,necesidad_proposito,tipo_vialidad,nombre_vialidad,numero_exterior,"
