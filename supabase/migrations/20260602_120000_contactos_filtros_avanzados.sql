@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public.panel_contactos_resumen(
     p_from timestamptz DEFAULT NULL,
     p_to timestamptz DEFAULT NULL,
     p_propietario uuid DEFAULT NULL,
+    p_search text DEFAULT NULL,
     p_origen text DEFAULT NULL,
     p_puesto text DEFAULT NULL,
     p_rol_decision text DEFAULT NULL,
@@ -34,9 +35,6 @@ WITH person_accounts AS (
         p.creado_en,
         p.puesto,
         p.rol_decision,
-        p.tipo_industria AS persona_tipo_industria,
-        p.tamano AS persona_tamano,
-        p.fecha_incorporacion AS persona_fecha_incorporacion,
         p.entidad AS persona_entidad,
         p.municipio AS persona_municipio,
         p.pais AS persona_pais,
@@ -68,6 +66,16 @@ WITH person_accounts AS (
       AND (p_from IS NULL OR p.creado_en >= p_from)
       AND (p_to IS NULL OR p.creado_en <= p_to)
       AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
+      AND (
+        p_search IS NULL OR p_search = '' OR
+        p.nombre_completo ILIKE '%' || p_search || '%' OR
+        p.correo_principal ILIKE '%' || p_search || '%' OR
+        p.telefono_principal_e164 ILIKE '%' || p_search || '%' OR
+        p.notas ILIKE '%' || p_search || '%' OR
+        COALESCE(account.nombre, account.razon_social, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(account.rfc, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(p.metadata->>'legacy_contacto_codigo', '') ILIKE '%' || p_search || '%'
+      )
       AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
       AND (p_puesto IS NULL OR lower(COALESCE(p.puesto, '')) = lower(p_puesto))
       AND (p_rol_decision IS NULL OR lower(COALESCE(p.rol_decision, '')) = lower(p_rol_decision))
@@ -78,17 +86,17 @@ WITH person_accounts AS (
         (lower(p_ligado) IN ('no', 'false', '0') AND relation.cuenta_id IS NULL)
       )
       AND (p_tipo_cuenta IS NULL OR p_tipo_cuenta = '' OR lower(COALESCE(account.tipo, '')) = lower(p_tipo_cuenta))
-      AND (p_tamano IS NULL OR p_tamano = '' OR lower(COALESCE(account.tamano, p.tamano, '')) = lower(p_tamano))
-      AND (p_clasificacion IS NULL OR p_clasificacion = '' OR lower(COALESCE(account.tipo_industria, p.tipo_industria, '')) = lower(p_clasificacion))
+      AND (p_tamano IS NULL OR p_tamano = '' OR lower(COALESCE(account.tamano, '')) = lower(p_tamano))
+      AND (p_clasificacion IS NULL OR p_clasificacion = '' OR lower(COALESCE(account.tipo_industria, '')) = lower(p_clasificacion))
       AND (p_cuenta_from IS NULL OR account.creado_en >= p_cuenta_from)
       AND (p_cuenta_to IS NULL OR account.creado_en <= p_cuenta_to)
       AND (
         p_fecha_incorporacion_from IS NULL
-        OR COALESCE(account.fecha_incorporacion, p.fecha_incorporacion) >= p_fecha_incorporacion_from
+        OR account.fecha_incorporacion >= p_fecha_incorporacion_from
       )
       AND (
         p_fecha_incorporacion_to IS NULL
-        OR COALESCE(account.fecha_incorporacion, p.fecha_incorporacion) <= p_fecha_incorporacion_to
+        OR account.fecha_incorporacion <= p_fecha_incorporacion_to
       )
       AND (
         p_fusionada IS NULL OR p_fusionada = '' OR
@@ -399,7 +407,6 @@ GRANT EXECUTE ON FUNCTION public.panel_contactos_resumen(
     text,
     text,
     text,
-    text,
     timestamptz,
     timestamptz,
     timestamptz,
@@ -424,6 +431,7 @@ GRANT EXECUTE ON FUNCTION public.panel_contactos_list(
     text,
     text,
     text,
+    text,
     timestamptz,
     timestamptz,
     timestamptz,
@@ -434,7 +442,6 @@ GRANT EXECUTE ON FUNCTION public.panel_contactos_list(
     text,
     text,
     text,
-    integer,
     integer,
     integer
 ) TO authenticated, service_role;

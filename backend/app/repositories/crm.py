@@ -11771,7 +11771,6 @@ class CRMRepository:
         if municipio and municipio.strip():
             payload["p_municipio"] = municipio.strip()
         if organizacion_id is not None:
-            payload["p_organizacion"] = str(organizacion_id)
             resp = await self._request_service_role(
                 "POST",
                 "/rest/v1/rpc/panel_contactos_resumen",
