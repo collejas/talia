@@ -183,6 +183,7 @@ type PersonaResponseResumen = {
 
 type PersonaMutationResponse = {
   resumen?: PersonaResponseResumen;
+  persona?: { id?: string | null } | null;
   error?: string;
 };
 
@@ -1456,7 +1457,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
       }
       toast.success("Cambios guardados.");
       onOpenChange(false);
-      onSaved?.(String(body.persona?.id || resolvedPersonaId));
+      onSaved?.(String(body.persona?.id ?? resolvedPersonaId));
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo guardar.";
       dispatch({ type: "error/set", value: message });

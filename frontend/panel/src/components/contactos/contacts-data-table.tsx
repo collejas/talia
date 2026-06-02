@@ -491,11 +491,14 @@ export function ContactsDataTable({
     }
   }, [router]);
 
-  const handleCreated = React.useCallback(() => {
-    setError(null);
-    setSuccess(null);
-    router.refresh();
-  }, [router]);
+  const handleCreated = React.useCallback(
+    (personaId: string) => {
+      setError(null);
+      setSuccess(null);
+      void refreshContactRow(personaId);
+    },
+    [refreshContactRow],
+  );
 
   const openLinkFlow = (row?: TableRow | null) => {
     if (!row) {
@@ -961,7 +964,7 @@ export function ContactsDataTable({
         open={createOpen}
         onOpenChange={setCreateOpen}
         initialMode={createInitialMode}
-        onCreated={handleCreated}
+        onCreated={(personaId) => handleCreated(personaId)}
       />
 
       <ContactEditFlow
