@@ -93,6 +93,50 @@ function getContactIdValue(raw: Record<string, unknown> | undefined): string {
   return extractString(raw, ["codigo_contacto"]) || extractString(raw, ["contacto_id"]) || "—";
 }
 
+function normalizeLabel(value: unknown): string {
+  if (typeof value !== "string") return "Desconocido";
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "Desconocido";
+}
+
+function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: TableRow | null): TableRow {
+  const previousRaw = previous?.raw as Record<string, unknown> | undefined;
+  const contactId = extractString(detail, ["contacto_id"]) || extractString(detail, ["id"]) || extractString(previousRaw, ["contacto_id"]) || "";
+  const createdAtRaw = extractString(detail, ["creado_en"]) || extractString(detail, ["actualizado_en"]) || extractString(previousRaw, ["creado_en"]) || "";
+  const createdAt = createdAtRaw && !Number.isNaN(Date.parse(createdAtRaw)) ? new Date(createdAtRaw).toISOString() : previous?.limit || "";
+  const conversationsRaw = extractString(detail, ["conversaciones"]) || extractString(previousRaw, ["conversaciones"]) || "0";
+  const conversations = Number.parseInt(conversationsRaw, 10);
+
+  return {
+    id: (previous?.id ?? Number.parseInt(contactId, 10)) || 0,
+    header:
+      extractString(detail, ["nombre_completo"]) ||
+      extractString(detail, ["nombre"]) ||
+      extractString(detail, ["company_name"]) ||
+      previous?.header ||
+      "Contacto sin nombre",
+    type: normalizeLabel(extractString(detail, ["estado"]) || previous?.type),
+    status: (extractString(detail, ["captura_estado"]) || "").toLowerCase() === "completo" ? "Done" : previous?.status || "In Process",
+    target: Number.isFinite(conversations) ? String(conversations) : previous?.target || "0",
+    limit: createdAt,
+    reviewer: extractString(detail, ["propietario_nombre"]) || previous?.reviewer || "Sin asignar",
+    raw: {
+      ...(previous?.raw ?? {}),
+      ...detail,
+      contacto_id: contactId || extractString(previousRaw, ["contacto_id"]) || "",
+      codigo_contacto: extractString(detail, ["codigo_contacto"]) || extractString(previousRaw, ["codigo_contacto"]) || "",
+      propietario_id: extractString(detail, ["propietario_id"]) || extractString(previousRaw, ["propietario_id"]) || "",
+      propietario_nombre: extractString(detail, ["propietario_nombre"]) || extractString(previousRaw, ["propietario_nombre"]) || "",
+      company_name: extractString(detail, ["company_name"]) || extractString(previousRaw, ["company_name"]) || "",
+      estado: extractString(detail, ["estado"]) || extractString(previousRaw, ["estado"]) || "",
+      captura_estado: extractString(detail, ["captura_estado"]) || extractString(previousRaw, ["captura_estado"]) || "",
+      creado_en: extractString(detail, ["creado_en"]) || extractString(previousRaw, ["creado_en"]) || "",
+      actualizado_en: extractString(detail, ["actualizado_en"]) || extractString(previousRaw, ["actualizado_en"]) || "",
+      conversaciones: Number.isFinite(conversations) ? conversations : 0,
+    },
+  };
+}
+
 function isSalesLevelRole(roles: string[] | undefined): boolean {
   return (roles ?? []).some((role) => {
     const value = (role ?? "").toString().trim().toLowerCase();
@@ -203,6 +247,7 @@ export function ContactsDataTable({
 }) {
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const [tableRows, setTableRows] = React.useState<ContactTableRow[]>(data);
   const normalizedPerms = React.useMemo(
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
@@ -216,6 +261,10 @@ export function ContactsDataTable({
   const [remoteSearchQuery, setRemoteSearchQuery] = React.useState("");
   const [remoteSearchLoading, setRemoteSearchLoading] = React.useState(false);
   const [remoteSearchError, setRemoteSearchError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setTableRows(data);
+  }, [data]);
 
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
@@ -404,6 +453,44 @@ export function ContactsDataTable({
     setEditOpen(true);
   };
 
+  const refreshContactRow = React.useCallback(async (personaId: string) => {
+    const id = personaId.trim();
+    if (!id) {
+      router.refresh();
+      return;
+    }
+    try {
+      const response = await fetch('/api/personas/' + encodeURIComponent(id), { cache: 'no-store' });
+      if (!response.ok) {
+        router.refresh();
+        return;
+      }
+      const detail = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      setTableRows((current) => {
+        const previous = current.find((row) => {
+          const rowRaw = row.raw as Record<string, unknown> | undefined;
+          return extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
+        }) ?? null;
+        const nextRow = mapContactDetailToTableRow(detail, previous);
+        const replaced = current.map((row) => {
+          const rowRaw = row.raw as Record<string, unknown> | undefined;
+          const rowId = extractString(rowRaw, ['contacto_id']) || extractString(rowRaw, ['id']);
+          return rowId === id ? nextRow : row;
+        });
+        if (!replaced.some((row) => {
+          const rowRaw = row.raw as Record<string, unknown> | undefined;
+          return extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
+        })) {
+          return [nextRow, ...current];
+        }
+        return replaced;
+      });
+      router.refresh();
+    } catch {
+      router.refresh();
+    }
+  }, [router]);
+
   const handleCreated = React.useCallback(() => {
     setError(null);
     setSuccess(null);
@@ -585,12 +672,12 @@ export function ContactsDataTable({
   };
 
   const sourceData = React.useMemo(() => {
-    if (!searchQuery) return data;
+    if (!searchQuery) return tableRows;
     if (remoteSearchQuery === searchQuery) {
       return remoteSearchData ?? [];
     }
     return [];
-  }, [data, remoteSearchData, remoteSearchQuery, searchQuery]);
+  }, [remoteSearchData, remoteSearchQuery, searchQuery, tableRows]);
 
   const ownerOptions = React.useMemo(() => {
     const options = new Map<string, string>();
@@ -649,7 +736,7 @@ export function ContactsDataTable({
             : `${filteredData.length} contactos`
       : createdFromFilter || createdToFilter || ownerFilter !== "all"
         ? `${filteredData.length} de ${sourceData.length} contactos`
-        : `${data.length} contactos`;
+        : `${tableRows.length} contactos`;
 
   const toolbarLeadingActions = (
     <div className="flex w-full flex-wrap items-center gap-2">
@@ -881,7 +968,7 @@ export function ContactsDataTable({
         open={editOpen}
         onOpenChange={setEditOpen}
         personaId={editPersonaId}
-        onSaved={() => router.refresh()}
+        onSaved={(personaId) => void refreshContactRow(personaId)}
       />
 
       <ContactLinkFlow

@@ -267,7 +267,7 @@ type ContactEditFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   personaId: string | null;
-  onSaved?: () => void;
+  onSaved?: (personaId: string) => void;
 };
 
 const PERSONA_ESTADO_OPTIONS = [
@@ -1456,7 +1456,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
       }
       toast.success("Cambios guardados.");
       onOpenChange(false);
-      onSaved?.();
+      onSaved?.(String(body.persona?.id || resolvedPersonaId));
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo guardar.";
       dispatch({ type: "error/set", value: message });
