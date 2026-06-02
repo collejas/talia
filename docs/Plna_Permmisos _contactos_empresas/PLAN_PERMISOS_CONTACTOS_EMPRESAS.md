@@ -258,4 +258,40 @@ La implementación debe apoyarse en:
 
 ## Próximo paso
 
+## Estado de avance
+
+Implementación completada para el flujo de contactos y empresas.
+
+### Ya quedó aplicado
+
+- Se agregaron los permisos nuevos:
+  - `contacts.view_sensitive_unowned`
+  - `accounts.view_sensitive_unowned`
+  - `contacts.export_csv`
+- La base de datos ya expone helpers de privacidad de campos sensibles.
+- El backend ya evalúa visibilidad sensible por registro y aplica máscara cuando corresponde.
+- La exportación CSV de contactos ya exige `contacts.export_csv`.
+- El frontend de empresas ya consume la bandera `can_view_sensitive_fields`.
+- El frontend de contactos ya consume la misma bandera tanto en el detalle como en la carga inicial.
+- La tabla de contactos ya no pierde la bandera al refrescar filas desde el detalle.
+
+### Ajuste final que resolvió el bug visible
+
+- La página principal de contactos usa una carga server-side distinta a la ruta `/api/contactos/list`.
+- Esa carga no estaba propagando `can_view_sensitive_fields`, por eso la tabla seguía mostrando `—` aunque el backend sí autorizaba al dueño.
+- Se corrigió en `frontend/panel/src/lib/contactos/data.ts`.
+
+### Validación realizada
+
+- `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py`
+- `corepack pnpm -C frontend/panel exec tsc --noEmit --pretty false`
+- Verificación manual con token real:
+  - contactos propios muestran teléfono y email
+  - contactos ajenos quedan ocultos
+  - empresas siguen respetando la regla de negocio
+
+### Pendiente
+
+- Solo queda mantenimiento normal o extender la misma lógica a otras vistas del CRM si aparecen casos nuevos.
+
 Convertir este plan en cambios concretos de migración, backend y frontend.
