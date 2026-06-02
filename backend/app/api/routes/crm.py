@@ -13678,29 +13678,51 @@ async def _resolve_sensitive_access_context(
 async def _can_view_contact_sensitive_fields(
     *,
     repo: CRMRepository,
+    persona_id: UUID | None,
     owner_user_id: UUID | None,
+    current_user_id: UUID | None = None,
+    can_view_all: bool | None = None,
 ) -> bool:
-    current_user_id, can_view_all = await _resolve_sensitive_access_context(
-        repo=repo,
-        permission_code="contacts.view_sensitive_unowned",
-    )
+    if current_user_id is None or can_view_all is None:
+        current_user_id, can_view_all = await _resolve_sensitive_access_context(
+            repo=repo,
+            permission_code="contacts.view_sensitive_unowned",
+        )
     if can_view_all:
         return True
-    return bool(current_user_id and owner_user_id and current_user_id == owner_user_id)
+    if current_user_id is None:
+        return False
+    if persona_id is not None:
+        try:
+            return await repo.can_view_contact_sensitive_fields(persona_id=persona_id)
+        except CRMRepositoryError:
+            pass
+    return bool(owner_user_id and current_user_id == owner_user_id)
 
 
 async def _can_view_account_sensitive_fields(
     *,
     repo: CRMRepository,
+    cuenta_id: UUID | None,
     owner_user_id: UUID | None,
+    current_user_id: UUID | None = None,
+    can_view_all: bool | None = None,
 ) -> bool:
-    current_user_id, can_view_all = await _resolve_sensitive_access_context(
-        repo=repo,
-        permission_code="accounts.view_sensitive_unowned",
-    )
+    if current_user_id is None or can_view_all is None:
+        current_user_id, can_view_all = await _resolve_sensitive_access_context(
+            repo=repo,
+            permission_code="accounts.view_sensitive_unowned",
+        )
     if can_view_all:
         return True
-    return bool(current_user_id and owner_user_id and current_user_id == owner_user_id)
+    if current_user_id is None:
+        return False
+    if cuenta_id is not None:
+        try:
+            return await repo.can_view_account_sensitive_fields(cuenta_id=cuenta_id)
+        except CRMRepositoryError:
+            pass
+    return bool(owner_user_id and current_user_id == owner_user_id)
 
 
 def _apply_contact_visibility_mask(
@@ -21773,13 +21795,13 @@ async def get_personas_list_legacy(
     payloads: list[dict[str, Any]] = []
     for row in rows:
         owner_user_id = _contact_owner_user_id(row)
-        can_view_sensitive_fields = bool(
-            can_view_all_sensitive
-            or (
-                current_user_id is not None
-                and owner_user_id is not None
-                and current_user_id == owner_user_id
-            )
+        persona_id = _safe_uuid(row.get("contacto_id") or row.get("id"))
+        can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
+            repo=repo,
+            persona_id=persona_id,
+            owner_user_id=owner_user_id,
+            current_user_id=current_user_id,
+            can_view_all=can_view_all_sensitive,
         )
         payloads.append(
             _apply_contact_visibility_mask(
@@ -21839,12 +21861,18 @@ async def export_personas_csv_legacy(
     masked_rows: list[dict[str, Any]] = []
     for row in rows:
         owner_user_id = _contact_owner_user_id(row)
+        persona_id = _safe_uuid(row.get("contacto_id") or row.get("id"))
         can_view_sensitive_fields = bool(
             can_view_all_sensitive
             or (
-                current_user_id is not None
-                and owner_user_id is not None
-                and current_user_id == owner_user_id
+                persona_id is not None
+                and await _can_view_contact_sensitive_fields(
+                    repo=repo,
+                    persona_id=persona_id,
+                    owner_user_id=owner_user_id,
+                    current_user_id=current_user_id,
+                    can_view_all=can_view_all_sensitive,
+                )
             )
         )
         masked_rows.append(
@@ -21899,12 +21927,18 @@ async def export_personas_csv(
     masked_rows: list[dict[str, Any]] = []
     for row in rows:
         owner_user_id = _contact_owner_user_id(row)
+        persona_id = _safe_uuid(row.get("contacto_id") or row.get("id"))
         can_view_sensitive_fields = bool(
             can_view_all_sensitive
             or (
-                current_user_id is not None
-                and owner_user_id is not None
-                and current_user_id == owner_user_id
+                persona_id is not None
+                and await _can_view_contact_sensitive_fields(
+                    repo=repo,
+                    persona_id=persona_id,
+                    owner_user_id=owner_user_id,
+                    current_user_id=current_user_id,
+                    can_view_all=can_view_all_sensitive,
+                )
             )
         )
         masked_rows.append(
@@ -21943,6 +21977,7 @@ async def get_persona_legacy(
     owner_user_id = _contact_owner_user_id(row)
     can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
         repo=repo,
+        persona_id=_safe_uuid(row.get("id") or row.get("contacto_id")),
         owner_user_id=owner_user_id,
     )
     payload = _apply_contact_visibility_mask(
@@ -21966,6 +22001,7 @@ async def get_persona(
     owner_user_id = _contact_owner_user_id(row)
     can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
         repo=repo,
+        persona_id=_safe_uuid(row.get("id") or row.get("contacto_id")),
         owner_user_id=owner_user_id,
     )
     payload = _apply_contact_visibility_mask(

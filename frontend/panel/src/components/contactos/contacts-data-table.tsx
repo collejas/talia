@@ -86,7 +86,7 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
 }
 
 function getContactOwnerId(raw: Record<string, unknown> | undefined): string | null {
-  return extractString(raw, ["propietario_usuario_id", "propietario_id"]);
+  return extractString(raw, ["propietario_usuario_id"]) || extractString(raw, ["propietario_id"]);
 }
 
 function getContactIdValue(raw: Record<string, unknown> | undefined): string {
@@ -106,6 +106,9 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
   const createdAt = createdAtRaw && !Number.isNaN(Date.parse(createdAtRaw)) ? new Date(createdAtRaw).toISOString() : previous?.limit || "";
   const conversationsRaw = extractString(detail, ["conversaciones"]) || extractString(previousRaw, ["conversaciones"]) || "0";
   const conversations = Number.parseInt(conversationsRaw, 10);
+  const canViewSensitiveFields =
+    extractUnknown(detail, ["can_view_sensitive_fields"]) === true ||
+    extractUnknown(previousRaw, ["can_view_sensitive_fields"]) === true;
 
   return {
     id: (previous?.id ?? Number.parseInt(contactId, 10)) || 0,
@@ -133,6 +136,7 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
       creado_en: extractString(detail, ["creado_en"]) || extractString(previousRaw, ["creado_en"]) || "",
       actualizado_en: extractString(detail, ["actualizado_en"]) || extractString(previousRaw, ["actualizado_en"]) || "",
       conversaciones: Number.isFinite(conversations) ? conversations : 0,
+      can_view_sensitive_fields: canViewSensitiveFields,
     },
   };
 }

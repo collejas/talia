@@ -45,6 +45,7 @@ type CrmContactListRow = {
   tipo_establecimiento: string | null;
   fecha_incorporacion: string | null;
   total_rows: number;
+  can_view_sensitive_fields?: boolean | null;
 };
 
 export type ContactosPayload = {
@@ -244,6 +245,7 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
         website: row.website,
         tipo_establecimiento: row.tipo_establecimiento,
         fecha_incorporacion: row.fecha_incorporacion,
+        can_view_sensitive_fields: row.can_view_sensitive_fields,
         status_meta: {
           label: captureDone ? "Completo" : "Incompleto",
           variant: captureDone ? "default" : "outline",

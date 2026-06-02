@@ -13377,6 +13377,32 @@ class CRMRepository:
                 return value
         return False
 
+    async def can_view_contact_sensitive_fields(self, *, persona_id: UUID) -> bool:
+        data = await self._rpc(
+            "can_view_contact_sensitive_fields",
+            {"p_persona_id": str(persona_id)},
+        )
+        if isinstance(data, bool):
+            return data
+        if isinstance(data, dict):
+            value = data.get("can_view_contact_sensitive_fields")
+            if isinstance(value, bool):
+                return value
+        return False
+
+    async def can_view_account_sensitive_fields(self, *, cuenta_id: UUID) -> bool:
+        data = await self._rpc(
+            "can_view_account_sensitive_fields",
+            {"p_cuenta_id": str(cuenta_id)},
+        )
+        if isinstance(data, bool):
+            return data
+        if isinstance(data, dict):
+            value = data.get("can_view_account_sensitive_fields")
+            if isinstance(value, bool):
+                return value
+        return False
+
     async def get_permission_context(self) -> dict[str, Any]:
         data = await self._rpc("mi_contexto_permisos", {})
         if isinstance(data, list) and data:
