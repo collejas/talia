@@ -308,11 +308,8 @@ function buildDedupeClipboardText(state: PersonaAltaValidationResponse | null): 
 }
 
 const PERSONA_ESTADO_OPTIONS = [
-  { value: "lead", label: "Lead" },
   { value: "activo", label: "Activo" },
   { value: "inactivo", label: "Inactivo" },
-  { value: "bloqueado", label: "Bloqueado" },
-  { value: "fusionado", label: "Fusionado" },
 ] as const;
 
 const PERSONA_ORIGEN_OPTIONS = [
@@ -332,6 +329,10 @@ const PHONE_LINE_TYPE_OPTIONS = [
 
 function getTodayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizePersonaEstado(value: string | null | undefined): "activo" | "inactivo" {
+  return value === "inactivo" ? "inactivo" : "activo";
 }
 
 const INITIAL_STATE: ContactCreateState = {
@@ -363,7 +364,7 @@ const INITIAL_STATE: ContactCreateState = {
     puesto: "",
     area: "",
     rol_decision: "",
-    estado: "lead",
+    estado: "activo",
     origen: "",
     notas: "",
     propietario_usuario_id: "",
@@ -644,6 +645,7 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
     correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
     correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
     propietario_usuario_id: state.persona.propietario_usuario_id || currentUserId || undefined,
+    estado: normalizePersonaEstado(state.persona.estado),
   });
 
   const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
@@ -1323,8 +1325,8 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               </Field>
               <Field label="Estado">
                 <Select
-                  value={state.persona.estado || "lead"}
-                  onValueChange={(value) => dispatch({ type: "persona/set", field: "estado", value })}
+                  value={normalizePersonaEstado(state.persona.estado)}
+                  onValueChange={(value) => dispatch({ type: "persona/set", field: "estado", value: normalizePersonaEstado(value) })}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona un estado" />

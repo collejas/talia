@@ -272,11 +272,8 @@ type ContactEditFlowProps = {
 };
 
 const PERSONA_ESTADO_OPTIONS = [
-  { value: "lead", label: "Lead" },
   { value: "activo", label: "Activo" },
   { value: "inactivo", label: "Inactivo" },
-  { value: "bloqueado", label: "Bloqueado" },
-  { value: "fusionado", label: "Fusionado" },
 ] as const;
 
 const PERSONA_ORIGEN_OPTIONS = [
@@ -354,6 +351,10 @@ function buildDedupeClipboardText(state: PersonaValidationResponse | null): stri
   return parts.join("\n");
 }
 
+function normalizePersonaEstado(value: string | null | undefined): "activo" | "inactivo" {
+  return value === "inactivo" ? "inactivo" : "activo";
+}
+
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
   persona: {
@@ -383,7 +384,7 @@ const INITIAL_STATE: ContactEditState = {
     puesto: "",
     area: "",
     rol_decision: "",
-    estado: "lead",
+    estado: "activo",
     origen: "",
     notas: "",
     propietario_usuario_id: "",
@@ -572,6 +573,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
     correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
     correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
+    estado: normalizePersonaEstado(state.persona.estado),
   }, { keepEmptyStringsAsNull: true });
 
   const accountType = resolveAccountType(state.mode, state.cuenta.tipo);
@@ -760,7 +762,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           telefono_empresa_2_extension: sanitizePhoneInput(readString(detail, "telefono_empresa_2_extension")),
           area: readString(detail, "area"),
           rol_decision: readString(detail, "rol_decision"),
-          estado: readString(detail, "estado"),
+          estado: normalizePersonaEstado(readString(detail, "estado")),
           origen: readString(detail, "origen"),
           notas: readString(detail, "notes"),
           propietario_usuario_id: readString(detail, "propietario_usuario_id"),
@@ -1680,8 +1682,8 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               </Field>
               <Field label="Estado">
                 <Select
-                  value={state.persona.estado || "lead"}
-                  onValueChange={(value) => dispatch({ type: "persona/set", field: "estado", value })}
+                  value={normalizePersonaEstado(state.persona.estado)}
+                  onValueChange={(value) => dispatch({ type: "persona/set", field: "estado", value: normalizePersonaEstado(value) })}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona un estado" />
