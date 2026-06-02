@@ -462,6 +462,48 @@ const ACCOUNT_TYPE_OPTIONS = [
   { value: "persona_fisica_actividad_empresarial", label: "Persona física con actividad empresarial" },
 ] as const;
 
+const CONTACT_FILTERS_STORAGE_KEY = "contacts-view-filters";
+
+type StoredContactFilters = {
+  searchTerm: string;
+  ownerFilter: string;
+  createdFromFilter: string;
+  createdToFilter: string;
+  advancedFilters: ContactAdvancedFilters;
+};
+
+function isStoredContactFilters(value: unknown): value is StoredContactFilters {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.searchTerm === "string" &&
+    typeof record.ownerFilter === "string" &&
+    typeof record.createdFromFilter === "string" &&
+    typeof record.createdToFilter === "string" &&
+    typeof record.advancedFilters === "object" &&
+    record.advancedFilters !== null
+  );
+}
+
+function loadStoredContactFilters(): StoredContactFilters | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(CONTACT_FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isStoredContactFilters(parsed)) return null;
+    return {
+      searchTerm: parsed.searchTerm,
+      ownerFilter: parsed.ownerFilter,
+      createdFromFilter: parsed.createdFromFilter,
+      createdToFilter: parsed.createdToFilter,
+      advancedFilters: { ...cloneDefaultAdvancedFilters(), ...parsed.advancedFilters },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function ContactsDataTable({
   data,
   onFiltersChange,
@@ -474,6 +516,7 @@ export function ContactsDataTable({
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const [tableRows, setTableRows] = React.useState<ContactTableRow[]>(data);
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const normalizedPerms = React.useMemo(
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
@@ -564,6 +607,35 @@ export function ContactsDataTable({
   const searchQuery = searchTerm.trim();
 
   React.useEffect(() => {
+    const stored = loadStoredContactFilters();
+    if (stored) {
+      setSearchTerm(stored.searchTerm);
+      setOwnerFilter(stored.ownerFilter);
+      setCreatedFromFilter(stored.createdFromFilter);
+      setCreatedToFilter(stored.createdToFilter);
+      setAdvancedFilters(stored.advancedFilters);
+    }
+    setFiltersHydrated(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!filtersHydrated || typeof window === "undefined") return;
+    try {
+      const payload: StoredContactFilters = {
+        searchTerm,
+        ownerFilter,
+        createdFromFilter,
+        createdToFilter,
+        advancedFilters,
+      };
+      window.localStorage.setItem(CONTACT_FILTERS_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore persistence failures.
+    }
+  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchTerm]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) return;
     onFiltersChange?.({
       search: searchQuery,
       owner: ownerFilter,
@@ -571,9 +643,10 @@ export function ContactsDataTable({
       createdTo: createdToFilter,
       advanced: advancedFilters,
     });
-  }, [advancedFilters, createdFromFilter, createdToFilter, onFiltersChange, ownerFilter, searchQuery]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, onFiltersChange, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
+    if (!filtersHydrated) return;
     const term = searchQuery;
     if (term.length < 2) {
       setRemoteSearchData(null);
@@ -631,7 +704,7 @@ export function ContactsDataTable({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [advancedFilters, createdFromFilter, createdToFilter, ownerFilter, searchQuery]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
