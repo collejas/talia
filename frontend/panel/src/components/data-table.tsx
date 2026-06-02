@@ -173,6 +173,23 @@ function isSameOrder(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
 
+function normalizeSorting(order: SortingState, reference: string[]): SortingState {
+  const seen = new Set<string>()
+  const filtered = order.filter((entry) => {
+    if (!reference.includes(entry.id)) return false
+    if (seen.has(entry.id)) return false
+    seen.add(entry.id)
+    return true
+  })
+  if (
+    filtered.length === order.length &&
+    filtered.every((entry, index) => entry.id === order[index]?.id && entry.desc === order[index]?.desc)
+  ) {
+    return order
+  }
+  return filtered
+}
+
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
   const { attributes, listeners } = useSortable({
@@ -667,6 +684,7 @@ export function DataTable({
 
   const [columnOrder, setColumnOrder] = React.useState<string[]>(resolvedColumnOrder)
   const hasLoadedColumnOrder = React.useRef(false)
+  const hasLoadedSorting = React.useRef(false)
 
   React.useEffect(() => {
     if (forcedColumnOrder?.length) {
@@ -698,6 +716,39 @@ export function DataTable({
   }, [defaultColumnOrder])
 
   React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined" || hasLoadedSorting.current) {
+      return
+    }
+    try {
+      const stored = window.localStorage.getItem(`${storageKey}:sorting`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          const normalized = normalizeSorting(
+            parsed.filter(
+              (entry): entry is { id: string; desc: boolean } =>
+                Boolean(entry) &&
+                typeof entry === "object" &&
+                typeof (entry as { id?: unknown }).id === "string" &&
+                typeof (entry as { desc?: unknown }).desc === "boolean",
+            ),
+            defaultColumnOrder,
+          )
+          setSorting(normalized)
+        }
+      }
+    } catch (error) {
+      console.warn("[visitas] No se pudo leer el orden de columnas", error)
+    } finally {
+      hasLoadedSorting.current = true
+    }
+  }, [storageKey, defaultColumnOrder])
+
+  React.useEffect(() => {
+    setSorting((prev) => normalizeSorting(prev, defaultColumnOrder))
+  }, [defaultColumnOrder])
+
+  React.useEffect(() => {
     if (!storageKey || typeof window === "undefined") return
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(columnOrder))
@@ -705,6 +756,15 @@ export function DataTable({
       console.warn("[visitas] No se pudo guardar el orden de columnas", error)
     }
   }, [columnOrder, storageKey])
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined" || !hasLoadedSorting.current) return
+    try {
+      window.localStorage.setItem(`${storageKey}:sorting`, JSON.stringify(sorting))
+    } catch (error) {
+      console.warn("[visitas] No se pudo guardar el ordenamiento", error)
+    }
+  }, [sorting, storageKey])
 
   const table = useReactTable({
     data,

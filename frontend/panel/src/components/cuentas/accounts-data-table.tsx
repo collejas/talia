@@ -403,14 +403,15 @@ export function AccountsDataTable({ rows }: Props) {
   return (
     <>
       <ClientDataTable
-        rows={rows}
-        extraColumns={extraColumns}
-        hideDefaultActions
-        forcedColumnOrder={accountColumnOrder}
-        initialVisibility={accountVisibility}
-        toolbarActions={<AccountCreateDialog onCreated={() => router.refresh()} />}
-        columnLabels={{
-          header: "Empresa",
+      rows={rows}
+      extraColumns={extraColumns}
+      hideDefaultActions
+      forcedColumnOrder={accountColumnOrder}
+      initialVisibility={accountVisibility}
+      storageKey="accounts-table-column-order"
+      toolbarActions={<AccountCreateDialog onCreated={() => router.refresh()} />}
+      columnLabels={{
+        header: "Empresa",
           type: "Tipo",
           status: "Industria",
           target: "Sitio / Contacto",
