@@ -87,7 +87,7 @@ export function ContactSectionCards({ data }: ContactSectionCardsProps) {
             En gestión continua
           </div>
           <div className="text-muted-foreground">
-            {formatNumber(data.leads)} siguen en etapa de lead
+            {formatNumber(data.leads)} están inactivos
           </div>
         </CardFooter>
       </Card>
