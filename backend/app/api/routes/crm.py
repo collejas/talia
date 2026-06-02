@@ -13821,7 +13821,9 @@ def _render_contacts_csv(rows: Sequence[Mapping[str, Any]]) -> str:
                 _contact_export_value(row.get("correo")),
                 _contact_export_value(row.get("telefono")),
                 _contact_export_value(row.get("estado")),
-                _contact_export_value(row.get("captura_estado")),
+                _contact_export_value(
+                    "completo" if _contact_capture_complete(row) else "incompleto"
+                ),
                 _contact_export_value(row.get("origen")),
                 _contact_export_value(row.get("creado_en")),
                 _contact_export_value(row.get("actualizado_en")),
@@ -13845,6 +13847,20 @@ def _render_contacts_csv(rows: Sequence[Mapping[str, Any]]) -> str:
             ]
         )
     return output.getvalue()
+
+
+def _contact_capture_complete(row: Mapping[str, Any]) -> bool:
+    required_values = [
+        row.get("cuenta_tipo"),
+        row.get("tamano"),
+        row.get("tipo_establecimiento"),
+        row.get("estado"),
+        row.get("origen"),
+        row.get("puesto"),
+        row.get("rol_decision"),
+        row.get("area"),
+    ]
+    return all(str(value or "").strip() for value in required_values)
 
 
 async def _load_all_contacts_for_export(
