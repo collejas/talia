@@ -43,15 +43,16 @@ type AccountRelation = {
   fecha_inicio: string | null;
   fecha_fin: string | null;
   notas: string | null;
-  persona?: {
-    id: string;
-    nombre_completo: string | null;
-    correo_principal: string | null;
-    telefono_principal_e164: string | null;
-    company_name: string | null;
-    propietario_usuario_id?: string | null;
-  } | null;
-};
+    persona?: {
+      id: string;
+      nombre_completo: string | null;
+      correo_principal: string | null;
+      telefono_principal_e164: string | null;
+      company_name: string | null;
+      propietario_usuario_id?: string | null;
+      can_view_sensitive_fields?: boolean | null;
+    } | null;
+  };
 type SearchItem = {
   id: string;
   nombre: string;
@@ -428,19 +429,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const canDeleteAny =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.delete");
   const accountOwnerId = getInputText(detail?.propietario_usuario_id);
-  const hasOwnedRelation = React.useMemo(
-    () =>
-      relations.some((relation) => {
-        const relationOwner = getInputText(relation.persona?.propietario_usuario_id);
-        return Boolean(currentUserId) && relationOwner === currentUserId;
-      }),
-    [currentUserId, relations],
-  );
   const canEditAccount =
     canEditAny &&
     (permissionContext.es_admin ||
       permissionContext.es_owner ||
-      (Boolean(currentUserId) && (!accountOwnerId || currentUserId === accountOwnerId || hasOwnedRelation)));
+      (Boolean(currentUserId) && Boolean(accountOwnerId) && currentUserId === accountOwnerId));
   const canDeleteAccount = canDeleteAny;
 
   const tenantCatalogs = useTenantContactCatalogs();
@@ -610,9 +603,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const rfcHint = "RFC (12 o 13 caracteres)";
   const rfc = getText(detail?.rfc);
   const industry = getText(detail?.industria);
-  const email = getText(detail?.correo ?? detail?.email);
-  const phone = getText(detail?.telefono);
-  const website = getText(detail?.sitio_web ?? detail?.website);
+  const canViewSensitiveFields = detail?.can_view_sensitive_fields === true;
   const updatedAt = formatDate(detail?.actualizado_en);
   const createdAt = formatDate(detail?.creado_en);
 
@@ -951,18 +942,26 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               <span className="text-muted-foreground">RFC</span>
               <span>{rfc}</span>
             </div>
-            <div className="grid gap-1">
-              <span className="text-muted-foreground">Correo</span>
-              <span>{email}</span>
-            </div>
-            <div className="grid gap-1">
-              <span className="text-muted-foreground">Teléfono</span>
-              <span>{phone}</span>
-            </div>
-            <div className="grid gap-1">
-              <span className="text-muted-foreground">Sitio web</span>
-              <span>{website}</span>
-            </div>
+            {canViewSensitiveFields ? (
+              <>
+                <div className="grid gap-1">
+                  <span className="text-muted-foreground">Correo</span>
+                  <span>{getText(detail?.correo ?? detail?.email)}</span>
+                </div>
+                <div className="grid gap-1">
+                  <span className="text-muted-foreground">Teléfono</span>
+                  <span>{getText(detail?.telefono)}</span>
+                </div>
+                <div className="grid gap-1">
+                  <span className="text-muted-foreground">Sitio web</span>
+                  <span>{getText(detail?.sitio_web ?? detail?.website)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground md:col-span-2">
+                Los datos sensibles de la empresa están ocultos por permisos.
+              </div>
+            )}
             <div className="grid gap-1">
               <span className="text-muted-foreground">Creado</span>
               <span>{createdAt}</span>
@@ -1013,7 +1012,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               relations.map((relation) => {
                 const person = relation.persona;
                 const personName = person?.nombre_completo || getText(relation.persona_id);
-                const personSubtitle = person?.correo_principal || person?.telefono_principal_e164 || person?.company_name || "Sin datos";
+                const personSubtitle =
+                  person?.can_view_sensitive_fields === true
+                    ? person?.correo_principal || person?.telefono_principal_e164 || person?.company_name || "Sin datos"
+                    : person?.company_name || "Sin datos";
                 return (
                   <div key={relation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-4">
                     <div className="grid gap-1">
@@ -1124,7 +1126,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {item.telefono || item.correo || "Sin datos"}
+                        {canViewSensitiveFields
+                          ? item.telefono || item.correo || "Sin datos"
+                          : "Datos sensibles ocultos"}
                       </div>
                     </div>
                   </button>
@@ -1722,7 +1726,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {item.telefono || item.correo || "Sin datos"}
+                        {canViewSensitiveFields
+                          ? item.telefono || item.correo || "Sin datos"
+                          : "Datos sensibles ocultos"}
                       </div>
                     </div>
                   </button>

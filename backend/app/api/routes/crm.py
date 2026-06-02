@@ -2588,6 +2588,7 @@ class CRMAccount(BaseModel):
     contacto_principal_correo: str | None = None
     contacto_principal_telefono: str | None = None
     contacto_principal_owner_id: UUID | None = None
+    can_view_sensitive_fields: bool | None = None
     archived_at: datetime | None = None
     merged_into_cuenta_id: UUID | None = None
     merge_metadata: dict[str, Any] | None = None
@@ -5089,6 +5090,22 @@ async def _require_edit_scope(
     if _is_sales_level_context(permission_context):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+
+
+async def _require_record_owner_or_privileged(
+    *,
+    repo: CRMRepository,
+    owner_user_id: UUID | None,
+) -> None:
+    permission_context = await _get_permission_context_or_raise(repo)
+    if _coerce_bool(permission_context.get("es_admin")) is True:
+        return
+    if _coerce_bool(permission_context.get("es_owner")) is True:
+        return
+
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+    if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
 
 
 async def _require_delete_scope(
@@ -9988,6 +10005,7 @@ class CRMContact(BaseModel):
     relacion_activa: bool | None = None
     cuenta_tipo: str | None = None
     contexto_modo: str | None = None
+    can_view_sensitive_fields: bool | None = None
     metadata: dict[str, Any] | None = None
     persona_datos: dict[str, Any] | None = Field(
         default=None,
@@ -13485,6 +13503,7 @@ class CRMContactListRow(BaseModel):
     tipo_establecimiento: str | None = None
     fecha_incorporacion: datetime | None = None
     total_rows: int | None = None
+    can_view_sensitive_fields: bool | None = None
 
 
 class CRMPersonaTimelineEntry(CRMContactTimelineEntry):
@@ -13526,6 +13545,85 @@ _CONTACTS_EXPORT_HEADERS = [
     "Fecha incorporación",
 ]
 
+_CONTACT_SENSITIVE_FIELDS = {
+    "correo",
+    "email",
+    "telefono_e164",
+    "telefono",
+    "telefono_principal_e164",
+    "telefono_principal_extension",
+    "telefono_movil_1_e164",
+    "telefono_movil_2_e164",
+    "telefono_empresa_1_e164",
+    "telefono_empresa_1_extension",
+    "telefono_empresa_2_e164",
+    "telefono_empresa_2_extension",
+    "website",
+    "tipo_vialidad",
+    "nombre_vialidad",
+    "numero_exterior",
+    "letra_exterior",
+    "edificio",
+    "edificio_piso",
+    "numero_interior",
+    "letra_interior",
+    "tipo_asentamiento",
+    "colonia",
+    "tipo_centro_comercial",
+    "corredor_industrial",
+    "numero_local",
+    "codigo_postal",
+    "clave_entidad",
+    "entidad",
+    "clave_municipio",
+    "municipio",
+    "clave_localidad",
+    "localidad",
+    "pais",
+}
+
+_ACCOUNT_SENSITIVE_FIELDS = {
+    "telefono",
+    "correo",
+    "correo_principal",
+    "correo_secundario",
+    "telefono_principal_e164",
+    "telefono_principal_tipo_linea",
+    "telefono_principal_extension",
+    "telefono_secundario_e164",
+    "telefono_secundario_tipo_linea",
+    "telefono_secundario_extension",
+    "direccion",
+    "direccion_fiscal",
+    "direccion_principal",
+    "direcciones",
+    "email",
+    "website",
+    "tipo_vialidad",
+    "nombre_vialidad",
+    "numero_exterior",
+    "letra_exterior",
+    "edificio",
+    "edificio_piso",
+    "numero_interior",
+    "letra_interior",
+    "tipo_asentamiento",
+    "colonia",
+    "tipo_centro_comercial",
+    "corredor_industrial",
+    "numero_local",
+    "codigo_postal",
+    "clave_entidad",
+    "entidad",
+    "clave_municipio",
+    "municipio",
+    "clave_localidad",
+    "localidad",
+    "pais",
+    "latitud",
+    "longitud",
+}
+
 
 def _contact_export_value(value: Any) -> str:
     if value is None:
@@ -13535,6 +13633,98 @@ def _contact_export_value(value: Any) -> str:
     if isinstance(value, UUID):
         return str(value)
     return str(value)
+
+
+def _mask_record_fields(record: dict[str, Any], field_names: Iterable[str]) -> dict[str, Any]:
+    masked = dict(record)
+    for field_name in field_names:
+        if field_name in masked:
+            masked[field_name] = None
+    return masked
+
+
+def _contact_owner_user_id(record: Mapping[str, Any]) -> UUID | None:
+    return _safe_uuid(
+        record.get("propietario_usuario_id")
+        or record.get("propietario_id")
+        or record.get("owner_id")
+    )
+
+
+def _account_owner_user_id(record: Mapping[str, Any]) -> UUID | None:
+    return _safe_uuid(record.get("propietario_usuario_id") or record.get("owner_id"))
+
+
+async def _resolve_sensitive_access_context(
+    *,
+    repo: CRMRepository,
+    permission_code: str,
+) -> tuple[UUID | None, bool]:
+    permission_context = await _get_permission_context_or_raise(repo)
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+    if _coerce_bool(permission_context.get("es_admin")) is True:
+        return current_user_id, True
+    if _coerce_bool(permission_context.get("es_owner")) is True:
+        return current_user_id, True
+    if current_user_id is None:
+        return None, False
+    try:
+        has_permission = await repo.current_user_has_perm(codigo=permission_code)
+    except CRMRepositoryError:
+        has_permission = False
+    return current_user_id, has_permission
+
+
+async def _can_view_contact_sensitive_fields(
+    *,
+    repo: CRMRepository,
+    owner_user_id: UUID | None,
+) -> bool:
+    current_user_id, can_view_all = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="contacts.view_sensitive_unowned",
+    )
+    if can_view_all:
+        return True
+    return bool(current_user_id and owner_user_id and current_user_id == owner_user_id)
+
+
+async def _can_view_account_sensitive_fields(
+    *,
+    repo: CRMRepository,
+    owner_user_id: UUID | None,
+) -> bool:
+    current_user_id, can_view_all = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="accounts.view_sensitive_unowned",
+    )
+    if can_view_all:
+        return True
+    return bool(current_user_id and owner_user_id and current_user_id == owner_user_id)
+
+
+def _apply_contact_visibility_mask(
+    record: dict[str, Any],
+    *,
+    can_view_sensitive_fields: bool,
+) -> dict[str, Any]:
+    payload = dict(record)
+    payload["can_view_sensitive_fields"] = can_view_sensitive_fields
+    if can_view_sensitive_fields:
+        return payload
+    return _mask_record_fields(payload, _CONTACT_SENSITIVE_FIELDS)
+
+
+def _apply_account_visibility_mask(
+    record: dict[str, Any],
+    *,
+    can_view_sensitive_fields: bool,
+) -> dict[str, Any]:
+    payload = dict(record)
+    payload["can_view_sensitive_fields"] = can_view_sensitive_fields
+    if can_view_sensitive_fields:
+        return payload
+    return _mask_record_fields(payload, _ACCOUNT_SENSITIVE_FIELDS)
 
 
 def _normalize_contact_search_value(value: Any) -> str:
@@ -14733,6 +14923,10 @@ async def list_accounts(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="accounts.view_sensitive_unowned",
+    )
     items: list[CRMAccount] = []
     account_ids = [account_id for account_id in (_safe_uuid(row.get("id")) for row in rows) if account_id]
     relation_rows: list[dict[str, Any]] = []
@@ -14755,7 +14949,7 @@ async def list_accounts(
     owner_candidate_ids: set[UUID] = set()
     owner_candidate_id_by_account_id: dict[str, UUID] = {}
     for row in rows:
-        owner_id = _safe_uuid(row.get("propietario_usuario_id"))
+        account_owner_id = _safe_uuid(row.get("propietario_usuario_id"))
         relations = relations_by_account_id.get(str(row.get("id") or "").strip(), [])
         primary_relation = (
             next((relation for relation in relations if relation.get("es_contacto_principal")), None)
@@ -14765,20 +14959,34 @@ async def list_accounts(
         )
         contact = primary_relation.get("persona") if isinstance(primary_relation, dict) else None
         contact_owner_id = _safe_uuid(contact.get("propietario_usuario_id")) if isinstance(contact, dict) else None
-        if not owner_id and contact_owner_id:
-            owner_id = contact_owner_id
-        if owner_id:
-            owner_candidate_ids.add(owner_id)
+        display_owner_id = account_owner_id or contact_owner_id
+        if display_owner_id:
+            owner_candidate_ids.add(display_owner_id)
             account_key = str(row.get("id") or "").strip()
             if account_key and account_key not in owner_candidate_id_by_account_id:
-                owner_candidate_id_by_account_id[account_key] = owner_id
+                owner_candidate_id_by_account_id[account_key] = display_owner_id
         payload = _materialize_account_directions(row, relation_rows=None, include_direcciones=False)
+        can_view_sensitive_fields = bool(
+            can_view_all_sensitive
+            or (
+                current_user_id is not None
+                and account_owner_id is not None
+                and current_user_id == account_owner_id
+            )
+        )
+        payload = _apply_account_visibility_mask(
+            payload,
+            can_view_sensitive_fields=can_view_sensitive_fields,
+        )
         existing_owner_name = str(payload.get("propietario_nombre") or "").strip() or None
         if contact:
             payload["contacto_principal_nombre"] = contact.get("nombre_completo")
             payload["contacto_principal_correo"] = contact.get("correo_principal")
             payload["contacto_principal_telefono"] = contact.get("telefono_principal_e164")
             payload["contacto_principal_owner_id"] = contact_owner_id
+            if not can_view_sensitive_fields:
+                payload["contacto_principal_correo"] = None
+                payload["contacto_principal_telefono"] = None
         payload["propietario_nombre"] = existing_owner_name
         if payload.get("propietario") is None and isinstance(row.get("propietario"), dict):
             payload["propietario"] = row.get("propietario")
@@ -14935,13 +15143,32 @@ async def get_account(
         )
     except CRMRepositoryError:
         direction_rows = []
-    return CRMAccount.model_validate(
-        _materialize_account_directions(
-            row,
-            relation_rows=direction_rows,
-            include_direcciones=True,
+    current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="accounts.view_sensitive_unowned",
+    )
+    owner_user_id = _account_owner_user_id(row)
+    can_view_sensitive_fields = bool(
+        can_view_all_sensitive
+        or (
+            current_user_id is not None
+            and owner_user_id is not None
+            and current_user_id == owner_user_id
         )
     )
+    payload = _materialize_account_directions(
+        row,
+        relation_rows=direction_rows,
+        include_direcciones=True,
+    )
+    payload = _apply_account_visibility_mask(
+        payload,
+        can_view_sensitive_fields=can_view_sensitive_fields,
+    )
+    if not can_view_sensitive_fields:
+        payload["contacto_principal_correo"] = None
+        payload["contacto_principal_telefono"] = None
+    return CRMAccount.model_validate(payload)
 
 
 @router.patch("/cuentas/{cuenta_id}", response_model=CRMAccount)
@@ -14959,7 +15186,7 @@ async def update_account(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not existing_row:
         raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
-    await _require_edit_scope(
+    await _require_record_owner_or_privileged(
         repo=repo,
         owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
     )
@@ -20023,7 +20250,7 @@ async def update_persona(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not existing_row:
         raise HTTPException(status_code=404, detail="contacto_no_encontrado")
-    await _require_edit_scope(
+    await _require_record_owner_or_privileged(
         repo=repo,
         owner_user_id=_safe_uuid(existing_row.get("propietario_usuario_id")),
     )
@@ -21539,7 +21766,28 @@ async def get_personas_list_legacy(
         rows = await repo.personas_list(usuario_token=user_token, limit=limit, search=search)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMPersonaListRow.model_validate(row) for row in rows]
+    current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="contacts.view_sensitive_unowned",
+    )
+    payloads: list[dict[str, Any]] = []
+    for row in rows:
+        owner_user_id = _contact_owner_user_id(row)
+        can_view_sensitive_fields = bool(
+            can_view_all_sensitive
+            or (
+                current_user_id is not None
+                and owner_user_id is not None
+                and current_user_id == owner_user_id
+            )
+        )
+        payloads.append(
+            _apply_contact_visibility_mask(
+                dict(row),
+                can_view_sensitive_fields=can_view_sensitive_fields,
+            )
+        )
+    return [CRMPersonaListRow.model_validate(row) for row in payloads]
 
 
 @router.get("/personas/list", response_model=list[CRMPersonaListRow])
@@ -21559,7 +21807,7 @@ async def get_personas_list(
 async def export_personas_csv_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("contacts.read")),
+    _: str = Depends(require_permission("contacts.export_csv")),
     user_token: str = Depends(require_user_token),
     search: str | None = Query(default=None, min_length=1),
     estado: str | None = Query(default=None),
@@ -21569,6 +21817,10 @@ async def export_personas_csv_legacy(
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
 ) -> Response:
+    current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="contacts.view_sensitive_unowned",
+    )
     try:
         rows = await _load_all_contacts_for_export(
             repo=repo,
@@ -21584,7 +21836,25 @@ async def export_personas_csv_legacy(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    csv_content = _render_contacts_csv(rows)
+    masked_rows: list[dict[str, Any]] = []
+    for row in rows:
+        owner_user_id = _contact_owner_user_id(row)
+        can_view_sensitive_fields = bool(
+            can_view_all_sensitive
+            or (
+                current_user_id is not None
+                and owner_user_id is not None
+                and current_user_id == owner_user_id
+            )
+        )
+        masked_rows.append(
+            _apply_contact_visibility_mask(
+                dict(row),
+                can_view_sensitive_fields=can_view_sensitive_fields,
+            )
+        )
+
+    csv_content = _render_contacts_csv(masked_rows)
     filename = f"contactos_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return Response(
         content=csv_content,
@@ -21597,7 +21867,7 @@ async def export_personas_csv_legacy(
 async def export_personas_csv(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("contacts.read")),
+    _: str = Depends(require_permission("contacts.export_csv")),
     user_token: str = Depends(require_user_token),
     search: str | None = Query(default=None, min_length=1),
     estado: str | None = Query(default=None),
@@ -21607,6 +21877,10 @@ async def export_personas_csv(
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
 ) -> Response:
+    current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
+        repo=repo,
+        permission_code="contacts.view_sensitive_unowned",
+    )
     try:
         rows = await _load_all_contacts_for_export(
             repo=repo,
@@ -21622,7 +21896,25 @@ async def export_personas_csv(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    csv_content = _render_contacts_csv(rows)
+    masked_rows: list[dict[str, Any]] = []
+    for row in rows:
+        owner_user_id = _contact_owner_user_id(row)
+        can_view_sensitive_fields = bool(
+            can_view_all_sensitive
+            or (
+                current_user_id is not None
+                and owner_user_id is not None
+                and current_user_id == owner_user_id
+            )
+        )
+        masked_rows.append(
+            _apply_contact_visibility_mask(
+                dict(row),
+                can_view_sensitive_fields=can_view_sensitive_fields,
+            )
+        )
+
+    csv_content = _render_contacts_csv(masked_rows)
     filename = f"personas_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return Response(
         content=csv_content,
@@ -21648,7 +21940,16 @@ async def get_persona_legacy(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="contacto_no_encontrado")
-    return CRMPersona.model_validate(row)
+    owner_user_id = _contact_owner_user_id(row)
+    can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
+        repo=repo,
+        owner_user_id=owner_user_id,
+    )
+    payload = _apply_contact_visibility_mask(
+        dict(row),
+        can_view_sensitive_fields=can_view_sensitive_fields,
+    )
+    return CRMPersona.model_validate(payload)
 
 
 @router.get("/personas/{persona_id}", response_model=CRMPersona)
@@ -21662,7 +21963,16 @@ async def get_persona(
     row = await repo.get_persona_by_id(persona_id=str(persona_id))
     if row is None:
         raise HTTPException(status_code=404, detail="persona_no_encontrada")
-    return CRMPersona.model_validate(row)
+    owner_user_id = _contact_owner_user_id(row)
+    can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
+        repo=repo,
+        owner_user_id=owner_user_id,
+    )
+    payload = _apply_contact_visibility_mask(
+        dict(row),
+        can_view_sensitive_fields=can_view_sensitive_fields,
+    )
+    return CRMPersona.model_validate(payload)
 
 
 @router.get("/contactos/catalogos/paises", response_model=list[CRMGeoCountryItem])

@@ -183,6 +183,9 @@ const CONTACT_COLUMNS: Array<{
     id: "contact_phone",
     label: "Teléfono",
     accessor: (row) => {
+      if (!canViewContactSensitiveRow(row)) {
+        return <span>—</span>;
+      }
       const raw = row.raw as Record<string, unknown> | undefined;
       const phone = formatContactValue(raw?.telefono);
       return phone !== "—" ? (
@@ -197,6 +200,9 @@ const CONTACT_COLUMNS: Array<{
     id: "contact_email",
     label: "Email",
     accessor: (row) => {
+      if (!canViewContactSensitiveRow(row)) {
+        return <span>—</span>;
+      }
       const raw = row.raw as Record<string, unknown> | undefined;
       const email = formatContactValue(raw?.correo);
       return email !== "—" ? (
@@ -252,6 +258,10 @@ export function ContactsDataTable({
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
   );
+  const canExportCsv =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.export_csv");
   const [searchTerm, setSearchTerm] = React.useState("");
   const [ownerFilter, setOwnerFilter] = React.useState("all");
   const [createdFromFilter, setCreatedFromFilter] = React.useState("");
@@ -282,7 +292,7 @@ export function ContactsDataTable({
       if (permissionContext.es_admin || permissionContext.es_owner) return true;
       if (!canEditAny || !currentUserId) return false;
       const ownerId = getContactOwnerId(row.raw as Record<string, unknown> | undefined);
-      return !ownerId || ownerId === currentUserId;
+      return Boolean(ownerId) && ownerId === currentUserId;
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );
@@ -833,26 +843,28 @@ export function ContactsDataTable({
 
   const toolbarActions = (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          const exportUrl = new URL("/api/contactos/export", window.location.origin);
-          if (searchTerm.trim()) {
-            exportUrl.searchParams.set("search", searchTerm.trim());
-          }
-          const anchor = document.createElement("a");
-          anchor.href = exportUrl.toString();
-          anchor.rel = "noreferrer";
-          document.body.appendChild(anchor);
-          anchor.click();
-          anchor.remove();
-        }}
-      >
-        <IconDownload className="size-4" />
-        Exportar CSV
-      </Button>
+      {canExportCsv ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const exportUrl = new URL("/api/contactos/export", window.location.origin);
+            if (searchTerm.trim()) {
+              exportUrl.searchParams.set("search", searchTerm.trim());
+            }
+            const anchor = document.createElement("a");
+            anchor.href = exportUrl.toString();
+            anchor.rel = "noreferrer";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+          }}
+        >
+          <IconDownload className="size-4" />
+          Exportar CSV
+        </Button>
+      ) : null}
       {canWrite ? (
         <>
           <Button
@@ -1116,6 +1128,11 @@ function formatContactValue(value: unknown): string {
   return String(value);
 }
 
+function canViewContactSensitiveRow(row: TableRow): boolean {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
+  return raw.can_view_sensitive_fields === true;
+}
+
 function ContactDetailPanel({
   row,
   onEdit,
@@ -1134,12 +1151,11 @@ function ContactDetailPanel({
   canDelete: boolean;
 }) {
   const raw = (row.raw ?? {}) as Record<string, unknown>;
+  const canViewSensitiveFields = raw.can_view_sensitive_fields === true;
 
   const contactName = row.header;
   const contactId = formatContactValue(raw.id);
   const company = formatContactValue(raw.company_name);
-  const email = formatContactValue(raw.correo);
-  const phone = formatContactValue(raw.telefono);
   const origin = formatContactValue(raw.origen);
   const owner = formatContactValue(raw.propietario_nombre);
   const status = formatContactValue(raw.estado);
@@ -1150,11 +1166,6 @@ function ContactDetailPanel({
   const role = formatContactValue(raw.rol_decision);
   const position = formatContactValue(raw.puesto);
   const area = formatContactValue(raw.area);
-  const postalCode = formatContactValue(raw.codigo_postal);
-  const city = formatContactValue(raw.municipio);
-  const state = formatContactValue(raw.entidad);
-  const country = formatContactValue(raw.pais);
-  const website = formatContactValue(raw.website);
 
   return (
     <div className="space-y-5 pb-6">
@@ -1205,12 +1216,30 @@ function ContactDetailPanel({
         <Separator />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <DetailItem icon={<IconMail className="size-4" />} label="Correo" value={email} href={email !== "—" ? `mailto:${email}` : undefined} />
-          <DetailItem icon={<IconPhone className="size-4" />} label="Teléfono" value={phone} href={phone !== "—" ? `tel:${phone}` : undefined} />
           <DetailItem icon={<IconBuilding className="size-4" />} label="Empresa" value={company} />
           <DetailItem icon={<IconUser className="size-4" />} label="Propietario" value={owner} />
           <DetailItem icon={<IconClock className="size-4" />} label="Último contacto" value={lastContact} />
           <DetailItem icon={<IconMessageCircle className="size-4" />} label="Conversaciones" value={conversations} />
+          {canViewSensitiveFields ? (
+            <>
+              <DetailItem
+                icon={<IconMail className="size-4" />}
+                label="Correo"
+                value={formatContactValue(raw.correo)}
+                href={typeof raw.correo === "string" && raw.correo.trim() ? `mailto:${raw.correo.trim()}` : undefined}
+              />
+              <DetailItem
+                icon={<IconPhone className="size-4" />}
+                label="Teléfono"
+                value={formatContactValue(raw.telefono)}
+                href={typeof raw.telefono === "string" && raw.telefono.trim() ? `tel:${raw.telefono.trim()}` : undefined}
+              />
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
+              Los datos sensibles de contacto están ocultos por permisos.
+            </div>
+          )}
         </div>
       </div>
       <div className="rounded-xl border p-4">
@@ -1226,11 +1255,23 @@ function ContactDetailPanel({
           <DetailItem label="Puesto" value={position} />
           <DetailItem label="Rol decisión" value={role} />
           <DetailItem label="Área" value={area} />
-          <DetailItem label="C.P." value={postalCode} />
-          <DetailItem label="Municipio" value={city} />
-          <DetailItem label="Estado" value={state} />
-          <DetailItem label="País" value={country} />
-          <DetailItem label="Sitio web" value={website} href={website !== "—" ? website : undefined} />
+          {canViewSensitiveFields ? (
+            <>
+              <DetailItem label="C.P." value={formatContactValue(raw.codigo_postal)} />
+              <DetailItem label="Municipio" value={formatContactValue(raw.municipio)} />
+              <DetailItem label="Estado" value={formatContactValue(raw.entidad)} />
+              <DetailItem label="País" value={formatContactValue(raw.pais)} />
+              <DetailItem
+                label="Sitio web"
+                value={formatContactValue(raw.website)}
+                href={typeof raw.website === "string" && raw.website.trim() ? raw.website.trim() : undefined}
+              />
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
+              Los datos de contacto y dirección están ocultos por permisos.
+            </div>
+          )}
         </div>
 
         <Separator className="my-4" />

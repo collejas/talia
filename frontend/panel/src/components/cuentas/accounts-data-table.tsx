@@ -59,6 +59,11 @@ function getAccountField(row: DataTableRow, key: string): string {
   return "—";
 }
 
+function canViewAccountSensitiveRow(row: DataTableRow): boolean {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  return raw?.can_view_sensitive_fields === true;
+}
+
 function isSalesLevelRole(roles: string[] | undefined): boolean {
   return (roles ?? []).some((role) => {
     const value = (role ?? "").toString().trim().toLowerCase();
@@ -72,12 +77,6 @@ function isSalesLevelRole(roles: string[] | undefined): boolean {
       value.includes("ejecutivo de ventas")
     );
   });
-}
-
-function getAccountRelatedContactOwnerId(row: DataTableRow): string | null {
-  const raw = row.raw as Record<string, unknown> | undefined;
-  const value = raw?.contacto_principal_owner_id;
-  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function formatDeleteBlockedMessage(error: string | undefined): string | null {
@@ -126,6 +125,7 @@ const ACCOUNT_COLUMNS: Array<{
     id: "account_phone",
     label: "Telefono",
     accessor: (row) => {
+      if (!canViewAccountSensitiveRow(row)) return <span>—</span>;
       const value = getAccountField(row, "contacto_principal_telefono");
       return value !== "—" ? (
         <a href={`tel:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>
@@ -138,6 +138,7 @@ const ACCOUNT_COLUMNS: Array<{
     id: "account_email",
     label: "Email",
     accessor: (row) => {
+      if (!canViewAccountSensitiveRow(row)) return <span>—</span>;
       const value = getAccountField(row, "contacto_principal_correo");
       return value !== "—" ? (
         <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>
@@ -216,6 +217,7 @@ function AccountRowDetails(row: DataTableRow) {
   const raw = row.raw as Record<string, unknown> | undefined;
   const accountId = getAccountId(row);
   if (!raw) return null;
+  const canViewSensitiveFields = raw.can_view_sensitive_fields === true;
 
   return (
     <div className="grid gap-4">
@@ -239,14 +241,22 @@ function AccountRowDetails(row: DataTableRow) {
             <span className="text-muted-foreground">RFC</span>
             <span>{getText(raw.rfc)}</span>
           </div>
-          <div className="grid gap-1">
-            <span className="text-muted-foreground">Correo</span>
-            <span>{getText(raw.correo ?? raw.email)}</span>
-          </div>
-          <div className="grid gap-1">
-            <span className="text-muted-foreground">Teléfono</span>
-            <span>{getText(raw.telefono)}</span>
-          </div>
+          {canViewSensitiveFields ? (
+            <>
+              <div className="grid gap-1">
+                <span className="text-muted-foreground">Correo</span>
+                <span>{getText(raw.correo ?? raw.email)}</span>
+              </div>
+              <div className="grid gap-1">
+                <span className="text-muted-foreground">Teléfono</span>
+                <span>{getText(raw.telefono)}</span>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+              Los datos sensibles de la empresa están ocultos por permisos.
+            </div>
+          )}
           {accountId ? (
             <div className="flex flex-wrap gap-2 pt-2">
               <Button asChild size="sm">
@@ -284,8 +294,7 @@ export function AccountsDataTable({ rows }: Props) {
       if (permissionContext.es_admin || permissionContext.es_owner) return true;
       if (!canEditAny || !currentUserId) return false;
       const ownerId = getText((row.raw as Record<string, unknown> | undefined)?.propietario_usuario_id);
-      const contactOwnerId = getAccountRelatedContactOwnerId(row);
-      return !ownerId || ownerId === currentUserId || contactOwnerId === currentUserId;
+      return Boolean(ownerId) && ownerId === currentUserId;
     },
     [canEditAny, currentUserId, permissionContext.es_admin, permissionContext.es_owner],
   );

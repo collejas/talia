@@ -196,10 +196,11 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
 
   const contactName = getText(detail?.nombre_completo ?? detail?.nombre);
   const companyName = getText(detail?.company_name);
-  const email = getText(detail?.correo_principal ?? detail?.correo);
-  const phoneBase = getText(detail?.telefono_principal_e164 ?? detail?.telefono_e164);
-  const phoneExtension = getText(detail?.telefono_principal_extension);
-  const phone = phoneBase && phoneExtension ? `${phoneBase} ext. ${phoneExtension}` : phoneBase;
+  const canViewSensitiveFields = detail?.can_view_sensitive_fields === true;
+  const email = canViewSensitiveFields ? getText(detail?.correo_principal ?? detail?.correo) : "—";
+  const phoneBase = canViewSensitiveFields ? getText(detail?.telefono_principal_e164 ?? detail?.telefono_e164) : "—";
+  const phoneExtension = canViewSensitiveFields ? getText(detail?.telefono_principal_extension) : "—";
+  const phone = phoneBase && phoneExtension && phoneBase !== "—" && phoneExtension !== "—" ? `${phoneBase} ext. ${phoneExtension}` : phoneBase;
   const notes = getText(detail?.notas ?? detail?.notes);
   const status = getText(detail?.estado);
   const origin = getText(detail?.origen);
@@ -225,7 +226,7 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
     canEditAny &&
     (permissionContext.es_admin ||
       permissionContext.es_owner ||
-      (Boolean(currentUserId) && (!contactOwnerId || currentUserId === contactOwnerId)));
+      (Boolean(currentUserId) && Boolean(contactOwnerId) && currentUserId === contactOwnerId));
   const relationCount = relations.length.toLocaleString("es-MX");
 
   const handleMerge = async () => {
@@ -326,8 +327,16 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2">
-                <SummaryItem label="Correo" value={email} />
-                <SummaryItem label="Teléfono" value={phone} />
+                {canViewSensitiveFields ? (
+                  <>
+                    <SummaryItem label="Correo" value={email} />
+                    <SummaryItem label="Teléfono" value={phone} />
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground md:col-span-2">
+                    Los datos sensibles de contacto están ocultos por permisos.
+                  </div>
+                )}
                 <SummaryItem label="Puesto" value={position} />
                 <SummaryItem label="Área" value={area} />
                 <SummaryItem label="Rol decisión" value={role} />
@@ -521,7 +530,9 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
                   >
                     <div className="text-sm font-medium">{item.nombre || "Sin nombre"}</div>
                     <div className="text-xs text-muted-foreground">
-                      {[item.correo, item.telefono, item.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                      {canViewSensitiveFields
+                        ? [item.correo, item.telefono, item.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"
+                        : item.empresa || "Sin datos adicionales"}
                     </div>
                   </button>
                 ))}

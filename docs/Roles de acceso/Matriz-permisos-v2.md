@@ -52,6 +52,9 @@ Estos son para cubrir control fino de jerarquías y reasignaciones.
 - `pipeline.reassign.any` (reasignar a cualquiera dentro del tenant)
 - `contacts.reassign.team` (cambiar propietario de contacto dentro del scope)
 - `contacts.reassign.any` (cambiar propietario a cualquiera dentro del tenant)
+- `contacts.view_sensitive_unowned` (ver teléfono, email y dirección de contactos ajenos al propietario)
+- `accounts.view_sensitive_unowned` (ver teléfono, email y dirección de empresas ajenas al propietario)
+- `contacts.export_csv` (exportar CSV desde la vista de contactos)
 - `audit.view_all` (ver auditoría completa del tenant)
 - `settings.secrets.manage` (si en el futuro se delega secretos del tenant sin platform admin)
 
