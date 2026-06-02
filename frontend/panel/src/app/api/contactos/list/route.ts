@@ -72,7 +72,7 @@ export async function GET(request: Request) {
 
   const rows = Array.isArray(response.data) ? response.data : [];
   const items = rows.map((row, index): ContactTableRow => {
-    const captureDone = (row.captura_estado || "").toLowerCase() === "completo";
+    const captureDone = isCaptureComplete(row);
     const conversations = Number.isFinite(row.conversaciones) ? Number(row.conversaciones) : 0;
     const lastContact =
       row.ultimo_contacto_en && !Number.isNaN(Date.parse(row.ultimo_contacto_en))
@@ -143,6 +143,19 @@ function normalizeLabel(value: string | null | undefined): string {
   if (!value) return "Desconocido";
   const trimmed = value.trim();
   return trimmed.length ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "Desconocido";
+}
+
+function isCaptureComplete(row: CrmContactListRow): boolean {
+  return [
+    row.cuenta_tipo || "",
+    row.tamano || "",
+    row.tipo_establecimiento || "",
+    row.estado || "",
+    row.origen || "",
+    row.puesto || "",
+    row.rol_decision || "",
+    row.area || "",
+  ].every((value) => String(value).trim().length > 0);
 }
 
 function buildSearchParams(searchParams: URLSearchParams, limit: number, offset: number): Record<string, string> {

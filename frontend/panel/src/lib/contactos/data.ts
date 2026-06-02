@@ -44,6 +44,8 @@ type CrmContactListRow = {
   website: string | null;
   tipo_establecimiento: string | null;
   fecha_incorporacion: string | null;
+  cuenta_tipo?: string | null;
+  tamano?: string | null;
   total_rows: number;
   can_view_sensitive_fields?: boolean | null;
 };
@@ -141,8 +143,7 @@ function mapCardsFromList(payload?: CrmContactListRow[] | null): ContactCards {
   const counts = payload.reduce(
     (acc, row) => {
       const estado = normalizeLabel(row.estado).trim().toLowerCase();
-      const captura = (row.captura_estado || "").trim().toLowerCase();
-      if (captura === "completo") acc.completos += 1;
+      if (isCaptureComplete(row)) acc.completos += 1;
       else acc.incompletos += 1;
       if (estado === "activo") acc.activos += 1;
       if (estado === "lead") acc.leads += 1;
@@ -201,7 +202,7 @@ function mergeCardsWithTopOwner(base: ContactCards, topOwner: ContactCards): Con
 function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
   if (!payload || !payload.length) return [];
   return payload.map((row, index) => {
-    const captureDone = (row.captura_estado || "").toLowerCase() === "completo";
+    const captureDone = isCaptureComplete(row);
     const status = captureDone ? "Done" : "In Process";
     const conversations = Number.isFinite(row.conversaciones) ? Number(row.conversaciones) : 0;
     const lastContact =
@@ -245,6 +246,8 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
         website: row.website,
         tipo_establecimiento: row.tipo_establecimiento,
         fecha_incorporacion: row.fecha_incorporacion,
+        cuenta_tipo: row.cuenta_tipo,
+        tamano: row.tamano,
         can_view_sensitive_fields: row.can_view_sensitive_fields,
         status_meta: {
           label: captureDone ? "Completo" : "Incompleto",
@@ -257,6 +260,20 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
       },
     };
   });
+}
+
+function isCaptureComplete(row: CrmContactListRow | undefined | null): boolean {
+  if (!row) return false;
+  return [
+    (row.cuenta_tipo || row.codigo_cuenta || "").trim(),
+    (row.tamano || "").trim(),
+    (row.tipo_establecimiento || "").trim(),
+    (row.estado || "").trim(),
+    (row.origen || "").trim(),
+    (row.puesto || "").trim(),
+    (row.rol_decision || "").trim(),
+    (row.area || "").trim(),
+  ].every((value) => value.length > 0);
 }
 
 function normalizeLabel(value: string | null | undefined): string {

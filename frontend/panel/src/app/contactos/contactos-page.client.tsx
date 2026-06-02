@@ -110,9 +110,8 @@ function mapCardsFromRows(rows: ContactTableRow[]): ContactCards {
 
   for (const row of rows) {
     const raw = row.raw as Record<string, unknown> | undefined
-    const captura = textValue(raw?.captura_estado).toLowerCase()
     const estado = textValue(raw?.estado).toLowerCase()
-    if (captura === "completo") completos += 1
+    if (isCaptureComplete(raw)) completos += 1
     else incompletos += 1
     if (estado === "activo") activos += 1
     if (estado === "lead") leads += 1
@@ -153,6 +152,20 @@ function mapCardsFromRows(rows: ContactTableRow[]): ContactCards {
 
 function textValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim()
+}
+
+function isCaptureComplete(raw: Record<string, unknown> | undefined): boolean {
+  if (!raw) return false
+  return [
+    textValue(raw.cuenta_tipo) || textValue(raw.tipo),
+    textValue(raw.tamano),
+    textValue(raw.tipo_establecimiento),
+    textValue(raw.estado),
+    textValue(raw.origen),
+    textValue(raw.puesto),
+    textValue(raw.rol_decision),
+    textValue(raw.area),
+  ].every(Boolean)
 }
 
 function areFiltersEqual(left: ContactFilters, right: ContactFilters): boolean {

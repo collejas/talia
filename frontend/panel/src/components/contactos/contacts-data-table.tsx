@@ -257,7 +257,12 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
       previous?.header ||
       "Contacto sin nombre",
     type: normalizeLabel(extractString(detail, ["estado"]) || previous?.type),
-    status: (extractString(detail, ["captura_estado"]) || "").toLowerCase() === "completo" ? "Done" : previous?.status || "In Process",
+    status: isCaptureComplete({
+      ...((previous?.raw ?? {}) as Record<string, unknown>),
+      ...detail,
+    })
+      ? "Done"
+      : previous?.status || "In Process",
     target: Number.isFinite(conversations) ? String(conversations) : previous?.target || "0",
     limit: createdAt,
     reviewer: extractString(detail, ["propietario_nombre"]) || previous?.reviewer || "Sin asignar",
@@ -1648,6 +1653,20 @@ function getRowCreatedAt(raw: Record<string, unknown> | undefined): number | nul
   if (!createdAt) return null;
   const timestamp = Date.parse(createdAt);
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function isCaptureComplete(raw: Record<string, unknown> | undefined): boolean {
+  if (!raw) return false;
+  return [
+    extractString(raw, ["cuenta_tipo", "tipo"]) ?? "",
+    extractString(raw, ["tamano"]) ?? "",
+    extractString(raw, ["tipo_establecimiento"]) ?? "",
+    extractString(raw, ["estado"]) ?? "",
+    extractString(raw, ["origen"]) ?? "",
+    extractString(raw, ["puesto"]) ?? "",
+    extractString(raw, ["rol_decision"]) ?? "",
+    extractString(raw, ["area"]) ?? "",
+  ].every((value) => value.trim().length > 0);
 }
 
 function formatContactValue(value: unknown): string {

@@ -21796,7 +21796,7 @@ async def get_personas_summary_legacy(
     municipio: str | None = Query(default=None),
 ) -> CRMPersonaSummary:
     try:
-        row = await repo.contactos_resumen(
+        row = await repo.personas_resumen(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             search=search,
