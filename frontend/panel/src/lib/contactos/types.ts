@@ -10,6 +10,25 @@ export type ContactCards = {
   ultimo?: string | null;
 };
 
+export type ContactAdvancedFilters = {
+  origen: string;
+  puesto: string;
+  rolDecision: string;
+  estadoContacto: string;
+  ligado: "all" | "si" | "no";
+  tipoCuenta: string;
+  tamano: string;
+  clasificacion: string;
+  fechaCreacionCuentaFrom: string;
+  fechaCreacionCuentaTo: string;
+  fechaIncorporacionFrom: string;
+  fechaIncorporacionTo: string;
+  fusionada: "all" | "si" | "no";
+  pais: string;
+  estadoDireccion: string;
+  municipio: string;
+};
+
 export type ContactTableRow = {
   id: number;
   header: string;
@@ -26,4 +45,5 @@ export type ContactFilters = {
   owner: string;
   createdFrom: string;
   createdTo: string;
+  advanced: ContactAdvancedFilters;
 };

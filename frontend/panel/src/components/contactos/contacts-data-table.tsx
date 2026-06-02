@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import {
   IconArrowsLeftRight,
+  IconAdjustmentsHorizontal,
   IconBuilding,
   IconClock,
   IconDownload,
@@ -28,6 +29,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -40,10 +42,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { usePermissions } from "@/hooks/use-permissions";
-import type { ContactFilters, ContactTableRow } from "@/lib/contactos/types";
+import type { ContactAdvancedFilters, ContactFilters, ContactTableRow } from "@/lib/contactos/types";
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
 import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
 import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -56,6 +60,29 @@ type SalesRepOption = {
 };
 
 export type { ContactFilters } from "@/lib/contactos/types";
+
+const DEFAULT_ADVANCED_FILTERS: ContactAdvancedFilters = {
+  origen: "",
+  puesto: "",
+  rolDecision: "",
+  estadoContacto: "",
+  ligado: "all",
+  tipoCuenta: "",
+  tamano: "",
+  clasificacion: "",
+  fechaCreacionCuentaFrom: "",
+  fechaCreacionCuentaTo: "",
+  fechaIncorporacionFrom: "",
+  fechaIncorporacionTo: "",
+  fusionada: "all",
+  pais: "",
+  estadoDireccion: "",
+  municipio: "",
+};
+
+function cloneDefaultAdvancedFilters(): ContactAdvancedFilters {
+  return { ...DEFAULT_ADVANCED_FILTERS };
+}
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -99,6 +126,117 @@ function normalizeLabel(value: unknown): string {
   return trimmed.length ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "Desconocido";
 }
 
+function normalizeFilterValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().toLowerCase();
+}
+
+function parseDateInput(value: string, boundary: "start" | "end"): number | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  const parts = raw.split("-").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return null;
+  const [year, month, day] = parts;
+  const date =
+    boundary === "start"
+      ? new Date(year, month - 1, day, 0, 0, 0, 0)
+      : new Date(year, month - 1, day, 23, 59, 59, 999);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function getRowDate(raw: Record<string, unknown> | undefined, keys: string[]): number | null {
+  const value = extractString(raw, keys);
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function isSelectAll(value: string | undefined | null): boolean {
+  return !value || value === "all";
+}
+
+function countAdvancedFilterSelections(filters: ContactAdvancedFilters): number {
+  let count = 0;
+  if (filters.origen) count += 1;
+  if (filters.puesto) count += 1;
+  if (filters.rolDecision) count += 1;
+  if (filters.estadoContacto) count += 1;
+  if (!isSelectAll(filters.ligado)) count += 1;
+  if (filters.tipoCuenta) count += 1;
+  if (filters.tamano) count += 1;
+  if (filters.clasificacion) count += 1;
+  if (filters.fechaCreacionCuentaFrom) count += 1;
+  if (filters.fechaCreacionCuentaTo) count += 1;
+  if (filters.fechaIncorporacionFrom) count += 1;
+  if (filters.fechaIncorporacionTo) count += 1;
+  if (!isSelectAll(filters.fusionada)) count += 1;
+  if (filters.pais) count += 1;
+  if (filters.estadoDireccion) count += 1;
+  if (filters.municipio) count += 1;
+  return count;
+}
+
+function buildListParams(filters: ContactFilters, limit: number): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.owner !== "all") params.set("propietario", filters.owner);
+  if (filters.createdFrom.trim()) params.set("from", filters.createdFrom.trim());
+  if (filters.createdTo.trim()) params.set("to", filters.createdTo.trim());
+  if (filters.advanced.origen.trim()) params.set("origen", filters.advanced.origen.trim());
+  if (filters.advanced.puesto.trim()) params.set("puesto", filters.advanced.puesto.trim());
+  if (filters.advanced.rolDecision.trim()) params.set("rol_decision", filters.advanced.rolDecision.trim());
+  if (filters.advanced.estadoContacto.trim()) params.set("estado_contacto", filters.advanced.estadoContacto.trim());
+  if (!isSelectAll(filters.advanced.ligado)) params.set("ligado", filters.advanced.ligado);
+  if (filters.advanced.tipoCuenta.trim()) params.set("tipo_cuenta", filters.advanced.tipoCuenta.trim());
+  if (filters.advanced.tamano.trim()) params.set("tamano", filters.advanced.tamano.trim());
+  if (filters.advanced.clasificacion.trim()) params.set("clasificacion", filters.advanced.clasificacion.trim());
+  if (filters.advanced.fechaCreacionCuentaFrom.trim()) params.set("cuenta_from", filters.advanced.fechaCreacionCuentaFrom.trim());
+  if (filters.advanced.fechaCreacionCuentaTo.trim()) params.set("cuenta_to", filters.advanced.fechaCreacionCuentaTo.trim());
+  if (filters.advanced.fechaIncorporacionFrom.trim()) params.set("fecha_incorporacion_from", filters.advanced.fechaIncorporacionFrom.trim());
+  if (filters.advanced.fechaIncorporacionTo.trim()) params.set("fecha_incorporacion_to", filters.advanced.fechaIncorporacionTo.trim());
+  if (!isSelectAll(filters.advanced.fusionada)) params.set("fusionada", filters.advanced.fusionada);
+  if (filters.advanced.pais.trim()) params.set("pais", filters.advanced.pais.trim());
+  if (filters.advanced.estadoDireccion.trim()) params.set("estado_direccion", filters.advanced.estadoDireccion.trim());
+  if (filters.advanced.municipio.trim()) params.set("municipio", filters.advanced.municipio.trim());
+  return params;
+}
+
+function matchesAdvancedFilters(raw: Record<string, unknown> | undefined, filters: ContactAdvancedFilters): boolean {
+  if (!raw) return false;
+  const origin = normalizeFilterValue(extractString(raw, ["origen"]));
+  if (filters.origen.trim() && origin !== normalizeFilterValue(filters.origen)) return false;
+  if (filters.puesto.trim() && normalizeFilterValue(extractString(raw, ["puesto"])) !== normalizeFilterValue(filters.puesto)) return false;
+  if (filters.rolDecision.trim() && normalizeFilterValue(extractString(raw, ["rol_decision"])) !== normalizeFilterValue(filters.rolDecision)) return false;
+  if (filters.estadoContacto.trim() && normalizeFilterValue(extractString(raw, ["estado"])) !== normalizeFilterValue(filters.estadoContacto)) return false;
+  if (filters.ligado !== "all") {
+    const linked = Boolean(extractString(raw, ["cuenta_id"]) || extractString(raw, ["codigo_cuenta"]));
+    if ((filters.ligado === "si" && !linked) || (filters.ligado === "no" && linked)) return false;
+  }
+  if (filters.tipoCuenta.trim() && normalizeFilterValue(extractString(raw, ["cuenta_tipo"])) !== normalizeFilterValue(filters.tipoCuenta)) return false;
+  if (filters.tamano.trim() && normalizeFilterValue(extractString(raw, ["tamano"])) !== normalizeFilterValue(filters.tamano)) return false;
+  if (filters.clasificacion.trim() && normalizeFilterValue(extractString(raw, ["tipo_industria"])) !== normalizeFilterValue(filters.clasificacion)) return false;
+  const accountCreated = getRowDate(raw, ["cuenta_creado_en", "cuenta_creado", "account_creado_en"]);
+  const accountCreatedFrom = parseDateInput(filters.fechaCreacionCuentaFrom, "start");
+  const accountCreatedTo = parseDateInput(filters.fechaCreacionCuentaTo, "end");
+  if (accountCreatedFrom !== null && (accountCreated === null || accountCreated < accountCreatedFrom)) return false;
+  if (accountCreatedTo !== null && (accountCreated === null || accountCreated > accountCreatedTo)) return false;
+  const incorporation = getRowDate(raw, ["fecha_incorporacion"]);
+  const incorporationFrom = parseDateInput(filters.fechaIncorporacionFrom, "start");
+  const incorporationTo = parseDateInput(filters.fechaIncorporacionTo, "end");
+  if (incorporationFrom !== null && (incorporation === null || incorporation < incorporationFrom)) return false;
+  if (incorporationTo !== null && (incorporation === null || incorporation > incorporationTo)) return false;
+  if (filters.fusionada !== "all") {
+    const fused = ["fusionado", "fusionada"].includes(normalizeFilterValue(extractString(raw, ["estado"])));
+    if ((filters.fusionada === "si" && !fused) || (filters.fusionada === "no" && fused)) return false;
+  }
+  if (filters.pais.trim() && normalizeFilterValue(extractString(raw, ["pais"])) !== normalizeFilterValue(filters.pais)) return false;
+  if (filters.estadoDireccion.trim() && normalizeFilterValue(extractString(raw, ["entidad"])) !== normalizeFilterValue(filters.estadoDireccion)) return false;
+  if (filters.municipio.trim() && normalizeFilterValue(extractString(raw, ["municipio"])) !== normalizeFilterValue(filters.municipio)) return false;
+  return true;
+}
+
 function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: TableRow | null): TableRow {
   const previousRaw = previous?.raw as Record<string, unknown> | undefined;
   const contactId = extractString(detail, ["contacto_id"]) || extractString(detail, ["id"]) || extractString(previousRaw, ["contacto_id"]) || "";
@@ -131,10 +269,16 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
       propietario_id: extractString(detail, ["propietario_id"]) || extractString(previousRaw, ["propietario_id"]) || "",
       propietario_nombre: extractString(detail, ["propietario_nombre"]) || extractString(previousRaw, ["propietario_nombre"]) || "",
       company_name: extractString(detail, ["company_name"]) || extractString(previousRaw, ["company_name"]) || "",
+      cuenta_id: extractString(detail, ["cuenta_id"]) || extractString(previousRaw, ["cuenta_id"]) || "",
+      cuenta_tipo: extractString(detail, ["cuenta_tipo"]) || extractString(previousRaw, ["cuenta_tipo"]) || "",
       estado: extractString(detail, ["estado"]) || extractString(previousRaw, ["estado"]) || "",
       captura_estado: extractString(detail, ["captura_estado"]) || extractString(previousRaw, ["captura_estado"]) || "",
       creado_en: extractString(detail, ["creado_en"]) || extractString(previousRaw, ["creado_en"]) || "",
       actualizado_en: extractString(detail, ["actualizado_en"]) || extractString(previousRaw, ["actualizado_en"]) || "",
+      cuenta_creado_en: extractString(detail, ["cuenta_creado_en"]) || extractString(previousRaw, ["cuenta_creado_en"]) || "",
+      tipo_industria: extractString(detail, ["tipo_industria"]) || extractString(previousRaw, ["tipo_industria"]) || "",
+      tamano: extractString(detail, ["tamano"]) || extractString(previousRaw, ["tamano"]) || "",
+      relacion_activa: extractUnknown(detail, ["relacion_activa"]) ?? extractUnknown(previousRaw, ["relacion_activa"]),
       conversaciones: Number.isFinite(conversations) ? conversations : 0,
       can_view_sensitive_fields: canViewSensitiveFields,
     },
@@ -246,6 +390,34 @@ const contactColumnLabels = {
   reviewer: "Propietario",
 } as const;
 
+const CONTACT_ORIGIN_OPTIONS = [
+  { value: "prospeccion_propia", label: "Prospección propia" },
+  { value: "referido_cliente", label: "Referido cliente" },
+  { value: "llamada_entrante", label: "Llamada entrante" },
+  { value: "visita_oficina", label: "Visita oficina" },
+  { value: "evento_feria", label: "Evento o feria" },
+  { value: "redes_sociales", label: "Redes sociales" },
+  { value: "importacion", label: "Importación" },
+] as const;
+
+const CONTACT_STATUS_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "activo", label: "Activo" },
+  { value: "inactivo", label: "Inactivo" },
+] as const;
+
+const BOOLEAN_FILTER_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "si", label: "Sí" },
+  { value: "no", label: "No" },
+] as const;
+
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "empresa", label: "Empresa" },
+  { value: "persona_fisica_actividad_empresarial", label: "Persona física con actividad empresarial" },
+] as const;
+
 export function ContactsDataTable({
   data,
   onFiltersChange,
@@ -270,11 +442,14 @@ export function ContactsDataTable({
   const [ownerFilter, setOwnerFilter] = React.useState("all");
   const [createdFromFilter, setCreatedFromFilter] = React.useState("");
   const [createdToFilter, setCreatedToFilter] = React.useState("");
+  const [advancedFilters, setAdvancedFilters] = React.useState<ContactAdvancedFilters>(() => cloneDefaultAdvancedFilters());
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [remoteSearchData, setRemoteSearchData] = React.useState<ContactTableRow[] | null>(null);
   const [remoteSearchTotalRows, setRemoteSearchTotalRows] = React.useState<number | null>(null);
   const [remoteSearchQuery, setRemoteSearchQuery] = React.useState("");
   const [remoteSearchLoading, setRemoteSearchLoading] = React.useState(false);
   const [remoteSearchError, setRemoteSearchError] = React.useState<string | null>(null);
+  const tenantCatalogs = useTenantContactCatalogs();
 
   React.useEffect(() => {
     setTableRows(data);
@@ -350,8 +525,9 @@ export function ContactsDataTable({
       owner: ownerFilter,
       createdFrom: createdFromFilter,
       createdTo: createdToFilter,
+      advanced: advancedFilters,
     });
-  }, [createdFromFilter, createdToFilter, onFiltersChange, ownerFilter, searchQuery]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, onFiltersChange, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
     const term = searchQuery;
@@ -370,7 +546,17 @@ export function ContactsDataTable({
 
     const timeout = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/contactos/list?search=${encodeURIComponent(term)}&limit=500`, {
+        const params = buildListParams(
+          {
+            search: term,
+            owner: ownerFilter,
+            createdFrom: createdFromFilter,
+            createdTo: createdToFilter,
+            advanced: advancedFilters,
+          },
+          500,
+        );
+        const response = await fetch(`/api/contactos/list?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -401,7 +587,7 @@ export function ContactsDataTable({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [searchQuery]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
@@ -712,6 +898,24 @@ export function ContactsDataTable({
       .sort((left, right) => left.label.localeCompare(right.label, "es"));
   }, [ownerFilter, sourceData]);
 
+  const activeAdvancedFilterCount = React.useMemo(() => countAdvancedFilterSelections(advancedFilters), [advancedFilters]);
+  const puestoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.puestoOptions, advancedFilters.puesto),
+    [advancedFilters.puesto, tenantCatalogs.puestoOptions],
+  );
+  const rolDecisionOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.rolDecisionOptions, advancedFilters.rolDecision),
+    [advancedFilters.rolDecision, tenantCatalogs.rolDecisionOptions],
+  );
+  const clasificacionOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, advancedFilters.clasificacion),
+    [advancedFilters.clasificacion, tenantCatalogs.clasificacionNegocioOptions],
+  );
+  const tamanoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.tamanoOptions, advancedFilters.tamano),
+    [advancedFilters.tamano, tenantCatalogs.tamanoOptions],
+  );
+
   const filteredData = React.useMemo(() => {
     const createdFrom = parseDateInput(createdFromFilter, "start");
     const createdTo = parseDateInput(createdToFilter, "end");
@@ -734,9 +938,12 @@ export function ContactsDataTable({
       if (createdTo !== null && createdAt === null) {
         return false;
       }
+      if (!matchesAdvancedFilters(raw, advancedFilters)) {
+        return false;
+      }
       return true;
     });
-  }, [createdFromFilter, createdToFilter, ownerFilter, sourceData]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, ownerFilter, sourceData]);
 
   React.useEffect(() => {
     onVisibleRowsChange?.(filteredData);
@@ -751,19 +958,24 @@ export function ContactsDataTable({
           : remoteSearchTotalRows !== null
             ? `${filteredData.length} de ${remoteSearchTotalRows} contactos`
             : `${filteredData.length} contactos`
-      : createdFromFilter || createdToFilter || ownerFilter !== "all"
+      : createdFromFilter || createdToFilter || ownerFilter !== "all" || activeAdvancedFilterCount > 0
         ? `${filteredData.length} de ${sourceData.length} contactos`
         : `${tableRows.length} contactos`;
 
   const toolbarLeadingActions = (
     <div className="flex w-full flex-wrap items-center gap-2">
       <div className="text-sm text-muted-foreground">{resultsLabel}</div>
+      {activeAdvancedFilterCount > 0 ? (
+        <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">
+          {activeAdvancedFilterCount} filtros avanzados
+        </Badge>
+      ) : null}
     </div>
   );
 
   const toolbarBelowActions = (
     <div className="rounded-xl border bg-muted/20 p-3 shadow-sm">
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px]">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px_auto]">
         <div className="grid gap-1.5">
           <Label className="text-xs font-medium text-muted-foreground">Búsqueda</Label>
           <div className="relative">
@@ -836,9 +1048,21 @@ export function ContactsDataTable({
               setCreatedFromFilter("");
               setCreatedToFilter("");
               setSearchTerm("");
+              setAdvancedFilters(cloneDefaultAdvancedFilters());
             }}
           >
             Limpiar filtros
+          </Button>
+        </div>
+        <div className="flex items-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={() => setAdvancedOpen(true)}
+          >
+            <IconAdjustmentsHorizontal className="size-4" />
+            Filtros avanzados
           </Button>
         </div>
       </div>
@@ -854,9 +1078,18 @@ export function ContactsDataTable({
           size="sm"
           onClick={() => {
             const exportUrl = new URL("/api/contactos/export", window.location.origin);
-            if (searchTerm.trim()) {
-              exportUrl.searchParams.set("search", searchTerm.trim());
-            }
+            buildListParams(
+              {
+                search: searchTerm.trim(),
+                owner: ownerFilter,
+                createdFrom: createdFromFilter,
+                createdTo: createdToFilter,
+                advanced: advancedFilters,
+              },
+              500,
+            ).forEach((value, key) => {
+              exportUrl.searchParams.set(key, value);
+            });
             const anchor = document.createElement("a");
             anchor.href = exportUrl.toString();
             anchor.rel = "noreferrer";
@@ -926,6 +1159,312 @@ export function ContactsDataTable({
     </div>
   );
 
+  const advancedFiltersDialog = (
+    <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Filtros avanzados</DialogTitle>
+          <DialogDescription>
+            Los filtros de búsqueda, propietario y fechas de creación siguen disponibles en la barra superior.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+          <section className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Vendedores</h3>
+              <p className="text-xs text-muted-foreground">Filtra por el vendedor asignado al contacto.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Propietario</Label>
+                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="unassigned">Sin asignar</SelectItem>
+                    {ownerOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Ligado</Label>
+                <Select
+                  value={advancedFilters.ligado}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, ligado: value as ContactAdvancedFilters["ligado"] }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Área Contactos</h3>
+              <p className="text-xs text-muted-foreground">Origen, cargo, rol, estado y fechas de creación.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Origen</Label>
+                <Select
+                  value={advancedFilters.origen || "all"}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, origen: value === "all" ? "" : value }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {CONTACT_ORIGIN_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Puesto</Label>
+                <ContactCatalogSelect
+                  value={advancedFilters.puesto}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, puesto: value }))}
+                  options={puestoOptions}
+                  placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Todos"}
+                  emptyLabel="Sin opciones configuradas"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Rol de decisión</Label>
+                <ContactCatalogSelect
+                  value={advancedFilters.rolDecision}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, rolDecision: value }))}
+                  options={rolDecisionOptions}
+                  placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Todos"}
+                  emptyLabel="Sin opciones configuradas"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Estado</Label>
+                <Select
+                  value={advancedFilters.estadoContacto || "all"}
+                  onValueChange={(value) =>
+                    setAdvancedFilters((current) => ({ ...current, estadoContacto: value === "all" ? "" : value }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTACT_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value || "all"} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-contact-created-from" className="text-xs font-medium text-muted-foreground">
+                  Fecha de creación desde
+                </Label>
+                <Input
+                  id="adv-contact-created-from"
+                  type="date"
+                  value={createdFromFilter}
+                  onChange={(event) => setCreatedFromFilter(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-contact-created-to" className="text-xs font-medium text-muted-foreground">
+                  Fecha de creación hasta
+                </Label>
+                <Input
+                  id="adv-contact-created-to"
+                  type="date"
+                  value={createdToFilter}
+                  onChange={(event) => setCreatedToFilter(event.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Área empresa y Persona física con actividad empresarial</h3>
+              <p className="text-xs text-muted-foreground">Tipo de cuenta, tamaño, clasificación y fechas de incorporación.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Tipo de cuenta</Label>
+                <Select
+                  value={advancedFilters.tipoCuenta || "all"}
+                  onValueChange={(value) =>
+                    setAdvancedFilters((current) => ({ ...current, tipoCuenta: value === "all" ? "" : value }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value || "all"} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Tamaño</Label>
+                <ContactCatalogSelect
+                  value={advancedFilters.tamano}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, tamano: value }))}
+                  options={tamanoOptions}
+                  placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Todos"}
+                  emptyLabel="Sin opciones configuradas"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Clasificación</Label>
+                <ContactCatalogSelect
+                  value={advancedFilters.clasificacion}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, clasificacion: value }))}
+                  options={clasificacionOptions}
+                  placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Todos"}
+                  emptyLabel="Sin opciones configuradas"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-account-created-from" className="text-xs font-medium text-muted-foreground">
+                  Fecha de creación desde
+                </Label>
+                <Input
+                  id="adv-account-created-from"
+                  type="date"
+                  value={advancedFilters.fechaCreacionCuentaFrom}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, fechaCreacionCuentaFrom: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-account-created-to" className="text-xs font-medium text-muted-foreground">
+                  Fecha de creación hasta
+                </Label>
+                <Input
+                  id="adv-account-created-to"
+                  type="date"
+                  value={advancedFilters.fechaCreacionCuentaTo}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, fechaCreacionCuentaTo: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-incorp-from" className="text-xs font-medium text-muted-foreground">
+                  Fecha de incorporación desde
+                </Label>
+                <Input
+                  id="adv-incorp-from"
+                  type="date"
+                  value={advancedFilters.fechaIncorporacionFrom}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, fechaIncorporacionFrom: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="adv-incorp-to" className="text-xs font-medium text-muted-foreground">
+                  Fecha de incorporación hasta
+                </Label>
+                <Input
+                  id="adv-incorp-to"
+                  type="date"
+                  value={advancedFilters.fechaIncorporacionTo}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, fechaIncorporacionTo: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Fusionada</Label>
+                <Select
+                  value={advancedFilters.fusionada}
+                  onValueChange={(value) => setAdvancedFilters((current) => ({ ...current, fusionada: value as ContactAdvancedFilters["fusionada"] }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold">Direcciones</h3>
+              <p className="text-xs text-muted-foreground">País, estado y municipio del contacto o de su cuenta.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">País</Label>
+                <Input
+                  value={advancedFilters.pais}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, pais: event.target.value }))}
+                  placeholder="MX"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Estado</Label>
+                <Input
+                  value={advancedFilters.estadoDireccion}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, estadoDireccion: event.target.value }))}
+                  placeholder="Jalisco"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Municipio</Label>
+                <Input
+                  value={advancedFilters.municipio}
+                  onChange={(event) => setAdvancedFilters((current) => ({ ...current, municipio: event.target.value }))}
+                  placeholder="Guadalajara"
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setAdvancedFilters(cloneDefaultAdvancedFilters())}
+          >
+            Limpiar avanzados
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setAdvancedOpen(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   const renderRowDetails = (row: TableRow) => (
     <ContactDetailPanel
       row={row}
@@ -975,6 +1514,8 @@ export function ContactsDataTable({
           );
         }}
       />
+
+      {advancedFiltersDialog}
 
       <ContactCreateFlow
         open={createOpen}
@@ -1106,21 +1647,6 @@ function getRowCreatedAt(raw: Record<string, unknown> | undefined): number | nul
   const createdAt = extractString(raw, ["creado_en"]);
   if (!createdAt) return null;
   const timestamp = Date.parse(createdAt);
-  return Number.isNaN(timestamp) ? null : timestamp;
-}
-
-function parseDateInput(value: string, boundary: "start" | "end"): number | null {
-  const raw = value.trim();
-  if (!raw) return null;
-  const parts = raw.split("-").map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) {
-    return null;
-  }
-  const [year, month, day] = parts;
-  const date = boundary === "start"
-    ? new Date(year, month - 1, day, 0, 0, 0, 0)
-    : new Date(year, month - 1, day, 23, 59, 59, 999);
-  const timestamp = date.getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 

@@ -13477,6 +13477,8 @@ class CRMContactListRow(BaseModel):
     contacto_id: UUID
     codigo_contacto: str | None = None
     codigo_cuenta: str | None = None
+    cuenta_id: UUID | None = None
+    cuenta_tipo: str | None = None
     nombre: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -13502,6 +13504,10 @@ class CRMContactListRow(BaseModel):
     website: str | None = None
     tipo_establecimiento: str | None = None
     fecha_incorporacion: datetime | None = None
+    cuenta_creado_en: datetime | None = None
+    tipo_industria: str | None = None
+    tamano: str | None = None
+    relacion_activa: bool | None = None
     total_rows: int | None = None
     can_view_sensitive_fields: bool | None = None
 
@@ -13841,6 +13847,21 @@ async def _load_all_contacts_for_export(
     propietario: UUID | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    puesto: str | None = None,
+    rol_decision: str | None = None,
+    estado_contacto: str | None = None,
+    ligado: str | None = None,
+    tipo_cuenta: str | None = None,
+    tamano: str | None = None,
+    clasificacion: str | None = None,
+    cuenta_from: datetime | None = None,
+    cuenta_to: datetime | None = None,
+    fecha_incorporacion_from: datetime | None = None,
+    fecha_incorporacion_to: datetime | None = None,
+    fusionada: str | None = None,
+    pais: str | None = None,
+    estado_direccion: str | None = None,
+    municipio: str | None = None,
 ) -> list[dict[str, Any]]:
     page_size = 500
     offset = 0
@@ -13858,6 +13879,21 @@ async def _load_all_contacts_for_export(
             propietario=propietario,
             date_from=date_from,
             date_to=date_to,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
         )
         rows.extend(batch)
         if len(batch) < page_size:
@@ -21732,9 +21768,24 @@ async def get_personas_summary_legacy(
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
     origen: str | None = Query(default=None),
+    puesto: str | None = Query(default=None),
+    rol_decision: str | None = Query(default=None),
+    estado_contacto: str | None = Query(default=None),
+    ligado: str | None = Query(default=None),
+    tipo_cuenta: str | None = Query(default=None),
+    tamano: str | None = Query(default=None),
+    clasificacion: str | None = Query(default=None),
+    cuenta_from: Annotated[datetime | None, Query(alias="cuenta_from")] = None,
+    cuenta_to: Annotated[datetime | None, Query(alias="cuenta_to")] = None,
+    fecha_incorporacion_from: Annotated[datetime | None, Query(alias="fecha_incorporacion_from")] = None,
+    fecha_incorporacion_to: Annotated[datetime | None, Query(alias="fecha_incorporacion_to")] = None,
+    fusionada: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    estado_direccion: str | None = Query(default=None),
+    municipio: str | None = Query(default=None),
 ) -> CRMPersonaSummary:
     try:
-        row = await repo.personas_resumen(
+        row = await repo.contactos_resumen(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             search=search,
@@ -21742,6 +21793,21 @@ async def get_personas_summary_legacy(
             date_from=date_from,
             date_to=date_to,
             origen=origen,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21760,6 +21826,21 @@ async def get_personas_summary(
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
     origen: str | None = Query(default=None),
+    puesto: str | None = Query(default=None),
+    rol_decision: str | None = Query(default=None),
+    estado_contacto: str | None = Query(default=None),
+    ligado: str | None = Query(default=None),
+    tipo_cuenta: str | None = Query(default=None),
+    tamano: str | None = Query(default=None),
+    clasificacion: str | None = Query(default=None),
+    cuenta_from: Annotated[datetime | None, Query(alias="cuenta_from")] = None,
+    cuenta_to: Annotated[datetime | None, Query(alias="cuenta_to")] = None,
+    fecha_incorporacion_from: Annotated[datetime | None, Query(alias="fecha_incorporacion_from")] = None,
+    fecha_incorporacion_to: Annotated[datetime | None, Query(alias="fecha_incorporacion_to")] = None,
+    fusionada: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    estado_direccion: str | None = Query(default=None),
+    municipio: str | None = Query(default=None),
 ) -> CRMPersonaSummary:
     row = await get_personas_summary_legacy(
         repo=repo,
@@ -21771,6 +21852,21 @@ async def get_personas_summary(
         date_from=date_from,
         date_to=date_to,
         origen=origen,
+        puesto=puesto,
+        rol_decision=rol_decision,
+        estado_contacto=estado_contacto,
+        ligado=ligado,
+        tipo_cuenta=tipo_cuenta,
+        tamano=tamano,
+        clasificacion=clasificacion,
+        cuenta_from=cuenta_from,
+        cuenta_to=cuenta_to,
+        fecha_incorporacion_from=fecha_incorporacion_from,
+        fecha_incorporacion_to=fecha_incorporacion_to,
+        fusionada=fusionada,
+        pais=pais,
+        estado_direccion=estado_direccion,
+        municipio=municipio,
     )
     return CRMPersonaSummary.model_validate(row.model_dump())
 
@@ -21783,9 +21879,53 @@ async def get_personas_list_legacy(
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
     search: str | None = Query(default=None, min_length=1),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    propietario: UUID | None = Query(default=None),
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: datetime | None = None,
+    origen: str | None = Query(default=None),
+    puesto: str | None = Query(default=None),
+    rol_decision: str | None = Query(default=None),
+    estado_contacto: str | None = Query(default=None),
+    ligado: str | None = Query(default=None),
+    tipo_cuenta: str | None = Query(default=None),
+    tamano: str | None = Query(default=None),
+    clasificacion: str | None = Query(default=None),
+    cuenta_from: Annotated[datetime | None, Query(alias="cuenta_from")] = None,
+    cuenta_to: Annotated[datetime | None, Query(alias="cuenta_to")] = None,
+    fecha_incorporacion_from: Annotated[datetime | None, Query(alias="fecha_incorporacion_from")] = None,
+    fecha_incorporacion_to: Annotated[datetime | None, Query(alias="fecha_incorporacion_to")] = None,
+    fusionada: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    estado_direccion: str | None = Query(default=None),
+    municipio: str | None = Query(default=None),
 ) -> list[CRMPersonaListRow]:
     try:
-        rows = await repo.personas_list(usuario_token=user_token, limit=limit, search=search)
+        rows = await repo.personas_list(
+            usuario_token=user_token,
+            limit=limit,
+            offset=offset,
+            search=search,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+            origen=origen,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
@@ -21820,8 +21960,54 @@ async def get_personas_list(
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
     search: str | None = Query(default=None, min_length=1),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    propietario: UUID | None = Query(default=None),
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: datetime | None = None,
+    origen: str | None = Query(default=None),
+    puesto: str | None = Query(default=None),
+    rol_decision: str | None = Query(default=None),
+    estado_contacto: str | None = Query(default=None),
+    ligado: str | None = Query(default=None),
+    tipo_cuenta: str | None = Query(default=None),
+    tamano: str | None = Query(default=None),
+    clasificacion: str | None = Query(default=None),
+    cuenta_from: Annotated[datetime | None, Query(alias="cuenta_from")] = None,
+    cuenta_to: Annotated[datetime | None, Query(alias="cuenta_to")] = None,
+    fecha_incorporacion_from: Annotated[datetime | None, Query(alias="fecha_incorporacion_from")] = None,
+    fecha_incorporacion_to: Annotated[datetime | None, Query(alias="fecha_incorporacion_to")] = None,
+    fusionada: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    estado_direccion: str | None = Query(default=None),
+    municipio: str | None = Query(default=None),
 ) -> list[CRMPersonaListRow]:
-    rows = await get_personas_list_legacy(repo=repo, _=_, user_token=user_token, limit=limit, search=search)
+    rows = await get_personas_list_legacy(
+        repo=repo,
+        _=_,
+        user_token=user_token,
+        limit=limit,
+        search=search,
+        offset=offset,
+        propietario=propietario,
+        date_from=date_from,
+        date_to=date_to,
+        origen=origen,
+        puesto=puesto,
+        rol_decision=rol_decision,
+        estado_contacto=estado_contacto,
+        ligado=ligado,
+        tipo_cuenta=tipo_cuenta,
+        tamano=tamano,
+        clasificacion=clasificacion,
+        cuenta_from=cuenta_from,
+        cuenta_to=cuenta_to,
+        fecha_incorporacion_from=fecha_incorporacion_from,
+        fecha_incorporacion_to=fecha_incorporacion_to,
+        fusionada=fusionada,
+        pais=pais,
+        estado_direccion=estado_direccion,
+        municipio=municipio,
+    )
     return [CRMPersonaListRow.model_validate(row.model_dump()) for row in rows]
 
 
@@ -21838,6 +22024,21 @@ async def export_personas_csv_legacy(
     propietario: UUID | None = Query(default=None),
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
+    puesto: str | None = Query(default=None),
+    rol_decision: str | None = Query(default=None),
+    estado_contacto: str | None = Query(default=None),
+    ligado: str | None = Query(default=None),
+    tipo_cuenta: str | None = Query(default=None),
+    tamano: str | None = Query(default=None),
+    clasificacion: str | None = Query(default=None),
+    cuenta_from: Annotated[datetime | None, Query(alias="cuenta_from")] = None,
+    cuenta_to: Annotated[datetime | None, Query(alias="cuenta_to")] = None,
+    fecha_incorporacion_from: Annotated[datetime | None, Query(alias="fecha_incorporacion_from")] = None,
+    fecha_incorporacion_to: Annotated[datetime | None, Query(alias="fecha_incorporacion_to")] = None,
+    fusionada: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    estado_direccion: str | None = Query(default=None),
+    municipio: str | None = Query(default=None),
 ) -> Response:
     current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
         repo=repo,
@@ -21854,6 +22055,21 @@ async def export_personas_csv_legacy(
             propietario=propietario,
             date_from=date_from,
             date_to=date_to,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

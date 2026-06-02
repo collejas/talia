@@ -31,6 +31,13 @@ type CrmContactListRow = {
   website: string | null;
   tipo_establecimiento: string | null;
   fecha_incorporacion: string | null;
+  cuenta_creado_en?: string | null;
+  cuenta_id?: string | null;
+  cuenta_tipo?: string | null;
+  tipo_industria?: string | null;
+  tamano?: string | null;
+  cuenta_fecha_incorporacion?: string | null;
+  relacion_activa?: boolean | null;
   total_rows: number;
   can_view_sensitive_fields?: boolean | null;
 };
@@ -48,15 +55,12 @@ type ContactTableRow = {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const search = url.searchParams.get("search")?.trim() || "";
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || "200")));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") || "0"));
 
   const response = await callCrmApi<CrmContactListRow[]>("/crm/contacts/list", {
     method: "GET",
-    searchParams: {
-      limit: String(limit),
-      ...(search ? { search } : {}),
-    },
+    searchParams: buildSearchParams(url.searchParams, limit, offset),
   });
 
   if (!response.ok) {
@@ -111,6 +115,13 @@ export async function GET(request: Request) {
         website: row.website,
         tipo_establecimiento: row.tipo_establecimiento,
         fecha_incorporacion: row.fecha_incorporacion,
+        cuenta_creado_en: row.cuenta_creado_en,
+        cuenta_id: row.cuenta_id,
+        cuenta_tipo: row.cuenta_tipo,
+        tipo_industria: row.tipo_industria,
+        tamano: row.tamano,
+        cuenta_fecha_incorporacion: row.cuenta_fecha_incorporacion,
+        relacion_activa: row.relacion_activa,
         can_view_sensitive_fields: row.can_view_sensitive_fields,
         status_meta: {
           label: captureDone ? "Completo" : "Incompleto",
@@ -132,4 +143,41 @@ function normalizeLabel(value: string | null | undefined): string {
   if (!value) return "Desconocido";
   const trimmed = value.trim();
   return trimmed.length ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "Desconocido";
+}
+
+function buildSearchParams(searchParams: URLSearchParams, limit: number, offset: number): Record<string, string> {
+  const params: Record<string, string> = {
+    limit: String(limit),
+    offset: String(offset),
+  };
+  for (const key of [
+    "search",
+    "estado",
+    "captura",
+    "origen",
+    "propietario",
+    "from",
+    "to",
+    "puesto",
+    "rol_decision",
+    "estado_contacto",
+    "ligado",
+    "tipo_cuenta",
+    "tamano",
+    "clasificacion",
+    "cuenta_from",
+    "cuenta_to",
+    "fecha_incorporacion_from",
+    "fecha_incorporacion_to",
+    "fusionada",
+    "pais",
+    "estado_direccion",
+    "municipio",
+  ]) {
+    const value = searchParams.get(key)?.trim();
+    if (value) {
+      params[key] = value;
+    }
+  }
+  return params;
 }

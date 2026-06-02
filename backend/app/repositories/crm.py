@@ -11713,6 +11713,21 @@ class CRMRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         origen: str | None = None,
+        puesto: str | None = None,
+        rol_decision: str | None = None,
+        estado_contacto: str | None = None,
+        ligado: str | None = None,
+        tipo_cuenta: str | None = None,
+        tamano: str | None = None,
+        clasificacion: str | None = None,
+        cuenta_from: datetime | None = None,
+        cuenta_to: datetime | None = None,
+        fecha_incorporacion_from: datetime | None = None,
+        fecha_incorporacion_to: datetime | None = None,
+        fusionada: str | None = None,
+        pais: str | None = None,
+        estado_direccion: str | None = None,
+        municipio: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if search and search.strip():
@@ -11725,6 +11740,36 @@ class CRMRepository:
             payload["p_to"] = date_to.astimezone(timezone.utc).isoformat()
         if origen and origen.strip():
             payload["p_origen"] = origen.strip()
+        if puesto and puesto.strip():
+            payload["p_puesto"] = puesto.strip()
+        if rol_decision and rol_decision.strip():
+            payload["p_rol_decision"] = rol_decision.strip()
+        if estado_contacto and estado_contacto.strip():
+            payload["p_estado_contacto"] = estado_contacto.strip()
+        if ligado and ligado.strip():
+            payload["p_ligado"] = ligado.strip()
+        if tipo_cuenta and tipo_cuenta.strip():
+            payload["p_tipo_cuenta"] = tipo_cuenta.strip()
+        if tamano and tamano.strip():
+            payload["p_tamano"] = tamano.strip()
+        if clasificacion and clasificacion.strip():
+            payload["p_clasificacion"] = clasificacion.strip()
+        if cuenta_from is not None:
+            payload["p_cuenta_from"] = cuenta_from.astimezone(timezone.utc).isoformat()
+        if cuenta_to is not None:
+            payload["p_cuenta_to"] = cuenta_to.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_from is not None:
+            payload["p_fecha_incorporacion_from"] = fecha_incorporacion_from.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_to is not None:
+            payload["p_fecha_incorporacion_to"] = fecha_incorporacion_to.astimezone(timezone.utc).isoformat()
+        if fusionada and fusionada.strip():
+            payload["p_fusionada"] = fusionada.strip()
+        if pais and pais.strip():
+            payload["p_pais"] = pais.strip()
+        if estado_direccion and estado_direccion.strip():
+            payload["p_estado_direccion"] = estado_direccion.strip()
+        if municipio and municipio.strip():
+            payload["p_municipio"] = municipio.strip()
         if organizacion_id is not None:
             payload["p_organizacion"] = str(organizacion_id)
             resp = await self._request_service_role(
@@ -11761,6 +11806,21 @@ class CRMRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         origen: str | None = None,
+        puesto: str | None = None,
+        rol_decision: str | None = None,
+        estado_contacto: str | None = None,
+        ligado: str | None = None,
+        tipo_cuenta: str | None = None,
+        tamano: str | None = None,
+        clasificacion: str | None = None,
+        cuenta_from: datetime | None = None,
+        cuenta_to: datetime | None = None,
+        fecha_incorporacion_from: datetime | None = None,
+        fecha_incorporacion_to: datetime | None = None,
+        fusionada: str | None = None,
+        pais: str | None = None,
+        estado_direccion: str | None = None,
+        municipio: str | None = None,
     ) -> dict[str, Any]:
         return await self.personas_resumen(
             usuario_token=usuario_token,
@@ -11770,6 +11830,21 @@ class CRMRepository:
             date_from=date_from,
             date_to=date_to,
             origen=origen,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
         )
 
     async def personas_list(
@@ -11785,6 +11860,21 @@ class CRMRepository:
         propietario: UUID | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        puesto: str | None = None,
+        rol_decision: str | None = None,
+        estado_contacto: str | None = None,
+        ligado: str | None = None,
+        tipo_cuenta: str | None = None,
+        tamano: str | None = None,
+        clasificacion: str | None = None,
+        cuenta_from: datetime | None = None,
+        cuenta_to: datetime | None = None,
+        fecha_incorporacion_from: datetime | None = None,
+        fecha_incorporacion_to: datetime | None = None,
+        fusionada: str | None = None,
+        pais: str | None = None,
+        estado_direccion: str | None = None,
+        municipio: str | None = None,
     ) -> list[dict[str, Any]]:
         body = {
             "p_limit": max(1, min(limit, 500)),
@@ -11810,6 +11900,36 @@ class CRMRepository:
             body["p_from"] = date_from.astimezone(timezone.utc).isoformat()
         if date_to:
             body["p_to"] = date_to.astimezone(timezone.utc).isoformat()
+        if puesto and puesto.strip():
+            body["p_puesto"] = puesto.strip()
+        if rol_decision and rol_decision.strip():
+            body["p_rol_decision"] = rol_decision.strip()
+        if estado_contacto and estado_contacto.strip():
+            body["p_estado_contacto"] = estado_contacto.strip()
+        if ligado and ligado.strip():
+            body["p_ligado"] = ligado.strip()
+        if tipo_cuenta and tipo_cuenta.strip():
+            body["p_tipo_cuenta"] = tipo_cuenta.strip()
+        if tamano and tamano.strip():
+            body["p_tamano"] = tamano.strip()
+        if clasificacion and clasificacion.strip():
+            body["p_clasificacion"] = clasificacion.strip()
+        if cuenta_from:
+            body["p_cuenta_from"] = cuenta_from.astimezone(timezone.utc).isoformat()
+        if cuenta_to:
+            body["p_cuenta_to"] = cuenta_to.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_from:
+            body["p_fecha_incorporacion_from"] = fecha_incorporacion_from.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_to:
+            body["p_fecha_incorporacion_to"] = fecha_incorporacion_to.astimezone(timezone.utc).isoformat()
+        if fusionada and fusionada.strip():
+            body["p_fusionada"] = fusionada.strip()
+        if pais and pais.strip():
+            body["p_pais"] = pais.strip()
+        if estado_direccion and estado_direccion.strip():
+            body["p_estado_direccion"] = estado_direccion.strip()
+        if municipio and municipio.strip():
+            body["p_municipio"] = municipio.strip()
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/panel_contactos_list",
@@ -11834,6 +11954,21 @@ class CRMRepository:
         propietario: UUID | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        puesto: str | None = None,
+        rol_decision: str | None = None,
+        estado_contacto: str | None = None,
+        ligado: str | None = None,
+        tipo_cuenta: str | None = None,
+        tamano: str | None = None,
+        clasificacion: str | None = None,
+        cuenta_from: datetime | None = None,
+        cuenta_to: datetime | None = None,
+        fecha_incorporacion_from: datetime | None = None,
+        fecha_incorporacion_to: datetime | None = None,
+        fusionada: str | None = None,
+        pais: str | None = None,
+        estado_direccion: str | None = None,
+        municipio: str | None = None,
     ) -> list[dict[str, Any]]:
         return await self.personas_list(
             usuario_token=usuario_token,
@@ -11846,6 +11981,21 @@ class CRMRepository:
             propietario=propietario,
             date_from=date_from,
             date_to=date_to,
+            puesto=puesto,
+            rol_decision=rol_decision,
+            estado_contacto=estado_contacto,
+            ligado=ligado,
+            tipo_cuenta=tipo_cuenta,
+            tamano=tamano,
+            clasificacion=clasificacion,
+            cuenta_from=cuenta_from,
+            cuenta_to=cuenta_to,
+            fecha_incorporacion_from=fecha_incorporacion_from,
+            fecha_incorporacion_to=fecha_incorporacion_to,
+            fusionada=fusionada,
+            pais=pais,
+            estado_direccion=estado_direccion,
+            municipio=municipio,
         )
 
     async def inbox_summary(
