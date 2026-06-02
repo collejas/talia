@@ -117,6 +117,11 @@ const ACCOUNT_COLUMNS: Array<{
     accessor: (row) => <span className="font-medium">{getText((row.raw as Record<string, unknown> | undefined)?.nombre)}</span>,
   },
   {
+    id: "account_contact_code",
+    label: "Id Contacto",
+    accessor: (row) => <span className="font-mono text-xs">{getAccountField(row, "contacto_principal_codigo_contacto")}</span>,
+  },
+  {
     id: "account_contact",
     label: "Nombre Contacto",
     accessor: (row) => <span>{getAccountField(row, "contacto_principal_nombre")}</span>,
@@ -356,7 +361,7 @@ export function AccountsDataTable({ rows }: Props) {
   };
 
   const accountColumnOrder = React.useMemo(
-    () => ["account_id", "account_name", "account_contact", "account_phone", "account_email", "account_rfc", "account_owner", "actions"],
+    () => ["account_id", "account_name", "account_contact_code", "account_contact", "account_phone", "account_email", "account_rfc", "account_owner", "actions"],
     [],
   );
 
@@ -369,6 +374,7 @@ export function AccountsDataTable({ rows }: Props) {
       reviewer: false,
       account_id: true,
       account_name: true,
+      account_contact_code: true,
       account_contact: true,
       account_phone: true,
       account_email: true,

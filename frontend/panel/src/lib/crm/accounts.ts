@@ -25,6 +25,7 @@ type CRMAccount = {
     correo: string | null;
   } | null;
   contacto_principal_nombre?: string | null;
+  contacto_principal_codigo_contacto?: string | null;
   contacto_principal_correo?: string | null;
   contacto_principal_telefono?: string | null;
   contacto_principal_owner_id?: string | null;
@@ -87,6 +88,7 @@ export async function loadCrmAccounts(): Promise<CrmAccountsPayload> {
       propietario_usuario_id: account.propietario_usuario_id,
       propietario_nombre: account.propietario_nombre,
       propietario: account.propietario,
+      contacto_principal_codigo_contacto: account.contacto_principal_codigo_contacto,
       contacto_principal_nombre: account.contacto_principal_nombre,
       contacto_principal_correo: account.contacto_principal_correo,
       contacto_principal_telefono: account.contacto_principal_telefono,
