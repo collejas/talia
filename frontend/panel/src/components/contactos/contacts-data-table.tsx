@@ -339,6 +339,15 @@ const CONTACT_COLUMNS: Array<{
     defaultVisible: true,
   },
   {
+    id: "contact_account_code",
+    label: "Id Empresa",
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return <span className="font-mono text-xs">{formatContactValue(raw?.codigo_cuenta)}</span>;
+    },
+    defaultVisible: true,
+  },
+  {
     id: "contact_company",
     label: "Nombre empresa",
     accessor: (row) => {
@@ -404,10 +413,10 @@ const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) 
 
 const contactColumnLabels = {
   header: "Nombre contacto",
-  type: "Nombre empresa",
-  status: "Teléfono",
-  target: "Email",
-  reviewer: "Propietario",
+  type: "Id Empresa",
+  status: "Nombre empresa",
+  target: "Teléfono",
+  reviewer: "Email",
 } as const;
 
 const CONTACT_ORIGIN_OPTIONS = [
@@ -797,7 +806,7 @@ export function ContactsDataTable({
   }, [canWrite, canReassign, canEditAny, canDeleteAny, canEditContactRow, canDeleteContactRow]);
 
   const contactColumnOrder = React.useMemo(
-    () => ["contact_id", "contact_name", "contact_company", "contact_phone", "contact_email", "contact_owner", "acciones"],
+    () => ["contact_id", "contact_name", "contact_account_code", "contact_company", "contact_phone", "contact_email", "contact_owner", "acciones"],
     [],
   );
 
@@ -810,6 +819,7 @@ export function ContactsDataTable({
       reviewer: false,
       contact_id: true,
       contact_name: true,
+      contact_account_code: true,
       contact_company: true,
       contact_phone: true,
       contact_email: true,
@@ -1091,37 +1101,6 @@ export function ContactsDataTable({
 
   const toolbarActions = (
     <div className="flex flex-wrap items-center gap-2">
-      {canExportCsv ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const exportUrl = new URL("/api/contactos/export", window.location.origin);
-            buildListParams(
-              {
-                search: searchTerm.trim(),
-                owner: ownerFilter,
-                createdFrom: createdFromFilter,
-                createdTo: createdToFilter,
-                advanced: advancedFilters,
-              },
-              500,
-            ).forEach((value, key) => {
-              exportUrl.searchParams.set(key, value);
-            });
-            const anchor = document.createElement("a");
-            anchor.href = exportUrl.toString();
-            anchor.rel = "noreferrer";
-            document.body.appendChild(anchor);
-            anchor.click();
-            anchor.remove();
-          }}
-        >
-          <IconDownload className="size-4" />
-          Exportar CSV
-        </Button>
-      ) : null}
       {canWrite ? (
         <>
           <Button
@@ -1175,6 +1154,37 @@ export function ContactsDataTable({
             Vincular contacto a empresa
           </Button>
         </>
+      ) : null}
+      {canExportCsv ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const exportUrl = new URL("/api/contactos/export", window.location.origin);
+            buildListParams(
+              {
+                search: searchTerm.trim(),
+                owner: ownerFilter,
+                createdFrom: createdFromFilter,
+                createdTo: createdToFilter,
+                advanced: advancedFilters,
+              },
+              500,
+            ).forEach((value, key) => {
+              exportUrl.searchParams.set(key, value);
+            });
+            const anchor = document.createElement("a");
+            anchor.href = exportUrl.toString();
+            anchor.rel = "noreferrer";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+          }}
+        >
+          <IconDownload className="size-4" />
+          Exportar CSV
+        </Button>
       ) : null}
     </div>
   );
