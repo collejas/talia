@@ -381,13 +381,13 @@ export function AccountsDataTable({ rows }: Props) {
 
   return (
     <>
-      <AccountCreateDialog onCreated={() => router.refresh()} />
       <ClientDataTable
         rows={rows}
         extraColumns={extraColumns}
         hideDefaultActions
         forcedColumnOrder={accountColumnOrder}
         initialVisibility={accountVisibility}
+        toolbarActions={<AccountCreateDialog onCreated={() => router.refresh()} />}
         columnLabels={{
           header: "Empresa",
           type: "Tipo",
