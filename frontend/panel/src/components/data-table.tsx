@@ -248,6 +248,8 @@ function createBaseColumns(
   detailRenderer?: (row: TableRowData) => React.ReactNode,
   detailDescription?: string,
   hideDefaultActions = false,
+  expandedRowId?: string | null,
+  setExpandedRowId?: (rowId: string | null) => void,
 ): ColumnDef<TableRowData>[] {
   const headerLabel = labels.header ?? "Sesión"
   const typeLabel = labels.type ?? "Ubicación / Etapa"
@@ -299,6 +301,8 @@ function createBaseColumns(
             item={row.original}
             renderDetails={detailRenderer}
             detailDescription={detailDescription}
+            open={expandedRowId === row.original.id.toString()}
+            onOpenChange={(open) => setExpandedRowId?.(open ? row.original.id.toString() : null)}
           />
         )
       },
@@ -608,6 +612,7 @@ export function DataTable({
     []
   )
   const [sorting, setSorting] = React.useState<SortingState>([])
+  const [expandedRowId, setExpandedRowId] = React.useState<string | null>(null)
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -628,11 +633,69 @@ export function DataTable({
     setMounted(true)
   }, [])
 
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(`${storageKey}:visibility`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          setColumnVisibility((current) => ({ ...current, ...(parsed as VisibilityState) }))
+        }
+      }
+    } catch (error) {
+      console.warn("[visitas] No se pudo leer la visibilidad de columnas", error)
+    }
+  }, [storageKey])
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(`${storageKey}:visibility`, JSON.stringify(columnVisibility))
+    } catch (error) {
+      console.warn("[visitas] No se pudo guardar la visibilidad de columnas", error)
+    }
+  }, [columnVisibility, storageKey])
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(`${storageKey}:expanded-row`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (typeof parsed === "string" && parsed.trim().length) {
+          setExpandedRowId(parsed)
+        }
+      }
+    } catch (error) {
+      console.warn("[visitas] No se pudo leer la fila expandida", error)
+    }
+  }, [storageKey])
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return
+    try {
+      if (expandedRowId) {
+        window.localStorage.setItem(`${storageKey}:expanded-row`, JSON.stringify(expandedRowId))
+      } else {
+        window.localStorage.removeItem(`${storageKey}:expanded-row`)
+      }
+    } catch (error) {
+      console.warn("[visitas] No se pudo guardar la fila expandida", error)
+    }
+  }, [expandedRowId, storageKey])
+
 
   const dataIds = React.useMemo<UniqueIdentifier[]>(
     () => data?.map(({ id }) => id) || [],
     [data]
   )
+
+  React.useEffect(() => {
+    if (expandedRowId && !dataIds.some((id) => String(id) === expandedRowId)) {
+      setExpandedRowId(null)
+    }
+  }, [dataIds, expandedRowId])
 
   const resolvedBaseColumns = React.useMemo(
     () =>
@@ -641,8 +704,10 @@ export function DataTable({
         renderRowDetails,
         detailDescription,
         hideDefaultActions,
+        expandedRowId,
+        setExpandedRowId,
       ),
-    [columnLabels, renderRowDetails, detailDescription, hideDefaultActions]
+    [columnLabels, renderRowDetails, detailDescription, hideDefaultActions, expandedRowId]
   )
 
   const metricColumnDefs = React.useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -1093,10 +1158,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function TableCellViewer({ item, renderDetails, detailDescription }: {
+function TableCellViewer({ item, renderDetails, detailDescription, open, onOpenChange }: {
   item: TableRowData
   renderDetails?: (row: TableRowData) => React.ReactNode
   detailDescription?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
 
@@ -1160,7 +1227,7 @@ function TableCellViewer({ item, renderDetails, detailDescription }: {
   const customContent = renderDetails ? renderDetails(item) : null
 
   return (
-    <Drawer direction={isMobile ? "bottom" : "right"}>
+    <Drawer direction={isMobile ? "bottom" : "right"} open={open} onOpenChange={onOpenChange}>
       <DrawerTrigger asChild>
         <Button variant="link" className="text-foreground w-fit px-0 text-left">
           {item.header}
