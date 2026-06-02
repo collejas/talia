@@ -193,12 +193,12 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
-function SortButton({
+export function SortButton<TData>({
   column,
   label,
   align = "left",
 }: {
-  column: Column<TableRowData, unknown>
+  column: Column<TData, unknown>
   label: string
   align?: "left" | "right"
 }) {

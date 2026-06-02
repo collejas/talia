@@ -20,7 +20,7 @@ import {
 import { z } from "zod";
 import Link from "next/link";
 
-import { DataTable, schema } from "@/components/data-table";
+import { DataTable, SortButton, schema } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -323,24 +323,28 @@ function isSalesLevelRole(roles: string[] | undefined): boolean {
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
+  sortValue: (row: TableRow) => string | number;
   accessor: (row: TableRow) => React.ReactNode;
   defaultVisible?: boolean;
 }> = [
   {
     id: "contact_id",
     label: "Id Contacto",
+    sortValue: (row) => getContactIdValue(row.raw as Record<string, unknown> | undefined),
     accessor: (row) => <span className="font-mono text-xs">{getContactIdValue(row.raw as Record<string, unknown> | undefined)}</span>,
     defaultVisible: true,
   },
   {
     id: "contact_name",
     label: "Nombre contacto",
+    sortValue: (row) => row.header,
     accessor: (row) => <span className="font-medium">{row.header}</span>,
     defaultVisible: true,
   },
   {
     id: "contact_account_code",
     label: "Id Empresa",
+    sortValue: (row) => formatContactValue((row.raw as Record<string, unknown> | undefined)?.codigo_cuenta),
     accessor: (row) => {
       const raw = row.raw as Record<string, unknown> | undefined;
       return <span className="font-mono text-xs">{formatContactValue(raw?.codigo_cuenta)}</span>;
@@ -350,6 +354,7 @@ const CONTACT_COLUMNS: Array<{
   {
     id: "contact_company",
     label: "Nombre empresa",
+    sortValue: (row) => formatContactValue((row.raw as Record<string, unknown> | undefined)?.company_name),
     accessor: (row) => {
       const raw = row.raw as Record<string, unknown> | undefined;
       return <span>{formatContactValue(raw?.company_name)}</span>;
@@ -359,6 +364,11 @@ const CONTACT_COLUMNS: Array<{
   {
     id: "contact_phone",
     label: "Teléfono",
+    sortValue: (row) => {
+      if (!canViewContactSensitiveRow(row)) return "";
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return formatContactValue(raw?.telefono);
+    },
     accessor: (row) => {
       if (!canViewContactSensitiveRow(row)) {
         return <span>—</span>;
@@ -376,6 +386,11 @@ const CONTACT_COLUMNS: Array<{
   {
     id: "contact_email",
     label: "Email",
+    sortValue: (row) => {
+      if (!canViewContactSensitiveRow(row)) return "";
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return formatContactValue(raw?.correo);
+    },
     accessor: (row) => {
       if (!canViewContactSensitiveRow(row)) {
         return <span>—</span>;
@@ -393,6 +408,7 @@ const CONTACT_COLUMNS: Array<{
   {
     id: "contact_owner",
     label: "Propietario",
+    sortValue: (row) => formatContactValue((row.raw as Record<string, unknown> | undefined)?.propietario_nombre),
     accessor: (row) => {
       const raw = row.raw as Record<string, unknown> | undefined;
       return <span>{formatContactValue(raw?.propietario_nombre)}</span>;
@@ -403,11 +419,10 @@ const CONTACT_COLUMNS: Array<{
 
 const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) => ({
   id: column.id,
-  header: column.label,
-  accessorFn: () => null,
+  header: ({ column: tableColumn }) => <SortButton column={tableColumn} label={column.label} />,
+  accessorFn: (row: TableRow) => column.sortValue(row),
   cell: ({ row }) => column.accessor(row.original),
   enableHiding: true,
-  enableSorting: false,
   meta: { label: column.label },
 }));
 

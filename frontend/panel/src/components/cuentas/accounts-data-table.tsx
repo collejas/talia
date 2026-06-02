@@ -12,6 +12,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClientDataTable } from "@/components/client-data-table";
+import { SortButton } from "@/components/data-table";
 import type { DataTableRow } from "@/components/data-table";
 import {
   DropdownMenu,
@@ -104,31 +105,40 @@ function formatDeleteBlockedMessage(error: string | undefined): string | null {
 const ACCOUNT_COLUMNS: Array<{
   id: string;
   label: string;
+  sortValue: (row: DataTableRow) => string | number;
   accessor: (row: DataTableRow) => React.ReactNode;
 }> = [
   {
     id: "account_id",
     label: "Id Empresa",
+    sortValue: (row) => getAccountCode(row),
     accessor: (row) => <span className="font-mono text-xs">{getAccountCode(row)}</span>,
   },
   {
     id: "account_name",
     label: "Nombre Empresa",
+    sortValue: (row) => getText((row.raw as Record<string, unknown> | undefined)?.nombre),
     accessor: (row) => <span className="font-medium">{getText((row.raw as Record<string, unknown> | undefined)?.nombre)}</span>,
   },
   {
     id: "account_contact_code",
     label: "Id Contacto",
+    sortValue: (row) => getAccountField(row, "contacto_principal_codigo_contacto"),
     accessor: (row) => <span className="font-mono text-xs">{getAccountField(row, "contacto_principal_codigo_contacto")}</span>,
   },
   {
     id: "account_contact",
     label: "Nombre Contacto",
+    sortValue: (row) => getAccountField(row, "contacto_principal_nombre"),
     accessor: (row) => <span>{getAccountField(row, "contacto_principal_nombre")}</span>,
   },
   {
     id: "account_phone",
     label: "Telefono",
+    sortValue: (row) => {
+      if (!canViewAccountSensitiveRow(row)) return "";
+      return getAccountField(row, "contacto_principal_telefono");
+    },
     accessor: (row) => {
       if (!canViewAccountSensitiveRow(row)) return <span>—</span>;
       const value = getAccountField(row, "contacto_principal_telefono");
@@ -142,6 +152,10 @@ const ACCOUNT_COLUMNS: Array<{
   {
     id: "account_email",
     label: "Email",
+    sortValue: (row) => {
+      if (!canViewAccountSensitiveRow(row)) return "";
+      return getAccountField(row, "contacto_principal_correo");
+    },
     accessor: (row) => {
       if (!canViewAccountSensitiveRow(row)) return <span>—</span>;
       const value = getAccountField(row, "contacto_principal_correo");
@@ -155,11 +169,13 @@ const ACCOUNT_COLUMNS: Array<{
   {
     id: "account_rfc",
     label: "RFC",
+    sortValue: (row) => getText((row.raw as Record<string, unknown> | undefined)?.rfc),
     accessor: (row) => <span>{getText((row.raw as Record<string, unknown> | undefined)?.rfc)}</span>,
   },
   {
     id: "account_owner",
     label: "Propietario",
+    sortValue: (row) => getAccountField(row, "propietario_nombre"),
     accessor: (row) => <span>{getAccountField(row, "propietario_nombre")}</span>,
   },
 ];
@@ -328,11 +344,10 @@ export function AccountsDataTable({ rows }: Props) {
     },
     ...ACCOUNT_COLUMNS.map((column) => ({
       id: column.id,
-      header: column.label,
-      accessorFn: () => null,
+      header: ({ column: tableColumn }) => <SortButton column={tableColumn} label={column.label} />,
+      accessorFn: (row: DataTableRow) => column.sortValue(row),
       cell: ({ row }: { row: { original: DataTableRow } }) => column.accessor(row.original),
       enableHiding: true,
-      enableSorting: false,
       meta: { label: column.label },
     } as ColumnDef<DataTableRow>)),
   ], [canEditAccountRow, canDeleteAccountRow]);
