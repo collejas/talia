@@ -119,8 +119,29 @@ base AS (
 counts AS (
     SELECT
         COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE captura_estado = 'completo') AS completos,
-        COUNT(*) FILTER (WHERE captura_estado <> 'completo') AS incompletos,
+        COUNT(*) FILTER (
+          WHERE
+            cuenta_tipo IS NOT NULL AND btrim(cuenta_tipo) <> '' AND
+            tamano IS NOT NULL AND btrim(tamano) <> '' AND
+            tipo_establecimiento IS NOT NULL AND btrim(tipo_establecimiento) <> '' AND
+            estado IS NOT NULL AND btrim(estado) <> '' AND
+            origen IS NOT NULL AND btrim(origen) <> '' AND
+            puesto IS NOT NULL AND btrim(puesto) <> '' AND
+            rol_decision IS NOT NULL AND btrim(rol_decision) <> '' AND
+            area IS NOT NULL AND btrim(area) <> ''
+        ) AS completos,
+        COUNT(*) FILTER (
+          WHERE NOT (
+            cuenta_tipo IS NOT NULL AND btrim(cuenta_tipo) <> '' AND
+            tamano IS NOT NULL AND btrim(tamano) <> '' AND
+            tipo_establecimiento IS NOT NULL AND btrim(tipo_establecimiento) <> '' AND
+            estado IS NOT NULL AND btrim(estado) <> '' AND
+            origen IS NOT NULL AND btrim(origen) <> '' AND
+            puesto IS NOT NULL AND btrim(puesto) <> '' AND
+            rol_decision IS NOT NULL AND btrim(rol_decision) <> '' AND
+            area IS NOT NULL AND btrim(area) <> ''
+          )
+        ) AS incompletos,
         COUNT(*) FILTER (WHERE estado = 'activo') AS activos,
         COUNT(*) FILTER (WHERE estado = 'lead') AS leads,
         COUNT(*) FILTER (WHERE origen = 'webchat') AS webchat,
@@ -272,7 +293,32 @@ WITH person_accounts AS (
     )
       AND (p_estado IS NULL OR lower(p.estado) = lower(p_estado))
       AND (COALESCE(p_estado_contacto, p_estado) IS NULL OR lower(p.estado) = lower(COALESCE(p_estado_contacto, p_estado)))
-      AND (p_captura IS NULL OR lower(COALESCE(p.metadata->>'legacy_captura_estado', 'incompleto')) = lower(p_captura))
+      AND (
+        p_captura IS NULL OR p_captura = '' OR
+        (
+          lower(p_captura) IN ('si', 'sí', 'true', '1') AND
+          account.tipo IS NOT NULL AND btrim(account.tipo) <> '' AND
+          account.tamano IS NOT NULL AND btrim(account.tamano) <> '' AND
+          account.tipo_establecimiento IS NOT NULL AND btrim(account.tipo_establecimiento) <> '' AND
+          p.estado IS NOT NULL AND btrim(p.estado) <> '' AND
+          p.origen IS NOT NULL AND btrim(p.origen) <> '' AND
+          p.puesto IS NOT NULL AND btrim(p.puesto) <> '' AND
+          p.rol_decision IS NOT NULL AND btrim(p.rol_decision) <> '' AND
+          p.area IS NOT NULL AND btrim(p.area) <> ''
+        ) OR
+        (
+          lower(p_captura) IN ('no', 'false', '0') AND NOT (
+            account.tipo IS NOT NULL AND btrim(account.tipo) <> '' AND
+            account.tamano IS NOT NULL AND btrim(account.tamano) <> '' AND
+            account.tipo_establecimiento IS NOT NULL AND btrim(account.tipo_establecimiento) <> '' AND
+            p.estado IS NOT NULL AND btrim(p.estado) <> '' AND
+            p.origen IS NOT NULL AND btrim(p.origen) <> '' AND
+            p.puesto IS NOT NULL AND btrim(p.puesto) <> '' AND
+            p.rol_decision IS NOT NULL AND btrim(p.rol_decision) <> '' AND
+            p.area IS NOT NULL AND btrim(p.area) <> ''
+          )
+        )
+      )
       AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
       AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
       AND (p_from IS NULL OR p.creado_en >= p_from)

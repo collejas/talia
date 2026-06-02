@@ -33,6 +33,7 @@ function buildSearchParams(searchParams: URLSearchParams): Record<string, string
     "puesto",
     "rol_decision",
     "estado_contacto",
+    "captura",
     "ligado",
     "tipo_cuenta",
     "tamano",

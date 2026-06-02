@@ -15,6 +15,7 @@ export type ContactAdvancedFilters = {
   puesto: string;
   rolDecision: string;
   estadoContacto: string;
+  captura: "all" | "si" | "no";
   ligado: "all" | "si" | "no";
   tipoCuenta: string;
   tamano: string;

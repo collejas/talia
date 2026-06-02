@@ -22,6 +22,7 @@ export default function ContactosPageClient({ initialCards, table }: ContactosPa
       puesto: "",
       rolDecision: "",
       estadoContacto: "",
+      captura: "all",
       ligado: "all",
       tipoCuenta: "",
       tamano: "",
@@ -70,6 +71,7 @@ function isDefaultFilterSet(filters: ContactFilters): boolean {
     !advanced.puesto.trim() &&
     !advanced.rolDecision.trim() &&
     !advanced.estadoContacto.trim() &&
+    advanced.captura === "all" &&
     advanced.ligado === "all" &&
     !advanced.tipoCuenta.trim() &&
     !advanced.tamano.trim() &&
@@ -178,6 +180,7 @@ function areFiltersEqual(left: ContactFilters, right: ContactFilters): boolean {
     left.advanced.puesto === right.advanced.puesto &&
     left.advanced.rolDecision === right.advanced.rolDecision &&
     left.advanced.estadoContacto === right.advanced.estadoContacto &&
+    left.advanced.captura === right.advanced.captura &&
     left.advanced.ligado === right.advanced.ligado &&
     left.advanced.tipoCuenta === right.advanced.tipoCuenta &&
     left.advanced.tamano === right.advanced.tamano &&

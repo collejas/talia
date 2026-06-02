@@ -66,6 +66,7 @@ const DEFAULT_ADVANCED_FILTERS: ContactAdvancedFilters = {
   puesto: "",
   rolDecision: "",
   estadoContacto: "",
+  captura: "all",
   ligado: "all",
   tipoCuenta: "",
   tamano: "",
@@ -112,6 +113,14 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
+function extractFirstString(raw: Record<string, unknown> | undefined, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = extractString(raw, [key]);
+    if (value) return value;
+  }
+  return null;
+}
+
 function getContactOwnerId(raw: Record<string, unknown> | undefined): string | null {
   return extractString(raw, ["propietario_usuario_id"]) || extractString(raw, ["propietario_id"]);
 }
@@ -146,7 +155,7 @@ function parseDateInput(value: string, boundary: "start" | "end"): number | null
 }
 
 function getRowDate(raw: Record<string, unknown> | undefined, keys: string[]): number | null {
-  const value = extractString(raw, keys);
+  const value = extractFirstString(raw, keys);
   if (!value) return null;
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : timestamp;
@@ -162,6 +171,7 @@ function countAdvancedFilterSelections(filters: ContactAdvancedFilters): number 
   if (filters.puesto) count += 1;
   if (filters.rolDecision) count += 1;
   if (filters.estadoContacto) count += 1;
+  if (!isSelectAll(filters.captura)) count += 1;
   if (!isSelectAll(filters.ligado)) count += 1;
   if (filters.tipoCuenta) count += 1;
   if (filters.tamano) count += 1;
@@ -188,6 +198,7 @@ function buildListParams(filters: ContactFilters, limit: number): URLSearchParam
   if (filters.advanced.puesto.trim()) params.set("puesto", filters.advanced.puesto.trim());
   if (filters.advanced.rolDecision.trim()) params.set("rol_decision", filters.advanced.rolDecision.trim());
   if (filters.advanced.estadoContacto.trim()) params.set("estado_contacto", filters.advanced.estadoContacto.trim());
+  if (!isSelectAll(filters.advanced.captura)) params.set("captura", filters.advanced.captura);
   if (!isSelectAll(filters.advanced.ligado)) params.set("ligado", filters.advanced.ligado);
   if (filters.advanced.tipoCuenta.trim()) params.set("tipo_cuenta", filters.advanced.tipoCuenta.trim());
   if (filters.advanced.tamano.trim()) params.set("tamano", filters.advanced.tamano.trim());
@@ -210,6 +221,10 @@ function matchesAdvancedFilters(raw: Record<string, unknown> | undefined, filter
   if (filters.puesto.trim() && normalizeFilterValue(extractString(raw, ["puesto"])) !== normalizeFilterValue(filters.puesto)) return false;
   if (filters.rolDecision.trim() && normalizeFilterValue(extractString(raw, ["rol_decision"])) !== normalizeFilterValue(filters.rolDecision)) return false;
   if (filters.estadoContacto.trim() && normalizeFilterValue(extractString(raw, ["estado"])) !== normalizeFilterValue(filters.estadoContacto)) return false;
+  if (filters.captura !== "all") {
+    const captureDone = isCaptureComplete(raw);
+    if ((filters.captura === "si" && !captureDone) || (filters.captura === "no" && captureDone)) return false;
+  }
   if (filters.ligado !== "all") {
     const linked = Boolean(extractString(raw, ["cuenta_id"]) || extractString(raw, ["codigo_cuenta"]));
     if ((filters.ligado === "si" && !linked) || (filters.ligado === "no" && linked)) return false;
@@ -1285,6 +1300,26 @@ export function ContactsDataTable({
                 </Select>
               </div>
               <div className="grid gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Captura completa</Label>
+                <Select
+                  value={advancedFilters.captura}
+                  onValueChange={(value) =>
+                    setAdvancedFilters((current) => ({ ...current, captura: value as ContactAdvancedFilters["captura"] }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BOOLEAN_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="adv-contact-created-from" className="text-xs font-medium text-muted-foreground">
                   Fecha de creación desde
                 </Label>
@@ -1637,7 +1672,7 @@ export function ContactsDataTable({
 }
 
 function getOwnerFilterKey(raw: Record<string, unknown> | undefined): string {
-  const ownerId = extractString(raw, ["propietario_id", "propietario_usuario_id"]);
+  const ownerId = extractFirstString(raw, ["propietario_id", "propietario_usuario_id"]);
   if (ownerId) return ownerId;
   const ownerName = extractString(raw, ["propietario_nombre"]);
   if (ownerName) return ownerName;
@@ -1645,11 +1680,11 @@ function getOwnerFilterKey(raw: Record<string, unknown> | undefined): string {
 }
 
 function getOwnerFilterLabel(raw: Record<string, unknown> | undefined): string {
-  return extractString(raw, ["propietario_nombre"]) || extractString(raw, ["propietario_id", "propietario_usuario_id"]) || "Sin asignar";
+  return extractString(raw, ["propietario_nombre"]) || extractFirstString(raw, ["propietario_id", "propietario_usuario_id"]) || "Sin asignar";
 }
 
 function getRowCreatedAt(raw: Record<string, unknown> | undefined): number | null {
-  const createdAt = extractString(raw, ["creado_en"]);
+  const createdAt = extractFirstString(raw, ["creado_en"]);
   if (!createdAt) return null;
   const timestamp = Date.parse(createdAt);
   return Number.isNaN(timestamp) ? null : timestamp;
@@ -1658,14 +1693,14 @@ function getRowCreatedAt(raw: Record<string, unknown> | undefined): number | nul
 function isCaptureComplete(raw: Record<string, unknown> | undefined): boolean {
   if (!raw) return false;
   return [
-    extractString(raw, ["cuenta_tipo", "tipo"]) ?? "",
-    extractString(raw, ["tamano"]) ?? "",
-    extractString(raw, ["tipo_establecimiento"]) ?? "",
-    extractString(raw, ["estado"]) ?? "",
-    extractString(raw, ["origen"]) ?? "",
-    extractString(raw, ["puesto"]) ?? "",
-    extractString(raw, ["rol_decision"]) ?? "",
-    extractString(raw, ["area"]) ?? "",
+    extractFirstString(raw, ["cuenta_tipo", "tipo"]) ?? "",
+    extractFirstString(raw, ["tamano"]) ?? "",
+    extractFirstString(raw, ["tipo_establecimiento"]) ?? "",
+    extractFirstString(raw, ["estado"]) ?? "",
+    extractFirstString(raw, ["origen"]) ?? "",
+    extractFirstString(raw, ["puesto"]) ?? "",
+    extractFirstString(raw, ["rol_decision"]) ?? "",
+    extractFirstString(raw, ["area"]) ?? "",
   ].every((value) => value.trim().length > 0);
 }
 

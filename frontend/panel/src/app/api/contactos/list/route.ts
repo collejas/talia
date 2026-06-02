@@ -174,6 +174,7 @@ function buildSearchParams(searchParams: URLSearchParams, limit: number, offset:
     "puesto",
     "rol_decision",
     "estado_contacto",
+    "captura",
     "ligado",
     "tipo_cuenta",
     "tamano",
