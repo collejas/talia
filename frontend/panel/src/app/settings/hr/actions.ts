@@ -632,17 +632,18 @@ export const updateUserRolesAction: CrudActionHandler = async (_, formData) => {
     }
 
     if (toRemove.length) {
-      const inClause = `in.(${toRemove.join(",")})`
-      const removeRes = await callSupabaseRest("/rest/v1/usuarios_roles", {
-        method: "DELETE",
-        searchParams: {
-          usuario_id: `eq.${userId}`,
-          rol_id: inClause,
-        },
-        forceServiceToken: true,
-      })
-      if (!removeRes.ok) {
-        throw new Error(removeRes.error || "No se pudo remover roles.")
+      for (const roleId of toRemove) {
+        const removeRes = await callSupabaseRest("/rest/v1/usuarios_roles", {
+          method: "DELETE",
+          searchParams: {
+            usuario_id: `eq.${userId}`,
+            rol_id: `eq.${roleId}`,
+          },
+          forceServiceToken: true,
+        })
+        if (!removeRes.ok) {
+          throw new Error(removeRes.error || "No se pudo remover roles.")
+        }
       }
     }
 

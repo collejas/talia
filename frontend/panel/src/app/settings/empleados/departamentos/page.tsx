@@ -57,7 +57,7 @@ function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
-        <DepartmentCreateSection />
+        <DepartmentCreateSection departments={data.items} />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Departamentos" value={data.total} />
           <SettingsStatCard label="Puestos definidos" value={data.stats.puestos} />
@@ -85,7 +85,11 @@ function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
                   </TableRow>
                 ) : (
                   data.items.map((dept) => (
-                    <DepartmentInlineRow key={dept.id} department={dept} />
+                    <DepartmentInlineRow
+                      key={dept.id}
+                      department={dept}
+                      departments={data.items}
+                    />
                   ))
                 )}
               </TableBody>
