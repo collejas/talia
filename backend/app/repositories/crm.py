@@ -150,6 +150,13 @@ def _coerce_uuid(value: Any, *, field: str) -> UUID:
         raise CRMRepositoryError(f"{field}_invalid") from exc
 
 
+def _safe_uuid(value: Any) -> UUID | None:
+    try:
+        return _coerce_uuid(value, field="uuid")
+    except CRMRepositoryError:
+        return None
+
+
 def _normalize_account_direction_relation_type(value: Any) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -7008,6 +7015,17 @@ class CRMRepository:
         organizacion_id: UUID,
         rows: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
+        def _maybe_uuid(value: Any) -> UUID | None:
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text:
+                return None
+            try:
+                return _coerce_uuid(text, field="cliente_vendor_id")
+            except Exception:
+                return None
+
         contact_ids: list[UUID] = []
         account_ids: list[UUID] = []
         opportunity_ids: list[UUID] = []
@@ -7015,19 +7033,19 @@ class CRMRepository:
         seen_accounts: set[str] = set()
         seen_opportunities: set[str] = set()
         for row in rows:
-            contact_id = _safe_uuid(row.get("contacto_id"))
+            contact_id = _maybe_uuid(row.get("contacto_id"))
             if contact_id is not None:
                 contact_key = str(contact_id)
                 if contact_key not in seen_contacts:
                     seen_contacts.add(contact_key)
                     contact_ids.append(contact_id)
-            account_id = _safe_uuid(row.get("cuenta_id"))
+            account_id = _maybe_uuid(row.get("cuenta_id"))
             if account_id is not None:
                 account_key = str(account_id)
                 if account_key not in seen_accounts:
                     seen_accounts.add(account_key)
                     account_ids.append(account_id)
-            opportunity_id = _safe_uuid(row.get("oportunidad_id"))
+            opportunity_id = _maybe_uuid(row.get("oportunidad_id"))
             if opportunity_id is not None:
                 opportunity_key = str(opportunity_id)
                 if opportunity_key not in seen_opportunities:
@@ -7070,12 +7088,12 @@ class CRMRepository:
                 opportunity_rows = [row for row in opportunity_data if isinstance(row, dict)]
 
         contact_owner_by_contact_id = {
-            str(row.get("id")): _safe_uuid(row.get("propietario_usuario_id"))
+            str(row.get("id")): _maybe_uuid(row.get("propietario_usuario_id"))
             for row in contact_rows
             if row.get("id")
         }
         account_owner_by_account_id = {
-            str(row.get("id")): _safe_uuid(row.get("propietario_usuario_id"))
+            str(row.get("id")): _maybe_uuid(row.get("propietario_usuario_id"))
             for row in account_rows
             if row.get("id")
         }
@@ -7084,8 +7102,8 @@ class CRMRepository:
             opportunity_id = str(row.get("id") or "").strip()
             if not opportunity_id:
                 continue
-            assigned_id = _safe_uuid(row.get("asignado_a_usuario_id"))
-            owner_id = assigned_id or _safe_uuid(row.get("propietario_usuario_id"))
+            assigned_id = _maybe_uuid(row.get("asignado_a_usuario_id"))
+            owner_id = assigned_id or _maybe_uuid(row.get("propietario_usuario_id"))
             owner_source = "oportunidad_asignado" if assigned_id else "oportunidad_propietario"
             opportunity_owner_by_id[opportunity_id] = (owner_id, owner_source if owner_id else None)
 
