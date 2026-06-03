@@ -1836,7 +1836,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"in.({in_values})",
-            "select": "id,nombre_completo,correo",
+            "select": "id,nombre_completo,correo,telefono_e164",
             "limit": str(min(len(unique_ids), 500)),
         }
         resp = await self._request("GET", "/rest/v1/usuarios", params=params)
@@ -7000,6 +7000,163 @@ class CRMRepository:
                 if contact:
                     row[target_field] = contact
                     break
+        return rows
+
+    async def _attach_cliente_vendor_rows(
+        self,
+        *,
+        organizacion_id: UUID,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        contact_ids: list[UUID] = []
+        account_ids: list[UUID] = []
+        opportunity_ids: list[UUID] = []
+        seen_contacts: set[str] = set()
+        seen_accounts: set[str] = set()
+        seen_opportunities: set[str] = set()
+        for row in rows:
+            contact_id = _safe_uuid(row.get("contacto_id"))
+            if contact_id is not None:
+                contact_key = str(contact_id)
+                if contact_key not in seen_contacts:
+                    seen_contacts.add(contact_key)
+                    contact_ids.append(contact_id)
+            account_id = _safe_uuid(row.get("cuenta_id"))
+            if account_id is not None:
+                account_key = str(account_id)
+                if account_key not in seen_accounts:
+                    seen_accounts.add(account_key)
+                    account_ids.append(account_id)
+            opportunity_id = _safe_uuid(row.get("oportunidad_id"))
+            if opportunity_id is not None:
+                opportunity_key = str(opportunity_id)
+                if opportunity_key not in seen_opportunities:
+                    seen_opportunities.add(opportunity_key)
+                    opportunity_ids.append(opportunity_id)
+
+        if not contact_ids and not account_ids and not opportunity_ids:
+            return rows
+
+        contact_rows: list[dict[str, Any]] = []
+        account_rows: list[dict[str, Any]] = []
+        opportunity_rows: list[dict[str, Any]] = []
+
+        if contact_ids:
+            contact_rows = await self.get_contacts_by_ids(
+                organizacion_id=organizacion_id,
+                contacto_ids=contact_ids,
+            )
+        if account_ids:
+            account_params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": _postgrest_in_clause([str(account_id) for account_id in account_ids]),
+                "select": "id,propietario_usuario_id",
+                "limit": str(min(len(account_ids), 500)),
+            }
+            account_resp = await self._request("GET", "/rest/v1/cuentas", params=account_params)
+            account_data = account_resp.json()
+            if isinstance(account_data, list):
+                account_rows = [row for row in account_data if isinstance(row, dict)]
+        if opportunity_ids:
+            opportunity_params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": _postgrest_in_clause([str(opportunity_id) for opportunity_id in opportunity_ids]),
+                "select": "id,asignado_a_usuario_id,propietario_usuario_id",
+                "limit": str(min(len(opportunity_ids), 500)),
+            }
+            opportunity_resp = await self._request("GET", "/rest/v1/oportunidades", params=opportunity_params)
+            opportunity_data = opportunity_resp.json()
+            if isinstance(opportunity_data, list):
+                opportunity_rows = [row for row in opportunity_data if isinstance(row, dict)]
+
+        contact_owner_by_contact_id = {
+            str(row.get("id")): _safe_uuid(row.get("propietario_usuario_id"))
+            for row in contact_rows
+            if row.get("id")
+        }
+        account_owner_by_account_id = {
+            str(row.get("id")): _safe_uuid(row.get("propietario_usuario_id"))
+            for row in account_rows
+            if row.get("id")
+        }
+        opportunity_owner_by_id: dict[str, tuple[UUID | None, str | None]] = {}
+        for row in opportunity_rows:
+            opportunity_id = str(row.get("id") or "").strip()
+            if not opportunity_id:
+                continue
+            assigned_id = _safe_uuid(row.get("asignado_a_usuario_id"))
+            owner_id = assigned_id or _safe_uuid(row.get("propietario_usuario_id"))
+            owner_source = "oportunidad_asignado" if assigned_id else "oportunidad_propietario"
+            opportunity_owner_by_id[opportunity_id] = (owner_id, owner_source if owner_id else None)
+
+        owner_ids: list[UUID] = []
+        seen_owner_ids: set[str] = set()
+        vendor_source_by_row_id: dict[str, str | None] = {}
+        vendor_id_by_row_id: dict[str, UUID | None] = {}
+
+        for row in rows:
+            row_id = str(row.get("id") or "").strip()
+            if not row_id:
+                continue
+            contact_id = str(row.get("contacto_id") or "").strip()
+            account_id = str(row.get("cuenta_id") or "").strip()
+            opportunity_id = str(row.get("oportunidad_id") or "").strip()
+
+            vendor_id: UUID | None = None
+            vendor_source: str | None = None
+
+            contact_owner_id = contact_owner_by_contact_id.get(contact_id) if contact_id else None
+            if contact_owner_id is not None:
+                vendor_id = contact_owner_id
+                vendor_source = "contacto"
+            else:
+                account_owner_id = account_owner_by_account_id.get(account_id) if account_id else None
+                if account_owner_id is not None:
+                    vendor_id = account_owner_id
+                    vendor_source = "cuenta"
+                else:
+                    opportunity_vendor = opportunity_owner_by_id.get(opportunity_id) if opportunity_id else None
+                    if opportunity_vendor is not None:
+                        vendor_id, vendor_source = opportunity_vendor
+
+            vendor_id_by_row_id[row_id] = vendor_id
+            vendor_source_by_row_id[row_id] = vendor_source
+            if vendor_id is not None:
+                vendor_key = str(vendor_id)
+                if vendor_key not in seen_owner_ids:
+                    seen_owner_ids.add(vendor_key)
+                    owner_ids.append(vendor_id)
+
+        vendor_name_by_id: dict[str, str] = {}
+        vendor_email_by_id: dict[str, str | None] = {}
+        vendor_phone_by_id: dict[str, str | None] = {}
+        if owner_ids:
+            try:
+                user_rows = await self.list_users_by_ids(
+                    organizacion_id=organizacion_id,
+                    user_ids=owner_ids,
+                )
+            except CRMRepositoryError:
+                user_rows = []
+            for user_row in user_rows:
+                if not isinstance(user_row, dict):
+                    continue
+                user_id = str(user_row.get("id") or "").strip()
+                if not user_id:
+                    continue
+                vendor_name_by_id[user_id] = str(user_row.get("nombre_completo") or user_row.get("correo") or "").strip()
+                vendor_email_by_id[user_id] = str(user_row.get("correo") or "").strip() or None
+                vendor_phone_by_id[user_id] = str(user_row.get("telefono_e164") or "").strip() or None
+
+        for row in rows:
+            row_id = str(row.get("id") or "").strip()
+            vendor_id = vendor_id_by_row_id.get(row_id)
+            vendor_source = vendor_source_by_row_id.get(row_id)
+            row["vendedor_usuario_id"] = vendor_id
+            row["vendedor_nombre"] = vendor_name_by_id.get(str(vendor_id)) if vendor_id is not None else None
+            row["vendedor_correo"] = vendor_email_by_id.get(str(vendor_id)) if vendor_id is not None else None
+            row["vendedor_telefono_e164"] = vendor_phone_by_id.get(str(vendor_id)) if vendor_id is not None else None
+            row["vendedor_fuente"] = vendor_source
         return rows
 
     async def _persona_to_contact_row(
@@ -13576,6 +13733,10 @@ class CRMRepository:
                 rows=rows,
                 source_fields=("contacto_id",),
             )
+            await self._attach_cliente_vendor_rows(
+                organizacion_id=organizacion_id,
+                rows=rows,
+            )
         return rows
 
     async def get_cliente_por_oportunidad(
@@ -13606,6 +13767,15 @@ class CRMRepository:
                 data = resp.json() or []
                 row = self._first_row(data)
                 if isinstance(row, dict):
+                    await self._attach_contact_rows(
+                        organizacion_id=organizacion_id,
+                        rows=[row],
+                        source_fields=("contacto_id",),
+                    )
+                    await self._attach_cliente_vendor_rows(
+                        organizacion_id=organizacion_id,
+                        rows=[row],
+                    )
                     return row
         resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
@@ -13615,6 +13785,10 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 rows=[row],
                 source_fields=("contacto_id",),
+            )
+            await self._attach_cliente_vendor_rows(
+                organizacion_id=organizacion_id,
+                rows=[row],
             )
             return row
         return None
@@ -13652,11 +13826,17 @@ class CRMRepository:
         data = resp.json() or []
         row = self._first_row(data)
         if isinstance(row, dict):
-            await self._attach_contact_rows(
-                organizacion_id=organizacion_id,
-                rows=[row],
-                source_fields=("contacto_id",),
-            )
+            row_org_id = _safe_uuid(row.get("organizacion_id"))
+            if row_org_id is not None:
+                await self._attach_contact_rows(
+                    organizacion_id=row_org_id,
+                    rows=[row],
+                    source_fields=("contacto_id",),
+                )
+                await self._attach_cliente_vendor_rows(
+                    organizacion_id=row_org_id,
+                    rows=[row],
+                )
             return row
         return None
 
@@ -13674,11 +13854,17 @@ class CRMRepository:
         data = resp.json() or []
         row = self._first_row(data)
         if isinstance(row, dict):
-            await self._attach_contact_rows(
-                organizacion_id=organizacion_id,
-                rows=[row],
-                source_fields=("contacto_id",),
-            )
+            row_org_id = _safe_uuid(row.get("organizacion_id")) or None
+            if row_org_id is not None:
+                await self._attach_contact_rows(
+                    organizacion_id=row_org_id,
+                    rows=[row],
+                    source_fields=("contacto_id",),
+                )
+                await self._attach_cliente_vendor_rows(
+                    organizacion_id=row_org_id,
+                    rows=[row],
+                )
             return row
         return None
 
@@ -13722,6 +13908,10 @@ class CRMRepository:
                     organizacion_id=org_uuid,
                     rows=[row],
                     source_fields=("contacto_id",),
+                )
+                await self._attach_cliente_vendor_rows(
+                    organizacion_id=org_uuid,
+                    rows=[row],
                 )
             return row
         return None

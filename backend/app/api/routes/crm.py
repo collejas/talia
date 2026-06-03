@@ -2913,6 +2913,11 @@ class ClienteRecord(BaseModel):
     contacto_id: UUID
     cuenta_id: UUID
     oportunidad_id: UUID | None = None
+    vendedor_usuario_id: UUID | None = None
+    vendedor_nombre: str | None = None
+    vendedor_correo: str | None = None
+    vendedor_telefono_e164: str | None = None
+    vendedor_fuente: str | None = None
     estado_onboarding: ClienteOnboardingEstado
     rfc: str | None = None
     razon_social: str | None = None

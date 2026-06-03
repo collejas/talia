@@ -9,7 +9,7 @@ export default async function ClientesPage() {
 
   return (
     <AppViewLayout title="Clientes">
-      <DataTable data={data.table} />
+      <DataTable data={data.table} columnLabels={{ reviewer: "Vendedor" }} />
     </AppViewLayout>
   );
 }

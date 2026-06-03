@@ -45,6 +45,11 @@ export type ClienteRecord = {
   contacto_id: string;
   cuenta_id: string;
   oportunidad_id: string | null;
+  vendedor_usuario_id: string | null;
+  vendedor_nombre: string | null;
+  vendedor_correo: string | null;
+  vendedor_telefono_e164: string | null;
+  vendedor_fuente: string | null;
   legacy_lead_id: string | null;
   estado_onboarding: "pendiente" | "en_progreso" | "completado";
   rfc: string | null;

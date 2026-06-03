@@ -64,6 +64,11 @@ function sanitizeClienteRecord(record: ClienteRecord): ClienteRecord {
   const estado = resolveEstadoOnboarding(record.estado_onboarding);
   return {
     ...record,
+    vendedor_usuario_id: record.vendedor_usuario_id ?? null,
+    vendedor_nombre: record.vendedor_nombre ?? null,
+    vendedor_correo: record.vendedor_correo ?? null,
+    vendedor_telefono_e164: record.vendedor_telefono_e164 ?? null,
+    vendedor_fuente: record.vendedor_fuente ?? null,
     datos_facturacion: datosFacturacion,
     metadatos,
     documentos,
@@ -122,7 +127,7 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
   return rows.map((row, index) => {
     const header = row.razon_social || row.contacto?.nombre_completo || "Cliente sin nombre";
     const principal = resolvePrincipal(row.responsables);
-    const reviewer = principal?.nombre || row.contacto?.nombre_completo || "Sin responsable";
+    const reviewer = row.vendedor_nombre || principal?.nombre || row.contacto?.nombre_completo || "Sin vendedor";
     const status = formatStatus(row.estado_onboarding);
 
     return {
@@ -138,6 +143,11 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
         rfc: row.rfc,
         estado: row.estado_onboarding,
         contacto_id: row.contacto_id,
+        vendedor_usuario_id: row.vendedor_usuario_id,
+        vendedor_nombre: row.vendedor_nombre,
+        vendedor_correo: row.vendedor_correo,
+        vendedor_telefono_e164: row.vendedor_telefono_e164,
+        vendedor_fuente: row.vendedor_fuente,
       },
     };
   });
