@@ -70,6 +70,26 @@ Además, controlar por rol la exportación CSV de contactos.
 - La lectura sigue devolviendo campos sensibles completos.
 - La exportación CSV hoy depende de permisos generales, no de un permiso específico de exportación.
 
+### Incidente observado en `settings/rh`
+
+Durante la revisión de permisos y roles se detectó un problema real al guardar cambios de roles de usuario:
+
+- al intentar quitar o cambiar roles a un usuario del tenant, el cambio se enviaba desde la UI, pero no se persistía en `usuarios_roles`;
+- el caso visible era el usuario `Oscar Martinez` del tenant `3dbb2a99-9d81-4233-8444-0990d53b93b3`, con rol `admin (0010)` que no se podía quitar desde la pantalla;
+- la causa raíz estaba en el trigger `public.prevent_remove_last_admin()`, que buscaba `roles.codigo = 'admin'`;
+- en este esquema el rol admin real usa `codigo = '0010'` y `nombre = 'admin'`, así que el trigger no identificaba el rol y cancelaba el `DELETE/UPDATE` sobre `usuarios_roles`.
+
+Corrección aplicada:
+
+- se ajustó `public.es_admin(uid)` para reconocer admin por `nombre` o por `codigo = '0010'`;
+- se ajustó `public.prevent_remove_last_admin()` para reconocer admin por `nombre` o por `codigo = '0010'`;
+- se aplicó la migración `supabase/migrations/20280603_130000_fix_admin_role_detection.sql`.
+
+Verificación:
+
+- el `DELETE` del rol `0010` sobre Oscar ya responde correctamente en una prueba transaccional;
+- después de guardar en la UI, los roles sí se actualizan y el cambio persiste en BD.
+
 ### Frontend
 
 - La tabla de contactos muestra:
