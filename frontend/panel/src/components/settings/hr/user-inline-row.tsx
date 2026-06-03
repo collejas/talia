@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useMemo, useState } from "react"
+import { useActionState, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useFormStatus } from "react-dom"
 
 import {
@@ -132,12 +133,19 @@ export function UserCreateSection({
 export function UserInlineRow({ user, rolesCatalog, departments, positions }: UserInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const router = useRouter()
 
   const [editState, editAction] = useActionState(updateUserAction, INITIAL_STATE)
   const [rolesState, rolesAction] = useActionState(updateUserRolesAction, INITIAL_STATE)
   const [deleteState, deleteAction] = useActionState(deleteUserAction, INITIAL_STATE)
 
   const estadoVariant = useMemo(() => getEstadoVariant(user.estado), [user.estado])
+
+  useEffect(() => {
+    if (rolesState.status === "success") {
+      router.refresh()
+    }
+  }, [rolesState.status, router])
 
   return (
     <>
