@@ -84,6 +84,43 @@ _PRICE_SPECIFIC_LOT_KEYWORDS: tuple[str, ...] = (
     "total del lote",
 )
 
+_INVENTORY_SNAPSHOT_KEYWORDS: tuple[str, ...] = (
+    "lote",
+    "lotes",
+    "terreno",
+    "terrenos",
+    "residencial",
+    "departamental",
+    "metros",
+    "metro",
+    "m2",
+    "m²",
+    "superficie",
+    "ubicacion",
+    "ubicación",
+    "zona",
+    "desarrollo",
+    "fraccionamiento",
+    "inventario",
+    "disponibilidad",
+    "agua",
+    "drenaje",
+    "luz",
+    "servicios",
+    "mantenimiento",
+)
+
+_GREETING_ONLY_PREFIXES: tuple[str, ...] = (
+    "hola",
+    "buenos dias",
+    "buenas dias",
+    "buen día",
+    "buen dia",
+    "buenas tardes",
+    "buenas noches",
+)
+
+
 
 def _should_skip_catalog_autoload(query: str) -> bool:
     normalized = " ".join(query.lower().split())
@@ -97,6 +134,19 @@ def _should_skip_catalog_autoload(query: str) -> bool:
     if re.search(r"\blote\s+\d+\b", normalized):
         return False
     return True
+
+
+def should_autoload_inventory_context(query: str) -> bool:
+    normalized = " ".join(query.lower().split())
+    if not normalized:
+        return False
+    if _should_skip_catalog_autoload(normalized):
+        return False
+    if any(normalized.startswith(prefix) for prefix in _GREETING_ONLY_PREFIXES):
+        if not any(keyword in normalized for keyword in _INVENTORY_SNAPSHOT_KEYWORDS):
+            return False
+    return any(keyword in normalized for keyword in _INVENTORY_SNAPSHOT_KEYWORDS)
+
 
 
 def _normalize_metadata_display(value: Any) -> str:

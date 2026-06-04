@@ -48,6 +48,7 @@ from app.channels.booking_context import build_booking_context_message
 from app.services.catalog_context import (
     build_catalog_context,
     build_catalog_inventory_context,
+    should_autoload_inventory_context,
 )
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.assistant_reply_guard import evaluate_reply_quality
@@ -2032,15 +2033,16 @@ async def handle_incoming_message(
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
     inventory_context_text = None
-    inventory_context_started = time.perf_counter()
-    try:
-        inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
-    except Exception as exc:
-        logger.warning(
-            "whatsapp.inventory_context_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-    _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
+    if should_autoload_inventory_context(message.body or ""):
+        inventory_context_started = time.perf_counter()
+        try:
+            inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.inventory_context_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context = None
     if settings.catalog_context_autoload:

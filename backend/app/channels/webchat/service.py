@@ -57,6 +57,7 @@ from app.services.catalog_context import (
     CatalogContext,
     build_catalog_context,
     build_catalog_inventory_context,
+    should_autoload_inventory_context,
 )
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
@@ -3198,15 +3199,16 @@ async def handle_message(
     )
 
     inventory_context_text = None
-    inventory_context_started = time.perf_counter()
-    try:
-        inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
-    except Exception as exc:
-        logger.warning(
-            "webchat.inventory_context_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-    _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
+    if should_autoload_inventory_context(payload.content or ""):
+        inventory_context_started = time.perf_counter()
+        try:
+            inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
+        except Exception as exc:
+            logger.warning(
+                "webchat.inventory_context_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context: CatalogContext | None = None
     if settings.catalog_context_autoload:
