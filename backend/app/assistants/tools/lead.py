@@ -1569,12 +1569,8 @@ def _build_information_whatsapp_body(
     summary: str | None,
     document_count: int,
 ) -> str:
-    greeting = f"Hola {full_name}," if full_name else "Hola,"
-    company_fragment = f" sobre {company_name}" if company_name else ""
     lines = [
-        greeting,
-        "",
-        f"Te comparto la información solicitada{company_fragment} por aquí.",
+        "Hola, te comparto por aquí información general.",
     ]
     if summary:
         lines.append("La información está enfocada en tu caso y te la dejo resumida en el PDF.")
@@ -1583,7 +1579,7 @@ def _build_information_whatsapp_body(
     lines.extend(
         [
             "",
-            "Si también quieres que te la mande por correo, te la envío enseguida.",
+            "¿Quieres que también te lo mande por correo?",
         ]
     )
     return "\n".join(lines)
