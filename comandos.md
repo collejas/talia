@@ -219,6 +219,11 @@ du -shL /var/www/talia/current/panel
     '1afbf5b2-1ee7-4626-bb08-e727ef7f69f4'::uuid
   );
 
+    select public.cleanup_test_phone_whatsapp(
+    '+5214441302811',
+    '39e32c05-bfc2-4794-8aab-225873f2bf19'::uuid
+  );
+
   delete from public.oportunidades
   where organizacion_id = '00000000-0000-0000-0000-000000000001'::uuid
     and metadata->>'seed_batch' = 'seed_oportunidades_prueba_20260316_v2';
