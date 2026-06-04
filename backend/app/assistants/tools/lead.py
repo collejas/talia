@@ -1568,21 +1568,8 @@ def _build_information_whatsapp_body(
     company_name: str | None,
     summary: str | None,
     document_count: int,
-) -> str:
-    lines = [
-        "Hola, te comparto por aquí información general.",
-    ]
-    if summary:
-        lines.append("La información está enfocada en tu caso y te la dejo resumida en el PDF.")
-    if document_count > 1:
-        lines.append(f"Te envio {document_count} documentos para que los revises con calma.")
-    lines.extend(
-        [
-            "",
-            "¿Quieres que también te lo mande por correo?",
-        ]
-    )
-    return "\n".join(lines)
+) -> str | None:
+    return None
 
 
 async def _handle_information_package(
