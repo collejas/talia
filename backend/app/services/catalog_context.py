@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Sequence
@@ -55,6 +56,47 @@ MAX_METADATA_REFERENCE_LINES = 40
 METADATA_KEYS_HIDE = {"linea", "linea_id", "familia", "familia_id"}
 INVENTORY_SNAPSHOT_CACHE_TTL_SECONDS = 60.0
 _inventory_snapshot_cache: dict[tuple[str, bool], tuple[float, str]] = {}
+
+_PRICE_GENERAL_KEYWORDS: tuple[str, ...] = (
+    "precio",
+    "precios",
+    "precio por m",
+    "m²",
+    "m2",
+    "mensualidad",
+    "contado",
+    "crédito",
+    "credito",
+    "infonavit",
+    "financiamiento",
+)
+_PRICE_SPECIFIC_LOT_KEYWORDS: tuple[str, ...] = (
+    "este lote",
+    "ese lote",
+    "lote ",
+    "lote#",
+    "lote número",
+    "lote numero",
+    "cuánto cuesta este lote",
+    "cuanto cuesta este lote",
+    "precio de este lote",
+    "precio total",
+    "total del lote",
+)
+
+
+def _should_skip_catalog_autoload(query: str) -> bool:
+    normalized = " ".join(query.lower().split())
+    if not normalized:
+        return False
+    has_price_keyword = any(keyword in normalized for keyword in _PRICE_GENERAL_KEYWORDS)
+    if not has_price_keyword:
+        return False
+    if any(keyword in normalized for keyword in _PRICE_SPECIFIC_LOT_KEYWORDS):
+        return False
+    if re.search(r"\blote\s+\d+\b", normalized):
+        return False
+    return True
 
 
 def _normalize_metadata_display(value: Any) -> str:
@@ -609,6 +651,12 @@ async def build_catalog_context(
         return None
     prompt = query.strip()
     if not prompt:
+        return None
+    if _should_skip_catalog_autoload(prompt):
+        logger.debug(
+            "catalog_context.skipped_for_price_query",
+            extra={"query": prompt[:120]},
+        )
         return None
     try:
         org_uuid = UUID(organizacion_id)
