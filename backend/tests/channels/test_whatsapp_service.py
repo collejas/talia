@@ -677,6 +677,63 @@ async def test_send_meta_whatsapp_reply_sends_attachment_payload(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_send_meta_whatsapp_reply_sends_attachment_without_body(monkeypatch) -> None:
+    runtime = SimpleNamespace(
+        provider="meta",
+        meta_phone_number_id="1139218909270276",
+        meta_page_access_token="meta-token",
+        meta_graph_api_version="v21.0",
+    )
+    monkeypatch.setattr(service.tenant_runtime, "get_whatsapp_runtime_settings", _async_return(runtime))
+
+    captured: dict[str, Any] = {}
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict[str, Any]:
+            return {"messages": [{"id": "wamid.media.2"}]}
+
+    class FakeClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeClient)
+
+    result = await service._send_meta_whatsapp_reply(
+        to_number="+5214443891655",
+        body=None,
+        attachments=[
+            {
+                "url": "https://cdn.example.com/adjunto.pdf",
+                "mime": "application/pdf",
+                "name": "adjunto.pdf",
+            }
+        ],
+        organizacion_id=UUID("39e32c05-bfc2-4794-8aab-225873f2bf19"),
+    )
+
+    assert result.provider == "meta"
+    assert result.sid == "wamid.media.2"
+    assert captured["json"]["type"] == "document"
+    assert captured["json"]["document"]["link"] == "https://cdn.example.com/adjunto.pdf"
+    assert captured["json"]["document"]["filename"] == "adjunto.pdf"
+
+
+@pytest.mark.asyncio
 async def test_send_twilio_whatsapp_reply_uses_media_url(monkeypatch) -> None:
     runtime = SimpleNamespace(
         phone_number="whatsapp:+521000000000",

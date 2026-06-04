@@ -1677,7 +1677,52 @@ async def _handle_information_package(
             documents=whatsapp_documents,
             body_text=whatsapp_body,
         )
+        if any(
+            not isinstance(item, dict)
+            or str(item.get("status") or "").strip().lower() != "sent"
+            or not str(item.get("sid") or "").strip()
+            for item in whatsapp_results
+        ):
+            failed = [
+                {
+                    "sid": str(item.get("sid") or "") if isinstance(item, dict) else None,
+                    "status": str(item.get("status") or "") if isinstance(item, dict) else None,
+                    "provider": str(item.get("provider") or "") if isinstance(item, dict) else None,
+                }
+                for item in whatsapp_results
+            ]
+            logger.warning(
+                "lead_tools.info_whatsapp_send_not_sent",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "results": failed,
+                },
+            )
+            raise ValueError("No se pudo enviar uno o más documentos por WhatsApp.")
         result["whatsapp"] = whatsapp_results
+        welcome_document_sent = any(
+            isinstance(document, dict)
+            and str(document.get("category") or "").strip().lower() == "welcome"
+            for document in whatsapp_documents
+        )
+        if welcome_document_sent:
+            try:
+                await storage.merge_conversation_inbox_context(
+                    context.conversation_id,
+                    {
+                        "welcome_document_sent": True,
+                        "welcome_document_sent_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.info_welcome_context_failed",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "error": str(exc),
+                    },
+                )
+            result["_side_effects"] = {"welcome_document_sent": True}
         if "documents" not in result:
             result["documents"] = document_delivery_service.build_document_manifest(
                 whatsapp_documents

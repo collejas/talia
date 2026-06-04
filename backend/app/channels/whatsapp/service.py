@@ -367,6 +367,17 @@ async def _send_welcome_document_for_conversation(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         return False
+    if send_result.status != "sent" or not send_result.sid:
+        logger.warning(
+            "whatsapp.welcome_document_send_not_sent",
+            extra={
+                "conversation_id": conversation_id,
+                "status": send_result.status,
+                "error": send_result.error,
+                "provider": send_result.provider,
+            },
+        )
+        return False
 
     document = documents[0]
     try:
@@ -2363,21 +2374,29 @@ async def handle_incoming_message(
             outbound_message_id=outgoing_registration.get("message_id"),
         )
         try:
-            welcome_sent = await _send_welcome_document_for_conversation(
-                conversation_id=conversation_id,
-                persona_id=persona_id,
-                message=message,
-                whatsapp_settings=whatsapp_settings,
-                organizacion_id=org_uuid,
-                conversation_meta=conversation_meta,
-            )
-            if welcome_sent:
+            if welcome_document_sent_by_tool:
                 log_event(
                     logger,
-                    "whatsapp.welcome_document_sent",
+                    "whatsapp.welcome_document_skipped_after_tool",
                     conversation_id=conversation_id,
                     inbound_message_id=inbound_message_id,
                 )
+            else:
+                welcome_sent = await _send_welcome_document_for_conversation(
+                    conversation_id=conversation_id,
+                    persona_id=persona_id,
+                    message=message,
+                    whatsapp_settings=whatsapp_settings,
+                    organizacion_id=org_uuid,
+                    conversation_meta=conversation_meta,
+                )
+                if welcome_sent:
+                    log_event(
+                        logger,
+                        "whatsapp.welcome_document_sent",
+                        conversation_id=conversation_id,
+                        inbound_message_id=inbound_message_id,
+                    )
         except Exception as exc:  # pragma: no cover - defensivo
             logger.warning(
                 "whatsapp.welcome_document_flow_failed",
@@ -3224,6 +3243,7 @@ async def _generate_assistant_reply(
     final_text = _compact_whatsapp_reply(reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
     final_response_id = result.response_id
     final_conversation_id = result.conversation_id
+    welcome_document_sent_by_tool = bool(result.side_effects.get("welcome_document_sent"))
 
     quality_eval_started = time.perf_counter()
     quality_ok, quality_reason = evaluate_reply_quality(final_text)
@@ -3434,18 +3454,25 @@ async def _send_meta_whatsapp_reply(
 
     normalized_template_name = _normalize_meta_template_name(template_name)
     normalized_template_language = _normalize_meta_template_language(template_language)
-    if not normalized_template_name or not normalized_template_language:
-        if content_sid:
-            logger.warning("whatsapp.meta_template_not_supported", extra={"content_sid": content_sid})
-        if not body:
-            logger.warning("whatsapp.empty_payload")
+    if normalized_template_name or normalized_template_language:
+        if not normalized_template_name or not normalized_template_language:
+            logger.warning(
+                "whatsapp.meta_template_incomplete",
+                extra={
+                    "template_name": template_name,
+                    "template_language": template_language,
+                },
+            )
             return TwilioSendResult(
                 sid=None,
                 status="skipped",
-                error="empty_payload",
+                error="invalid_template",
                 provider="meta",
             )
-    if not body and not normalized_template_name and not attachments:
+    else:
+        if content_sid:
+            logger.warning("whatsapp.meta_template_not_supported", extra={"content_sid": content_sid})
+    if not body and not attachments and not normalized_template_name:
         logger.warning("whatsapp.empty_payload")
         return TwilioSendResult(sid=None, status="skipped", error="empty_payload", provider="meta")
 

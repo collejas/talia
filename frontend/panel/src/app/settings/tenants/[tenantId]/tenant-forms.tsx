@@ -697,6 +697,7 @@ export type WhatsAppInitialValues = {
   whatsapp_provider?: "twilio" | "meta"
   whatsapp_prompt_id?: string
   whatsapp_prompt_version?: string
+  whatsapp_welcome_document_prompt_version?: string
   whatsapp_assistant_id?: string
   whatsapp_inactivity_minutes?: number
   whatsapp_reengage_minutes?: number
@@ -1936,6 +1937,19 @@ export function TenantWhatsAppSettings({
               name="whatsapp_prompt_version"
               defaultValue={initialValues.whatsapp_prompt_version ?? ""}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_welcome_document_prompt_version">
+              whatsapp.welcome_document_prompt_version
+            </Label>
+            <Input
+              id="whatsapp_welcome_document_prompt_version"
+              name="whatsapp_welcome_document_prompt_version"
+              defaultValue={initialValues.whatsapp_welcome_document_prompt_version ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de bienvenida.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="whatsapp_assistant_id">whatsapp.assistant_id</Label>
