@@ -31,10 +31,13 @@ def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
     """Devuelve las líneas del bloque 'Contexto CRM' dado el contacto y oportunidad."""
     contact = context_data.get("contact") if context_data else None
     opportunity = context_data.get("opportunity") if context_data else None
+    conversation = context_data.get("conversation") if context_data else None
     contact_lines = _build_contact_context_lines(contact)
     opportunity_lines = _build_opportunity_context_lines(opportunity)
     booking_context = context_data.get("booking_context") if context_data else None
-    if not contact_lines and not opportunity_lines and not booking_context:
+    inbox_context = _ensure_dict(conversation.get("inbox_context")) if isinstance(conversation, dict) else {}
+    welcome_document_sent = bool(inbox_context.get("welcome_document_sent"))
+    if not contact_lines and not opportunity_lines and not booking_context and not welcome_document_sent:
         return []
 
     lines: list[str] = ["Contexto CRM:"]
@@ -50,6 +53,11 @@ def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
             lines.append("")
         lines.append("Contexto de agenda:")
         lines.append(f"- {_safe_text(booking_context)}")
+    if welcome_document_sent:
+        if contact_lines or opportunity_lines or booking_context:
+            lines.append("")
+        lines.append("Contexto operativo:")
+        lines.append("- Documento de bienvenida enviado por WhatsApp")
     return lines
 
 

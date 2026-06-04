@@ -276,6 +276,109 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monkeypatch) -> None:
+    """En el primer turno con el prompt de bienvenida, el backend envía el PDF y marca contexto."""
+    message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+
+    register_calls: list[dict] = []
+    send_calls: list[dict] = []
+    merge_calls: list[dict] = []
+
+    async def fake_register(**kwargs):
+        register_calls.append(kwargs)
+        if kwargs.get("direction") == "entrante":
+            return {
+                "conversation_id": "conv-1",
+                "contact_id": "contact-1",
+                "openai_conversation_id": None,
+            }
+        return {
+            "conversation_id": "conv-1",
+            "contact_id": "contact-1",
+            "openai_conversation_id": "conv-openai",
+        }
+
+    async def fake_fetch_conversation(conversation_id: str):
+        return {
+            "id": conversation_id,
+            "contact_id": "contact-1",
+            "manual_override": False,
+            "openai_conversation_id": None,
+            "last_response_id": None,
+            "inbox_context": {},
+        }
+
+    async def fake_fetch_persona(contact_id: str):
+        return {"id": contact_id, "organizacion_id": "org-test"}
+
+    async def fake_fetch_persona_identities(contact_id: str):
+        return []
+
+    async def fake_generate(**kwargs):
+        return service.AssistantReply(
+            text="¡Hola! Gracias por contactar con Gran Peñón.",
+            openai_conversation_id="conv-openai",
+            response_id="resp-1",
+        )
+
+    async def fake_send(**kwargs):
+        send_calls.append(kwargs)
+        return service.TwilioSendResult(sid="SM-out", status="sent")
+
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object):
+        return {
+            "oportunidad_id": "opp-1",
+            "restart_created": False,
+            "restart_sequence": 1,
+        }
+
+    async def fake_resolve_docs(**kwargs):
+        return [
+            {
+                "id": "doc-1",
+                "title": "welcome",
+                "channel_scope": "whatsapp",
+                "category": "welcome",
+                "mime": "application/pdf",
+                "url": "https://example.com/welcome.pdf",
+                "delivery_url": "https://example.com/welcome.pdf",
+            }
+        ]
+
+    async def fake_merge_context(conversation_id: str, patch: dict):
+        merge_calls.append({"conversation_id": conversation_id, "patch": patch})
+        return {"id": conversation_id, "inbox_context": patch}
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
+    monkeypatch.setattr(service.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", fake_merge_context)
+    monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
+    monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
+    monkeypatch.setattr(service.assistant_document_delivery, "resolve_documents_for_context", fake_resolve_docs)
+
+    await service.handle_incoming_message(message)
+
+    assert len(send_calls) == 2
+    assert send_calls[0]["body"] == "¡Hola! Gracias por contactar con Gran Peñón."
+    assert send_calls[0]["attachments"] is None
+    assert send_calls[1]["body"] is None
+    assert send_calls[1]["attachments"] and send_calls[1]["attachments"][0]["mime"] == "application/pdf"
+    assert merge_calls
+    assert merge_calls[0]["patch"]["welcome_document_sent"] is True
+    assert merge_calls[0]["patch"]["welcome_document_channel"] == "whatsapp"
+    assert len(register_calls) == 2
+
+
+@pytest.mark.asyncio
 async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
     """Cuando se crea una oportunidad por reinicio se notifica al vendedor."""
     message = _build_sample_message()

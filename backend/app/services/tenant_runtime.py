@@ -1011,6 +1011,7 @@ class WhatsappRuntimeSettings:
     assistant_id: str | None
     prompt_id: str | None
     prompt_version: str | None
+    welcome_document_prompt_version: str | None
     inactivity_minutes: int
     reengage_minutes: int
     reengage_max_attempts: int
@@ -1050,6 +1051,7 @@ class WhatsappRuntimeSettings:
             assistant_id=settings.whatsapp_assistant_id,
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
+            welcome_document_prompt_version=settings.whatsapp_welcome_document_prompt_version,
             inactivity_minutes=settings.whatsapp_inactivity_minutes,
             reengage_minutes=settings.whatsapp_reengage_minutes,
             reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
@@ -1122,6 +1124,14 @@ async def get_whatsapp_runtime_settings(
         prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
     if prompt_version is not None:
         settings_payload.prompt_version = prompt_version
+
+    welcome_prompt_version = _coerce_str_or_none(whatsapp_cfg.get("welcome_document_prompt_version"))
+    if welcome_prompt_version is None:
+        welcome_prompt_version = _coerce_str_or_none(
+            settings.whatsapp_welcome_document_prompt_version
+        )
+    if welcome_prompt_version is not None:
+        settings_payload.welcome_document_prompt_version = welcome_prompt_version
 
     inactivity_value = whatsapp_cfg.get("inactivity_minutes")
     if inactivity_value is not None:

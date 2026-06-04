@@ -34,6 +34,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import conversation_summary, leads_geo, storage
+from app.services import assistant_document_delivery
 from app.services import openai as openai_service
 from app.services import openai_usage_ledger
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
@@ -257,6 +258,135 @@ def _trim_text(value: Any) -> str | None:
 def _normalize_whatsapp_provider(value: Any) -> str:
     provider = str(value or "").strip().lower()
     return provider if provider in {"twilio", "meta"} else "twilio"
+
+
+def _conversation_inbox_context(conversation_meta: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(conversation_meta, Mapping):
+        return {}
+    raw = conversation_meta.get("inbox_context")
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return dict(parsed)
+    return {}
+
+
+def _should_auto_send_welcome_document(
+    *,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+    conversation_meta: Mapping[str, Any] | None,
+) -> bool:
+    welcome_prompt_version = str(
+        whatsapp_settings.welcome_document_prompt_version or ""
+    ).strip()
+    if not welcome_prompt_version:
+        return False
+    if str(whatsapp_settings.prompt_version or "").strip() != welcome_prompt_version:
+        return False
+    inbox_context = _conversation_inbox_context(conversation_meta)
+    if bool(inbox_context.get("welcome_document_sent")):
+        return False
+    last_response_id = str((conversation_meta or {}).get("last_response_id") or "").strip()
+    if last_response_id:
+        return False
+    return True
+
+
+async def _send_welcome_document_for_conversation(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    message: schemas.WhatsAppIncomingMessage,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+    organizacion_id: UUID | None,
+    conversation_meta: Mapping[str, Any] | None,
+) -> bool:
+    if not _should_auto_send_welcome_document(
+        whatsapp_settings=whatsapp_settings,
+        conversation_meta=conversation_meta,
+    ):
+        return False
+
+    context = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        channel="whatsapp",
+        organizacion_id=str(organizacion_id) if organizacion_id else None,
+    )
+    try:
+        documents = await assistant_document_delivery.resolve_documents_for_context(
+            context=context,
+            channel_scope="whatsapp",
+            category="welcome",
+            limit=1,
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.welcome_documents_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+
+    if not documents:
+        try:
+            documents = await assistant_document_delivery.resolve_documents_for_context(
+                context=context,
+                channel_scope="whatsapp",
+                category=None,
+                limit=1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.welcome_documents_fallback_lookup_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+            return False
+
+    if not documents:
+        return False
+
+    attachments = assistant_document_delivery.build_whatsapp_attachments(documents)
+    if not attachments:
+        return False
+
+    try:
+        send_result = await send_manual_message(
+            to_number=message.from_number,
+            body=None,
+            attachments=[attachments[0]],
+            organizacion_id=organizacion_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.welcome_document_send_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+
+    document = documents[0]
+    try:
+        await storage.merge_conversation_inbox_context(
+            conversation_id,
+            {
+                "welcome_document_sent": True,
+                "welcome_document_id": str(document.get("id") or "").strip() or None,
+                "welcome_document_title": str(document.get("title") or "").strip() or None,
+                "welcome_document_channel": "whatsapp",
+                "welcome_document_sent_at": datetime.now(timezone.utc).isoformat(),
+                "welcome_document_provider_sid": str(send_result.sid or "").strip() or None,
+            },
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.welcome_document_context_mark_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+    return True
 
 
 def _guess_attachment_name(attachment: schemas.WhatsAppMediaAttachment) -> str:
@@ -2232,6 +2362,27 @@ async def handle_incoming_message(
             inbound_message_id=inbound_message_id,
             outbound_message_id=outgoing_registration.get("message_id"),
         )
+        try:
+            welcome_sent = await _send_welcome_document_for_conversation(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                message=message,
+                whatsapp_settings=whatsapp_settings,
+                organizacion_id=org_uuid,
+                conversation_meta=conversation_meta,
+            )
+            if welcome_sent:
+                log_event(
+                    logger,
+                    "whatsapp.welcome_document_sent",
+                    conversation_id=conversation_id,
+                    inbound_message_id=inbound_message_id,
+                )
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.warning(
+                "whatsapp.welcome_document_flow_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
         _log_trace_stage(
             stage="assistant_persisted",
             conversation_id=conversation_id,

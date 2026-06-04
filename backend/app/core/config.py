@@ -1065,6 +1065,13 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_PROMPT_VERSION",
         ),
     )
+    whatsapp_welcome_document_prompt_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_WELCOME_DOCUMENT_PROMPT_VERSION",
+            "TALIA_WHATSAPP_WELCOME_DOCUMENT_PROMPT_VERSION",
+        ),
+    )
     whatsapp_assistant_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

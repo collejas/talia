@@ -1649,6 +1649,12 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
         row = await repo.get_conversation_with_controls(conversation_id=conversation_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    inbox_context: dict[str, Any] = {}
+    try:
+        inbox_row = await repo.get_conversation_inbox_context(conversation_id=conversation_id)
+        inbox_context = _ensure_dict(inbox_row.get("inbox_context"))
+    except CRMRepositoryError:
+        inbox_context = {}
     ctrl = row.get("conversaciones_controles")
     channel_value = row.get("canal")
     try:
@@ -1677,6 +1683,7 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
         "persona_id": row.get("persona_id") or row.get("contacto_id"),
         "contact_id": row.get("contacto_id"),
         "manual_override": manual_override,
+        "inbox_context": inbox_context,
     }
 
 
@@ -2330,7 +2337,17 @@ async def fetch_persona_context(*, conversation_id: str, persona_id: str) -> dic
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    return {"persona": persona, "contact": persona, "opportunity": opportunity}
+    try:
+        conversation_row = await repo.get_conversation_inbox_context(conversation_id=conversation_id)
+    except CRMRepositoryError:
+        conversation_row = {}
+
+    return {
+        "persona": persona,
+        "contact": persona,
+        "opportunity": opportunity,
+        "conversation": conversation_row,
+    }
 
 
 async def fetch_persona_identities(persona_id: str) -> list[dict[str, Any]]:
