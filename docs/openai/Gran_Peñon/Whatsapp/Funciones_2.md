@@ -104,8 +104,8 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead al final de la calificación. Se usa cuando ya tenemos nombre, correo, teléfono y empresa confirmados. También incluye el resumen de la necesidad para el equipo comercial.",
-  "strict": true,
+  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos datos base de contacto y contexto del prospecto y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
+  "strict": false,
   "parameters": {
     "type": "object",
     "properties": {
@@ -115,11 +115,154 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de Tal-IA. Ej: 'Administra condominios y plazas comerciales; quiere automatizar atención a residentes y coordinación de incidencias vía WhatsApp sin saturar al personal.'"
+        "description": "Resumen corto en lenguaje humano. Incluye qué busca y siguiente contexto comercial. Máx 320 caracteres.",
+        "maxLength": 320
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
+        "description": "Intención principal del lead en una sola frase clara tipo titular. Máx 220 caracteres.",
+        "maxLength": 220
+      },
+      "siguiente_accion": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Siguiente paso acordado con el prospecto. Ej: 'Quiere agendar cita presencial para conocer opciones este fin de semana'.",
+        "maxLength": 180
+      },
+      "financing_type": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Cómo planea comprar. Valores canónicos: contado, credito, mixto, unknown, refused."
+      },
+      "credit_preapproved": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Estatus del crédito (solo si aplica). Valores canónicos: yes, in_process, no, unknown, refused. Si financing_type=contado, omite este campo y marca skipped_max_retries en profiling_statuses si corresponde."
+      },
+      "budget_range": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Rango de presupuesto expresado por el prospecto (texto corto)."
+      },
+      "down_payment_ready": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Si tiene enganche listo: yes, partial, no, unknown o refused."
+      },
+      "purchase_timeline": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Horizonte de compra. Valores canónicos: <3m, 3-6m, 6-12m, >12m, unknown, refused."
+      },
+      "hard_deadline": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Si existe fecha límite real para comprar/mudarse: yes, no, unknown o refused."
+      },
+      "requirements_defined": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Nivel de definición de lo que busca. Valores canónicos: high, medium, low, unknown, refused."
+      },
+      "comparison_mode": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Modo de comparación actual. Valores canónicos: shortlist, comparing, exploring, unknown, refused."
+      },
+      "visited_properties": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Si ya visitó propiedades: yes, no, unknown o refused."
+      },
+      "decision_authority": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Autoridad de decisión. Valores canónicos: full, shared, advisor, unknown, refused."
+      },
+      "buyer_type": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Tipo de comprador. Valores canónicos: individual, couple, family, company, investor, unknown, refused."
+      },
+      "appointment_requested": {
+        "type": [
+          "boolean",
+          "null"
+        ],
+        "description": "Marca true cuando el prospecto pidió/aceptó cita; false si no."
+      },
+      "accepted_answering_questions": {
+        "type": [
+          "boolean",
+          "null"
+        ],
+        "description": "Marca si aceptó responder preguntas de precalificación antes de agendar."
+      },
+      "evasive_answers_count": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Número de respuestas evasivas o negativas explícitas durante la precalificación.",
+        "minimum": 0
+      },
+      "response_time_bucket": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Velocidad de respuesta observada: fast, medium o slow."
+      },
+      "profiling_statuses": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Estado por campo de perfilamiento en esta ejecución de close_lead. Las llaves deben ser dinámicas según field_key activo en base de datos (scoring_questions) para el canal actual.",
+        "additionalProperties": {
+          "type": "string",
+          "enum": [
+            "answered",
+            "unknown",
+            "refused",
+            "skipped_max_retries"
+          ]
+        }
+      },
+      "profiling_reprompt_counts": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Número de repreguntas realizadas por campo durante el perfilamiento. Las llaves deben ser dinámicas según field_key activo en base de datos (scoring_questions).",
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "required": [
@@ -130,7 +273,6 @@
     "additionalProperties": false
   }
 }
-
 ---
 
 {
