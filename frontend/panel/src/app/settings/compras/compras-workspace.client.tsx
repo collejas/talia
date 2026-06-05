@@ -1013,6 +1013,11 @@ export function ComprasWorkspace({
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
   const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
   const [orderResponsableFlete, setOrderResponsableFlete] = useState("")
+  const selectedReceptionOrder = useMemo(
+    () => openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null,
+    [openOrders, selectedOrderId],
+  )
+  const selectedReceptionWarehouseId = asString(selectedReceptionOrder?.almacen_destino_id, selectedWarehouseId || defaultWarehouseId)
   const [orderResponsableSeguro, setOrderResponsableSeguro] = useState("")
   const [orderResponsableDespachoExportacion, setOrderResponsableDespachoExportacion] = useState("")
   const [orderResponsableDespachoImportacion, setOrderResponsableDespachoImportacion] = useState("")
@@ -1928,7 +1933,7 @@ export function ComprasWorkspace({
     setEditingReceptionLineCostIndex(null)
     const currentOrder = openOrders.find((orden) => String(orden.id) === orderId) ?? null
     setLines(buildLinesFromOrder(currentOrder))
-    setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
+    setSelectedWarehouseId(asString(currentOrder?.almacen_destino_id, defaultWarehouseId))
   }
 
   const showResumen = activeView === "resumen"
@@ -4642,25 +4647,17 @@ export function ComprasWorkspace({
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-almacen">
-                  Almacén
+                  Almacén destino
                 </label>
-                <select
+                <Input
                   id="recepcion-almacen"
-                  name="almacen_id"
-                  value={selectedWarehouseId}
-                  onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  required
-                  >
-                  <option value="" disabled>
-                    Selecciona un almacén
-                  </option>
-                  {almacenes.map((almacen) => (
-                    <option key={String(almacen.id)} value={String(almacen.id)}>
-                      {asString(almacen.codigo)} · {asString(almacen.nombre)}
-                    </option>
-                  ))}
-                </select>
+                  value={selectedReceptionWarehouseId ? `${asString((almacenes.find((almacen) => String(almacen.id) === selectedReceptionWarehouseId) as AnyRecord | undefined)?.codigo)} · ${asString((almacenes.find((almacen) => String(almacen.id) === selectedReceptionWarehouseId) as AnyRecord | undefined)?.nombre, "Almacén destino")}` : "Selecciona una orden"}
+                  readOnly
+                />
+                <input type="hidden" name="almacen_id" value={selectedReceptionWarehouseId} readOnly />
+                <p className="text-xs text-muted-foreground">
+                  La recepción se registra obligatoriamente en el almacén destino de la orden seleccionada.
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-numero">
