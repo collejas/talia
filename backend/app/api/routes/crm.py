@@ -10538,6 +10538,9 @@ _ACCOUNT_DIRECTION_LEGACY_FIELDS = (
     "letra_interior",
     "tipo_asentamiento",
     "colonia",
+    "codigo_contacto",
+    "nombre",
+    "nombre_completo",
     "tipo_centro_comercial",
     "corredor_industrial",
     "numero_local",
@@ -13567,6 +13570,9 @@ _CONTACTS_EXPORT_HEADERS = [
 ]
 
 _CONTACT_SENSITIVE_FIELDS = {
+    "codigo_contacto",
+    "nombre",
+    "nombre_completo",
     "correo",
     "email",
     "telefono_e164",
@@ -13618,7 +13624,11 @@ _ACCOUNT_SENSITIVE_FIELDS = {
     "direccion_fiscal",
     "direccion_principal",
     "direcciones",
+    "contacto_principal_codigo_contacto",
+    "contacto_principal_nombre",
     "email",
+    "contacto_principal_codigo_contacto",
+    "contacto_principal_nombre",
     "website",
     "tipo_vialidad",
     "nombre_vialidad",

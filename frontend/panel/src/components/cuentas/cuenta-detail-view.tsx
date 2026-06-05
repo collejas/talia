@@ -1015,9 +1015,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
             ) : relations.length ? (
               relations.map((relation) => {
                 const person = relation.persona;
-                const personName = person?.nombre_completo || getText(relation.persona_id);
+                const canViewPersonSensitive = person?.can_view_sensitive_fields === true;
+                const personName = canViewPersonSensitive ? (person?.nombre_completo || "—") : "—";
                 const personSubtitle =
-                  person?.can_view_sensitive_fields === true
+                  canViewPersonSensitive
                     ? person?.correo_principal || person?.telefono_principal_e164 || person?.company_name || "Sin datos"
                     : person?.company_name || "Sin datos";
                 return (

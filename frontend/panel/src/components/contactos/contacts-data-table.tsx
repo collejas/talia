@@ -125,8 +125,10 @@ function getContactOwnerId(raw: Record<string, unknown> | undefined): string | n
   return extractString(raw, ["propietario_usuario_id"]) || extractString(raw, ["propietario_id"]);
 }
 
-function getContactIdValue(raw: Record<string, unknown> | undefined): string {
-  return extractString(raw, ["codigo_contacto"]) || extractString(raw, ["contacto_id"]) || "—";
+function getContactIdValue(row: TableRow): string {
+  if (!canViewContactSensitiveRow(row)) return "—";
+  const raw = row.raw as Record<string, unknown> | undefined;
+  return extractString(raw, ["codigo_contacto"]) || "—";
 }
 
 function normalizeLabel(value: unknown): string {
@@ -330,15 +332,15 @@ const CONTACT_COLUMNS: Array<{
   {
     id: "contact_id",
     label: "Id Contacto",
-    sortValue: (row) => getContactIdValue(row.raw as Record<string, unknown> | undefined),
-    accessor: (row) => <span className="font-mono text-xs">{getContactIdValue(row.raw as Record<string, unknown> | undefined)}</span>,
+    sortValue: (row) => getContactIdValue(row),
+    accessor: (row) => <span className="font-mono text-xs">{getContactIdValue(row)}</span>,
     defaultVisible: true,
   },
   {
     id: "contact_name",
     label: "Nombre contacto",
-    sortValue: (row) => row.header,
-    accessor: (row) => <span className="font-medium">{row.header}</span>,
+    sortValue: (row) => (canViewContactSensitiveRow(row) ? row.header : ""),
+    accessor: (row) => <span className="font-medium">{canViewContactSensitiveRow(row) ? row.header : "—"}</span>,
     defaultVisible: true,
   },
   {

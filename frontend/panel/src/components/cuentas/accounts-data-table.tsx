@@ -123,14 +123,18 @@ const ACCOUNT_COLUMNS: Array<{
   {
     id: "account_contact_code",
     label: "Id Contacto",
-    sortValue: (row) => getAccountField(row, "contacto_principal_codigo_contacto"),
-    accessor: (row) => <span className="font-mono text-xs">{getAccountField(row, "contacto_principal_codigo_contacto")}</span>,
+    sortValue: (row) => (canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_codigo_contacto") : ""),
+    accessor: (row) => (
+      <span className="font-mono text-xs">
+        {canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_codigo_contacto") : "—"}
+      </span>
+    ),
   },
   {
     id: "account_contact",
     label: "Nombre Contacto",
-    sortValue: (row) => getAccountField(row, "contacto_principal_nombre"),
-    accessor: (row) => <span>{getAccountField(row, "contacto_principal_nombre")}</span>,
+    sortValue: (row) => (canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_nombre") : ""),
+    accessor: (row) => <span>{canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_nombre") : "—"}</span>,
   },
   {
     id: "account_phone",
