@@ -11857,8 +11857,6 @@ def _persona_alta_to_account_payload(
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
         "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo")),
         "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
-        "colonia": _persona_alta_clean_text(direccion.colonia if direccion else None)
-        or _persona_alta_clean_text(existing_values.get("colonia")),
         "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),
         "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None) or _persona_alta_clean_text(existing_values.get("corredor_industrial")),
         "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_local")),

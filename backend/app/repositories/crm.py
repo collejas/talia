@@ -7864,6 +7864,8 @@ class CRMRepository:
                 except Exception:
                     current_account_uuid = None
                 if current_account_uuid:
+                    account_patch = dict(account_body)
+                    account_patch.pop("colonia", None)
                     try:
                         account_resp = await self._request(
                             "PATCH",
@@ -7872,12 +7874,12 @@ class CRMRepository:
                                 "organizacion_id": f"eq.{organizacion_id}",
                                 "id": f"eq.{current_account_uuid}",
                             },
-                            json=account_body,
+                            json=account_patch,
                             prefer="return=representation",
                         )
                     except CRMRepositoryError as exc:
                         if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
-                            fallback_account = dict(account_body)
+                            fallback_account = dict(account_patch)
                             fallback_account.pop("propietario_usuario_id", None)
                             account_resp = await self._request(
                                 "PATCH",
