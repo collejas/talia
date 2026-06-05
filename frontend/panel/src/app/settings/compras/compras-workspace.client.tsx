@@ -27,6 +27,7 @@ import {
   createInventarioAjusteAction,
   createOrdenCompraAction,
   createRecepcionAction,
+  deleteRecepcionAction,
   approveOrdenCompraAction,
   deleteOrdenCompraDocumentoAction,
   saveOrdenCompraPagosProgramadosAction,
@@ -38,6 +39,7 @@ import {
   sendOrdenCompraAction,
   updateAlmacenAction,
   updateOrdenCompraAction,
+  updateRecepcionAction,
 } from "./actions"
 
 type AnyRecord = Record<string, unknown>
@@ -538,6 +540,37 @@ function buildLinesFromOrder(order: AnyRecord | undefined | null): ReceptionLine
     })
 }
 
+function buildLinesFromReception(order: AnyRecord | undefined | null, reception: AnyRecord | undefined | null): ReceptionLine[] {
+  if (!order || !Array.isArray(order.items)) return []
+  const receptionItems = Array.isArray(reception?.items)
+    ? (reception?.items as AnyRecord[]).filter((item): item is AnyRecord => Boolean(item) && typeof item === "object")
+    : []
+  return order.items
+    .filter((item): item is AnyRecord => Boolean(item) && typeof item === "object")
+    .map((item) => {
+      const catalogItem = item.catalog_item && typeof item.catalog_item === "object" ? (item.catalog_item as AnyRecord) : {}
+      const matchedItem =
+        receptionItems.find(
+          (entry) =>
+            asString(entry.orden_compra_item_id, "") === asString(item.id, "") ||
+            asString(entry.catalog_item_id, "") === asString(item.catalog_item_id, ""),
+        ) ?? null
+      return {
+        orden_compra_item_id: asString(item.id, ""),
+        catalog_item_id: asString(item.catalog_item_id, ""),
+        nombre: asString(catalogItem.nombre, "Producto"),
+        unidad: asString(catalogItem.unidad, "unidad"),
+        cantidad_solicitada: asNumber(item.cantidad_solicitada),
+        cantidad_recibida: asNumber(matchedItem?.cantidad_recibida),
+        costo_unitario_real: asNumber(matchedItem?.costo_unitario_real ?? item.costo_unitario),
+        lote_codigo: asString(matchedItem?.lote_codigo, ""),
+        fecha_caducidad: asString(matchedItem?.fecha_caducidad, ""),
+        serie: asString(matchedItem?.serie, ""),
+        observaciones: asString(matchedItem?.observaciones, ""),
+      }
+    })
+}
+
 function buildOrderLinesFromOrder(order: AnyRecord | undefined | null): OrderLine[] {
   if (!order || !Array.isArray(order.items) || !order.items.length) {
     return [createEmptyOrderLine()]
@@ -977,6 +1010,8 @@ export function ComprasWorkspace({
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
   const [referenceExternal, setReferenceExternal] = useState("")
   const [observations, setObservations] = useState("")
+  const [editingReceptionId, setEditingReceptionId] = useState<string | null>(null)
+  const [receptionSaveErrorMessage, setReceptionSaveErrorMessage] = useState("")
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [isProveedorModalOpen, setIsProveedorModalOpen] = useState(false)
@@ -1013,11 +1048,6 @@ export function ComprasWorkspace({
   const [orderIncotermVersion, setOrderIncotermVersion] = useState("2020")
   const [orderLugarIncoterm, setOrderLugarIncoterm] = useState("")
   const [orderResponsableFlete, setOrderResponsableFlete] = useState("")
-  const selectedReceptionOrder = useMemo(
-    () => openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null,
-    [openOrders, selectedOrderId],
-  )
-  const selectedReceptionWarehouseId = asString(selectedReceptionOrder?.almacen_destino_id, selectedWarehouseId || defaultWarehouseId)
   const [orderResponsableSeguro, setOrderResponsableSeguro] = useState("")
   const [orderResponsableDespachoExportacion, setOrderResponsableDespachoExportacion] = useState("")
   const [orderResponsableDespachoImportacion, setOrderResponsableDespachoImportacion] = useState("")
@@ -1108,6 +1138,17 @@ export function ComprasWorkspace({
         : [],
     [selectedOrderRecord],
   )
+  const receptionOrderOptions = useMemo(() => {
+    if (!editingReceptionId || !selectedOrderRecord) {
+      return openOrders
+    }
+    const selectedOrderIdValue = String(selectedOrderRecord.id)
+    const alreadyIncluded = openOrders.some((orden) => String(orden.id) === selectedOrderIdValue)
+    if (alreadyIncluded) {
+      return openOrders
+    }
+    return [...openOrders, selectedOrderRecord]
+  }, [editingReceptionId, openOrders, selectedOrderRecord])
   const getOrderItemDisplayName = useCallback((item: AnyRecord): string => {
     const catalogItem = item.catalog_item && typeof item.catalog_item === "object" ? (item.catalog_item as AnyRecord) : null
     return (
@@ -1931,10 +1972,88 @@ export function ComprasWorkspace({
     setSelectedOrderId(orderId)
     setEditingPaymentScheduleRecord(null)
     setEditingReceptionLineCostIndex(null)
+    setReceptionSaveErrorMessage("")
     const currentOrder = openOrders.find((orden) => String(orden.id) === orderId) ?? null
     setLines(buildLinesFromOrder(currentOrder))
     setSelectedWarehouseId(asString(currentOrder?.almacen_destino_id, defaultWarehouseId))
   }
+
+  const resetReceptionForm = useCallback(() => {
+    setReceptionSaveErrorMessage("")
+    setEditingReceptionId(null)
+    setEditingReceptionLineCostIndex(null)
+    setEditingReceptionLineCostDraft("")
+    setReferenceExternal("")
+    setObservations("")
+    setReceptionNumber(createSuggestedReceptionNumber())
+    if (initialOrder) {
+      setSelectedOrderId(String(initialOrder.id))
+      setLines(buildLinesFromOrder(initialOrder))
+      setSelectedWarehouseId(asString(initialOrder.almacen_destino_id, defaultWarehouseId))
+      return
+    }
+    setSelectedOrderId("")
+    setLines([])
+    setSelectedWarehouseId(defaultWarehouseId)
+  }, [defaultWarehouseId, initialOrder])
+
+  const startEditReception = useCallback(
+    (reception: AnyRecord) => {
+      const receptionId = asString(reception.id, "")
+      const orderId = asString(reception.orden_compra_id, "")
+      if (!receptionId || !orderId) {
+        return
+      }
+      const order = ordenes.find((orden) => String(orden.id) === orderId) ?? null
+      setReceptionSaveErrorMessage("")
+      setEditingReceptionId(receptionId)
+      setSelectedOrderId(orderId)
+      setSelectedWarehouseId(asString(reception.almacen_id, defaultWarehouseId))
+      setReceptionNumber(asString(reception.numero_recepcion, createSuggestedReceptionNumber()))
+      setReferenceExternal(asString(reception.referencia_externa, ""))
+      setObservations(asString(reception.observaciones, ""))
+      setEditingReceptionLineCostIndex(null)
+      setEditingReceptionLineCostDraft("")
+      setLines(buildLinesFromReception(order, reception))
+    },
+    [defaultWarehouseId, ordenes],
+  )
+
+  const handleReceptionSubmit = useCallback(
+    async (formData: FormData) => {
+      try {
+        const action = editingReceptionId ? updateRecepcionAction.bind(null, editingReceptionId) : createRecepcionAction
+        await action(formData)
+        resetReceptionForm()
+        router.refresh()
+      } catch (error) {
+        setReceptionSaveErrorMessage(error instanceof Error ? error.message : "No se pudo guardar la recepción.")
+      }
+    },
+    [editingReceptionId, resetReceptionForm, router],
+  )
+
+  const handleDeleteReception = useCallback(
+    async (reception: AnyRecord) => {
+      const receptionId = asString(reception.id, "")
+      if (!receptionId) {
+        return
+      }
+      if (typeof window !== "undefined" && !window.confirm(`Eliminar la recepción ${asString(reception.numero_recepcion, receptionId)}?`)) {
+        return
+      }
+      try {
+        await deleteRecepcionAction(receptionId)
+        if (editingReceptionId === receptionId) {
+          resetReceptionForm()
+        }
+        router.refresh()
+      } catch (error) {
+        setReceptionSaveErrorMessage(error instanceof Error ? error.message : "No se pudo eliminar la recepción.")
+      }
+    },
+    [editingReceptionId, resetReceptionForm, router],
+  )
 
   const showResumen = activeView === "resumen"
   const showAlmacenes = activeView === "almacenes"
@@ -4610,13 +4729,29 @@ export function ComprasWorkspace({
 
       <Card>
         <CardHeader>
-          <CardTitle>Registrar recepción</CardTitle>
-          <CardDescription>
-            El operador selecciona una orden y ajusta cantidades. No ve JSON ni estructuras técnicas.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{editingReceptionId ? "Actualizar recepción" : "Registrar recepción"}</CardTitle>
+              <CardDescription>
+                El operador selecciona una orden y ajusta cantidades. No ve JSON ni estructuras técnicas.
+              </CardDescription>
+            </div>
+            {editingReceptionId ? (
+              <Button type="button" variant="outline" onClick={resetReceptionForm}>
+                Cancelar edición
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
-          <form action={createRecepcionAction} className="space-y-5">
+          <form action={handleReceptionSubmit} className="space-y-5">
+            {editingReceptionId ? <input type="hidden" name="orden_compra_id" value={selectedOrderId} readOnly /> : null}
+            {receptionSaveErrorMessage ? (
+              <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{receptionSaveErrorMessage}</span>
+              </div>
+            ) : null}
             <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-orden">
@@ -4627,13 +4762,14 @@ export function ComprasWorkspace({
                   name="orden_compra_id"
                   value={selectedOrderId}
                   onChange={(event) => handleSelectOrder(event.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  disabled={Boolean(editingReceptionId)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted"
                   required
                 >
                   <option value="" disabled>
                     Selecciona una orden
                   </option>
-                  {openOrders.map((orden) => (
+                  {receptionOrderOptions.map((orden) => (
                     <option key={String(orden.id)} value={String(orden.id)}>
                       {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.nombre_comercial ?? (orden.proveedor as AnyRecord | undefined)?.razon_social, "Proveedor")}
                     </option>
@@ -4647,16 +4783,27 @@ export function ComprasWorkspace({
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="recepcion-almacen">
-                  Almacén destino
+                  Almacén de recepción
                 </label>
-                <Input
+                <select
                   id="recepcion-almacen"
-                  value={selectedReceptionWarehouseId ? `${asString((almacenes.find((almacen) => String(almacen.id) === selectedReceptionWarehouseId) as AnyRecord | undefined)?.codigo)} · ${asString((almacenes.find((almacen) => String(almacen.id) === selectedReceptionWarehouseId) as AnyRecord | undefined)?.nombre, "Almacén destino")}` : "Selecciona una orden"}
-                  readOnly
-                />
-                <input type="hidden" name="almacen_id" value={selectedReceptionWarehouseId} readOnly />
+                  name="almacen_id"
+                  value={selectedWarehouseId}
+                  onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="" disabled>
+                    Selecciona un almacén
+                  </option>
+                  {almacenes.map((almacen) => (
+                    <option key={String(almacen.id)} value={String(almacen.id)}>
+                      {asString(almacen.codigo)} · {asString(almacen.nombre)}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
-                  La recepción se registra obligatoriamente en el almacén destino de la orden seleccionada.
+                  Puedes recibir en tránsito, central u otro almacén autorizado. El sistema usará este almacén para la entrada.
                 </p>
               </div>
               <div className="space-y-2">
@@ -4842,9 +4989,16 @@ export function ComprasWorkspace({
                 </TableBody>
               </Table>
             </div>
-            <Button type="submit" disabled={!lines.length}>
-              Registrar recepción
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" disabled={!lines.length}>
+                {editingReceptionId ? "Actualizar recepción" : "Registrar recepción"}
+              </Button>
+              {editingReceptionId ? (
+                <Button type="button" variant="ghost" onClick={resetReceptionForm}>
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -5289,12 +5443,13 @@ export function ComprasWorkspace({
                 <TableHead>Estado</TableHead>
                 <TableHead>Recibido</TableHead>
                 <TableHead className="text-right">Ítems</TableHead>
+                <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!recepciones.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                     Aún no hay recepciones registradas.
                   </TableCell>
                 </TableRow>
@@ -5309,6 +5464,16 @@ export function ComprasWorkspace({
                       <TableCell>{asString(recepcion.estado)}</TableCell>
                       <TableCell>{formatDateTime(recepcion.recibido_en)}</TableCell>
                       <TableCell className="text-right">{items.length}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => startEditReception(recepcion)}>
+                            Editar
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteReception(recepcion)}>
+                            Eliminar
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   )
                 })

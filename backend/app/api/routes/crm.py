@@ -18528,6 +18528,63 @@ async def create_compras_recepcion(
     return CRMRecepcionCompra.model_validate(row)
 
 
+@router.patch("/compras/recepciones/{recepcion_id}", response_model=CRMRecepcionCompra)
+async def update_compras_recepcion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    recepcion_id: UUID,
+    payload: CRMRecepcionCompraCreate,
+) -> CRMRecepcionCompra:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if usuario_id:
+        body.setdefault("recibido_por_usuario_id", str(usuario_id))
+    try:
+        updated_recepcion_id = await repo.update_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=recepcion_id,
+            payload=body,
+        )
+        row = await repo.get_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=updated_recepcion_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "exists" in detail.lower() or "unq" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is None:
+        raise HTTPException(status_code=502, detail="recepcion_compra_not_updated")
+    return CRMRecepcionCompra.model_validate(row)
+
+
+@router.delete("/compras/recepciones/{recepcion_id}", response_model=CRMRecepcionCompra)
+async def delete_compras_recepcion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    recepcion_id: UUID,
+) -> CRMRecepcionCompra:
+    try:
+        existing = await repo.get_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=recepcion_id,
+        )
+        if existing is None:
+            raise HTTPException(status_code=404, detail="recepcion_compra_not_found")
+        await repo.delete_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=recepcion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMRecepcionCompra.model_validate(existing)
+
+
 class CatalogVectorStoreStatus(BaseModel):
     last_reindex_at: str | None = None
     last_reindex_by: UUID | None = None

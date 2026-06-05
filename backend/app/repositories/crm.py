@@ -11888,6 +11888,76 @@ class CRMRepository:
                     raise CRMRepositoryError(f"Respuesta inválida al registrar recepcion: {data!r}") from exc
         raise CRMRepositoryError(f"Respuesta inesperada al registrar recepcion: {data!r}")
 
+    async def update_recepcion_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        recepcion_id: UUID,
+        payload: dict[str, Any],
+    ) -> UUID:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_recepcion_id": str(recepcion_id),
+            "p_orden_compra_id": payload.get("orden_compra_id"),
+            "p_almacen_id": payload.get("almacen_id"),
+            "p_numero_recepcion": payload.get("numero_recepcion"),
+            "p_recibido_por_usuario_id": payload.get("recibido_por_usuario_id"),
+            "p_referencia_externa": payload.get("referencia_externa"),
+            "p_observaciones": payload.get("observaciones"),
+            "p_items": payload.get("items") or [],
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/actualizar_recepcion_compra",
+            json=body,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if isinstance(data, str):
+            try:
+                return UUID(data)
+            except (TypeError, ValueError) as exc:
+                raise CRMRepositoryError(f"Respuesta inválida al actualizar recepcion: {data!r}") from exc
+        if isinstance(data, dict):
+            candidate = data.get("id") or data.get("recepcion_id")
+            if candidate:
+                try:
+                    return UUID(str(candidate))
+                except (TypeError, ValueError) as exc:
+                    raise CRMRepositoryError(f"Respuesta inválida al actualizar recepcion: {data!r}") from exc
+        raise CRMRepositoryError(f"Respuesta inesperada al actualizar recepcion: {data!r}")
+
+    async def delete_recepcion_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        recepcion_id: UUID,
+    ) -> UUID:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_recepcion_id": str(recepcion_id),
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/eliminar_recepcion_compra",
+            json=body,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if isinstance(data, str):
+            try:
+                return UUID(data)
+            except (TypeError, ValueError) as exc:
+                raise CRMRepositoryError(f"Respuesta inválida al eliminar recepcion: {data!r}") from exc
+        if isinstance(data, dict):
+            candidate = data.get("id") or data.get("recepcion_id")
+            if candidate:
+                try:
+                    return UUID(str(candidate))
+                except (TypeError, ValueError) as exc:
+                    raise CRMRepositoryError(f"Respuesta inválida al eliminar recepcion: {data!r}") from exc
+        raise CRMRepositoryError(f"Respuesta inesperada al eliminar recepcion: {data!r}")
+
     async def soft_delete_catalog_item(
         self,
         *,

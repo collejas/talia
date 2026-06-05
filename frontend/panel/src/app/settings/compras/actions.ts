@@ -1081,6 +1081,38 @@ export async function createRecepcionAction(formData: FormData): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function updateRecepcionAction(recepcionId: string, formData: FormData): Promise<void> {
+  const items = zipReceptionItems(formData)
+  const payload = {
+    orden_compra_id: parseRequiredText(formData.get("orden_compra_id"), "orden_compra_id"),
+    almacen_id: parseRequiredText(formData.get("almacen_id"), "almacen_id"),
+    numero_recepcion: parseRequiredText(formData.get("numero_recepcion"), "numero_recepcion"),
+    recibido_por_usuario_id: parseOptionalText(formData.get("recibido_por_usuario_id")),
+    referencia_externa: parseOptionalText(formData.get("referencia_externa")),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+    items,
+  }
+
+  const response = await callCrmApi(`/crm/compras/recepciones/${recepcionId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteRecepcionAction(recepcionId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/recepciones/${recepcionId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function createInventarioAjusteAction(formData: FormData): Promise<void> {
   const payload = {
     catalog_item_id: parseRequiredText(formData.get("catalog_item_id"), "catalog_item_id"),
