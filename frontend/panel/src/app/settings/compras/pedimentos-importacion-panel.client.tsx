@@ -215,6 +215,7 @@ export function PedimentosImportacionPanel({
   const [availableOrderSelection, setAvailableOrderSelection] = useState<string[]>([])
   const [associatedOrderSelection, setAssociatedOrderSelection] = useState<string[]>([])
   const [gastoForm, setGastoForm] = useState(() => buildGastoFormState())
+  const [editingGastoMonto, setEditingGastoMonto] = useState(false)
   const [gastoPedimentoId, setGastoPedimentoId] = useState<string>(() => selectedPedimentoId || String(pedimentos[0]?.id ?? ""))
 
   useEffect(() => {
@@ -296,6 +297,9 @@ export function PedimentosImportacionPanel({
       }, 0),
     [selectedPedimentoForActionsGastos],
   )
+  const gastoMonto = asNumber(gastoForm.monto, 0)
+  const gastoTipoCambio = asNumber(gastoForm.tipo_cambio, 1) || 1
+  const gastoMontoMxn = gastoMonto * gastoTipoCambio
   const internationalOrders = useMemo(
     () => ordenes.filter((orden) => String(orden.tipo_operacion ?? "").toLowerCase() === "internacional"),
     [ordenes],
@@ -901,11 +905,43 @@ export function PedimentosImportacionPanel({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gasto-monto-modal">Monto</Label>
-                    <Input id="gasto-monto-modal" name="monto" type="number" step="0.0001" min="0" value={gastoForm.monto} onChange={(event) => setGastoForm((prev) => ({ ...prev, monto: event.target.value }))} required />
+                    <Input
+                      id="gasto-monto-modal"
+                      type="text"
+                      inputMode="decimal"
+                      value={formatCurrencyInput(gastoForm.monto, gastoForm.moneda, editingGastoMonto)}
+                      onFocus={() => setEditingGastoMonto(true)}
+                      onBlur={() => setEditingGastoMonto(false)}
+                      onChange={(event) => setGastoForm((prev) => ({ ...prev, monto: String(parseCurrencyInput(event.target.value)) }))}
+                      placeholder={formatMoney(0, gastoForm.moneda)}
+                      className="text-right tabular-nums"
+                      required
+                    />
+                    <input
+                      type="hidden"
+                      name="monto"
+                      value={Number.isFinite(asNumber(gastoForm.monto)) ? asNumber(gastoForm.monto) : 0}
+                      readOnly
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Equivale a {formatMoney(gastoMontoMxn, "MXN")} usando el tipo de cambio capturado.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gasto-moneda-modal">Moneda</Label>
-                    <select id="gasto-moneda-modal" name="moneda" value={gastoForm.moneda} onChange={(event) => setGastoForm((prev) => ({ ...prev, moneda: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <select
+                      id="gasto-moneda-modal"
+                      name="moneda"
+                      value={gastoForm.moneda}
+                      onChange={(event) =>
+                        setGastoForm((prev) => ({
+                          ...prev,
+                          moneda: event.target.value,
+                          tipo_cambio: event.target.value === "MXN" ? "1" : prev.tipo_cambio || "1",
+                        }))
+                      }
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
                       {moneyOptions.map((moneda) => (
                         <option key={String(moneda.codigo)} value={String(moneda.codigo)}>
                           {asString(moneda.codigo)}
@@ -915,7 +951,18 @@ export function PedimentosImportacionPanel({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gasto-tipo-cambio-modal">Tipo cambio</Label>
-                    <Input id="gasto-tipo-cambio-modal" name="tipo_cambio" type="number" step="0.000001" min="0" value={gastoForm.tipo_cambio} onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_cambio: event.target.value }))} />
+                    <Input
+                      id="gasto-tipo-cambio-modal"
+                      name="tipo_cambio"
+                      type="number"
+                      step="0.000001"
+                      min="0"
+                      value={gastoForm.tipo_cambio}
+                      onChange={(event) => setGastoForm((prev) => ({ ...prev, tipo_cambio: event.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Se usa para convertir el monto a MXN: {formatMoney(gastoMontoMxn, "MXN")}.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gasto-fecha-modal">Fecha</Label>
@@ -1317,8 +1364,8 @@ export function PedimentosImportacionPanel({
                             <TableHead>Partida</TableHead>
                             <TableHead className="text-right">Cantidad</TableHead>
                             <TableHead>Item</TableHead>
-                            <TableHead className="text-right">Base OC MXN</TableHead>
-                            <TableHead className="text-right">Base total MXN</TableHead>
+                            <TableHead className="text-right">Base unit. MXN</TableHead>
+                            <TableHead className="text-right">Base línea MXN</TableHead>
                             <TableHead className="text-right">Inc %</TableHead>
                             <TableHead className="text-right">Inc. unit. MXN</TableHead>
                             <TableHead className="text-right">Total unit. MXN</TableHead>
@@ -1337,8 +1384,10 @@ export function PedimentosImportacionPanel({
                               const item = prorrateo.orden_compra_item && typeof prorrateo.orden_compra_item === "object" ? (prorrateo.orden_compra_item as AnyRecord) : null
                               const order = prorrateo.orden_compra && typeof prorrateo.orden_compra === "object" ? (prorrateo.orden_compra as AnyRecord) : null
                               const quantity = asNumber(item?.cantidad_solicitada, asNumber(item?.cantidad_recibida, 0))
-                              const baseTotalMxn = asNumber(prorrateo.base_total_mxn, 0)
-                              const baseUnitMxn = quantity > 0 ? baseTotalMxn / quantity : 0
+                              const exchangeRate = asNumber(order?.tipo_cambio_referencia, 1) || 1
+                              const baseUnitPurchase = asNumber(item?.costo_unitario, 0)
+                              const baseUnitMxn = baseUnitPurchase * exchangeRate
+                              const baseLineMxn = asNumber(item?.total, asNumber(item?.subtotal, baseUnitPurchase * quantity)) * exchangeRate
                               const extraUnitMxn = asNumber(prorrateo.costo_unitario_adicional, 0)
                               const extraUnitPercent = baseUnitMxn > 0 ? (extraUnitMxn / baseUnitMxn) * 100 : 0
                               const totalUnitMxn = baseUnitMxn + extraUnitMxn
@@ -1351,7 +1400,7 @@ export function PedimentosImportacionPanel({
                                   <TableCell className="text-right">{quantity.toFixed(3)}</TableCell>
                                   <TableCell>{asString(item?.descripcion, "—")}</TableCell>
                                   <TableCell className="text-right">{formatMoney(baseUnitMxn, "MXN")}</TableCell>
-                                  <TableCell className="text-right">{formatMoney(baseTotalMxn, "MXN")}</TableCell>
+                                  <TableCell className="text-right">{formatMoney(baseLineMxn, "MXN")}</TableCell>
                                   <TableCell className="text-right">{extraUnitPercent.toFixed(4)}%</TableCell>
                                   <TableCell className="text-right">{formatMoney(extraUnitMxn, "MXN")}</TableCell>
                                   <TableCell className="text-right">{formatMoney(totalUnitMxn, "MXN")}</TableCell>
