@@ -743,6 +743,9 @@ class CatalogEmbeddingService:
         tipo = _safe_text(row.get("tipo"))
         if tipo:
             sections.append(f"Tipo: {tipo}")
+        description = _safe_text(row.get("descripcion"))
+        if description:
+            sections.append(f"Descripción: {description}")
         short_desc = _safe_text(row.get("descripcion_corta"))
         if short_desc:
             sections.append(f"Resumen corto: {short_desc}")

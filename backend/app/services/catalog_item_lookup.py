@@ -95,17 +95,18 @@ def _score_catalog_item(
 ) -> int:
     name = _normalize_text(str(row.get("nombre") or ""))
     slug = _normalize_text(str(row.get("slug") or ""))
+    description = _normalize_text(str(row.get("descripcion") or ""))
     modelo_name = _normalize_text(str((row.get("modelo") or {}).get("nombre") or ""))
     familia_name = _normalize_text(str((row.get("familia") or {}).get("nombre") or ""))
     linea_name = _normalize_text(str((row.get("linea") or {}).get("nombre") or ""))
     relation_names = [value for value in (modelo_name, familia_name, linea_name) if value]
     if not query_normalized:
         return 0
-    if query_normalized == name or query_normalized == slug:
+    if query_normalized == name or query_normalized == slug or query_normalized == description:
         return 100
     if any(query_normalized == relation_name for relation_name in relation_names):
         return 95
-    if query_normalized in name or query_normalized in slug:
+    if query_normalized in name or query_normalized in slug or query_normalized in description:
         return 80
     if any(query_normalized in relation_name for relation_name in relation_names):
         return 74
@@ -131,6 +132,7 @@ def _score_catalog_item(
         for token in query_tokens
         if token in name
         or token in slug
+        or token in description
         or any(token in relation_name for relation_name in relation_names)
     )
     if overlap <= 0:

@@ -1574,7 +1574,7 @@ def _is_pytest_runtime() -> bool:
     return bool(os.getenv("PYTEST_CURRENT_TEST"))
 DEFAULT_CONTACTS_LIMIT = 200
 DEFAULT_PORTAL_TOKEN_DAYS = 14
-QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta))"
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
@@ -12046,6 +12046,7 @@ class CRMCatalogItem(BaseModel):
     slug: str | None = None
     nombre: str
     tipo: str
+    descripcion: str | None = None
     descripcion_corta: str | None = None
     descripcion_larga: str | None = None
     unidad: str
@@ -12085,6 +12086,7 @@ class CRMCatalogItemCreate(BaseModel):
     slug: str | None = Field(default=None, max_length=140)
     nombre: str = Field(..., max_length=255)
     tipo: str = Field(default="servicio")
+    descripcion: str | None = Field(default=None, max_length=4000)
     descripcion_corta: str | None = Field(default=None, max_length=400)
     descripcion_larga: str | None = Field(default=None, max_length=4000)
     unidad: str = Field(default="unidad", max_length=80)
@@ -12115,6 +12117,7 @@ class CRMCatalogItemUpdate(BaseModel):
     slug: str | None = Field(default=None, max_length=140)
     nombre: str | None = Field(default=None, max_length=255)
     tipo: str | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=4000)
     descripcion_corta: str | None = Field(default=None, max_length=400)
     descripcion_larga: str | None = Field(default=None, max_length=4000)
     unidad: str | None = Field(default=None, max_length=80)
@@ -13223,6 +13226,16 @@ class CRMProductImportSummary(BaseModel):
     created: int
     updated: int
     errors: list[CRMProductImportRowError] = Field(default_factory=list)
+
+
+def _default_product_metadata_field() -> dict[str, Any]:
+    return {
+        "id": "descripcion",
+        "label": "Descripción",
+        "type": "text",
+        "required": False,
+        "description": "Descripción principal del producto.",
+    }
 
 
 class CRMLineaDeNegocio(BaseModel):
@@ -16423,6 +16436,7 @@ async def import_product_catalog_items(
             nombre = _pick_value(row, BASE_HEADER_CANDIDATES["nombre"])
             if not nombre:
                 raise ValueError("Falta el nombre del producto.")
+            descripcion = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion"])
             linea_name = _pick_value(row, BASE_HEADER_CANDIDATES["linea"])
             if not linea_name:
                 raise ValueError("Falta la línea asociada.")
@@ -16471,6 +16485,8 @@ async def import_product_catalog_items(
                 "tipo": "producto",
             }
             payload["organizacion_id"] = str(organizacion_id)
+            if descripcion:
+                payload["descripcion"] = descripcion
             if modelo_id:
                 payload["modelo_id"] = str(modelo_id)
             if metadata:
@@ -19764,7 +19780,7 @@ async def list_product_metadata_schemes(
         rows = await repo.list_product_metadata_schemes(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMProductMetadataScheme.model_validate(row) for row in rows]
+    return [CRMProductMetadataScheme.model_validate(_ensure_default_product_metadata_field(row)) for row in rows]
 
 
 @router.post(
@@ -19782,11 +19798,11 @@ async def create_product_metadata_scheme(
     try:
         row = await repo.create_product_metadata_scheme(
             organizacion_id=organizacion_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=_merge_default_product_metadata_field(payload.model_dump(mode="json", exclude_unset=True)),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMProductMetadataScheme.model_validate(row)
+    return CRMProductMetadataScheme.model_validate(_ensure_default_product_metadata_field(row))
 
 
 @router.patch("/productos/importador/schemes/{scheme_id}", response_model=CRMProductMetadataScheme)
@@ -19804,13 +19820,13 @@ async def update_product_metadata_scheme(
         row = await repo.update_product_metadata_scheme(
             organizacion_id=organizacion_id,
             scheme_id=scheme_id,
-            payload=payload.model_dump(mode="json", exclude_none=True),
+            payload=_merge_default_product_metadata_field(payload.model_dump(mode="json", exclude_none=True)),
         )
     except CRMRepositoryError as exc:
         detail = "scheme_not_found" if "scheme_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "scheme_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    return CRMProductMetadataScheme.model_validate(row)
+    return CRMProductMetadataScheme.model_validate(_ensure_default_product_metadata_field(row))
 
 
 @router.delete(
@@ -19911,8 +19927,40 @@ def _build_field_header_map(
     return mapping
 
 
+def _normalize_product_metadata_fields(raw_fields: Any) -> list[dict[str, Any]]:
+    fields: list[dict[str, Any]] = []
+    if isinstance(raw_fields, list):
+        for raw in raw_fields:
+            if not isinstance(raw, dict):
+                continue
+            fields.append(dict(raw))
+    has_default = False
+    for field in fields:
+        field_id = str(field.get("id") or field.get("slug") or "").strip().lower()
+        field_label = str(field.get("label") or field.get("name") or "").strip().lower()
+        if field_id == "descripcion" or field_label == "descripción":
+            has_default = True
+            break
+    if not has_default:
+        fields.insert(0, _default_product_metadata_field())
+    return fields
+
+
+def _merge_default_product_metadata_field(payload: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(payload)
+    merged["fields"] = _normalize_product_metadata_fields(payload.get("fields"))
+    return merged
+
+
+def _ensure_default_product_metadata_field(row: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return row
+    return _merge_default_product_metadata_field(row)
+
+
 BASE_HEADER_CANDIDATES = {
     "nombre": ["nombre", "name"],
+    "descripcion": ["descripcion", "description", "desc"],
     "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
     "familia": ["familia", "family", "familia_nombre"],
     "modelo": ["modelo", "model", "modelo_nombre"],

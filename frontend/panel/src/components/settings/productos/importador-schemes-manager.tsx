@@ -28,6 +28,16 @@ import {
 
 type Scheme = ImporterScheme
 
+const DEFAULT_IMPORTER_FIELDS: ImporterField[] = [
+  {
+    id: "descripcion",
+    label: "Descripción",
+    type: "text",
+    required: false,
+    description: "Descripción principal del producto.",
+  },
+]
+
 const FIELD_TYPES: { label: string; value: ImporterFieldType }[] = [
   { label: "Texto", value: "text" },
   { label: "Número", value: "number" },
@@ -37,6 +47,16 @@ const FIELD_TYPES: { label: string; value: ImporterFieldType }[] = [
 
 function newField(): ImporterField {
   return { id: "", label: "", type: "text", required: false, description: "" }
+}
+
+function mergeDefaultFields(fields: ImporterField[]): ImporterField[] {
+  const merged = [...fields]
+  for (const defaultField of DEFAULT_IMPORTER_FIELDS) {
+    if (!merged.some((field) => field.id === defaultField.id)) {
+      merged.unshift({ ...defaultField })
+    }
+  }
+  return merged
 }
 
 function slugify(value: string): string {
@@ -75,10 +95,12 @@ function parseApiErrorPayload(payload: unknown): string {
 
 function buildFormValuesForScheme(scheme: Scheme | null) {
   if (!scheme) {
-    return { name: "", description: "", fields: [newField()] }
+    return { name: "", description: "", fields: [...DEFAULT_IMPORTER_FIELDS, newField()] }
   }
   const fields =
-    scheme.fields.length > 0 ? scheme.fields.map((field) => ({ ...field })) : [newField()]
+    scheme.fields.length > 0
+      ? mergeDefaultFields(scheme.fields.map((field) => ({ ...field })))
+      : [...DEFAULT_IMPORTER_FIELDS, newField()]
   return {
     name: scheme.name,
     description: scheme.description ?? "",
@@ -153,7 +175,16 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
 
   const downloadTemplate = useCallback(
     (scheme: Scheme) => {
-      const headers = ["nombre", "linea", "familia", "modelo", ...scheme.fields.map((field) => field.id || field.label)]
+      const headers = [
+        "nombre",
+        "descripcion",
+        "linea",
+        "familia",
+        "modelo",
+        ...mergeDefaultFields(scheme.fields)
+          .map((field) => field.id || field.label)
+          .filter((field): field is string => field !== "descripcion"),
+      ]
       const csv = headers.join(",") + "\n"
       const blob = new Blob([csv], { type: "text/csv" })
       const url = URL.createObjectURL(blob)
@@ -395,38 +426,50 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
+                    <TableHead>Descripción</TableHead>
                     <TableHead>Línea</TableHead>
                     <TableHead>Familia</TableHead>
                     <TableHead>Modelo</TableHead>
-                    {formValues.fields.map((field, index) => (
-                      <TableHead key={`${field.id}-${index}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{field.label || field.id || `Campo ${index + 1}`}</span>
-                          <button
-                            type="button"
-                            className="text-xs text-destructive underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={() => handleRemoveField(index)}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </TableHead>
-                    ))}
+                    {formValues.fields.map((field, index) => {
+                      if (field.id === "descripcion") {
+                        return null
+                      }
+                      return (
+                        <TableHead key={`${field.id}-${index}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{field.label || field.id || `Campo ${index + 1}`}</span>
+                            <button
+                              type="button"
+                              className="text-xs text-destructive underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={() => handleRemoveField(index)}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </TableHead>
+                      )
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <TableRow>
                     <TableCell>Protótipo 1</TableCell>
+                    <TableCell>Descripción breve del producto</TableCell>
                     <TableCell>Residencial</TableCell>
                     <TableCell>Familia muestra</TableCell>
                     <TableCell>Modelo base</TableCell>
-                    {formValues.fields.map((field, index) => (
-                      <TableCell key={`${field.id || index}`}>
-                        {field.type === "boolean"
-                          ? "sí / no"
-                          : field.label || field.id || `Val ${index + 1}`}
-                      </TableCell>
-                    ))}
+                    {formValues.fields.map((field, index) => {
+                      if (field.id === "descripcion") {
+                        return null
+                      }
+                      return (
+                        <TableCell key={`${field.id || index}`}>
+                          {field.type === "boolean"
+                            ? "sí / no"
+                            : field.label || field.id || `Val ${index + 1}`}
+                        </TableCell>
+                      )
+                    })}
                   </TableRow>
                 </TableBody>
               </Table>

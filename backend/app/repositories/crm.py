@@ -29,7 +29,7 @@ class CRMRepositoryError(RuntimeError):
     """Errores al interactuar con Supabase CRM."""
 
 
-QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta))"
 
 PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS = 30.0
 PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS = 30.0
@@ -9550,7 +9550,7 @@ class CRMRepository:
                 sanitized = pattern.replace("%", "").replace("*", "")
                 params["or"] = (
                     f"(nombre.ilike.*{sanitized}*,slug.ilike.*{sanitized}*,"
-                    f"descripcion_corta.ilike.*{sanitized}*)"
+                    f"descripcion.ilike.*{sanitized}*,descripcion_corta.ilike.*{sanitized}*)"
                 )
         resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
         data = resp.json()
