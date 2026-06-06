@@ -14,6 +14,7 @@ class DummyCRMRepository(CRMRepository):
     """Repo falso que permite inyectar respuestas predecibles."""
 
     def __init__(self) -> None:  # pragma: no cover - simple init
+        self._user_token = None
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.pipeline_stages: list[dict[str, Any]] = []
         self.pipeline_opportunities: list[dict[str, Any]] = []
@@ -61,6 +62,15 @@ class DummyCRMRepository(CRMRepository):
     async def get_permission_context(self) -> dict[str, Any]:
         self.calls.append(("get_permission_context", {}))
         return dict(self.permission_context)
+
+    async def get_organizacion_config(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("get_organizacion_config", kwargs))
+        return {
+            "features": {
+                "propiedades": {"enabled": True},
+                "productos": {"enabled": True},
+            }
+        }
 
     async def list_accounts(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_accounts", kwargs))
@@ -1386,7 +1396,7 @@ async def test_registrar_venta_propiedad_requiere_oportunidad(
 
 @pytest.mark.asyncio
 async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
-    client: AsyncClient, fake_repo: DummyCRMRepository
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     catalog_item_id = uuid.uuid4()
     unidad_id = uuid.uuid4()
@@ -1433,6 +1443,14 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
         },
     }
 
+    monkeypatch.setattr(crm_routes, "_render_quote_pdf_after_sale", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        crm_routes,
+        "_mark_quote_as_accepted_from_mapbox",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(crm_routes, "_advance_opportunity_to_won", AsyncMock(return_value=None))
+
     resp = await client.post(
         "/crm/ventas/propiedades",
         headers=_headers(),
@@ -1455,7 +1473,7 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert any(call_name == "create_quote" for call_name, _ in fake_repo.calls)
     assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
     assert fake_repo.updated_propiedad_unidades
-    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "vendido"
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status_comercial"] == "vendido"
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["catalog_item_id"] == str(catalog_item_id)
     assert fake_repo.created_propiedad_unidad_movimientos
@@ -3004,4 +3022,3 @@ async def test_prospect_full_lookup_and_checklist_batches_allow_300_ids() -> Non
         crm_routes.ProspectoChecklistLookupPayload.model_validate({"limit": 301})
     with pytest.raises(crm_routes.ValidationError):
         crm_routes.ProspectoChecklistScraperPayload.model_validate({"prospecto_ids": over_limit_ids, "limit": 300})
-
