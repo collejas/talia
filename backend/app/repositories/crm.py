@@ -1133,7 +1133,7 @@ class CRMRepository:
         payload: dict[str, Any],
         organizacion_id: UUID | None = None,
     ) -> dict[str, Any]:
-        resp = await self._request(
+        resp = await self._request_service_role(
             "POST",
             "/rest/v1/propiedad_unidad_movimientos",
             json=payload,

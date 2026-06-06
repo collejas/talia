@@ -354,3 +354,37 @@ async def test_get_propiedad_capa_does_not_filter_by_organizacion_id(
     assert captured["method"] == "GET"
     assert captured["path"] == "/rest/v1/propiedad_capas"
     assert captured["params"] == {"id": f"eq.{capa_id}", "limit": "1"}
+
+
+@pytest.mark.asyncio
+async def test_create_propiedad_unidad_movimiento_uses_service_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository(user_token="user-token")
+    captured: dict[str, object] = {}
+
+    async def fake_request_service_role(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        captured["json"] = kwargs.get("json")
+        return DummyResponse([{"id": str(uuid.uuid4())}])
+
+    monkeypatch.setattr(repo, "_request_service_role", fake_request_service_role)
+
+    await repo.create_propiedad_unidad_movimiento(
+        organizacion_id=uuid.uuid4(),
+        payload={
+            "organizacion_id": str(uuid.uuid4()),
+            "unidad_id": str(uuid.uuid4()),
+            "estado_anterior": "disponible",
+            "estado_nuevo": "reservado",
+        },
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/rest/v1/propiedad_unidad_movimientos"
+    assert captured["json"]["estado_nuevo"] == "reservado"
