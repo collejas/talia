@@ -120,14 +120,6 @@ type MixItem = {
   desarrollo_id: string;
 };
 
-type OpportunityOption = {
-  id: string;
-  titulo: string;
-  contactoNombre: string | null;
-  cuentaNombre: string | null;
-  etapaCodigo: string | null;
-};
-
 type UnidadFormState = {
   unidad: string;
   nombre: string;
@@ -138,7 +130,6 @@ type UnidadFormState = {
   precio: string;
   precioM2: string;
   area: string;
-  oportunidadId: string;
   lineaId: string;
   familiaId: string;
   modeloId: string;
@@ -657,7 +648,6 @@ const PRECIO_TIPO_OPTIONS = [
   { value: "m2", label: "Por m²" },
 ] as const;
 
-const SALE_TRACKED_STATUS_SET = new Set(["reservado", "apartado", "vendido"]);
 const PROPERTY_MODAL_WIDTH_CLASS = "max-w-3xl";
 const PROPERTY_MODAL_BODY_CLASS = "max-h-[72vh] space-y-4 overflow-y-auto pr-1";
 const PROPERTY_MODAL_MIX_BODY_CLASS = "max-h-[76vh] space-y-4 overflow-y-auto pr-1";
@@ -707,7 +697,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       precio: "",
       precioM2: "",
       area: "",
-      oportunidadId: "",
       lineaId: lineas[0]?.id ?? "",
       familiaId: familias[0]?.id ?? "",
       modeloId: modelos[0]?.id ?? "",
@@ -1054,13 +1043,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         const next = { ...prev, [field]: value } as UnidadFormState;
         if (field === "destinoInventario" && value === "patrimonial") {
           next.status = "bloqueado";
-          next.oportunidadId = "";
         }
         if (field === "precioTipo" && value === "manual") {
           next.precioM2 = "";
-        }
-        if (field === "status" && !SALE_TRACKED_STATUS_SET.has(value)) {
-          next.oportunidadId = "";
         }
         return next;
       });
@@ -1146,7 +1131,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         precio: unidad.precio != null ? String(unidad.precio) : "",
         precioM2: unidad.precio_m2 != null ? String(unidad.precio_m2) : "",
         area: unidad.area_m2 != null ? String(unidad.area_m2) : "",
-        oportunidadId: unidad.oportunidad_id || "",
         lineaId: unidad.linea_id || "",
         familiaId: unidad.familia_id || "",
         modeloId: unidad.modelo_id || "",
@@ -1245,8 +1229,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [mixMunicipioOptions, setMixMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isLoadingOpportunities, setIsLoadingOpportunities] = useState(false);
-  const [opportunityOptions, setOpportunityOptions] = useState<OpportunityOption[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
@@ -1633,42 +1615,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     };
   }, [mixForm.estadoCve]);
 
-  useEffect(() => {
-    if (!isUnidadModalOpen) {
-      setOpportunityOptions([]);
-      setIsLoadingOpportunities(false);
-      return;
-    }
-    const controller = new AbortController();
-    setIsLoadingOpportunities(true);
-    (async () => {
-      try {
-        const response = await fetch("/api/crm/oportunidades/ventas/lista?limit=200", {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error || "No se pudieron consultar oportunidades.");
-        }
-        const data = await response.json().catch(() => []);
-        if (!controller.signal.aborted) {
-          setOpportunityOptions(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error("Error cargando oportunidades:", error);
-          setOpportunityOptions([]);
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingOpportunities(false);
-        }
-      }
-    })();
-    return () => controller.abort();
-  }, [isUnidadModalOpen]);
-
-  const unidadRequiereOportunidad = SALE_TRACKED_STATUS_SET.has(unidadForm.status);
   const unidadEsPatrimonial = unidadForm.destinoInventario === "patrimonial";
   const unidadPrecioCalculado = useMemo(() => {
     if (unidadForm.precioTipo === "m2") {
@@ -1995,13 +1941,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         payload.area_m2 = areaValue;
       }
     }
-    if (unidadRequiereOportunidad) {
-      if (!unidadForm.oportunidadId) {
-        setUnidadFormError("Selecciona la oportunidad vinculada a este estado.");
-        return;
-      }
-      payload.oportunidad_id = unidadForm.oportunidadId;
-    }
     if (unidadForm.lineaId) {
       payload.linea_id = unidadForm.lineaId;
     }
@@ -2062,7 +2001,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     editingUnidad,
     resetUnidadForm,
     unidadForm,
-    unidadRequiereOportunidad,
   ]);
 
   const handleCreateMix = useCallback(async () => {
@@ -3499,37 +3437,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     Esta unidad se guardará como bloqueada y fuera del flujo comercial.
                   </p>
                 )}
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[0.7rem]">
-                  Oportunidad {unidadRequiereOportunidad ? "(requerida)" : "(opcional)"}
-                </Label>
-                <Select
-                  value={unidadForm.oportunidadId || "__none"}
-                  onValueChange={(value) =>
-                    handleUnidadField("oportunidadId", value === "__none" ? "" : value)
-                  }
-                  disabled={unidadEsPatrimonial}
-                >
-                  <SelectTrigger size="sm">
-                    <SelectValue
-                      placeholder={
-                        isLoadingOpportunities
-                          ? "Cargando oportunidades…"
-                          : "Selecciona una oportunidad"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Sin oportunidad</SelectItem>
-                    {opportunityOptions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.titulo}
-                        {option.contactoNombre ? ` · ${option.contactoNombre}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
