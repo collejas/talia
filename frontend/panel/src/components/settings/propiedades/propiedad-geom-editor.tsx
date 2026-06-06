@@ -177,6 +177,27 @@ export function PropiedadGeomEditor({
         fillOpacity: 0.12,
       };
     });
+
+    if (!highlightId || !mapRef.current) {
+      return;
+    }
+    let highlightedLayer: any = null;
+    overlayRef.current.eachLayer((layer: any) => {
+      if (highlightedLayer) {
+        return;
+      }
+      const feature = layer?.feature as { id?: string } | undefined;
+      if (String(feature?.id ?? "") === String(highlightId)) {
+        highlightedLayer = layer;
+      }
+    });
+    if (!highlightedLayer || typeof highlightedLayer.getBounds !== "function") {
+      return;
+    }
+    const bounds = highlightedLayer.getBounds();
+    if (bounds?.isValid?.()) {
+      mapRef.current.fitBounds(bounds, { padding: [36, 36], maxZoom: 18 });
+    }
   }, [features, highlightId]);
 
   return (

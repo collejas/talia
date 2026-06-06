@@ -960,6 +960,45 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     [handleSelectGeometryTarget],
   );
 
+  const handleFocusDesarrollo = useCallback(
+    (desarrollo: DesarrolloNode) => {
+      handleSelectDesarrolloGeometry(desarrollo);
+      setExpandedNodes((prev) => ({ ...prev, [desarrollo.id]: true }));
+    },
+    [handleSelectDesarrolloGeometry],
+  );
+
+  const handleFocusCapa = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode) => {
+      handleSelectCapaGeometry(desarrollo, capa);
+      setExpandedNodes((prev) => ({
+        ...prev,
+        [desarrollo.id]: true,
+        [capa.id]: true,
+      }));
+    },
+    [handleSelectCapaGeometry],
+  );
+
+  const handleFocusUnidad = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
+      handleSelectUnidadGeometry(desarrollo, capa, unidad);
+      setExpandedNodes((prev) => ({
+        ...prev,
+        [desarrollo.id]: true,
+        [capa.id]: true,
+      }));
+    },
+    [handleSelectUnidadGeometry],
+  );
+
+  const isTreeNodeSelected = useCallback(
+    (nodeType: GeometryTarget["type"], nodeId: string) => {
+      return geometryTarget?.type === nodeType && geometryTarget.id === nodeId;
+    },
+    [geometryTarget],
+  );
+
   const handleCapaField = useCallback(
     (field: keyof typeof capaForm, value: string) => {
       setCapaForm((prev) => ({ ...prev, [field]: value }));
@@ -2184,18 +2223,34 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
 
   const renderUnidadRow = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
+    const isSelected = isTreeNodeSelected("unidad", unidad.id);
     return (
       <div key={unidad.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.75rem]">
-          <div className="flex items-center gap-2">
-            <IconSquares className="size-4 text-slate-400" />
+          <button
+            type="button"
+            className={`flex flex-1 items-center gap-2 rounded-md border-l-4 px-2 py-1 text-left transition ${
+              isSelected
+                ? "border-l-sky-500 bg-sky-50 text-sky-900 shadow-sm"
+                : "border-l-transparent hover:bg-slate-100/80"
+            }`}
+            onClick={() => handleFocusUnidad(desarrollo, capa, unidad)}
+            aria-label={`Centrar unidad ${unidad.unidad || "sin clave"}`}
+          >
+            <IconSquares className={`size-4 ${isSelected ? "text-sky-600" : "text-slate-400"}`} />
             <div className="flex flex-col">
-              <span className="font-semibold">{unidad.unidad || "Unidad sin clave"}</span>
-              <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">
+              <span className={`font-semibold ${isSelected ? "text-sky-900" : ""}`}>
+                {unidad.unidad || "Unidad sin clave"}
+              </span>
+              <span
+                className={`text-[0.6rem] uppercase tracking-[0.2em] ${
+                  isSelected ? "text-sky-700" : "text-slate-400"
+                }`}
+              >
                 unidad
               </span>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-1 text-slate-500">
             <Button
               type="button"
@@ -2251,10 +2306,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
     const isExpanded = expandedNodes[capa.id] ?? false;
     const capaLabel = capa.nombre || `Nivel ${capa.nivel ?? "?"}`;
+    const isSelected = isTreeNodeSelected("capa", capa.id);
     return (
       <div key={capa.id} className="space-y-2 border-b border-dashed border-slate-200 pb-3 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.75rem]">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -2264,13 +2320,28 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             >
               {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
             </Button>
-            <div className="flex items-center gap-2">
-              <IconLayersSelected className="size-4 text-slate-400" />
+            <button
+              type="button"
+              className={`flex flex-1 items-center gap-2 rounded-md border-l-4 px-2 py-1 text-left transition ${
+                isSelected
+                  ? "border-l-orange-500 bg-orange-50 text-orange-900 shadow-sm"
+                  : "border-l-transparent hover:bg-slate-100/80"
+              }`}
+              onClick={() => handleFocusCapa(desarrollo, capa)}
+              aria-label={`Centrar capa ${capaLabel}`}
+            >
+              <IconLayersSelected className={`size-4 ${isSelected ? "text-orange-600" : "text-slate-400"}`} />
               <div className="flex flex-col">
-                <span className="font-semibold">{capaLabel}</span>
-                <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">capa</span>
+                <span className={`font-semibold ${isSelected ? "text-orange-900" : ""}`}>{capaLabel}</span>
+                <span
+                  className={`text-[0.6rem] uppercase tracking-[0.2em] ${
+                    isSelected ? "text-orange-700" : "text-slate-400"
+                  }`}
+                >
+                  capa
+                </span>
               </div>
-            </div>
+            </button>
           </div>
           <div className="flex items-center gap-1 text-slate-500">
             <Button
@@ -2327,10 +2398,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
     const isExpanded = expandedNodes[desarrollo.id] ?? true;
+    const isSelected = isTreeNodeSelected("desarrollo", desarrollo.id);
     return (
       <div key={desarrollo.id} className="space-y-2 border-b border-dashed border-slate-200 pb-4 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.85rem]">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -2340,15 +2412,30 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             >
               {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
             </Button>
-            <div className="flex items-center gap-2">
-              <IconBuilding className="size-4 text-slate-400" />
+            <button
+              type="button"
+              className={`flex flex-1 items-center gap-2 rounded-md border-l-4 px-2 py-1 text-left transition ${
+                isSelected
+                  ? "border-l-violet-500 bg-violet-50 text-violet-950 shadow-sm"
+                  : "border-l-transparent hover:bg-slate-100/80"
+              }`}
+              onClick={() => handleFocusDesarrollo(desarrollo)}
+              aria-label={`Centrar desarrollo ${desarrollo.nombre}`}
+            >
+              <IconBuilding className={`size-4 ${isSelected ? "text-violet-600" : "text-slate-400"}`} />
               <div className="flex flex-col">
-                <span className="font-semibold">{desarrollo.nombre}</span>
-                <span className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+                <span className={`font-semibold ${isSelected ? "text-violet-950" : ""}`}>
+                  {desarrollo.nombre}
+                </span>
+                <span
+                  className={`text-[0.6rem] uppercase tracking-[0.3em] ${
+                    isSelected ? "text-violet-700" : "text-slate-400"
+                  }`}
+                >
                   {desarrollo.tipo || "horizontal"}
                 </span>
               </div>
-            </div>
+            </button>
           </div>
           <div className="flex items-center gap-1 text-slate-500">
             <Button
