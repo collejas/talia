@@ -510,10 +510,12 @@ export function ContactsDataTable({
   data,
   onFiltersChange,
   onVisibleRowsChange,
+  loading = false,
 }: {
   data: ContactTableRow[];
   onFiltersChange?: (filters: ContactFilters) => void;
   onVisibleRowsChange?: (rows: ContactTableRow[]) => void;
+  loading?: boolean;
 }) {
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
@@ -1070,17 +1072,19 @@ export function ContactsDataTable({
   }, [filteredData, onVisibleRowsChange]);
 
   const resultsLabel =
-    searchQuery.length > 0
-      ? remoteSearchLoading
-        ? "Buscando contactos..."
-        : remoteSearchError
-          ? remoteSearchError
-          : remoteSearchTotalRows !== null
-            ? `${filteredData.length} de ${remoteSearchTotalRows} contactos`
-            : `${filteredData.length} contactos`
-      : createdFromFilter || createdToFilter || ownerFilter !== "all" || activeAdvancedFilterCount > 0
-        ? `${filteredData.length} de ${sourceData.length} contactos`
-        : `${tableRows.length} contactos`;
+    loading && !tableRows.length && !searchQuery
+      ? "Cargando contactos..."
+      : searchQuery.length > 0
+        ? remoteSearchLoading
+          ? "Buscando contactos..."
+          : remoteSearchError
+            ? remoteSearchError
+            : remoteSearchTotalRows !== null
+              ? `${filteredData.length} de ${remoteSearchTotalRows} contactos`
+              : `${filteredData.length} contactos`
+        : createdFromFilter || createdToFilter || ownerFilter !== "all" || activeAdvancedFilterCount > 0
+          ? `${filteredData.length} de ${sourceData.length} contactos`
+          : `${tableRows.length} contactos`;
 
   const toolbarLeadingActions = (
     <div className="flex w-full flex-wrap items-center gap-2">
@@ -1644,6 +1648,7 @@ export function ContactsDataTable({
         initialVisibility={contactVisibility}
         storageKey="contacts-table-column-order"
         toolbarActions={toolbarActions}
+        loading={loading && !filteredData.length}
         selectionActions={(selectedRows) => {
           if (!canWrite || !selectedRows.length) return null;
           if (!selectedRows.every((row) => canDeleteContactRow(row))) return null;

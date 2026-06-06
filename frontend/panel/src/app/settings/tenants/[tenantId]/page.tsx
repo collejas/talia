@@ -173,6 +173,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
       whatsappConfig,
       "welcome_document_prompt_version",
     ),
+    whatsapp_location_href: getNestedString(whatsappConfig, "location_href"),
     whatsapp_assistant_id: getNestedString(whatsappConfig, "assistant_id"),
     whatsapp_inactivity_minutes: getNestedNumber(whatsappConfig, "inactivity_minutes"),
     whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),

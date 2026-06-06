@@ -698,6 +698,7 @@ export type WhatsAppInitialValues = {
   whatsapp_prompt_id?: string
   whatsapp_prompt_version?: string
   whatsapp_welcome_document_prompt_version?: string
+  whatsapp_location_href?: string
   whatsapp_assistant_id?: string
   whatsapp_inactivity_minutes?: number
   whatsapp_reengage_minutes?: number
@@ -1949,6 +1950,18 @@ export function TenantWhatsAppSettings({
             />
             <p className="text-xs text-muted-foreground">
               Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de bienvenida.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_location_href">whatsapp.location_href</Label>
+            <Input
+              id="whatsapp_location_href"
+              name="whatsapp_location_href"
+              placeholder="https://www.google.com/maps/..."
+              defaultValue={initialValues.whatsapp_location_href ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              Pega aquí el link directo de Google Maps del desarrollo.
             </p>
           </div>
           <div className="space-y-2">

@@ -807,6 +807,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const promptId = getText(formData, "whatsapp_prompt_id")
     const promptVersion = getText(formData, "whatsapp_prompt_version")
     const welcomeDocumentPromptVersion = getText(formData, "whatsapp_welcome_document_prompt_version")
+    const locationHref = getText(formData, "whatsapp_location_href")
     const assistantId = getText(formData, "whatsapp_assistant_id")
     const inactivityMinutesRaw = getText(formData, "whatsapp_inactivity_minutes")
     const reengageMinutesRaw = getText(formData, "whatsapp_reengage_minutes")
@@ -841,6 +842,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (promptId) whatsappPatch.prompt_id = promptId
     if (promptVersion) whatsappPatch.prompt_version = promptVersion
     if (welcomeDocumentPromptVersion) whatsappPatch.welcome_document_prompt_version = welcomeDocumentPromptVersion
+    if (locationHref) whatsappPatch.location_href = locationHref
     if (assistantId) whatsappPatch.assistant_id = assistantId
     const inactivityMinutes = parseNumber(inactivityMinutesRaw)
     if (inactivityMinutes !== undefined) whatsappPatch.inactivity_minutes = inactivityMinutes

@@ -1072,6 +1072,13 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_WELCOME_DOCUMENT_PROMPT_VERSION",
         ),
     )
+    whatsapp_location_href: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_LOCATION_HREF",
+            "TALIA_WHATSAPP_LOCATION_HREF",
+        ),
+    )
     whatsapp_assistant_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

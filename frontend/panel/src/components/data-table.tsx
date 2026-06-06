@@ -587,6 +587,7 @@ export function DataTable({
   selectionActions,
   forcedColumnOrder,
   hideDefaultActions = false,
+  loading = false,
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
@@ -602,6 +603,7 @@ export function DataTable({
   selectionActions?: (selectedRows: TableRowData[]) => React.ReactNode
   forcedColumnOrder?: string[]
   hideDefaultActions?: boolean
+  loading?: boolean
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -1030,7 +1032,7 @@ export function DataTable({
                       colSpan={mergedColumns.length}
                       className="h-24 text-center"
                     >
-                      No results.
+                      {loading ? "Cargando datos..." : "No results."}
                     </TableCell>
                   </TableRow>
                 )}

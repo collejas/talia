@@ -4,14 +4,27 @@ import * as React from "react"
 
 import { ContactSectionCards } from "@/components/contactos/section-cards"
 import { ContactsDataTable } from "@/components/contactos/contacts-data-table"
+import { SessionRecovery } from "@/components/session-recovery"
 import type { ContactFilters, ContactCards, ContactTableRow } from "@/lib/contactos/types"
 
 type ContactosPageClientProps = {
-  initialCards: ContactCards
-  table: ContactTableRow[]
+  initialCards?: ContactCards
+  table?: ContactTableRow[]
 }
 
-export default function ContactosPageClient({ initialCards, table }: ContactosPageClientProps) {
+const EMPTY_CARDS: ContactCards = {
+  total: 0,
+  completos: 0,
+  incompletos: 0,
+  activos: 0,
+  leads: 0,
+  propietarios: 0,
+  topPropietarioNombre: null,
+  topPropietarioTotal: 0,
+  ultimo: null,
+}
+
+export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table = [] }: ContactosPageClientProps) {
   const [filters, setFilters] = React.useState<ContactFilters>({
     search: "",
     owner: "all",
@@ -37,27 +50,116 @@ export default function ContactosPageClient({ initialCards, table }: ContactosPa
       municipio: "",
     },
   })
+  const [cards, setCards] = React.useState<ContactCards>(initialCards)
+  const [tableRows, setTableRows] = React.useState<ContactTableRow[]>(table)
   const [visibleRows, setVisibleRows] = React.useState<ContactTableRow[]>(table)
+  const [loadingCards, setLoadingCards] = React.useState(true)
+  const [loadingTable, setLoadingTable] = React.useState(true)
+  const [errors, setErrors] = React.useState<string[]>([])
 
   const handleFiltersChange = React.useCallback((nextFilters: ContactFilters) => {
     setFilters((prev) => (areFiltersEqual(prev, nextFilters) ? prev : nextFilters))
   }, [])
 
-  const cards = React.useMemo(
-    () => (isDefaultFilterSet(filters) ? initialCards : mapCardsFromRows(visibleRows)),
-    [filters, initialCards, visibleRows],
+  React.useEffect(() => {
+    const controller = new AbortController()
+    let alive = true
+
+    const loadCards = async () => {
+      try {
+        const response = await fetch("/api/contactos/summary", {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error || `Error ${response.status}`)
+        }
+        const body = (await response.json()) as ContactCards
+        if (alive) setCards(body)
+      } catch (error) {
+        if ((error as Error).name !== "AbortError" && alive) {
+          setErrors((current) => [...current, error instanceof Error ? error.message : "No se pudo cargar el resumen de contactos."])
+        }
+      } finally {
+        if (alive) setLoadingCards(false)
+      }
+    }
+
+    const loadTable = async () => {
+      try {
+        const response = await fetch("/api/contactos/list?limit=200", {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error || `Error ${response.status}`)
+        }
+        const body = (await response.json()) as { items?: ContactTableRow[] }
+        if (alive) {
+          const nextRows = Array.isArray(body.items) ? body.items : []
+          setTableRows(nextRows)
+          setVisibleRows(nextRows)
+        }
+      } catch (error) {
+        if ((error as Error).name !== "AbortError" && alive) {
+          setErrors((current) => [...current, error instanceof Error ? error.message : "No se pudo cargar el listado de contactos."])
+        }
+      } finally {
+        if (alive) setLoadingTable(false)
+      }
+    }
+
+    void loadCards()
+    void loadTable()
+
+    return () => {
+      alive = false
+      controller.abort()
+    }
+  }, [])
+
+  const derivedCards = React.useMemo(
+    () => (isDefaultFilterSet(filters) ? cards : mapCardsFromRows(visibleRows)),
+    [cards, filters, visibleRows],
   )
 
   return (
     <div className="space-y-4">
-      <ContactSectionCards data={cards} />
+      <SessionRecovery errors={errors} />
+      {errors.length ? (
+        <div className="px-4 lg:px-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <p className="font-medium">No se pudieron cargar todos los datos:</p>
+            <ul className="list-disc pl-5">
+              {errors.map((message, index) => (
+                <li key={index}>{sanitizeMessage(message)}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+      <ContactSectionCards data={derivedCards} loading={loadingCards} />
       <ContactsDataTable
-        data={table}
+        data={tableRows}
         onFiltersChange={handleFiltersChange}
         onVisibleRowsChange={setVisibleRows}
+        loading={loadingTable}
       />
     </div>
   )
+}
+
+function sanitizeMessage(message: string) {
+  const trimmed = message.trim()
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+    return "El endpoint devolvió HTML en lugar de JSON (verifica la ruta o el proxy)."
+  }
+  if (/jwt\s+expired/i.test(trimmed)) {
+    return "Tu sesión en Supabase caducó. Estamos intentando renovarla automáticamente; si persiste, vuelve a iniciar sesión."
+  }
+  return trimmed
 }
 
 function isDefaultFilterSet(filters: ContactFilters): boolean {

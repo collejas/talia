@@ -3148,6 +3148,8 @@ async def _generate_assistant_reply(
     }
 
     prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
+    if whatsapp_settings.location_href:
+        prompt_variables["location_href"] = whatsapp_settings.location_href
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
@@ -3232,7 +3234,7 @@ async def _generate_assistant_reply(
                 prompt_id=assistant.prompt_id,
                 prompt_version=assistant.prompt_version,
             )
-            prompt_variables = {}
+            prompt_variables = {"conversacion_id": prompt_variables.get("conversacion_id", conversation_id)}
             result, tool_loop_retry_ms = await _run_assistant_generation(previous_response_id)
             debug_timings["tool_loop_retry_ms"] = tool_loop_retry_ms
             tool_runtime_debug = result.side_effects.get("tool_runtime_debug")

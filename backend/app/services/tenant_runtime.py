@@ -59,6 +59,7 @@ class WebchatRuntimeSettings:
     prompt_version: str | None
     inactivity_minutes: int | None
     project_id: str | None
+    location_href: str | None
 
 
 @dataclass(slots=True)
@@ -404,6 +405,7 @@ async def get_openai_project_id(*, organizacion_id: UUID | None) -> str | None:
 async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRuntimeSettings:
     config = await get_org_config(organizacion_id=organizacion_id)
     webchat = _as_dict(config.get("webchat")) or {}
+    whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
     openai_cfg = _as_dict(config.get("openai")) or {}
     general_cfg = _as_dict(openai_cfg.get("general")) or {}
     assistant_id = webchat.get("assistant_id") if isinstance(webchat.get("assistant_id"), str) else None
@@ -425,6 +427,11 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
 
     openai_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
     project_id = _coerce_str_or_none(general_cfg.get("project_id")) or settings.openai_project_id
+    location_href = (
+        _coerce_str_or_none(webchat.get("location_href"))
+        or _coerce_str_or_none(whatsapp_cfg.get("location_href"))
+        or settings.whatsapp_location_href
+    )
 
     return WebchatRuntimeSettings(
         openai_api_key=openai_api_key,
@@ -432,6 +439,7 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
         prompt_version=prompt_version,
         inactivity_minutes=inactivity_minutes,
         project_id=project_id,
+        location_href=location_href,
     )
 
 
@@ -1012,6 +1020,7 @@ class WhatsappRuntimeSettings:
     prompt_id: str | None
     prompt_version: str | None
     welcome_document_prompt_version: str | None
+    location_href: str | None
     inactivity_minutes: int
     reengage_minutes: int
     reengage_max_attempts: int
@@ -1052,6 +1061,7 @@ class WhatsappRuntimeSettings:
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
             welcome_document_prompt_version=settings.whatsapp_welcome_document_prompt_version,
+            location_href=settings.whatsapp_location_href,
             inactivity_minutes=settings.whatsapp_inactivity_minutes,
             reengage_minutes=settings.whatsapp_reengage_minutes,
             reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
@@ -1132,6 +1142,12 @@ async def get_whatsapp_runtime_settings(
         )
     if welcome_prompt_version is not None:
         settings_payload.welcome_document_prompt_version = welcome_prompt_version
+
+    location_href = _coerce_str_or_none(whatsapp_cfg.get("location_href"))
+    if location_href is None:
+        location_href = _coerce_str_or_none(settings.whatsapp_location_href)
+    if location_href is not None:
+        settings_payload.location_href = location_href
 
     inactivity_value = whatsapp_cfg.get("inactivity_minutes")
     if inactivity_value is not None:

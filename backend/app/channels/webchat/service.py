@@ -3016,6 +3016,7 @@ async def handle_message(
     runtime_openai_project_id: str | None = None
     runtime_assistant_id: str | None = None
     runtime_prompt_version: str | None = None
+    runtime_location_href: str | None = None
     if organizacion_hint:
         runtime_started = time.perf_counter()
         try:
@@ -3035,6 +3036,7 @@ async def handle_message(
                 runtime_openai_project_id = rt.project_id
                 runtime_assistant_id = rt.assistant_id
                 runtime_prompt_version = rt.prompt_version
+                runtime_location_href = rt.location_href
                 if rt.inactivity_minutes is not None:
                     runtime_inactivity_minutes = rt.inactivity_minutes
         _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_started)
@@ -3956,6 +3958,8 @@ async def _run_assistant_turn(
         "temperature": 0.4,
     }
     prompt_variables: dict[str, Any] = {"conversacion_id": context.conversation_id}
+    if runtime_location_href:
+        prompt_variables["location_href"] = runtime_location_href
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:

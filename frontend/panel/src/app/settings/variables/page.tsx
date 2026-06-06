@@ -203,6 +203,7 @@ export default async function SettingsVariablesPage() {
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
     whatsapp_welcome_document_prompt_version: getNestedString(whatsappConfig, "welcome_document_prompt_version"),
+    whatsapp_location_href: getNestedString(whatsappConfig, "location_href"),
     whatsapp_assistant_id: getNestedString(whatsappConfig, "assistant_id"),
     whatsapp_inactivity_minutes: getNestedNumber(whatsappConfig, "inactivity_minutes"),
     whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),
