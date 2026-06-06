@@ -4565,7 +4565,9 @@ class PropiedadUnidadCreateRequest(BaseModel):
 
 
 class PropiedadUnidadStatusUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     status: PropiedadStatus
+    oportunidad_id: UUID | None = None
 
 
 class CRMPropertySaleRequest(BaseModel):
@@ -38778,7 +38780,9 @@ async def actualizar_status_propiedad_unidad(
             detail="patrimonial_property_must_remain_blocked",
         )
     previous_status = str(current_unidad.get("status") or PropiedadStatus.disponible.value) if current_unidad else PropiedadStatus.disponible.value
-    resolved_oportunidad_id = _safe_uuid(current_unidad.get("oportunidad_id")) if current_unidad else None
+    resolved_oportunidad_id = payload.oportunidad_id or (
+        _safe_uuid(current_unidad.get("oportunidad_id")) if current_unidad else None
+    )
     resolved_persona_id = _safe_uuid(current_unidad.get("persona_id")) if current_unidad else None
     resolved_cuenta_id = _safe_uuid(current_unidad.get("cuenta_id")) if current_unidad else None
     if resolved_oportunidad_id:
@@ -38789,14 +38793,26 @@ async def actualizar_status_propiedad_unidad(
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not opportunity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="opportunity_not_found",
+            )
         if opportunity:
             if resolved_persona_id is None:
                 resolved_persona_id = _safe_uuid(opportunity.get("contacto_principal_id"))
             if resolved_cuenta_id is None:
                 resolved_cuenta_id = _safe_uuid(opportunity.get("cuenta_id"))
+    if payload.status.value in SALE_TRACKED_PROPERTY_STATUSES and not resolved_oportunidad_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="opportunity_required_for_commercial_status",
+        )
     update_payload: dict[str, Any] = {
         "status": payload.status.value,
     }
+    if resolved_oportunidad_id:
+        update_payload["oportunidad_id"] = str(resolved_oportunidad_id)
     try:
         record = await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,

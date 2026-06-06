@@ -451,6 +451,10 @@ export function PropertyMap() {
   const [saleModalPrice, setSaleModalPrice] = useState("");
   const [saleModalOpportunityId, setSaleModalOpportunityId] = useState(null);
   const [saleModalError, setSaleModalError] = useState(null);
+  const [isStatusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusModalTarget, setStatusModalTarget] = useState(null);
+  const [statusModalOpportunityId, setStatusModalOpportunityId] = useState(null);
+  const [statusModalError, setStatusModalError] = useState(null);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -1859,47 +1863,62 @@ export function PropertyMap() {
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
 
-  const handleStatusUpdate = useCallback(
-    async (status) => {
-      if (!mapboxProps?.id) {
-        return;
+  const handleOpenStatusModal = useCallback((status) => {
+    setStatusModalTarget(status);
+    setStatusModalOpportunityId(null);
+    setStatusModalError(null);
+    setStatusModalOpen(true);
+  }, []);
+
+  const handleConfirmStatusUpdate = useCallback(async () => {
+    if (!mapboxProps?.id || !statusModalTarget) {
+      return;
+    }
+    if (!statusModalOpportunityId) {
+      setStatusModalError("Selecciona una oportunidad antes de confirmar.");
+      return;
+    }
+    setStatusLoading(true);
+    setStatusMessage(null);
+    setStatusError(null);
+    try {
+      const response = await fetch(`/api/crm/propiedad-unidades/${mapboxProps.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: statusModalTarget,
+          oportunidad_id: statusModalOpportunityId,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.error || "update_status_failed");
       }
-      setStatusLoading(true);
-      setStatusMessage(null);
-      setStatusError(null);
-      try {
-        const response = await fetch(`/api/crm/propiedad-unidades/${mapboxProps.id}/status`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ status }),
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.detail || payload?.error || "update_status_failed");
-        }
-        setStatusMessage(
-          `Unidad ${status === "apartado" ? "apartada" : "reservada"} correctamente.`,
-        );
-        refreshGeojson();
-      } catch (error) {
-        setStatusError(
-          error instanceof Error ? error.message : "update_status_failed",
-        );
-      } finally {
-        setStatusLoading(false);
-      }
-    },
-    [mapboxProps?.id, refreshGeojson],
-  );
+      setStatusMessage(
+        `Unidad ${statusModalTarget === "apartado" ? "apartada" : "reservada"} correctamente.`,
+      );
+      setStatusModalOpen(false);
+      setStatusModalTarget(null);
+      refreshGeojson();
+    } catch (error) {
+      setStatusError(
+        error instanceof Error ? error.message : "update_status_failed",
+      );
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [mapboxProps?.id, refreshGeojson, statusModalOpportunityId, statusModalTarget]);
 
   useEffect(() => {
-    if (!isSaleModalOpen) {
+    if (!isSaleModalOpen && !isStatusModalOpen) {
       setAvailableOpportunities([]);
       setSaleModalOpportunityId(null);
+      setStatusModalOpportunityId(null);
       setSaleModalPrice("");
       setSaleModalError(null);
+      setStatusModalError(null);
       setOpportunitiesLoading(false);
       return;
     }
@@ -1930,13 +1949,19 @@ export function PropertyMap() {
       }
     })();
     return () => controller.abort();
-  }, [isSaleModalOpen]);
+  }, [isSaleModalOpen, isStatusModalOpen]);
 
   useEffect(() => {
     if (isSaleModalOpen && availableOpportunities.length && !saleModalOpportunityId) {
       setSaleModalOpportunityId(availableOpportunities[0].id);
     }
   }, [availableOpportunities, isSaleModalOpen, saleModalOpportunityId]);
+
+  useEffect(() => {
+    if (isStatusModalOpen && availableOpportunities.length && !statusModalOpportunityId) {
+      setStatusModalOpportunityId(availableOpportunities[0].id);
+    }
+  }, [availableOpportunities, isStatusModalOpen, statusModalOpportunityId]);
 
   const selectedOpportunity = useMemo(() => {
     if (!saleModalOpportunityId) return null;
@@ -4097,7 +4122,7 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.apartado,
                                 }}
-                                onClick={() => handleStatusUpdate("apartado")}
+                                onClick={() => handleOpenStatusModal("apartado")}
                                 disabled={statusLoading}
                               >
                                 {statusLoading ? "Actualizando..." : "Apartar"}
@@ -4108,7 +4133,7 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.reservado,
                                 }}
-                                onClick={() => handleStatusUpdate("reservado")}
+                                onClick={() => handleOpenStatusModal("reservado")}
                                 disabled={statusLoading}
                               >
                                 {statusLoading ? "Actualizando..." : "Reservar"}
@@ -4214,6 +4239,95 @@ export function PropertyMap() {
                                   disabled={saleLoading || !saleModalOpportunityId}
                                 >
                                   {saleLoading ? "Registrando venta..." : "Confirmar venta"}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Dialog
+                            open={isStatusModalOpen}
+                            onOpenChange={(open) => {
+                              setStatusModalOpen(open);
+                              if (!open) {
+                                setStatusModalTarget(null);
+                                setStatusModalOpportunityId(null);
+                                setStatusModalError(null);
+                              }
+                            }}
+                          >
+                            <DialogContent className="min-w-[320px] max-w-lg space-y-4">
+                              <DialogHeader>
+                                <DialogTitle>
+                                  Vincular oportunidad para{" "}
+                                  {statusModalTarget === "apartado" ? "apartado" : "reserva"}
+                                </DialogTitle>
+                                <DialogDescription>
+                                  Antes de guardar el estado comercial, selecciona la oportunidad que respalda
+                                  este cambio.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
+                                    Oportunidades disponibles
+                                  </p>
+                                  {opportunitiesLoading && (
+                                    <span className="text-[0.65rem] text-slate-400">Cargando...</span>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[0.65rem] text-slate-400" htmlFor="status-opportunity-select">
+                                    Elige la oportunidad vinculada antes de confirmar el cambio.
+                                  </label>
+                                  <select
+                                    id="status-opportunity-select"
+                                    className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white transition focus:border-emerald-500 focus:outline-none"
+                                    value={statusModalOpportunityId ?? ""}
+                                    onChange={(event) => {
+                                      setStatusModalOpportunityId(event.target.value || null);
+                                    }}
+                                    disabled={opportunitiesLoading}
+                                  >
+                                    <option value="">Selecciona una oportunidad</option>
+                                    {availableOpportunities.map((opportunity) => {
+                                      const contactLabel =
+                                        opportunity.contacto_nombre ??
+                                        opportunity.contacto_correo ??
+                                        opportunity.contacto_telefono ??
+                                        "Contacto sin datos";
+                                      const descriptionLabel = formatDescriptionLabel(
+                                        opportunity.descripcion,
+                                      );
+                                      return (
+                                        <option key={opportunity.id} value={opportunity.id}>
+                                          {contactLabel} · {opportunity.titulo ?? `Oportunidad ${opportunity.id}`}
+                                          {descriptionLabel ? ` · ${descriptionLabel}` : ""}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  {statusModalError && (
+                                    <p className="text-[0.65rem] text-rose-400">{statusModalError}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => {
+                                    setStatusModalOpen(false);
+                                    setStatusModalTarget(null);
+                                    setStatusModalOpportunityId(null);
+                                  }}
+                                  variant="secondary"
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button
+                                  onClick={handleConfirmStatusUpdate}
+                                  disabled={statusLoading || !statusModalOpportunityId}
+                                >
+                                  {statusLoading
+                                    ? "Actualizando..."
+                                    : `Confirmar ${statusModalTarget === "apartado" ? "apartado" : "reserva"}`}
                                 </Button>
                               </div>
                             </DialogContent>
