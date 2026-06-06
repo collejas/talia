@@ -418,7 +418,7 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
               Aprovecha los modelos para documentar variantes homologadas de productos o servicios.
             </div>
           ) : (
-            <ScrollArea className="max-h-[600px] rounded-xl bg-background p-4">
+            <ScrollArea className="h-[min(600px,calc(100vh-24rem))] rounded-xl bg-background p-4">
               <div className="space-y-4">
                 {filteredModelos.map((modelo) => (
                   <Card key={modelo.id}>
