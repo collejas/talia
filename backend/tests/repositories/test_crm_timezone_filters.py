@@ -325,3 +325,32 @@ def test_geo_row_matching_prefers_exact_geo_columns_over_text() -> None:
 
     assert _row_matches_geo_filters(row, geo_estado="24", geo_municipio="028")
     assert not _row_matches_geo_filters(row, geo_estado="21", geo_municipio=None)
+
+
+@pytest.mark.asyncio
+async def test_get_propiedad_capa_does_not_filter_by_organizacion_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+    capa_id = uuid.uuid4()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([{"id": str(capa_id)}])
+
+    monkeypatch.setattr(repo, "_request", fake_request)
+
+    await repo.get_propiedad_capa(
+        organizacion_id=uuid.uuid4(),
+        capa_id=capa_id,
+    )
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rest/v1/propiedad_capas"
+    assert captured["params"] == {"id": f"eq.{capa_id}", "limit": "1"}

@@ -1178,7 +1178,6 @@ class CRMRepository:
         capa_id: UUID,
     ) -> dict[str, Any] | None:
         params = {
-            "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{capa_id}",
             "limit": "1",
         }
