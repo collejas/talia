@@ -28,9 +28,10 @@ Queda fuera de este plan:
 
 ## Principios
 
-- El estado comercial solo debe describir la disponibilidad operativa de venta.
+- El estado comercial describe la disponibilidad operativa de venta.
+- En `settings/propiedades` el usuario puede editar el `status` de la unidad sin amarrarlo a una oportunidad.
 - La reserva patrimonial no debe entrar al flujo comercial ni a las métricas de ventas.
-- Los estados `reservado`, `apartado` y `vendido` deben seguir ligados a una oportunidad.
+- Los estados `reservado`, `apartado` y `vendido` deben seguir ligados a una oportunidad en el flujo comercial de CRM/ventas.
 - `bloqueado` no debe ligarse a oportunidad porque responde a una restricción administrativa o legal.
 - El precio efectivo de una unidad debe seguir existiendo como columna real.
 - El precio por m2 debe ser una forma de captura, no una simple nota en metadata.
@@ -53,17 +54,17 @@ Queda fuera de este plan:
   - Puede generar `catalog_item`.
 
 - `reservado`
-  - Requiere `oportunidad_id`.
+  - Requiere `oportunidad_id` en el flujo comercial.
   - Debe registrar motivo y movimiento de auditoría.
   - Sigue siendo parte del inventario comercial.
 
 - `apartado`
-  - Requiere `oportunidad_id`.
+  - Requiere `oportunidad_id` en el flujo comercial.
   - Representa un compromiso comercial más fuerte que `reservado`.
   - Sigue siendo parte del inventario comercial.
 
 - `vendido`
-  - Requiere `oportunidad_id`.
+  - Requiere `oportunidad_id` en el flujo comercial.
   - Cierra la operación.
   - Debe desactivar la disponibilidad comercial.
 
@@ -129,7 +130,7 @@ Evita usar `status` para dos cosas distintas:
 
 ## Reglas de consistencia
 
-- `reservado`, `apartado` y `vendido` deben tener `oportunidad_id`.
+- `reservado`, `apartado` y `vendido` deben tener `oportunidad_id` cuando el cambio se ejecuta como transición comercial.
 - `bloqueado` no debe requerir `oportunidad_id`.
 - `destino_inventario = patrimonial` debe bloquear la venta aunque el registro exista.
 - El frontend no debe decidir por sí solo el cambio de estado; debe pasar por backend.
@@ -189,6 +190,8 @@ Mostrar un selector de modo de captura:
   - `area_m2`
   - `precio_m2`
   - total calculado en vivo
+- La edición de `status` debe estar disponible sin pedir una oportunidad.
+- La oportunidad vive en el flujo comercial de ventas, no como requisito del editor de inventario.
 
 ### Resultado esperado
 
@@ -206,7 +209,7 @@ Al cambiar a:
 - `apartado`
 - `vendido`
 
-el backend debe validar:
+el backend debe validar en el flujo comercial:
 
 - que exista `oportunidad_id`
 - que la oportunidad sea válida
@@ -258,7 +261,7 @@ Usar el historial de movimientos existente para registrar:
 1. El usuario crea o edita una unidad.
 2. Define si el precio será manual o por m2.
 3. Si la unidad es comercial, elige su estado comercial.
-4. Si pasa a `reservado`, `apartado` o `vendido`, el backend exige oportunidad.
+4. Si pasa a `reservado`, `apartado` o `vendido` desde el CRM/ventas, el backend exige oportunidad.
 5. Si la unidad es patrimonial, queda fuera del flujo comercial.
 6. El historial guarda toda transición.
 
@@ -267,7 +270,7 @@ Usar el historial de movimientos existente para registrar:
 - El sistema distingue claramente entre estado comercial y reserva patrimonial.
 - Las unidades patrimoniales no aparecen en ventas.
 - Las unidades vendibles pueden operarse con precio manual o por m2.
-- La venta sigue ligada a oportunidad.
+- La venta sigue ligada a oportunidad cuando se ejecuta como operación comercial.
 - La UI de propiedades permite capturar ambos esquemas de precio.
 
 ## Relación con otros planes
@@ -276,4 +279,3 @@ Usar el historial de movimientos existente para registrar:
 - `docs/Plan_3D/plan_migracion_tecnica_inventario_ventas_personas.md`
 - `docs/Plan_3D/checklist_prs_inventario_ventas_personas.md`
 - `docs/Plan_3D/plan_3D.md`
-

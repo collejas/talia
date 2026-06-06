@@ -108,7 +108,8 @@ La unidad comercial solo debe poder estar en uno de estos estados:
 
 Reglas:
 
-- `reservado`, `apartado` y `vendido` exigen `oportunidad_id`.
+- En `settings/propiedades` el `status` de la unidad se puede cambiar sin amarrarlo a una oportunidad.
+- La exigencia de `oportunidad_id` aplica al flujo comercial de CRM/ventas cuando la unidad entra a `reservado`, `apartado` o `vendido`.
 - `bloqueado` no exige `oportunidad_id`.
 - `destino_inventario = patrimonial` excluye la unidad del flujo comercial.
 
@@ -143,7 +144,7 @@ Opciones:
 
 La recomendación es combinar dos capas:
 
-- `propiedad_unidades.oportunidad_id` para el estado actual
+- `propiedad_unidades.oportunidad_id` para el vínculo comercial cuando exista
 - `propiedad_unidad_movimientos` para historial y auditoría
 
 #### `propiedad_unidad_movimientos`
@@ -213,7 +214,7 @@ Si la unidad pasa a:
 - `apartado`
 - `vendido`
 
-entonces debe existir una `oportunidad_id` válida.
+entonces debe existir una `oportunidad_id` válida cuando el cambio se haga dentro del flujo comercial.
 
 ### Regla comercial
 
@@ -278,6 +279,7 @@ Las rutas de `propiedades` y `settings/propiedades` deben seguir creando y edita
 - unidad
 
 pero deben dejar de depender de metadata para atributos operativos.
+En `settings/propiedades` el editor de inventario no debe pedir una oportunidad para cambiar el `status` de la unidad; ese vínculo se gestiona en CRM/ventas.
 
 ### Precio por m2
 
@@ -310,7 +312,9 @@ La vista debe priorizar:
 
 - columnas estructurales para estado, precio, área, referencias y geografía
 - metadata solo para campos opcionales
-- selector de oportunidad al ejecutar `reservar`, `apartar` o `vender`
+- edición directa del `status` de la unidad sin exigir oportunidad
+
+La oportunidad pertenece al flujo comercial de ventas, no al editor de inventario.
 
 ### Panel comercial
 
@@ -369,7 +373,7 @@ sin depender de reconstrucciones desde `jsonb`.
 El plan se considera bien encaminado cuando:
 
 - una unidad cambia de estado solo desde backend
-- `reservado`, `apartado` y `vendido` exigen oportunidad
+- `reservado`, `apartado` y `vendido` exigen oportunidad solo en el flujo comercial de CRM/ventas
 - ventas y cotizaciones guardan `persona_id`
 - el inventario principal consulta columnas, no `jsonb`
 - Mapbox recibe datos ya normalizados

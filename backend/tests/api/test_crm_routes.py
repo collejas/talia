@@ -1473,7 +1473,7 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert any(call_name == "create_quote" for call_name, _ in fake_repo.calls)
     assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
     assert fake_repo.updated_propiedad_unidades
-    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status_comercial"] == "vendido"
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "vendido"
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["catalog_item_id"] == str(catalog_item_id)
     assert fake_repo.created_propiedad_unidad_movimientos
