@@ -61,6 +61,20 @@ def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
     return lines
 
 
+def build_location_context_lines(location_href: str | None) -> list[str]:
+    """Devuelve el bloque operativo para la ubicación oficial del desarrollo."""
+    href = _safe_text(location_href)
+    if href == "—":
+        return []
+    return [
+        "Contexto operativo:",
+        f"- Ubicación oficial del desarrollo (Google Maps): {href}",
+        "- Si el usuario pide dirección, ubicación o cómo llegar, responde usando ese enlace como salida principal.",
+        "- No describas la dirección con texto cuando el enlace esté disponible.",
+        "- Si la cita queda confirmada, vuelve a enviar el mismo enlace de Google Maps.",
+    ]
+
+
 def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     if not isinstance(contact, dict):
         return []

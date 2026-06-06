@@ -120,6 +120,19 @@ _GREETING_ONLY_PREFIXES: tuple[str, ...] = (
     "buenas noches",
 )
 
+_LOCATION_REQUEST_KEYWORDS: tuple[str, ...] = (
+    "direccion",
+    "dirección",
+    "ubicacion",
+    "ubicación",
+    "donde estan ubicados",
+    "dónde están ubicados",
+    "donde estan",
+    "dónde están",
+    "como llegar",
+    "cómo llegar",
+)
+
 
 
 def _should_skip_catalog_autoload(query: str) -> bool:
@@ -146,6 +159,13 @@ def should_autoload_inventory_context(query: str) -> bool:
         if not any(keyword in normalized for keyword in _INVENTORY_SNAPSHOT_KEYWORDS):
             return False
     return any(keyword in normalized for keyword in _INVENTORY_SNAPSHOT_KEYWORDS)
+
+
+def is_location_request(query: str) -> bool:
+    normalized = " ".join(query.lower().split())
+    if not normalized:
+        return False
+    return any(keyword in normalized for keyword in _LOCATION_REQUEST_KEYWORDS)
 
 
 

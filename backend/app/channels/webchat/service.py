@@ -57,6 +57,7 @@ from app.services.catalog_context import (
     CatalogContext,
     build_catalog_context,
     build_catalog_inventory_context,
+    is_location_request,
     should_autoload_inventory_context,
 )
 from app.services.catalog_embeddings import CatalogEmbeddingService
@@ -71,6 +72,7 @@ from app.services.catalog_locations import (
     extract_development_id,
     format_location_payload,
 )
+from app.services.context_formatter import build_location_context_lines
 from app.services.scoring_contract import (
     normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
 )
@@ -3201,7 +3203,8 @@ async def handle_message(
     )
 
     inventory_context_text = None
-    if should_autoload_inventory_context(payload.content or ""):
+    location_request = is_location_request(payload.content or "")
+    if not location_request and should_autoload_inventory_context(payload.content or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -3213,7 +3216,7 @@ async def handle_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context: CatalogContext | None = None
-    if settings.catalog_context_autoload:
+    if settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
@@ -3827,6 +3830,18 @@ async def _run_assistant_turn(
             ],
         }
     )
+    if runtime_location_href:
+        base_input.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "\n".join(build_location_context_lines(runtime_location_href)),
+                    }
+                ],
+            }
+        )
     base_input.append(
         {
             "role": "developer",

@@ -38,7 +38,7 @@ from app.services import assistant_document_delivery
 from app.services import openai as openai_service
 from app.services import openai_usage_ledger
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
-from app.services.context_formatter import build_crm_context_lines
+from app.services.context_formatter import build_crm_context_lines, build_location_context_lines
 from app.services import tenant_runtime
 from app.services import twilio as twilio_service
 from app.services.metrics import metrics
@@ -48,6 +48,7 @@ from app.channels.booking_context import build_booking_context_message
 from app.services.catalog_context import (
     build_catalog_context,
     build_catalog_inventory_context,
+    is_location_request,
     should_autoload_inventory_context,
 )
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
@@ -2033,7 +2034,8 @@ async def handle_incoming_message(
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
     inventory_context_text = None
-    if should_autoload_inventory_context(message.body or ""):
+    location_request = is_location_request(message.body or "")
+    if not location_request and should_autoload_inventory_context(message.body or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -2045,7 +2047,7 @@ async def handle_incoming_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context = None
-    if settings.catalog_context_autoload:
+    if settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
@@ -3049,6 +3051,19 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    if whatsapp_settings.location_href:
+        initial_input.insert(
+            5,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "\n".join(build_location_context_lines(whatsapp_settings.location_href)),
+                    }
+                ],
+            },
+        )
     if booking_context:
         initial_input.insert(
             3,
