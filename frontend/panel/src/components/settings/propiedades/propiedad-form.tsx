@@ -276,6 +276,49 @@ function parseMetadataText(value: string): Record<string, unknown> | undefined {
   return parsed as Record<string, unknown>;
 }
 
+function asNumber(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 0;
+  }
+  const normalized = trimmed
+    .replace(/\s+/g, "")
+    .replace(/[^0-9,.-]/g, "")
+    .replace(/(?!^)-/g, "");
+  if (!normalized) {
+    return 0;
+  }
+  const lastComma = normalized.lastIndexOf(",");
+  const lastDot = normalized.lastIndexOf(".");
+  const decimalSeparator = lastComma > lastDot ? "," : lastDot > -1 ? "." : null;
+  const parseable = decimalSeparator
+    ? (() => {
+        const parts = normalized.split(decimalSeparator);
+        const whole = parts.slice(0, -1).join("").replace(/[.,-]/g, "");
+        const fraction = parts[parts.length - 1]?.replace(/[.,-]/g, "") ?? "";
+        return `${whole || "0"}.${fraction}`;
+      })()
+    : normalized.replace(/[^\d-]/g, "");
+  const parsed = Number.parseFloat(parseable);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrency(value: string, currency = "MXN"): string {
+  const numberValue = asNumber(value);
+  if (numberValue <= 0) {
+    return "";
+  }
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(numberValue);
+  } catch {
+    return `${numberValue.toFixed(2)} ${currency}`;
+  }
+}
+
 const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
   "entidad",
   "grupo",
@@ -711,6 +754,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [unidadFormError, setUnidadFormError] = useState<string | null>(null);
   const [isSubmittingUnidad, setIsSubmittingUnidad] = useState(false);
   const [editingUnidad, setEditingUnidad] = useState<UnidadNode | null>(null);
+  const [isPrecioFocused, setIsPrecioFocused] = useState(false);
+  const [isPrecioM2Focused, setIsPrecioM2Focused] = useState(false);
   const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
   const [editingCapa, setEditingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
@@ -1039,6 +1084,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const handleUnidadField = useCallback(
     (field: keyof UnidadFormState, value: string) => {
+      if (field === "precioTipo" && value === "manual") {
+        setIsPrecioM2Focused(false);
+      }
+      if (field === "precioTipo" && value === "m2") {
+        setIsPrecioFocused(false);
+      }
       setUnidadForm((prev) => {
         const next = { ...prev, [field]: value } as UnidadFormState;
         if (field === "destinoInventario" && value === "patrimonial") {
@@ -1073,6 +1124,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setUnidadForm(createUnidadFormDefaults());
     setUnidadFormError(null);
     setEditingUnidad(null);
+    setIsPrecioFocused(false);
+    setIsPrecioM2Focused(false);
   }, [createUnidadFormDefaults]);
 
   const openCapaModal = useCallback(
@@ -1138,6 +1191,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         metadata: stringifyMetadata(unidad.metadata),
       });
       setUnidadFormError(null);
+      setIsPrecioFocused(false);
+      setIsPrecioM2Focused(false);
       setIsUnidadModalOpen(true);
     },
     [tipos],
@@ -1619,10 +1674,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const unidadPrecioCalculado = useMemo(() => {
     if (unidadForm.precioTipo === "m2") {
       const areaValue = Number(unidadForm.area);
-      const precioM2Value = Number(unidadForm.precioM2);
+      const precioM2Value = asNumber(unidadForm.precioM2);
       if (
         Number.isNaN(areaValue) ||
-        Number.isNaN(precioM2Value) ||
         areaValue <= 0 ||
         precioM2Value <= 0
       ) {
@@ -1630,8 +1684,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       }
       return areaValue * precioM2Value;
     }
-    const precioValue = Number(unidadForm.precio);
-    if (Number.isNaN(precioValue) || precioValue <= 0) {
+    const precioValue = asNumber(unidadForm.precio);
+    if (precioValue <= 0) {
       return null;
     }
     return precioValue;
@@ -1919,15 +1973,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         return;
       }
       payload.area_m2 = areaValue;
-      const precioM2Value = Number(unidadForm.precioM2);
-      if (Number.isNaN(precioM2Value) || precioM2Value <= 0) {
+      const precioM2Value = asNumber(unidadForm.precioM2);
+      if (precioM2Value <= 0) {
         setUnidadFormError("Ingresa un precio por m² válido.");
         return;
       }
       payload.precio_m2 = precioM2Value;
     } else {
-      const precioValue = Number(unidadForm.precio);
-      if (Number.isNaN(precioValue) || precioValue <= 0) {
+      const precioValue = asNumber(unidadForm.precio);
+      if (precioValue <= 0) {
         setUnidadFormError("Ingresa un precio válido.");
         return;
       }
@@ -3482,24 +3536,50 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               <div className="space-y-1">
                 <Label className="text-[0.7rem]">Precio por m²</Label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={unidadForm.precioM2}
+                  type="text"
+                  inputMode="decimal"
+                  value={isPrecioM2Focused ? unidadForm.precioM2 : formatCurrency(unidadForm.precioM2)}
+                  onFocus={() => {
+                    setIsPrecioM2Focused(true);
+                    setUnidadForm((prev) => ({
+                      ...prev,
+                      precioM2: asNumber(prev.precioM2) > 0 ? String(asNumber(prev.precioM2)) : "",
+                    }));
+                  }}
+                  onBlur={() => {
+                    setUnidadForm((prev) => ({
+                      ...prev,
+                      precioM2: asNumber(prev.precioM2) > 0 ? formatCurrency(prev.precioM2) : "",
+                    }));
+                    setIsPrecioM2Focused(false);
+                  }}
                   onChange={(event) => handleUnidadField("precioM2", event.target.value)}
-                  placeholder="Ej. 15000"
+                  placeholder={formatCurrency("1000")}
                 />
               </div>
             ) : (
               <div className="space-y-1">
                 <Label className="text-[0.7rem]">Precio</Label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={unidadForm.precio}
+                  type="text"
+                  inputMode="decimal"
+                  value={isPrecioFocused ? unidadForm.precio : formatCurrency(unidadForm.precio)}
+                  onFocus={() => {
+                    setIsPrecioFocused(true);
+                    setUnidadForm((prev) => ({
+                      ...prev,
+                      precio: asNumber(prev.precio) > 0 ? String(asNumber(prev.precio)) : "",
+                    }));
+                  }}
+                  onBlur={() => {
+                    setUnidadForm((prev) => ({
+                      ...prev,
+                      precio: asNumber(prev.precio) > 0 ? formatCurrency(prev.precio) : "",
+                    }));
+                    setIsPrecioFocused(false);
+                  }}
                   onChange={(event) => handleUnidadField("precio", event.target.value)}
-                  placeholder="Ej. 3500000"
+                  placeholder={formatCurrency("1000")}
                 />
               </div>
             )}
