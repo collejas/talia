@@ -143,6 +143,7 @@ type UnidadFormState = {
   familiaId: string;
   modeloId: string;
   descripcion: string;
+  metadata: string;
 };
 
 type GeometryTarget =
@@ -259,6 +260,29 @@ function safeGeoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry | null | undefi
   } catch {
     return "";
   }
+}
+
+function stringifyMetadata(value: Record<string, unknown> | null | undefined): string {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length) {
+    return "";
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "";
+  }
+}
+
+function parseMetadataText(value: string): Record<string, unknown> | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("metadata debe ser un objeto JSON válido.");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
@@ -634,6 +658,9 @@ const PRECIO_TIPO_OPTIONS = [
 ] as const;
 
 const SALE_TRACKED_STATUS_SET = new Set(["reservado", "apartado", "vendido"]);
+const PROPERTY_MODAL_WIDTH_CLASS = "max-w-3xl";
+const PROPERTY_MODAL_BODY_CLASS = "max-h-[72vh] space-y-4 overflow-y-auto pr-1";
+const PROPERTY_MODAL_MIX_BODY_CLASS = "max-h-[76vh] space-y-4 overflow-y-auto pr-1";
 
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
@@ -667,6 +694,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     altura: "",
     descripcion: "",
     copias: "1",
+    metadata: "",
   });
   const createUnidadFormDefaults = useCallback(
     (): UnidadFormState => ({
@@ -684,6 +712,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       familiaId: familias[0]?.id ?? "",
       modeloId: modelos[0]?.id ?? "",
       descripcion: "",
+      metadata: "",
     }),
     [familias, lineas, modelos, tipos],
   );
@@ -706,10 +735,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     nombre: "",
     descripcion: "",
     tipo: "horizontal",
+    status: "disponible" as UnidadStatus,
     paisCodigo: "MX",
     estadoCve: "",
     municipioCve: "",
     codigoPostal: "",
+    colonia: "",
+    metadata: "",
   });
   const [editingDesarrolloId, setEditingDesarrolloId] = useState<string | null>(null);
   const [isSubmittingDesarrollo, setIsSubmittingDesarrollo] = useState(false);
@@ -718,11 +750,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [mixForm, setMixForm] = useState({
     nombre: "",
     descripcion: "",
+    status: "disponible" as CapaStatus,
     paisCodigo: "MX",
     estadoCve: "",
     municipioCve: "",
     codigoPostal: "",
     colonia: "",
+    metadata: "",
   });
   const [mixFormError, setMixFormError] = useState<string | null>(null);
   const [isMixItemModalOpen, setIsMixItemModalOpen] = useState(false);
@@ -762,10 +796,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       nombre: "",
       descripcion: "",
       tipo: "horizontal",
+      status: "disponible",
       paisCodigo: "MX",
       estadoCve: "",
       municipioCve: "",
       codigoPostal: "",
+      colonia: "",
+      metadata: "",
     });
     setDesarrolloFormError(null);
     if (!keepEditing) {
@@ -780,10 +817,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         nombre: "",
         descripcion: "",
         tipo,
+        status: "disponible",
         paisCodigo: "MX",
         estadoCve: "",
         municipioCve: "",
         codigoPostal: "",
+        colonia: "",
+        metadata: "",
       });
       setDesarrolloFormError(null);
       setIsDesarrolloModalOpen(true);
@@ -795,11 +835,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setMixForm({
       nombre: "",
       descripcion: "",
+      status: "disponible",
       paisCodigo: "MX",
       estadoCve: "",
       municipioCve: "",
       codigoPostal: "",
       colonia: "",
+      metadata: "",
     });
     setMixFormError(null);
   }, []);
@@ -1034,6 +1076,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       altura: "",
       descripcion: "",
       copias: "1",
+      metadata: "",
     });
     setCapaFormError(null);
     setCreatingCapaFor(null);
@@ -1060,6 +1103,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         altura: duplicateFrom && duplicateFrom.altura != null ? String(duplicateFrom.altura) : "",
         descripcion: duplicateFrom?.descripcion || "",
         copias: "1",
+        metadata: "",
       });
       setCapaFormError(null);
       setEditingCapa(null);
@@ -1107,6 +1151,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         familiaId: unidad.familia_id || "",
         modeloId: unidad.modelo_id || "",
         descripcion: unidad.descripcion || "",
+        metadata: stringifyMetadata(unidad.metadata),
       });
       setUnidadFormError(null);
       setIsUnidadModalOpen(true);
@@ -1126,6 +1171,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         altura: capa.altura != null ? String(capa.altura) : "",
         descripcion: capa.descripcion || "",
         copias: "1",
+        metadata: stringifyMetadata(capa.metadata),
       });
       setCapaFormError(null);
       setIsCapaModalOpen(true);
@@ -1409,10 +1455,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       nombre: desarrollo.nombre,
       descripcion: desarrollo.descripcion ?? "",
       tipo: desarrollo.tipo || "horizontal",
+      status: (desarrollo.status || "disponible") as UnidadStatus,
       paisCodigo: desarrollo.pais_codigo || "MX",
       estadoCve: desarrollo.estado_cve || "",
       municipioCve: desarrollo.municipio_cve || "",
       codigoPostal: desarrollo.codigo_postal || "",
+      colonia: desarrollo.colonia || "",
+      metadata: stringifyMetadata(desarrollo.metadata),
     });
     setIsDesarrolloModalOpen(true);
   }, []);
@@ -1652,10 +1701,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setIsSubmittingDesarrollo(true);
     setDesarrolloFormError(null);
     try {
-      const payload: Record<string, string | null> = {
+      const payload: Record<string, unknown> = {
         nombre: desarrolloForm.nombre.trim(),
         descripcion: desarrolloForm.descripcion.trim() || null,
         tipo: desarrolloForm.tipo,
+        status: desarrolloForm.status,
       };
       const paisCodigo = desarrolloForm.paisCodigo?.trim().toUpperCase();
       if (paisCodigo) payload.pais_codigo = paisCodigo;
@@ -1663,6 +1713,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (desarrolloForm.municipioCve) payload.municipio_cve = desarrolloForm.municipioCve;
       if (desarrolloForm.codigoPostal?.trim()) {
         payload.codigo_postal = desarrolloForm.codigoPostal.trim();
+      }
+      if (desarrolloForm.colonia.trim()) {
+        payload.colonia = desarrolloForm.colonia.trim();
+      }
+      const metadata = parseMetadataText(desarrolloForm.metadata);
+      if (metadata) {
+        payload.metadata = metadata;
       }
       const response = await fetch(
         isEditingDesarrollo
@@ -1729,6 +1786,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))) {
         payload.altura = Number(capaForm.altura);
       }
+      const metadata = parseMetadataText(capaForm.metadata);
+      if (metadata) {
+        payload.metadata = metadata;
+      }
       if (!Object.keys(payload).length) {
         setCapaFormError("Actualiza al menos un campo antes de guardar.");
         return;
@@ -1784,6 +1845,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))
         ? Number(capaForm.altura)
         : undefined;
+    const metadata = parseMetadataText(capaForm.metadata);
     const copies = isDuplicating
       ? Math.max(1, Number.parseInt(capaForm.copias, 10) || 1)
       : 1;
@@ -1811,6 +1873,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         }
         if (isVertical && alturaValue) {
           payload.altura = alturaValue;
+        }
+        if (metadata) {
+          payload.metadata = metadata;
         }
         const response = await fetch("/api/crm/propiedad-capas", {
           method: "POST",
@@ -1946,6 +2011,17 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     if (unidadForm.modeloId) {
       payload.modelo_id = unidadForm.modeloId;
     }
+    try {
+      const metadata = parseMetadataText(unidadForm.metadata);
+      if (metadata) {
+        payload.metadata = metadata;
+      }
+    } catch (error) {
+      setUnidadFormError(
+        error instanceof Error ? error.message : "metadata debe ser un objeto JSON válido.",
+      );
+      return;
+    }
     const isEditingUnidad = Boolean(editingUnidad);
     setIsSubmittingUnidad(true);
     setUnidadFormError(null);
@@ -2001,13 +2077,17 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         nombre: mixForm.nombre.trim(),
         descripcion: mixForm.descripcion?.trim() || null,
         tipo: "mixto",
-        status: "disponible",
+        status: mixForm.status,
       };
       if (mixForm.paisCodigo) payload.pais_codigo = mixForm.paisCodigo.trim().toUpperCase();
       if (mixForm.estadoCve) payload.estado_cve = mixForm.estadoCve.trim();
       if (mixForm.municipioCve) payload.municipio_cve = mixForm.municipioCve.trim();
       if (mixForm.codigoPostal) payload.codigo_postal = mixForm.codigoPostal.trim();
       if (mixForm.colonia) payload.colonia = mixForm.colonia.trim();
+      const metadata = parseMetadataText(mixForm.metadata);
+      if (metadata) {
+        payload.metadata = metadata;
+      }
       const response = await fetch("/api/crm/propiedad-desarrollos-mix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2767,7 +2847,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
           <DialogHeader>
             <DialogTitle>
               {isEditingDesarrollo
@@ -2778,7 +2858,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               Define los metadatos del desarrollo antes de dibujar el plano correspondiente.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className={PROPERTY_MODAL_BODY_CLASS}>
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Nombre</Label>
               <Input
@@ -2787,8 +2867,41 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 placeholder="Ej. Torre Miramar"
               />
             </div>
-            <div className="text-xs font-medium uppercase tracking-[0.4em] text-slate-500">
-              {desarrolloForm.tipo}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Tipo</Label>
+                <Select
+                  value={desarrolloForm.tipo}
+                  onValueChange={(value) => handleDesarrolloField("tipo", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="horizontal">Horizontal</SelectItem>
+                    <SelectItem value="vertical">Vertical</SelectItem>
+                    <SelectItem value="mixto">Mixto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Status</Label>
+                <Select
+                  value={desarrolloForm.status}
+                  onValueChange={(value) => handleDesarrolloField("status", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIDAD_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -2855,6 +2968,25 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 </Select>
               </div>
             </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Colonia</Label>
+                <Input
+                  value={desarrolloForm.colonia}
+                  onChange={(event) => handleDesarrolloField("colonia", event.target.value)}
+                  placeholder="Ej. Centro"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Metadata</Label>
+                <Textarea
+                  value={desarrolloForm.metadata}
+                  onChange={(event) => handleDesarrolloField("metadata", event.target.value)}
+                  placeholder='{"clave":"valor"}'
+                  className="min-h-[90px] font-mono text-xs"
+                />
+              </div>
+            </div>
             {locationError && <p className="text-xs text-rose-500">{locationError}</p>}
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Descripción</Label>
@@ -2904,14 +3036,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
           <DialogHeader>
             <DialogTitle>Nuevo desarrollo mixto</DialogTitle>
             <DialogDescription>
               Define el contenedor mixto antes de agregar secciones horizontales o verticales.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className={PROPERTY_MODAL_BODY_CLASS}>
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Nombre</Label>
               <Input
@@ -2927,6 +3059,35 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 onChange={(event) => handleMixField("descripcion", event.target.value)}
                 className="text-sm"
               />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Status</Label>
+                <Select
+                  value={mixForm.status}
+                  onValueChange={(value) => handleMixField("status", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIDAD_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Metadata</Label>
+                <Textarea
+                  value={mixForm.metadata}
+                  onChange={(event) => handleMixField("metadata", event.target.value)}
+                  placeholder='{"clave":"valor"}'
+                  className="min-h-[90px] font-mono text-xs"
+                />
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -3018,14 +3179,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
           <DialogHeader>
             <DialogTitle>Nueva sección del mixto</DialogTitle>
             <DialogDescription>
               Vincula un desarrollo horizontal o vertical y define el modo.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className={PROPERTY_MODAL_MIX_BODY_CLASS}>
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Desarrollo</Label>
               <Select
@@ -3092,7 +3253,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
         <DialogHeader>
             <DialogTitle>
               {editingCapa
@@ -3115,7 +3276,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className={PROPERTY_MODAL_BODY_CLASS}>
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Nombre de la capa</Label>
               <Input
@@ -3124,23 +3285,34 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 placeholder="Ej. Planta baja, Manzana A"
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[0.7rem]">Estado</Label>
-              <Select
-                value={capaForm.status}
-                onValueChange={(value) => handleCapaField("status", value)}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue placeholder="Selecciona un estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CAPA_STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Estado</Label>
+                <Select
+                  value={capaForm.status}
+                  onValueChange={(value) => handleCapaField("status", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CAPA_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Metadata</Label>
+                <Textarea
+                  value={capaForm.metadata}
+                  onChange={(event) => handleCapaField("metadata", event.target.value)}
+                  placeholder='{"clave":"valor"}'
+                  className="min-h-[90px] font-mono text-xs"
+                />
+              </div>
             </div>
             {creatingCapaFor?.tipo === "vertical" && (
               <>
@@ -3229,7 +3401,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
           <DialogHeader>
             <DialogTitle>
               {editingUnidad ? "Editar unidad" : "Crear unidad"} para{" "}
@@ -3241,7 +3413,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 : "Captura el inventario comercial o patrimonial y dibuja el polígono correspondiente antes de guardar."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className={PROPERTY_MODAL_BODY_CLASS}>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-[0.7rem]">Clave de unidad</Label>
@@ -3495,6 +3667,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 value={unidadForm.descripcion}
                 onChange={(event) => handleUnidadField("descripcion", event.target.value)}
                 className="text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Metadata</Label>
+              <Textarea
+                value={unidadForm.metadata}
+                onChange={(event) => handleUnidadField("metadata", event.target.value)}
+                placeholder='{"clave":"valor"}'
+                className="min-h-[110px] font-mono text-xs"
               />
             </div>
             {unidadFormError && <p className="text-xs text-rose-500">{unidadFormError}</p>}
