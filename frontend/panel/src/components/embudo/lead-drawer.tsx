@@ -856,6 +856,9 @@ export function LeadDrawer({
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
   const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [quoteCatalogPickerOpen, setQuoteCatalogPickerOpen] = useState(false);
+  const [quoteCatalogPickerSearch, setQuoteCatalogPickerSearch] = useState("");
+  const [quoteCatalogSelection, setQuoteCatalogSelection] = useState<string[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -1322,10 +1325,10 @@ export function LeadDrawer({
   }, [open, card?.oportunidadId, quotesState.status, fetchQuotes]);
 
   useEffect(() => {
-    if (quoteDialogOpen && catalogState.status === "idle") {
+    if ((quoteDialogOpen || quoteCatalogPickerOpen) && catalogState.status === "idle") {
       void loadCatalogItems();
     }
-  }, [quoteDialogOpen, catalogState.status, loadCatalogItems]);
+  }, [quoteDialogOpen, quoteCatalogPickerOpen, catalogState.status, loadCatalogItems]);
 
   useEffect(() => {
     if (card?.moneda) {
@@ -1342,11 +1345,25 @@ export function LeadDrawer({
     const baseList = catalogState.items.filter((item) => item.activo);
     const query = catalogSearch.trim().toLowerCase();
     if (!query) return baseList;
+    const terms = query.split(/\s+/).filter(Boolean);
     return baseList.filter((item) => {
-      const haystack = `${item.nombre} ${item.descripcion ?? ""}`.toLowerCase();
-      return haystack.includes(query);
+      const haystack = `${item.nombre} ${item.descripcion ?? ""} ${item.unidad}`.toLowerCase();
+      return terms.every((term) => haystack.includes(term));
     });
   }, [catalogState.items, catalogSearch]);
+
+  const quoteCatalogPickerItems = useMemo(() => {
+    const baseList = catalogState.items.filter((item) => item.activo);
+    const query = quoteCatalogPickerSearch.trim().toLowerCase();
+    if (!query) return baseList;
+    const terms = query.split(/\s+/).filter(Boolean);
+    return baseList.filter((item) => {
+      const haystack = `${item.nombre} ${item.descripcion ?? ""} ${item.unidad}`.toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
+  }, [catalogState.items, quoteCatalogPickerSearch]);
+
+  const catalogSearchSuggestions = useMemo(() => filteredCatalogItems.slice(0, 5), [filteredCatalogItems]);
 
   const handleAddNote = useCallback(async () => {
     if (!card) return;
@@ -1852,10 +1869,6 @@ export function LeadDrawer({
     }
   }, [card, selectedVendorId]);
 
-  const handleAddEmptyItem = useCallback(() => {
-    setQuoteItems((prev) => [...prev, createQuoteItemForm({ moneda: quoteMoneda || "MXN" })]);
-  }, [quoteMoneda]);
-
   const handleAddCatalogItem = useCallback(
     (option: CatalogItemOption) => {
       setQuoteItems((prev) => [
@@ -1863,9 +1876,29 @@ export function LeadDrawer({
         catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"),
       ]);
       setQuoteError(null);
+      setCatalogSearch(option.nombre);
     },
     [quoteMoneda],
   );
+
+  const handleAddCatalogItems = useCallback(
+    (options: CatalogItemOption[]) => {
+      if (!options.length) return;
+      setQuoteItems((prev) => [
+        ...prev,
+        ...options.map((option) => catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN")),
+      ]);
+      setQuoteError(null);
+      setQuoteCatalogSelection([]);
+      setQuoteCatalogPickerOpen(false);
+      setQuoteCatalogPickerSearch("");
+    },
+    [quoteMoneda],
+  );
+
+  const handleAddEmptyItem = useCallback(() => {
+    setQuoteItems((prev) => [...prev, createQuoteItemForm({ moneda: quoteMoneda || "MXN" })]);
+  }, [quoteMoneda]);
 
   const handleItemFieldChange = useCallback(
     (index: number, field: keyof QuoteItemForm, value: string) => {
@@ -1902,6 +1935,28 @@ export function LeadDrawer({
   const handleUnlinkCatalogItem = useCallback((index: number) => {
     setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, catalogItemId: null } : item)));
   }, []);
+
+  const handleOpenCatalogPicker = useCallback(() => {
+    setQuoteCatalogPickerOpen(true);
+    setQuoteCatalogPickerSearch("");
+    setQuoteCatalogSelection([]);
+  }, []);
+
+  const handleCatalogSelectionToggle = useCallback((optionId: string) => {
+    setQuoteCatalogSelection((prev) =>
+      prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId],
+    );
+  }, []);
+
+  const handleCatalogSearchKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Enter") return;
+      if (!catalogSearchSuggestions.length) return;
+      event.preventDefault();
+      handleAddCatalogItem(catalogSearchSuggestions[0]);
+    },
+    [catalogSearchSuggestions, handleAddCatalogItem],
+  );
 
   const handleQuoteChannelChange = (nextChannel: QuoteChannel) => {
     setQuoteChannel(nextChannel);
@@ -2018,6 +2073,10 @@ export function LeadDrawer({
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
       setQuoteItems(fallbackItems);
+      setCatalogSearch("");
+      setQuoteCatalogPickerOpen(false);
+      setQuoteCatalogPickerSearch("");
+      setQuoteCatalogSelection([]);
       setQuoteError(null);
       setQuoteSuccess(null);
       setQuoteDialogOpen(true);
@@ -2028,6 +2087,9 @@ export function LeadDrawer({
   const handleQuoteDialogOpenChange = (openState: boolean) => {
     if (!openState) {
       setQuoteDialogOpen(false);
+      setQuoteCatalogPickerOpen(false);
+      setQuoteCatalogPickerSearch("");
+      setQuoteCatalogSelection([]);
       setQuoteError(null);
     }
   };
@@ -3387,6 +3449,7 @@ export function LeadDrawer({
   </DrawerContent>
     </Drawer>
     {!isCreateMode && card ? (
+      <>
       <Dialog open={quoteDialogOpen} onOpenChange={handleQuoteDialogOpenChange}>
         <DialogContent className="flex h-[90vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
           <div className="flex h-full min-h-0 flex-col bg-background">
@@ -3531,193 +3594,167 @@ export function LeadDrawer({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Productos y conceptos</h4>
-                        <p className="text-[11px] text-muted-foreground">Busca en catálogo o agrega partidas manuales.</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Usa el buscador semántico o abre el listado para multiselección.
+                        </p>
                       </div>
-                      <Button type="button" size="sm" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
-                        <IconPlus className="size-4" />
-                        Agregar línea
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleOpenCatalogPicker}
+                        disabled={quotePending || catalogState.status === "loading"}
+                      >
+                        Productos y servicios
                       </Button>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <div className="flex flex-1 items-center gap-2 rounded-md bg-muted/35 px-2">
-                          <IconSearch className="size-4 shrink-0 text-muted-foreground" />
-                          <Input
-                            value={catalogSearch}
-                            onChange={(event) => setCatalogSearch(event.target.value)}
-                            placeholder="Buscar en catálogo"
-                            disabled={catalogState.status === "loading"}
-                            className="h-8 border-0 bg-transparent px-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCatalogSearch("")}
-                          disabled={!catalogSearch.length}
-                        >
-                          Limpiar
-                        </Button>
+                    <div className="relative">
+                      <div className="flex items-center gap-2 rounded-md bg-muted/35 px-2">
+                        <IconSearch className="size-4 shrink-0 text-muted-foreground" />
+                        <Input
+                          value={catalogSearch}
+                          onChange={(event) => setCatalogSearch(event.target.value)}
+                          onKeyDown={handleCatalogSearchKeyDown}
+                          placeholder="Buscar por producto, servicio, SKU o descripción"
+                          disabled={catalogState.status === "loading"}
+                          className="h-8 border-0 bg-transparent px-0 shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0"
+                        />
                       </div>
-
-                      <div className="rounded-md bg-muted/25">
-                        <ScrollArea className="max-h-44">
-                          {catalogState.status === "loading" || catalogState.status === "idle" ? (
-                            <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
-                          ) : catalogState.status === "error" ? (
-                            <p className="px-3 py-2 text-xs text-destructive">
-                              {catalogState.error || "No se pudo cargar el catálogo."}
-                            </p>
-                          ) : filteredCatalogItems.length === 0 ? (
-                            <p className="px-3 py-2 text-xs text-muted-foreground">
-                              {catalogSearch ? "Sin resultados para tu búsqueda." : "No hay productos activos."}
-                            </p>
-                          ) : (
-                            filteredCatalogItems.slice(0, 12).map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-muted/40"
-                                onClick={() => handleAddCatalogItem(item)}
-                                disabled={quotePending}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
-                                  {item.descripcion ? (
-                                    <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
-                                      {item.descripcion}
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span className="shrink-0 text-[11px] text-muted-foreground">
-                                  {formatQuoteCurrency(item.precioBase, item.moneda)}
-                                </span>
-                              </button>
-                            ))
-                          )}
-                        </ScrollArea>
-                      </div>
-
-                      <div className="space-y-2">
-                        {quoteItems.map((item, index) => (
-                          <div key={item.key} className="space-y-2 rounded-md bg-muted/25 p-2.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="truncate text-xs font-semibold text-foreground">
-                                  Concepto {index + 1}
-                                </p>
-                                {item.catalogItemId ? (
-                                  <p className="text-[11px] text-emerald-600">Vinculado al catálogo</p>
+                      {catalogSearch.trim().length > 0 && catalogSearchSuggestions.length ? (
+                        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border/40 bg-background shadow-sm">
+                          {catalogSearchSuggestions.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-muted/40"
+                              onClick={() => handleAddCatalogItem(item)}
+                              disabled={quotePending}
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
+                                {item.descripcion ? (
+                                  <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+                                    {item.descripcion}
+                                  </span>
                                 ) : null}
-                              </div>
-                              <div className="flex items-center gap-1">
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
+                                {formatQuoteCurrency(item.precioBase, item.moneda)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Escribe para buscar y selecciona una sugerencia. El listado completo se abre desde el botón.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Partidas cotizadas</h4>
+                        <p className="text-[11px] text-muted-foreground">
+                          Edita aquí los conceptos ya agregados a la cotización.
+                        </p>
+                      </div>
+                      <Button type="button" size="sm" variant="outline" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
+                        <IconPlus className="size-4" />
+                        Línea en blanco
+                      </Button>
+                    </div>
+
+                    <div className="overflow-hidden rounded-md border border-border/40 bg-muted/20">
+                      <div className="grid grid-cols-[minmax(0,1.7fr)_72px_82px_96px_72px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Concepto</span>
+                        <span>Cant.</span>
+                        <span>Unidad</span>
+                        <span>Precio</span>
+                        <span>Desc.</span>
+                        <span>Total</span>
+                        <span className="text-right"> </span>
+                      </div>
+                      <ScrollArea className="max-h-72">
+                        <div className="space-y-1.5 px-2 py-2">
+                          {quoteItems.map((item, index) => (
+                            <div
+                              key={item.key}
+                              className="grid grid-cols-[minmax(0,1.7fr)_72px_82px_96px_72px_84px_40px] items-start gap-2 rounded-md bg-background px-2 py-2"
+                            >
+                              <div className="min-w-0 space-y-1">
+                                <Input
+                                  value={item.nombre}
+                                  onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="Nombre del concepto"
+                                  className={quoteCompactInputClass}
+                                />
+                                <Input
+                                  value={item.descripcion}
+                                  onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="Descripción breve"
+                                  className={quoteCompactInputClass}
+                                />
                                 {item.catalogItemId ? (
-                                  <Button
+                                  <button
                                     type="button"
-                                    variant="outline"
-                                    size="sm"
+                                    className="text-[10px] font-medium text-emerald-600 hover:underline"
                                     onClick={() => handleUnlinkCatalogItem(index)}
                                     disabled={quotePending}
                                   >
-                                    Quitar vínculo
-                                  </Button>
+                                    Vinculado al catálogo
+                                  </button>
                                 ) : null}
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8"
-                                  onClick={() => handleRemoveItem(index)}
-                                  disabled={quotePending}
-                                >
-                                  <IconTrash className="size-4" />
-                                </Button>
                               </div>
-                            </div>
-                            <div className="grid gap-2 md:grid-cols-2">
                               <Input
-                                value={item.nombre}
-                                onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
+                                value={item.cantidad}
+                                onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
                                 disabled={quotePending}
-                                placeholder="Nombre del concepto"
+                                placeholder="1"
+                                className={quoteCompactInputClass}
                               />
                               <Input
-                                value={item.descripcion}
-                                onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
+                                value={item.unidad}
+                                onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
                                 disabled={quotePending}
-                                placeholder="Descripción o notas"
+                                placeholder="und"
+                                className={quoteCompactInputClass}
                               />
-                            </div>
-                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                              <div className="grid gap-1">
-                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Cantidad
-                                </label>
-                                <Input
-                                  value={item.cantidad}
-                                  onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
-                                  disabled={quotePending}
-                                  placeholder="1"
-                                />
-                              </div>
-                              <div className="grid gap-1">
-                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Unidad
-                                </label>
-                                <Input
-                                  value={item.unidad}
-                                  onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
-                                  disabled={quotePending}
-                                  placeholder="unidad"
-                                />
-                              </div>
-                              <div className="grid gap-1">
-                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Precio unitario
-                                </label>
-                                <Input
-                                  value={item.precioUnitario}
-                                  onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
-                                  onBlur={() => handleItemPriceBlur(index)}
-                                  disabled={quotePending}
-                                  placeholder="0.00"
-                                />
-                              </div>
-                              <div className="grid gap-1">
-                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Descuento
-                                </label>
-                                <Input
-                                  value={item.descuento}
-                                  onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
-                                  disabled={quotePending}
-                                  placeholder="0.00"
-                                />
-                              </div>
-                              <div className="grid gap-1">
-                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Moneda
-                                </label>
-                                <Input
-                                  value={item.moneda}
-                                  onChange={(event) => handleItemFieldChange(index, "moneda", event.target.value.toUpperCase())}
-                                  disabled={quotePending}
-                                  maxLength={3}
-                                  placeholder={quoteSummaryCurrency}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                              <span>Total estimado</span>
-                              <span className="text-sm font-semibold text-foreground">
+                              <Input
+                                value={item.precioUnitario}
+                                onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
+                                onBlur={() => handleItemPriceBlur(index)}
+                                disabled={quotePending}
+                                placeholder="0.00"
+                                className={quoteCompactInputClass}
+                              />
+                              <Input
+                                value={item.descuento}
+                                onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
+                                disabled={quotePending}
+                                placeholder="0.00"
+                                className={quoteCompactInputClass}
+                              />
+                              <div className="flex items-center justify-end px-1 pt-1 text-xs font-medium text-foreground">
                                 {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteSummaryCurrency)}
-                              </span>
+                              </div>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="size-8"
+                                onClick={() => handleRemoveItem(index)}
+                                disabled={quotePending}
+                              >
+                                <IconTrash className="size-4" />
+                              </Button>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
                   </div>
 
@@ -3880,6 +3917,131 @@ export function LeadDrawer({
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={quoteCatalogPickerOpen}
+        onOpenChange={(openState) => {
+          if (openState) {
+            setQuoteCatalogPickerOpen(true);
+            return;
+          }
+          setQuoteCatalogPickerOpen(false);
+          setQuoteCatalogPickerSearch("");
+          setQuoteCatalogSelection([]);
+        }}
+      >
+        <DialogContent className="flex h-[84vh] w-[92vw] max-w-[92vw] flex-col overflow-hidden p-0">
+          <div className="border-b border-border/50 px-3 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <DialogTitle className="text-base font-semibold">Productos y servicios</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Selecciona uno o varios conceptos para agregarlos a la cotización.
+                </DialogDescription>
+              </div>
+              <Badge variant="outline" className="h-6 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                {quoteCatalogSelection.length} seleccionados
+              </Badge>
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 py-3">
+            <div className="flex items-center gap-2 rounded-md bg-muted/35 px-2">
+              <IconSearch className="size-4 shrink-0 text-muted-foreground" />
+              <Input
+                value={quoteCatalogPickerSearch}
+                onChange={(event) => setQuoteCatalogPickerSearch(event.target.value)}
+                placeholder="Buscar producto, servicio, SKU o descripción"
+                disabled={catalogState.status === "loading"}
+                className="h-8 border-0 bg-transparent px-0 shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setQuoteCatalogPickerSearch("")}
+                disabled={!quoteCatalogPickerSearch.length}
+              >
+                Limpiar
+              </Button>
+            </div>
+
+            <div className="min-h-0 flex-1 rounded-md bg-muted/20">
+              <ScrollArea className="h-full">
+                {catalogState.status === "loading" || catalogState.status === "idle" ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
+                ) : catalogState.status === "error" ? (
+                  <p className="px-3 py-2 text-xs text-destructive">
+                    {catalogState.error || "No se pudo cargar el catálogo."}
+                  </p>
+                ) : quoteCatalogPickerItems.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    {quoteCatalogPickerSearch ? "Sin resultados para tu búsqueda." : "No hay productos activos."}
+                  </p>
+                ) : (
+                  quoteCatalogPickerItems.map((item) => {
+                    const checked = quoteCatalogSelection.includes(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        role="button"
+                        tabIndex={0}
+                        className="flex w-full cursor-pointer items-start gap-3 border-b border-border/40 px-3 py-2 text-left text-xs last:border-b-0 hover:bg-muted/40"
+                        onClick={() => handleCatalogSelectionToggle(item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          handleCatalogSelectionToggle(item.id);
+                        }}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => handleCatalogSelectionToggle(item.id)}
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
+                          {item.descripcion ? (
+                            <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+                              {item.descripcion}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {formatQuoteCurrency(item.precioBase, item.moneda)}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </ScrollArea>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-border/50 px-3 py-2.5">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setQuoteCatalogPickerOpen(false);
+                setQuoteCatalogPickerSearch("");
+                setQuoteCatalogSelection([]);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                handleAddCatalogItems(
+                  quoteCatalogPickerItems.filter((item) => quoteCatalogSelection.includes(item.id)),
+                )
+              }
+              disabled={!quoteCatalogSelection.length || quotePending}
+            >
+              Agregar seleccionados
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      </>
     ) : null}
     </>
   );
