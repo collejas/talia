@@ -151,6 +151,10 @@ class QuoteRenderContext:
     items: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     economic_details_html: str | None = None
+    vendor_company_name: str | None = None
+    vendor_razon_social: str | None = None
+    vendor_assessor_name: str | None = None
+    vendor_assessor_phone: str | None = None
 
 
 @dataclass
@@ -533,8 +537,13 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
     issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
     valid_until = context.valido_hasta.isoformat() if context.valido_hasta else "Sin vigencia"
     currency = _safe_text(context.moneda, "MXN")
-    vendor_name = _safe_text(context.issuer_name, "Sin vendedor")
-    vendor_email = _safe_text(context.issuer_email, "Sin correo")
+    vendor_company = _safe_text(context.vendor_company_name or context.issuer_name, "Sin empresa")
+    vendor_razon_social = _safe_text(
+        context.vendor_razon_social or context.vendor_company_name or context.issuer_name,
+        "Sin razón social",
+    )
+    vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
+    vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
     client_name = _safe_text(context.contact_name, "Sin cliente")
     client_company = _safe_text(context.contact_company, "Sin razón social")
     client_email = _safe_text(context.contact_email, "Sin email")
@@ -588,11 +597,6 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
 
           <div class="info-grid">
             <div class="card">
-              <h3>Vendedor</h3>
-              <p><strong>{html_escape(vendor_name)}</strong></p>
-              <p>{html_escape(vendor_email)}</p>
-            </div>
-            <div class="card">
               <h3>Cliente</h3>
               <p><strong>{html_escape(client_company)}</strong></p>
               <p>{html_escape(client_name)}</p>
@@ -603,6 +607,13 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
               <h3>Proyecto</h3>
               <p><strong>{html_escape(project_name)}</strong></p>
               <p>{html_escape(project_description)}</p>
+            </div>
+            <div class="card">
+              <h3>Vendedor</h3>
+              <p><strong>{html_escape(vendor_company)}</strong></p>
+              <p>{html_escape(vendor_razon_social)}</p>
+              <p>{html_escape(vendor_name)}</p>
+              <p>{html_escape(vendor_phone)}</p>
             </div>
           </div>
 
@@ -808,6 +819,14 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(f"Empresa: {context.contact_company or '—'}")
     lines.append(f"Correo: {context.contact_email or '—'}")
     lines.append(f"Teléfono: {context.contact_phone or '—'}")
+    lines.append("")
+
+    lines.append("Vendedor")
+    lines.append(sub_divider)
+    lines.append(f"Empresa: {context.vendor_company_name or context.issuer_name or '—'}")
+    lines.append(f"Razón Social: {context.vendor_razon_social or context.vendor_company_name or '—'}")
+    lines.append(f"Asesor: {context.vendor_assessor_name or context.issuer_name or '—'}")
+    lines.append(f"Teléfono, Asesor: {context.vendor_assessor_phone or '—'}")
     lines.append("")
 
     if context.descripcion:

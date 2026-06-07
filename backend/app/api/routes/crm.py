@@ -2087,6 +2087,57 @@ async def _advance_opportunity_to_won(
         )
 
 
+async def _resolve_quote_vendor_context(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity: Mapping[str, Any],
+) -> dict[str, str | None]:
+    tenant_name: str | None = None
+    tenant_razon_social: str | None = None
+    try:
+        platform_repo = PlatformRepository()
+        tenant_row = await platform_repo.get_organizacion_details(organizacion_id=organizacion_id)
+    except PlatformRepositoryError:
+        tenant_row = None
+
+    if isinstance(tenant_row, dict):
+        tenant_name = _clean_text(tenant_row.get("nombre"))
+        tenant_razon_social = _clean_text(tenant_row.get("razon_social"))
+
+    seller_row = _single_related(opportunity.get("propietario")) or _single_related(
+        opportunity.get("asignado")
+    ) or {}
+    seller_name = _clean_text(seller_row.get("nombre_completo") or seller_row.get("correo"))
+    seller_phone = _clean_text(seller_row.get("telefono_e164"))
+
+    if (not seller_name or not seller_phone) and opportunity.get("propietario_usuario_id"):
+        owner_id = _safe_uuid(opportunity.get("propietario_usuario_id"))
+        if owner_id is None:
+            owner_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+        if owner_id is not None:
+            try:
+                users = await repo.list_users_by_ids(
+                    organizacion_id=organizacion_id,
+                    user_ids=[owner_id],
+                )
+            except CRMRepositoryError:
+                users = []
+            if users and isinstance(users[0], dict):
+                user_row = users[0]
+                seller_name = seller_name or _clean_text(
+                    user_row.get("nombre_completo") or user_row.get("correo")
+                )
+                seller_phone = seller_phone or _clean_text(user_row.get("telefono_e164"))
+
+    return {
+        "vendor_company_name": tenant_name,
+        "vendor_razon_social": tenant_razon_social,
+        "vendor_assessor_name": seller_name,
+        "vendor_assessor_phone": seller_phone,
+    }
+
+
 async def _render_quote_pdf_after_sale(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -2126,6 +2177,11 @@ async def _render_quote_pdf_after_sale(
         )
         return
     contact = opportunity.get("contacto") or {}
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity,
+    )
     subtotal_value = _as_number(quote_row.get("subtotal"))
     impuestos_value = _as_number(quote_row.get("impuestos"))
     total_value = _as_number(quote_row.get("total"))
@@ -2155,6 +2211,10 @@ async def _render_quote_pdf_after_sale(
         descripcion=_clean_text(opportunity.get("descripcion") or opportunity.get("titulo")),
         notes=_clean_text(contact.get("notes") or opportunity.get("metadata", {}).get("notas")),
         items=items_list if isinstance(items_list, list) else [],
+        vendor_company_name=vendor_context["vendor_company_name"],
+        vendor_razon_social=vendor_context["vendor_razon_social"],
+        vendor_assessor_name=vendor_context["vendor_assessor_name"],
+        vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
     )
     try:
         pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -26093,6 +26153,11 @@ async def preview_lead_quote_pdf(
         base_payload.impuestos = totals["impuestos"]
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity_row,
+    )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -26116,6 +26181,10 @@ async def preview_lead_quote_pdf(
         or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
+        vendor_company_name=vendor_context["vendor_company_name"],
+        vendor_razon_social=vendor_context["vendor_razon_social"],
+        vendor_assessor_name=vendor_context["vendor_assessor_name"],
+        vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -26173,6 +26242,11 @@ async def send_lead_quote(
         base_payload.impuestos = totals["impuestos"]
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=oportunidad_row,
+    )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -26196,6 +26270,10 @@ async def send_lead_quote(
         or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=payload.detalles_propuesta_html,
+        vendor_company_name=vendor_context["vendor_company_name"],
+        vendor_razon_social=vendor_context["vendor_razon_social"],
+        vendor_assessor_name=vendor_context["vendor_assessor_name"],
+        vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
