@@ -3822,7 +3822,7 @@ export function LeadDrawer({
                       </Button>
                     </div>
 
-                    <div className="overflow-hidden rounded-md border border-border/40 bg-muted/20">
+                    <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border/40 bg-muted/20">
                       <div className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <span>Img.</span>
                         <span>Concepto</span>
@@ -3833,7 +3833,7 @@ export function LeadDrawer({
                         <span>Total</span>
                         <span className="text-right"> </span>
                       </div>
-                      <ScrollArea className="max-h-72">
+                      <ScrollArea className="h-72 min-h-0">
                         <div className="space-y-1.5 px-2 py-2">
                           {quoteItems.map((item, index) => {
                             const catalogImageUrl = item.catalogItemId
