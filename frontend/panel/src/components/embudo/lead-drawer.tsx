@@ -1876,7 +1876,7 @@ export function LeadDrawer({
         catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"),
       ]);
       setQuoteError(null);
-      setCatalogSearch(option.nombre);
+      setCatalogSearch("");
     },
     [quoteMoneda],
   );
@@ -1892,6 +1892,7 @@ export function LeadDrawer({
       setQuoteCatalogSelection([]);
       setQuoteCatalogPickerOpen(false);
       setQuoteCatalogPickerSearch("");
+      setCatalogSearch("");
     },
     [quoteMoneda],
   );
@@ -2048,17 +2049,6 @@ export function LeadDrawer({
       const validUntil =
         formatIsoDateForInput(latestQuote?.validUntil) ?? formatDateInput(addDays(new Date(), 14));
       const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
-      const fallbackItems = initialItems.length
-        ? initialItems
-        : [
-            createQuoteItemForm({
-              nombre: card.proyectoNombre?.trim() || "Implementación Tal-IA",
-              descripcion: defaultDescription,
-              cantidad: defaultSubtotal ? "1" : "1",
-              precioUnitario: defaultSubtotal || "",
-              moneda: defaultMoneda,
-            }),
-          ];
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
       setQuoteDescription(defaultDescription);
@@ -2072,11 +2062,57 @@ export function LeadDrawer({
       setQuoteTotal(formatPresetNumberString(defaultTotal));
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
-      setQuoteItems(fallbackItems);
+      setQuoteItems(initialItems);
       setCatalogSearch("");
       setQuoteCatalogPickerOpen(false);
       setQuoteCatalogPickerSearch("");
       setQuoteCatalogSelection([]);
+      if (typeof window !== "undefined" && card?.oportunidadId) {
+        const draftRaw = window.localStorage.getItem(`talia.embudo.quoteDraft.${card.oportunidadId}`);
+        if (draftRaw) {
+          try {
+            const draft = JSON.parse(draftRaw) as Record<string, unknown>;
+            if (draft && typeof draft === "object") {
+              if (typeof draft.quoteChannel === "string" && (draft.quoteChannel === "email" || draft.quoteChannel === "whatsapp")) {
+                setQuoteChannel(draft.quoteChannel);
+              }
+              if (typeof draft.quoteTitle === "string") setQuoteTitle(draft.quoteTitle);
+              if (typeof draft.quoteDescription === "string") setQuoteDescription(draft.quoteDescription);
+              if (typeof draft.quoteEconomicDetails === "string") setQuoteEconomicDetails(draft.quoteEconomicDetails);
+              if (typeof draft.quoteSubject === "string") setQuoteSubject(draft.quoteSubject);
+              if (typeof draft.quoteMessage === "string") setQuoteMessage(draft.quoteMessage);
+              if (typeof draft.quoteEmailTo === "string") setQuoteEmailTo(draft.quoteEmailTo);
+              if (typeof draft.quoteWhatsappTo === "string") setQuoteWhatsappTo(draft.quoteWhatsappTo);
+              if (typeof draft.quoteSubtotal === "string") setQuoteSubtotal(draft.quoteSubtotal);
+              if (typeof draft.quoteImpuestos === "string") setQuoteImpuestos(draft.quoteImpuestos);
+              if (typeof draft.quoteTotal === "string") setQuoteTotal(draft.quoteTotal);
+              if (typeof draft.quoteMoneda === "string") setQuoteMoneda(draft.quoteMoneda);
+              if (typeof draft.quoteValidoHasta === "string") setQuoteValidoHasta(draft.quoteValidoHasta);
+              if (Array.isArray(draft.quoteItems)) {
+                const restoredItems = draft.quoteItems
+                  .filter(isRecord)
+                  .map((item) =>
+                    createQuoteItemForm({
+                      catalogItemId: typeof item.catalogItemId === "string" ? item.catalogItemId : null,
+                      nombre: typeof item.nombre === "string" ? item.nombre : "",
+                      descripcion: typeof item.descripcion === "string" ? item.descripcion : "",
+                      unidad: typeof item.unidad === "string" ? item.unidad : "unidad",
+                      cantidad: typeof item.cantidad === "string" ? item.cantidad : "1",
+                      precioUnitario: typeof item.precioUnitario === "string" ? item.precioUnitario : "",
+                      descuento: typeof item.descuento === "string" ? item.descuento : "",
+                      moneda: typeof item.moneda === "string" ? item.moneda : defaultMoneda,
+                    }),
+                  );
+                if (restoredItems.length) {
+                  setQuoteItems(restoredItems);
+                }
+              }
+            }
+          } catch {
+            // Ignore invalid drafts.
+          }
+        }
+      }
       setQuoteError(null);
       setQuoteSuccess(null);
       setQuoteDialogOpen(true);
@@ -2094,11 +2130,54 @@ export function LeadDrawer({
     }
   };
 
+  const handleSaveQuoteDraft = () => {
+    if (!card || !quoteDraftStorageKey || typeof window === "undefined") return;
+    const draft = {
+      quoteChannel,
+      quoteTitle,
+      quoteDescription,
+      quoteEconomicDetails,
+      quoteSubject,
+      quoteMessage,
+      quoteEmailTo,
+      quoteWhatsappTo,
+      quoteSubtotal,
+      quoteImpuestos,
+      quoteTotal,
+      quoteMoneda,
+      quoteValidoHasta,
+      quoteItems,
+    };
+    window.localStorage.setItem(quoteDraftStorageKey, JSON.stringify(draft));
+    setQuoteSuccess("Borrador guardado localmente.");
+  };
+
   const quoteSummaryCurrency = (quoteMoneda || card?.moneda || "MXN").trim().toUpperCase();
   const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
+  const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
+  const quoteCurrentStatus = quoteLatestEntry?.status ?? "Borrador";
+  const quoteCurrentFolio = quoteLatestEntry ? `COT-${String(quoteLatestEntry.version).padStart(5, "0")}` : "COT-00000";
+  const quoteClientName = card?.empresa?.trim() || card?.contactoProfileName?.trim() || card?.nombre?.trim() || "Sin cliente";
+  const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
+  const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
+  const quoteClientEmail = card?.correo?.trim() || "Sin email";
+  const quoteProjectName = card?.proyectoNombre?.trim() || card?.titulo?.trim() || "Sin proyecto";
+  const quoteProjectLocation = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin ubicación";
+  const quoteAlerts = useMemo(() => {
+    const alerts: string[] = [];
+    if (!quoteItems.length) alerts.push("No hay partidas agregadas.");
+    if (quoteChannel === "email" && !quoteEmailTo.trim()) alerts.push("Falta destinatario de correo.");
+    if (quoteChannel === "whatsapp" && !quoteWhatsappTo.trim()) alerts.push("Falta número de WhatsApp.");
+    if (!quoteValidoHasta.trim()) alerts.push("La cotización no tiene vigencia.");
+    if (quoteItems.some((item) => !item.nombre.trim() || !item.precioUnitario.trim())) {
+      alerts.push("Hay partidas incompletas.");
+    }
+    return alerts;
+  }, [quoteChannel, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
+  const quoteRecentHistory = quotesState.data.slice(0, 4);
   const quoteCompactInputClass =
     "h-8 border-0 bg-muted/35 px-2 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
   const quoteCompactTextareaClass =
@@ -3454,24 +3533,28 @@ export function LeadDrawer({
         <DialogContent className="flex h-[90vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
           <div className="flex h-full min-h-0 flex-col bg-background">
             <div className="border-b border-border/50 px-3 py-2.5 sm:px-4">
-              <div className="flex flex-col gap-2.5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-0.5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <DialogTitle className="text-base font-semibold">Enviar cotización</DialogTitle>
+                    <DialogTitle className="text-base font-semibold">Nueva cotización</DialogTitle>
                     <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
-                      {quoteChannel === "email" ? "Correo" : "WhatsApp"}
+                      {quoteCurrentFolio}
                     </Badge>
-                    {quoteLatestEntry ? (
-                      <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
-                        Última: {quoteLatestEntry.status}
-                      </Badge>
-                    ) : null}
+                    <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                      {quoteCurrentStatus}
+                    </Badge>
                   </div>
                   <DialogDescription className="max-w-2xl text-xs">
-                    Genera y envía una cotización en PDF para {card.titulo ?? "la oportunidad seleccionada"}.
+                    Cotización para {card.titulo ?? "la oportunidad seleccionada"}.
                   </DialogDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled>
+                    ...
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={handleSaveQuoteDraft} disabled={quotePending}>
+                    Guardar borrador
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
@@ -3493,6 +3576,9 @@ export function LeadDrawer({
                   >
                     <IconBrandWhatsapp className="size-4" />
                     WhatsApp
+                  </Button>
+                  <Button type="button" size="sm" onClick={handleSendQuote} disabled={quotePending}>
+                    {quotePending ? "Enviando..." : "Enviar cotización"}
                   </Button>
                 </div>
               </div>
@@ -3586,6 +3672,68 @@ export function LeadDrawer({
                           disabled={quotePending}
                           className={quoteCompactInputClass}
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-md bg-muted/20 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Tarjeta de cliente</h4>
+                          <p className="text-[11px] text-muted-foreground">Confirma el cliente de la cotización.</p>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Ver perfil del cliente
+                        </Button>
+                      </div>
+                      <div className="grid gap-1 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Razón social</span>
+                          <span className="font-medium text-foreground">{quoteClientName}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">RFC</span>
+                          <span className="font-medium text-foreground">Sin RFC</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Email</span>
+                          <span className="font-medium text-foreground">{quoteClientEmail}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Teléfono</span>
+                          <span className="font-medium text-foreground">{quoteClientPhone}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Contacto</span>
+                          <span className="font-medium text-foreground">{quoteClientContact}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md bg-muted/20 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Tarjeta de proyecto</h4>
+                          <p className="text-[11px] text-muted-foreground">Cotización ligada al proyecto seleccionado.</p>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Seleccionar proyecto
+                        </Button>
+                      </div>
+                      <div className="grid gap-1 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Nombre</span>
+                          <span className="font-medium text-foreground">{quoteProjectName}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Ubicación</span>
+                          <span className="font-medium text-foreground">{quoteProjectLocation}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">Referencia</span>
+                          <span className="font-medium text-foreground">{card.oportunidadId.slice(0, 8).toUpperCase()}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3758,41 +3906,58 @@ export function LeadDrawer({
                     </div>
                   </div>
 
-                  <div className="space-y-2 pb-2">
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="grid gap-1">
-                        <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
-                        <Input
-                          value={quoteMessage}
-                          onChange={(event) => setQuoteMessage(event.target.value)}
-                          disabled={quotePending}
-                          placeholder="Texto que acompañará al PDF."
-                          className={quoteCompactInputClass}
-                        />
+                  <div className="space-y-3 pb-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
+                          <p className="text-[11px] text-muted-foreground">Define la regla comercial de la operación.</p>
+                        </div>
                       </div>
-                      <div className="grid gap-1">
-                        <label className="text-[11px] font-medium text-muted-foreground">Moneda</label>
-                        <Input
-                          value={quoteMoneda}
-                          onChange={(event) => setQuoteMoneda(event.target.value.toUpperCase())}
-                          disabled={quotePending}
-                          maxLength={3}
-                          placeholder="MXN"
-                          className={quoteCompactInputClass}
-                        />
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Contado</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Crédito 15 días</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Anticipo + saldo</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Entrega 7 días</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Garantía 1 año</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">IVA incluido</span>
+                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">MXN</span>
                       </div>
-                      <div className="grid gap-1 md:col-span-2">
-                        <label className="text-[11px] font-medium text-muted-foreground">
-                          Detalles de propuesta económica (HTML)
-                        </label>
-                        <Textarea
-                          value={quoteEconomicDetails}
-                          onChange={(event) => setQuoteEconomicDetails(event.target.value)}
-                          disabled={quotePending}
-                          rows={4}
-                          placeholder="<p>Incluye alcances, términos y cualquier anotación adicional.</p>"
-                          className={quoteCompactTextareaClass}
-                        />
+                      <Textarea
+                        value={quoteEconomicDetails}
+                        onChange={(event) => setQuoteEconomicDetails(event.target.value)}
+                        disabled={quotePending}
+                        rows={3}
+                        placeholder="Condiciones comerciales y observaciones."
+                        className={quoteCompactTextareaClass}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
+                          <p className="text-[11px] text-muted-foreground">Información visible e interna de apoyo.</p>
+                        </div>
+                      </div>
+                      <Textarea
+                        value={quoteMessage}
+                        onChange={(event) => setQuoteMessage(event.target.value)}
+                        disabled={quotePending}
+                        rows={3}
+                        placeholder="Notas para el cliente visibles en PDF o correo."
+                        className={quoteCompactTextareaClass}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Agregar archivo
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Ver archivo
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Eliminar archivo
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -3878,12 +4043,27 @@ export function LeadDrawer({
                       </div>
                     </div>
 
-                    <div className="space-y-1 border-t border-border/40 pt-3">
-                      <h4 className="text-sm font-semibold text-foreground">Condiciones</h4>
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        <p>Precios sujetos a validación antes del envío.</p>
-                        <p>Revisa el detalle de partidas y el mensaje antes de enviar.</p>
+                    <div className="space-y-2 border-t border-border/40 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Alertas</h4>
+                          <p className="text-[11px] text-muted-foreground">Revisa estos puntos antes de enviar.</p>
+                        </div>
                       </div>
+                      {quoteAlerts.length ? (
+                        <div className="space-y-1.5">
+                          {quoteAlerts.map((alert) => (
+                            <div key={alert} className="flex items-start gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                              <IconAlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                              <span>{alert}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-md bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800">
+                          No hay alertas críticas.
+                        </div>
+                      )}
                     </div>
 
                     {quoteError ? (
@@ -3896,19 +4076,49 @@ export function LeadDrawer({
                         {quoteSuccess}
                       </p>
                     ) : null}
-                    <div className="flex flex-col gap-2">
-                      <Button type="button" onClick={handleSendQuote} disabled={quotePending} className="w-full">
-                        {quotePending ? "Enviando..." : "Enviar cotización"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setQuoteDialogOpen(false)}
-                        disabled={quotePending}
-                        className="w-full"
-                      >
-                        Cancelar
-                      </Button>
+
+                    <div className="space-y-2 border-t border-border/40 pt-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Acciones</h4>
+                        <p className="text-[11px] text-muted-foreground">Vista previa y envío.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Button type="button" variant="outline" disabled>
+                          Vista previa PDF
+                        </Button>
+                        <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
+                          {quotePending ? "Enviando..." : "Enviar cotización"}
+                        </Button>
+                        <Button type="button" variant="ghost" disabled>
+                          Más acciones
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 border-t border-border/40 pt-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Historial</h4>
+                        <p className="text-[11px] text-muted-foreground">Movimientos recientes de la cotización.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        {quoteRecentHistory.length ? (
+                          quoteRecentHistory.map((entry) => (
+                            <div key={entry.id} className="rounded-md bg-background/70 px-2 py-1.5 text-[11px]">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-foreground">{entry.status}</span>
+                                <span className="text-muted-foreground">{formatDateTime(entry.createdAt ?? entry.sentAt ?? "")}</span>
+                              </div>
+                              <p className="mt-0.5 text-muted-foreground">
+                                {entry.title ?? entry.description ?? "Cotización creada"}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-md bg-background/70 px-2 py-1.5 text-[11px] text-muted-foreground">
+                            Todavía no hay historial de cotizaciones.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </ScrollArea>
