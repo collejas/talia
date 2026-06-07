@@ -118,6 +118,58 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizacion_create_failed")
         return data[0]
 
+    async def get_quote_template(
+        self,
+        *,
+        slug: str,
+        organizacion_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "slug": f"eq.{slug}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/quote_templates", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError(
+                f"Respuesta inválida al obtener template de cotización: {row!r}"
+            )
+        return row
+
+    async def upsert_quote_template(
+        self,
+        *,
+        slug: str,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+        updated_by: UUID | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "slug": slug,
+            "organizacion_id": str(organizacion_id),
+            **payload,
+        }
+        if updated_by:
+            body["updated_by"] = str(updated_by)
+        data = await self._rest(
+            "POST",
+            "/rest/v1/quote_templates",
+            params={"on_conflict": "slug,organizacion_id"},
+            json=body,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        if not isinstance(data, list) or not data:
+            raise PlatformRepositoryError("Supabase no devolvió el template de cotización actualizado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError(
+                f"Respuesta inválida al actualizar template de cotización: {row!r}"
+            )
+        return row
+
     async def delete_organizacion(self, *, organizacion_id: UUID) -> None:
         await self._rest(
             "DELETE",

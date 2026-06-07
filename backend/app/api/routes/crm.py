@@ -23,6 +23,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Awaitable, Callable, Iterable, Literal, Mapping, Sequence, TypeVar
 from uuid import UUID, uuid4
+from mimetypes import guess_type
 from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
@@ -2087,6 +2088,9 @@ async def _advance_opportunity_to_won(
         )
 
 
+DEFAULT_QUOTE_LOGO_PATH = "/assets/logos/Logo8.png"
+
+
 async def _resolve_quote_vendor_context(
     *,
     repo: CRMRepository,
@@ -2138,6 +2142,175 @@ async def _resolve_quote_vendor_context(
     }
 
 
+async def _resolve_quote_logo_url(
+    *,
+    organizacion_id: UUID,
+) -> str | None:
+    logger.info(
+        "quote_logo_debug_start",
+        extra={"organizacion_id": str(organizacion_id)},
+    )
+    try:
+        platform_repo = PlatformRepository()
+        template_row = await platform_repo.get_quote_template(
+            slug=DEFAULT_QUOTE_TEMPLATE_SLUG,
+            organizacion_id=organizacion_id,
+        )
+    except PlatformRepositoryError:
+        logger.warning(
+            "quote_logo_debug_template_fetch_failed",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+        return DEFAULT_QUOTE_LOGO_PATH
+    if not isinstance(template_row, dict):
+        logger.warning(
+            "quote_logo_debug_template_not_dict",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+        return DEFAULT_QUOTE_LOGO_PATH
+    config = _ensure_dict(template_row.get("config"), default={})
+    logger.info(
+        "quote_logo_debug_template_loaded",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "config_keys": sorted(config.keys()),
+        },
+    )
+    for key in ("logoUrl", "logo_url"):
+        value = config.get(key)
+        if isinstance(value, str) and value.strip():
+            raw_logo_url = value.strip()
+            logger.info(
+                "quote_logo_debug_logo_value_found",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "config_key": key,
+                    "raw_logo_url": raw_logo_url,
+                },
+            )
+            data_uri = _quote_logo_data_uri(raw_logo_url)
+            if data_uri:
+                logger.info(
+                    "quote_logo_debug_logo_data_uri_ready",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "config_key": key,
+                        "data_uri_prefix": data_uri[:40],
+                        "data_uri_length": len(data_uri),
+                    },
+                )
+                return data_uri
+            if raw_logo_url.startswith(("http://", "https://", "data:")):
+                logger.info(
+                    "quote_logo_debug_logo_uses_absolute_url",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "config_key": key,
+                        "resolved_url": raw_logo_url,
+                    },
+                )
+                return raw_logo_url
+            public_base_url = None
+            try:
+                public_base_url = await tenant_runtime.get_org_public_base_url(
+                    organizacion_id=organizacion_id
+                )
+            except Exception:
+                public_base_url = None
+            base_url = (public_base_url or "https://talia.mx").rstrip("/")
+            if raw_logo_url.startswith("/"):
+                resolved_url = f"{base_url}{raw_logo_url}"
+            else:
+                resolved_url = f"{base_url}/{raw_logo_url}"
+            logger.info(
+                "quote_logo_debug_logo_resolved_relative",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "config_key": key,
+                    "public_base_url": public_base_url,
+                    "resolved_url": resolved_url,
+                },
+            )
+            return resolved_url
+    logger.warning(
+        "quote_logo_debug_no_logo_in_template",
+        extra={"organizacion_id": str(organizacion_id)},
+    )
+    return DEFAULT_QUOTE_LOGO_PATH
+
+
+def _quote_logo_data_uri(raw_logo_url: str) -> str | None:
+    path_value = raw_logo_url.strip()
+    if not path_value:
+        logger.info("quote_logo_debug_empty_path")
+        return None
+    if path_value.startswith("data:"):
+        logger.info("quote_logo_debug_existing_data_uri")
+        return path_value
+
+    parsed = urlparse(path_value)
+    if parsed.scheme in {"http", "https"}:
+        path_value = parsed.path or path_value
+
+    repo_root = Path(__file__).resolve().parents[4]
+    candidate_paths: list[Path] = []
+    normalized = path_value.lstrip("/")
+    filename = Path(path_value).name
+
+    if normalized.startswith("assets/logos/"):
+        candidate_paths.extend(
+            [
+                repo_root / "frontend/panel/public" / normalized,
+                repo_root / "backend/app/public/shared/logos" / filename,
+                repo_root / "backend/app/public/shared" / normalized,
+            ]
+        )
+    else:
+        candidate_paths.extend(
+            [
+                repo_root / "frontend/panel/public" / normalized,
+                repo_root / "backend/app/public/shared" / normalized,
+            ]
+        )
+    logger.info(
+        "quote_logo_debug_candidate_paths",
+        extra={
+            "raw_logo_url": raw_logo_url,
+            "normalized": normalized,
+            "candidate_paths": [str(candidate) for candidate in candidate_paths],
+        },
+    )
+
+    for candidate in candidate_paths:
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        mime_type, _ = guess_type(str(candidate))
+        safe_mime = mime_type or "image/png"
+        try:
+            encoded = base64.b64encode(candidate.read_bytes()).decode("ascii")
+        except OSError:
+            logger.warning(
+                "quote_logo_debug_read_failed",
+                extra={"candidate_path": str(candidate)},
+            )
+            continue
+        logger.info(
+            "quote_logo_debug_logo_file_found",
+            extra={
+                "candidate_path": str(candidate),
+                "mime_type": safe_mime,
+                "byte_length": candidate.stat().st_size,
+            },
+        )
+        return f"data:{safe_mime};base64,{encoded}"
+
+    logger.warning(
+        "quote_logo_debug_no_local_file",
+        extra={"raw_logo_url": raw_logo_url, "normalized": normalized},
+    )
+    return None
+
+
 async def _render_quote_pdf_after_sale(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -2182,6 +2355,7 @@ async def _render_quote_pdf_after_sale(
         organizacion_id=organizacion_id,
         opportunity=opportunity,
     )
+    logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
     subtotal_value = _as_number(quote_row.get("subtotal"))
     impuestos_value = _as_number(quote_row.get("impuestos"))
     total_value = _as_number(quote_row.get("total"))
@@ -2215,6 +2389,7 @@ async def _render_quote_pdf_after_sale(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        logo_url=logo_url,
     )
     try:
         pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -21889,17 +22064,17 @@ async def update_email_template(
 @router.get("/settings/quote-template", response_model=CRMQuoteTemplate)
 async def get_quote_template(
     *,
-    repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
     _: str = Depends(require_permission("settings.view")),
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
 ) -> CRMQuoteTemplate:
     try:
-        row = await repo.get_quote_template(
+        platform_repo = PlatformRepository()
+        row = await platform_repo.get_quote_template(
             slug=slug,
             organizacion_id=organizacion_id,
         )
-    except CRMRepositoryError as exc:
+    except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="quote_template_not_found")
@@ -21909,7 +22084,6 @@ async def get_quote_template(
 @router.put("/settings/quote-template", response_model=CRMQuoteTemplate)
 async def update_quote_template(
     *,
-    repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMQuoteTemplateUpdate,
@@ -21918,13 +22092,14 @@ async def update_quote_template(
 ) -> CRMQuoteTemplate:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.upsert_quote_template(
+        platform_repo = PlatformRepository()
+        row = await platform_repo.upsert_quote_template(
             slug=slug,
             organizacion_id=organizacion_id,
             payload=body,
             updated_by=usuario_id,
         )
-    except CRMRepositoryError as exc:
+    except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuoteTemplate.model_validate(row)
 
@@ -26158,6 +26333,7 @@ async def preview_lead_quote_pdf(
         organizacion_id=organizacion_id,
         opportunity=opportunity_row,
     )
+    logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -26185,6 +26361,7 @@ async def preview_lead_quote_pdf(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        logo_url=logo_url,
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -26247,6 +26424,7 @@ async def send_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=oportunidad_row,
     )
+    logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -26274,6 +26452,7 @@ async def send_lead_quote(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        logo_url=logo_url,
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)

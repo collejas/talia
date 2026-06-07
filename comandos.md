@@ -207,7 +207,7 @@ echo "========== RELEASES PANEL =========="
 du -sh /var/www/talia/releases/panel/*
 readlink -f /var/www/talia/current/panel
 du -shL /var/www/talia/current/panel
-
+/var/www/talia/cotizacion-e37183ad-20260607180303.pdf
 # EJECUTAR LIMPIEZA DE MI TELEFONO:
   select public.cleanup_test_phone_whatsapp(
     '+5214441302811',

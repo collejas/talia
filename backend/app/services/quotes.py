@@ -155,6 +155,7 @@ class QuoteRenderContext:
     vendor_razon_social: str | None = None
     vendor_assessor_name: str | None = None
     vendor_assessor_phone: str | None = None
+    logo_url: str | None = None
 
 
 @dataclass
@@ -216,10 +217,28 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .topbar {
         display: flex;
         justify-content: space-between;
-        gap: 16px;
+        gap: 20px;
         padding-bottom: 14px;
         border-bottom: 1px solid #dbe3f0;
         margin-bottom: 14px;
+        align-items: flex-start;
+    }
+
+    .brand-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 72%;
+    }
+
+    .brand-logo {
+        width: 78px;
+        height: 78px;
+        object-fit: contain;
+        border-radius: 14px;
+        border: 1px solid #dbe3f0;
+        background: #ffffff;
+        padding: 8px;
     }
 
     .eyebrow {
@@ -550,6 +569,12 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
     client_phone = _safe_text(context.contact_phone, "Sin teléfono")
     project_name = _safe_text(context.lead_label, "Sin proyecto")
     project_description = _safe_text(context.descripcion, "Sin descripción")
+    logo_url = _safe_text(context.logo_url, "")
+    logo_html = (
+        f'<div><img class="brand-logo" src="{html_escape(logo_url, quote=True)}" alt="Logo de la empresa" /></div>'
+        if logo_url
+        else ""
+    )
     notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
     conditions_html = _build_quote_rich_text_block(
         context.economic_details_html,
@@ -569,10 +594,12 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
       <body>
         <div class="sheet">
           <div class="topbar">
-            <div>
-              <p class="eyebrow">Tal-IA · Cotizador</p>
-              <h1 class="title">{html_escape(project_name)}</h1>
-              <p class="subtitle">{html_escape(project_description)}</p>
+            <div class="brand-stack">
+              {logo_html}
+              <div>
+                <h1 class="title">{html_escape(project_name)}</h1>
+                <p class="subtitle">{html_escape(project_description)}</p>
+              </div>
             </div>
             <div class="top-meta">
               <div class="meta-block">
@@ -662,7 +689,7 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
           </div>
 
           <div class="footer">
-            <span>Documento generado por Tal-IA.</span>
+            <span>Documento generado por <a href="https://talia.mx">talia.mx</a>.</span>
             <span>{html_escape(folio)}</span>
           </div>
         </div>
