@@ -2037,6 +2037,10 @@ export function LeadDrawer({
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
+  const quoteCompactInputClass =
+    "h-8 border-0 bg-muted/35 px-2 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
+  const quoteCompactTextareaClass =
+    "min-h-[88px] border-0 bg-muted/35 px-2 py-1.5 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
 
   const handleSendQuote = () => {
     if (!card) return;
@@ -3386,9 +3390,9 @@ export function LeadDrawer({
       <Dialog open={quoteDialogOpen} onOpenChange={handleQuoteDialogOpenChange}>
         <DialogContent className="flex h-[90vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
           <div className="flex h-full min-h-0 flex-col bg-background">
-            <div className="border-b border-border/60 px-4 py-3 sm:px-5 sm:py-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-1">
+            <div className="border-b border-border/50 px-3 py-2.5 sm:px-4">
+              <div className="flex flex-col gap-2.5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-0.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <DialogTitle className="text-base font-semibold">Enviar cotización</DialogTitle>
                     <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
@@ -3431,93 +3435,100 @@ export function LeadDrawer({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
               <ScrollArea className="h-full min-h-0">
-                <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
-                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
-                    <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="space-y-3 px-3 py-3 sm:px-4">
+                  <div className="space-y-2 pb-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Datos principales</h4>
                         <p className="text-[11px] text-muted-foreground">Campos base de la propuesta.</p>
                       </div>
                     </div>
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="grid gap-1.5">
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="grid gap-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Título interno</label>
                         <Input
                           value={quoteTitle}
                           onChange={(event) => setQuoteTitle(event.target.value)}
                           disabled={quotePending}
                           placeholder="Implementación Tal-IA"
+                          className={quoteCompactInputClass}
                         />
                       </div>
-                      <div className="grid gap-1.5 md:col-span-2">
+                      <div className="grid gap-1 md:col-span-2">
                         <label className="text-[11px] font-medium text-muted-foreground">Descripción / resumen</label>
                         <Input
                           value={quoteDescription}
                           onChange={(event) => setQuoteDescription(event.target.value)}
                           disabled={quotePending}
                           placeholder="Resumen del proyecto que aparecerá en el PDF."
+                          className={quoteCompactInputClass}
                         />
                       </div>
                       {quoteChannel === "email" ? (
-                        <div className="grid gap-1.5">
+                        <div className="grid gap-1">
                           <label className="text-[11px] font-medium text-muted-foreground">Destinatarios</label>
                           <Input
                             value={quoteEmailTo}
                             onChange={(event) => setQuoteEmailTo(event.target.value)}
                             disabled={quotePending}
                             placeholder="correo@empresa.com"
+                            className={quoteCompactInputClass}
                           />
                         </div>
                       ) : (
-                        <div className="grid gap-1.5">
+                        <div className="grid gap-1">
                           <label className="text-[11px] font-medium text-muted-foreground">WhatsApp destino</label>
                           <Input
                             value={quoteWhatsappTo}
                             onChange={(event) => setQuoteWhatsappTo(event.target.value)}
                             disabled={quotePending}
                             placeholder="+52..."
+                            className={quoteCompactInputClass}
                           />
                         </div>
                       )}
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div className="mt-2 grid gap-2 md:grid-cols-3">
                       {quoteChannel === "email" ? (
-                        <div className="grid gap-1.5 md:col-span-2">
+                        <div className="grid gap-1 md:col-span-2">
                           <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
                           <Input
                             value={quoteSubject}
                             onChange={(event) => setQuoteSubject(event.target.value)}
                             disabled={quotePending}
                             placeholder="Cotización Tal-IA"
+                            className={quoteCompactInputClass}
                           />
                         </div>
                       ) : (
-                        <div className="grid gap-1.5 md:col-span-2">
+                        <div className="grid gap-1 md:col-span-2">
                           <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
                           <Input
                             value={quoteMessage}
                             onChange={(event) => setQuoteMessage(event.target.value)}
                             disabled={quotePending}
                             placeholder="Texto que acompañará al PDF."
+                            className={quoteCompactInputClass}
                           />
                         </div>
                       )}
-                      <div className="grid gap-1.5">
+                      <div className="grid gap-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Vigente hasta</label>
                         <Input
                           type="date"
                           value={quoteValidoHasta}
                           onChange={(event) => setQuoteValidoHasta(event.target.value)}
                           disabled={quotePending}
+                          className={quoteCompactInputClass}
                         />
                       </div>
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-2 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Productos y conceptos</h4>
                         <p className="text-[11px] text-muted-foreground">Busca en catálogo o agrega partidas manuales.</p>
@@ -3530,14 +3541,14 @@ export function LeadDrawer({
 
                     <div className="space-y-2">
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <div className="flex flex-1 items-center gap-2 rounded-md border border-border/60 bg-background px-3">
+                        <div className="flex flex-1 items-center gap-2 rounded-md bg-muted/35 px-2">
                           <IconSearch className="size-4 shrink-0 text-muted-foreground" />
                           <Input
                             value={catalogSearch}
                             onChange={(event) => setCatalogSearch(event.target.value)}
                             placeholder="Buscar en catálogo"
                             disabled={catalogState.status === "loading"}
-                            className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                            className="h-8 border-0 bg-transparent px-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0"
                           />
                         </div>
                         <Button
@@ -3551,7 +3562,7 @@ export function LeadDrawer({
                         </Button>
                       </div>
 
-                      <div className="rounded-lg border border-dashed border-border/60 bg-muted/20">
+                      <div className="rounded-md bg-muted/25">
                         <ScrollArea className="max-h-44">
                           {catalogState.status === "loading" || catalogState.status === "idle" ? (
                             <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
@@ -3568,7 +3579,7 @@ export function LeadDrawer({
                               <button
                                 key={item.id}
                                 type="button"
-                                className="flex w-full items-start justify-between gap-3 border-b border-border/40 px-3 py-2 text-left text-xs last:border-b-0 hover:bg-muted/50"
+                                className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-muted/40"
                                 onClick={() => handleAddCatalogItem(item)}
                                 disabled={quotePending}
                               >
@@ -3591,7 +3602,7 @@ export function LeadDrawer({
 
                       <div className="space-y-2">
                         {quoteItems.map((item, index) => (
-                          <div key={item.key} className="space-y-2 rounded-lg border border-border/60 bg-background p-2.5">
+                          <div key={item.key} className="space-y-2 rounded-md bg-muted/25 p-2.5">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-foreground">
@@ -3708,20 +3719,21 @@ export function LeadDrawer({
                         ))}
                       </div>
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="grid gap-1.5">
+                  <div className="space-y-2 pb-2">
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
                         <Input
                           value={quoteMessage}
                           onChange={(event) => setQuoteMessage(event.target.value)}
                           disabled={quotePending}
                           placeholder="Texto que acompañará al PDF."
+                          className={quoteCompactInputClass}
                         />
                       </div>
-                      <div className="grid gap-1.5">
+                      <div className="grid gap-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Moneda</label>
                         <Input
                           value={quoteMoneda}
@@ -3729,9 +3741,10 @@ export function LeadDrawer({
                           disabled={quotePending}
                           maxLength={3}
                           placeholder="MXN"
+                          className={quoteCompactInputClass}
                         />
                       </div>
-                      <div className="grid gap-1.5 md:col-span-2">
+                      <div className="grid gap-1 md:col-span-2">
                         <label className="text-[11px] font-medium text-muted-foreground">
                           Detalles de propuesta económica (HTML)
                         </label>
@@ -3741,19 +3754,19 @@ export function LeadDrawer({
                           disabled={quotePending}
                           rows={4}
                           placeholder="<p>Incluye alcances, términos y cualquier anotación adicional.</p>"
-                          className="min-h-[96px]"
+                          className={quoteCompactTextareaClass}
                         />
                       </div>
                     </div>
-                  </section>
+                  </div>
                 </div>
               </ScrollArea>
 
-              <aside className="border-t border-border/60 bg-muted/20 lg:border-l lg:border-t-0">
+              <aside className="border-t border-border/40 bg-muted/15 lg:border-l lg:border-t-0">
                 <ScrollArea className="h-full min-h-0">
-                  <div className="space-y-3 p-4">
-                    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
-                      <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="space-y-3 p-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
                         <div>
                           <h4 className="text-sm font-semibold text-foreground">Resumen</h4>
                           <p className="text-[11px] text-muted-foreground">Totales calculados en tiempo real.</p>
@@ -3762,64 +3775,64 @@ export function LeadDrawer({
                           {quoteSummaryCurrency}
                         </Badge>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-3 text-sm">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-sm">
                           <span className="text-muted-foreground">Subtotal</span>
                           <Input
                             value={quoteSubtotal}
                             onChange={(event) => setQuoteSubtotal(event.target.value)}
                             disabled={quotePending}
                             placeholder="0.00"
-                            className="h-8 w-[120px] text-right"
+                            className={`${quoteCompactInputClass} w-[108px] text-right`}
                           />
                         </div>
-                        <div className="flex items-center justify-between gap-3 text-sm">
+                        <div className="flex items-center justify-between gap-2 text-sm">
                           <span className="text-muted-foreground">IVA 16%</span>
                           <Input
                             value={quoteImpuestos}
                             onChange={(event) => setQuoteImpuestos(event.target.value)}
                             disabled={quotePending}
                             placeholder="0.00"
-                            className="h-8 w-[120px] text-right"
+                            className={`${quoteCompactInputClass} w-[108px] text-right`}
                           />
                         </div>
-                        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-base font-semibold">
+                        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 text-base font-semibold">
                           <span className="text-foreground">Total</span>
                           <Input
                             value={quoteTotal}
                             onChange={(event) => setQuoteTotal(event.target.value)}
                             disabled={quotePending}
                             placeholder="0.00"
-                            className="h-8 w-[120px] text-right"
+                            className={`${quoteCompactInputClass} w-[108px] text-right`}
                           />
                         </div>
                       </div>
-                      <div className="mt-3 space-y-2 rounded-lg bg-muted/30 p-2.5 text-xs">
-                        <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1.5 rounded-md bg-background/70 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Subtotal calculado</span>
                           <span className="font-medium text-foreground">
                             {formatQuoteCurrency(quoteSummarySubtotal, quoteSummaryCurrency)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">IVA calculado</span>
                           <span className="font-medium text-foreground">
                             {formatQuoteCurrency(quoteSummaryTaxes, quoteSummaryCurrency)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Total calculado</span>
                           <span className="font-semibold text-foreground">
                             {formatQuoteCurrency(quoteSummaryTotal, quoteSummaryCurrency)}
                           </span>
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-2 text-xs">
-                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-2">
+                      <div className="grid gap-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2 rounded-md bg-background/70 px-2 py-1.5">
                           <span className="text-muted-foreground">Vigencia</span>
                           <span className="font-medium text-foreground">{quoteValidoHasta || "Sin fecha"}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-2">
+                        <div className="flex items-center justify-between gap-2 rounded-md bg-background/70 px-2 py-1.5">
                           <span className="text-muted-foreground">Canal</span>
                           <span className="font-medium text-foreground">
                             {quoteChannel === "email" ? "Correo" : "WhatsApp"}
@@ -3828,21 +3841,21 @@ export function LeadDrawer({
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
+                    <div className="space-y-1 border-t border-border/40 pt-3">
                       <h4 className="text-sm font-semibold text-foreground">Condiciones</h4>
-                      <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                      <div className="space-y-1 text-xs text-muted-foreground">
                         <p>Precios sujetos a validación antes del envío.</p>
                         <p>Revisa el detalle de partidas y el mensaje antes de enviar.</p>
                       </div>
                     </div>
 
                     {quoteError ? (
-                      <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      <p className="rounded-md bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
                         {quoteError}
                       </p>
                     ) : null}
                     {quoteSuccess ? (
-                      <p className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800">
+                      <p className="rounded-md bg-green-50 px-2.5 py-2 text-xs text-green-800">
                         {quoteSuccess}
                       </p>
                     ) : null}
