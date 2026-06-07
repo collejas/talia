@@ -855,7 +855,7 @@ export function LeadDrawer({
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
     formatDateInput(addDays(new Date(), 14)),
   );
-  const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => [createQuoteItemForm()]);
+  const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
   const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -1878,10 +1878,11 @@ export function LeadDrawer({
 
   const handleAddCatalogItem = useCallback(
     (option: CatalogItemOption) => {
-      setQuoteItems((prev) => [
-        ...prev,
-        catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"),
-      ]);
+      const nextItem = catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN");
+      setQuoteItems((prev) => {
+        const cleaned = prev.filter((item) => !isBlankQuoteItem(item));
+        return [...cleaned, nextItem];
+      });
       setQuoteError(null);
       setCatalogSearch("");
     },
@@ -1891,10 +1892,11 @@ export function LeadDrawer({
   const handleAddCatalogItems = useCallback(
     (options: CatalogItemOption[]) => {
       if (!options.length) return;
-      setQuoteItems((prev) => [
-        ...prev,
-        ...options.map((option) => catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN")),
-      ]);
+      const nextItems = options.map((option) => catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"));
+      setQuoteItems((prev) => {
+        const cleaned = prev.filter((item) => !isBlankQuoteItem(item));
+        return cleaned.length ? [...cleaned, ...nextItems] : nextItems;
+      });
       setQuoteError(null);
       setQuoteCatalogSelection([]);
       setQuoteCatalogPickerOpen(false);
@@ -1931,13 +1933,11 @@ export function LeadDrawer({
   const handleRemoveItem = useCallback(
     (index: number) => {
       setQuoteItems((prev) => {
-        if (prev.length <= 1) {
-          return [createQuoteItemForm({ moneda: quoteMoneda || "MXN" })];
-        }
-        return prev.filter((_, idx) => idx !== index);
+        const next = prev.filter((_, idx) => idx !== index);
+        return next.length ? next : [];
       });
     },
-    [quoteMoneda],
+    [],
   );
 
   const handleUnlinkCatalogItem = useCallback((index: number) => {
@@ -5124,6 +5124,17 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
     descuento: initial?.descuento ?? "",
     moneda: (initial?.moneda ?? "MXN").toUpperCase(),
   };
+}
+
+function isBlankQuoteItem(item: QuoteItemForm): boolean {
+  return (
+    !item.catalogItemId &&
+    !item.fotoUrl &&
+    !item.nombre.trim() &&
+    !item.descripcion.trim() &&
+    !item.precioUnitario.trim() &&
+    !item.descuento.trim()
+  );
 }
 
 function catalogOptionToQuoteItem(option: CatalogItemOption, fallbackCurrency: string): QuoteItemForm {
