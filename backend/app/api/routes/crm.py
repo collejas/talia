@@ -13405,6 +13405,7 @@ class LeadQuoteCreatePayload(BaseModel):
     titulo: str | None = Field(default=None, max_length=200)
     descripcion: str | None = Field(default=None, max_length=2000)
     detalles_propuesta_html: str | None = Field(default=None, max_length=16000)
+    message: str | None = Field(default=None, max_length=2000)
     conceptos: list[dict[str, Any]] | None = Field(default=None)
     subtotal: float | None = Field(default=None)
     impuestos: float | None = Field(default=None)
@@ -13429,7 +13430,6 @@ class LeadQuoteSendPayload(LeadQuoteCreatePayload):
     email_to: list[str] | None = Field(default=None)
     whatsapp_to: str | None = Field(default=None)
     subject: str | None = Field(default=None, max_length=200)
-    message: str | None = Field(default=None, max_length=2000)
 
 
 class LeadQuote(BaseModel):
@@ -26112,7 +26112,7 @@ async def preview_lead_quote_pdf(
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
         descripcion=base_payload.descripcion or base_payload.titulo,
-        notes=oportunidad_metadata.get("proyecto_necesidades")
+        notes=base_payload.message or oportunidad_metadata.get("proyecto_necesidades")
         or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
@@ -26192,7 +26192,7 @@ async def send_lead_quote(
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
         descripcion=base_payload.descripcion or base_payload.titulo,
-        notes=oportunidad_metadata.get("proyecto_necesidades")
+        notes=base_payload.message or oportunidad_metadata.get("proyecto_necesidades")
         or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=payload.detalles_propuesta_html,

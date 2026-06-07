@@ -166,17 +166,601 @@ class QuoteSendError(RuntimeError):
 
 
 async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
-    """Genera el PDF de cotización usando la plantilla configurada o un fallback."""
+    """Genera el PDF de cotización con el formato nuevo y un fallback legado."""
 
     try:
-        template = await quote_templates_service.fetch_active_template()
-        return await _render_template_based_pdf(context, template)
-    except quote_templates_service.QuoteTemplateError as exc:
-        logger.warning("quote_template_unavailable: %s", exc)
+        return await _render_modern_pdf(context)
     except Exception as exc:  # pragma: no cover - defensivo
-        logger.exception("quote_template_render_failed", exc_info=exc)
-
+        logger.exception("quote_modern_render_failed", exc_info=exc)
+        try:
+            template = await quote_templates_service.fetch_active_template()
+            return await _render_template_based_pdf(context, template)
+        except quote_templates_service.QuoteTemplateError as template_exc:
+            logger.warning("quote_template_unavailable: %s", template_exc)
+        except Exception as template_exc:  # pragma: no cover - defensivo
+            logger.exception("quote_template_render_failed", exc_info=template_exc)
     return _render_plaintext_pdf(context)
+
+
+MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
+    """
+    @page {
+        size: A4;
+        margin: 10mm 11mm 12mm;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #0f172a;
+        background: #f3f6fb;
+        font-size: 10.8pt;
+        line-height: 1.45;
+    }
+
+    .sheet {
+        background: #ffffff;
+        border: 1px solid #dbe3f0;
+        border-radius: 16px;
+        padding: 18px;
+    }
+
+    .topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #dbe3f0;
+        margin-bottom: 14px;
+    }
+
+    .eyebrow {
+        margin: 0;
+        color: #64748b;
+        font-size: 8.5pt;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+    }
+
+    .title {
+        margin: 4px 0 6px;
+        font-size: 22pt;
+        line-height: 1.08;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .subtitle {
+        margin: 0;
+        color: #475569;
+        font-size: 10pt;
+    }
+
+    .top-meta {
+        min-width: 180px;
+        text-align: right;
+        display: grid;
+        gap: 8px;
+    }
+
+    .meta-pill {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: #eef6ff;
+        color: #1d4ed8;
+        font-size: 8.5pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .meta-block {
+        display: grid;
+        gap: 2px;
+    }
+
+    .meta-label {
+        color: #64748b;
+        font-size: 8.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .meta-value {
+        color: #0f172a;
+        font-size: 10pt;
+        font-weight: 700;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .card {
+        border: 1px solid #dbe3f0;
+        border-radius: 14px;
+        background: #f8fbff;
+        padding: 12px;
+    }
+
+    .card h3 {
+        margin: 0 0 8px;
+        font-size: 9pt;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+    }
+
+    .card p {
+        margin: 0 0 4px;
+        color: #334155;
+    }
+
+    .card p strong {
+        color: #0f172a;
+    }
+
+    .section {
+        margin-top: 14px;
+    }
+
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #dbe3f0;
+        margin-bottom: 10px;
+    }
+
+    .section-head h2 {
+        margin: 0;
+        font-size: 12pt;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .section-head span {
+        font-size: 9pt;
+        color: #64748b;
+    }
+
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .items-table th,
+    .items-table td {
+        border-bottom: 1px solid #dbe3f0;
+        padding: 8px 8px;
+        vertical-align: top;
+        font-size: 9pt;
+    }
+
+    .items-table thead th {
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 7.8pt;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        background: #f8fbff;
+        border-top: 1px solid #dbe3f0;
+    }
+
+    .item-image-cell {
+        width: 40px;
+    }
+
+    .item-image {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid #dbe3f0;
+        background: #eef2f7;
+        display: block;
+    }
+
+    .item-image-fallback {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7pt;
+        text-transform: uppercase;
+        text-align: center;
+        line-height: 1.1;
+    }
+
+    .item-concept {
+        width: 34%;
+    }
+
+    .item-qty {
+        width: 9%;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .item-unit {
+        width: 9%;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .item-price,
+    .item-discount,
+    .item-total {
+        width: 15%;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .item-concept-title {
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 3px;
+    }
+
+    .item-concept-desc {
+        margin: 0;
+        color: #475569;
+        font-size: 8.7pt;
+    }
+
+    .empty-row {
+        text-align: center;
+        color: #64748b;
+        padding: 16px 10px;
+    }
+
+    .bottom-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .prose-box,
+    .note-box,
+    .summary-box {
+        border: 1px solid #dbe3f0;
+        border-radius: 14px;
+        background: #f8fbff;
+        padding: 12px;
+    }
+
+    .box-title {
+        margin: 0 0 8px;
+        font-size: 9pt;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+    }
+
+    .richtext,
+    .richtext p,
+    .richtext li,
+    .richtext div,
+    .richtext span {
+        margin: 0;
+        color: #334155;
+        font-size: 9.2pt;
+        line-height: 1.5;
+    }
+
+    .richtext p + p,
+    .richtext div + div {
+        margin-top: 6px;
+    }
+
+    .summary-box {
+        background: #eef6ff;
+        border-color: #cfe0ff;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 10pt;
+    }
+
+    .summary-row span {
+        color: #475569;
+    }
+
+    .summary-row strong {
+        color: #0f172a;
+    }
+
+    .summary-total {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #cfe0ff;
+        font-size: 12pt;
+        font-weight: 700;
+    }
+
+    .footer {
+        margin-top: 14px;
+        padding-top: 10px;
+        border-top: 1px solid #dbe3f0;
+        color: #64748b;
+        font-size: 8.5pt;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    """
+).strip()
+
+
+async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
+    html_doc = _build_modern_quote_html(context)
+    base_url = _resolve_template_base_url()
+    try:
+        pdf_bytes = await asyncio.to_thread(
+            lambda: WeasyHTML(string=html_doc, base_url=base_url).write_pdf()
+        )
+    except Exception as exc:
+        logger.exception("quote_modern_weasyprint_render_failed", exc_info=exc)
+        raise
+    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
+    return QuoteDocument(filename=filename, content=pdf_bytes)
+
+
+def _build_modern_quote_html(context: QuoteRenderContext) -> str:
+    folio = f"COT-{context.reference.upper()}"
+    issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
+    valid_until = context.valido_hasta.isoformat() if context.valido_hasta else "Sin vigencia"
+    currency = _safe_text(context.moneda, "MXN")
+    vendor_name = _safe_text(context.issuer_name, "Sin vendedor")
+    vendor_email = _safe_text(context.issuer_email, "Sin correo")
+    client_name = _safe_text(context.contact_name, "Sin cliente")
+    client_company = _safe_text(context.contact_company, "Sin razón social")
+    client_email = _safe_text(context.contact_email, "Sin email")
+    client_phone = _safe_text(context.contact_phone, "Sin teléfono")
+    project_name = _safe_text(context.lead_label, "Sin proyecto")
+    project_description = _safe_text(context.descripcion, "Sin descripción")
+    notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
+    conditions_html = _build_quote_rich_text_block(
+        context.economic_details_html,
+        "Sin condiciones comerciales adicionales.",
+    )
+    items_html = _build_modern_quote_items_html(context)
+    subtotal = _format_currency(context.subtotal, context.moneda)
+    taxes = _format_currency(context.impuestos, context.moneda)
+    total = _format_currency(_resolve_total(context), context.moneda)
+
+    return f"""
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>{MODERN_QUOTE_PDF_STYLE}</style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div class="topbar">
+            <div>
+              <p class="eyebrow">Tal-IA · Cotizador</p>
+              <h1 class="title">{html_escape(project_name)}</h1>
+              <p class="subtitle">{html_escape(project_description)}</p>
+            </div>
+            <div class="top-meta">
+              <div class="meta-block">
+                <span class="meta-label">Folio</span>
+                <span class="meta-value">{html_escape(folio)}</span>
+              </div>
+              <span class="meta-pill">Borrador</span>
+              <div class="meta-block">
+                <span class="meta-label">Emitida</span>
+                <span class="meta-value">{html_escape(issued_at)}</span>
+              </div>
+              <div class="meta-block">
+                <span class="meta-label">Vigencia</span>
+                <span class="meta-value">{html_escape(valid_until)}</span>
+              </div>
+              <div class="meta-block">
+                <span class="meta-label">Moneda</span>
+                <span class="meta-value">{html_escape(currency)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="card">
+              <h3>Vendedor</h3>
+              <p><strong>{html_escape(vendor_name)}</strong></p>
+              <p>{html_escape(vendor_email)}</p>
+            </div>
+            <div class="card">
+              <h3>Cliente</h3>
+              <p><strong>{html_escape(client_company)}</strong></p>
+              <p>{html_escape(client_name)}</p>
+              <p>{html_escape(client_email)}</p>
+              <p>{html_escape(client_phone)}</p>
+            </div>
+            <div class="card">
+              <h3>Proyecto</h3>
+              <p><strong>{html_escape(project_name)}</strong></p>
+              <p>{html_escape(project_description)}</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h2>Partidas cotizadas</h2>
+              <span>{html_escape(currency)}</span>
+            </div>
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="item-image-cell">Img.</th>
+                  <th class="item-concept">Concepto</th>
+                  <th class="item-qty">Cant.</th>
+                  <th class="item-unit">Unidad</th>
+                  <th class="item-price">Precio</th>
+                  <th class="item-discount">Desc.</th>
+                  <th class="item-total">Total</th>
+                </tr>
+              </thead>
+              <tbody>{items_html}</tbody>
+            </table>
+          </div>
+
+          <div class="bottom-grid">
+            <div class="section" style="margin-top:0;">
+              <div class="prose-box">
+                <p class="box-title">Condiciones comerciales</p>
+                <div class="richtext">{conditions_html}</div>
+              </div>
+              <div class="note-box" style="margin-top:12px;">
+                <p class="box-title">Notas y anexos</p>
+                <div class="richtext">{notes_html}</div>
+                <div class="richtext" style="margin-top:10px;color:#64748b;">
+                  Anexos: no hay archivos cargados todavía.
+                </div>
+              </div>
+            </div>
+
+            <div class="summary-box">
+              <p class="box-title">Resumen financiero</p>
+              <div class="summary-row"><span>Subtotal</span><strong>{html_escape(subtotal)}</strong></div>
+              <div class="summary-row"><span>IVA</span><strong>{html_escape(taxes)}</strong></div>
+              <div class="summary-row summary-total"><span>Total</span><strong>{html_escape(total)}</strong></div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <span>Documento generado por Tal-IA.</span>
+            <span>{html_escape(folio)}</span>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+
+
+def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
+    concepts = context.conceptos or []
+    items = context.items or []
+    if not concepts and not items:
+        return '<tr><td class="empty-row" colspan="7">Todavía no hay partidas para previsualizar.</td></tr>'
+
+    rows: list[str] = []
+    max_items = max(len(concepts), len(items))
+    for idx in range(max_items):
+        concept = concepts[idx] if idx < len(concepts) and isinstance(concepts[idx], dict) else {}
+        related = items[idx] if idx < len(items) and isinstance(items[idx], dict) else {}
+        title = html_escape(_concept_title_for_display(concept, idx + 1))
+        desc_value = (
+            _record_value(concept, "descripcion")
+            or _record_value(concept, "detalle")
+            or _record_value(related, "descripcion")
+            or _record_value(related, "detalle")
+            or related.get("descripcion")
+            or concept.get("descripcion")
+        )
+        desc = _normalize_detail_text(desc_value)
+        quantity_value = _record_value(concept, "cantidad") or _record_value(related, "cantidad")
+        quantity = html_escape(_format_quantity(quantity_value))
+        unit_source = (
+            _record_value(concept, "unidad")
+            or _record_value(related, "unidad")
+            or related.get("unidad")
+            or concept.get("unidad")
+        )
+        unit = html_escape(_format_unit(unit_source))
+        amount_value = _concept_total(concept)
+        if amount_value is None:
+            amount_value = _item_total(related)
+        price_value = _resolve_unit_price(concept, related, amount_value, _coerce_float(quantity_value))
+        price = html_escape(_format_currency(price_value, context.moneda))
+        discount_value = _record_value(concept, "descuento") or _record_value(related, "descuento")
+        discount = html_escape(_format_discount(discount_value, context.moneda))
+        total_value = amount_value
+        if total_value is None:
+            total_value = _item_total(related)
+        total = html_escape(_format_currency(total_value, context.moneda))
+        image_url = _item_image_url(related)
+        image_html = (
+            f'<img class="item-image" src="{html_escape(image_url, quote=True)}" alt="Producto" />'
+            if image_url
+            else '<div class="item-image-fallback">Sin img</div>'
+        )
+        rows.append(
+            "<tr>"
+            f'<td class="item-image-cell">{image_html}</td>'
+            f'<td class="item-concept"><p class="item-concept-title">{title}</p><p class="item-concept-desc">{desc}</p></td>'
+            f'<td class="item-qty">{quantity}</td>'
+            f'<td class="item-unit">{unit}</td>'
+            f'<td class="item-price">{price}</td>'
+            f'<td class="item-discount">{discount}</td>'
+            f'<td class="item-total">{total}</td>'
+            "</tr>"
+        )
+    return "".join(rows)
+
+
+def _build_quote_rich_text_block(value: str | None, fallback: str) -> str:
+    sanitized = _sanitize_html_fragment(value)
+    if sanitized:
+        return sanitized
+    return f"<p>{html_escape(fallback)}</p>"
+
+
+def _item_image_url(record: Any) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    for key in ("fotoUrl", "foto_url", "image_url", "image"):
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    metadata = record.get("metadatos") or record.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("fotoUrl", "foto_url", "image_url", "url"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        media = metadata.get("media")
+        if isinstance(media, list):
+            for media_item in media:
+                if not isinstance(media_item, dict):
+                    continue
+                media_url = media_item.get("url")
+                if isinstance(media_url, str) and media_url.strip():
+                    return media_url.strip()
+    return None
+
+
+def _format_discount(value: Any, currency: str | None) -> str:
+    amount = _coerce_float(value)
+    if amount is None:
+        return "—"
+    if amount <= 0:
+        return "0"
+    if amount < 1:
+        return f"{amount * 100:.0f}%"
+    return _format_currency(amount, currency)
 
 
 async def _render_template_based_pdf(

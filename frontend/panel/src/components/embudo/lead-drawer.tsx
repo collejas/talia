@@ -2255,10 +2255,10 @@ export function LeadDrawer({
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
       detalles_propuesta_html: quoteEconomicDetails.trim() || null,
+      message: quoteMessage.trim() || null,
       email_to: quoteChannel === "email" ? emails : undefined,
       whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
       subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
-      message: quoteMessage.trim() || null,
     };
   };
 
@@ -5571,6 +5571,7 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
         total,
         moneda: form.moneda.trim().slice(0, 3).toUpperCase(),
         orden: index + 1,
+        metadatos: form.fotoUrl ? { fotoUrl: form.fotoUrl } : undefined,
       };
       return payload;
     })
