@@ -26051,6 +26051,80 @@ async def create_lead_quote(
     return LeadQuoteResponse(quote=quote)
 
 
+@router.post("/oportunidades/{oportunidad_id}/quotes/pdf")
+async def preview_lead_quote_pdf(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> Response:
+    opportunity_row = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity_row is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+
+    contact = _single_related(opportunity_row.get("contacto")) or {}
+    cuenta = _single_related(opportunity_row.get("cuenta")) or {}
+    oportunidad_metadata = _ensure_dict(opportunity_row.get("metadata"), default={})
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(
+        organizacion_id=organizacion_id
+    )
+    lead_label = (
+        opportunity_row.get("titulo")
+        or contact.get("nombre_completo")
+        or cuenta.get("nombre")
+        or "Oportunidad sin nombre"
+    )
+    try:
+        base_payload = LeadQuoteCreatePayload.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()) from exc
+
+    currency = base_payload.moneda or opportunity_row.get("moneda") or "MXN"
+    normalized_items = _normalize_quote_items(base_payload.items or [])
+    totals = _quote_totals_from_items(normalized_items)
+    if totals:
+        base_payload.subtotal = totals["subtotal"]
+        base_payload.impuestos = totals["impuestos"]
+        base_payload.total = totals["total"]
+    conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
+
+    issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
+    issuer_email = mail_settings.username
+    quote_context = quotes_service.QuoteRenderContext(
+        lead_label=lead_label,
+        reference=str(oportunidad_id).split("-")[0],
+        issuer_name=issuer_name,
+        issuer_email=issuer_email,
+        contact_name=_clean_text(contact.get("nombre_completo")),
+        contact_company=_clean_text(contact.get("company_name")),
+        contact_email=_clean_text(contact.get("correo")),
+        contact_phone=_clean_text(contact.get("telefono_e164")),
+        conceptos=conceptos_context,
+        subtotal=base_payload.subtotal,
+        impuestos=base_payload.impuestos,
+        total=base_payload.total,
+        moneda=currency,
+        valido_hasta=base_payload.valido_hasta,
+        descripcion=base_payload.descripcion or base_payload.titulo,
+        notes=oportunidad_metadata.get("proyecto_necesidades")
+        or contact.get("necesidad_proposito"),
+        items=normalized_items,
+        economic_details_html=base_payload.detalles_propuesta_html,
+    )
+
+    pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{pdf_doc.filename}"',
+    }
+    return Response(content=pdf_doc.content, media_type="application/pdf", headers=headers)
+
+
 @router.post(
     "/oportunidades/{oportunidad_id}/quotes/send",
     response_model=LeadQuoteResponse,

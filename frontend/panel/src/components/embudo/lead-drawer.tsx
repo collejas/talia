@@ -839,6 +839,7 @@ export function LeadDrawer({
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
   const [quotePdfLoadingId, setQuotePdfLoadingId] = useState<string | null>(null);
+  const [quotePreviewPdfLoading, setQuotePreviewPdfLoading] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
@@ -863,6 +864,7 @@ export function LeadDrawer({
   const [quoteCatalogPickerSearch, setQuoteCatalogPickerSearch] = useState("");
   const [quoteCatalogSelection, setQuoteCatalogSelection] = useState<string[]>([]);
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
+  const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -2136,6 +2138,7 @@ export function LeadDrawer({
       setQuoteCatalogPickerSearch("");
       setQuoteCatalogSelection([]);
       setQuotePreviewOpen(false);
+      setQuotePreviewError(null);
       setQuoteError(null);
     }
   };
@@ -2204,6 +2207,61 @@ export function LeadDrawer({
   const quoteCompactTextareaClass =
     "min-h-[88px] border-0 bg-muted/35 px-2 py-1.5 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
 
+  const buildQuotePayload = () => {
+    const emails = parseEmailList(quoteEmailTo);
+    const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
+    const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
+    const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
+    const itemsPayload = buildQuoteItemsPayload(quoteItems);
+    const conceptsPayload = itemsPayload
+      .map((item) => {
+        const title = typeof item.titulo === "string" ? item.titulo : null;
+        const description = typeof item.descripcion === "string" ? item.descripcion : null;
+        const total = typeof item.total === "number" ? item.total : null;
+        const unit = typeof item.unidad === "string" ? item.unidad : null;
+        const quantity = typeof item.cantidad === "number" ? item.cantidad : null;
+        if (!title && !description && total == null) {
+          return null;
+        }
+        return {
+          titulo: title,
+          descripcion: description,
+          total,
+          unidad: unit,
+          cantidad: quantity,
+        };
+      })
+      .filter(
+        (
+          concept,
+        ): concept is {
+          titulo: string | null;
+          descripcion: string | null;
+          total: number | null;
+          unidad: string | null;
+          cantidad: number | null;
+        } => !!concept,
+      );
+
+    return {
+      channel: quoteChannel,
+      titulo: quoteTitle.trim() || null,
+      descripcion: quoteDescription.trim() || null,
+      conceptos: conceptsPayload.length ? conceptsPayload : undefined,
+      items: itemsPayload,
+      subtotal: subtotalValue ?? null,
+      impuestos: taxValue ?? null,
+      total: totalValue ?? null,
+      moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
+      valido_hasta: quoteValidoHasta?.trim() || null,
+      detalles_propuesta_html: quoteEconomicDetails.trim() || null,
+      email_to: quoteChannel === "email" ? emails : undefined,
+      whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
+      subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
+      message: quoteMessage.trim() || null,
+    };
+  };
+
   const handleSendQuote = () => {
     if (!card) return;
     if (quoteChannel === "email") {
@@ -2226,41 +2284,10 @@ export function LeadDrawer({
     setQuoteError(null);
     startQuoteAction(async () => {
       try {
-        const emails = parseEmailList(quoteEmailTo);
-        const subtotalValue =
-          computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
-        const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
-        const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
-        const itemsPayload = buildQuoteItemsPayload(quoteItems);
-        const conceptsPayload = itemsPayload
-          .map((item) => {
-            const title = typeof item.titulo === "string" ? item.titulo : null;
-            const description = typeof item.descripcion === "string" ? item.descripcion : null;
-            const total = typeof item.total === "number" ? item.total : null;
-            const unit = typeof item.unidad === "string" ? item.unidad : null;
-            const quantity = typeof item.cantidad === "number" ? item.cantidad : null;
-            if (!title && !description && total == null) {
-              return null;
-            }
-            return {
-              titulo: title,
-              descripcion: description,
-              total,
-              unidad: unit,
-              cantidad: quantity,
-            };
-          })
-          .filter(
-            (
-              concept,
-            ): concept is {
-              titulo: string | null;
-              descripcion: string | null;
-              total: number | null;
-              unidad: string | null;
-              cantidad: number | null;
-            } => !!concept,
-          );
+        const payload = buildQuotePayload();
+        const subtotalValue = payload.subtotal;
+        const totalValue = payload.total;
+        const itemsPayload = payload.items;
 
         const hasItems = itemsPayload.length > 0;
         const hasTotals = subtotalValue != null || totalValue != null;
@@ -2268,29 +2295,11 @@ export function LeadDrawer({
           setQuoteError("Agrega al menos un concepto con cantidad o define un monto estimado.");
           return;
         }
-        const currencyValue = (quoteMoneda || "MXN").trim().toUpperCase();
+        const currencyValue = payload.moneda;
         if (currencyValue.length !== 3) {
           setQuoteError("La moneda debe tener exactamente 3 caracteres (ej. MXN).");
           return;
         }
-
-        const payload = {
-          channel: quoteChannel,
-          titulo: quoteTitle.trim() || null,
-          descripcion: quoteDescription.trim() || null,
-          conceptos: conceptsPayload.length ? conceptsPayload : undefined,
-          items: itemsPayload,
-          subtotal: subtotalValue ?? null,
-          impuestos: taxValue ?? null,
-          total: totalValue ?? null,
-          moneda: currencyValue,
-          valido_hasta: quoteValidoHasta?.trim() || null,
-          detalles_propuesta_html: quoteEconomicDetails.trim() || null,
-          email_to: quoteChannel === "email" ? emails : undefined,
-          whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
-          subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
-          message: quoteMessage.trim() || null,
-        };
 
         const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/send`, {
           method: "POST",
@@ -2316,6 +2325,47 @@ export function LeadDrawer({
         );
       }
     });
+  };
+
+  const handleDownloadQuotePdf = async () => {
+    if (!card) return;
+    setQuotePreviewError(null);
+    try {
+      setQuotePreviewPdfLoading(true);
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/pdf",
+        },
+        body: JSON.stringify(buildQuotePayload()),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const message = typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)"?/i);
+      const filename = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].replace(/"/g, "")) : "cotizacion.pdf";
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
+      setQuoteSuccess("PDF descargado correctamente.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo descargar el PDF.";
+      setQuotePreviewError(message);
+      window.alert(message);
+    } finally {
+      setQuotePreviewPdfLoading(false);
+    }
   };
 
   const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
@@ -4307,6 +4357,11 @@ export function LeadDrawer({
               </Badge>
             </div>
           </div>
+          {quotePreviewError ? (
+            <div className="border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">
+              {quotePreviewError}
+            </div>
+          ) : null}
           <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="min-h-0 rounded-lg bg-muted/20 p-3">
               <ScrollArea className="h-full">
@@ -4530,8 +4585,18 @@ export function LeadDrawer({
               <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
                 <h4 className="text-sm font-semibold text-foreground">Acciones</h4>
                 <div className="mt-3 grid gap-2">
-                  <Button type="button" variant="outline" disabled>
-                    Descargar PDF
+                  <Button type="button" variant="outline" onClick={handleDownloadQuotePdf} disabled={quotePreviewPdfLoading}>
+                    {quotePreviewPdfLoading ? (
+                      <>
+                        <IconLoader2 className="size-4 animate-spin" />
+                        Descargando...
+                      </>
+                    ) : (
+                      <>
+                        <IconDownload className="size-4" />
+                        Descargar PDF
+                      </>
+                    )}
                   </Button>
                   <Button type="button" variant="outline" disabled>
                     Enviar por email
