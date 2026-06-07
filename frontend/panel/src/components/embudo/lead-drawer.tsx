@@ -176,6 +176,7 @@ type QuotesState =
 type LeadQuoteItemEntry = {
   id: string;
   catalogItemId: string | null;
+  fotoUrl: string | null;
   title: string | null;
   description: string | null;
   unit: string | null;
@@ -191,6 +192,7 @@ type LeadQuoteItemEntry = {
 type QuoteItemForm = {
   key: string;
   catalogItemId: string | null;
+  fotoUrl: string | null;
   nombre: string;
   descripcion: string;
   unidad: string;
@@ -214,6 +216,7 @@ type CatalogItemOption = {
   precioBase: number | null;
   moneda: string;
   activo: boolean;
+  fotoUrl: string | null;
 };
 
 type CatalogItemsState =
@@ -1364,6 +1367,10 @@ export function LeadDrawer({
   }, [catalogState.items, quoteCatalogPickerSearch]);
 
   const catalogSearchSuggestions = useMemo(() => filteredCatalogItems.slice(0, 5), [filteredCatalogItems]);
+  const catalogItemsById = useMemo(
+    () => new Map(catalogState.items.map((item) => [item.id, item])),
+    [catalogState.items],
+  );
 
   const handleAddNote = useCallback(async () => {
     if (!card) return;
@@ -2091,12 +2098,13 @@ export function LeadDrawer({
               if (Array.isArray(draft.quoteItems)) {
                 const restoredItems = draft.quoteItems
                   .filter(isRecord)
-                  .map((item) =>
-                    createQuoteItemForm({
-                      catalogItemId: typeof item.catalogItemId === "string" ? item.catalogItemId : null,
-                      nombre: typeof item.nombre === "string" ? item.nombre : "",
-                      descripcion: typeof item.descripcion === "string" ? item.descripcion : "",
-                      unidad: typeof item.unidad === "string" ? item.unidad : "unidad",
+                      .map((item) =>
+                        createQuoteItemForm({
+                          catalogItemId: typeof item.catalogItemId === "string" ? item.catalogItemId : null,
+                          fotoUrl: typeof item.fotoUrl === "string" ? item.fotoUrl : null,
+                          nombre: typeof item.nombre === "string" ? item.nombre : "",
+                          descripcion: typeof item.descripcion === "string" ? item.descripcion : "",
+                          unidad: typeof item.unidad === "string" ? item.unidad : "unidad",
                       cantidad: typeof item.cantidad === "string" ? item.cantidad : "1",
                       precioUnitario: typeof item.precioUnitario === "string" ? item.precioUnitario : "",
                       descuento: typeof item.descuento === "string" ? item.descuento : "",
@@ -3815,7 +3823,8 @@ export function LeadDrawer({
                     </div>
 
                     <div className="overflow-hidden rounded-md border border-border/40 bg-muted/20">
-                      <div className="grid grid-cols-[minmax(0,1.7fr)_72px_82px_96px_72px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <div className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Img.</span>
                         <span>Concepto</span>
                         <span>Cant.</span>
                         <span>Unidad</span>
@@ -3826,11 +3835,24 @@ export function LeadDrawer({
                       </div>
                       <ScrollArea className="max-h-72">
                         <div className="space-y-1.5 px-2 py-2">
-                          {quoteItems.map((item, index) => (
+                          {quoteItems.map((item, index) => {
+                            const catalogImageUrl = item.catalogItemId
+                              ? catalogItemsById.get(item.catalogItemId)?.fotoUrl ?? null
+                              : null;
+                            const imageUrl = item.fotoUrl || catalogImageUrl;
+                            return (
                             <div
                               key={item.key}
-                              className="grid grid-cols-[minmax(0,1.7fr)_72px_82px_96px_72px_84px_40px] items-start gap-2 rounded-md bg-background px-2 py-2"
+                              className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px_40px] items-start gap-2 rounded-md bg-background px-2 py-2"
                             >
+                              <div
+                                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30 bg-center bg-cover"
+                                style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
+                              >
+                                {!imageUrl ? (
+                                  <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
+                                ) : null}
+                              </div>
                               <div className="min-w-0 space-y-1">
                                 <Input
                                   value={item.nombre}
@@ -3900,7 +3922,8 @@ export function LeadDrawer({
                                 <IconTrash className="size-4" />
                               </Button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </div>
@@ -4910,6 +4933,12 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
   return {
     id: String(row.id ?? generateLocalId()),
     catalogItemId: typeof row.catalog_item_id === "string" ? row.catalog_item_id : null,
+    fotoUrl:
+      typeof row.fotoUrl === "string"
+        ? row.fotoUrl
+        : typeof row.foto_url === "string"
+          ? row.foto_url
+          : null,
     title:
       typeof row.titulo === "string"
         ? row.titulo
@@ -5086,6 +5115,7 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
   return {
     key: generateLocalId(),
     catalogItemId: initial?.catalogItemId ?? null,
+    fotoUrl: initial?.fotoUrl ?? null,
     nombre: initial?.nombre ?? "",
     descripcion: initial?.descripcion ?? "",
     unidad: initial?.unidad ?? "unidad",
@@ -5099,6 +5129,7 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
 function catalogOptionToQuoteItem(option: CatalogItemOption, fallbackCurrency: string): QuoteItemForm {
   return createQuoteItemForm({
     catalogItemId: option.id,
+    fotoUrl: option.fotoUrl,
     nombre: option.nombre,
     descripcion: option.descripcion,
     unidad: option.unidad,
@@ -5206,6 +5237,7 @@ function quoteEntryToItemForms(
     return entry.items.map((item) =>
       createQuoteItemForm({
         catalogItemId: item.catalogItemId,
+        fotoUrl: item.fotoUrl,
         nombre: item.title ?? "",
         descripcion: item.description ?? fallbackDescription,
         unidad: item.unit ?? "unidad",
@@ -5252,6 +5284,12 @@ function convertConceptsToItemForms(
         cantidad: "1",
         precioUnitario: total != null ? String(total) : "",
         moneda: fallbackCurrency,
+        fotoUrl:
+          typeof record.fotoUrl === "string"
+            ? record.fotoUrl
+            : typeof record.foto_url === "string"
+              ? record.foto_url
+              : null,
       });
     })
     .filter((item): item is QuoteItemForm => !!item);
@@ -5262,6 +5300,11 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
   if (!row) return null;
   const id = typeof row.id === "string" ? row.id : null;
   if (!id) return null;
+  const metadataCandidate = isRecord(row.metadatos)
+    ? row.metadatos
+    : isRecord(row.metadata)
+      ? row.metadata
+      : null;
   return {
     id,
     nombre: typeof row.nombre === "string" ? row.nombre : "Producto sin nombre",
@@ -5275,7 +5318,32 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
     precioBase: toNumber(row.precio_base ?? row.precioBase),
     moneda: (typeof row.moneda === "string" && row.moneda.trim()) ? row.moneda.toUpperCase() : "MXN",
     activo: typeof row.activo === "boolean" ? row.activo : true,
+    fotoUrl:
+      typeof row.fotoUrl === "string"
+        ? row.fotoUrl
+        : typeof row.foto_url === "string"
+          ? row.foto_url
+          : extractCatalogMediaUrl(metadataCandidate),
   };
+}
+
+function extractCatalogMediaUrl(metadatos: Record<string, unknown> | null): string | null {
+  if (!metadatos) return null;
+  const media = metadatos.media;
+  if (!Array.isArray(media)) return null;
+  const sorted = [...media].sort((a, b) => {
+    const pa = isRecord(a) && "predeterminada" in a ? Boolean(a.predeterminada) : false;
+    const pb = isRecord(b) && "predeterminada" in b ? Boolean(b.predeterminada) : false;
+    return (pb === pa ? 0 : pb ? 1 : -1);
+  });
+  for (const entry of sorted) {
+    if (!isRecord(entry)) continue;
+    const url = entry.url;
+    if (typeof url === "string" && url.trim()) {
+      return url.trim();
+    }
+  }
+  return null;
 }
 
 function generateLocalId(): string {
