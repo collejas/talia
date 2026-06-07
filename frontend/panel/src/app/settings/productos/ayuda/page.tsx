@@ -53,7 +53,7 @@ export default function SettingsProductosAyudaPage() {
                 Las líneas agrupan estrategias generales, las familias agrupan productos dentro de esa línea
                 y los modelos conservan variantes reutilizables. Los productos se crean en
                 <strong> catalog_items</strong>; la descripción principal vive en <strong>descripcion</strong> y
-                el resto de columnas va a <strong>metadata</strong>.
+                el precio base vive en <strong>precio_base</strong>; el resto de columnas va a <strong>metadata</strong>.
               </p>
               <ul className="space-y-1 pl-4 text-foreground">
                 <li>• Primero define o selecciona la línea correspondiente.</li>
@@ -104,7 +104,7 @@ export default function SettingsProductosAyudaPage() {
               <p className="text-xs uppercase tracking-wide">2. Descarga la plantilla</p>
               <p>
                 Usa el botón <em>Descargar plantilla CSV</em> para obtener el encabezado con: nombre,
-                descripción, línea, familia, modelo y los campos adicionales.
+                descripción, precio base, línea, familia, modelo y los campos adicionales.
               </p>
             </div>
             <div className="space-y-2">
@@ -112,7 +112,8 @@ export default function SettingsProductosAyudaPage() {
               <p>
                 Completa cada fila siguiendo el mismo orden: el nombre del producto irá a la columna
                 <strong> nombre</strong>, la descripción en <strong>descripcion</strong>, la línea debe existir
-                en el catálogo y las columnas extra se convertirán en metadata.
+                en el catálogo, el precio base en <strong>precio_base</strong> y las columnas extra se convertirán
+                en metadata.
               </p>
             </div>
             <div className="space-y-2">

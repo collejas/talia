@@ -13228,14 +13228,23 @@ class CRMProductImportSummary(BaseModel):
     errors: list[CRMProductImportRowError] = Field(default_factory=list)
 
 
-def _default_product_metadata_field() -> dict[str, Any]:
-    return {
-        "id": "descripcion",
-        "label": "Descripción",
-        "type": "text",
-        "required": False,
-        "description": "Descripción principal del producto.",
-    }
+def _default_product_metadata_fields() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "descripcion",
+            "label": "Descripción",
+            "type": "text",
+            "required": False,
+            "description": "Descripción principal del producto.",
+        },
+        {
+            "id": "precio_base",
+            "label": "Precio base",
+            "type": "number",
+            "required": False,
+            "description": "Precio base del producto.",
+        },
+    ]
 
 
 class CRMLineaDeNegocio(BaseModel):
@@ -16437,6 +16446,10 @@ async def import_product_catalog_items(
             if not nombre:
                 raise ValueError("Falta el nombre del producto.")
             descripcion = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion"])
+            precio_base = _parse_metadata_value(
+                _pick_value(row, BASE_HEADER_CANDIDATES["precio_base"]),
+                "number",
+            )
             linea_name = _pick_value(row, BASE_HEADER_CANDIDATES["linea"])
             if not linea_name:
                 raise ValueError("Falta la línea asociada.")
@@ -16487,6 +16500,8 @@ async def import_product_catalog_items(
             payload["organizacion_id"] = str(organizacion_id)
             if descripcion:
                 payload["descripcion"] = descripcion
+            if precio_base is not None:
+                payload["precio_base"] = precio_base
             if modelo_id:
                 payload["modelo_id"] = str(modelo_id)
             if metadata:
@@ -19928,22 +19943,21 @@ def _build_field_header_map(
 
 
 def _normalize_product_metadata_fields(raw_fields: Any) -> list[dict[str, Any]]:
-    fields: list[dict[str, Any]] = []
+    custom_fields: list[dict[str, Any]] = []
     if isinstance(raw_fields, list):
         for raw in raw_fields:
             if not isinstance(raw, dict):
                 continue
-            fields.append(dict(raw))
-    has_default = False
-    for field in fields:
+            custom_fields.append(dict(raw))
+    defaults = _default_product_metadata_fields()
+    default_ids = {field["id"] for field in defaults}
+    filtered_custom_fields: list[dict[str, Any]] = []
+    for field in custom_fields:
         field_id = str(field.get("id") or field.get("slug") or "").strip().lower()
-        field_label = str(field.get("label") or field.get("name") or "").strip().lower()
-        if field_id == "descripcion" or field_label == "descripción":
-            has_default = True
-            break
-    if not has_default:
-        fields.insert(0, _default_product_metadata_field())
-    return fields
+        if field_id in default_ids:
+            continue
+        filtered_custom_fields.append(field)
+    return defaults + filtered_custom_fields
 
 
 def _merge_default_product_metadata_field(payload: dict[str, Any]) -> dict[str, Any]:
@@ -19961,6 +19975,7 @@ def _ensure_default_product_metadata_field(row: dict[str, Any]) -> dict[str, Any
 BASE_HEADER_CANDIDATES = {
     "nombre": ["nombre", "name"],
     "descripcion": ["descripcion", "description", "desc"],
+    "precio_base": ["precio_base", "precio base", "precio", "price", "base_price"],
     "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
     "familia": ["familia", "family", "familia_nombre"],
     "modelo": ["modelo", "model", "modelo_nombre"],

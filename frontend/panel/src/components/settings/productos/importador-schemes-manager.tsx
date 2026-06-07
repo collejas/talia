@@ -36,7 +36,16 @@ const DEFAULT_IMPORTER_FIELDS: ImporterField[] = [
     required: false,
     description: "Descripción principal del producto.",
   },
+  {
+    id: "precio_base",
+    label: "Precio base",
+    type: "number",
+    required: false,
+    description: "Precio base del producto.",
+  },
 ]
+
+const DEFAULT_IMPORTER_FIELD_IDS = new Set(DEFAULT_IMPORTER_FIELDS.map((field) => field.id))
 
 const FIELD_TYPES: { label: string; value: ImporterFieldType }[] = [
   { label: "Texto", value: "text" },
@@ -50,13 +59,10 @@ function newField(): ImporterField {
 }
 
 function mergeDefaultFields(fields: ImporterField[]): ImporterField[] {
-  const merged = [...fields]
-  for (const defaultField of DEFAULT_IMPORTER_FIELDS) {
-    if (!merged.some((field) => field.id === defaultField.id)) {
-      merged.unshift({ ...defaultField })
-    }
-  }
-  return merged
+  const customFields = fields.filter(
+    (field) => !DEFAULT_IMPORTER_FIELD_IDS.has(field.id),
+  )
+  return [...DEFAULT_IMPORTER_FIELDS.map((field) => ({ ...field })), ...customFields]
 }
 
 function slugify(value: string): string {
@@ -178,12 +184,13 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
       const headers = [
         "nombre",
         "descripcion",
+        "precio_base",
         "linea",
         "familia",
         "modelo",
         ...mergeDefaultFields(scheme.fields)
           .map((field) => field.id || field.label)
-          .filter((field): field is string => field !== "descripcion"),
+          .filter((field): field is string => !DEFAULT_IMPORTER_FIELD_IDS.has(field)),
       ]
       const csv = headers.join(",") + "\n"
       const blob = new Blob([csv], { type: "text/csv" })
@@ -427,11 +434,12 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
                   <TableRow>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Descripción</TableHead>
+                    <TableHead>Precio base</TableHead>
                     <TableHead>Línea</TableHead>
                     <TableHead>Familia</TableHead>
                     <TableHead>Modelo</TableHead>
                     {formValues.fields.map((field, index) => {
-                      if (field.id === "descripcion") {
+                      if (DEFAULT_IMPORTER_FIELD_IDS.has(field.id)) {
                         return null
                       }
                       return (
@@ -455,11 +463,12 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
                   <TableRow>
                     <TableCell>Protótipo 1</TableCell>
                     <TableCell>Descripción breve del producto</TableCell>
+                    <TableCell>$ 0.00</TableCell>
                     <TableCell>Residencial</TableCell>
                     <TableCell>Familia muestra</TableCell>
                     <TableCell>Modelo base</TableCell>
                     {formValues.fields.map((field, index) => {
-                      if (field.id === "descripcion") {
+                      if (DEFAULT_IMPORTER_FIELD_IDS.has(field.id)) {
                         return null
                       }
                       return (
