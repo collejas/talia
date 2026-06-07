@@ -217,6 +217,7 @@ type CatalogItemOption = {
   moneda: string;
   activo: boolean;
   fotoUrl: string | null;
+  metadatos: Record<string, unknown> | null;
 };
 
 type CatalogItemsState =
@@ -3842,27 +3843,51 @@ export function LeadDrawer({
                       </div>
                       {catalogSearch.trim().length > 0 && catalogSearchSuggestions.length ? (
                         <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border/40 bg-background shadow-sm">
-                          {catalogSearchSuggestions.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-muted/40"
-                              onClick={() => handleAddCatalogItem(item)}
-                              disabled={quotePending}
-                            >
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
-                                {item.descripcion ? (
-                                  <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
-                                    {item.descripcion}
+                          {catalogSearchSuggestions.map((item) => {
+                            const imageUrl = resolveCatalogItemImageUrl(item);
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="flex w-full items-start gap-3 px-3 py-2 text-left text-xs hover:bg-muted/40"
+                                onClick={() => handleAddCatalogItem(item)}
+                                disabled={quotePending}
+                              >
+                                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
+                                  {imageUrl ? (
+                                    <>
+                                      <img
+                                        src={imageUrl}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                        onError={(event) => {
+                                          const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
+                                            "[data-fallback='true']",
+                                          );
+                                          if (fallback) fallback.classList.remove("hidden");
+                                          event.currentTarget.style.display = "none";
+                                        }}
+                                      />
+                                      <span
+                                        data-fallback="true"
+                                        className="hidden absolute inset-0 items-center justify-center text-[9px] uppercase text-muted-foreground"
+                                      >
+                                        Sin img
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
+                                  )}
+                                </span>
+                                <span className="min-w-0 flex-1 pt-1">
+                                  <span className="block truncate text-sm font-medium text-foreground">
+                                    {item.nombre}
                                   </span>
-                                ) : null}
-                              </span>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                {formatQuoteCurrency(item.precioBase, item.moneda)}
-                              </span>
-                            </button>
-                          ))}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -4275,6 +4300,7 @@ export function LeadDrawer({
                 ) : (
                   quoteCatalogPickerItems.map((item) => {
                     const checked = quoteCatalogSelection.includes(item.id);
+                    const imageUrl = resolveCatalogItemImageUrl(item);
                     return (
                       <div
                         key={item.id}
@@ -4293,16 +4319,38 @@ export function LeadDrawer({
                           onCheckedChange={() => handleCatalogSelectionToggle(item.id)}
                           className="mt-0.5"
                         />
-                        <span className="min-w-0 flex-1">
+                        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
+                          {imageUrl ? (
+                            <>
+                              <img
+                                src={imageUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                onError={(event) => {
+                                  const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
+                                    "[data-fallback='true']",
+                                  );
+                                  if (fallback) fallback.classList.remove("hidden");
+                                  event.currentTarget.style.display = "none";
+                                }}
+                              />
+                              <span
+                                data-fallback="true"
+                                className="hidden absolute inset-0 items-center justify-center text-[9px] uppercase text-muted-foreground"
+                              >
+                                Sin img
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1 pt-1">
                           <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
-                          {item.descripcion ? (
-                            <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
-                              {item.descripcion}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {formatQuoteCurrency(item.precioBase, item.moneda)}
+                          <span className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                            {item.descripcion || "Sin descripción"}
+                          </span>
                         </span>
                       </div>
                     );
@@ -4466,20 +4514,36 @@ export function LeadDrawer({
                                 key={item.key}
                                 className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px] items-start gap-2 border-b border-border/20 px-2 py-2 last:border-b-0"
                               >
-                                <div
-                                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30 bg-center bg-cover"
-                                  style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
-                                >
-                                  {!imageUrl ? (
+                                <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
+                                  {imageUrl ? (
+                                    <>
+                                      <img
+                                        src={imageUrl}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                        onError={(event) => {
+                                          const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
+                                            "[data-fallback='true']",
+                                          );
+                                          if (fallback) fallback.classList.remove("hidden");
+                                          event.currentTarget.style.display = "none";
+                                        }}
+                                      />
+                                      <span
+                                        data-fallback="true"
+                                        className="hidden absolute inset-0 items-center justify-center text-[9px] uppercase text-muted-foreground"
+                                      >
+                                        Sin img
+                                      </span>
+                                    </>
+                                  ) : (
                                     <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
-                                  ) : null}
+                                  )}
                                 </div>
                                 <div className="min-w-0 space-y-1">
                                   <p className="truncate text-sm font-medium text-foreground">
                                     {index + 1}. {item.nombre || "Sin concepto"}
-                                  </p>
-                                  <p className="line-clamp-2 text-xs text-muted-foreground">
-                                    {item.descripcion || "Sin descripción"}
                                   </p>
                                 </div>
                                 <div className="pt-1 text-xs text-foreground">{item.cantidad || "-"}</div>
@@ -5675,11 +5739,19 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
         : typeof row.foto_url === "string"
           ? row.foto_url
           : extractCatalogMediaUrl(metadataCandidate),
+    metadatos: metadataCandidate,
   };
 }
 
 function extractCatalogMediaUrl(metadatos: Record<string, unknown> | null): string | null {
   if (!metadatos) return null;
+  const directKeys = ["fotoUrl", "foto_url", "image_url", "image", "url"];
+  for (const key of directKeys) {
+    const value = metadatos[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
   const media = metadatos.media;
   if (!Array.isArray(media)) return null;
   const sorted = [...media].sort((a, b) => {
@@ -5695,6 +5767,13 @@ function extractCatalogMediaUrl(metadatos: Record<string, unknown> | null): stri
     }
   }
   return null;
+}
+
+function resolveCatalogItemImageUrl(item: CatalogItemOption): string | null {
+  const directUrl = item.fotoUrl?.trim();
+  if (directUrl) return directUrl;
+  const metadataUrl = extractCatalogMediaUrl(item.metadatos);
+  return metadataUrl?.trim() || null;
 }
 
 function generateLocalId(): string {
