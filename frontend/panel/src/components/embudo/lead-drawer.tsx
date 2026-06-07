@@ -26,8 +26,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -2034,6 +2032,12 @@ export function LeadDrawer({
     }
   };
 
+  const quoteSummaryCurrency = (quoteMoneda || card?.moneda || "MXN").trim().toUpperCase();
+  const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
+  const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
+  const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
+  const quoteLatestEntry = quotesState.data[0] ?? null;
+
   const handleSendQuote = () => {
     if (!card) return;
     if (quoteChannel === "email") {
@@ -3375,369 +3379,492 @@ export function LeadDrawer({
             />
           </TabsContent>
           ) : null}
-        </Tabs>
-      </DrawerContent>
+    </Tabs>
+  </DrawerContent>
     </Drawer>
     {!isCreateMode && card ? (
       <Dialog open={quoteDialogOpen} onOpenChange={handleQuoteDialogOpenChange}>
-        <DialogContent className="flex h-[85vh] w-[85vw] max-w-[85vw] flex-col overflow-hidden p-0">
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <DialogHeader>
-              <DialogTitle>Enviar cotización</DialogTitle>
-              <DialogDescription>
-                Genera y envía una cotización en PDF para {card.titulo ?? "la oportunidad seleccionada"}.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                className="gap-1"
-                variant={quoteChannel === "email" ? "default" : "outline"}
-                onClick={() => handleQuoteChannelChange("email")}
-                disabled={quotePending}
-              >
-                <IconMail className="size-4" />
-                Correo
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="gap-1"
-                variant={quoteChannel === "whatsapp" ? "default" : "outline"}
-                onClick={() => handleQuoteChannelChange("whatsapp")}
-                disabled={quotePending}
-              >
-                <IconBrandWhatsapp className="size-4" />
-                WhatsApp
-              </Button>
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Título interno</label>
-              <Input
-                value={quoteTitle}
-                onChange={(event) => setQuoteTitle(event.target.value)}
-                disabled={quotePending}
-                placeholder="Implementación Tal-IA"
-              />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs font-medium text-muted-foreground">Descripción / resumen</label>
-                <Textarea
-                value={quoteDescription}
-                onChange={(event) => setQuoteDescription(event.target.value)}
-                disabled={quotePending}
-                rows={3}
-                placeholder="Resumen del proyecto que aparecerá en el PDF."
-              />
-            </div>
-
-            {quoteChannel === "email" ? (
-              <>
-                <div className="grid gap-2">
-                  <label className="text-xs font-medium text-muted-foreground">Destinatarios</label>
-                  <Input
-                    value={quoteEmailTo}
-                    onChange={(event) => setQuoteEmailTo(event.target.value)}
-                    disabled={quotePending}
-                    placeholder="correo@empresa.com, contacto@otra.com"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Separa correos con comas o espacios.</p>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-xs font-medium text-muted-foreground">Asunto</label>
-                  <Input
-                    value={quoteSubject}
-                    onChange={(event) => setQuoteSubject(event.target.value)}
-                    disabled={quotePending}
-                    placeholder="Cotización Tal-IA"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="grid gap-2">
-                <label className="text-xs font-medium text-muted-foreground">WhatsApp destino</label>
-                <Input
-                  value={quoteWhatsappTo}
-                  onChange={(event) => setQuoteWhatsappTo(event.target.value)}
-                  disabled={quotePending}
-                  placeholder="+52..."
-                />
-              </div>
-            )}
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Mensaje introductorio</label>
-              <Textarea
-                value={quoteMessage}
-                onChange={(event) => setQuoteMessage(event.target.value)}
-                disabled={quotePending}
-                rows={3}
-                placeholder="Texto que acompañará al PDF."
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                Detalles de propuesta económica (HTML)
-              </label>
-              <Textarea
-                value={quoteEconomicDetails}
-                onChange={(event) => setQuoteEconomicDetails(event.target.value)}
-                disabled={quotePending}
-                rows={6}
-                placeholder="<p>Incluye alcances, términos y cualquier anotación adicional.</p>"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Puedes usar etiquetas HTML básicas como &lt;p&gt;, &lt;br&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;li&gt; y
-                enlaces (&lt;a&gt;).
-              </p>
-            </div>
-
-            <div className="space-y-4 rounded-xl border border-border/70 bg-background/60 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h5 className="text-sm font-semibold text-foreground">Productos y conceptos</h5>
-                  <p className="text-xs text-muted-foreground">
-                    Selecciona elementos del catálogo o captura partidas manuales.
-                  </p>
-                </div>
-                <Button type="button" size="sm" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
-                  <IconPlus className="size-4" />
-                  Línea en blanco
-                </Button>
-              </div>
-
-              <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-background p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="flex flex-1 items-center gap-2">
-                    <IconSearch className="size-4 text-muted-foreground" />
-                    <Input
-                      value={catalogSearch}
-                      onChange={(event) => setCatalogSearch(event.target.value)}
-                      placeholder="Buscar en catálogo"
-                      disabled={catalogState.status === "loading"}
-                    />
+        <DialogContent className="flex h-[90vh] w-[96vw] max-w-[96vw] flex-col overflow-hidden p-0">
+          <div className="flex h-full min-h-0 flex-col bg-background">
+            <div className="border-b border-border/60 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DialogTitle className="text-base font-semibold">Enviar cotización</DialogTitle>
+                    <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                      {quoteChannel === "email" ? "Correo" : "WhatsApp"}
+                    </Badge>
+                    {quoteLatestEntry ? (
+                      <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                        Última: {quoteLatestEntry.status}
+                      </Badge>
+                    ) : null}
                   </div>
+                  <DialogDescription className="max-w-2xl text-xs">
+                    Genera y envía una cotización en PDF para {card.titulo ?? "la oportunidad seleccionada"}.
+                  </DialogDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
-                    onClick={() => setCatalogSearch("")}
-                    disabled={!catalogSearch.length}
+                    className="gap-1"
+                    variant={quoteChannel === "email" ? "default" : "outline"}
+                    onClick={() => handleQuoteChannelChange("email")}
+                    disabled={quotePending}
                   >
-                    Limpiar
+                    <IconMail className="size-4" />
+                    Correo
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1"
+                    variant={quoteChannel === "whatsapp" ? "default" : "outline"}
+                    onClick={() => handleQuoteChannelChange("whatsapp")}
+                    disabled={quotePending}
+                  >
+                    <IconBrandWhatsapp className="size-4" />
+                    WhatsApp
                   </Button>
                 </div>
-                <div className="rounded-lg border bg-muted/10">
-                  <ScrollArea className="max-h-48">
-                    {catalogState.status === "loading" || catalogState.status === "idle" ? (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
-                    ) : catalogState.status === "error" ? (
-                      <p className="px-3 py-2 text-xs text-destructive">
-                        {catalogState.error || "No se pudo cargar el catálogo."}
-                      </p>
-                    ) : filteredCatalogItems.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">
-                        {catalogSearch ? "Sin resultados para tu búsqueda." : "No hay productos activos."}
-                      </p>
-                    ) : (
-                      filteredCatalogItems.slice(0, 12).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="w-full border-b border-border/40 px-3 py-2 text-left text-xs last:border-b-0 hover:bg-muted/50"
-                          onClick={() => handleAddCatalogItem(item)}
-                          disabled={quotePending}
-                        >
-                          <div className="flex items-center justify-between gap-2 text-sm font-medium">
-                            <span className="line-clamp-1">{item.nombre}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatQuoteCurrency(item.precioBase, item.moneda)}
-                            </span>
-                          </div>
-                          {item.descripcion ? (
-                            <p className="line-clamp-2 text-[11px] text-muted-foreground">{item.descripcion}</p>
-                          ) : null}
-                        </button>
-                      ))
-                    )}
-                  </ScrollArea>
-                </div>
               </div>
+            </div>
 
-              <div className="space-y-3">
-                {quoteItems.map((item, index) => (
-                  <div key={item.key} className="space-y-3 rounded-lg border border-border/50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-muted-foreground">Concepto {index + 1}</span>
-                        {item.catalogItemId ? (
-                          <span className="text-[11px] text-emerald-600">Vinculado al catálogo</span>
-                        ) : null}
+            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <ScrollArea className="h-full min-h-0">
+                <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Datos principales</h4>
+                        <p className="text-[11px] text-muted-foreground">Campos base de la propuesta.</p>
                       </div>
-                      <div className="flex gap-2">
-                        {item.catalogItemId ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUnlinkCatalogItem(index)}
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="grid gap-1.5">
+                        <label className="text-[11px] font-medium text-muted-foreground">Título interno</label>
+                        <Input
+                          value={quoteTitle}
+                          onChange={(event) => setQuoteTitle(event.target.value)}
+                          disabled={quotePending}
+                          placeholder="Implementación Tal-IA"
+                        />
+                      </div>
+                      <div className="grid gap-1.5 md:col-span-2">
+                        <label className="text-[11px] font-medium text-muted-foreground">Descripción / resumen</label>
+                        <Input
+                          value={quoteDescription}
+                          onChange={(event) => setQuoteDescription(event.target.value)}
+                          disabled={quotePending}
+                          placeholder="Resumen del proyecto que aparecerá en el PDF."
+                        />
+                      </div>
+                      {quoteChannel === "email" ? (
+                        <div className="grid gap-1.5">
+                          <label className="text-[11px] font-medium text-muted-foreground">Destinatarios</label>
+                          <Input
+                            value={quoteEmailTo}
+                            onChange={(event) => setQuoteEmailTo(event.target.value)}
                             disabled={quotePending}
-                          >
-                            Quitar vínculo
-                          </Button>
-                        ) : null}
+                            placeholder="correo@empresa.com"
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid gap-1.5">
+                          <label className="text-[11px] font-medium text-muted-foreground">WhatsApp destino</label>
+                          <Input
+                            value={quoteWhatsappTo}
+                            onChange={(event) => setQuoteWhatsappTo(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="+52..."
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      {quoteChannel === "email" ? (
+                        <div className="grid gap-1.5 md:col-span-2">
+                          <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                          <Input
+                            value={quoteSubject}
+                            onChange={(event) => setQuoteSubject(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="Cotización Tal-IA"
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid gap-1.5 md:col-span-2">
+                          <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
+                          <Input
+                            value={quoteMessage}
+                            onChange={(event) => setQuoteMessage(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="Texto que acompañará al PDF."
+                          />
+                        </div>
+                      )}
+                      <div className="grid gap-1.5">
+                        <label className="text-[11px] font-medium text-muted-foreground">Vigente hasta</label>
+                        <Input
+                          type="date"
+                          value={quoteValidoHasta}
+                          onChange={(event) => setQuoteValidoHasta(event.target.value)}
+                          disabled={quotePending}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Productos y conceptos</h4>
+                        <p className="text-[11px] text-muted-foreground">Busca en catálogo o agrega partidas manuales.</p>
+                      </div>
+                      <Button type="button" size="sm" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
+                        <IconPlus className="size-4" />
+                        Agregar línea
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <div className="flex flex-1 items-center gap-2 rounded-md border border-border/60 bg-background px-3">
+                          <IconSearch className="size-4 shrink-0 text-muted-foreground" />
+                          <Input
+                            value={catalogSearch}
+                            onChange={(event) => setCatalogSearch(event.target.value)}
+                            placeholder="Buscar en catálogo"
+                            disabled={catalogState.status === "loading"}
+                            className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                          />
+                        </div>
                         <Button
                           type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleRemoveItem(index)}
-                          disabled={quotePending}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCatalogSearch("")}
+                          disabled={!catalogSearch.length}
                         >
-                          <IconTrash className="size-4" />
+                          Limpiar
                         </Button>
                       </div>
+
+                      <div className="rounded-lg border border-dashed border-border/60 bg-muted/20">
+                        <ScrollArea className="max-h-44">
+                          {catalogState.status === "loading" || catalogState.status === "idle" ? (
+                            <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
+                          ) : catalogState.status === "error" ? (
+                            <p className="px-3 py-2 text-xs text-destructive">
+                              {catalogState.error || "No se pudo cargar el catálogo."}
+                            </p>
+                          ) : filteredCatalogItems.length === 0 ? (
+                            <p className="px-3 py-2 text-xs text-muted-foreground">
+                              {catalogSearch ? "Sin resultados para tu búsqueda." : "No hay productos activos."}
+                            </p>
+                          ) : (
+                            filteredCatalogItems.slice(0, 12).map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="flex w-full items-start justify-between gap-3 border-b border-border/40 px-3 py-2 text-left text-xs last:border-b-0 hover:bg-muted/50"
+                                onClick={() => handleAddCatalogItem(item)}
+                                disabled={quotePending}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm font-medium text-foreground">{item.nombre}</span>
+                                  {item.descripcion ? (
+                                    <span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+                                      {item.descripcion}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="shrink-0 text-[11px] text-muted-foreground">
+                                  {formatQuoteCurrency(item.precioBase, item.moneda)}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </ScrollArea>
+                      </div>
+
+                      <div className="space-y-2">
+                        {quoteItems.map((item, index) => (
+                          <div key={item.key} className="space-y-2 rounded-lg border border-border/60 bg-background p-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-foreground">
+                                  Concepto {index + 1}
+                                </p>
+                                {item.catalogItemId ? (
+                                  <p className="text-[11px] text-emerald-600">Vinculado al catálogo</p>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {item.catalogItemId ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleUnlinkCatalogItem(index)}
+                                    disabled={quotePending}
+                                  >
+                                    Quitar vínculo
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8"
+                                  onClick={() => handleRemoveItem(index)}
+                                  disabled={quotePending}
+                                >
+                                  <IconTrash className="size-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <Input
+                                value={item.nombre}
+                                onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
+                                disabled={quotePending}
+                                placeholder="Nombre del concepto"
+                              />
+                              <Input
+                                value={item.descripcion}
+                                onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
+                                disabled={quotePending}
+                                placeholder="Descripción o notas"
+                              />
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                              <div className="grid gap-1">
+                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Cantidad
+                                </label>
+                                <Input
+                                  value={item.cantidad}
+                                  onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="1"
+                                />
+                              </div>
+                              <div className="grid gap-1">
+                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Unidad
+                                </label>
+                                <Input
+                                  value={item.unidad}
+                                  onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="unidad"
+                                />
+                              </div>
+                              <div className="grid gap-1">
+                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Precio unitario
+                                </label>
+                                <Input
+                                  value={item.precioUnitario}
+                                  onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
+                                  onBlur={() => handleItemPriceBlur(index)}
+                                  disabled={quotePending}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="grid gap-1">
+                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Descuento
+                                </label>
+                                <Input
+                                  value={item.descuento}
+                                  onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="grid gap-1">
+                                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Moneda
+                                </label>
+                                <Input
+                                  value={item.moneda}
+                                  onChange={(event) => handleItemFieldChange(index, "moneda", event.target.value.toUpperCase())}
+                                  disabled={quotePending}
+                                  maxLength={3}
+                                  placeholder={quoteSummaryCurrency}
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span>Total estimado</span>
+                              <span className="text-sm font-semibold text-foreground">
+                                {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteSummaryCurrency)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <Input
-                      value={item.nombre}
-                      onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
-                      disabled={quotePending}
-                      placeholder="Nombre del concepto"
-                    />
-                    <Textarea
-                      value={item.descripcion}
-                      onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
-                      disabled={quotePending}
-                      rows={2}
-                      placeholder="Descripción o notas"
-                    />
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Cantidad</label>
+                  </section>
+
+                  <section className="rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
                         <Input
-                          value={item.cantidad}
-                          onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
+                          value={quoteMessage}
+                          onChange={(event) => setQuoteMessage(event.target.value)}
                           disabled={quotePending}
-                          placeholder="1"
+                          placeholder="Texto que acompañará al PDF."
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Unidad</label>
+                      <div className="grid gap-1.5">
+                        <label className="text-[11px] font-medium text-muted-foreground">Moneda</label>
                         <Input
-                          value={item.unidad}
-                          onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
-                          disabled={quotePending}
-                          placeholder="unidad"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Precio unitario</label>
-                        <Input
-                          value={item.precioUnitario}
-                          onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
-                          onBlur={() => handleItemPriceBlur(index)}
-                          disabled={quotePending}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Descuento</label>
-                        <Input
-                          value={item.descuento}
-                          onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
-                          disabled={quotePending}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Moneda</label>
-                        <Input
-                          value={item.moneda}
-                          onChange={(event) => handleItemFieldChange(index, "moneda", event.target.value.toUpperCase())}
+                          value={quoteMoneda}
+                          onChange={(event) => setQuoteMoneda(event.target.value.toUpperCase())}
                           disabled={quotePending}
                           maxLength={3}
-                          placeholder={quoteMoneda || "MXN"}
+                          placeholder="MXN"
+                        />
+                      </div>
+                      <div className="grid gap-1.5 md:col-span-2">
+                        <label className="text-[11px] font-medium text-muted-foreground">
+                          Detalles de propuesta económica (HTML)
+                        </label>
+                        <Textarea
+                          value={quoteEconomicDetails}
+                          onChange={(event) => setQuoteEconomicDetails(event.target.value)}
+                          disabled={quotePending}
+                          rows={4}
+                          placeholder="<p>Incluye alcances, términos y cualquier anotación adicional.</p>"
+                          className="min-h-[96px]"
                         />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Total estimado</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteMoneda)}
-                      </span>
+                  </section>
+                </div>
+              </ScrollArea>
+
+              <aside className="border-t border-border/60 bg-muted/20 lg:border-l lg:border-t-0">
+                <ScrollArea className="h-full min-h-0">
+                  <div className="space-y-3 p-4">
+                    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Resumen</h4>
+                          <p className="text-[11px] text-muted-foreground">Totales calculados en tiempo real.</p>
+                        </div>
+                        <Badge variant="outline" className="h-6 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                          {quoteSummaryCurrency}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <Input
+                            value={quoteSubtotal}
+                            onChange={(event) => setQuoteSubtotal(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="0.00"
+                            className="h-8 w-[120px] text-right"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-muted-foreground">IVA 16%</span>
+                          <Input
+                            value={quoteImpuestos}
+                            onChange={(event) => setQuoteImpuestos(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="0.00"
+                            className="h-8 w-[120px] text-right"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-base font-semibold">
+                          <span className="text-foreground">Total</span>
+                          <Input
+                            value={quoteTotal}
+                            onChange={(event) => setQuoteTotal(event.target.value)}
+                            disabled={quotePending}
+                            placeholder="0.00"
+                            className="h-8 w-[120px] text-right"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-2 rounded-lg bg-muted/30 p-2.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Subtotal calculado</span>
+                          <span className="font-medium text-foreground">
+                            {formatQuoteCurrency(quoteSummarySubtotal, quoteSummaryCurrency)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">IVA calculado</span>
+                          <span className="font-medium text-foreground">
+                            {formatQuoteCurrency(quoteSummaryTaxes, quoteSummaryCurrency)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Total calculado</span>
+                          <span className="font-semibold text-foreground">
+                            {formatQuoteCurrency(quoteSummaryTotal, quoteSummaryCurrency)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs">
+                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-2">
+                          <span className="text-muted-foreground">Vigencia</span>
+                          <span className="font-medium text-foreground">{quoteValidoHasta || "Sin fecha"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-2">
+                          <span className="text-muted-foreground">Canal</span>
+                          <span className="font-medium text-foreground">
+                            {quoteChannel === "email" ? "Correo" : "WhatsApp"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
+                      <h4 className="text-sm font-semibold text-foreground">Condiciones</h4>
+                      <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                        <p>Precios sujetos a validación antes del envío.</p>
+                        <p>Revisa el detalle de partidas y el mensaje antes de enviar.</p>
+                      </div>
+                    </div>
+
+                    {quoteError ? (
+                      <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        {quoteError}
+                      </p>
+                    ) : null}
+                    {quoteSuccess ? (
+                      <p className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800">
+                        {quoteSuccess}
+                      </p>
+                    ) : null}
+                    <div className="flex flex-col gap-2">
+                      <Button type="button" onClick={handleSendQuote} disabled={quotePending} className="w-full">
+                        {quotePending ? "Enviando..." : "Enviar cotización"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setQuoteDialogOpen(false)}
+                        disabled={quotePending}
+                        className="w-full"
+                      >
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Subtotal</label>
-              <Input
-                value={quoteSubtotal}
-                readOnly
-                disabled={quotePending}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                Impuestos (IVA 16%)
-              </label>
-              <Input
-                value={quoteImpuestos}
-                readOnly
-                disabled={quotePending}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Total</label>
-              <Input
-                value={quoteTotal}
-                readOnly
-                disabled={quotePending}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Moneda</label>
-              <Input
-                value={quoteMoneda}
-                onChange={(event) => setQuoteMoneda(event.target.value.toUpperCase())}
-                disabled={quotePending}
-                maxLength={3}
-                placeholder="MXN"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Vigente hasta</label>
-              <Input
-                type="date"
-                value={quoteValidoHasta}
-                onChange={(event) => setQuoteValidoHasta(event.target.value)}
-                disabled={quotePending}
-              />
-            </div>
+                </ScrollArea>
+              </aside>
             </div>
           </div>
-          <DialogFooter className="flex flex-col gap-2 border-t border-border/60 px-6 py-4">
-            {quoteError ? (
-              <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {quoteError}
-              </p>
-            ) : null}
-            <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
-              {quotePending ? "Enviando..." : "Enviar cotización"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setQuoteDialogOpen(false)} disabled={quotePending}>
-              Cancelar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     ) : null}
