@@ -862,6 +862,7 @@ export function LeadDrawer({
   const [quoteCatalogPickerOpen, setQuoteCatalogPickerOpen] = useState(false);
   const [quoteCatalogPickerSearch, setQuoteCatalogPickerSearch] = useState("");
   const [quoteCatalogSelection, setQuoteCatalogSelection] = useState<string[]>([]);
+  const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -2134,9 +2135,14 @@ export function LeadDrawer({
       setQuoteCatalogPickerOpen(false);
       setQuoteCatalogPickerSearch("");
       setQuoteCatalogSelection([]);
+      setQuotePreviewOpen(false);
       setQuoteError(null);
     }
   };
+
+  const handleOpenQuotePreview = useCallback(() => {
+    setQuotePreviewOpen(true);
+  }, []);
 
   const handleSaveQuoteDraft = () => {
     if (!card || !quoteDraftStorageKey || typeof window === "undefined") return;
@@ -2165,6 +2171,9 @@ export function LeadDrawer({
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
+  const quotePreviewItems = quoteItems.filter((item) => !isBlankQuoteItem(item));
+  const quoteAssignedVendor =
+    vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
   const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
   const quoteCurrentStatus = quoteLatestEntry?.status ?? "Borrador";
   const quoteCurrentFolio = quoteLatestEntry ? `COT-${String(quoteLatestEntry.version).padStart(5, "0")}` : "COT-00000";
@@ -2174,6 +2183,10 @@ export function LeadDrawer({
   const quoteClientEmail = card?.correo?.trim() || "Sin email";
   const quoteProjectName = card?.proyectoNombre?.trim() || card?.titulo?.trim() || "Sin proyecto";
   const quoteProjectLocation = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin ubicación";
+  const quoteAssignedVendorName =
+    quoteAssignedVendor?.nombre_completo?.trim() || card?.asignadoNombre?.trim() || "Sin vendedor";
+  const quoteAssignedVendorEmail = quoteAssignedVendor?.correo?.trim() || "Sin correo";
+  const quoteAssignedVendorPhone = quoteAssignedVendor?.telefono_e164?.trim() || "Sin teléfono";
   const quoteAlerts = useMemo(() => {
     const alerts: string[] = [];
     if (!quoteItems.length) alerts.push("No hay partidas agregadas.");
@@ -4106,7 +4119,7 @@ export function LeadDrawer({
                         <p className="text-[11px] text-muted-foreground">Vista previa y envío.</p>
                       </div>
                       <div className="grid gap-2">
-                        <Button type="button" variant="outline" disabled>
+                        <Button type="button" variant="outline" onClick={handleOpenQuotePreview}>
                           Vista previa PDF
                         </Button>
                         <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
@@ -4271,6 +4284,267 @@ export function LeadDrawer({
             >
               Agregar seleccionados
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={quotePreviewOpen}
+        onOpenChange={(openState) => {
+          setQuotePreviewOpen(openState);
+        }}
+      >
+        <DialogContent className="flex h-[88vh] w-[94vw] max-w-[94vw] flex-col overflow-hidden p-0">
+          <div className="border-b border-border/50 px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <DialogTitle className="text-base font-semibold">Vista previa PDF</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Revisa cómo se verá la cotización antes de enviarla.
+                </DialogDescription>
+              </div>
+              <Badge variant="outline" className="h-6 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                {quotePreviewItems.length ? `${quotePreviewItems.length} partidas` : "Sin partidas"}
+              </Badge>
+            </div>
+          </div>
+          <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="min-h-0 rounded-lg bg-muted/20 p-3">
+              <ScrollArea className="h-full">
+                <div className="mx-auto max-w-4xl space-y-3 rounded-xl border border-border/40 bg-white p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-4 border-b border-border/30 pb-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Cotización</p>
+                      <h3 className="mt-1 text-2xl font-semibold text-foreground">{quoteTitle || "Nueva cotización"}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {quoteDescription || "Resumen de la propuesta comercial."}
+                      </p>
+                    </div>
+                    <div className="space-y-1 text-right text-sm">
+                      <p className="font-semibold text-foreground">{quoteCurrentFolio}</p>
+                      <p className="text-muted-foreground">{quoteCurrentStatus}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</h4>
+                      <div className="mt-2 space-y-1">
+                        <p className="font-medium text-foreground">{quoteAssignedVendorName}</p>
+                        <p className="text-muted-foreground">{quoteAssignedVendorEmail}</p>
+                        <p className="text-muted-foreground">{quoteAssignedVendorPhone}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cliente</h4>
+                      <div className="mt-2 space-y-1">
+                        <p className="font-medium text-foreground">{quoteClientName}</p>
+                        <p className="text-muted-foreground">{quoteClientContact}</p>
+                        <p className="text-muted-foreground">{quoteClientEmail}</p>
+                        <p className="text-muted-foreground">{quoteClientPhone}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proyecto</h4>
+                      <div className="mt-2 space-y-1">
+                        <p className="font-medium text-foreground">{quoteProjectName}</p>
+                        <p className="text-muted-foreground">{quoteProjectLocation}</p>
+                        <p className="text-muted-foreground">Referencia: {card.oportunidadId.slice(0, 8).toUpperCase()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="space-y-1 text-sm">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Título interno</p>
+                        <p className="text-foreground">{quoteTitle || "Nueva cotización"}</p>
+                      </div>
+                      <div className="space-y-1 text-sm md:col-span-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Descripción / resumen</p>
+                        <p className="text-foreground">{quoteDescription || "Resumen de la propuesta comercial."}</p>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vigente hasta</p>
+                        <p className="text-foreground">{quoteValidoHasta || "Sin vigencia"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-md bg-background/80 p-3 text-sm">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {quoteChannel === "email" ? "Destinatarios" : "WhatsApp destino"}
+                        </p>
+                        <p className="mt-1 text-foreground">{quoteChannel === "email" ? quoteEmailTo || "Sin destinatarios" : quoteWhatsappTo || "Sin destino"}</p>
+                      </div>
+                      <div className="rounded-md bg-background/80 p-3 text-sm">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {quoteChannel === "email" ? "Asunto" : "Mensaje introductorio"}
+                        </p>
+                        <p className="mt-1 text-foreground">{quoteChannel === "email" ? quoteSubject || "Sin asunto" : quoteMessage || "Sin mensaje"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-border/30 pb-2">
+                      <h4 className="text-sm font-semibold text-foreground">Partidas cotizadas</h4>
+                      <span className="text-xs text-muted-foreground">{quoteSummaryCurrency}</span>
+                    </div>
+                    {quotePreviewItems.length ? (
+                      <div className="overflow-hidden rounded-md border border-border/30">
+                        <div className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px] gap-2 border-b border-border/30 bg-muted/20 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          <span>Img.</span>
+                          <span>Concepto</span>
+                          <span>Cant.</span>
+                          <span>Unidad</span>
+                          <span>Precio</span>
+                          <span>Desc.</span>
+                          <span>Total</span>
+                        </div>
+                        <div className="max-h-[420px] overflow-auto bg-background">
+                          {quotePreviewItems.map((item, index) => {
+                            const catalogImageUrl = item.catalogItemId
+                              ? catalogItemsById.get(item.catalogItemId)?.fotoUrl ?? null
+                              : null;
+                            const imageUrl = item.fotoUrl || catalogImageUrl;
+                            return (
+                              <div
+                                key={item.key}
+                                className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px] items-start gap-2 border-b border-border/20 px-2 py-2 last:border-b-0"
+                              >
+                                <div
+                                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30 bg-center bg-cover"
+                                  style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
+                                >
+                                  {!imageUrl ? (
+                                    <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
+                                  ) : null}
+                                </div>
+                                <div className="min-w-0 space-y-1">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {index + 1}. {item.nombre || "Sin concepto"}
+                                  </p>
+                                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                                    {item.descripcion || "Sin descripción"}
+                                  </p>
+                                </div>
+                                <div className="pt-1 text-xs text-foreground">{item.cantidad || "-"}</div>
+                                <div className="pt-1 text-xs text-foreground">{item.unidad || "-"}</div>
+                                <div className="pt-1 text-xs text-foreground">
+                                  {formatQuoteCurrency(parseNumberInput(item.precioUnitario), item.moneda || quoteSummaryCurrency)}
+                                </div>
+                                <div className="pt-1 text-xs text-foreground">
+                                  {item.descuento ? item.descuento : "0"}
+                                </div>
+                                <div className="pt-1 text-xs font-semibold text-foreground">
+                                  {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteSummaryCurrency)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed border-border/40 px-3 py-4 text-sm text-muted-foreground">
+                        Todavía no hay partidas para previsualizar.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
+                        <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Contado</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Crédito 15 días</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Anticipo + saldo</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Entrega 7 días</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Garantía 1 año</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">IVA incluido</span>
+                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">{quoteSummaryCurrency}</span>
+                        </div>
+                        <div className="mt-3 rounded-md bg-background px-3 py-2 text-sm text-foreground">
+                          {quoteEconomicDetails.trim() || "Sin condiciones comerciales adicionales."}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
+                        <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
+                        <div className="mt-2 space-y-3">
+                          <div className="rounded-md bg-background px-3 py-2 text-sm text-foreground">
+                            {quoteMessage.trim() || "Sin notas para el cliente."}
+                          </div>
+                          <div className="rounded-md border border-dashed border-border/40 bg-background px-3 py-2 text-sm text-muted-foreground">
+                            Anexos: no hay archivos cargados todavía.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
+                        <h4 className="text-sm font-semibold text-foreground">Resumen financiero</h4>
+                        <div className="mt-3 space-y-1.5 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span className="font-medium text-foreground">
+                              {formatQuoteCurrency(quoteSummarySubtotal, quoteSummaryCurrency)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">IVA</span>
+                            <span className="font-medium text-foreground">
+                              {formatQuoteCurrency(quoteSummaryTaxes, quoteSummaryCurrency)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2 text-base font-semibold">
+                            <span className="text-foreground">Total</span>
+                            <span className="text-foreground">
+                              {formatQuoteCurrency(quoteSummaryTotal, quoteSummaryCurrency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
+                <h4 className="text-sm font-semibold text-foreground">Vendedor</h4>
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">{quoteAssignedVendorName}</p>
+                  <p>{quoteAssignedVendorEmail}</p>
+                  <p>{quoteAssignedVendorPhone}</p>
+                </div>
+              </div>
+              <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
+                <h4 className="text-sm font-semibold text-foreground">Plantilla</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Por ahora solo una vista ejecutiva.</p>
+                <div className="mt-3 rounded-md bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  Esta es una maqueta visual. Luego se conectará al PDF real.
+                </div>
+              </div>
+              <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
+                <h4 className="text-sm font-semibold text-foreground">Acciones</h4>
+                <div className="mt-3 grid gap-2">
+                  <Button type="button" variant="outline" disabled>
+                    Descargar PDF
+                  </Button>
+                  <Button type="button" variant="outline" disabled>
+                    Enviar por email
+                  </Button>
+                  <Button type="button" variant="outline" disabled>
+                    Enviar por WhatsApp
+                  </Button>
+                  <Button type="button" onClick={() => setQuotePreviewOpen(false)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
