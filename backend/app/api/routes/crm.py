@@ -10592,6 +10592,8 @@ class CRMPersonaAltaValidationResponse(BaseModel):
 
 class CRMDedupeCandidate(BaseModel):
     id: UUID
+    codigo_contacto: str | None = None
+    codigo_cuenta: str | None = None
     nombre: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -11409,6 +11411,27 @@ async def _attach_dedupe_owner_names(
         if owner_id:
             candidate["propietario_nombre"] = owner_map.get(str(owner_id)) or candidate.get("propietario_nombre")
         candidate["tipo_registro"] = _dedupe_tipo_registro_label(str(candidate.get("tipo_registro") or ""))
+        record_type = str(candidate.get("tipo_registro") or "").strip().lower()
+        candidate_id = _safe_uuid(candidate.get("id"))
+        if candidate_id:
+            if record_type in {"contacto", "persona"} and not str(candidate.get("codigo_contacto") or "").strip():
+                try:
+                    persona_row = await repo.get_persona_by_id(persona_id=str(candidate_id))
+                except CRMRepositoryError:
+                    persona_row = None
+                if isinstance(persona_row, dict):
+                    candidate["codigo_contacto"] = (
+                        str(persona_row.get("codigo_contacto") or persona_row.get("legacy_contacto_codigo") or "").strip() or None
+                    )
+            if record_type in {"empresa", "empresa_propia"} and not str(candidate.get("codigo_cuenta") or "").strip():
+                try:
+                    account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=candidate_id)
+                except CRMRepositoryError:
+                    account_row = None
+                if isinstance(account_row, dict):
+                    candidate["codigo_cuenta"] = (
+                        str(account_row.get("codigo_cuenta") or account_row.get("codigo") or "").strip() or None
+                    )
     return candidates
 
 
@@ -11528,6 +11551,7 @@ async def _persona_alta_find_existing_account(
             candidates,
             {
                 "id": str(account.id),
+                "codigo_cuenta": account.codigo_cuenta,
                 "nombre": account.nombre,
                 "alias": account.alias,
                 "rfc": account.rfc,
@@ -11606,6 +11630,7 @@ async def _persona_alta_find_persona_candidates(
                 candidates,
                 {
                     "id": str(by_phone.get("id")),
+                    "codigo_contacto": by_phone.get("codigo_contacto") or by_phone.get("legacy_contacto_codigo"),
                     "nombre": by_phone.get("nombre_completo"),
                     "correo": by_phone.get("correo"),
                     "telefono": by_phone.get("telefono_e164"),
@@ -11634,6 +11659,7 @@ async def _persona_alta_find_persona_candidates(
                 candidates,
                 {
                     "id": str(by_email.get("id")),
+                    "codigo_contacto": by_email.get("codigo_contacto") or by_email.get("legacy_contacto_codigo"),
                     "nombre": by_email.get("nombre_completo"),
                     "correo": by_email.get("correo"),
                     "telefono": by_email.get("telefono_e164"),
@@ -11680,6 +11706,7 @@ async def _persona_alta_find_persona_candidates(
                 candidates,
                 {
                     "id": str(row.get("id")),
+                    "codigo_contacto": row.get("codigo_contacto") or row.get("legacy_contacto_codigo"),
                     "nombre": row.get("nombre_completo"),
                     "correo": row.get("correo"),
                     "telefono": row.get("telefono_e164"),

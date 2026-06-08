@@ -733,6 +733,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     setEditSubmitting(true);
     setEditError(null);
     try {
+      const normalizedCorreo = editForm.correo.trim() || null;
       const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -742,7 +743,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           razon_social: editForm.razon_social.trim(),
           rfc: sanitizeRfcInput(editForm.rfc) || null,
           website: editForm.website.trim(),
-          correo: editForm.correo.trim(),
+          // Mantener sincronizados los alias del correo evita que el detalle siga mostrando un valor viejo.
+          correo: normalizedCorreo,
+          correo_principal: normalizedCorreo,
+          email: normalizedCorreo,
           telefono: sanitizePhoneInput(editForm.telefono) || null,
           industria: editForm.industria.trim(),
           tamano: editForm.tamano.trim(),

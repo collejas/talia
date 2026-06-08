@@ -162,6 +162,8 @@ type AccountOption = {
 
 type DedupeCandidate = {
   id: string;
+  codigo_contacto?: string | null;
+  codigo_cuenta?: string | null;
   nombre?: string | null;
   alias?: string | null;
   empresa?: string | null;
@@ -305,12 +307,17 @@ function formatDedupeRecordType(value: string | null | undefined): string {
   }
 }
 
+function formatDedupeCode(candidate: DedupeCandidate): string {
+  return candidate.codigo_contacto?.trim() || candidate.codigo_cuenta?.trim() || candidate.id;
+}
+
 function formatDedupeSeller(candidate: DedupeCandidate): string {
   return candidate.propietario_nombre?.trim() || candidate.propietario_usuario_id?.trim() || "Sin vendedor";
 }
 
 function formatDedupeCandidateClipboard(candidate: DedupeCandidate): string {
   const lines = [
+    `Código: ${formatDedupeCode(candidate)}`,
     `Nombre: ${candidate.nombre || "Sin nombre"}`,
     `Tipo: ${formatDedupeRecordType(candidate.tipo_registro)}`,
     `Nivel: ${candidate.nivel || "debil"}`,
@@ -2366,7 +2373,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm font-medium">
-                        {candidate.nombre || "Sin nombre"}{" "}
+                        [{formatDedupeCode(candidate)}] {candidate.nombre || "Sin nombre"}{" "}
                         <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
                       </div>
                       <div className="text-xs text-muted-foreground">{formatDedupeRecordType(candidate.tipo_registro)}</div>
@@ -2399,7 +2406,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm font-medium">
-                        {candidate.nombre || "Sin nombre"}{" "}
+                        [{formatDedupeCode(candidate)}] {candidate.nombre || "Sin nombre"}{" "}
                         <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
                       </div>
                       <div className="text-xs text-muted-foreground">{formatDedupeRecordType(candidate.tipo_registro)}</div>
