@@ -13493,11 +13493,18 @@ class CRMProductImportSummary(BaseModel):
 def _default_product_metadata_fields() -> list[dict[str, Any]]:
     return [
         {
-            "id": "descripcion",
-            "label": "Descripción",
+            "id": "descripcion_corta",
+            "label": "Descripción corta",
             "type": "text",
             "required": False,
-            "description": "Descripción principal del producto.",
+            "description": "Resumen breve del producto.",
+        },
+        {
+            "id": "descripcion_larga",
+            "label": "Descripción larga",
+            "type": "text",
+            "required": False,
+            "description": "Descripción extensa del producto.",
         },
         {
             "id": "precio_base",
@@ -16707,7 +16714,8 @@ async def import_product_catalog_items(
             nombre = _pick_value(row, BASE_HEADER_CANDIDATES["nombre"])
             if not nombre:
                 raise ValueError("Falta el nombre del producto.")
-            descripcion = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion"])
+            descripcion_corta = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion_corta"])
+            descripcion_larga = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion_larga"])
             precio_base = _parse_metadata_value(
                 _pick_value(row, BASE_HEADER_CANDIDATES["precio_base"]),
                 "number",
@@ -16734,16 +16742,13 @@ async def import_product_catalog_items(
                 parsed_value = _parse_metadata_value(row.get(header), field["type"])
                 if parsed_value is not None:
                     metadata[field["id"]] = parsed_value
-            metadata.setdefault("linea", linea_name)
-            metadata.setdefault("familia", familia_name)
-            if modelo_name:
-                metadata.setdefault("modelo", modelo_name)
             for key, value in row.items():
                 if not value:
                     continue
                 if key in field_header_map.values() or key in BASE_HEADER_KEYS:
                     continue
                 metadata[headers_map.get(key, key)] = value
+            metadata = _strip_catalog_reserved_metadata_keys(metadata)
 
             provided_slug = _pick_value(row, BASE_HEADER_CANDIDATES["slug"])
             slug = provided_slug or _slugify(nombre) or f"item-{uuid4().hex}"
@@ -16760,8 +16765,10 @@ async def import_product_catalog_items(
                 "tipo": "producto",
             }
             payload["organizacion_id"] = str(organizacion_id)
-            if descripcion:
-                payload["descripcion"] = descripcion
+            if descripcion_corta:
+                payload["descripcion_corta"] = descripcion_corta
+            if descripcion_larga:
+                payload["descripcion_larga"] = descripcion_larga
             if precio_base is not None:
                 payload["precio_base"] = precio_base
             if modelo_id:
@@ -16922,6 +16929,8 @@ async def create_catalog_item(
     background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if isinstance(body.get("metadatos"), dict):
+        body["metadatos"] = _strip_catalog_reserved_metadata_keys(body["metadatos"])
     if usuario_id:
         body.setdefault("created_by", str(usuario_id))
         body.setdefault("updated_by", str(usuario_id))
@@ -16954,6 +16963,8 @@ async def update_catalog_item(
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
+    if isinstance(body.get("metadatos"), dict):
+        body["metadatos"] = _strip_catalog_reserved_metadata_keys(body["metadatos"])
     if usuario_id:
         body["updated_by"] = str(usuario_id)
     try:
@@ -20190,6 +20201,22 @@ def _normalize_scheme_fields(raw_fields: Any) -> list[dict[str, Any]]:
     return fields
 
 
+def _strip_catalog_reserved_metadata_keys(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not metadata:
+        return metadata
+    reserved_keys = {
+        "linea",
+        "familia",
+        "modelo",
+        "descripcion",
+        "descripcion_corta",
+        "descripcion_larga",
+        "precio_base",
+    }
+    filtered = {key: value for key, value in metadata.items() if key not in reserved_keys}
+    return filtered or None
+
+
 def _build_field_header_map(
     headers: list[str], fields: list[dict[str, Any]]
 ) -> dict[str, str]:
@@ -20213,10 +20240,11 @@ def _normalize_product_metadata_fields(raw_fields: Any) -> list[dict[str, Any]]:
             custom_fields.append(dict(raw))
     defaults = _default_product_metadata_fields()
     default_ids = {field["id"] for field in defaults}
+    legacy_ids = {"descripcion"}
     filtered_custom_fields: list[dict[str, Any]] = []
     for field in custom_fields:
         field_id = str(field.get("id") or field.get("slug") or "").strip().lower()
-        if field_id in default_ids:
+        if field_id in default_ids or field_id in legacy_ids:
             continue
         filtered_custom_fields.append(field)
     return defaults + filtered_custom_fields
@@ -20236,7 +20264,8 @@ def _ensure_default_product_metadata_field(row: dict[str, Any]) -> dict[str, Any
 
 BASE_HEADER_CANDIDATES = {
     "nombre": ["nombre", "name"],
-    "descripcion": ["descripcion", "description", "desc"],
+    "descripcion_corta": ["descripcion_corta", "descripcion corta", "desc_corta", "short_description"],
+    "descripcion_larga": ["descripcion_larga", "descripcion larga", "desc_larga", "descripcion", "description", "desc"],
     "precio_base": ["precio_base", "precio base", "precio", "price", "base_price"],
     "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
     "familia": ["familia", "family", "familia_nombre"],

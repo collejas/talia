@@ -30,11 +30,18 @@ type Scheme = ImporterScheme
 
 const DEFAULT_IMPORTER_FIELDS: ImporterField[] = [
   {
-    id: "descripcion",
-    label: "Descripción",
+    id: "descripcion_corta",
+    label: "Descripción corta",
     type: "text",
     required: false,
-    description: "Descripción principal del producto.",
+    description: "Resumen breve del producto.",
+  },
+  {
+    id: "descripcion_larga",
+    label: "Descripción larga",
+    type: "text",
+    required: false,
+    description: "Descripción extensa del producto.",
   },
   {
     id: "precio_base",
@@ -46,6 +53,7 @@ const DEFAULT_IMPORTER_FIELDS: ImporterField[] = [
 ]
 
 const DEFAULT_IMPORTER_FIELD_IDS = new Set(DEFAULT_IMPORTER_FIELDS.map((field) => field.id))
+const LEGACY_IMPORTER_FIELD_IDS = new Set(["descripcion"])
 
 const FIELD_TYPES: { label: string; value: ImporterFieldType }[] = [
   { label: "Texto", value: "text" },
@@ -60,7 +68,7 @@ function newField(): ImporterField {
 
 function mergeDefaultFields(fields: ImporterField[]): ImporterField[] {
   const customFields = fields.filter(
-    (field) => !DEFAULT_IMPORTER_FIELD_IDS.has(field.id),
+    (field) => !DEFAULT_IMPORTER_FIELD_IDS.has(field.id) && !LEGACY_IMPORTER_FIELD_IDS.has(field.id),
   )
   return [...DEFAULT_IMPORTER_FIELDS.map((field) => ({ ...field })), ...customFields]
 }
@@ -183,7 +191,8 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
     (scheme: Scheme) => {
       const headers = [
         "nombre",
-        "descripcion",
+        "descripcion_corta",
+        "descripcion_larga",
         "precio_base",
         "linea",
         "familia",
@@ -310,7 +319,7 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
           <p className="text-sm text-muted-foreground">{feedback}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Define los campos que conformarán el `metadata` cuando subas CSV/Excel.
+            Define los campos adicionales que conformarán el `metadata` cuando subas CSV/Excel.
           </p>
         )}
         <div className="flex flex-wrap gap-3">
@@ -433,7 +442,8 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Descripción</TableHead>
+                    <TableHead>Descripción corta</TableHead>
+                    <TableHead>Descripción larga</TableHead>
                     <TableHead>Precio base</TableHead>
                     <TableHead>Línea</TableHead>
                     <TableHead>Familia</TableHead>
@@ -462,7 +472,8 @@ export function ProductMetadataSchemesManager({ initialSchemes }: { initialSchem
                 <TableBody>
                   <TableRow>
                     <TableCell>Protótipo 1</TableCell>
-                    <TableCell>Descripción breve del producto</TableCell>
+                    <TableCell>Resumen breve del producto</TableCell>
+                    <TableCell>Descripción extensa del producto</TableCell>
                     <TableCell>$ 0.00</TableCell>
                     <TableCell>Residencial</TableCell>
                     <TableCell>Familia muestra</TableCell>
