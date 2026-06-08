@@ -35022,6 +35022,7 @@ async def pipeline_board(
     canal: str | None = Query(default=None),
     estado: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    correo: str | None = Query(default=None),
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
     days: Annotated[int | None, Query(ge=1, le=365)] = None,
@@ -35037,6 +35038,7 @@ async def pipeline_board(
             "canal": canal,
             "estado": estado,
             "q": q,
+            "correo": correo,
             "etapa_ids": etapa_ids,
             "tiene_cita": tiene_cita,
             "days": days,
@@ -35079,6 +35081,7 @@ async def pipeline_board(
             canal=canal,
             estado=estado,
             q=q,
+            correo=correo,
             etapa_ids=etapa_ids,
             tiene_cita=tiene_cita,
             # El select del tablero ya trae `contacto` embebido; hidratarlo otra
@@ -35135,6 +35138,7 @@ async def pipeline_scoring_kpis(
     canal: str | None = Query(default=None),
     estado: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    correo: str | None = Query(default=None),
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
 ) -> CRMPipelineScoringKpis:
@@ -35195,6 +35199,7 @@ async def pipeline_scoring_kpis(
                 "incoming_asignado_id": None,
                 "effective_asignado_id": str(asignado_id) if asignado_id else None,
                 "days": days,
+                "correo": correo,
                 "limit": limit,
             },
         )
@@ -35206,6 +35211,7 @@ async def pipeline_scoring_kpis(
                 "incoming_asignado_id": str(asignado_id),
                 "effective_asignado_id": str(asignado_id),
                 "days": days,
+                "correo": correo,
                 "limit": limit,
             },
         )
@@ -35218,6 +35224,7 @@ async def pipeline_scoring_kpis(
             canal=canal,
             estado=estado,
             q=q,
+            correo=correo,
             etapa_ids=etapa_ids,
             tiene_cita=tiene_cita,
         )

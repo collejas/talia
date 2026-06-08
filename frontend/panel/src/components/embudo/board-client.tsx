@@ -238,13 +238,14 @@ export function EmbudoBoardClient({
   const [progressionError, setProgressionError] = useState<string | null>(null);
   const [progressionPending, setProgressionPending] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [appliedDays, setAppliedDays] = useState<number | null>(7);
+  const [appliedDays, setAppliedDays] = useState<number | null>(null);
   const [appliedCanal, setAppliedCanal] = useState("");
   const [appliedEstado, setAppliedEstado] = useState("");
+  const [appliedCorreo, setAppliedCorreo] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedTieneCita, setAppliedTieneCita] = useState("");
   const [appliedEtapaIds, setAppliedEtapaIds] = useState<string[]>([]);
-  const [draftDays, setDraftDays] = useState<number | null>(7);
+  const [draftDays, setDraftDays] = useState<number | null>(null);
   const [draftCanal, setDraftCanal] = useState("");
   const [draftEstado, setDraftEstado] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
@@ -284,7 +285,8 @@ export function EmbudoBoardClient({
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
   const hasMountedRef = useRef(false);
-  const boardFetchInFlightRef = useRef(false);
+  const boardFetchRequestIdRef = useRef(0);
+  const boardLoadingCountRef = useRef(0);
   const searchParams = useSearchParams();
   const pendingOpenIdRef = useRef<string | null>(null);
 
@@ -372,11 +374,9 @@ export function EmbudoBoardClient({
     options?: { silent?: boolean },
   ) => {
     const silent = Boolean(options?.silent);
-    if (boardFetchInFlightRef.current) {
-      return;
-    }
-    boardFetchInFlightRef.current = true;
+    const requestId = ++boardFetchRequestIdRef.current;
     if (!silent) {
+      boardLoadingCountRef.current += 1;
       setBoardLoading(true);
       setBoardFetchError(null);
     }
@@ -395,6 +395,9 @@ export function EmbudoBoardClient({
       if (appliedEstado) {
         params.set("estado", appliedEstado);
       }
+      if (appliedCorreo.trim()) {
+        params.set("correo", appliedCorreo.trim());
+      }
       if (appliedQuery.trim()) {
         params.set("q", appliedQuery.trim());
       }
@@ -410,11 +413,17 @@ export function EmbudoBoardClient({
         throw new Error(message || `Error ${response.status}`);
       }
       const data: EmbudoData = await response.json();
+      if (requestId !== boardFetchRequestIdRef.current) {
+        return;
+      }
       setBoardState({
         ...data,
         errors: Array.isArray(data.errors) ? data.errors : [],
       });
     } catch (error) {
+      if (requestId !== boardFetchRequestIdRef.current) {
+        return;
+      }
       if (!silent) {
         setBoardFetchError(
           error instanceof Error ? error.message : "No se pudo actualizar el embudo.",
@@ -422,11 +431,13 @@ export function EmbudoBoardClient({
       }
     } finally {
       if (!silent) {
-        setBoardLoading(false);
+        boardLoadingCountRef.current = Math.max(0, boardLoadingCountRef.current - 1);
+        if (boardLoadingCountRef.current === 0) {
+          setBoardLoading(false);
+        }
       }
-      boardFetchInFlightRef.current = false;
     }
-  }, [appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds]);
+  }, [appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedQuery, appliedTieneCita, appliedEtapaIds]);
 
   const fetchSupervisedVendors = useCallback(async () => {
     if (!showVendorFilter) return;
@@ -474,7 +485,7 @@ export function EmbudoBoardClient({
       return;
     }
     void fetchBoardData(selectedVendedorId || undefined);
-  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
+  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedQuery, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
 
   useEffect(() => {
     const refresh = () => {
@@ -1325,10 +1336,11 @@ export function EmbudoBoardClient({
     (selectedVendedorId ? 1 : 0) +
     (appliedCanal ? 1 : 0) +
     (appliedEstado ? 1 : 0) +
+    (appliedCorreo.trim() ? 1 : 0) +
     (appliedQuery.trim() ? 1 : 0) +
     (appliedTieneCita ? 1 : 0) +
     (appliedEtapaIds.length ? 1 : 0) +
-    (appliedDays !== 7 ? 1 : 0);
+    (appliedDays !== null ? 1 : 0);
 
   return (
     <>
@@ -1358,13 +1370,21 @@ export function EmbudoBoardClient({
               >
                 <Plus className="h-4 w-4" />
                 Nueva Oportunidad
-              </Button>
+                </Button>
+              <div className="min-w-[260px] max-w-[360px] flex-1">
+                <Input
+                  value={appliedCorreo}
+                  onChange={(event) => setAppliedCorreo(event.target.value)}
+                  placeholder="Filtrar por correo electrónico"
+                  autoComplete="email"
+                />
+              </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setDraftDays(appliedDays);
+                setDraftDays(appliedDays);
                   setDraftCanal(appliedCanal);
                   setDraftEstado(appliedEstado);
                   setDraftQuery(appliedQuery);
@@ -1412,7 +1432,7 @@ export function EmbudoBoardClient({
                 }}
               >
                 <SelectTrigger className="h-10 w-full">
-                  <SelectValue placeholder="7 días" />
+                  <SelectValue placeholder="Sin rango" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all">Sin rango</SelectItem>
@@ -1559,15 +1579,16 @@ export function EmbudoBoardClient({
               type="button"
               variant="outline"
               onClick={() => {
-                setDraftDays(7);
+                setDraftDays(null);
                 setDraftCanal("");
                 setDraftEstado("");
                 setDraftQuery("");
                 setDraftTieneCita("");
                 setDraftEtapaIds([]);
-                setAppliedDays(7);
+                setAppliedDays(null);
                 setAppliedCanal("");
                 setAppliedEstado("");
+                setAppliedCorreo("");
                 setAppliedQuery("");
                 setAppliedTieneCita("");
                 setAppliedEtapaIds([]);

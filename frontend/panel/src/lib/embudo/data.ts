@@ -12,6 +12,7 @@ export type LoadEmbudoOptions = {
   canal?: string | null;
   estado?: string | null;
   q?: string | null;
+  correo?: string | null;
   etapaIds?: string[] | null;
   tieneCita?: string | null;
 };
@@ -188,6 +189,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
     canal: options.canal ?? null,
     estado: options.estado ?? null,
     q: options.q ?? null,
+    correo: options.correo ?? null,
     etapaIds,
     tieneCita: options.tieneCita ?? null,
   });
@@ -200,6 +202,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ...(options.canal ? { canal: options.canal } : {}),
       ...(options.estado ? { estado: options.estado } : {}),
       ...(options.q ? { q: options.q } : {}),
+      ...(options.correo ? { correo: options.correo } : {}),
       ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
       ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
       ...(days !== null ? { days: String(days) } : {}),
@@ -222,6 +225,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ...(options.canal ? { canal: options.canal } : {}),
       ...(options.estado ? { estado: options.estado } : {}),
       ...(options.q ? { q: options.q } : {}),
+      ...(options.correo ? { correo: options.correo } : {}),
       ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
       ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
     },

@@ -440,6 +440,110 @@ def _search_row_text(row: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+_EMAIL_PATTERN = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", re.IGNORECASE)
+
+
+def _extract_email_values(value: Any) -> list[str]:
+    emails: list[str] = []
+
+    def _collect(candidate: Any) -> None:
+        if candidate is None:
+            return
+        if isinstance(candidate, str):
+            normalized = _normalize_search_text(candidate)
+            if not normalized:
+                return
+            emails.extend(match.casefold() for match in _EMAIL_PATTERN.findall(normalized))
+            return
+        if isinstance(candidate, dict):
+            for inner in candidate.values():
+                _collect(inner)
+            return
+        if isinstance(candidate, list):
+            for inner in candidate:
+                _collect(inner)
+
+    _collect(value)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for email in emails:
+        if email in seen:
+            continue
+        seen.add(email)
+        deduped.append(email)
+    return deduped
+
+
+def _matches_email_filter(row: dict[str, Any], query: str | None) -> bool:
+    variants = _search_variants(query)
+    if not variants:
+        return True
+    candidate_values: list[Any] = []
+    candidate_values.append(row.get("correo"))
+
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        candidate_values.extend(
+            metadata.get(key)
+            for key in (
+                "correo",
+                "email",
+                "contacto_correo",
+                "contacto_email",
+                "contact_email",
+                "correo_principal",
+                "correo_secundario",
+                "correo_institucional",
+                "cuenta_correo_principal",
+                "cuenta_correo_secundario",
+            )
+        )
+
+    contacto = row.get("contacto")
+    if isinstance(contacto, dict):
+        candidate_values.extend(
+            contacto.get(key)
+            for key in (
+                "correo",
+                "email",
+                "correo_principal",
+                "correo_secundario",
+                "correo_institucional",
+            )
+        )
+
+    cuenta = row.get("cuenta")
+    if isinstance(cuenta, dict):
+        candidate_values.extend(
+            cuenta.get(key)
+            for key in (
+                "correo",
+                "email",
+                "correo_principal",
+                "correo_secundario",
+                "correo_institucional",
+            )
+        )
+
+    emails: list[str] = []
+    for candidate in candidate_values:
+        emails.extend(_extract_email_values(candidate))
+    if not emails:
+        return False
+    for term in variants:
+        normalized_term = _normalize_search_text(term)
+        if not normalized_term:
+            continue
+        if "@" in normalized_term:
+            if any(email == normalized_term for email in emails):
+                continue
+        elif any(normalized_term in email for email in emails):
+            continue
+        else:
+            return False
+    return True
+
+
 def _matches_search_query(row: dict[str, Any], query: str | None) -> bool:
     variants = _search_variants(query)
     if not variants:
@@ -5356,6 +5460,7 @@ class CRMRepository:
         canal: str | None = None,
         estado: str | None = None,
         q: str | None = None,
+        correo: str | None = None,
         etapa_ids: str | None = None,
         tiene_cita: str | None = None,
     ) -> list[dict[str, Any]]:
@@ -5368,7 +5473,7 @@ class CRMRepository:
         if created_from:
             params["created_at"] = f"gte.{created_from.isoformat()}"
         opportunity_ids: list[str] | None = None
-        should_filter_by_opportunity = any([asignado_id, canal, estado, q, etapa_ids, tiene_cita])
+        should_filter_by_opportunity = any([asignado_id, canal, estado, q, correo, etapa_ids, tiene_cita])
         if should_filter_by_opportunity:
             assigned_rows, _ = await self.list_pipeline_opportunities(
                 organizacion_id=organizacion_id,
@@ -5377,6 +5482,7 @@ class CRMRepository:
                 canal=canal,
                 estado=estado,
                 q=q,
+                correo=correo,
                 etapa_ids=etapa_ids,
                 tiene_cita=tiene_cita,
                 include_contact_rows=False,
@@ -5402,13 +5508,14 @@ class CRMRepository:
                 "crm.scoring_events.filtered",
                 extra={
                     "organizacion_id": str(organizacion_id),
-                    "asignado_id": str(asignado_id) if asignado_id else None,
-                    "canal": canal,
-                    "estado": estado,
-                    "q": q,
-                    "opportunities": len(opportunity_ids),
-                    "created_from": created_from.isoformat() if created_from else None,
-                },
+                "asignado_id": str(asignado_id) if asignado_id else None,
+                "canal": canal,
+                "estado": estado,
+                "q": q,
+                "correo": correo,
+                "opportunities": len(opportunity_ids),
+                "created_from": created_from.isoformat() if created_from else None,
+            },
             )
         # Este histórico es telemetría interna del backend; se consulta con service role
         # para no depender de políticas RLS del JWT de usuario final.
@@ -6557,6 +6664,7 @@ class CRMRepository:
         canal: str | None = None,
         estado: str | None = None,
         q: str | None = None,
+        correo: str | None = None,
         etapa_ids: str | None = None,
         tiene_cita: str | None = None,
         include_contact_rows: bool = True,
@@ -6611,6 +6719,8 @@ class CRMRepository:
         results = [row for row in data if isinstance(row, dict)]
         if q and q.strip():
             results = [row for row in results if _matches_search_query(row, q)]
+        if correo and correo.strip():
+            results = [row for row in results if _matches_email_filter(row, correo)]
         if results and include_contact_rows:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,

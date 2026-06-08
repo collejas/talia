@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   const asignadoId = url.searchParams.get("asignado_id")
   const canal = url.searchParams.get("canal")
   const estado = url.searchParams.get("estado")
+  const correo = url.searchParams.get("correo")
   const q = url.searchParams.get("q")
   const etapaIdsRaw = url.searchParams.get("etapa_ids")
   const etapaIds = etapaIdsRaw ? etapaIdsRaw.split(",").map((value) => value.trim()).filter(Boolean) : []
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
       asignadoId: asignadoId || undefined,
       canal: canal || undefined,
       estado: estado || undefined,
+      correo: correo || undefined,
       q: q || undefined,
       etapaIds,
       tieneCita: tieneCita || undefined,

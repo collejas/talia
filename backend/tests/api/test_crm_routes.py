@@ -2315,6 +2315,76 @@ async def test_pipeline_board_applies_day_window(
 
 
 @pytest.mark.asyncio
+async def test_pipeline_board_forwards_email_filter(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    stage_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(stage_id),
+            "nombre": "Prospecto",
+            "codigo": "prospecto",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {},
+        }
+    ]
+    fake_repo.pipeline_opportunities = [
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_id),
+            "titulo": "Oportunidad con correo",
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Alice", "correo_principal": "collejas1@gmail.com"},
+            "etapa": {
+                "id": str(stage_id),
+                "nombre": "Prospecto",
+                "codigo": "prospecto",
+                "categoria": "abierta",
+                "orden": 1,
+                "metadata": {},
+            },
+        }
+    ]
+
+    resp = await client.get(
+        "/crm/pipeline/board",
+        headers=_headers(include_user_token=True),
+        params={"correo": "collejas1@gmail.com"},
+    )
+
+    assert resp.status_code == 200
+    call_kwargs = next(kwargs for name, kwargs in fake_repo.calls if name == "list_pipeline_opportunities")
+    assert call_kwargs["correo"] == "collejas1@gmail.com"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_scoring_kpis_forwards_email_filter(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        crm_routes,
+        "_resolve_effective_timezone_name",
+        AsyncMock(return_value=("UTC", "UTC")),
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_list_scoring_events(**kwargs: Any) -> list[dict[str, Any]]:
+        captured.update(kwargs)
+        return []
+
+    fake_repo.list_opportunity_scoring_events = AsyncMock(side_effect=fake_list_scoring_events)
+
+    resp = await client.get(
+        "/crm/pipeline/scoring/kpis",
+        headers=_headers(include_user_token=True),
+        params={"correo": "collejas1@gmail.com"},
+    )
+
+    assert resp.status_code == 200
+    assert captured["correo"] == "collejas1@gmail.com"
+
+
+@pytest.mark.asyncio
 async def test_pipeline_scoring_kpis_supports_no_window(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:

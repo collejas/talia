@@ -169,6 +169,96 @@ async def test_list_pipeline_opportunities_can_skip_exact_count_and_contact_enri
 
 
 @pytest.mark.asyncio
+async def test_list_pipeline_opportunities_filters_by_email() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/rest/v1/oportunidades"
+        return DummyResponse(
+            [
+                {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "titulo": "Match",
+                    "contacto": {
+                        "correo_principal": "collejas1@gmail.com",
+                        "correo_secundario": None,
+                    },
+                    "cuenta": {"correo": None},
+                    "metadata": {},
+                },
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "titulo": "Miss",
+                    "contacto": {
+                        "correo_principal": "otro@gmail.com",
+                        "correo_secundario": None,
+                    },
+                    "cuenta": {"correo": None},
+                    "metadata": {},
+                },
+            ]
+        )
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._attach_contact_rows = AsyncMock()
+
+    rows, total = await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        correo="collejas1@gmail.com",
+        include_contact_rows=False,
+    )
+
+    assert total == 1
+    assert [row["id"] for row in rows] == ["11111111-1111-1111-1111-111111111111"]
+    repo._attach_contact_rows.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_pipeline_opportunities_ignores_vendor_email_for_email_filter() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/rest/v1/oportunidades"
+        return DummyResponse(
+            [
+                {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "titulo": "Vendor only",
+                    "contacto": {
+                        "correo_principal": "otro-contacto@gmail.com",
+                        "correo_secundario": None,
+                    },
+                    "cuenta": {"correo": None},
+                    "asignado": {"correo": "collejas1@gmail.com"},
+                    "propietario": {"correo": None},
+                    "metadata": {},
+                }
+            ]
+        )
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._attach_contact_rows = AsyncMock()
+
+    rows, total = await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        correo="collejas1@gmail.com",
+        include_contact_rows=False,
+    )
+
+    assert total == 0
+    assert rows == []
+    repo._attach_contact_rows.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_whatsapp_metrics_filters_use_raw_iso_and_and_clause() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"
