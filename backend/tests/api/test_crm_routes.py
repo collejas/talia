@@ -1202,6 +1202,60 @@ async def test_create_account(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_reassign_opportunity_aligns_contact_and_conversation(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opportunity_id = uuid.uuid4()
+    contacto_id = uuid.uuid4()
+    conversation_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+
+    fake_repo.current_user_has_perm = AsyncMock(return_value=True)
+    fake_repo.get_employee_vendor = AsyncMock(return_value={"id": str(seller_id), "es_vendedor": True})
+    fake_repo.get_opportunity = AsyncMock(
+        return_value={
+            "id": str(opportunity_id),
+            "organizacion_id": str(uuid.uuid4()),
+            "contacto_principal_id": str(contacto_id),
+            "metadata": {},
+        }
+    )
+    fake_repo.update_opportunity = AsyncMock(return_value={"id": str(opportunity_id)})
+    fake_repo.update_persona = AsyncMock(return_value={"id": str(contacto_id)})
+    fake_repo.update_conversation = AsyncMock(return_value={"id": str(conversation_id)})
+    fake_repo.insert_sales_assignment_audit = AsyncMock(return_value={"id": str(uuid.uuid4())})
+    monkeypatch.setattr(crm_routes, "CRMRepository", lambda *args, **kwargs: fake_repo)
+
+    resp = await client.post(
+        f"/crm/oportunidades/{opportunity_id}/reasignar",
+        headers=_headers(include_user_token=True),
+        json={
+            "asignado_usuario_id": str(seller_id),
+            "contacto_id": str(contacto_id),
+            "conversacion_id": str(conversation_id),
+            "alinear_contacto": True,
+            "alinear_conversacion": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["oportunidad_id"] == str(opportunity_id)
+    assert payload["contacto_actualizado"] is True
+    assert payload["conversacion_actualizada"] is True
+
+    assert fake_repo.update_opportunity.await_count == 1
+    assert fake_repo.update_persona.await_count == 1
+    assert fake_repo.update_conversation.await_count == 1
+    assert fake_repo.insert_sales_assignment_audit.await_count == 1
+
+    persona_kwargs = fake_repo.update_persona.await_args.kwargs
+    assert persona_kwargs["persona_id"] == contacto_id
+    assert "contacto_id" not in persona_kwargs
+
+
+@pytest.mark.asyncio
 async def test_delete_denue_busqueda_borra_fisicamente(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

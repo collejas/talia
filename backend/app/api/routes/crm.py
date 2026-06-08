@@ -16248,7 +16248,7 @@ async def reassign_opportunity(
                 )
         await repo.update_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             payload={"propietario_usuario_id": str(payload.asignado_usuario_id)},
         )
         contacto_actualizado = True
