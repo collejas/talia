@@ -158,6 +158,17 @@ def _safe_uuid(value: Any) -> UUID | None:
         return None
 
 
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    return text in {"1", "true", "t", "yes", "y", "on"}
+
+
 def _normalize_account_direction_relation_type(value: Any) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -6960,6 +6971,30 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         if not query or not query.strip():
             return []
+
+        permission_context = await self.get_permission_context()
+        current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+        if current_user_id is None:
+            return []
+
+        is_admin = _coerce_bool(permission_context.get("es_admin")) is True
+        is_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        can_view_unowned_contacts = is_admin or is_owner
+        can_view_unowned_accounts = is_admin or is_owner
+        if not can_view_unowned_contacts:
+            can_view_unowned_contacts = await self.current_user_has_perm(codigo="contacts.view_sensitive_unowned")
+        if not can_view_unowned_accounts:
+            can_view_unowned_accounts = await self.current_user_has_perm(codigo="accounts.view_sensitive_unowned")
+
+        def _is_visible_result(row: Mapping[str, Any]) -> bool:
+            owner_user_id = _safe_uuid(row.get("propietario_usuario_id"))
+            account_owner_user_id = _safe_uuid(row.get("cuenta_propietario_usuario_id"))
+            if owner_user_id is not None and owner_user_id == current_user_id:
+                return True
+            if account_owner_user_id is not None and account_owner_user_id == current_user_id:
+                return True
+            return can_view_unowned_contacts or can_view_unowned_accounts
+
         rows: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         search_clause = _build_search_clause(
@@ -6987,10 +7022,11 @@ class CRMRepository:
             query,
         )
 
+        fetch_limit = str(min(max(limit * 5, 25), 100))
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": PERSONA_SELECT_FIELDS,
-            "limit": str(limit),
+            "limit": fetch_limit,
             "offset": str(offset),
         }
         if search_clause:
@@ -7014,6 +7050,8 @@ class CRMRepository:
                 continue
             contact_id = str(contact_row.get("id") or "")
             if not contact_id or contact_id in seen_ids:
+                continue
+            if not _is_visible_result(contact_row):
                 continue
             seen_ids.add(contact_id)
             rows.append(contact_row)
@@ -7080,9 +7118,11 @@ class CRMRepository:
                     contact_id = str(contact_row.get("id") or "")
                     if not contact_id or contact_id in seen_ids:
                         continue
+                    if not _is_visible_result(contact_row):
+                        continue
                     seen_ids.add(contact_id)
                     rows.append(contact_row)
-        return rows
+        return rows[:limit]
 
     async def search_personas(
         self,
@@ -7488,6 +7528,7 @@ class CRMRepository:
             "persona_datos": metadata,
             "contacto_datos": dict(metadata),
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else None,
+            "cuenta_propietario_usuario_id": account.get("propietario_usuario_id") if isinstance(account, dict) else None,
             "persona_fisica_moral": None,
             "nombre_nombres": persona.get("nombre"),
             "apellido_paterno": persona.get("apellido_paterno"),
