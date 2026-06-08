@@ -6729,25 +6729,51 @@ class CRMRepository:
                 def _has_booking(metadata: dict[str, Any]) -> bool:
                     if not metadata:
                         return False
+
+                    direct_keys = (
+                        "booking_id",
+                        "calendar_booking_id",
+                        "demo_booking_id",
+                        "demo_scheduled_at",
+                        "appointment_scheduled",
+                        "appointment_confirmed",
+                        "appointment_attended",
+                    )
+                    for key in direct_keys:
+                        value = metadata.get(key)
+                        if isinstance(value, bool) and value:
+                            return True
+                        if isinstance(value, str) and value.strip():
+                            return True
+
+                    def _has_stage_prep_booking(value: Any) -> bool:
+                        if isinstance(value, dict):
+                            for inner_key, inner_value in value.items():
+                                normalized_key = str(inner_key).strip().lower()
+                                if normalized_key in {
+                                    "booking_id",
+                                    "calendar_booking_id",
+                                    "demo_booking_id",
+                                    "demo_scheduled_at",
+                                    "appointment_scheduled",
+                                    "appointment_confirmed",
+                                    "appointment_attended",
+                                }:
+                                    if isinstance(inner_value, bool) and inner_value:
+                                        return True
+                                    if isinstance(inner_value, str) and inner_value.strip():
+                                        return True
+                                    if isinstance(inner_value, (int, float)) and inner_value:
+                                        return True
+                                if _has_stage_prep_booking(inner_value):
+                                    return True
+                        elif isinstance(value, list):
+                            return any(_has_stage_prep_booking(inner) for inner in value)
+                        return False
+
                     stage_prep = metadata.get("stage_prep")
                     if isinstance(stage_prep, dict):
-                        for value in stage_prep.values():
-                            if not isinstance(value, dict):
-                                continue
-                            for key, inner in value.items():
-                                normalized_key = str(key).lower()
-                                if "booking" in normalized_key and inner:
-                                    return True
-                                if normalized_key.endswith("_scheduled_at") and isinstance(inner, str) and inner.strip():
-                                    return True
-                                if normalized_key.endswith("_confirmed_at") and isinstance(inner, str) and inner.strip():
-                                    return True
-                    sales_notifications = metadata.get("sales_notifications")
-                    if isinstance(sales_notifications, dict) and sales_notifications:
-                        return True
-                    sales_primary = metadata.get("sales_primary_notifications")
-                    if isinstance(sales_primary, dict) and sales_primary:
-                        return True
+                        return _has_stage_prep_booking(stage_prep)
                     return False
 
                 filtered: list[dict[str, Any]] = []

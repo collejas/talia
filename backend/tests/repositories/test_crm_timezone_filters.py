@@ -259,6 +259,104 @@ async def test_list_pipeline_opportunities_ignores_vendor_email_for_email_filter
 
 
 @pytest.mark.asyncio
+async def test_list_pipeline_opportunities_filters_only_real_bookings() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/rest/v1/oportunidades"
+        return DummyResponse(
+            [
+                {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "titulo": "Only notification",
+                    "contacto": {"correo_principal": "a@example.com"},
+                    "cuenta": {"correo": None},
+                    "metadata": {"sales_notifications": {"booking_confirmed": True}},
+                },
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "titulo": "Real booking",
+                    "contacto": {"correo_principal": "b@example.com"},
+                    "cuenta": {"correo": None},
+                    "metadata": {
+                        "stage_prep": {
+                            "demo": {
+                                "demo_booking_id": "booking-123",
+                                "demo_scheduled_at": "2026-06-08T10:00:00Z",
+                            }
+                        }
+                    },
+                },
+            ]
+        )
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._attach_contact_rows = AsyncMock()
+
+    con_cita_rows, con_cita_total = await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        tiene_cita="con_cita",
+        include_contact_rows=False,
+    )
+    sin_cita_rows, sin_cita_total = await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        tiene_cita="sin_cita",
+        include_contact_rows=False,
+    )
+
+    assert con_cita_total == 1
+    assert [row["id"] for row in con_cita_rows] == ["22222222-2222-2222-2222-222222222222"]
+    assert sin_cita_total == 1
+    assert [row["id"] for row in sin_cita_rows] == ["11111111-1111-1111-1111-111111111111"]
+
+
+@pytest.mark.asyncio
+async def test_list_pipeline_opportunities_counts_general_demo_schedule_as_booking() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/rest/v1/oportunidades"
+        return DummyResponse(
+            [
+                {
+                    "id": "33333333-3333-3333-3333-333333333333",
+                    "titulo": "General demo",
+                    "contacto": {"correo_principal": "c@example.com"},
+                    "cuenta": {"correo": None},
+                    "metadata": {
+                        "stage_prep": {
+                            "general_demo": {
+                                "demo_format": "virtual",
+                                "demo_scheduled_at": "2026-06-08T10:00:00Z",
+                            }
+                        }
+                    },
+                }
+            ]
+        )
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._attach_contact_rows = AsyncMock()
+
+    rows, total = await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        tiene_cita="con_cita",
+        include_contact_rows=False,
+    )
+
+    assert total == 1
+    assert [row["id"] for row in rows] == ["33333333-3333-3333-3333-333333333333"]
+
+
+@pytest.mark.asyncio
 async def test_whatsapp_metrics_filters_use_raw_iso_and_and_clause() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"
