@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from difflib import SequenceMatcher
 import json
 import re
 import unicodedata
@@ -373,15 +374,92 @@ def _search_variants(value: str | None) -> list[str]:
         sanitized,
         unicodedata.normalize("NFKD", sanitized).encode("ascii", "ignore").decode("ascii"),
     ):
-        text = candidate.strip()
-        if not text:
-            continue
-        key = text.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        variants.append(text)
+        for raw_term in re.split(r"\s+", candidate):
+            text = raw_term.strip()
+            if not text:
+                continue
+            key = text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            variants.append(text)
     return variants
+
+
+def _build_search_clause(fields: Sequence[str], value: str | None) -> str | None:
+    variants = _search_variants(value)
+    if not variants:
+        return None
+    groups: list[str] = []
+    for term in variants:
+        pattern = _postgrest_ilike_literal(term)
+        groups.append("or(" + ",".join(f"{field}.ilike.{pattern}" for field in fields) + ")")
+    if len(groups) == 1:
+        return groups[0]
+    return "and(" + ",".join(groups) + ")"
+
+
+def _normalize_search_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return " ".join(normalized.split())
+
+
+def _search_row_text(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+
+    def _collect(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, str):
+            cleaned = _normalize_search_text(value)
+            if cleaned:
+                parts.append(cleaned)
+            return
+        if isinstance(value, dict):
+            for inner in value.values():
+                _collect(inner)
+            return
+        if isinstance(value, list):
+            for inner in value:
+                _collect(inner)
+
+    for key in (
+        "titulo",
+        "descripcion",
+        "contacto_nombre",
+        "canal",
+        "estado",
+        "metadata",
+    ):
+        _collect(row.get(key))
+    _collect(row.get("contacto"))
+    _collect(row.get("cuenta"))
+    return " ".join(parts)
+
+
+def _matches_search_query(row: dict[str, Any], query: str | None) -> bool:
+    variants = _search_variants(query)
+    if not variants:
+        return True
+    haystack = _search_row_text(row)
+    if not haystack:
+        return False
+    haystack_tokens = haystack.split()
+    for term in variants:
+        normalized_term = _normalize_search_text(term)
+        if not normalized_term:
+            continue
+        if normalized_term in haystack:
+            continue
+        if any(normalized_term in token or token in normalized_term for token in haystack_tokens):
+            continue
+        if any(SequenceMatcher(None, normalized_term, token).ratio() >= 0.72 for token in haystack_tokens):
+            continue
+        return False
+    return True
 
 
 def _normalize_geo_text(value: Any) -> str:
@@ -6516,16 +6594,6 @@ class CRMRepository:
             params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
         if canal:
             params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
-        sanitized_query = _sanitize_search_pattern(q)
-        if sanitized_query:
-            pattern = _postgrest_ilike_literal(sanitized_query)
-            and_filters.append(
-                "or("
-                f"titulo.ilike.{pattern},"
-                f"descripcion.ilike.{pattern},"
-                f"contacto_nombre.ilike.{pattern}"
-                ")"
-            )
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
         prefer = "count=exact" if count_exact else None
@@ -6541,6 +6609,8 @@ class CRMRepository:
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
         results = [row for row in data if isinstance(row, dict)]
+        if q and q.strip():
+            results = [row for row in results if _matches_search_query(row, q)]
         if results and include_contact_rows:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
@@ -6583,7 +6653,7 @@ class CRMRepository:
                     elif target == "sin_cita" and not booking:
                         filtered.append(row)
                 results = filtered
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        total = len(results)
         return results, total
 
     async def list_supervised_sales_reps(
@@ -6756,31 +6826,45 @@ class CRMRepository:
         limit: int = 8,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        sanitized = query.strip()
-        if not sanitized:
+        if not query or not query.strip():
             return []
-        # Evitamos caracteres que rompan el or-filter de Supabase
-        for char in ("(", ")", ","):
-            sanitized = sanitized.replace(char, " ")
-        sanitized = sanitized.replace("*", "")
-        pattern = f"*{sanitized}*"
         rows: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
+        search_clause = _build_search_clause(
+            [
+                "codigo_contacto",
+                "nombre_completo",
+                "correo_principal",
+                "correo_institucional",
+                "correo_personal_3",
+                "telefono_principal_e164",
+                "telefono_movil_1_e164",
+                "telefono_movil_2_e164",
+                "telefono_empresa_1_e164",
+                "telefono_empresa_2_e164",
+                "apellido_paterno",
+                "notas",
+                "area",
+                "puesto",
+                "rol_decision",
+                "company_name",
+                "correo",
+                "telefono",
+            ],
+            query,
+        )
 
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": PERSONA_SELECT_FIELDS,
             "limit": str(limit),
             "offset": str(offset),
-            "or": (
-                f"(codigo_contacto.ilike.*{pattern}*,nombre_completo.ilike.*{pattern}*,correo_principal.ilike.*{pattern}*,"
-                f"correo_institucional.ilike.*{pattern}*,correo_personal_3.ilike.*{pattern}*,"
-                f"telefono_principal_e164.ilike.*{pattern}*,telefono_movil_1_e164.ilike.*{pattern}*,"
-                f"telefono_movil_2_e164.ilike.*{pattern}*,telefono_empresa_1_e164.ilike.*{pattern}*,"
-                f"telefono_empresa_2_e164.ilike.*{pattern}*,apellido_paterno.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
-                f"area.ilike.*{pattern}*,puesto.ilike.*{pattern}*,rol_decision.ilike.*{pattern}*)"
-            ),
         }
+        if search_clause:
+            if search_clause.startswith("and("):
+                params["and"] = f"({search_clause[4:-1]})"
+            else:
+                params["or"] = search_clause
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -6801,15 +6885,20 @@ class CRMRepository:
             seen_ids.add(contact_id)
             rows.append(contact_row)
 
+        account_search_clause = _build_search_clause(
+            ["nombre", "alias", "razon_social", "rfc", "codigo_cuenta", "necesidad_proposito", "correo", "telefono"],
+            query,
+        )
         account_params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": "id",
             "limit": "100",
-            "or": (
-                f"(nombre.ilike.*{pattern}*,alias.ilike.*{pattern}*,razon_social.ilike.*{pattern}*,"
-                f"rfc.ilike.*{pattern}*,codigo_cuenta.ilike.*{pattern}*)"
-            ),
         }
+        if account_search_clause:
+            if account_search_clause.startswith("and("):
+                account_params["and"] = f"({account_search_clause[4:-1]})"
+            else:
+                account_params["or"] = account_search_clause
         account_resp = await self._request("GET", "/rest/v1/cuentas", params=account_params)
         account_data = account_resp.json()
         account_ids = [

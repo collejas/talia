@@ -8,7 +8,7 @@ import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 export type LoadEmbudoOptions = {
   limit?: number;
   asignadoId?: string | null;
-  days?: number;
+  days?: number | null;
   canal?: string | null;
   estado?: string | null;
   q?: string | null;
@@ -173,7 +173,10 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 
 export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<EmbudoData> {
   const limit = options.limit ?? DEFAULT_LIMIT;
-  const days = options.days ?? 7;
+  const days =
+    typeof options.days === "number" && Number.isFinite(options.days)
+      ? Math.max(1, Math.floor(options.days))
+      : null;
   const etapaIds = Array.isArray(options.etapaIds)
     ? options.etapaIds.map((value) => value.trim()).filter(Boolean)
     : [];
@@ -199,6 +202,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ...(options.q ? { q: options.q } : {}),
       ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
       ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
+      ...(days !== null ? { days: String(days) } : {}),
     },
     withUserToken: true,
   }).then((result) => {
@@ -213,7 +217,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
   const scoringStartedAt = performance.now();
   const scoringPromise = callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
     searchParams: {
-      days: String(days),
+      ...(days !== null ? { days: String(days) } : {}),
       ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
       ...(options.canal ? { canal: options.canal } : {}),
       ...(options.estado ? { estado: options.estado } : {}),

@@ -14,11 +14,12 @@ export type ScoringKpisOverviewProps = {
 export function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
   const view = selectOperationalView(kpis)
   const sourceLabel = view.source === "opportunity_latest_based" ? "Último evento por oportunidad" : "Eventos"
+  const windowLabel = formatWindowLabel(kpis.window_days)
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Card>
         <CardHeader>
-          <CardTitle>Puntaje promedio (7 días)</CardTitle>
+          <CardTitle>Puntaje promedio ({windowLabel})</CardTitle>
           <CardDescription>{sourceLabel}</CardDescription>
         </CardHeader>
         <CardContent className="text-3xl font-semibold">
@@ -98,6 +99,13 @@ function selectOperationalView(kpis: EmbudoScoringKpis): OperationalView {
 function formatPct(value: number | null) {
   if (value == null || Number.isNaN(value)) return "—"
   return `${value.toFixed(1)}%`
+}
+
+function formatWindowLabel(windowDays: number) {
+  if (!Number.isFinite(windowDays) || windowDays <= 0) {
+    return "sin rango"
+  }
+  return `${windowDays} días`
 }
 
 function formatGradeDistribution(values: Record<string, number>) {

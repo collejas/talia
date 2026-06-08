@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.routes import crm as crm_routes
-from app.repositories.crm import CRMRepository, _make_json_serializable
+from app.repositories.crm import CRMRepository, _build_search_clause, _make_json_serializable, _matches_search_query
 
 
 class DummyCRMRepository(CRMRepository):
@@ -138,6 +138,10 @@ class DummyCRMRepository(CRMRepository):
                 or str((row.get("etapa", {}) or {}).get("tablero_id")) == tablero_filter
             ]
         return rows[: kwargs.get("limit", len(rows))], len(rows)
+
+    async def list_opportunity_scoring_events(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_opportunity_scoring_events", kwargs))
+        return []
 
     async def list_sale_ready_opportunities(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_sale_ready_opportunities", kwargs))
@@ -1569,6 +1573,28 @@ async def test_make_json_serializable_convierte_uuid_anidados() -> None:
     assert sanitized["metadata"]["items"][1]["otro"] == str(nested_uuid)
 
 
+def test_build_search_clause_splits_terms() -> None:
+    clause = _build_search_clause(["titulo", "descripcion"], "juan empresa")
+
+    assert clause is not None
+    assert clause.startswith("and(")
+    assert "juan" in clause
+    assert "empresa" in clause
+
+
+def test_matches_search_query_accepts_typo_tolerant_text() -> None:
+    row = {
+        "titulo": "Perico De los Palotes de Urbanizadora compartió sus datos básicos y pidió información",
+        "descripcion": "Perico De los Palotes de Urbanizadora compartió sus datos básicos y pidió información",
+        "contacto_nombre": "Perico De los Palotes",
+        "metadata": {"project_name": "Perico De los Palotes de Urbanizadora compartió sus datos básicos y pidió información"},
+    }
+
+    assert _matches_search_query(row, "Perico")
+    assert _matches_search_query(row, "Perico De los Palotes")
+    assert _matches_search_query(row, "Palotesporqu")
+
+
 
 @pytest.mark.asyncio
 async def test_build_contact_write_parts_mueve_segmento_a_metadata() -> None:
@@ -2236,6 +2262,84 @@ async def test_pipeline_board_includes_channel_from_metadata(
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["stages"][0]["tarjetas"][0]["canal"] == "whatsapp"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_board_applies_day_window(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        crm_routes,
+        "_resolve_effective_timezone_name",
+        AsyncMock(return_value=("UTC", "UTC")),
+    )
+    stage_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(stage_id),
+            "nombre": "Prospecto",
+            "codigo": "prospecto",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {},
+        }
+    ]
+    fake_repo.pipeline_opportunities = [
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_id),
+            "titulo": "Oportunidad con fecha",
+            "metadata": {},
+            "etapa": {
+                "id": str(stage_id),
+                "nombre": "Prospecto",
+                "codigo": "prospecto",
+                "categoria": "abierta",
+                "orden": 1,
+                "metadata": {},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Alice"},
+        }
+    ]
+
+    resp = await client.get(
+        "/crm/pipeline/board",
+        headers=_headers(include_user_token=True),
+        params={"days": "15"},
+    )
+
+    assert resp.status_code == 200
+    call_kwargs = next(kwargs for name, kwargs in fake_repo.calls if name == "list_pipeline_opportunities")
+    assert call_kwargs["created_from"] is not None
+    assert call_kwargs["include_contact_rows"] is False
+
+
+@pytest.mark.asyncio
+async def test_pipeline_scoring_kpis_supports_no_window(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        crm_routes,
+        "_resolve_effective_timezone_name",
+        AsyncMock(return_value=("UTC", "UTC")),
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_list_scoring_events(**kwargs: Any) -> list[dict[str, Any]]:
+        captured.update(kwargs)
+        return []
+
+    fake_repo.list_opportunity_scoring_events = AsyncMock(side_effect=fake_list_scoring_events)
+
+    resp = await client.get(
+        "/crm/pipeline/scoring/kpis",
+        headers=_headers(include_user_token=True),
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["window_days"] == 0
+    assert captured["created_from"] is None
 
 
 

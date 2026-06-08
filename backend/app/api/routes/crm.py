@@ -34988,6 +34988,7 @@ async def pipeline_board(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
     tablero_id: UUID | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
@@ -34996,6 +34997,7 @@ async def pipeline_board(
     q: str | None = Query(default=None),
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
+    days: Annotated[int | None, Query(ge=1, le=365)] = None,
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
     request_started = time.perf_counter()
@@ -35010,9 +35012,20 @@ async def pipeline_board(
             "q": q,
             "etapa_ids": etapa_ids,
             "tiene_cita": tiene_cita,
+            "days": days,
         },
     )
     try:
+        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+        )
+        created_from = (
+            _resolve_recent_days_created_from_utc(days=days, timezone_name=effective_timezone)
+            if days is not None
+            else None
+        )
         try:
             stage_started = time.perf_counter()
             await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
@@ -35034,6 +35047,7 @@ async def pipeline_board(
             organizacion_id=organizacion_id,
             limit=limit,
             tablero_id=tablero_id,
+            created_from=created_from,
             asignado_id=asignado_id,
             canal=canal,
             estado=estado,
@@ -35088,7 +35102,7 @@ async def pipeline_scoring_kpis(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    days: Annotated[int, Query(ge=1, le=90)] = 7,
+    days: Annotated[int | None, Query(ge=1, le=365)] = None,
     limit: Annotated[int, Query(ge=100, le=5000)] = 2000,
     asignado_id: UUID | None = Query(default=None),
     canal: str | None = Query(default=None),
@@ -35102,9 +35116,10 @@ async def pipeline_scoring_kpis(
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
-    created_from = _resolve_recent_days_created_from_utc(
-        days=days,
-        timezone_name=effective_timezone,
+    created_from = (
+        _resolve_recent_days_created_from_utc(days=days, timezone_name=effective_timezone)
+        if days is not None
+        else None
     )
     # Si no se pasa asignado_id explícitamente, y el usuario es vendedor (no admin),
     # forzamos KPIs a su propio alcance para evitar que vea métricas globales
@@ -35190,7 +35205,7 @@ async def pipeline_scoring_kpis(
             "days": days,
         },
     )
-    return _build_scoring_kpis(rows=rows, window_days=days)
+    return _build_scoring_kpis(rows=rows, window_days=days if days is not None else 0)
 
 
 @router.get("/pipeline/scoring/config", response_model=CRMScoringConfigBundle)

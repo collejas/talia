@@ -238,13 +238,13 @@ export function EmbudoBoardClient({
   const [progressionError, setProgressionError] = useState<string | null>(null);
   const [progressionPending, setProgressionPending] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [appliedDays, setAppliedDays] = useState(7);
+  const [appliedDays, setAppliedDays] = useState<number | null>(7);
   const [appliedCanal, setAppliedCanal] = useState("");
   const [appliedEstado, setAppliedEstado] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedTieneCita, setAppliedTieneCita] = useState("");
   const [appliedEtapaIds, setAppliedEtapaIds] = useState<string[]>([]);
-  const [draftDays, setDraftDays] = useState(7);
+  const [draftDays, setDraftDays] = useState<number | null>(7);
   const [draftCanal, setDraftCanal] = useState("");
   const [draftEstado, setDraftEstado] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
@@ -386,7 +386,7 @@ export function EmbudoBoardClient({
       if (asignadoId) {
         params.set("asignado_id", asignadoId);
       }
-      if (appliedDays) {
+      if (appliedDays !== null) {
         params.set("days", String(appliedDays));
       }
       if (appliedCanal) {
@@ -1400,13 +1400,28 @@ export function EmbudoBoardClient({
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Ventana KPIs
               </Label>
-              <Select value={String(draftDays)} onValueChange={(value) => setDraftDays(Number(value) || 7)}>
+              <Select
+                value={draftDays === null ? "all" : String(draftDays)}
+                onValueChange={(value) => {
+                  if (value === "all") {
+                    setDraftDays(null);
+                    return;
+                  }
+                  const parsed = Number(value);
+                  setDraftDays(Number.isFinite(parsed) && parsed > 0 ? parsed : 7);
+                }}
+              >
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="7 días" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
+                  <SelectItem value="all">Sin rango</SelectItem>
+                  <SelectItem value="1">1 día</SelectItem>
                   <SelectItem value="7">7 días</SelectItem>
+                  <SelectItem value="15">15 días</SelectItem>
                   <SelectItem value="30">30 días</SelectItem>
+                  <SelectItem value="60">60 días</SelectItem>
+                  <SelectItem value="90">90 días</SelectItem>
                 </SelectContent>
               </Select>
             </div>
