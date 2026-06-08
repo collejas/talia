@@ -6232,7 +6232,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "contacto_id": f"eq.{contacto_id}",
-            "order": "creado_en.desc",
+            "order": "iniciada_en.desc",
             "limit": "1",
             "select": "id",
         }

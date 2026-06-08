@@ -218,6 +218,35 @@ async def test_list_pipeline_opportunities_filters_by_email() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_latest_conversation_id_by_contact_orders_by_iniciada_en() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([{"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}])
+
+    repo._request = AsyncMock(side_effect=fake_request)
+
+    convo_id = await repo.get_latest_conversation_id_by_contact(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        contacto_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+    )
+
+    assert convo_id == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rest/v1/conversaciones"
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params.get("order") == "iniciada_en.desc"
+
+
+@pytest.mark.asyncio
 async def test_list_pipeline_opportunities_ignores_vendor_email_for_email_filter() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"
