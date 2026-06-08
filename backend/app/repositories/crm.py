@@ -534,13 +534,9 @@ def _matches_email_filter(row: dict[str, Any], query: str | None) -> bool:
         normalized_term = _normalize_search_text(term)
         if not normalized_term:
             continue
-        if "@" in normalized_term:
-            if any(email == normalized_term for email in emails):
-                continue
-        elif any(normalized_term in email for email in emails):
+        if any(email.startswith(normalized_term) for email in emails):
             continue
-        else:
-            return False
+        return False
     return True
 
 

@@ -189,6 +189,41 @@ function sortCards(cards: EmbudoCard[]): EmbudoCard[] {
   });
 }
 
+function normalizeEmailFilterValue(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function extractCardEmailCandidates(card: EmbudoCard): string[] {
+  const candidates = new Set<string>();
+  const push = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return;
+    candidates.add(normalized);
+  };
+
+  push(card.correo);
+  push(card.metadata?.contacto_correo);
+  push(card.metadata?.contacto_email);
+  push(card.metadata?.contact_email);
+  push(card.metadata?.correo);
+  push(card.metadata?.email);
+  push(card.metadata?.correo_principal);
+  push(card.metadata?.correo_secundario);
+  push(card.metadata?.correo_institucional);
+  push(card.metadata?.cuenta_correo_principal);
+  push(card.metadata?.cuenta_correo_secundario);
+  return [...candidates];
+}
+
+function matchesEmailFilter(card: EmbudoCard, rawFilter: string): boolean {
+  const filter = normalizeEmailFilterValue(rawFilter);
+  if (!filter) return true;
+  const emails = extractCardEmailCandidates(card);
+  if (!emails.length) return false;
+  return emails.some((email) => email.startsWith(filter));
+}
+
 export function EmbudoBoardClient({
   etapas,
   sinConversacion,
@@ -478,6 +513,16 @@ export function EmbudoBoardClient({
   }, [showVendorFilter, vendorOptions.length, fetchSupervisedVendors]);
 
   const defaultCreateStage = useMemo(() => sortStages(stages)[0] ?? null, [stages]);
+
+  const visibleStages = useMemo(() => {
+    if (!appliedCorreo.trim()) {
+      return stages;
+    }
+    return stages.map((stage) => ({
+      ...stage,
+      tarjetas: (stage.tarjetas ?? []).filter((card) => matchesEmailFilter(card, appliedCorreo)),
+    }));
+  }, [stages, appliedCorreo]);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -1325,7 +1370,7 @@ export function EmbudoBoardClient({
   };
 
   const hasContent =
-    stages.some((stage) => stage.tarjetas.length > 0) ||
+    stages.length > 0 ||
     boardState.sinConversacion.length > 0 ||
     boardState.visitantesSinChat > 0;
 
@@ -1643,7 +1688,7 @@ export function EmbudoBoardClient({
               </section>
             </div>
 
-            {stages.map((stage) => (
+            {visibleStages.map((stage) => (
               <div key={stage.id} className="w-[320px] shrink-0">
                 <EmbudoStageColumn
                   stage={stage}
