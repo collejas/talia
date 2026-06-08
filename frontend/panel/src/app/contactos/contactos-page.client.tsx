@@ -120,10 +120,15 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
     }
   }, [])
 
-  const derivedCards = React.useMemo(
-    () => (isDefaultFilterSet(filters) ? cards : mapCardsFromRows(visibleRows)),
-    [cards, filters, visibleRows],
-  )
+  const derivedCards = React.useMemo(() => {
+    if (!isDefaultFilterSet(filters)) {
+      return mapCardsFromRows(visibleRows)
+    }
+    if (hasMeaningfulCards(cards)) {
+      return cards
+    }
+    return mapCardsFromRows(tableRows)
+  }, [cards, filters, tableRows, visibleRows])
 
   return (
     <div className="space-y-4">
@@ -160,6 +165,20 @@ function sanitizeMessage(message: string) {
     return "Tu sesión en Supabase caducó. Estamos intentando renovarla automáticamente; si persiste, vuelve a iniciar sesión."
   }
   return trimmed
+}
+
+function hasMeaningfulCards(cards: ContactCards): boolean {
+  return (
+    cards.total > 0 ||
+    cards.completos > 0 ||
+    cards.incompletos > 0 ||
+    cards.activos > 0 ||
+    cards.leads > 0 ||
+    cards.propietarios > 0 ||
+    cards.topPropietarioTotal > 0 ||
+    Boolean(cards.topPropietarioNombre) ||
+    Boolean(cards.ultimo)
+  )
 }
 
 function isDefaultFilterSet(filters: ContactFilters): boolean {
