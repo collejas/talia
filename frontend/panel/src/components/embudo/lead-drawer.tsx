@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -29,7 +29,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  searchEmbudoContacts,
   type ContactSearchResult,
   type LeadActionResult,
   type LeadDeleteResult,
@@ -906,12 +905,69 @@ export function LeadDrawer({
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
   const [contactSearchError, setContactSearchError] = useState<string | null>(null);
-  const [contactSearchPending, startContactSearch] = useTransition();
+  const [contactSearchLoading, setContactSearchLoading] = useState(false);
   const contactSearchRequestRef = useRef(0);
+  const contactSearchAbortRef = useRef<AbortController | null>(null);
+  const deferredContactSearchQuery = useDeferredValue(contactSearchQuery);
   const [quotePending, startQuoteAction] = useTransition();
   const isBusy = pending || deletePending;
   const wasOpenRef = useRef(false);
   const lastDrawerRecordKeyRef = useRef<string | null>(null);
+
+  const runContactSearch = useCallback(async (term: string, requestId: number) => {
+    const trimmed = term.trim();
+    if (trimmed.length < 3) {
+      setContactSearchError("Escribe al menos 3 caracteres para buscar.");
+      setContactSearchResults([]);
+      setContactSearchLoading(false);
+      return;
+    }
+
+    contactSearchAbortRef.current?.abort();
+    const controller = new AbortController();
+    contactSearchAbortRef.current = controller;
+    contactSearchRequestRef.current = requestId;
+    setContactSearchError(null);
+    setContactSearchLoading(true);
+
+    try {
+      const response = await fetch(`/api/agenda/contacts/search?q=${encodeURIComponent(trimmed)}&limit=8`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        items?: ContactSearchResult[];
+        error?: string;
+      };
+      if (contactSearchRequestRef.current !== requestId || controller.signal.aborted) {
+        return;
+      }
+      if (!response.ok) {
+        setContactSearchResults([]);
+        setContactSearchError(body.error || "No se pudieron buscar contactos.");
+        return;
+      }
+      const results = Array.isArray(body.items) ? body.items : [];
+      setContactSearchResults(results);
+      setContactSearchError(results.length ? null : "No encontramos coincidencias.");
+    } catch {
+      if (contactSearchRequestRef.current !== requestId || controller.signal.aborted) {
+        return;
+      }
+      setContactSearchResults([]);
+      setContactSearchError("No se pudieron buscar contactos.");
+    } finally {
+      if (contactSearchRequestRef.current === requestId && !controller.signal.aborted) {
+        setContactSearchLoading(false);
+      }
+    }
+  }, []);
+
+  const handleContactSearch = useCallback(() => {
+    const term = contactSearchQuery.trim();
+    const requestId = contactSearchRequestRef.current + 1;
+    void runContactSearch(term, requestId);
+  }, [contactSearchQuery, runContactSearch]);
 
   const drawerRecordKey = isCreateMode
     ? `create:${currentStage?.id ?? "sin-etapa"}`
@@ -1052,10 +1108,14 @@ export function LeadDrawer({
 
   useEffect(() => {
     if (!open || !isCreateMode) {
+      contactSearchAbortRef.current?.abort();
+      contactSearchAbortRef.current = null;
       setSelectedContact(null);
       setContactSearchQuery("");
       setContactSearchResults([]);
       setContactSearchError(null);
+      setContactSearchLoading(false);
+      return;
     }
   }, [open, isCreateMode]);
 
@@ -1064,29 +1124,24 @@ export function LeadDrawer({
       return;
     }
 
-    const term = contactSearchQuery.trim();
+    const term = deferredContactSearchQuery.trim();
     if (term.length < 3) {
+      contactSearchAbortRef.current?.abort();
+      contactSearchAbortRef.current = null;
       contactSearchRequestRef.current += 1;
       setContactSearchResults([]);
       setContactSearchError(null);
+      setContactSearchLoading(false);
       return;
     }
 
     const requestId = contactSearchRequestRef.current + 1;
     const timeout = window.setTimeout(() => {
-      contactSearchRequestRef.current = requestId;
-      startContactSearch(async () => {
-        const results = await searchEmbudoContacts(term, 8);
-        if (contactSearchRequestRef.current !== requestId) {
-          return;
-        }
-        setContactSearchResults(results);
-        setContactSearchError(results.length ? null : "No encontramos coincidencias.");
-      });
+      void runContactSearch(term, requestId);
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [contactSearchQuery, isCreateMode, open, startContactSearch]);
+  }, [deferredContactSearchQuery, isCreateMode, open, runContactSearch]);
 
   useEffect(() => {
     if (selectedContact) {
@@ -1811,28 +1866,6 @@ export function LeadDrawer({
     }
   };
 
-  const runContactSearch = useCallback((term: string) => {
-    if (term.length < 3) {
-      setContactSearchError("Escribe al menos 3 caracteres para buscar.");
-      setContactSearchResults([]);
-      return;
-    }
-    setContactSearchError(null);
-    const requestId = contactSearchRequestRef.current + 1;
-    contactSearchRequestRef.current = requestId;
-    startContactSearch(async () => {
-      const results = await searchEmbudoContacts(term, 8);
-      if (contactSearchRequestRef.current !== requestId) {
-        return;
-      }
-      setContactSearchResults(results);
-      setContactSearchError(results.length ? null : "No encontramos coincidencias.");
-    });
-  }, [startContactSearch]);
-
-  const handleContactSearch = useCallback(() => {
-    runContactSearch(contactSearchQuery.trim());
-  }, [contactSearchQuery, runContactSearch]);
 
   const handleSelectExistingContact = (contact: ContactSearchResult) => {
     setSelectedContact(contact);
@@ -2756,10 +2789,10 @@ export function LeadDrawer({
                       <Button
                         type="button"
                         onClick={handleContactSearch}
-                        disabled={isBusy || contactSearchPending}
+                        disabled={isBusy || contactSearchLoading}
                         variant="secondary"
                       >
-                        {contactSearchPending ? "Buscando..." : "Buscar"}
+                        {contactSearchLoading ? "Buscando..." : "Buscar"}
                       </Button>
                     </div>
                     {contactSearchError ? (

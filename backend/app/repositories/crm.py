@@ -6965,23 +6965,24 @@ class CRMRepository:
         search_clause = _build_search_clause(
             [
                 "codigo_contacto",
+                "nombre",
                 "nombre_completo",
+                "apellido_paterno",
+                "apellido_materno",
                 "correo_principal",
                 "correo_institucional",
                 "correo_personal_3",
                 "telefono_principal_e164",
                 "telefono_movil_1_e164",
                 "telefono_movil_2_e164",
+                "telefono_secundario_e164",
                 "telefono_empresa_1_e164",
                 "telefono_empresa_2_e164",
-                "apellido_paterno",
                 "notas",
                 "area",
                 "puesto",
                 "rol_decision",
                 "company_name",
-                "correo",
-                "telefono",
             ],
             query,
         )
@@ -6996,7 +6997,7 @@ class CRMRepository:
             if search_clause.startswith("and("):
                 params["and"] = f"({search_clause[4:-1]})"
             else:
-                params["or"] = search_clause
+                params["or"] = f"({search_clause[3:-1]})"
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -7018,7 +7019,18 @@ class CRMRepository:
             rows.append(contact_row)
 
         account_search_clause = _build_search_clause(
-            ["nombre", "alias", "razon_social", "rfc", "codigo_cuenta", "necesidad_proposito", "correo", "telefono"],
+            [
+                "nombre",
+                "alias",
+                "razon_social",
+                "rfc",
+                "codigo_cuenta",
+                "necesidad_proposito",
+                "correo_principal",
+                "correo_secundario",
+                "telefono_principal_e164",
+                "telefono_secundario_e164",
+            ],
             query,
         )
         account_params = {
@@ -7030,7 +7042,7 @@ class CRMRepository:
             if account_search_clause.startswith("and("):
                 account_params["and"] = f"({account_search_clause[4:-1]})"
             else:
-                account_params["or"] = account_search_clause
+                account_params["or"] = f"({account_search_clause[3:-1]})"
         account_resp = await self._request("GET", "/rest/v1/cuentas", params=account_params)
         account_data = account_resp.json()
         account_ids = [

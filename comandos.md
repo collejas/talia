@@ -220,7 +220,7 @@ du -shL /var/www/talia/current/panel
   );
 
     select public.cleanup_test_phone_whatsapp(
-    '+5214441302811',
+    '+5214441306206',
     '39e32c05-bfc2-4794-8aab-225873f2bf19'::uuid
   );
 
