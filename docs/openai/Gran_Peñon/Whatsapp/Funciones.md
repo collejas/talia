@@ -135,7 +135,7 @@
 
 {
   "name": "send_information_email",
-  "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
+  "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar una cita.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -246,7 +246,7 @@
 
 {
   "name": "list_demo_slots",
-  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de demo dentro de WhatsApp.",
+  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de cita dentro de WhatsApp.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -284,7 +284,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma una demo en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
+  "description": "Confirma una cita en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -320,7 +320,7 @@
 
 {
   "name": "reschedule_demo",
-  "description": "Mueve una demo confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
+  "description": "Mueve una cita confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -356,7 +356,7 @@
 
 {
   "name": "cancel_demo",
-  "description": "Cancela una demo previamente confirmada.",
+  "description": "Cancela una cita previamente confirmada.",
   "strict": true,
   "parameters": {
     "type": "object",

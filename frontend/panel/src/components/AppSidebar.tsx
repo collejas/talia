@@ -146,7 +146,7 @@ const NAVIGATION: {
       children: [
         { title: "Extras", url: "/settings/account", icon: IconAdjustments, permission: "settings.manage" },
         { title: "Formato de correos", url: "/settings/email", icon: IconMail, permission: "settings.manage" },
-        { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell, permission: "settings.manage" },
+        { title: "Recordatorios de citas", url: "/settings/reminders", icon: IconBell, permission: "settings.manage" },
         { title: "Calificación IA", url: "/settings/scoring", icon: IconGauge, permission: "settings.manage" },
         {
           title: "Formato de cotización",

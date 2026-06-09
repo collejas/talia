@@ -87,7 +87,7 @@ function MetricsOverview({ metrics }: MetricsOverviewProps) {
       <Card>
         <CardHeader>
           <CardTitle>Total de citas</CardTitle>
-          <CardDescription>Incluye todas las demos registradas en agenda.</CardDescription>
+          <CardDescription>Incluye todas las citas registradas en agenda.</CardDescription>
         </CardHeader>
         <CardContent className="text-3xl font-semibold">{metrics.total}</CardContent>
       </Card>

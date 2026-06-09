@@ -497,7 +497,7 @@ function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow
     },
     {
       id: "demo",
-      header: () => <div className="w-full">Demo programada</div>,
+      header: () => <div className="w-full">Cita programada</div>,
       accessorFn: (row) => {
         const raw = row.raw as {
           metadata?: { stage_prep?: { demo?: { demo_scheduled_at?: string } } };
@@ -514,7 +514,7 @@ function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow
           </div>
         );
       },
-      meta: { label: "Demo programada" },
+      meta: { label: "Cita programada" },
     },
   ];
 

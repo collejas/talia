@@ -1,7 +1,7 @@
 export const MAPA_STAGE_ORDER = [
   { key: "captado", label: "Captado" },
   { key: "precalificado", label: "Precalificado" },
-  { key: "demo", label: "Demo agendada" },
+  { key: "demo", label: "Cita agendada" },
   { key: "negociacion", label: "Negociación" },
   { key: "ganado", label: "Cerrado (ganado)" },
   { key: "perdido", label: "Cerrado (perdido)" },

@@ -3163,7 +3163,7 @@ async def _generate_assistant_reply(
                         "type": "input_text",
                         "text": (
                             "Regla de agenda en prospección: nunca digas que no puedes agendar. "
-                            "Si el prospecto confirma fecha/hora o acepta demo, DEBES usar tools "
+                            "Si el prospecto confirma fecha/hora o acepta cita, DEBES usar tools "
                             "(list_demo_slots y/o schedule_demo) antes de responder. "
                             "Si falta algún dato requerido, pide solo ese dato faltante en una pregunta corta. "
                             "Orden obligatorio de captura antes de agendar: nombre completo, luego correo, luego empresa. "
@@ -3182,7 +3182,7 @@ async def _generate_assistant_reply(
                     {
                         "type": "input_text",
                         "text": (
-                            "Si ya existe demo confirmada en el contexto, no reinicies calificación ni agenda. "
+                            "Si ya existe cita confirmada en el contexto, no reinicies calificación ni agenda. "
                             "No vuelvas a pedir nombre/correo/empresa. "
                             "Solo confirma y responde dudas puntuales; "
                             "si el usuario quiere cambiar/cancelar, usa reschedule_demo o cancel_demo."

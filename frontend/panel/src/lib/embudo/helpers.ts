@@ -293,7 +293,7 @@ export function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, 
 
   return {
     id: stage.id,
-    nombre: stage.nombre,
+    nombre: stage.codigo === "demo" ? "Cita agendada" : stage.nombre,
     codigo: stage.codigo,
     categoria: stage.categoria,
     orden: typeof stage.orden === "number" ? stage.orden : Number.MAX_SAFE_INTEGER,

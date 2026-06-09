@@ -225,7 +225,7 @@ export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<Sc
     );
     return { ok: true, booking: response.booking };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "No se pudo agendar la demo.";
+    const message = error instanceof Error ? error.message : "No se pudo agendar la cita.";
     return { ok: false, error: message };
   }
 }

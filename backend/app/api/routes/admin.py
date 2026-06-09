@@ -797,7 +797,7 @@ PIPELINE_STAGE_SEED: tuple[dict[str, Any], ...] = (
     },
     {
         "codigo": "demo",
-        "nombre": "Demo agendada",
+        "nombre": "Cita agendada",
         "orden": 30,
         "probabilidad": 45.0,
         "categoria": "abierta",

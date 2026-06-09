@@ -51,7 +51,7 @@ export function ReminderSettingsForm({ initialSettings }: ReminderSettingsFormPr
         <div>
           <p className="text-sm font-medium">Recordatorios automáticos</p>
           <p className="text-muted-foreground text-sm">
-            Envía un correo previo a la demo con los datos confirmados.
+            Envía un correo previo a la cita con los datos confirmados.
           </p>
         </div>
         <Checkbox
@@ -67,7 +67,7 @@ export function ReminderSettingsForm({ initialSettings }: ReminderSettingsFormPr
           Anticipación del recordatorio
         </Label>
         <p className="text-muted-foreground text-sm">
-          Define cuántos minutos antes de la demo se enviará el recordatorio.
+          Define cuántos minutos antes de la cita se enviará el recordatorio.
         </p>
         <Input
           id="offset-input"

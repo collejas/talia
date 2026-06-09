@@ -791,12 +791,12 @@ export function EmbudoBoardClient({
     if (!scheduleContext) return;
 
     if (!scheduleDateTime.trim()) {
-      setScheduleError("Selecciona la fecha y hora de la demo.");
+      setScheduleError("Selecciona la fecha y hora de la cita.");
       return;
     }
 
     if (!scheduleFormat.trim()) {
-      setScheduleError("Selecciona la modalidad de la demo.");
+      setScheduleError("Selecciona la modalidad de la cita.");
       return;
     }
 
@@ -823,7 +823,7 @@ export function EmbudoBoardClient({
     });
 
     if (!bookingResult.ok) {
-      setScheduleError(bookingResult.error || "No se pudo agendar la demo.");
+      setScheduleError(bookingResult.error || "No se pudo agendar la cita.");
       setSchedulePending(false);
       setMovePending(false);
       return;
@@ -1098,12 +1098,12 @@ export function EmbudoBoardClient({
     if (!localValue) {
       return {
         ok: false as const,
-        error: "Completa la fecha de la demo en la tarjeta antes de avanzar.",
+        error: "Completa la fecha de la cita en la tarjeta antes de avanzar.",
       };
     }
     const isoValue = fromDateTimeLocalInput(localValue);
     if (!isoValue) {
-      return { ok: false as const, error: "La fecha de la demo no tiene un formato válido." };
+      return { ok: false as const, error: "La fecha de la cita no tiene un formato válido." };
     }
     const currentScheduledRaw = readDemoScheduledAt(selectedCard, targetStage.codigo, DEMO_STAGE_CODE);
     const currentScheduledIso = currentScheduledRaw?.includes("T")
@@ -1129,7 +1129,7 @@ export function EmbudoBoardClient({
           startAt: isoValue,
         });
         if (!bookingResult.ok) {
-          return { ok: false as const, error: bookingResult.error || "No se pudo agendar la demo." };
+          return { ok: false as const, error: bookingResult.error || "No se pudo agendar la cita." };
         }
         bookingId = bookingResult.booking.booking_id;
       }
@@ -1746,17 +1746,17 @@ export function EmbudoBoardClient({
       <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
         <SheetContent side="right" className="sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>Agendar demo</SheetTitle>
+            <SheetTitle>Agendar cita</SheetTitle>
             <SheetDescription>
               {scheduleContext
                 ? `Define la fecha y hora antes de mover “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}”.`
-                : "Define la fecha y hora de la demo."}
+                : "Define la fecha y hora de la cita."}
             </SheetDescription>
           </SheetHeader>
           <form className="flex flex-col gap-4 px-4 pb-6" onSubmit={handleScheduleSubmit}>
             <DateTimeCalendarPicker
               id="schedule-demo-datetime"
-              label="Fecha y hora de la demo *"
+              label="Fecha y hora de la cita *"
               value={scheduleDateTime}
               onChange={setScheduleDateTime}
               minValue={scheduleMinValue || undefined}
@@ -1795,7 +1795,7 @@ export function EmbudoBoardClient({
                 placeholder="https://..."
                 disabled={schedulePending}
               />
-              <p className="text-xs text-muted-foreground">Ingresa la sala virtual o dirección de la demo.</p>
+              <p className="text-xs text-muted-foreground">Ingresa la sala virtual o dirección de la cita.</p>
             </div>
             {scheduleError ? (
               <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -1807,7 +1807,7 @@ export function EmbudoBoardClient({
                 Cancelar
               </Button>
               <Button type="submit" disabled={schedulePending}>
-                Confirmar demo
+                Confirmar cita
               </Button>
             </SheetFooter>
           </form>

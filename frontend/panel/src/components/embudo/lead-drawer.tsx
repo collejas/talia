@@ -354,8 +354,8 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
     sections: [
       {
         key: "demo_planning",
-        title: "Preparación de la demo",
-        description: "Agenda y contexto necesarios para la demostración.",
+        title: "Preparación de la cita",
+        description: "Agenda y contexto necesarios para la cita.",
         order: 10,
         fields: [
           {
@@ -389,7 +389,7 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
           {
             key: "demo_objectives",
             type: "textarea",
-            label: "Objetivos de la demo",
+            label: "Objetivos de la cita",
           },
         ],
       },
@@ -3243,7 +3243,7 @@ export function LeadDrawer({
                                     }
                                   >
                                     <IconCalendarEvent className="size-4" />
-                                    Agendar demo
+                                    Agendar cita
                                   </Button>
                                 ) : null}
                                 {total ? (

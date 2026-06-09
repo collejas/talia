@@ -24,7 +24,7 @@ export default async function EmailSettingsPage() {
           </h1>
           <p className="max-w-2xl text-muted-foreground">
             Personaliza el mensaje que Tal-IA envía cuando el cliente prefiere
-            recibir información por correo en lugar de agendar una demo.
+            recibir información por correo en lugar de agendar una cita.
           </p>
         </div>
         <EmailTemplateSettingsForm initialSettings={settings} />

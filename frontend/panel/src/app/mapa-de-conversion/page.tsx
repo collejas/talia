@@ -35,7 +35,7 @@ type ColorMode = "sequential" | "channel";
 const STAGE_LABELS: Record<string, string> = {
   captado: "Captado",
   precalificado: "Precalificado",
-  demo: "Demo agendada",
+  demo: "Cita agendada",
   negociacion: "Negociación",
   cerrado_ganado: "Cerrado (ganado)",
   cerrado_perdido: "Cerrado (perdido)",

@@ -36715,7 +36715,7 @@ async def public_web_booking_create(
         or _clean_text((persona_data or {}).get("telefono_e164"))
         or "Cliente"
     )
-    opportunity_title = f"Demo agendada por cliente - {display_name}"
+    opportunity_title = f"Cita agendada por cliente - {display_name}"
     opportunity_metadata: dict[str, Any] = {
         "source": (payload.source or "").strip().lower() or "public_demo",
         "booking_session_id": payload.booking_session_id,
@@ -36735,7 +36735,7 @@ async def public_web_booking_create(
                 "contacto_principal_id": str(contact_uuid),
                 "etapa_id": str(stage_id),
                 "titulo": opportunity_title,
-                "descripcion": "Demo agendada desde página pública.",
+                "descripcion": "Cita agendada desde página pública.",
                 "moneda": "MXN",
                 "estado": "abierta",
                 "metadata": opportunity_metadata,

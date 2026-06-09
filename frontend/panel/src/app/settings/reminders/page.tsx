@@ -5,7 +5,7 @@ import { ReminderSettingsForm } from "@/components/settings/reminder-settings-fo
 import { fetchReminderSettings } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Recordatorios de demos · Settings",
+  title: "Recordatorios de citas · Settings",
 };
 
 export default async function ReminderSettingsPage() {
@@ -15,9 +15,9 @@ export default async function ReminderSettingsPage() {
     <AppViewLayout title="Settings">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Recordatorios de demos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Recordatorios de citas</h1>
           <p className="max-w-2xl text-muted-foreground">
-            Define si Tal-IA debe enviar recordatorios automáticos antes de cada demo y con cuánta
+            Define si Tal-IA debe enviar recordatorios automáticos antes de cada cita y con cuánta
             anticipación lo hará.
           </p>
         </div>

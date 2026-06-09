@@ -82,14 +82,14 @@ INFORMATION_EMAIL_TEMPLATE: dict[str, Any] = {
     "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
     "highlights": [
         "Automatiza la atención 24/7 en webchat, WhatsApp y voz con un solo asistente.",
-        "Califica prospectos y agenda demos o recordatorios sin cargar al equipo comercial.",
+        "Califica prospectos y agenda citas o recordatorios sin cargar al equipo comercial.",
         "Centraliza conversaciones, métricas y tareas en el panel de Tal-IA para dar seguimiento inteligente.",
     ],
     "resources": [
         {"label": "Sitio de Tal-IA", "url": "https://talia.mx/"},
         {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
     ],
-    "closing": "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+    "closing": "Cuando quieras, puedo ayudarte a agendar una cita personalizada o resolver cualquier duda por este medio.",
     "use_summary": True,
     "use_highlights": True,
     "use_resources": True,
@@ -1033,18 +1033,18 @@ def _missing_basic_contact_fields(persona: dict[str, Any] | None) -> list[str]:
 def _build_persona_required_guidance(missing_fields: list[str]) -> str:
     if not missing_fields:
         return (
-            "Antes de agendar la demo falta un dato del contacto. "
+            "Antes de agendar la cita falta un dato del contacto. "
             "Haz una sola pregunta corta y vuelve a ejecutar schedule_demo."
         )
     first = missing_fields[0]
     question_map = {
         "full_name": "¿Me compartes tu nombre completo para la invitación?",
-        "email": "¿A qué correo te envío la invitación de la demo?",
+        "email": "¿A qué correo te envío la invitación de la cita?",
         "company_name": "¿Cuál es el nombre de tu empresa?",
     }
     question_text = question_map.get(first, "¿Me compartes ese dato para continuar?")
     return (
-        "Antes de agendar la demo en prospección faltan datos básicos del contacto. "
+        "Antes de agendar la cita en prospección faltan datos básicos del contacto. "
         f"Campo faltante: {first}. "
         f"Haz una sola pregunta exacta al prospecto: {question_text} "
         "Cuando responda, guarda el dato y vuelve a ejecutar schedule_demo con el mismo horario solicitado."

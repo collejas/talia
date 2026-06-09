@@ -5,7 +5,7 @@ WITH stage_defs AS (
         VALUES
             ('captado', 'Captado', 10::smallint, 'abierta', 10.0, 'slate'),
             ('precalificado', 'Precalificado', 20::smallint, 'abierta', 25.0, 'sky'),
-            ('demo', 'Demo agendada', 30::smallint, 'abierta', 45.0, 'violet'),
+            ('demo', 'Cita agendada', 30::smallint, 'abierta', 45.0, 'violet'),
             ('propuesta', 'Propuesta', 40::smallint, 'abierta', 65.0, 'amber'),
             ('negociacion', 'Negociación', 50::smallint, 'abierta', 80.0, 'orange'),
             ('cerrado_ganado', 'Cerrado · Ganado', 60::smallint, 'ganada', 100.0, 'emerald'),

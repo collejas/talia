@@ -75,7 +75,7 @@ const DEFAULT_SETTINGS: EmailTemplateSettings = {
     { label: "Geoactiv · Casos y soluciones", url: "https://geoactiv.ai/" },
   ],
   closing:
-    "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+    "Cuando quieras, puedo ayudarte a agendar una cita personalizada o resolver cualquier duda por este medio.",
   useSummary: true,
   useHighlights: true,
   useResources: true,
