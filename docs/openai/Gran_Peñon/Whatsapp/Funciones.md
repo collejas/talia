@@ -387,7 +387,7 @@
 
 {
   "name": "fetch_catalog_item_details",
-  "description": "Retorna el registro completo con metadata de un prototipo o fraccionamiento, priorizando lookup SQL exacto y aplicando fallback semántico solo si no hay match claro.",
+  "description": "Retorna el registro completo con metadata de un lote, terreno o fraccionamiento, priorizando lookup SQL exacto y aplicando fallback semántico solo si no hay match claro.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -402,7 +402,7 @@
       },
       "query": {
         "type": "string",
-        "description": "Nombre del prototipo o fraccionamiento que desean conocer."
+        "description": "Nombre del lote, terreno o fraccionamiento que desean conocer."
       },
       "detail_level": {
         "type": "string",
@@ -432,7 +432,7 @@
 
 {
   "name": "list_catalog_fraccionamientos",
-  "description": "Devuelve el listado de fraccionamientos activos con zona/segmento y algunos prototipos representativos.",
+  "description": "Devuelve el listado de fraccionamientos activos con zona/segmento y algunos lotes representativos.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -464,7 +464,7 @@
 
 {
   "name": "list_catalog_modelos",
-  "description": "Entrega la jerarquía completa de líneas, familias y modelos, junto con los tipos de propiedad disponibles.",
+  "description": "Entrega la jerarquía disponible del catálogo y los tipos de propiedad, priorizando lotes y terrenos.",
   "strict": false,
   "parameters": {
     "type": "object",
