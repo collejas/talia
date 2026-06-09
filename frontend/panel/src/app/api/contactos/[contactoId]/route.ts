@@ -26,6 +26,38 @@ function cleanObject(input: UnknownRecord, allowedKeys: readonly string[]): Unkn
   return out
 }
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+}
+
+async function resolveContactDeleteTarget(contactoId: string): Promise<string> {
+  const trimmed = contactoId.trim()
+  if (!trimmed || isUuidLike(trimmed)) return trimmed
+
+  const response = await callCrmApi("/crm/contacts/list", {
+    method: "GET",
+    searchParams: {
+      limit: "200",
+      search: trimmed,
+    },
+    withUserToken: true,
+  })
+
+  if (!response.ok || !Array.isArray(response.data)) return trimmed
+
+  for (const row of response.data as Array<Record<string, unknown>>) {
+    if (!row || typeof row !== "object") continue
+    const codigo = typeof row.codigo_contacto === "string" ? row.codigo_contacto.trim() : ""
+    const rowContactoId = typeof row.contacto_id === "string" ? row.contacto_id.trim() : ""
+    const rowId = typeof row.id === "string" ? row.id.trim() : ""
+    if (codigo === trimmed || rowContactoId === trimmed || rowId === trimmed) {
+      return rowContactoId || rowId || trimmed
+    }
+  }
+
+  return trimmed
+}
+
 const CONTACT_UPDATE_KEYS = [
   "cuenta_id",
   "nombre_nombres",
@@ -152,7 +184,9 @@ export async function DELETE(
     return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
   }
 
-  const response = await callCrmApi(`/crm/contacts/${contactoId}`, {
+  const resolvedContactId = await resolveContactDeleteTarget(contactoId)
+
+  const response = await callCrmApi(`/crm/contacts/${resolvedContactId}`, {
     method: "DELETE",
     withUserToken: true,
   })

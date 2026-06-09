@@ -510,11 +510,13 @@ export function ContactsDataTable({
   data,
   onFiltersChange,
   onVisibleRowsChange,
+  onContactsDeleted,
   loading = false,
 }: {
   data: ContactTableRow[];
   onFiltersChange?: (filters: ContactFilters) => void;
   onVisibleRowsChange?: (rows: ContactTableRow[]) => void;
+  onContactsDeleted?: (keys: string[]) => void;
   loading?: boolean;
 }) {
   const router = useRouter();
@@ -762,6 +764,8 @@ export function ContactsDataTable({
   const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
   const activePersonaId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
+  const activeContactDeleteKey =
+    extractString(activeRaw, ["codigo_contacto"]) ?? activePersonaId;
   const activePropietarioId = getContactOwnerId(activeRaw);
 
   const openEdit = (row: TableRow) => {
@@ -937,22 +941,41 @@ export function ContactsDataTable({
   };
 
   const handleDelete = async () => {
-    if (!activePersonaId) {
+    const deleteKey = activeContactDeleteKey?.trim();
+    if (!deleteKey) {
       setError("No se encontró la persona a eliminar.");
       return;
     }
     await runAndReload(async () => {
-      const response = await fetch(`/api/contactos/${activePersonaId}`, {
+      const response = await fetch(`/api/contactos/${encodeURIComponent(deleteKey)}`, {
         method: "DELETE",
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      setDeleteOpen(false);
+      setTableRows((current) =>
+        current.filter((row) => {
+          const rowRaw = row.raw as Record<string, unknown> | undefined;
+          const rowKeys = new Set([
+            extractString(rowRaw, ["codigo_contacto"]),
+            extractString(rowRaw, ["contacto_id"]),
+            extractString(rowRaw, ["id"]),
+          ].filter((value): value is string => Boolean(value)));
+          return !rowKeys.has(deleteKey);
+        }),
+      );
+      onContactsDeleted?.([deleteKey]);
     });
   };
 
   const handleOpenBulkDelete = (selectedRows: TableRow[]) => {
     const ids = selectedRows
-      .map((row) => extractString(row.raw as Record<string, unknown> | undefined, ["contacto_id"]) ?? extractString(row.raw as Record<string, unknown> | undefined, ["id"]))
+      .map(
+        (row) =>
+          extractString(row.raw as Record<string, unknown> | undefined, ["codigo_contacto"]) ??
+          extractString(row.raw as Record<string, unknown> | undefined, ["contacto_id"]) ??
+          extractString(row.raw as Record<string, unknown> | undefined, ["id"]),
+      )
       .filter((value): value is string => Boolean(value));
     if (!ids.length) return;
     setBulkDeleteIds(ids);
@@ -975,6 +998,18 @@ export function ContactsDataTable({
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      setTableRows((current) =>
+        current.filter((row) => {
+          const rowRaw = row.raw as Record<string, unknown> | undefined;
+          const rowKeys = new Set([
+            extractString(rowRaw, ["codigo_contacto"]),
+            extractString(rowRaw, ["contacto_id"]),
+            extractString(rowRaw, ["id"]),
+          ].filter((value): value is string => Boolean(value)));
+          return !bulkDeleteIds.some((deleteKey) => rowKeys.has(deleteKey));
+        }),
+      );
+      onContactsDeleted?.(bulkDeleteIds);
     });
     setBulkDeleteIds([]);
   };

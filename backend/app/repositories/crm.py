@@ -9111,6 +9111,37 @@ class CRMRepository:
             return None
         return await self.get_persona_by_id(persona_id=resolved_persona_id)
 
+    async def get_persona_by_codigo_contacto(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo_contacto: str,
+    ) -> dict[str, Any] | None:
+        code = codigo_contacto.strip()
+        if not code:
+            return None
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "codigo_contacto": f"eq.{code}",
+            "limit": "1",
+            "select": PERSONA_SELECT_FIELDS,
+        }
+        resp = await self._request("GET", "/rest/v1/personas", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar persona por código: {row!r}")
+        org_value = row.get("organizacion_id")
+        if not org_value:
+            return row
+        try:
+            org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+        except ValueError:
+            return row
+        return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+
     async def get_persona_by_phone_e164(
         self,
         *,

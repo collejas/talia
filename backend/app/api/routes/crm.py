@@ -12412,11 +12412,11 @@ class CRMCatalogDeleteResponse(BaseModel):
 
 
 class CRMBulkDeleteRequest(BaseModel):
-    ids: list[UUID] = Field(..., min_length=1, max_length=500)
+    ids: list[str] = Field(..., min_length=1, max_length=500)
 
 
 class CRMBulkDeleteError(BaseModel):
-    id: UUID
+    id: str
     detail: str
 
 
@@ -12424,7 +12424,7 @@ class CRMBulkDeleteResponse(BaseModel):
     requested: int
     deleted: int
     failed: int
-    deleted_ids: list[UUID] = Field(default_factory=list)
+    deleted_ids: list[str] = Field(default_factory=list)
     errors: list[CRMBulkDeleteError] = Field(default_factory=list)
 
 
@@ -21657,13 +21657,28 @@ async def delete_persona_legacy(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("contacts.write")),
-    contacto_id: UUID,
+    contacto_id: str,
 ) -> Response:
     try:
-        persona_row = await repo.get_persona(
-            organizacion_id=organizacion_id,
-            persona_id=contacto_id,
-        )
+        contacto_key = contacto_id.strip()
+        if not contacto_key:
+            raise HTTPException(status_code=400, detail="contacto_id_required")
+        persona_row: dict[str, Any] | None
+        try:
+            persona_row = await repo.get_persona(
+                organizacion_id=organizacion_id,
+                persona_id=UUID(contacto_key),
+            )
+        except ValueError:
+            persona_row = await repo.get_persona_by_codigo_contacto(
+                organizacion_id=organizacion_id,
+                codigo_contacto=contacto_key,
+            )
+        if persona_row is None and contacto_key:
+            persona_row = await repo.get_persona_by_codigo_contacto(
+                organizacion_id=organizacion_id,
+                codigo_contacto=contacto_key,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not persona_row:
@@ -21675,7 +21690,7 @@ async def delete_persona_legacy(
     try:
         await repo.delete_persona(
             organizacion_id=organizacion_id,
-            persona_id=contacto_id,
+            persona_id=_safe_uuid(persona_row.get("id")) or UUID(contacto_key),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21732,31 +21747,50 @@ async def bulk_delete_contacts(
     can_delete_any = _can_delete_any_contact_or_account(permission_context)
     current_user_id = _safe_uuid(permission_context.get("usuario_id"))
 
-    deleted_ids: list[UUID] = []
+    deleted_ids: list[str] = []
     errors: list[CRMBulkDeleteError] = []
 
     for contact_id in payload.ids:
+        contacto_key = contact_id.strip()
+        if not contacto_key:
+            errors.append(CRMBulkDeleteError(id=contact_id, detail="contacto_id_required"))
+            continue
         try:
-            persona_row = await repo.get_persona(
-                organizacion_id=organizacion_id,
-                persona_id=contact_id,
-            )
+            persona_row: dict[str, Any] | None
+            try:
+                persona_row = await repo.get_persona(
+                    organizacion_id=organizacion_id,
+                    persona_id=UUID(contacto_key),
+                )
+            except ValueError:
+                persona_row = await repo.get_persona_by_codigo_contacto(
+                    organizacion_id=organizacion_id,
+                    codigo_contacto=contacto_key,
+                )
+            if persona_row is None:
+                persona_row = await repo.get_persona_by_codigo_contacto(
+                    organizacion_id=organizacion_id,
+                    codigo_contacto=contacto_key,
+                )
             if not persona_row:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="contacto_no_encontrado")
             if not can_delete_any:
                 owner_user_id = _safe_uuid(persona_row.get("propietario_usuario_id"))
                 if not current_user_id or not owner_user_id or current_user_id != owner_user_id:
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
+            delete_persona_id = _safe_uuid(persona_row.get("id"))
+            if not delete_persona_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="contacto_no_encontrado")
             await repo.delete_persona(
                 organizacion_id=organizacion_id,
-                persona_id=contact_id,
+                persona_id=delete_persona_id,
             )
         except CRMRepositoryError as exc:
-            errors.append(CRMBulkDeleteError(id=contact_id, detail=str(exc)))
+            errors.append(CRMBulkDeleteError(id=contacto_key, detail=str(exc)))
         except HTTPException as exc:
-            errors.append(CRMBulkDeleteError(id=contact_id, detail=str(exc.detail)))
+            errors.append(CRMBulkDeleteError(id=contacto_key, detail=str(exc.detail)))
         else:
-            deleted_ids.append(contact_id)
+            deleted_ids.append(contacto_key)
 
     return CRMBulkDeleteResponse(
         requested=len(payload.ids),

@@ -61,6 +61,27 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
     setFilters((prev) => (areFiltersEqual(prev, nextFilters) ? prev : nextFilters))
   }, [])
 
+  const handleContactsDeleted = React.useCallback((keys: string[]) => {
+    const normalizedKeys = new Set(keys.map((key) => key.trim()).filter(Boolean))
+    if (!normalizedKeys.size) return
+    const matchesDeleted = (row: ContactTableRow) => {
+      const raw = row.raw as Record<string, unknown> | undefined
+      const rowKeys = [
+        typeof raw?.codigo_contacto === "string" ? raw.codigo_contacto.trim() : "",
+        typeof raw?.contacto_id === "string" ? raw.contacto_id.trim() : "",
+        typeof raw?.id === "string" ? raw.id.trim() : "",
+      ].filter(Boolean)
+      return rowKeys.some((key) => normalizedKeys.has(key))
+    }
+
+    setTableRows((current) => current.filter((row) => !matchesDeleted(row)))
+    setVisibleRows((current) => current.filter((row) => !matchesDeleted(row)))
+    setCards((current) => {
+      const nextRows = tableRows.filter((row) => !matchesDeleted(row))
+      return isDefaultFilterSet(filters) ? mapCardsFromRows(nextRows) : current
+    })
+  }, [filters, tableRows])
+
   React.useEffect(() => {
     const controller = new AbortController()
     let alive = true
@@ -150,6 +171,7 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
         data={tableRows}
         onFiltersChange={handleFiltersChange}
         onVisibleRowsChange={setVisibleRows}
+        onContactsDeleted={handleContactsDeleted}
         loading={loadingTable}
       />
     </div>
