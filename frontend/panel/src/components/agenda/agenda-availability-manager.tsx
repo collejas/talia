@@ -186,6 +186,39 @@ export function AgendaAvailabilityManager() {
     }
     return Array.from(grouped.entries())
   }, [previewSlots])
+  const patternsByWeekday = React.useMemo(() => {
+    const grouped = new Map<number, PatternItem[]>()
+    for (const item of patterns) {
+      const current = grouped.get(item.weekday) ?? []
+      current.push(item)
+      grouped.set(item.weekday, current)
+    }
+    return WEEKDAY_OPTIONS.map((day) => {
+      const weekday = Number(day.value)
+      const items = (grouped.get(weekday) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time))
+      return {
+        weekday,
+        label: day.label,
+        items,
+        isOpen: items.some((item) => item.is_active),
+      }
+    })
+  }, [patterns])
+  const weeklySummary = React.useMemo(() => {
+    const openDays = patternsByWeekday
+      .filter((day) => day.isOpen)
+      .map((day) => {
+        const ranges = day.items
+          .filter((item) => item.is_active)
+          .map((item) => `${item.start_time.slice(0, 5)}-${item.end_time.slice(0, 5)}`)
+        return `${day.label.toLowerCase()} ${ranges.join(", ")}`
+      })
+    const closedDays = patternsByWeekday.filter((day) => !day.isOpen).map((day) => day.label.toLowerCase())
+    return {
+      openText: openDays.length ? openDays.join(" · ") : "Sin horarios recurrentes configurados.",
+      closedText: closedDays.length ? closedDays.join(", ") : "Ninguno.",
+    }
+  }, [patternsByWeekday])
   const weeklyPreviewDays = React.useMemo(() => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromDate)
     if (!match) return []
@@ -325,6 +358,18 @@ export function AgendaAvailabilityManager() {
       setPreviewLoading(false)
     }
   }, [resourceId, fromDate, toDate, selectedResource?.timezone])
+
+  const openPatternEditorForWeekday = React.useCallback((weekday: number) => {
+    setPatternForm((current) => ({
+      ...current,
+      weekday: String(weekday),
+    }))
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("pattern-editor")?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    }
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -883,6 +928,54 @@ export function AgendaAvailabilityManager() {
           </CardContent>
         </Card>
       ) : null}
+      <Card className="border-dashed bg-muted/20">
+        <CardHeader>
+          <CardTitle>Cómo llenar la disponibilidad</CardTitle>
+          <CardDescription>
+            Primero define cuándo sí atiendes. Después agrega cierres temporales si un día o rango no estará disponible.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-border/70 bg-background p-3">
+            <p className="text-sm font-medium">1. Horarios recurrentes</p>
+            <p className="text-sm text-muted-foreground">
+              Configura los días y horas normales de atención. Un bloque = un horario disponible.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-background p-3">
+            <p className="text-sm font-medium">2. Cierres temporales</p>
+            <p className="text-sm text-muted-foreground">
+              Usa bloqueos para vacaciones, reuniones, comida o cualquier día que no atiendes.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-background p-3">
+            <p className="text-sm font-medium">3. Revisa el resumen</p>
+            <p className="text-sm text-muted-foreground">
+              La vista te muestra en palabras simples qué días están abiertos y cuáles cerrados.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumen humano del horario</CardTitle>
+          <CardDescription>
+            Esto es lo que entiende el calendario: qué días están abiertos y cuáles siguen cerrados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="rounded-lg border border-border/70 bg-background p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Abierto</p>
+            <p className="text-sm">{weeklySummary.openText}</p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-background p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Cerrado</p>
+            <p className="text-sm">{weeklySummary.closedText}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
@@ -1068,16 +1161,87 @@ export function AgendaAvailabilityManager() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Horario semanal actual</CardTitle>
+          <CardDescription>
+            Aquí ves, por día, si está abierto o cerrado. Si un día no aparece con horario, entonces está cerrado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {patternsByWeekday.map((day) => (
+            <div key={day.weekday} className="rounded-lg border border-border/70 bg-background p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{day.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {day.isOpen ? "Abierto" : "Cerrado"} {day.items.filter((item) => item.is_active).length ? "con horarios activos" : "sin horarios activos"}
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${
+                    day.isOpen
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {day.isOpen ? "Abierto" : "Cerrado"}
+                </span>
+              </div>
+              <div className="mt-3 space-y-1">
+                {day.items.length ? (
+                  day.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center justify-between rounded-md border px-2 py-1 text-xs ${
+                        item.is_active ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/70 bg-muted/30"
+                      }`}
+                    >
+                      <span>
+                        {item.start_time.slice(0, 5)} - {item.end_time.slice(0, 5)}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {item.capacity} cupo{item.capacity === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">No hay horarios recurrentes para este día.</p>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => openPatternEditorForWeekday(day.weekday)} disabled={!canManage}>
+                  Agregar horario
+                </Button>
+                {day.items.length ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openPatternEditorForWeekday(day.weekday)}
+                    disabled={!canManage}
+                  >
+                    Editar día
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{form.id ? "Editar excepción" : "Crear excepción"}</CardTitle>
-            <CardDescription>Alta rápida de bloques u horarios extra.</CardDescription>
+            <CardTitle>{form.id ? "Editar bloqueo temporal" : "Bloqueos temporales"}</CardTitle>
+            <CardDescription>
+              Úsalo para cerrar vacaciones, reuniones, comidas o abrir un horario especial fuera de lo normal.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Tipo</Label>
+                <Label>Qué quieres registrar</Label>
                 <Select
                   value={form.kind}
                   onValueChange={(value: "block" | "extra") =>
@@ -1088,13 +1252,13 @@ export function AgendaAvailabilityManager() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="block">Bloqueo</SelectItem>
-                    <SelectItem value="extra">Horario extra</SelectItem>
+                    <SelectItem value="block">Cerrar horario</SelectItem>
+                    <SelectItem value="extra">Abrir horario extra</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="x-capacity">Capacidad (opcional)</Label>
+                <Label htmlFor="x-capacity">Capacidad del bloque (opcional)</Label>
                 <Input
                   id="x-capacity"
                   type="number"
@@ -1106,7 +1270,7 @@ export function AgendaAvailabilityManager() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="x-start">Inicio</Label>
+                <Label htmlFor="x-start">Fecha y hora de inicio</Label>
                 <Input
                   id="x-start"
                   type="datetime-local"
@@ -1137,7 +1301,7 @@ export function AgendaAvailabilityManager() {
 
             <div className="flex gap-2">
               <Button type="button" onClick={saveException} disabled={!canManage || savingException || !resourceId}>
-                {savingException ? "Guardando..." : form.id ? "Guardar cambios" : "Crear excepción"}
+                {savingException ? "Guardando..." : form.id ? "Guardar bloqueo" : "Guardar bloqueo"}
               </Button>
               <Button type="button" variant="ghost" onClick={resetForm}>
                 Limpiar
@@ -1148,18 +1312,18 @@ export function AgendaAvailabilityManager() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Excepciones ({exceptions.length})</CardTitle>
-            <CardDescription>Selecciona una para editarla o eliminarla.</CardDescription>
+            <CardTitle>Bloqueos y horarios extra ({exceptions.length})</CardTitle>
+            <CardDescription>Estos son los cierres o aperturas especiales que afectan el horario normal.</CardDescription>
           </CardHeader>
           <CardContent>
             {!exceptions.length ? (
-              <p className="text-sm text-muted-foreground">No hay registros para este filtro.</p>
+              <p className="text-sm text-muted-foreground">No hay bloqueos ni horarios especiales para este filtro.</p>
             ) : (
               <div className="max-h-[34rem] space-y-2 overflow-auto pr-1">
                 {exceptions.map((item) => (
                   <div key={item.id} className="rounded-md border border-border/70 p-3">
                     <p className="text-sm font-medium">
-                      {item.kind === "block" ? "Bloqueo" : "Horario extra"}
+                      {item.kind === "block" ? "Cierre temporal" : "Horario extra"}
                     </p>
                     <p className="text-muted-foreground text-xs">{formatRange(item.start_at, item.end_at)}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
@@ -1185,13 +1349,15 @@ export function AgendaAvailabilityManager() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{patternForm.id ? "Editar patrón semanal" : "Crear patrón semanal"}</CardTitle>
-            <CardDescription>Define disponibilidad recurrente por día de semana.</CardDescription>
+            <CardTitle id="pattern-editor">{patternForm.id ? "Editar horario recurrente" : "Agregar horario recurrente"}</CardTitle>
+            <CardDescription>
+              Un horario recurrente define un bloque donde sí atiendes. Si un día tiene dos bloques, agrega dos horarios.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Día</Label>
+                <Label>Día de atención</Label>
                 <Select
                   value={patternForm.weekday}
                   onValueChange={(value) =>
@@ -1211,7 +1377,7 @@ export function AgendaAvailabilityManager() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Capacidad</Label>
+                <Label>Capacidad de este horario</Label>
                 <Input
                   type="number"
                   min={1}
@@ -1225,7 +1391,7 @@ export function AgendaAvailabilityManager() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Hora inicio</Label>
+                <Label>Hora de inicio</Label>
                 <Input
                   type="time"
                   value={patternForm.start_time}
@@ -1235,7 +1401,7 @@ export function AgendaAvailabilityManager() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Hora fin</Label>
+                <Label>Hora de fin</Label>
                 <Input
                   type="time"
                   value={patternForm.end_time}
@@ -1245,62 +1411,66 @@ export function AgendaAvailabilityManager() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Vigencia inicio (opcional)</Label>
-                <Input
-                  type="date"
-                  value={patternForm.start_date}
-                  onChange={(event) =>
-                    setPatternForm((current) => ({ ...current, start_date: event.target.value }))
-                  }
-                />
+            <details className="rounded-lg border border-border/70 bg-muted/20 p-3">
+              <summary className="cursor-pointer text-sm font-medium">Opciones avanzadas</summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Vigencia inicio</Label>
+                  <Input
+                    type="date"
+                    value={patternForm.start_date}
+                    onChange={(event) =>
+                      setPatternForm((current) => ({ ...current, start_date: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vigencia fin</Label>
+                  <Input
+                    type="date"
+                    value={patternForm.end_date}
+                    onChange={(event) =>
+                      setPatternForm((current) => ({ ...current, end_date: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Prioridad de regla</Label>
+                  <Input
+                    type="number"
+                    min={-100}
+                    max={100}
+                    value={patternForm.priority}
+                    onChange={(event) =>
+                      setPatternForm((current) => ({ ...current, priority: event.target.value }))
+                    }
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Vigencia fin (opcional)</Label>
-                <Input
-                  type="date"
-                  value={patternForm.end_date}
-                  onChange={(event) =>
-                    setPatternForm((current) => ({ ...current, end_date: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Input
-                  type="number"
-                  min={-100}
-                  max={100}
-                  value={patternForm.priority}
-                  onChange={(event) =>
-                    setPatternForm((current) => ({ ...current, priority: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Estatus</Label>
-                <Select
-                  value={patternForm.is_active ? "active" : "inactive"}
-                  onValueChange={(value) =>
-                    setPatternForm((current) => ({ ...current, is_active: value === "active" }))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Activo</SelectItem>
-                    <SelectItem value="inactive">Inactivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Usa estas opciones solo si necesitas una vigencia especial o resolver solapes entre reglas.
+              </p>
+            </details>
+            <div className="space-y-2">
+              <Label>Estatus del horario</Label>
+              <Select
+                value={patternForm.is_active ? "active" : "inactive"}
+                onValueChange={(value) =>
+                  setPatternForm((current) => ({ ...current, is_active: value === "active" }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Activo</SelectItem>
+                  <SelectItem value="inactive">Inactivo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2">
               <Button type="button" onClick={savePattern} disabled={!canManage || savingPattern || !resourceId}>
-                {savingPattern ? "Guardando..." : patternForm.id ? "Guardar cambios" : "Crear patrón"}
+                {savingPattern ? "Guardando..." : patternForm.id ? "Guardar horario" : "Guardar horario"}
               </Button>
               <Button type="button" variant="ghost" onClick={resetPatternForm}>
                 Limpiar
