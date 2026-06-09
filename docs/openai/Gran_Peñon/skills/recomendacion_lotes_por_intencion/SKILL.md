@@ -1,5 +1,5 @@
 ---
-name: recomendacion_lotes_por_intencion
+name: recomendacion-lotes-por-intencion
 description: Usa esta skill cuando el prospecto pida opciones, comparación o recomendación de lotes dentro de Gran Peñón.
 ---
 

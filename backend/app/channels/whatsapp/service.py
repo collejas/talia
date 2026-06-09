@@ -233,6 +233,7 @@ class AssistantReply:
     text: str | None
     openai_conversation_id: str | None
     response_id: str | None
+    tools_called: list[str] | None = None
     debug_timings: dict[str, float] | None = None
 
 
@@ -2175,6 +2176,7 @@ async def handle_incoming_message(
             text=DEFAULT_FALLBACK,
             openai_conversation_id=openai_conversation_id,
             response_id=previous_response_id,
+            tools_called=[],
         )
 
     if not assistant_reply.text:
@@ -2184,9 +2186,14 @@ async def handle_incoming_message(
             conversation_id=conversation_id,
         )
         assistant_reply = AssistantReply(
-            text=DEFAULT_FALLBACK,
+            text=(
+                "Ya te compartí el PDF de bienvenida. ¿Me compartes tu nombre y apellido, por favor?"
+                if welcome_document_sent_by_tool
+                else DEFAULT_FALLBACK
+            ),
             openai_conversation_id=assistant_reply.openai_conversation_id or openai_conversation_id,
             response_id=assistant_reply.response_id or previous_response_id,
+            tools_called=assistant_reply.tools_called,
         )
 
     final_reply_text = assistant_reply.text
@@ -3262,7 +3269,9 @@ async def _generate_assistant_reply(
     final_text = _compact_whatsapp_reply(reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
     final_response_id = result.response_id
     final_conversation_id = result.conversation_id
-    welcome_document_sent_by_tool = bool(result.side_effects.get("welcome_document_sent"))
+    welcome_document_sent_by_tool = bool(result.side_effects.get("welcome_document_sent")) or (
+        "send_information_package" in result.tools_called
+    )
 
     quality_eval_started = time.perf_counter()
     quality_ok, quality_reason = evaluate_reply_quality(final_text)
@@ -3377,6 +3386,7 @@ async def _generate_assistant_reply(
         text=final_text.strip() if final_text else None,
         openai_conversation_id=final_conversation_id,
         response_id=final_response_id,
+        tools_called=result.tools_called,
         debug_timings=debug_timings,
     )
 

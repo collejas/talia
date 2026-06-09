@@ -1,5 +1,5 @@
 ---
-name: manejo_objeciones_inmobiliarias
+name: manejo-objeciones-inmobiliarias
 description: Usa esta skill cuando el prospecto tenga dudas, objeciones o resistencia para avanzar en la compra o visita de un lote en Gran Peñón.
 ---
 

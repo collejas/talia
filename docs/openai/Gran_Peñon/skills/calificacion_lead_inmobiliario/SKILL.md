@@ -1,5 +1,5 @@
 ---
-name: calificacion_lead_inmobiliario
+name: calificacion-lead-inmobiliario
 description: Usa esta skill para estimar si un prospecto de Gran Peñón está frío, tibio o caliente según sus mensajes y avance comercial.
 ---
 

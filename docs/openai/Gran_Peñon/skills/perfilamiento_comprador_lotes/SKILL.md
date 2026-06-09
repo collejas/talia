@@ -1,5 +1,5 @@
 ---
-name: perfilamiento_comprador_lotes
+name: perfilamiento-comprador-lotes
 description: Usa esta skill cuando necesites identificar el tipo de comprador, intención, urgencia, presupuesto o etapa de compra de un prospecto interesado en lotes de Gran Peñón.
 ---
 

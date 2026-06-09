@@ -1,5 +1,5 @@
 ---
-name: asesor_ventas_terrenos_gran_penon
+name: asesor-ventas-terrenos-gran-penon
 description: Usa esta skill cuando el prospecto quiera comprar, comparar, cotizar o visitar lotes de terreno en Gran Peñón.
 ---
 

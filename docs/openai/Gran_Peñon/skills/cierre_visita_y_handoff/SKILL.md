@@ -1,5 +1,5 @@
 ---
-name: cierre_visita_y_handoff
+name: cierre-visita-y-handoff
 description: Usa esta skill cuando el prospecto muestre interés claro, pida cita, quiera visitar el desarrollo o necesite pasar con un asesor humano.
 ---
 

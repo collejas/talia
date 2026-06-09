@@ -1,5 +1,5 @@
 ---
-name: tono_whatsapp_isa_breve
+name: tono-whatsapp-isa-breve
 description: Usa esta skill para mantener respuestas breves, naturales y comerciales en WhatsApp durante conversaciones de venta de lotes.
 ---
 
