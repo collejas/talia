@@ -2179,6 +2179,10 @@ async def handle_incoming_message(
             tools_called=[],
         )
 
+    welcome_document_sent_by_tool = bool(
+        assistant_reply.tools_called and "send_information_package" in assistant_reply.tools_called
+    )
+
     if not assistant_reply.text:
         log_event(
             logger,
