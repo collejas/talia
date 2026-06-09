@@ -26,6 +26,10 @@ def _normalize_phone_key(value: str | None) -> str | None:
     if not value:
         return None
     normalized = value.strip().replace(" ", "")
+    if normalized.lower().startswith("whatsapp:"):
+        normalized = normalized.split(":", 1)[1].strip()
+    if normalized.lower().startswith("tel:"):
+        normalized = normalized.split(":", 1)[1].strip()
     if normalized and not normalized.startswith("+") and normalized.replace("+", "").isdigit():
         return f"+{normalized}"
     if normalized:

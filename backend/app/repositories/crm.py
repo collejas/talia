@@ -615,6 +615,8 @@ def _phone_lookup_variants(value: Any) -> list[str]:
             _push(national)
             _push(alt_52)
             _push(f"+{alt_52}")
+            _push(f"521521{national}")
+            _push(f"+521521{national}")
         elif normalized_digits.startswith("52") and len(normalized_digits) >= 12:
             national = normalized_digits[2:]
             _push(national)

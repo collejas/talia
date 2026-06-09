@@ -55,6 +55,7 @@ from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.assistant_reply_guard import evaluate_reply_quality
 from app.services.time_utils import get_current_time_reference
 from app.services.high_demand_mode import high_demand_controller
+from app.services.phone_utils import normalize_phone
 
 from . import schemas
 
@@ -2189,11 +2190,75 @@ async def handle_incoming_message(
             "whatsapp.empty_reply",
             conversation_id=conversation_id,
         )
+        empty_retry_text: str | None = None
+        try:
+            empty_retry_kwargs: dict[str, Any] = {
+                "input": [
+                    {
+                        "role": "developer",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": (
+                                    "Regenera SOLO un mensaje final de WhatsApp completo y autocontenido. "
+                                    "Responde al último mensaje del cliente con 1-3 frases, máximo 300 caracteres. "
+                                    "No uses herramientas, no expliques el error y no dejes la respuesta vacía."
+                                ),
+                            }
+                        ],
+                    }
+                ],
+                "store": True,
+                "max_output_tokens": 180,
+                "temperature": 0.2,
+                "metadata": metadata_payload,
+                "tool_choice": "none",
+            }
+            empty_retry_kwargs.update(_build_request_template(include_tools=False))
+            if assistant.is_prompt:
+                empty_retry_kwargs.pop("temperature", None)
+            if assistant_reply.openai_conversation_id or openai_conversation_id:
+                empty_retry_kwargs["conversation"] = (
+                    assistant_reply.openai_conversation_id or openai_conversation_id
+                )
+            elif assistant_reply.response_id or previous_response_id:
+                empty_retry_kwargs["previous_response_id"] = (
+                    assistant_reply.response_id or previous_response_id
+                )
+            empty_retry_started = time.perf_counter()
+            empty_retry_response = await client.responses.create(**empty_retry_kwargs)
+            debug_timings["empty_retry_ms"] = round((time.perf_counter() - empty_retry_started) * 1000, 2)
+            empty_retry_payload = empty_retry_response.model_dump()
+            await openai_usage_ledger.record_response_usage(
+                organizacion_id=organizacion_id,
+                channel="whatsapp",
+                feature="sales_chat",
+                assistant=assistant,
+                response_payload=empty_retry_payload,
+                request_purpose="empty_reply_retry",
+                latency_ms=int(round(debug_timings["empty_retry_ms"])),
+                api_key=whatsapp_settings.voice_api_key,
+                request_metadata={"conversation_id": conversation_id},
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                fallback_used=True,
+                project_id=assistant.project_id,
+            )
+            empty_retry_text = _extract_text_from_response(empty_retry_payload)
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.empty_reply_retry_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
         assistant_reply = AssistantReply(
             text=(
-                "Ya te compartí el PDF de bienvenida. ¿Me compartes tu nombre y apellido, por favor?"
-                if welcome_document_sent_by_tool
-                else DEFAULT_FALLBACK
+                empty_retry_text
+                or (
+                    "Ya te compartí el PDF de bienvenida. ¿Me compartes tu nombre y apellido, por favor?"
+                    if welcome_document_sent_by_tool
+                    else DEFAULT_FALLBACK
+                )
             ),
             openai_conversation_id=assistant_reply.openai_conversation_id or openai_conversation_id,
             response_id=assistant_reply.response_id or previous_response_id,
@@ -4128,8 +4193,8 @@ def _normalize_phone_number(value: str | None) -> str | None:
         return None
     text = value.strip()
     if text.lower().startswith("whatsapp:"):
-        return text.split(":", 1)[1]
-    return text
+        text = text.split(":", 1)[1]
+    return normalize_phone(text) or text
 
 
 def _phone_lookup_candidates(value: str | None) -> list[str]:

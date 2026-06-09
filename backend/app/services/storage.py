@@ -1427,6 +1427,7 @@ async def register_whatsapp_message(
     """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
     repo = CRMRepository()
     metadata_payload = dict(metadata or {})
+    normalized_phone = normalize_phone(phone_e164) or phone_e164
     if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
         metadata_payload["resolved_organizacion_id"] = organizacion_id
     resolved_persona_id = persona_id or contact_id
@@ -1451,9 +1452,9 @@ async def register_whatsapp_message(
                     wa_id=wa_id,
                     organizacion_id=org_uuid,
                 )
-            if not persona_row and phone_e164:
+            if not persona_row and normalized_phone:
                 persona_row = await repo.get_persona_by_phone_e164(
-                    phone_e164=phone_e164,
+                    phone_e164=normalized_phone,
                     organizacion_id=org_uuid,
                 )
 
@@ -1483,7 +1484,7 @@ async def register_whatsapp_message(
         result = await repo.register_whatsapp_message(
             direction=direction,
             wa_id=wa_id,
-            phone_e164=phone_e164,
+            phone_e164=normalized_phone,
             body=body,
             message_sid=message_sid,
             profile_name=profile_name,

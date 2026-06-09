@@ -38,6 +38,9 @@ DECLARE
     v_org uuid := p_organizacion_id;
     v_tmp_persona uuid;
     v_tmp_org uuid;
+    v_conv_org uuid;
+    v_phone_digits text := regexp_replace(COALESCE(p_phone_e164, ''), '[^0-9]', '', 'g');
+    v_phone_e164 text := NULL;
 BEGIN
     IF v_org IS NULL AND v_metadata ? 'resolved_organizacion_id' THEN
         BEGIN
@@ -57,7 +60,7 @@ BEGIN
         INSERT INTO public.webhooks_entrantes (canal, id_solicitud, carga, processed_ok, organizacion_id)
         VALUES (
             'whatsapp',
-            COALESCE(NULLIF(p_message_sid, ''), NULLIF(p_whatsapp_id, ''), NULLIF(p_phone_e164, '')),
+            COALESCE(NULLIF(p_message_sid, ''), NULLIF(p_whatsapp_id, ''), NULLIF(v_phone_e164, '')),
             p_webhook_payload,
             NULL,
             v_org
@@ -79,6 +82,7 @@ BEGIN
           FROM public.mensajes m
           JOIN public.conversaciones c ON c.id = m.conversacion_id
          WHERE m.twilio_message_sid = p_message_sid
+           AND (v_org IS NULL OR c.organizacion_id = v_org)
          LIMIT 1;
         IF FOUND THEN
             RETURN QUERY SELECT v_existing.conversacion_id, v_existing.id, v_existing.contacto_id, v_existing.conversacion_openai_id;
@@ -92,41 +96,59 @@ BEGIN
         END IF;
     END IF;
 
+    LOOP
+        EXIT WHEN v_phone_digits = '' OR length(v_phone_digits) <= 13;
+        IF v_phone_digits LIKE '521521%' THEN
+            v_phone_digits := '521' || substr(v_phone_digits, 7);
+            CONTINUE;
+        END IF;
+        IF v_phone_digits LIKE '52521%' THEN
+            v_phone_digits := '521' || substr(v_phone_digits, 6);
+            CONTINUE;
+        END IF;
+        EXIT;
+    END LOOP;
+    IF v_phone_digits <> '' THEN
+        v_phone_e164 := '+' || v_phone_digits;
+    END IF;
+
     IF p_contact_id IS NOT NULL THEN
         SELECT id, organizacion_id INTO v_tmp_persona, v_tmp_org
           FROM public.personas
-         WHERE id = p_contact_id;
+         WHERE id = p_contact_id
+           AND (v_org IS NULL OR organizacion_id = v_org);
         IF NOT FOUND THEN
-            RAISE EXCEPTION 'Persona % no existe', p_contact_id;
+            RAISE EXCEPTION 'Persona % no existe o no pertenece a la organización esperada', p_contact_id;
         END IF;
         v_contact_id := v_tmp_persona;
         IF v_tmp_org IS NOT NULL THEN
+            IF v_org IS NOT NULL AND v_tmp_org <> v_org THEN
+                RAISE EXCEPTION 'La persona % pertenece a otra organización', p_contact_id;
+            END IF;
             v_org := v_tmp_org;
             PERFORM set_config('app.current_organizacion_id', v_org::text, true);
         END IF;
     END IF;
 
     IF p_conversation_id IS NOT NULL THEN
-        SELECT c.id, c.contacto_id, c.conversacion_openai_id, c.ultimo_mensaje_en
-          INTO v_conversacion_id, v_contact_id, v_conv_openai, v_last_activity
+        SELECT c.id, c.contacto_id, c.conversacion_openai_id, c.ultimo_mensaje_en, c.organizacion_id
+          INTO v_conversacion_id, v_contact_id, v_conv_openai, v_last_activity, v_conv_org
           FROM public.conversaciones c
          WHERE c.id = p_conversation_id
            AND c.canal = 'whatsapp'
+           AND (v_org IS NULL OR c.organizacion_id = v_org)
          LIMIT 1;
         IF NOT FOUND THEN
-            RAISE EXCEPTION 'La conversación % no pertenece al canal WhatsApp', p_conversation_id;
+            RAISE EXCEPTION 'La conversación % no pertenece al canal WhatsApp o no pertenece a la organización esperada', p_conversation_id;
         END IF;
         IF p_contact_id IS NOT NULL AND v_contact_id <> p_contact_id THEN
             RAISE EXCEPTION 'La persona % no coincide con la conversación %', p_contact_id, p_conversation_id;
         END IF;
-        IF v_org IS NULL AND v_contact_id IS NOT NULL THEN
-            SELECT organizacion_id INTO v_tmp_org
-              FROM public.personas
-             WHERE id = v_contact_id;
-            IF v_tmp_org IS NOT NULL THEN
-                v_org := v_tmp_org;
-                PERFORM set_config('app.current_organizacion_id', v_org::text, true);
-            END IF;
+        IF v_org IS NULL AND v_conv_org IS NOT NULL THEN
+            v_org := v_conv_org;
+            PERFORM set_config('app.current_organizacion_id', v_org::text, true);
+        ELSIF v_org IS NOT NULL AND v_conv_org IS NOT NULL AND v_conv_org <> v_org THEN
+            RAISE EXCEPTION 'La conversación % pertenece a otra organización', p_conversation_id;
         END IF;
     END IF;
 
@@ -137,10 +159,14 @@ BEGIN
           JOIN public.personas p ON p.id = ic.contacto_id
          WHERE ic.canal = 'whatsapp'
            AND ic.id_externo = p_whatsapp_id
+           AND (v_org IS NULL OR p.organizacion_id = v_org)
          LIMIT 1;
         IF FOUND THEN
             v_contact_id := v_tmp_persona;
             IF v_tmp_org IS NOT NULL THEN
+                IF v_org IS NOT NULL AND v_tmp_org <> v_org THEN
+                    RAISE EXCEPTION 'La identidad WhatsApp % pertenece a otra organización', p_whatsapp_id;
+                END IF;
                 v_org := v_tmp_org;
                 PERFORM set_config('app.current_organizacion_id', v_org::text, true);
             END IF;
@@ -151,11 +177,15 @@ BEGIN
         SELECT id, organizacion_id
           INTO v_tmp_persona, v_tmp_org
           FROM public.personas
-         WHERE regexp_replace(COALESCE(telefono_principal_e164, ''), '[^0-9]', '', 'g') = regexp_replace(COALESCE(p_phone_e164, ''), '[^0-9]', '', 'g')
+         WHERE regexp_replace(COALESCE(telefono_principal_e164, ''), '[^0-9]', '', 'g') = v_phone_digits
+           AND (v_org IS NULL OR organizacion_id = v_org)
          LIMIT 1;
         IF FOUND THEN
             v_contact_id := v_tmp_persona;
             IF v_tmp_org IS NOT NULL THEN
+                IF v_org IS NOT NULL AND v_tmp_org <> v_org THEN
+                    RAISE EXCEPTION 'El teléfono % pertenece a otra organización', p_phone_e164;
+                END IF;
                 v_org := v_tmp_org;
                 PERFORM set_config('app.current_organizacion_id', v_org::text, true);
             END IF;
@@ -179,9 +209,9 @@ BEGIN
         )
         VALUES (
             'Visitante WhatsApp',
-            NULLIF(p_phone_e164, ''),
+            NULLIF(v_phone_e164, ''),
             'movil',
-            NULLIF(p_phone_e164, ''),
+            NULLIF(v_phone_e164, ''),
             'movil',
             'whatsapp',
             jsonb_build_object('wa_id', p_whatsapp_id, 'profile_name', p_profile_name, 'tipo_linea', 'movil'),
@@ -196,7 +226,7 @@ BEGIN
             v_contact_id,
             'whatsapp',
             p_whatsapp_id,
-            jsonb_build_object('telefono', p_phone_e164, 'profile_name', p_profile_name),
+            jsonb_build_object('telefono', v_phone_e164, 'profile_name', p_profile_name),
             v_org
         )
         ON CONFLICT (canal, id_externo) DO UPDATE
@@ -212,6 +242,7 @@ BEGIN
          WHERE c.contacto_id = v_contact_id
            AND c.canal = 'whatsapp'
            AND c.estado <> 'cerrada'
+           AND (v_org IS NULL OR c.organizacion_id = v_org)
          ORDER BY c.iniciada_en DESC
          LIMIT 1;
     END IF;
