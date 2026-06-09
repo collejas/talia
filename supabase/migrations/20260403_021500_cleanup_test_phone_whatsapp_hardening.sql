@@ -111,7 +111,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_prospectos ON COMMIT DROP AS
     SELECT p.id, p.organizacion_id
     FROM public.prospeccion_prospectos p
-    WHERE (p_organizacion_id IS NULL OR p.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         regexp_replace(COALESCE(p.phone, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
         OR regexp_replace(COALESCE(p.phone_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
@@ -120,13 +120,13 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_personas ON COMMIT DROP AS
     SELECT DISTINCT p.id, p.organizacion_id
     FROM public.personas p
-    WHERE (p_organizacion_id IS NULL OR p.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND regexp_replace(COALESCE(p.telefono_principal_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
 
     CREATE TEMP TABLE tmp_cleanup_contacts ON COMMIT DROP AS
     SELECT DISTINCT c.id, c.organizacion_id
     FROM public.contactos c
-    WHERE (p_organizacion_id IS NULL OR c.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         regexp_replace(COALESCE(c.telefono_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
         OR c.id IN (
@@ -138,7 +138,7 @@ BEGIN
         OR c.id IN (
             SELECT ic.contacto_id
             FROM public.identidades_canal ic
-            WHERE (p_organizacion_id IS NULL OR ic.organizacion_id = p_organizacion_id)
+            WHERE TRUE
               AND (
                 regexp_replace(COALESCE(ic.metadatos->>'telefono', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
                 OR regexp_replace(COALESCE(ic.id_externo, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
@@ -149,7 +149,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_opportunities ON COMMIT DROP AS
     SELECT DISTINCT o.id, o.organizacion_id
     FROM public.oportunidades o
-    WHERE (p_organizacion_id IS NULL OR o.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         o.contacto_principal_id IN (SELECT id FROM tmp_cleanup_personas)
         OR o.contacto_principal_id IN (SELECT id FROM tmp_cleanup_contacts)
@@ -165,7 +165,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_cuentas ON COMMIT DROP AS
     SELECT DISTINCT c.id, c.organizacion_id
     FROM public.cuentas c
-    WHERE (p_organizacion_id IS NULL OR c.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         c.id IN (
             SELECT DISTINCT ct.cuenta_id
@@ -190,7 +190,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_leads ON COMMIT DROP AS
     SELECT DISTINCT l.id, l.organizacion_id
     FROM public.leads l
-    WHERE (p_organizacion_id IS NULL OR l.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         l.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
         OR l.convertido_a_contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
@@ -201,7 +201,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_conversations ON COMMIT DROP AS
     SELECT DISTINCT cv.id, cv.organizacion_id
     FROM public.conversaciones cv
-    WHERE (p_organizacion_id IS NULL OR cv.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         cv.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
         OR cv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
@@ -223,7 +223,7 @@ BEGIN
     CREATE TEMP TABLE tmp_cleanup_messages ON COMMIT DROP AS
     SELECT DISTINCT m.id, m.organizacion_id, m.twilio_message_sid
     FROM public.mensajes m
-    WHERE (p_organizacion_id IS NULL OR m.organizacion_id = p_organizacion_id)
+    WHERE TRUE
       AND (
         m.conversacion_id IN (SELECT id FROM tmp_cleanup_conversations)
         OR regexp_replace(COALESCE(m.datos->>'phone_e164', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
@@ -241,8 +241,7 @@ BEGIN
     GET DIAGNOSTICS v_deleted_webhooks_by_sid = ROW_COUNT;
 
     DELETE FROM public.webhooks_entrantes w
-    WHERE (p_organizacion_id IS NULL OR w.organizacion_id = p_organizacion_id)
-      AND w.canal = 'whatsapp'
+    WHERE w.canal = 'whatsapp'
       AND (
         regexp_replace(COALESCE(w.carga->>'WaId', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
         OR regexp_replace(COALESCE(w.carga->>'From', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
@@ -421,19 +420,13 @@ BEGIN
     GET DIAGNOSTICS v_deleted_web_sessions = ROW_COUNT;
 
     DELETE FROM public.webchat_visitantes wv
-    WHERE (p_organizacion_id IS NULL OR wv.organizacion_id = p_organizacion_id)
-      AND (
-        wv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
-        OR wv.persona_id IN (SELECT id FROM tmp_cleanup_personas)
-      );
+    WHERE wv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+      OR wv.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_webchat_visitantes = ROW_COUNT;
 
     DELETE FROM public.webchat_session_closures wsc
-    WHERE (p_organizacion_id IS NULL OR wsc.organizacion_id = p_organizacion_id)
-      AND (
-        wsc.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
-        OR wsc.persona_id IN (SELECT id FROM tmp_cleanup_personas)
-      );
+    WHERE wsc.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+      OR wsc.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_webchat_session_closures = ROW_COUNT;
 
     DELETE FROM public.oportunidades o
@@ -455,14 +448,11 @@ BEGIN
     GET DIAGNOSTICS v_deleted_conversaciones = ROW_COUNT;
 
     DELETE FROM public.identidades_canal ic
-    WHERE (p_organizacion_id IS NULL OR ic.organizacion_id = p_organizacion_id)
-      AND (
-        ic.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
-        OR ic.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
-        OR ic.persona_id IN (SELECT id FROM tmp_cleanup_personas)
-        OR regexp_replace(COALESCE(ic.metadatos->>'telefono', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
-        OR regexp_replace(COALESCE(ic.id_externo, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
-      );
+    WHERE ic.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR ic.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR ic.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR regexp_replace(COALESCE(ic.metadatos->>'telefono', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
+       OR regexp_replace(COALESCE(ic.id_externo, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
     GET DIAGNOSTICS v_deleted_identidades = ROW_COUNT;
 
     DELETE FROM public.contactos c
@@ -487,27 +477,18 @@ BEGIN
     GET DIAGNOSTICS v_deleted_personas = ROW_COUNT;
 
     DELETE FROM public.prospeccion_contactos_log l
-    WHERE (p_organizacion_id IS NULL OR l.organizacion_id = p_organizacion_id)
-      AND (
-        l.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
-        OR regexp_replace(COALESCE(l.detalle->>'phone', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
-      );
+    WHERE l.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
+       OR regexp_replace(COALESCE(l.detalle->>'phone', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
     GET DIAGNOSTICS v_deleted_prosp_log_phone = ROW_COUNT;
 
     DELETE FROM public.prospeccion_contacto_envio e
-    WHERE (p_organizacion_id IS NULL OR e.organizacion_id = p_organizacion_id)
-      AND (
-        e.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
-        OR regexp_replace(COALESCE(e.detalle->>'phone', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
-      );
+    WHERE e.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
+       OR regexp_replace(COALESCE(e.detalle->>'phone', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
     GET DIAGNOSTICS v_deleted_prosp_envio_phone = ROW_COUNT;
 
     DELETE FROM public.prospeccion_contacto_suppressions s
-    WHERE (p_organizacion_id IS NULL OR s.organizacion_id = p_organizacion_id)
-      AND (
-        s.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
-        OR regexp_replace(COALESCE(s.phone_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
-      );
+    WHERE s.prospecto_id IN (SELECT id FROM tmp_cleanup_prospectos)
+       OR regexp_replace(COALESCE(s.phone_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
     GET DIAGNOSTICS v_deleted_prosp_suppressions_phone = ROW_COUNT;
 
     DELETE FROM public.prospeccion_prospectos p
