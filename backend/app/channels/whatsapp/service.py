@@ -21,7 +21,11 @@ from openai import AsyncOpenAI
 from xml.etree import ElementTree as ET
 
 from app.assistants.manager import AssistantConfig
-from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
+from app.assistants.runtime import (
+    build_prompt_payload,
+    filter_assistant_tools,
+    resolve_assistant_spec,
+)
 from app.assistants.tool_runtime import (
     ToolRuntimeContext,
     classify_runtime_error,
@@ -2035,9 +2039,29 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
+    catalog_backend_enabled = True
+    if org_uuid:
+        try:
+            catalog_backend_started = time.perf_counter()
+            catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+                organizacion_id=org_uuid,
+                channel="whatsapp",
+            )
+            stage_timings["catalog_backend_toggle_ms"] = round(
+                (time.perf_counter() - catalog_backend_started) * 1000, 2
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "whatsapp.catalog_backend_toggle_lookup_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "organizacion_id": str(org_uuid),
+                    "error": str(exc),
+                },
+            )
     inventory_context_text = None
     location_request = is_location_request(message.body or "")
-    if not location_request and should_autoload_inventory_context(message.body or ""):
+    if catalog_backend_enabled and not location_request and should_autoload_inventory_context(message.body or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -2049,7 +2073,7 @@ async def handle_incoming_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context = None
-    if settings.catalog_context_autoload and not location_request:
+    if catalog_backend_enabled and settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
@@ -2121,6 +2145,7 @@ async def handle_incoming_message(
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
             organizacion_id=org_uuid,
+            catalog_backend_enabled=catalog_backend_enabled,
             prospeccion_mode=is_prospeccion_mode,
             origin_type=origin_type,
             inbound_message_id=inbound_message_id,
@@ -2914,6 +2939,7 @@ async def _generate_assistant_reply(
     booking_context: str | None,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
     organizacion_id: UUID | None,
+    catalog_backend_enabled: bool = True,
     prospeccion_mode: bool = False,
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
@@ -2952,6 +2978,11 @@ async def _generate_assistant_reply(
         assistant_spec_started = time.perf_counter()
         assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
         debug_timings["assistant_spec_ms"] = round((time.perf_counter() - assistant_spec_started) * 1000, 2)
+    filtered_assistant_tools = (
+        filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        if assistant_spec
+        else []
+    )
     context_payload: dict[str, Any] | None = None
     try:
         context_fetch_started = time.perf_counter()
@@ -3091,23 +3122,26 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    location_prompt = (
+        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
+        "es solo referencia técnica y no define la zona de búsqueda del prospecto. "
+        "Nunca preguntes si busca en la zona inferida por su teléfono. "
+    )
+    inventory_prompt = (
+        "Si el prospecto menciona una zona/fraccionamiento sin coincidencias claras, "
+        "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
+        "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+        if catalog_backend_enabled
+        else "Catálogo/backend desactivado para este tenant/canal. "
+        "No uses recursos de catálogo/backend ni infieras inventario desde ellos. "
+        "Si falta contexto, haz una sola pregunta de aclaración usando solo la información "
+        "permitida por el tenant."
+    )
     initial_input.insert(
         3,
         {
             "role": "developer",
-            "content": [
-                {
-                    "type": "input_text",
-                    "text": (
-                        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
-                        "es solo referencia técnica y no define la zona de búsqueda del prospecto. "
-                        "Nunca preguntes si busca en la zona inferida por su teléfono. "
-                        "Si el prospecto menciona una zona/fraccionamiento sin coincidencias claras, "
-                        "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
-                        "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
-                    ),
-                }
-            ],
+            "content": [{"type": "input_text", "text": location_prompt + inventory_prompt}],
         },
     )
     initial_input.insert(
@@ -3126,7 +3160,8 @@ async def _generate_assistant_reply(
             ],
         },
     )
-    if whatsapp_settings.location_href:
+    location_href = getattr(whatsapp_settings, "location_href", None)
+    if location_href:
         initial_input.insert(
             5,
             {
@@ -3134,7 +3169,7 @@ async def _generate_assistant_reply(
                 "content": [
                     {
                         "type": "input_text",
-                        "text": "\n".join(build_location_context_lines(whatsapp_settings.location_href)),
+                        "text": "\n".join(build_location_context_lines(location_href)),
                     }
                 ],
             },
@@ -3238,8 +3273,8 @@ async def _generate_assistant_reply(
     }
 
     prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
-    if whatsapp_settings.location_href:
-        prompt_variables["location_href"] = whatsapp_settings.location_href
+    if location_href:
+        prompt_variables["location_href"] = location_href
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
@@ -3252,8 +3287,8 @@ async def _generate_assistant_reply(
         payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
             payload["instructions"] = assistant_spec.instructions
-        if include_tools and assistant_spec.tools:
-            payload["tools"] = assistant_spec.tools
+        if include_tools and filtered_assistant_tools:
+            payload["tools"] = filtered_assistant_tools
         return payload
 
     request_kwargs.update(_build_request_template(include_tools=True))
@@ -3267,6 +3302,7 @@ async def _generate_assistant_reply(
         channel="whatsapp",
         organizacion_id=str(organizacion_id) if organizacion_id else None,
         feature="sales_chat",
+        catalog_backend_enabled=catalog_backend_enabled,
     )
 
     async def _run_assistant_generation(current_previous_response_id: str | None) -> tuple[Any, float]:

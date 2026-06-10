@@ -10,6 +10,15 @@ from openai import AsyncOpenAI
 from .manager import AssistantConfig
 
 
+CATALOG_BACKEND_TOOL_NAMES = frozenset(
+    {
+        "list_catalog_fraccionamientos",
+        "list_catalog_modelos",
+        "fetch_catalog_item_details",
+    }
+)
+
+
 @dataclass(slots=True)
 class AssistantSpec:
     """Especificación remota de un asistente almacenado en OpenAI."""
@@ -20,6 +29,40 @@ class AssistantSpec:
 
 
 _ASSISTANT_CACHE: dict[str, AssistantSpec] = {}
+
+
+def _extract_function_tool_name(tool: dict[str, Any]) -> str | None:
+    if not isinstance(tool, dict):
+        return None
+    function_payload = tool.get("function")
+    if isinstance(function_payload, dict):
+        tool_name = function_payload.get("name")
+        if isinstance(tool_name, str):
+            cleaned = tool_name.strip()
+            return cleaned or None
+    tool_name = tool.get("name")
+    if isinstance(tool_name, str):
+        cleaned = tool_name.strip()
+        return cleaned or None
+    return None
+
+
+def filter_assistant_tools(
+    tools: list[dict[str, Any]],
+    *,
+    enabled: bool,
+    excluded_names: frozenset[str] = CATALOG_BACKEND_TOOL_NAMES,
+) -> list[dict[str, Any]]:
+    """Quita tools concretas cuando una capacidad del tenant está desactivada."""
+    if enabled:
+        return tools
+    filtered: list[dict[str, Any]] = []
+    for tool in tools:
+        tool_name = _extract_function_tool_name(tool)
+        if tool_name and tool_name in excluded_names:
+            continue
+        filtered.append(tool)
+    return filtered
 
 
 async def resolve_assistant_spec(client: AsyncOpenAI, assistant_id: str) -> AssistantSpec:

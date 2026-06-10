@@ -27,6 +27,7 @@ from app.assistants.runtime import AssistantSpec, resolve_assistant_spec
 from app.assistants.runtime import (
     build_prompt_payload as build_assistant_prompt_payload,
 )
+from app.assistants.runtime import CATALOG_BACKEND_TOOL_NAMES, filter_assistant_tools
 from app.assistants.tool_runtime import (
     ToolRuntimeContext,
     classify_runtime_error,
@@ -1563,6 +1564,7 @@ class WebchatContext:
     conversation_id: str
     persona_id: str
     session_id: str
+    catalog_backend_enabled: bool = True
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -3196,15 +3198,37 @@ async def handle_message(
             raise HTTPException(
                 status_code=500, detail="No se pudo cargar la configuración del asistente"
             ) from exc
+    catalog_backend_enabled = True
+    if organizacion_id:
+        resolved_org = _resolve_org_uuid(organizacion_id)
+        if resolved_org:
+            try:
+                catalog_backend_started = time.perf_counter()
+                catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+                    organizacion_id=UUID(resolved_org),
+                    channel="webchat",
+                )
+                debug_timings["catalog_backend_toggle_ms"] = round(
+                    (time.perf_counter() - catalog_backend_started) * 1000, 2
+                )
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "webchat.catalog_backend_toggle_lookup_failed",
+                    extra={
+                        "conversation_id": str(conversation_id),
+                        "organizacion_id": organizacion_id,
+                        "error": str(exc),
+                    },
+                )
     context = WebchatContext(
         conversation_id=str(conversation_id),
         persona_id=str(persona_id),
         session_id=payload.session_id,
+        catalog_backend_enabled=catalog_backend_enabled,
     )
-
     inventory_context_text = None
     location_request = is_location_request(payload.content or "")
-    if not location_request and should_autoload_inventory_context(payload.content or ""):
+    if catalog_backend_enabled and not location_request and should_autoload_inventory_context(payload.content or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -3216,7 +3240,7 @@ async def handle_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context: CatalogContext | None = None
-    if settings.catalog_context_autoload and not location_request:
+    if catalog_backend_enabled and settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
@@ -3273,6 +3297,7 @@ async def handle_message(
             openai_conversation_id=openai_conversation_id,
             previous_response_id=conversation_meta.get("last_response_id"),
             organizacion_id=resolved_organizacion_id,
+            catalog_backend_enabled=catalog_backend_enabled,
             catalog_context=catalog_context,
             booking_context=booking_context_text,
             inbound_message_id=inbound_message_id,
@@ -3472,10 +3497,24 @@ async def append_manual_agent_context(
             logger.exception("webchat.manual_context.resolve_failed", extra={"error": str(exc)})
             return
 
+    catalog_backend_enabled = True
+    org_uuid_value = _resolve_org_uuid(conversation_meta.get("organizacion_id"))
+    if org_uuid_value:
+        try:
+            catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+                organizacion_id=UUID(org_uuid_value),
+                channel="webchat",
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "webchat.manual_context.catalog_backend_lookup_failed",
+                extra={"conversation_id": str(conversation_id), "error": str(exc)},
+            )
     context = WebchatContext(
         conversation_id=str(conversation_id),
         persona_id=str(persona_id),
         session_id=session_id,
+        catalog_backend_enabled=catalog_backend_enabled,
     )
 
     manual_text_parts = [
@@ -3531,8 +3570,9 @@ async def append_manual_agent_context(
             "no generes una respuesta para el visitante; únicamente incorpora el contenido al contexto."
         )
         request_kwargs["instructions"] = f"{instructions}\n\n{note}".strip()
-        if assistant_spec.tools:
-            request_kwargs["tools"] = assistant_spec.tools
+        filtered_tools = filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        if filtered_tools:
+            request_kwargs["tools"] = filtered_tools
 
     try:
         await client.responses.create(**request_kwargs)
@@ -3732,6 +3772,7 @@ async def _run_assistant_turn(
     openai_conversation_id: str | None,
     previous_response_id: str | None,
     organizacion_id: str | None = None,
+    catalog_backend_enabled: bool = True,
     catalog_context: CatalogContext | None = None,
     booking_context: str | None = None,
     inbound_message_id: str | None = None,
@@ -3783,6 +3824,16 @@ async def _run_assistant_turn(
                 }
             ],
         }
+    )
+    catalog_backend_note = (
+        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
+        "es solo referencia técnica y no define la zona de búsqueda del visitante. "
+        "Nunca preguntes si busca en la zona inferida por su teléfono. "
+    )
+    catalog_backend_disabled_note = (
+        "Catálogo/backend desactivado para este tenant/canal. "
+        "No uses recursos de catálogo/backend ni infieras inventario desde ellos. "
+        "Trabaja solo con las fuentes y flujos permitidos para el tenant."
     )
     profiling_enabled_for_channel = True
     if organizacion_id:
@@ -3849,12 +3900,14 @@ async def _run_assistant_turn(
                 {
                     "type": "input_text",
                     "text": (
-                        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
-                        "es solo referencia técnica y no define la zona de búsqueda del visitante. "
-                        "Nunca preguntes si busca en la zona inferida por su teléfono. "
-                        "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
-                        "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
-                        "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                        catalog_backend_note
+                        + (
+                            "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
+                            "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
+                            "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                            if catalog_backend_enabled
+                            else catalog_backend_disabled_note
+                        )
                     ),
                 }
             ],
@@ -3931,6 +3984,10 @@ async def _run_assistant_turn(
             f"con organizacion_id '{org_label}', usa la lista de propiedad_tipos "
             "para identificar si es un lote, terreno, local, oficina, departamento, etc., "
             "y describe los modelos coincidentes con su tipo explícito."
+            if catalog_backend_enabled
+            else "Catálogo/backend desactivado: no uses datos de catálogo/backend. "
+            "Si el visitante pide información de propiedades, responde solo con las fuentes permitidas "
+            "y pide una aclaración breve si hace falta."
         )
         base_input.append(
             {
@@ -3988,8 +4045,9 @@ async def _run_assistant_turn(
         payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
             payload["instructions"] = assistant_spec.instructions
-        if include_tools and assistant_spec.tools:
-            payload["tools"] = assistant_spec.tools
+        filtered_tools = filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        if include_tools and filtered_tools:
+            payload["tools"] = filtered_tools
         return payload
 
     request_kwargs.update(_build_request_template(include_tools=True))
@@ -4008,6 +4066,7 @@ async def _run_assistant_turn(
         channel="webchat",
         organizacion_id=organizacion_id,
         feature="sales_chat",
+        catalog_backend_enabled=catalog_backend_enabled,
     )
 
     tool_loop_started = time.perf_counter()
@@ -4317,6 +4376,10 @@ async def _execute_function_call(
         raise ValueError(
             f"El conversacion_id recibido ({conv_id}) no coincide con la conversación activa"
         )
+
+    func = name.strip()
+    if func in CATALOG_BACKEND_TOOL_NAMES and not context.catalog_backend_enabled:
+        raise ValueError(f"{func} no está disponible para este tenant/canal")
 
     lead_context = ToolRuntimeContext(
         conversation_id=context.conversation_id,

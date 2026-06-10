@@ -145,10 +145,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
-function readFeatureEnabled(features: Record<string, unknown> | null | undefined, key: string): boolean {
-  if (!isRecord(features)) return false
+function readFeatureEnabled(
+  features: Record<string, unknown> | null | undefined,
+  key: string,
+  fallback = false,
+): boolean {
+  if (!isRecord(features)) return fallback
   const entry = features[key]
-  if (!isRecord(entry)) return false
+  if (!isRecord(entry)) return fallback
   return Boolean(entry.enabled)
 }
 
@@ -156,6 +160,7 @@ function buildModuleConfigJson(
   config: Record<string, unknown> | null | undefined,
   productosEnabled: boolean,
   propiedadesEnabled: boolean,
+  catalogBackendEnabled: boolean,
 ): string {
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
   const features = isRecord(nextConfig.features) ? { ...nextConfig.features } : {}
@@ -166,6 +171,10 @@ function buildModuleConfigJson(
   features.propiedades = {
     ...(isRecord(features.propiedades) ? features.propiedades : {}),
     enabled: propiedadesEnabled,
+  }
+  features.catalog_backend = {
+    ...(isRecord(features.catalog_backend) ? features.catalog_backend : {}),
+    enabled: catalogBackendEnabled,
   }
   nextConfig.features = features
   return JSON.stringify(nextConfig, null, 2)
@@ -216,14 +225,18 @@ export function TenantModuleFlagsForm({
   const features = isRecord(config?.features) ? (config?.features as Record<string, unknown>) : null
   const [productosEnabled, setProductosEnabled] = useState(() => readFeatureEnabled(features, "productos"))
   const [propiedadesEnabled, setPropiedadesEnabled] = useState(() => readFeatureEnabled(features, "propiedades"))
+  const [catalogBackendEnabled, setCatalogBackendEnabled] = useState(() =>
+    readFeatureEnabled(features, "catalog_backend", true),
+  )
   const configJson = useMemo(
-    () => buildModuleConfigJson(config, productosEnabled, propiedadesEnabled),
-    [config, productosEnabled, propiedadesEnabled],
+    () => buildModuleConfigJson(config, productosEnabled, propiedadesEnabled, catalogBackendEnabled),
+    [config, productosEnabled, propiedadesEnabled, catalogBackendEnabled],
   )
 
   useEffect(() => {
     setProductosEnabled(readFeatureEnabled(features, "productos"))
     setPropiedadesEnabled(readFeatureEnabled(features, "propiedades"))
+    setCatalogBackendEnabled(readFeatureEnabled(features, "catalog_backend", true))
   }, [features])
 
   return (
@@ -255,10 +268,28 @@ export function TenantModuleFlagsForm({
             <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
           </div>
         </div>
+        <div className="space-y-2 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="module_catalog_backend_enabled"
+              type="checkbox"
+              checked={catalogBackendEnabled}
+              onChange={(event) => setCatalogBackendEnabled(event.target.checked)}
+              className="size-4"
+            />
+            <Label htmlFor="module_catalog_backend_enabled">Catálogo/backend en asistentes</Label>
+          </div>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Esto actualiza <code>organizaciones.config.features.productos.enabled</code> y{" "}
-        <code>organizaciones.config.features.propiedades.enabled</code>.
+        Esto actualiza <code>organizaciones.config.features.productos.enabled</code>,{" "}
+        <code>organizaciones.config.features.propiedades.enabled</code> y{" "}
+        <code>organizaciones.config.features.catalog_backend.enabled</code>.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        El switch de catálogo/backend aplica a WhatsApp, Webchat y Voz. Cuando se apaga, los asistentes no ven ni
+        usan <code>list_catalog_fraccionamientos</code>, <code>list_catalog_modelos</code> ni{" "}
+        <code>fetch_catalog_item_details</code>.
       </p>
       <p className="text-xs text-muted-foreground">
         La taxonomía puede seguir compartida, pero el acceso operativo al módulo queda separado.

@@ -209,6 +209,7 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     assert data["recovery_email_sent"] is True
     assert isinstance(repo.updated_config, dict)
     assert repo.updated_config.get("features", {}).get("webchat", {}).get("enabled") is True
+    assert repo.updated_config.get("features", {}).get("catalog_backend", {}).get("enabled") is True
     assert repo.updated_config.get("webchat", {}).get("calendar", {}).get("resource_id")
     assert repo.updated_config.get("whatsapp", {}).get("provider") == "meta"
     assert [stage["codigo"] for stage in repo.created_stages] == [

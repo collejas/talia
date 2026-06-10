@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from app.assistants.runtime import CATALOG_BACKEND_TOOL_NAMES
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.assistants.tools import lead as lead_tools
 from app.channels.webchat import service as webchat_service
@@ -1252,6 +1253,8 @@ async def execute_tool(
         raise ValueError(f"Tipo de argumentos no soportado: {type(arguments)!r}")
 
     func = name.strip()
+    if func in CATALOG_BACKEND_TOOL_NAMES and not context.catalog_backend_enabled:
+        raise ValueError(f"{func} no está disponible para este tenant/canal")
     if func == "set_full_name":
         full_name = await lead_tools._resolve_full_name_from_context(
             context=context,

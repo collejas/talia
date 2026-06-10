@@ -199,6 +199,10 @@ Flags de módulo:
 - `features.voice.enabled`
 - `features.productos.enabled`
 - `features.propiedades.enabled`
+- `features.catalog_backend.enabled`
+
+> `features.catalog_backend.enabled` controla si el tenant puede usar o exponer las tools de
+> catálogo/backend en asistentes. Aplica a WhatsApp, Webchat y Voz.
 
 Webchat (ejemplos):
 - `TALIA_OPENAI_WEBCHAT_ASSISTANT_ID`

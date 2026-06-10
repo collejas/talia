@@ -1471,6 +1471,33 @@ async def is_profiling_enabled(
     return _coerce_bool(by_channel.get(channel), global_enabled)
 
 
+async def is_catalog_backend_enabled(
+    *,
+    organizacion_id: UUID,
+    channel: Literal["whatsapp", "webchat", "voice"] | None = None,
+) -> bool:
+    """Resuelve si el catálogo/backend de asistentes está habilitado para un tenant.
+
+    Fuente:
+    - `organizaciones.config.features.catalog_backend.enabled`
+
+    Default ON para no romper tenants existentes sin config explícita.
+    """
+
+    try:
+        config = await get_org_config(organizacion_id=organizacion_id)
+    except Exception as exc:
+        logger.warning(
+            "tenant_runtime.catalog_backend_enabled_fallback_true",
+            extra={"organizacion_id": str(organizacion_id), "channel": channel, "error": str(exc)},
+        )
+        return True
+
+    features_cfg = _as_dict(config.get("features")) or {}
+    catalog_backend_cfg = _as_dict(features_cfg.get("catalog_backend")) or {}
+    return _coerce_bool(catalog_backend_cfg.get("enabled"), True)
+
+
 @dataclass(slots=True)
 class MessengerRuntimeSettings:
     page_access_token: str | None
