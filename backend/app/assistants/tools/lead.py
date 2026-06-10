@@ -1659,13 +1659,24 @@ async def _handle_information_package(
         result["documents"] = email_result.get("documents", [])
 
     if "whatsapp" in channels:
+        explicit_whatsapp_document_selection = any(
+            key in arguments and bool(arguments.get(key))
+            for key in (
+                "assistant_document_ids",
+                "document_ids",
+                "assistant_document_category",
+                "category",
+                "assistant_document_limit",
+                "document_limit",
+            )
+        )
         whatsapp_documents = await _resolve_assistant_documents_for_context(
             arguments,
             context,
             channel_scope="whatsapp",
-            # En WhatsApp preferimos un solo PDF por envío salvo que el modelo
-            # haya especificado explícitamente varios IDs o un límite mayor.
-            default_limit=1,
+            # Si el modelo no especifica documentos concretos, mandamos uno solo.
+            # Si sí los especifica, respetamos esa selección.
+            default_limit=3 if explicit_whatsapp_document_selection else 1,
         )
         whatsapp_body = _build_information_whatsapp_body(
             full_name=full_name,
