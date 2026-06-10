@@ -1663,7 +1663,9 @@ async def _handle_information_package(
             arguments,
             context,
             channel_scope="whatsapp",
-            default_limit=3,
+            # En WhatsApp preferimos un solo PDF por envío salvo que el modelo
+            # haya especificado explícitamente varios IDs o un límite mayor.
+            default_limit=1,
         )
         whatsapp_body = _build_information_whatsapp_body(
             full_name=full_name,

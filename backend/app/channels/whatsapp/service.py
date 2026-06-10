@@ -2936,14 +2936,6 @@ async def _generate_assistant_reply(
         api_key=whatsapp_settings.voice_api_key,
         project_id=whatsapp_settings.project_id,
     )
-    assistant_spec = None
-    if not assistant.is_prompt:
-        if not assistant.assistant_id:
-            raise RuntimeError("WHATSAPP_ASSISTANT_ID is not configured")
-        assistant_spec_started = time.perf_counter()
-        assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
-        debug_timings["assistant_spec_ms"] = round((time.perf_counter() - assistant_spec_started) * 1000, 2)
-
     metadata_payload = {
         "conversation_id": conversation_id,
         "persona_id": persona_id,
@@ -2953,6 +2945,13 @@ async def _generate_assistant_reply(
         "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
         "origin_type": str(origin_type or "").strip().lower() or "general_whatsapp",
     }
+    assistant_spec = None
+    if not assistant.is_prompt:
+        if not assistant.assistant_id:
+            raise RuntimeError("WHATSAPP_ASSISTANT_ID is not configured")
+        assistant_spec_started = time.perf_counter()
+        assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
+        debug_timings["assistant_spec_ms"] = round((time.perf_counter() - assistant_spec_started) * 1000, 2)
     context_payload: dict[str, Any] | None = None
     try:
         context_fetch_started = time.perf_counter()
