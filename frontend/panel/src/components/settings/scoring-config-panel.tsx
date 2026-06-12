@@ -23,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChartContainer } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const WEIGHT_KEYS = [
   "capacidad_financiera",
@@ -126,6 +127,10 @@ const QUESTION_FACTOR_ORDER: QuestionFactor[] = [
   "autoridad",
   "interaccion_compromiso",
 ];
+
+const DISPLAYED_QUESTION_FACTOR_ORDER: QuestionFactor[] = QUESTION_FACTOR_ORDER.filter(
+  (factor) => factor !== "interaccion_compromiso",
+);
 
 function resolveQuestionFactorColor(factor: QuestionFactor): string {
   return WEIGHT_COLORS[factor];
@@ -650,7 +655,27 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                         className="inline-flex h-2.5 w-2.5 rounded-full"
                         style={{ backgroundColor: WEIGHT_COLORS[key] }}
                       />
-                      {WEIGHT_LABELS[key]}
+                      <span className="flex items-center gap-1.5">
+                        {WEIGHT_LABELS[key]}
+                        {key === "interaccion_compromiso" ? (
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="Qué mide Interacción y compromiso"
+                                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                  i
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+                                Mide apertura para responder, seguimiento durante la conversación y disposición a avanzar.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : null}
+                      </span>
                     </Label>
                     <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                       {parsePercent(weightsForm[key], 0)}%
@@ -900,7 +925,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
         </div>
 
         <div className="space-y-3">
-          {QUESTION_FACTOR_ORDER.map((factor) => {
+          {DISPLAYED_QUESTION_FACTOR_ORDER.map((factor) => {
             const bucket = questionsByFactor[factor];
             const isOpen = expandedFactor === factor;
             const factorColor = resolveQuestionFactorColor(factor);

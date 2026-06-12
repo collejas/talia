@@ -918,8 +918,6 @@ def _compute_lead_scoring(
     for event_key, positive_score, negative_score in (
         ("appointment_requested", 80, 30),
         ("appointment_scheduled", 100, 30),
-        ("appointment_confirmed", 100, 40),
-        ("appointment_attended", 100, 50),
     ):
         event_value = _as_bool(events.get(event_key))
         if event_value is not None:
@@ -995,8 +993,6 @@ def _evaluate_interaction_score_from_events(events: dict[str, Any]) -> int:
     for event_key, positive_score, negative_score in (
         ("appointment_requested", 80, 30),
         ("appointment_scheduled", 100, 30),
-        ("appointment_confirmed", 100, 40),
-        ("appointment_attended", 100, 50),
     ):
         event_value = _as_bool(events.get(event_key))
         if event_value is not None:
