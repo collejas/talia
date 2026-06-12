@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead al final de la calificación. Se usa cuando ya tenemos nombre, correo, teléfono y empresa confirmados. También incluye el resumen de la necesidad para el equipo comercial.",
+  "description": "Cerrar y consolidar el lead con la información útil capturada durante la conversación. Se usa para guardar avances del contacto, su necesidad y el resumen comercial, sin depender de que ya exista cita confirmada.",
   "strict": true,
   "parameters": {
     "type": "object",

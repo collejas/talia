@@ -767,6 +767,80 @@ def _normalize_required_fields_for_answers(
     return shared_normalize_required_fields_for_answers(required_fields, answers)
 
 
+def _contact_has_name(contact: Mapping[str, Any] | None) -> bool:
+    if not isinstance(contact, Mapping):
+        return False
+    for field in ("nombre_completo", "nombre"):
+        if _clean_text(contact.get(field)):
+            return True
+    return False
+
+
+def _contact_has_phone(contact: Mapping[str, Any] | None) -> bool:
+    if not isinstance(contact, Mapping):
+        return False
+    for field in (
+        "telefono_e164",
+        "phone_e164",
+        "telefono",
+        "telefono_movil_1_e164",
+        "telefono_principal_e164",
+        "telefono_secundario_e164",
+    ):
+        normalized = normalize_phone(contact.get(field))
+        if _clean_text(normalized):
+            return True
+    return False
+
+
+def _contact_has_email(contact: Mapping[str, Any] | None) -> bool:
+    if not isinstance(contact, Mapping):
+        return False
+    for field in ("email", "correo", "correo_principal", "correo_secundario", "correo_institucional"):
+        value = _clean_text(contact.get(field))
+        if value and "@" in value:
+            return True
+    return False
+
+
+async def _load_prequalification_required_fields(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
+    profiling_enabled: bool,
+    fallback_answers: Mapping[str, Any] | None,
+    fallback_fields: Sequence[str] = (),
+) -> list[str]:
+    if not profiling_enabled:
+        return []
+
+    required_fields: list[str] = []
+    for field in fallback_fields:
+        normalized = str(field or "").strip()
+        if normalized and normalized not in required_fields:
+            required_fields.append(normalized)
+
+    try:
+        question_rows = await repo.list_scoring_questions(
+            organizacion_id=organizacion_id,
+            canal=channel if channel in {"whatsapp", "webchat"} else "webchat",
+            include_inactive=False,
+        )
+    except CRMRepositoryError:
+        question_rows = []
+    for row in question_rows:
+        field_key = str(row.get("field_key") or "").strip()
+        if not field_key:
+            continue
+        if bool(row.get("required_for_case_a")) and field_key not in required_fields:
+            required_fields.append(field_key)
+
+    if not required_fields:
+        required_fields = list(_CRITICAL_SCORING_FIELDS)
+    return _normalize_required_fields_for_answers(required_fields, fallback_answers)
+
+
 def _field_score(field: str, value: Any) -> int:
     score_map = _SCORE_VALUE_MAP.get(field)
     if score_map is None:
@@ -3545,27 +3619,49 @@ async def maybe_promote_prequalified_from_scoring(
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     scoring = _ensure_dict(metadata.get("lead_scoring"))
-    events = _ensure_dict(scoring.get("events"))
     answers = _ensure_dict(scoring.get("answers"))
 
-    appointment_scheduled = _as_bool(events.get("appointment_scheduled"))
-    critical_fields_raw = scoring.get("critical_fields")
-    critical_fields: list[str] = []
-    if isinstance(critical_fields_raw, list):
-        for item in critical_fields_raw:
-            field = str(item or "").strip()
-            if field and field not in critical_fields:
-                critical_fields.append(field)
-    if not critical_fields:
-        critical_fields = list(_CRITICAL_SCORING_FIELDS)
-    critical_fields = _normalize_required_fields_for_answers(critical_fields, answers)
+    channel_key = str(channel or "").strip().lower()
+    profiling_enabled = await tenant_runtime.is_profiling_enabled(
+        organizacion_id=org_uuid,
+        channel=channel_key if channel_key in {"whatsapp", "webchat"} else "webchat",
+    )
+    has_name = _contact_has_name(contact)
+    has_phone = _contact_has_phone(contact)
+    has_email = _contact_has_email(contact)
 
+    has_required_contact_data = False
+    if channel_key == "whatsapp":
+        has_required_contact_data = has_name and has_phone
+    elif channel_key == "webchat":
+        has_required_contact_data = has_name and (has_email or has_phone)
+
+    if not has_required_contact_data:
+        metadata["precalificacion_incompleta"] = True
+        try:
+            await repo.update_opportunity(
+                organizacion_id=org_uuid,
+                oportunidad_id=opp_uuid,
+                payload={"metadata": metadata},
+            )
+        except CRMRepositoryError:
+            pass
+        return False
+
+    required_fields = await _load_prequalification_required_fields(
+        repo=repo,
+        organizacion_id=org_uuid,
+        channel=channel_key,
+        profiling_enabled=profiling_enabled,
+        fallback_answers=answers,
+        fallback_fields=scoring.get("critical_fields") if isinstance(scoring.get("critical_fields"), list) else (),
+    )
     has_required_answers = all(
         (answers.get(field) not in (None, "", "unknown", "refused"))
-        for field in critical_fields
+        for field in required_fields
     )
 
-    if not (appointment_scheduled and has_required_answers):
+    if not has_required_answers:
         metadata["precalificacion_incompleta"] = True
         try:
             await repo.update_opportunity(
