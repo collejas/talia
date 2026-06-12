@@ -99,7 +99,7 @@ function resolveFieldLabel(fieldKey: string | null | undefined) {
 const CUSTOM_FIELD_KEY = "__custom__";
 
 type WeightKey = (typeof WEIGHT_KEYS)[number];
-type QuestionFactor = WeightKey | "__unassigned__";
+type QuestionFactor = WeightKey;
 
 type WeightForm = Record<WeightKey, string>;
 
@@ -109,7 +109,6 @@ const QUESTION_FACTOR_LABELS: Record<QuestionFactor, string> = {
   nivel_decision: WEIGHT_LABELS.nivel_decision,
   autoridad: WEIGHT_LABELS.autoridad,
   interaccion_compromiso: WEIGHT_LABELS.interaccion_compromiso,
-  __unassigned__: "Sin peso asignado",
 };
 
 const QUESTION_FACTOR_HELP: Record<QuestionFactor, string> = {
@@ -118,7 +117,6 @@ const QUESTION_FACTOR_HELP: Record<QuestionFactor, string> = {
   nivel_decision: "Ordena preguntas que muestran nivel de avance y claridad.",
   autoridad: "Ayuda a saber quién decide y quién influye en la compra.",
   interaccion_compromiso: "Mide apertura, seguimiento y disposición a avanzar.",
-  __unassigned__: "Revisa estas preguntas porque no tienen un peso asociado.",
 };
 
 const QUESTION_FACTOR_ORDER: QuestionFactor[] = [
@@ -127,11 +125,9 @@ const QUESTION_FACTOR_ORDER: QuestionFactor[] = [
   "nivel_decision",
   "autoridad",
   "interaccion_compromiso",
-  "__unassigned__",
 ];
 
 function resolveQuestionFactorColor(factor: QuestionFactor): string {
-  if (factor === "__unassigned__") return "hsl(var(--muted-foreground))";
   return WEIGHT_COLORS[factor];
 }
 
@@ -211,7 +207,7 @@ function resolveQuestionFactor(question: QuestionLike): QuestionFactor {
   }
 
   const inferred = QUESTION_FACTOR_BY_FIELD_KEY[question.field_key.trim()];
-  return inferred ?? "__unassigned__";
+  return inferred ?? "capacidad_financiera";
 }
 
 function resolveQuestionTypeLabel(questionType?: string | null) {
@@ -386,15 +382,6 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     return grouped;
   }, [questions]);
 
-  const questionOptions = useMemo(
-    () =>
-      questions.map((question) => ({
-        id: question.id,
-        label: `${resolveFieldLabel(question.field_key) ?? "Dato personalizado"} · ${question.question_text}`,
-      })),
-    [questions],
-  );
-
   const fieldKeyOptions = useMemo(() => {
     const presetOptions = FIELD_KEY_PRESETS.map((item) => ({
       value: item.key,
@@ -415,6 +402,15 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
       })),
     ];
   }, [questions]);
+
+  const questionOptions = useMemo(
+    () =>
+      questions.map((question) => ({
+        id: question.id,
+        label: `${resolveFieldLabel(question.field_key) ?? "Dato personalizado"} · ${question.question_text}`,
+      })),
+    [questions],
+  );
 
   const syncProfileEditors = (nextChannel: ScoringChannel) => {
     const profile = bundles[nextChannel]?.profiles?.[0];
@@ -921,7 +917,6 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
           {QUESTION_FACTOR_ORDER.map((factor) => {
             const bucket = questionsByFactor[factor];
             const isOpen = expandedFactor === factor;
-            const isUnassigned = factor === "__unassigned__";
             const factorColor = resolveQuestionFactorColor(factor);
 
             return (
@@ -962,22 +957,17 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isPending || isUnassigned}
+                    disabled={isPending}
                     className="border-transparent text-white hover:opacity-90"
                     style={{ backgroundColor: factorColor }}
                     onClick={() => startQuestionCreate(factor)}
                   >
-                    {isUnassigned ? "Revisar" : "Agregar"}
+                    Agregar
                   </Button>
                 </div>
 
                 {isOpen ? (
                   <div className="overflow-x-auto">
-                    {isUnassigned ? (
-                      <div className="border-b bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                        Estas preguntas no tienen peso asignado. Revísalas antes de seguir.
-                      </div>
-                    ) : null}
                     <table className="min-w-[1260px] w-full border-separate border-spacing-0 text-sm">
                       <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
@@ -994,166 +984,158 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                         </tr>
                       </thead>
                       <tbody>
-                        {!isUnassigned ? (
-                          <tr className="bg-muted/20 align-top">
-                            <td className="border-b px-3 py-3">
-                              <Input
-                                type="number"
-                                value={questionOrder}
-                                onChange={(event) => setQuestionOrder(event.target.value)}
-                                className="h-9"
-                              />
-                            </td>
-                            <td className="border-b px-3 py-3">
-                              <Input
-                                placeholder="Nueva pregunta"
-                                value={questionText}
-                                onChange={(event) => setQuestionText(event.target.value)}
-                                className="h-9"
-                              />
-                            </td>
-                            <td className="border-b px-3 py-3">
-                              <div className="space-y-2">
-                                <select
-                                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                                  value={questionFieldPreset}
-                                  onChange={(event) => {
-                                    const next = event.target.value;
-                                    setQuestionFieldPreset(next);
-                                    if (next !== CUSTOM_FIELD_KEY) {
-                                      setQuestionField(next);
-                                      setQuestionFieldCustom("");
-                                    } else {
-                                      setQuestionField("");
-                                    }
-                                  }}
-                                >
-                                  <option value="">Selecciona el dato</option>
-                                  {fieldKeyOptions.map((item) => (
-                                    <option key={item.value} value={item.value}>
-                                      {item.label}
-                                    </option>
-                                  ))}
-                                  <option value={CUSTOM_FIELD_KEY}>Otro campo (avanzado)</option>
-                                </select>
-                                {questionFieldPreset === CUSTOM_FIELD_KEY ? (
-                                  <Input
-                                    placeholder="Field key personalizado"
-                                    value={questionFieldCustom}
-                                    onChange={(event) => {
-                                      const next = event.target.value;
-                                      setQuestionFieldCustom(next);
-                                      setQuestionField(next);
-                                    }}
-                                    className="h-9"
-                                  />
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className="border-b px-3 py-3">
+                        <tr className="bg-muted/20 align-top">
+                          <td className="border-b px-3 py-3">
+                            <Input
+                              type="number"
+                              value={questionOrder}
+                              onChange={(event) => setQuestionOrder(event.target.value)}
+                              className="h-9"
+                            />
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <Input
+                              placeholder="Nueva pregunta"
+                              value={questionText}
+                              onChange={(event) => setQuestionText(event.target.value)}
+                              className="h-9"
+                            />
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <div className="space-y-2">
                               <select
                                 className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                                value={questionType}
-                                onChange={(event) => setQuestionType(event.target.value)}
+                                value={questionFieldPreset}
+                                onChange={(event) => {
+                                  const next = event.target.value;
+                                  setQuestionFieldPreset(next);
+                                  if (next !== CUSTOM_FIELD_KEY) {
+                                    setQuestionField(next);
+                                    setQuestionFieldCustom("");
+                                  } else {
+                                    setQuestionField("");
+                                  }
+                                }}
                               >
-                                {QUESTION_TYPE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
+                                <option value="">Selecciona el dato</option>
+                                {fieldKeyOptions.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
                                   </option>
                                 ))}
+                                <option value={CUSTOM_FIELD_KEY}>Otro campo (avanzado)</option>
                               </select>
-                            </td>
-                            <td className="border-b px-3 py-3 hidden md:table-cell text-muted-foreground">
-                              Se genera con reglas
-                            </td>
-                            <td className="border-b px-3 py-3">
-                              <Input
-                                type="number"
-                                value={questionRepreguntaMax}
-                                onChange={(event) => setQuestionRepreguntaMax(event.target.value)}
-                                className="h-9"
+                              {questionFieldPreset === CUSTOM_FIELD_KEY ? (
+                                <Input
+                                  placeholder="Field key personalizado"
+                                  value={questionFieldCustom}
+                                  onChange={(event) => {
+                                    const next = event.target.value;
+                                    setQuestionFieldCustom(next);
+                                    setQuestionField(next);
+                                  }}
+                                  className="h-9"
+                                />
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <select
+                              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                              value={questionType}
+                              onChange={(event) => setQuestionType(event.target.value)}
+                            >
+                              {QUESTION_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="border-b px-3 py-3 hidden md:table-cell text-muted-foreground">
+                            Se genera con reglas
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <Input
+                              type="number"
+                              value={questionRepreguntaMax}
+                              onChange={(event) => setQuestionRepreguntaMax(event.target.value)}
+                              className="h-9"
+                            />
+                          </td>
+                          <td className="border-b px-3 py-3 hidden md:table-cell">
+                            <Label className="flex items-center gap-2 text-sm font-normal">
+                              <Checkbox
+                                checked={questionRequiredCaseA}
+                                onCheckedChange={(value) => setQuestionRequiredCaseA(Boolean(value))}
                               />
-                            </td>
-                            <td className="border-b px-3 py-3 hidden md:table-cell">
-                              <Label className="flex items-center gap-2 text-sm font-normal">
-                                <Checkbox
-                                  checked={questionRequiredCaseA}
-                                  onCheckedChange={(value) => setQuestionRequiredCaseA(Boolean(value))}
-                                />
-                                Sí
-                              </Label>
-                            </td>
-                            <td className="border-b px-3 py-3">
-                              <Label className="flex items-center gap-2 text-sm font-normal">
-                                <Checkbox
-                                  checked={questionActive}
-                                  onCheckedChange={(value) => setQuestionActive(Boolean(value))}
-                                />
-                                Sí
-                              </Label>
-                            </td>
-                            <td className="border-b px-3 py-3 hidden lg:table-cell">
-                              <span className="text-muted-foreground">
-                                {questionRequiredCaseA ? "Sí" : "No"}
-                              </span>
-                            </td>
-                            <td className="border-b px-3 py-3">
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  disabled={isPending}
-                                  onClick={() =>
-                                    startTransition(async () => {
-                                      setStatus(null, null);
-                                      const resolvedFieldKey = questionField.trim();
-                                      if (!resolvedFieldKey) {
-                                        setStatus(null, "Selecciona el dato (field_key) de la pregunta.");
-                                        return;
-                                      }
-                                      if (!questionText.trim()) {
-                                        setStatus(null, "Escribe el texto de la pregunta.");
-                                        return;
-                                      }
-                                      try {
-                                        const factorBeforeSave = questionFactor;
-                                        const saved = await upsertScoringQuestion({
-                                          id: undefined,
-                                          canal: channel,
-                                          field_key: resolvedFieldKey,
-                                          question_text: questionText.trim(),
-                                          question_type: questionType.trim() || "single_choice",
-                                          orden: Number(questionOrder || "100"),
-                                          repregunta_max: Number(questionRepreguntaMax || "1"),
-                                          required_for_case_a: questionRequiredCaseA,
-                                          activa: questionActive,
-                                          allow_unknown: true,
-                                          allow_refused: true,
-                                          metadata: buildQuestionMetadata(null),
-                                        });
-                                        patchBundle({
-                                          questions: [...questions.filter((item) => item.id !== saved.id), saved],
-                                        });
-                                        resetQuestionForm(factorBeforeSave);
-                                        setExpandedFactor(factorBeforeSave);
-                                        setStatus("Pregunta guardada.");
-                                      } catch (error) {
-                                        setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la pregunta.");
-                                      }
-                                    })
-                                  }
-                                >
-                                  Crear
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          <tr>
-                            <td colSpan={10} className="px-3 py-4 text-sm text-muted-foreground">
-                              Este bloque es solo para revisar preguntas sin peso asignado.
-                            </td>
-                          </tr>
-                        )}
+                              Sí
+                            </Label>
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <Label className="flex items-center gap-2 text-sm font-normal">
+                              <Checkbox
+                                checked={questionActive}
+                                onCheckedChange={(value) => setQuestionActive(Boolean(value))}
+                              />
+                              Sí
+                            </Label>
+                          </td>
+                          <td className="border-b px-3 py-3 hidden lg:table-cell">
+                            <span className="text-muted-foreground">
+                              {questionRequiredCaseA ? "Sí" : "No"}
+                            </span>
+                          </td>
+                          <td className="border-b px-3 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() =>
+                                  startTransition(async () => {
+                                    setStatus(null, null);
+                                    const resolvedFieldKey = questionField.trim();
+                                    if (!resolvedFieldKey) {
+                                      setStatus(null, "Selecciona el dato (field_key) de la pregunta.");
+                                      return;
+                                    }
+                                    if (!questionText.trim()) {
+                                      setStatus(null, "Escribe el texto de la pregunta.");
+                                      return;
+                                    }
+                                    try {
+                                      const factorBeforeSave = questionFactor;
+                                      const saved = await upsertScoringQuestion({
+                                        id: undefined,
+                                        canal: channel,
+                                        field_key: resolvedFieldKey,
+                                        question_text: questionText.trim(),
+                                        question_type: questionType.trim() || "single_choice",
+                                        orden: Number(questionOrder || "100"),
+                                        repregunta_max: Number(questionRepreguntaMax || "1"),
+                                        required_for_case_a: questionRequiredCaseA,
+                                        activa: questionActive,
+                                        allow_unknown: true,
+                                        allow_refused: true,
+                                        metadata: buildQuestionMetadata(null),
+                                      });
+                                      patchBundle({
+                                        questions: [...questions.filter((item) => item.id !== saved.id), saved],
+                                      });
+                                      resetQuestionForm(factorBeforeSave);
+                                      setExpandedFactor(factorBeforeSave);
+                                      setStatus("Pregunta guardada.");
+                                    } catch (error) {
+                                      setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la pregunta.");
+                                    }
+                                  })
+                                }
+                              >
+                                Crear
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
 
                         {bucket.length ? (
                           bucket.map((item) => {
