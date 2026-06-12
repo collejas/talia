@@ -963,7 +963,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                           <th className="border-b px-3 py-3 min-w-[160px]">Tipo de respuesta</th>
                           <th className="border-b px-3 py-3 hidden md:table-cell w-28">Opciones</th>
                           <th className="border-b px-3 py-3 w-24">Repreguntas</th>
-                          <th className="border-b px-3 py-3 hidden md:table-cell w-28">Obligatoria</th>
+                          <th className="border-b px-3 py-3 hidden md:table-cell w-36">Obligatoria para agendar</th>
                           <th className="border-b px-3 py-3 w-24">Activa</th>
                           <th className="border-b px-3 py-3 hidden lg:table-cell w-36">Agenda/Notificación</th>
                           <th className="border-b px-3 py-3 w-36">Acciones</th>
@@ -1055,7 +1055,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                                 checked={questionRequiredCaseA}
                                 onCheckedChange={(value) => setQuestionRequiredCaseA(Boolean(value))}
                               />
-                              Sí
+                              Obligatoria para agendar
                             </Label>
                           </td>
                           <td className="border-b px-3 py-3">
@@ -1219,7 +1219,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                                           checked={questionEditRequiredCaseA}
                                           onCheckedChange={(value) => setQuestionEditRequiredCaseA(Boolean(value))}
                                         />
-                                        Sí
+                                        Obligatoria para agendar
                                       </Label>
                                     </td>
                                     <td className="border-b px-3 py-3">
