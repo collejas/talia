@@ -1,0 +1,12 @@
+tenant_id,canal,field_key,question_text,question_type,orden,activa,required_for_case_a,repregunta_max,allow_unknown,allow_refused,metadata
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,financing_type,"¿Comprarías de contado, crédito o mixto?",single_choice,10,True,True,1,True,True,"{""factor"":""capacidad_financiera""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,budget_range,¿Cuál es tu rango de presupuesto aproximado?,single_choice,20,True,True,1,True,True,"{""factor"":""capacidad_financiera"",""missing_score"":40,""unknown_score"":40,""refused_score"":20}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,purchase_timeline,¿En qué plazo planeas comprar?,single_choice,30,True,True,1,True,True,"{""factor"":""urgencia""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,decision_authority,¿Quién toma la decisión final de compra?,single_choice,40,True,False,1,True,True,"{""factor"":""autoridad""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,credit_preapproved,¿Ya tienes preaprobación de crédito?,single_choice,50,True,True,1,True,True,"{""factor"":""capacidad_financiera""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,visited_properties,¿Ya visitaste propiedades similares?,single_choice,60,True,False,1,True,True,"{""factor"":""nivel_decision""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,down_payment_ready,¿Ya tienes listo el enganche?,single_choice,70,True,False,1,True,True,"{""factor"":""capacidad_financiera""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,hard_deadline,¿Tienes una fecha límite para comprar?,single_choice,80,True,False,1,True,True,"{""factor"":""urgencia""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,requirements_defined,¿Ya tienes claras las características que buscas?,single_choice,90,True,False,1,True,True,"{""factor"":""nivel_decision""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,comparison_mode,¿Estás comparando opciones o apenas explorando?,single_choice,100,True,False,1,True,True,"{""factor"":""nivel_decision""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,buyer_type,"¿La compra es para uso personal, familia, empresa o inversión?",single_choice,110,True,False,1,True,True,"{""factor"":""autoridad""}"

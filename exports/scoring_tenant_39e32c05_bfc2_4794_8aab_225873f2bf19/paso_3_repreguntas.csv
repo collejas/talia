@@ -1,0 +1,12 @@
+tenant_id,canal,field_key,question_text,intento,prompt_text,activa,metadata
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,financing_type,"¿Comprarías de contado, crédito o mixto?",1,"¿Lo ves más de contado, crédito o mixto?",True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,budget_range,¿Cuál es tu rango de presupuesto aproximado?,1,¿Qué rango te gustaría considerar para no mostrarte opciones fuera de presupuesto?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,purchase_timeline,¿En qué plazo planeas comprar?,1,¿En qué plazo te gustaría comprar?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,decision_authority,¿Quién toma la decisión final de compra?,1,¿La decisión la tomas tú solo o la revisan con alguien más?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,credit_preapproved,¿Ya tienes preaprobación de crédito?,1,¿Ya cuentas con preaprobación o estás en trámite?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,visited_properties,¿Ya visitaste propiedades similares?,1,¿Ya has visitado algún desarrollo similar?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,down_payment_ready,¿Ya tienes listo el enganche?,1,¿Ya tienes listo el enganche o aún lo estás preparando?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,hard_deadline,¿Tienes una fecha límite para comprar?,1,¿Tienes una fecha límite real para comprar?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,requirements_defined,¿Ya tienes claras las características que buscas?,1,¿Ya tienes claras las características que buscas?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,comparison_mode,¿Estás comparando opciones o apenas explorando?,1,¿Estás comparando opciones o apenas explorando?,True,"{""source"":""gran_penon_scoring_seed_v1""}"
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,buyer_type,"¿La compra es para uso personal, familia, empresa o inversión?",1,"¿La compra es para ti, tu familia o para inversión?",True,"{""source"":""gran_penon_scoring_seed_v1""}"

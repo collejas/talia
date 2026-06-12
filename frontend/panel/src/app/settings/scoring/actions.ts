@@ -22,10 +22,14 @@ export type ScoringQuestion = {
   canal: ScoringChannel;
   field_key: string;
   question_text: string;
+  question_type?: string;
   orden: number;
   repregunta_max: number;
   required_for_case_a: boolean;
   activa: boolean;
+  metadata: Record<string, unknown>;
+  allow_unknown?: boolean;
+  allow_refused?: boolean;
 };
 
 export type ScoringReprompt = {
@@ -113,10 +117,14 @@ export async function upsertScoringQuestion(input: {
   canal: ScoringChannel;
   field_key: string;
   question_text: string;
+  question_type?: string;
   orden: number;
   repregunta_max: number;
   required_for_case_a?: boolean;
   activa?: boolean;
+  allow_unknown?: boolean;
+  allow_refused?: boolean;
+  metadata?: Record<string, unknown>;
 }): Promise<ScoringQuestion> {
   const response = await callCrmApi<ScoringQuestion>("/crm/pipeline/scoring/config/question", {
     method: "PUT",

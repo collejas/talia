@@ -1,0 +1,2 @@
+tenant_id,canal,perfil,activo,weights,thresholds,confidence_thresholds,metadata
+39e32c05-bfc2-4794-8aab-225873f2bf19,whatsapp,default,True,"{""capacidad_financiera"":30,""urgencia"":20,""nivel_decision"":20,""autoridad"":15,""interaccion_compromiso"":15}","{""explorando_max"":50,""interesado_max"":75,""listo_min"":76}","{""high_min"":0.8,""medium_min"":0.5}","{""source"":""gran_penon_scoring_seed_v1""}"
