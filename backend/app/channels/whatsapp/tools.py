@@ -1973,11 +1973,29 @@ async def _handle_close_lead(
             "whatsapp.close_lead.ensure_opportunity_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
+    try:
         await storage.update_persona(
             persona_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.close_lead.persona_update_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
     if tarjeta_id:
+        try:
+            await storage.sync_persona_opportunity_context(
+                conversation_id=context.conversation_id,
+                persona_id=persona_id,
+                opportunity_id=str(tarjeta_id),
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.opportunity_sync_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
         channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
         profiling_enabled_for_channel = True
         persona_org = webchat_service._extract_persona_org(persona)

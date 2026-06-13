@@ -4400,6 +4400,19 @@ async def _execute_function_call(
             context.persona_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
+        if opportunity_id:
+            try:
+                await storage.sync_persona_opportunity_context(
+                    conversation_id=context.conversation_id,
+                    persona_id=context.persona_id,
+                    opportunity_id=str(opportunity_id),
+                    channel="webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.close_lead.opportunity_sync_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
         await storage.upsert_conversation_insights(
             conversation_id=context.conversation_id,

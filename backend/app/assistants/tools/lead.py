@@ -466,13 +466,6 @@ async def _complete_close_lead(
         context.persona_id,
         {"notes": notes, "necesidad_proposito": necesidad},
     )
-    try:
-        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
-    except StorageError as exc:
-        logger.warning(
-            "lead_tools.conversation_update_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
     if tarjeta_id:
         try:
             await storage.sync_persona_opportunity_context(
@@ -486,6 +479,13 @@ async def _complete_close_lead(
                 "lead_tools.opportunity_sync_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+    try:
+        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.conversation_update_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
     try:
         await storage.upsert_conversation_insights(
             conversation_id=context.conversation_id,
