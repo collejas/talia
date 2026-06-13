@@ -17993,17 +17993,112 @@ async def list_compras_ordenes_para_recepcion(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.view")),
     solo_abiertas: bool = Query(default=True),
+    lite: bool = Query(default=False),
+    offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    search: str | None = Query(default=None, max_length=120),
 ) -> list[CRMOrdenCompraRecepcion]:
     try:
         rows = await repo.list_ordenes_compra(
             organizacion_id=organizacion_id,
             include_closed=not solo_abiertas,
             limit=limit,
+            offset=offset,
+            lite=lite,
+            search=search,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMOrdenCompraRecepcion.model_validate(_normalize_orden_compra_row(row)) for row in rows]
+
+
+@router.get("/compras/ordenes/bootstrap")
+async def get_compras_ordenes_bootstrap(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    try:
+        tasks = await asyncio.gather(
+            repo.list_almacenes(organizacion_id=organizacion_id, include_inactive=False, limit=100),
+            repo.list_proveedores(organizacion_id=organizacion_id, include_inactive=False, limit=100),
+            repo.list_catalog_items(organizacion_id=organizacion_id, include_inactive=False, limit=1000),
+            repo.list_incoterms(limit=200),
+            repo.list_monedas(limit=200),
+            repo.list_modos_transporte(limit=200),
+            repo.list_geo_paises(limit=250),
+            repo.list_agentes_aduanales(organizacion_id=organizacion_id, include_inactive=True, limit=200),
+            repo.list_pedimentos_importacion(organizacion_id=organizacion_id, include_cancelled=True, limit=200),
+            repo.count_ordenes_compra(organizacion_id=organizacion_id, include_closed=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    (
+        almacenes,
+        proveedores,
+        catalog_items,
+        incoterms,
+        monedas,
+        modos_transporte,
+        paises,
+        agentes_aduanales,
+        pedimentos_importacion,
+        total_ordenes,
+    ) = tasks
+    duration_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "crm.compras.ordenes.bootstrap",
+        extra={
+            "duration_ms": round(duration_ms, 2),
+            "almacenes": len(almacenes),
+            "proveedores": len(proveedores),
+            "catalog_items": len(catalog_items),
+            "incoterms": len(incoterms),
+            "monedas": len(monedas),
+            "modos_transporte": len(modos_transporte),
+            "paises": len(paises),
+            "agentes_aduanales": len(agentes_aduanales),
+            "pedimentos_importacion": len(pedimentos_importacion),
+            "total_ordenes": total_ordenes,
+        },
+    )
+    return {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "almacenes": almacenes,
+        "proveedores": proveedores,
+        "catalog_items": catalog_items,
+        "incoterms": incoterms,
+        "monedas": monedas,
+        "modos_transporte": modos_transporte,
+        "paises": paises,
+        "agentes_aduanales": agentes_aduanales,
+        "pedimentos_importacion": pedimentos_importacion,
+        "total_ordenes": total_ordenes,
+    }
+
+
+@router.get("/compras/ordenes/{orden_id}", response_model=CRMOrdenCompraRecepcion)
+async def get_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    try:
+        row = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+    return CRMOrdenCompraRecepcion.model_validate(_normalize_orden_compra_row(row))
 
 
 @router.get("/compras/tipo-cambio", response_model=CRMBanxicoTipoCambioResponse)

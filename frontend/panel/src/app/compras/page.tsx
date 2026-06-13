@@ -127,10 +127,10 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
   let ordenes: AnyRecord[] = []
   let recepciones: AnyRecord[] = []
   let existencias: AnyRecord[] = []
-  let incoterms: AnyRecord[] = []
+  const incoterms: AnyRecord[] = []
   let monedas: AnyRecord[] = []
-  let modosTransporte: AnyRecord[] = []
-  let paises: AnyRecord[] = []
+  const modosTransporte: AnyRecord[] = []
+  const paises: AnyRecord[] = []
   let agentesAduanales: AnyRecord[] = []
   let pedimentosImportacion: AnyRecord[] = []
   let comprasResumen: ComprasResumen = { almacenes: 0, ordenes_abiertas: 0, recepciones: 0 }
@@ -148,19 +148,9 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       fetchList("/crm/personas/list", { limit: 500 }),
     ])
   } else if (isOrdenesView) {
-    ;[almacenes, proveedores, catalogItems, ordenes, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] =
-      await Promise.all([
-        fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
-        fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
-        fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
-        fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
-        fetchList("/crm/compras/catalogos/incoterms", { limit: 200 }),
-        fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
-        fetchList("/crm/compras/catalogos/modos-transporte", { limit: 200 }),
-        fetchList("/crm/compras/catalogos/paises", { limit: 250 }),
-        fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
-        fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
-      ])
+    ;[ordenes] = await Promise.all([
+      fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 50, lite: true }),
+    ])
   } else if (isPedimentosView || isAgentesView) {
     ;[ordenes, monedas, agentesAduanales, pedimentosImportacion] = await Promise.all([
       fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),

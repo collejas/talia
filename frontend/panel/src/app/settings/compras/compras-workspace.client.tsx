@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { AlertCircle, Info } from "lucide-react"
 
@@ -182,6 +182,24 @@ type OrderExchangeRateStatus = {
   loading: boolean
   message: string
   sourceLabel: string
+}
+
+type ComprasOrdenesBootstrapResponse = {
+  ok?: boolean
+  almacenes?: AnyRecord[]
+  proveedores?: AnyRecord[]
+  catalog_items?: AnyRecord[]
+  incoterms?: AnyRecord[]
+  monedas?: AnyRecord[]
+  modos_transporte?: AnyRecord[]
+  paises?: AnyRecord[]
+  agentes_aduanales?: AnyRecord[]
+  pedimentos_importacion?: AnyRecord[]
+  total_ordenes?: number
+}
+
+function isPlainRecord(value: unknown): value is AnyRecord {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
 }
 
 function isBanxicoTipoCambioResponse(
@@ -966,21 +984,21 @@ function getPaymentNormalizationDate(row: AnyRecord, fallback: string): string {
 }
 
 export function ComprasWorkspace({
-  almacenes,
-  proveedores,
-  proveedorContactos,
-  proveedorCuentasBancarias,
-  personas,
-  catalogItems,
-  ordenes,
-  recepciones,
-  existencias,
-  incoterms,
-  monedas,
-  modosTransporte,
-  paises,
-  agentesAduanales,
-  pedimentosImportacion,
+  almacenes: initialAlmacenes,
+  proveedores: initialProveedores,
+  proveedorContactos: initialProveedorContactos,
+  proveedorCuentasBancarias: initialProveedorCuentasBancarias,
+  personas: initialPersonas,
+  catalogItems: initialCatalogItems,
+  ordenes: initialOrdenes,
+  recepciones: initialRecepciones,
+  existencias: initialExistencias,
+  incoterms: initialIncoterms,
+  monedas: initialMonedas,
+  modosTransporte: initialModosTransporte,
+  paises: initialPaises,
+  agentesAduanales: initialAgentesAduanales,
+  pedimentosImportacion: initialPedimentosImportacion,
   selectedPedimento,
   selectedPedimentoId,
   defaultOrderId,
@@ -995,6 +1013,21 @@ export function ComprasWorkspace({
   activeView,
 }: ComprasWorkspaceProps) {
   const router = useRouter()
+  const [almacenes, setAlmacenes] = useState<AnyRecord[]>(() => initialAlmacenes)
+  const [proveedores, setProveedores] = useState<AnyRecord[]>(() => initialProveedores)
+  const proveedorContactos = initialProveedorContactos
+  const proveedorCuentasBancarias = initialProveedorCuentasBancarias
+  const personas = initialPersonas
+  const [catalogItems, setCatalogItems] = useState<AnyRecord[]>(() => initialCatalogItems)
+  const [ordenes, setOrdenes] = useState<AnyRecord[]>(() => initialOrdenes)
+  const recepciones = initialRecepciones
+  const existencias = initialExistencias
+  const [incoterms, setIncoterms] = useState<AnyRecord[]>(() => initialIncoterms)
+  const [monedas, setMonedas] = useState<AnyRecord[]>(() => initialMonedas)
+  const [modosTransporte, setModosTransporte] = useState<AnyRecord[]>(() => initialModosTransporte)
+  const [paises, setPaises] = useState<AnyRecord[]>(() => initialPaises)
+  const [agentesAduanales, setAgentesAduanales] = useState<AnyRecord[]>(() => initialAgentesAduanales)
+  const [pedimentosImportacion, setPedimentosImportacion] = useState<AnyRecord[]>(() => initialPedimentosImportacion)
   const openOrders = useMemo(
     () =>
       ordenes.filter((orden) =>
@@ -1112,8 +1145,15 @@ export function ComprasWorkspace({
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
   const [expandedOrderLineIndex, setExpandedOrderLineIndex] = useState<number | null>(null)
   const orderHydratingRef = useRef(false)
+  const orderBootstrapLoadedRef = useRef(false)
+  const orderInitialPageLoadedRef = useRef(false)
   const orderExchangeRateRequestIdRef = useRef(0)
   const paymentMxnLookupRequestIdRef = useRef(0)
+  const [orderSearchInput, setOrderSearchInput] = useState("")
+  const [orderSearchTerm, setOrderSearchTerm] = useState("")
+  const [orderTotalCount, setOrderTotalCount] = useState<number>(initialOrdenes.length)
+  const [orderLoadMorePending, setOrderLoadMorePending] = useState(false)
+  const [orderHasMore, setOrderHasMore] = useState(initialOrdenes.length >= 50)
   const createEmptyDocumentUploadSlot = useCallback(
     () => ({ id: crypto.randomUUID(), file: null as File | null, fileName: "" }),
     [],
@@ -1121,6 +1161,211 @@ export function ComprasWorkspace({
   const [orderDocumentUploadSlots, setOrderDocumentUploadSlots] = useState<
     Record<string, Array<{ id: string; file: File | null; fileName: string }>>
   >({})
+
+  const mergeOrderRecord = useCallback((nextOrder: AnyRecord) => {
+    const orderId = String(nextOrder.id ?? "")
+    if (!orderId) {
+      return
+    }
+    setOrdenes((current) => {
+      let replaced = false
+      const next = current.map((order) => {
+        if (String(order.id) !== orderId) {
+          return order
+        }
+        replaced = true
+        return { ...order, ...nextOrder }
+      })
+      if (!replaced) {
+        return [nextOrder, ...current]
+      }
+      return next
+    })
+  }, [])
+
+  const mergeOrderRecords = useCallback((nextOrders: AnyRecord[], replace = false) => {
+    setOrdenes((current) => {
+      if (replace) {
+        return nextOrders
+      }
+      const byId = new Map(current.map((order) => [String(order.id), order]))
+      for (const order of nextOrders) {
+        const orderId = String(order.id ?? "")
+        if (!orderId) {
+          continue
+        }
+        byId.set(orderId, { ...byId.get(orderId), ...order })
+      }
+      return Array.from(byId.values())
+    })
+  }, [])
+
+  const loadOrdersPage = useCallback(
+    async (options?: { reset?: boolean; search?: string }) => {
+      const reset = Boolean(options?.reset)
+      const search = (options?.search ?? orderSearchTerm).trim()
+      const offset = reset ? 0 : ordenes.length
+      if (!reset && orderLoadMorePending) {
+        return
+      }
+      if (!reset && !orderHasMore) {
+        return
+      }
+      setOrderLoadMorePending(true)
+      try {
+        const query = new URLSearchParams({
+          solo_abiertas: "false",
+          lite: "true",
+          limit: "50",
+          offset: String(offset),
+        })
+        if (search) {
+          query.set("search", search)
+        }
+        const response = await fetch(`/api/compras/ordenes?${query.toString()}`, {
+          cache: "no-store",
+        })
+        const payload = (await response.json().catch(() => null)) as unknown
+        if (!response.ok || !Array.isArray(payload)) {
+          throw new Error("ordenes_unavailable")
+        }
+        const nextOrders = payload as AnyRecord[]
+        if (reset) {
+          mergeOrderRecords(nextOrders, true)
+        } else {
+          mergeOrderRecords(nextOrders)
+        }
+        setOrderSearchTerm(search)
+        setOrderSearchInput(search)
+        setOrderHasMore(nextOrders.length >= 50)
+      } finally {
+        setOrderLoadMorePending(false)
+      }
+    },
+    [mergeOrderRecords, orderHasMore, orderLoadMorePending, orderSearchTerm, ordenes.length],
+  )
+
+  const handleOrderSearchSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      await loadOrdersPage({ reset: true, search: orderSearchInput })
+    },
+    [loadOrdersPage, orderSearchInput],
+  )
+
+  const ensureOrderDetail = useCallback(
+    async (orden: AnyRecord | string) => {
+      const orderId = typeof orden === "string" ? orden : String(orden.id ?? "")
+      if (!orderId) {
+        return null
+      }
+      const currentOrder = typeof orden === "string" ? ordenes.find((entry) => String(entry.id) === orderId) ?? null : orden
+      const hasFullPayload =
+        currentOrder &&
+        Array.isArray(currentOrder.documentos) &&
+        Array.isArray(currentOrder.items) &&
+        Array.isArray(currentOrder.pagos_programados) &&
+        currentOrder.condiciones_comerciales &&
+        currentOrder.condiciones_pago &&
+        currentOrder.logistica
+      if (hasFullPayload) {
+        return currentOrder
+      }
+      const response = await fetch(`/api/compras/ordenes/${encodeURIComponent(orderId)}`, {
+        cache: "no-store",
+      })
+      const payload = (await response.json().catch(() => null)) as unknown
+      if (!response.ok || !isPlainRecord(payload)) {
+        throw new Error("orden_compra_not_found")
+      }
+      mergeOrderRecord(payload)
+      return payload
+    },
+    [mergeOrderRecord, ordenes],
+  )
+
+  useEffect(() => {
+    if (activeView !== "ordenes" || orderBootstrapLoadedRef.current) {
+      return
+    }
+    orderBootstrapLoadedRef.current = true
+    let cancelled = false
+
+    const loadBootstrap = async () => {
+      try {
+        const response = await fetch("/api/compras/ordenes/bootstrap", {
+          cache: "no-store",
+        })
+        const payload = (await response.json().catch(() => null)) as unknown
+        if (!response.ok || !isPlainRecord(payload)) {
+          throw new Error("ordenes_bootstrap_unavailable")
+        }
+        if (cancelled) {
+          return
+        }
+        const bootstrapPayload = payload as ComprasOrdenesBootstrapResponse
+        const nextAlmacenes = Array.isArray(bootstrapPayload.almacenes) ? bootstrapPayload.almacenes : []
+        const nextProveedores = Array.isArray(bootstrapPayload.proveedores) ? bootstrapPayload.proveedores : []
+        const nextCatalogItems = Array.isArray(bootstrapPayload.catalog_items) ? bootstrapPayload.catalog_items : []
+        const nextIncoterms = Array.isArray(bootstrapPayload.incoterms) ? bootstrapPayload.incoterms : []
+        const nextMonedas = Array.isArray(bootstrapPayload.monedas) ? bootstrapPayload.monedas : []
+        const nextModosTransporte = Array.isArray(bootstrapPayload.modos_transporte) ? bootstrapPayload.modos_transporte : []
+        const nextPaises = Array.isArray(bootstrapPayload.paises) ? bootstrapPayload.paises : []
+        const nextAgentesAduanales = Array.isArray(bootstrapPayload.agentes_aduanales) ? bootstrapPayload.agentes_aduanales : []
+        const nextPedimentosImportacion = Array.isArray(bootstrapPayload.pedimentos_importacion) ? bootstrapPayload.pedimentos_importacion : []
+
+        setAlmacenes(nextAlmacenes)
+        setProveedores(nextProveedores)
+        setCatalogItems(nextCatalogItems)
+        setIncoterms(nextIncoterms)
+        setMonedas(nextMonedas)
+        setModosTransporte(nextModosTransporte)
+        setPaises(nextPaises)
+        setAgentesAduanales(nextAgentesAduanales)
+        setPedimentosImportacion(nextPedimentosImportacion)
+
+        const firstWarehouse = nextAlmacenes.find((almacen: AnyRecord) => Boolean(almacen?.es_principal)) ?? nextAlmacenes[0] ?? null
+        const firstProvider = nextProveedores[0] ?? null
+        const firstCatalogItem = nextCatalogItems[0] ?? null
+        const warehouseId = firstWarehouse ? String(firstWarehouse.id ?? "") : ""
+        const providerId = firstProvider ? String(firstProvider.id ?? "") : ""
+        const catalogItemId = firstCatalogItem ? String(firstCatalogItem.id ?? "") : ""
+        const totalOrdenes = Number(bootstrapPayload.total_ordenes ?? 0)
+
+        if (warehouseId) {
+          setSelectedWarehouseId((current) => current || warehouseId)
+          setOrderWarehouseId((current) => current || warehouseId)
+          setAdjustmentWarehouseId((current) => current || warehouseId)
+        }
+        if (providerId) {
+          setOrderProviderId((current) => current || providerId)
+        }
+        if (catalogItemId) {
+          setAdjustmentCatalogItemId((current) => current || catalogItemId)
+        }
+        setWarehouseFormPrincipal(nextAlmacenes.length === 0)
+        if (Number.isFinite(totalOrdenes) && totalOrdenes > 0) {
+          setOrderTotalCount(totalOrdenes)
+          setOrderHasMore(totalOrdenes > initialOrdenes.length)
+        }
+      } catch {
+        // Sin datos de bootstrap, la vista sigue funcionando con lo ya cargado.
+      }
+    }
+
+    void loadBootstrap()
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, initialOrdenes.length])
+
+  useEffect(() => {
+    if (activeView !== "ordenes" || orderInitialPageLoadedRef.current) {
+      return
+    }
+    orderInitialPageLoadedRef.current = true
+    void loadOrdersPage({ reset: true, search: "" })
+  }, [activeView, loadOrdersPage])
 
   const selectedOrderRecord = useMemo(
     () => ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null,
@@ -1295,34 +1540,28 @@ export function ComprasWorkspace({
     }
     return subtotal * rate
   }
-  const openOrderPayments = (orden: AnyRecord) => {
-    const orderId = String(orden.id)
-    setSelectedOrderId(orderId)
-    setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(orden))
-    setEditingPaymentScheduleRecord(null)
-    setEditingPaymentScheduleAmountIndex(null)
-    setEditingRegisteredPaymentAmountFocused(false)
-    setIsOrderPaymentsModalOpen(true)
-  }
+  const openOrderPayments = useCallback(
+    async (orden: AnyRecord | string) => {
+      const fullOrder = await ensureOrderDetail(orden)
+      if (!fullOrder) {
+        return
+      }
+      const orderId = String(fullOrder.id)
+      setSelectedOrderId(orderId)
+      setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(fullOrder))
+      setEditingPaymentScheduleRecord(null)
+      setEditingPaymentScheduleAmountIndex(null)
+      setEditingRegisteredPaymentAmountFocused(false)
+      setIsOrderPaymentsModalOpen(true)
+    },
+    [ensureOrderDetail],
+  )
 
   const openCreateOrderModal = () => {
     setOrderSaveErrorMessage("")
     clearOrderForm()
     resetOrderDocumentUploadSlots()
     setIsOrderModalOpen(true)
-  }
-
-  const openEditOrderModal = (orden: AnyRecord) => {
-    setOrderSaveErrorMessage("")
-    setSelectedOrderId(String(orden.id))
-    startEditOrder(orden)
-    resetOrderDocumentUploadSlots()
-    setIsOrderModalOpen(true)
-  }
-
-  const openOrderDetail = (orden: AnyRecord) => {
-    setSelectedOrderId(String(orden.id))
-    setIsOrderDetailOpen(true)
   }
 
   const handleOrderModalOpenChange = (open: boolean) => {
@@ -1873,24 +2112,50 @@ export function ComprasWorkspace({
     }
   }, [defaultOrderEmissionIso, defaultOrderFolio, defaultWarehouseId])
 
+  const openEditOrderModal = useCallback(
+    async (orden: AnyRecord) => {
+      setOrderSaveErrorMessage("")
+      const fullOrder = await ensureOrderDetail(orden)
+      if (!fullOrder) {
+        return
+      }
+      setSelectedOrderId(String(fullOrder.id))
+      startEditOrder(fullOrder)
+      resetOrderDocumentUploadSlots()
+      setIsOrderModalOpen(true)
+    },
+    [ensureOrderDetail, resetOrderDocumentUploadSlots, startEditOrder],
+  )
+
+  const openOrderDetail = useCallback(
+    async (orden: AnyRecord) => {
+      const fullOrder = await ensureOrderDetail(orden)
+      if (!fullOrder) {
+        return
+      }
+      setSelectedOrderId(String(fullOrder.id))
+      setIsOrderDetailOpen(true)
+    },
+    [ensureOrderDetail],
+  )
+
   useEffect(() => {
     if (activeView !== "ordenes") {
+      return
+    }
+    if (isOrderPaymentsModalOpen) {
       return
     }
     if (!defaultPaymentOrderId) {
       return
     }
     const targetOrder = ordenes.find((orden) => String(orden.id) === defaultPaymentOrderId) ?? null
-    if (!targetOrder) {
+    if (targetOrder) {
+      void openOrderPayments(targetOrder)
       return
     }
-    setSelectedOrderId(String(targetOrder.id))
-    setOrderPaymentSchedules(buildOrderPaymentScheduleExtrasFromOrder(targetOrder))
-    setEditingPaymentScheduleRecord(null)
-    setEditingPaymentScheduleAmountIndex(null)
-    setEditingRegisteredPaymentAmountFocused(false)
-    setIsOrderPaymentsModalOpen(true)
-  }, [activeView, defaultPaymentOrderId, ordenes])
+    void openOrderPayments(defaultPaymentOrderId)
+  }, [activeView, defaultPaymentOrderId, isOrderPaymentsModalOpen, openOrderPayments, ordenes])
 
   const clearOrderForm = () => {
     orderHydratingRef.current = true
@@ -5261,51 +5526,79 @@ export function ComprasWorkspace({
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <CardTitle>Órdenes de compra</CardTitle>
-                <CardDescription />
+                <CardDescription>
+                  {orderSearchTerm
+                    ? `${ordenes.length} resultados encontrados`
+                    : `${ordenes.length} de ${orderTotalCount} órdenes cargadas`}
+                </CardDescription>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={openCreateOrderModal}>
-                  Crear Orden de Compra
-                </Button>
-                <Button type="button" variant="outline" onClick={() => selectedOrderRecord && openEditOrderModal(selectedOrderRecord)} disabled={!selectedOrderRecord}>
-                  Editar
-                </Button>
-                <Button type="button" variant="outline" onClick={() => selectedOrderRecord && openOrderPayments(selectedOrderRecord)} disabled={!selectedOrderRecord}>
-                  Pagos
-                </Button>
-                {selectedOrderRecord && selectedOrderStatus === "borrador" ? (
-                  <form action={sendOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
-                    <Button type="submit" variant="secondary">
+              <div className="flex w-full flex-col gap-3 lg:w-auto">
+                <form className="flex flex-wrap items-center gap-2" onSubmit={handleOrderSearchSubmit}>
+                  <Input
+                    value={orderSearchInput}
+                    onChange={(event) => setOrderSearchInput(event.target.value)}
+                    placeholder="Buscar por folio, referencia u observación"
+                    className="min-w-[280px] lg:w-[320px]"
+                  />
+                  <Button type="submit" variant="outline">
+                    Buscar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setOrderSearchInput("")
+                      void loadOrdersPage({ reset: true, search: "" })
+                    }}
+                    disabled={!orderSearchInput && !orderSearchTerm}
+                  >
+                    Limpiar
+                  </Button>
+                </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" onClick={openCreateOrderModal}>
+                    Crear Orden de Compra
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => { if (selectedOrderRecord) void openEditOrderModal(selectedOrderRecord) }} disabled={!selectedOrderRecord}>
+                    Editar
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => { if (selectedOrderRecord) void openOrderPayments(selectedOrderRecord) }} disabled={!selectedOrderRecord}>
+                    Pagos
+                  </Button>
+                  {selectedOrderRecord && selectedOrderStatus === "borrador" ? (
+                    <form action={sendOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                      <Button type="submit" variant="secondary">
+                        Enviar
+                      </Button>
+                    </form>
+                  ) : (
+                    <Button type="button" variant="secondary" disabled>
                       Enviar
                     </Button>
-                  </form>
-                ) : (
-                  <Button type="button" variant="secondary" disabled>
-                    Enviar
-                  </Button>
-                )}
-                {selectedOrderRecord && selectedOrderStatus === "enviada" ? (
-                  <form action={approveOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
-                    <Button type="submit" variant="secondary">
+                  )}
+                  {selectedOrderRecord && selectedOrderStatus === "enviada" ? (
+                    <form action={approveOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                      <Button type="submit" variant="secondary">
+                        Aprobar
+                      </Button>
+                    </form>
+                  ) : (
+                    <Button type="button" variant="secondary" disabled>
                       Aprobar
                     </Button>
-                  </form>
-                ) : (
-                  <Button type="button" variant="secondary" disabled>
-                    Aprobar
-                  </Button>
-                )}
-                {selectedOrderRecord ? (
-                  <form action={deleteOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
-                    <Button type="submit" variant="ghost">
+                  )}
+                  {selectedOrderRecord ? (
+                    <form action={deleteOrdenCompraAction.bind(null, String(selectedOrderRecord.id))}>
+                      <Button type="submit" variant="ghost">
+                        Eliminar
+                      </Button>
+                    </form>
+                  ) : (
+                    <Button type="button" variant="ghost" disabled>
                       Eliminar
                     </Button>
-                  </form>
-                ) : (
-                  <Button type="button" variant="ghost" disabled>
-                    Eliminar
-                  </Button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -5393,7 +5686,7 @@ export function ComprasWorkspace({
                             <Button
                               type="button"
                               size="sm"
-                              onClick={() => openOrderDetail(orden)}
+                              onClick={() => { void openOrderDetail(orden) }}
                             >
                               Ver
                             </Button>
@@ -5405,6 +5698,23 @@ export function ComprasWorkspace({
                 )}
               </TableBody>
             </Table>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                {orderSearchTerm
+                  ? "La búsqueda se resuelve en servidor y puedes seguir cargando coincidencias."
+                  : "Puedes cargar más órdenes sin volver a pedir el detalle pesado."}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void loadOrdersPage({ reset: false })
+                }}
+                disabled={orderLoadMorePending || !orderHasMore}
+              >
+                {orderLoadMorePending ? "Cargando..." : orderHasMore ? "Cargar más" : "Sin más resultados"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}

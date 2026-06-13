@@ -11229,12 +11229,35 @@ class CRMRepository:
         organizacion_id: UUID,
         include_closed: bool = True,
         limit: int = 100,
+        offset: int = 0,
+        lite: bool = False,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "fecha_emision.desc",
             "limit": str(max(1, min(limit, 5000))),
-            "select": (
+            "offset": str(max(0, offset)),
+        }
+        if search:
+            sanitized = _sanitize_search_pattern(search)
+            if sanitized:
+                params["or"] = (
+                    f"(folio.ilike.*{sanitized}*,referencia_externa.ilike.*{sanitized}*,observaciones.ilike.*{sanitized}*)"
+                )
+        if lite:
+            params["select"] = (
+                "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
+                "moneda,tipo_operacion,tipo_cambio_referencia,subtotal,descuento_total,impuestos_total,total,"
+                "enviada_por_usuario_id,enviada_en,aprobado_por_usuario_id,aprobada_en,referencia_externa,observaciones,"
+                "creado_en,actualizado_en,"
+                "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
+                "almacen:almacenes(id,codigo,nombre,activo,es_principal),"
+                "enviada_por_usuario:usuarios!ordenes_compra_enviada_por_usuario_id_fkey(id,nombre_completo,correo),"
+                "aprobado_por_usuario:usuarios!ordenes_compra_aprobado_por_usuario_id_fkey(id,nombre_completo,correo)"
+            )
+        else:
+            params["select"] = (
             "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
                 "moneda,tipo_operacion,tipo_cambio_referencia,vigencia_hasta,proforma_referencia,"
                 "subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
@@ -11275,8 +11298,7 @@ class CRMRepository:
                 "lote,numero_serie,fecha_caducidad,observaciones,creado_en,actualizado_en,"
                 "catalog_item:catalog_items(id,slug,nombre,tipo,unidad,activo,maneja_inventario)"
                 ")"
-            ),
-        }
+            )
         if not include_closed:
             params["estado"] = "in.(borrador,enviada,aprobada,parcial)"
         resp = await self._request("GET", "/rest/v1/ordenes_compra", params=params)
@@ -11884,11 +11906,13 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         data = await self.list_ordenes_compra(
             organizacion_id=organizacion_id,
             include_closed=False,
             limit=limit,
+            offset=offset,
         )
         return data
 
