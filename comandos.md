@@ -160,7 +160,7 @@ free -m
 
 # REINDEXAR
 cd /var/www/talia/backend
-.venv/bin/python scripts/index_catalog.py --organizacion-id 39e32c05-bfc2-4794-8aab-225873f2bf19
+.venv/bin/python scripts/index_catalog.py --organizacion-id 00000000-0000-0000-0000-000000000001
 # DIAGNOSTICO DE CPU
 
 echo "========== LOAD =========="
@@ -216,12 +216,12 @@ du -shL /var/www/talia/current/panel
 
   select public.cleanup_test_phone_whatsapp(
     '+5214441302811',
-    '1afbf5b2-1ee7-4626-bb08-e727ef7f69f4'::uuid
+    '00000000-0000-0000-0000-000000000001'::uuid
   );
 
     select public.cleanup_test_phone_whatsapp(
     '+5214441306206',
-    '39e32c05-bfc2-4794-8aab-225873f2bf19'::uuid
+    '00000000-0000-0000-0000-000000000001'::uuid
   );
 
   delete from public.oportunidades
@@ -610,3 +610,24 @@ curl -X POST "https://graph.facebook.com/v25.0/1046129768592659/messages" \
 }'
 
 Si te regresa un messages[].id, ya quedó funcionando.
+
+
+# correr rellenos:
+
+  Comandos:
+
+cd /var/www/talia/backend
+poetry run python scripts/backfill_opportunity_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001
+poetry run python scripts/backfill_opportunity_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001 --apply
+
+  Para recomputar resumen e insights de una conversación específica:
+
+cd /var/www/talia/backend
+poetry run python scripts/recompute_conversation_insights.py --conversation-id 7f852e0d-1fa8-459a-b059-7ec92fc1c3a0
+poetry run python scripts/recompute_conversation_insights.py --conversation-id 7f852e0d-1fa8-459a-b059-7ec92fc1c3a0 --apply
+
+  Para correr por tenant:
+
+cd /var/www/talia/backend
+poetry run python scripts/recompute_conversation_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001
+poetry run python scripts/recompute_conversation_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001 --apply

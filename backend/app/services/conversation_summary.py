@@ -176,6 +176,90 @@ async def _summarize_messages(
     return text.strip()
 
 
+async def rebuild_conversation_summary(
+    *,
+    conversation_id: str,
+    persona_id: str | None = None,
+    organizacion_id: str | UUID | None = None,
+    tipo: str = "conversation",
+    context_data: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Regenera un resumen de conversación aunque ya exista uno previo."""
+    try:
+        messages = await storage.fetch_recent_messages(
+            conversation_id=conversation_id,
+            limit=settings.conversation_summary_history_limit,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "conversation_summary.messages_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+
+    if not messages:
+        return None
+
+    summary_text = await _summarize_messages(
+        messages,
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        organizacion_id=_resolve_organizacion_uuid(organizacion_id),
+        context_data=context_data,
+    )
+    if not summary_text:
+        return None
+
+    last_message = messages[-1]
+    last_message_id = str(last_message.get("id") or "").strip()
+    new_metadata = _ensure_metadata_with_type(
+        {
+            "last_message_id": last_message_id,
+            "last_message_timestamp": str(last_message.get("creado_en") or ""),
+            "messages_count": len(messages),
+            "recomputed_at": time.time(),
+            "source": "recompute_job",
+        }
+    )
+    try:
+        resolved_org_id: str | None
+        if isinstance(organizacion_id, UUID):
+            resolved_org_id = str(organizacion_id)
+        elif isinstance(organizacion_id, str):
+            resolved_org_id = organizacion_id.strip() or None
+        else:
+            resolved_org_id = None
+        created = await storage.create_conversation_summary(
+            conversation_id=conversation_id,
+            resumen=summary_text,
+            persona_id=persona_id,
+            organizacion_id=resolved_org_id,
+            tipo=tipo,
+            metadatos=new_metadata,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "conversation_summary.rebuild_create_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+
+    created["metadatos"] = _ensure_dict(created.get("metadatos"))
+    try:
+        await storage.refresh_persona_insights_from_conversation(
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            summary_text=summary_text,
+            source="conversation_summary_rebuild",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "conversation_summary.rebuild_insights_refresh_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+    return created
+
+
 async def ensure_conversation_summary(
     *,
     conversation_id: str,

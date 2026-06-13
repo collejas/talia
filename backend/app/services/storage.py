@@ -411,7 +411,7 @@ def _looks_like_placeholder_insight(value: str) -> bool:
     lowered = " ".join(value.strip().lower().split())
     if not lowered:
         return True
-    return lowered in {
+    if lowered in {
         "interés en tal-ia",
         "interes en tal-ia",
         "información comercial compartida durante la conversación.",
@@ -420,7 +420,28 @@ def _looks_like_placeholder_insight(value: str) -> bool:
         "prospecto en conversacion activa solicitando informacion.",
         "resumen generado por tal-ia",
         "necesidad capturada por tal-ia",
-    }
+        "luis pérez se ha presentado como un nuevo contacto.",
+        "luis perez se ha presentado como un nuevo contacto.",
+        "la necesidad principal no está claramente definida en este mensaje inicial.",
+        "la necesidad principal no esta claramente definida en este mensaje inicial.",
+        "hay una oportunidad abierta en el embudo de ventas.",
+        "el siguiente paso sugerido es realizar un seguimiento para explorar sus necesidades y ofrecer soluciones adecuadas.",
+        "el siguiente paso sugerido es programar un seguimiento para explorar sus necesidades y ofrecer soluciones adecuadas.",
+    }:
+        return True
+    return any(
+        fragment in lowered
+        for fragment in (
+            "se ha presentado como un nuevo contacto",
+            "la necesidad principal no está claramente definida",
+            "la necesidad principal no esta claramente definida",
+            "hay una oportunidad abierta en el embudo de ventas",
+            "seguir para explorar sus necesidades",
+            "ofrecer soluciones adecuadas",
+            "solicitó información",
+            "solicito informacion",
+        )
+    )
 
 
 def _looks_like_placeholder_opportunity_description(value: str) -> bool:
@@ -439,6 +460,23 @@ def _looks_like_placeholder_opportunity_description(value: str) -> bool:
             "soluciones adecuadas",
         )
     )
+
+
+def _build_need_title(text: str, *, fallback_company: str | None = None) -> str:
+    candidate = " ".join(str(text or "").strip().split())
+    if candidate:
+        for separator in (".", "!", "?", ";", "\n"):
+            if separator in candidate:
+                candidate = candidate.split(separator, 1)[0].strip()
+                break
+    if candidate and len(candidate) > 96:
+        candidate = candidate[:95].rstrip() + "…"
+    if candidate:
+        return candidate
+    company = str(fallback_company or "").strip()
+    if company:
+        return f"Información de Tal-IA para {company}"
+    return "Interés en Tal-IA"
 
 
 def _build_opportunity_title(
