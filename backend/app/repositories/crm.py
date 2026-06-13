@@ -9715,26 +9715,17 @@ class CRMRepository:
         persona_id: UUID,
     ) -> None:
         persona_row = await self.get_persona(organizacion_id=organizacion_id, persona_id=persona_id)
-        if persona_row and persona_row.get("id"):
-            persona_uuid = str(persona_row.get("id"))
-            await self._request(
-                "DELETE",
-                "/rest/v1/cuenta_personas",
-                params={
-                    "organizacion_id": f"eq.{organizacion_id}",
-                    "persona_id": f"eq.{persona_uuid}",
-                },
-                prefer="return=representation",
-            )
-            await self._request(
-                "DELETE",
-                "/rest/v1/personas",
-                params={
-                    "organizacion_id": f"eq.{organizacion_id}",
-                    "id": f"eq.{persona_uuid}",
-                },
-                prefer="return=representation",
-            )
+        if not persona_row or not persona_row.get("id"):
+            return
+
+        persona_uuid = str(persona_row.get("id"))
+        await self._rpc(
+            "crm_delete_persona_physical",
+            {
+                "p_persona_id": persona_uuid,
+                "p_organizacion_id": str(organizacion_id),
+            },
+        )
 
     async def delete_contact(
         self,
