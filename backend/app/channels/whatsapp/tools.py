@@ -2164,13 +2164,14 @@ async def _handle_close_lead(
                 email=webchat_service._extract_persona_email(notify_persona),
                 extra={"siguiente_accion": siguiente_accion},
             )
-        except Exception:
+        except Exception as exc:
             logger.warning(
                 "whatsapp.close_lead.notify_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "persona_id": persona_id,
                     "opportunity_id": str(tarjeta_id),
+                    "error": str(exc),
                 },
             )
 
@@ -3338,6 +3339,7 @@ async def _notify_sales_rep(
                 vendedor_id=seller_uuid,
                 conversation_id=context.conversation_id,
                 persona_id=persona_id,
+                contact_id=persona_id,
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=message_sid,
