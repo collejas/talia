@@ -13123,6 +13123,12 @@ class CRMBanxicoTipoCambioResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CRMComprasResumenResponse(BaseModel):
+    almacenes: int
+    ordenes_abiertas: int
+    recepciones: int
+
+
 def _normalize_orden_compra_row(row: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(row)
     for field in ("condiciones_comerciales", "condiciones_pago", "logistica"):
@@ -18029,6 +18035,31 @@ async def get_compras_tipo_cambio(
             "fuente_url": resultado.fuente_url or None,
             "actualizado_en": resultado.actualizado_en,
         }
+    )
+
+
+@router.get("/compras/resumen", response_model=CRMComprasResumenResponse)
+async def get_compras_resumen(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+) -> CRMComprasResumenResponse:
+    try:
+        almacenes_task = repo.count_almacenes(organizacion_id=organizacion_id, include_inactive=False)
+        ordenes_task = repo.count_ordenes_compra(organizacion_id=organizacion_id, include_closed=False)
+        recepciones_task = repo.count_recepciones_compra(organizacion_id=organizacion_id)
+        almacenes, ordenes_abiertas, recepciones = await asyncio.gather(
+            almacenes_task,
+            ordenes_task,
+            recepciones_task,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMComprasResumenResponse(
+        almacenes=almacenes,
+        ordenes_abiertas=ordenes_abiertas,
+        recepciones=recepciones,
     )
 
 

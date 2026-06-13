@@ -5,6 +5,11 @@ import { callCrmApi } from "@/lib/api/crm"
 import { ComprasWorkspace } from "../settings/compras/compras-workspace.client"
 
 type AnyRecord = Record<string, unknown>
+type ComprasResumen = {
+  almacenes: number
+  ordenes_abiertas: number
+  recepciones: number
+}
 
 async function fetchList(path: string, searchParams?: Record<string, string | number | boolean | undefined>) {
   const response = await callCrmApi<AnyRecord[]>(path, { searchParams })
@@ -18,6 +23,14 @@ async function fetchOne(path: string) {
   const response = await callCrmApi<AnyRecord>(path)
   if (!response.ok || !response.data || typeof response.data !== "object") {
     return null
+  }
+  return response.data
+}
+
+async function fetchComprasResumen(): Promise<ComprasResumen> {
+  const response = await callCrmApi<ComprasResumen>("/crm/compras/resumen")
+  if (!response.ok || !response.data) {
+    return { almacenes: 0, ordenes_abiertas: 0, recepciones: 0 }
   }
   return response.data
 }
@@ -96,23 +109,79 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       : Array.isArray(ordenIdParam)
         ? ordenIdParam[0] ?? ""
         : ""
-  const [almacenes, proveedores, proveedorContactos, proveedorCuentasBancarias, personas, catalogItems, ordenes, recepciones, existencias, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] = await Promise.all([
-    fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
-    fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
-    fetchList("/crm/compras/proveedores-relaciones/contactos", { include_inactive: false, limit: 500 }),
-    fetchList("/crm/compras/proveedores-relaciones/cuentas-bancarias", { include_inactive: false, limit: 500 }),
-    fetchList("/crm/personas/list", { limit: 500 }),
-    fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
-    fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
-    fetchList("/crm/compras/recepciones", { limit: 25 }),
-    fetchList("/crm/compras/existencias", { limit: 200 }),
-    fetchList("/crm/compras/catalogos/incoterms", { limit: 200 }),
-    fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
-    fetchList("/crm/compras/catalogos/modos-transporte", { limit: 200 }),
-    fetchList("/crm/compras/catalogos/paises", { limit: 250 }),
-    fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
-    fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
-  ])
+  const isResumenView = activeView === "resumen"
+  const isAlmacenesView = activeView === "almacenes"
+  const isProveedoresView = activeView === "proveedores"
+  const isOrdenesView = activeView === "ordenes"
+  const isPedimentosView = activeView === "pedimentos"
+  const isAgentesView = activeView === "agentes"
+  const isInventarioView = activeView === "inventario"
+  const isRecepcionesView = activeView === "recepciones"
+
+  let almacenes: AnyRecord[] = []
+  let proveedores: AnyRecord[] = []
+  let proveedorContactos: AnyRecord[] = []
+  let proveedorCuentasBancarias: AnyRecord[] = []
+  let personas: AnyRecord[] = []
+  let catalogItems: AnyRecord[] = []
+  let ordenes: AnyRecord[] = []
+  let recepciones: AnyRecord[] = []
+  let existencias: AnyRecord[] = []
+  let incoterms: AnyRecord[] = []
+  let monedas: AnyRecord[] = []
+  let modosTransporte: AnyRecord[] = []
+  let paises: AnyRecord[] = []
+  let agentesAduanales: AnyRecord[] = []
+  let pedimentosImportacion: AnyRecord[] = []
+  let comprasResumen: ComprasResumen = { almacenes: 0, ordenes_abiertas: 0, recepciones: 0 }
+
+  if (isResumenView) {
+    comprasResumen = await fetchComprasResumen()
+  } else if (isAlmacenesView) {
+    ;[almacenes] = await Promise.all([fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 })])
+  } else if (isProveedoresView) {
+    ;[almacenes, proveedores, proveedorContactos, proveedorCuentasBancarias, personas] = await Promise.all([
+      fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
+      fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
+      fetchList("/crm/compras/proveedores-relaciones/contactos", { include_inactive: false, limit: 500 }),
+      fetchList("/crm/compras/proveedores-relaciones/cuentas-bancarias", { include_inactive: false, limit: 500 }),
+      fetchList("/crm/personas/list", { limit: 500 }),
+    ])
+  } else if (isOrdenesView) {
+    ;[almacenes, proveedores, catalogItems, ordenes, incoterms, monedas, modosTransporte, paises, agentesAduanales, pedimentosImportacion] =
+      await Promise.all([
+        fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
+        fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
+        fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
+        fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
+        fetchList("/crm/compras/catalogos/incoterms", { limit: 200 }),
+        fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
+        fetchList("/crm/compras/catalogos/modos-transporte", { limit: 200 }),
+        fetchList("/crm/compras/catalogos/paises", { limit: 250 }),
+        fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
+        fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
+      ])
+  } else if (isPedimentosView || isAgentesView) {
+    ;[ordenes, monedas, agentesAduanales, pedimentosImportacion] = await Promise.all([
+      fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
+      fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
+      fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
+      fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
+    ])
+  } else if (isInventarioView) {
+    ;[almacenes, catalogItems, existencias] = await Promise.all([
+      fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
+      fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
+      fetchList("/crm/compras/existencias", { limit: 200 }),
+    ])
+  } else if (isRecepcionesView) {
+    ;[almacenes, ordenes, recepciones] = await Promise.all([
+      fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
+      fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
+      fetchList("/crm/compras/recepciones", { limit: 25 }),
+    ])
+  }
+
   const inventoryCatalogItems = catalogItems.filter(isInventoryCatalogItem)
 
   const principalWarehouse = almacenes.find((almacen) => Boolean(almacen.es_principal)) ?? almacenes[0] ?? null
@@ -144,7 +213,10 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
         ? pedimentoIdParam[0] ?? ""
         : ""
   const effectivePedimentoId = requestedPedimentoId
-  const selectedPedimento = effectivePedimentoId ? await fetchOne(`/crm/compras/pedimentos/${encodeURIComponent(effectivePedimentoId)}`) : null
+  const selectedPedimento =
+    effectivePedimentoId && (isPedimentosView || isAgentesView)
+      ? await fetchOne(`/crm/compras/pedimentos/${encodeURIComponent(effectivePedimentoId)}`)
+      : null
 
   const views: Array<{ value: ComprasView; label: string }> = [
     { value: "resumen", label: "Resumen" },
@@ -211,6 +283,11 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
           defaultOrderFolio={defaultOrderFolio}
           defaultOrderEmissionIso={defaultOrderEmissionIso}
           defaultPaymentOrderId={defaultPaymentOrderId}
+          resumen={{
+            almacenes: comprasResumen.almacenes,
+            ordenesAbiertas: comprasResumen.ordenes_abiertas,
+            recepciones: comprasResumen.recepciones,
+          }}
           activeView={activeView}
         />
       </div>

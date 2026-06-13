@@ -10726,6 +10726,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar almacenes: {data!r}")
         return data
 
+    async def count_almacenes(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+    ) -> int:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id",
+            "limit": "1",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/almacenes",
+            params=params,
+            prefer="count=exact",
+        )
+        return self._extract_total_count(resp.headers.get("content-range")) or 0
+
     async def list_proveedores(
         self,
         *,
@@ -11263,6 +11284,27 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar ordenes de compra: {data!r}")
         return data
+
+    async def count_ordenes_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_closed: bool = True,
+    ) -> int:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id",
+            "limit": "1",
+        }
+        if not include_closed:
+            params["estado"] = "in.(borrador,enviada,aprobada,parcial)"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/ordenes_compra",
+            params=params,
+            prefer="count=exact",
+        )
+        return self._extract_total_count(resp.headers.get("content-range")) or 0
 
     async def get_orden_compra(
         self,
@@ -12130,6 +12172,24 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar recepciones: {data!r}")
         return data
+
+    async def count_recepciones_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> int:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/recepciones_compra",
+            params=params,
+            prefer="count=exact",
+        )
+        return self._extract_total_count(resp.headers.get("content-range")) or 0
 
     async def get_recepcion_compra(
         self,

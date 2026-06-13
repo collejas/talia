@@ -70,6 +70,11 @@ type ComprasWorkspaceProps = {
   defaultOrderFolio: string
   defaultOrderEmissionIso: string
   defaultPaymentOrderId: string
+  resumen: {
+    almacenes: number
+    ordenesAbiertas: number
+    recepciones: number
+  }
   activeView: "resumen" | "almacenes" | "proveedores" | "ordenes" | "pedimentos" | "agentes" | "inventario" | "recepciones" | "pagos"
 }
 
@@ -986,6 +991,7 @@ export function ComprasWorkspace({
   defaultOrderFolio,
   defaultOrderEmissionIso,
   defaultPaymentOrderId,
+  resumen,
   activeView,
 }: ComprasWorkspaceProps) {
   const router = useRouter()
@@ -5014,19 +5020,19 @@ export function ComprasWorkspace({
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="text-sm font-medium">Almacenes</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {almacenes.length ? `${almacenes.length} disponibles` : "Aún no hay almacenes"}
+              {resumen.almacenes ? `${resumen.almacenes} disponibles` : "Aún no hay almacenes"}
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="text-sm font-medium">Órdenes abiertas</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {openOrders.length ? `${openOrders.length} órdenes listas para recibir` : "No hay órdenes abiertas"}
+              {resumen.ordenesAbiertas ? `${resumen.ordenesAbiertas} órdenes listas para recibir` : "No hay órdenes abiertas"}
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="text-sm font-medium">Recepciones recientes</div>
+            <div className="text-sm font-medium">Recepciones registradas</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {recepciones.length ? `${recepciones.length} registros recientes` : "Sin movimientos todavía"}
+              {resumen.recepciones ? `${resumen.recepciones} recepciones registradas` : "Sin movimientos todavía"}
             </div>
           </div>
         </CardContent>
