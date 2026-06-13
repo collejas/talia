@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
+import { IconArrowsUpDown, IconChevronDown, IconChevronUp } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 
 import {
   LineaDeNegocio,
@@ -46,9 +49,80 @@ const LINEA_FORM_DEFAULTS: LineaFormValues = {
 
 type Feedback = { type: "success" | "error"; message: string }
 type PendingAction = "save" | "delete" | "bulk-delete"
+type SortKey = "nombre" | "familias" | "estado" | "actualizado"
+type SortState = { id: SortKey; desc: boolean } | null
+
+const LINEA_COLLATOR = new Intl.Collator("es", { sensitivity: "base", numeric: true })
+const LINEA_UPDATED_FORMATTER = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "America/Mexico_City",
+})
+
+function sortLineas(
+  lineas: LineaDeNegocio[],
+  familiasPorLinea: Map<string, number>,
+  sortState: SortState,
+): LineaDeNegocio[] {
+  return [...lineas].sort((a, b) => {
+    const direction = sortState?.desc ? -1 : 1
+    if (!sortState) {
+      return LINEA_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    let comparison = 0
+    switch (sortState.id) {
+      case "nombre":
+        comparison = LINEA_COLLATOR.compare(a.nombre, b.nombre)
+        break
+      case "familias":
+        comparison = (familiasPorLinea.get(a.id) ?? 0) - (familiasPorLinea.get(b.id) ?? 0)
+        break
+      case "estado":
+        comparison = Number(a.activo) - Number(b.activo)
+        break
+      case "actualizado":
+        comparison = new Date(a.actualizadoEn).getTime() - new Date(b.actualizadoEn).getTime()
+        break
+      default:
+        comparison = 0
+    }
+    if (comparison === 0) {
+      comparison = LINEA_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    return comparison * direction
+  })
+}
+
+function SortButton({
+  label,
+  active,
+  desc,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  desc: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+    >
+      <span>{label}</span>
+      {active ? (
+        desc ? <IconChevronDown className="size-3" /> : <IconChevronUp className="size-3" />
+      ) : (
+        <IconArrowsUpDown className="size-3" />
+      )}
+    </button>
+  )
+}
 
 export function LineasView({ lineas, familias }: LineasViewProps) {
   const [lineasState, setLineasState] = useState(lineas)
+  const [sortState, setSortState] = useState<SortState>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<LineaDeNegocio | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -73,6 +147,11 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
     }
     return map
   }, [familias])
+
+  const visibleLineas = useMemo(
+    () => sortLineas(lineasState, familiasPorLinea, sortState),
+    [familiasPorLinea, lineasState, sortState],
+  )
 
   const handleOpenSheet = useCallback(
     (linea?: LineaDeNegocio) => {
@@ -177,6 +256,18 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
   const handleToggleSelectAll = useCallback(() => {
     setSelectedLineas(allLineasSelected ? [] : [...lineasIds])
   }, [allLineasSelected, lineasIds])
+
+  const handleSort = useCallback((id: SortKey) => {
+    setSortState((current) => {
+      if (!current || current.id !== id) {
+        return { id, desc: false }
+      }
+      if (!current.desc) {
+        return { id, desc: true }
+      }
+      return null
+    })
+  }, [])
 
   const handleDeleteLinea = (linea: LineaDeNegocio) => {
     if (!window.confirm(`¿Eliminar la línea "${linea.nombre}"? Esta acción no se puede deshacer.`)) {
@@ -326,73 +417,125 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
               del catálogo.
             </div>
           ) : (
-            <div className="max-h-[520px] overflow-y-auto rounded-xl bg-background p-4">
-              <div className="space-y-4">
-                {lineasState.map((linea) => (
-                  <div
-                    key={linea.id}
-                    className="rounded-2xl border border-border/80 bg-card px-4 py-3 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={selectedLineasSet.has(linea.id)}
-                          onCheckedChange={() => toggleSelectLinea(linea.id)}
-                          aria-label={`Seleccionar línea ${linea.nombre}`}
-                          className="mt-1"
-                        />
-                        <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
-                          {linea.fotoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={linea.fotoUrl}
-                              alt={linea.nombre}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                              Sin imagen
+            <div className="overflow-hidden rounded-xl border">
+              <Table className="table-fixed">
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-12 px-3">
+                      <Checkbox
+                        checked={allLineasSelected}
+                        onCheckedChange={handleToggleSelectAll}
+                        aria-label="Seleccionar todas las líneas"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[420px]">
+                      <SortButton
+                        label="Línea"
+                        active={sortState?.id === "nombre"}
+                        desc={sortState?.id === "nombre" ? sortState.desc : false}
+                        onClick={() => handleSort("nombre")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[160px]">
+                      <SortButton
+                        label="Familias"
+                        active={sortState?.id === "familias"}
+                        desc={sortState?.id === "familias" ? sortState.desc : false}
+                        onClick={() => handleSort("familias")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px]">
+                      <SortButton
+                        label="Estado"
+                        active={sortState?.id === "estado"}
+                        desc={sortState?.id === "estado" ? sortState.desc : false}
+                        onClick={() => handleSort("estado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[180px]">
+                      <SortButton
+                        label="Actualizado"
+                        active={sortState?.id === "actualizado"}
+                        desc={sortState?.id === "actualizado" ? sortState.desc : false}
+                        onClick={() => handleSort("actualizado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleLineas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        No hay líneas registradas.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    visibleLineas.map((linea) => (
+                      <TableRow key={linea.id} className={cn(!linea.activo && "bg-muted/30")}>
+                        <TableCell className="px-3">
+                          <Checkbox
+                            checked={selectedLineasSet.has(linea.id)}
+                            onCheckedChange={() => toggleSelectLinea(linea.id)}
+                            aria-label={`Seleccionar línea ${linea.nombre}`}
+                          />
+                        </TableCell>
+                        <TableCell className="overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
+                              {linea.fotoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={linea.fotoUrl}
+                                  alt={linea.nombre}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                  Sin imagen
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-lg font-semibold">{linea.nombre}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {linea.descripcion || "Sin descripción proporcionada"}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant={linea.activo ? "secondary" : "outline"}>
-                        {linea.activo ? "Activa" : "Archivada"}
-                      </Badge>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Familias asociadas
-                        </p>
-                        <p className="text-2xl font-semibold">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{linea.nombre}</p>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {linea.descripcion || "Sin descripción proporcionada"}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium tabular-nums">
                           {familiasPorLinea.get(linea.id) ?? 0}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(linea)}>
-                          Editar línea
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteLinea(linea)}
-                          disabled={isProcessing}
-                          className="text-destructive"
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={linea.activo ? "secondary" : "outline"}>
+                            {linea.activo ? "Activa" : "Archivada"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {linea.actualizadoEn ? LINEA_UPDATED_FORMATTER.format(new Date(linea.actualizadoEn)) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(linea)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteLinea(linea)}
+                              disabled={isProcessing}
+                              className="text-destructive"
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
+import { IconArrowsUpDown, IconChevronDown, IconChevronUp } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,10 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 
 import {
   FamiliaProducto,
@@ -53,12 +55,15 @@ const MODELO_FORM_DEFAULTS: ModeloFormValues = {
 
 type Feedback = { type: "success" | "error"; message: string }
 type PendingAction = "save" | "delete" | "bulk-delete"
+type SortKey = "nombre" | "familia" | "linea" | "estado" | "actualizado"
+type SortState = { id: SortKey; desc: boolean } | null
 
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
   timeZone: "America/Mexico_City",
 })
+const MODELO_COLLATOR = new Intl.Collator("es", { sensitivity: "base", numeric: true })
 const ALL_LINEA_OPTION = "__all_lines__"
 const ALL_FAMILIA_OPTION = "__all_families__"
 
@@ -70,13 +75,90 @@ function formatDate(value: string): string {
   return formatter.format(parsed)
 }
 
+function sortModelos(
+  modelos: ModeloProducto[],
+  familiaMap: Map<string, FamiliaProducto>,
+  lineaMap: Map<string, LineaDeNegocio>,
+  sortState: SortState,
+): ModeloProducto[] {
+  return [...modelos].sort((a, b) => {
+    const direction = sortState?.desc ? -1 : 1
+    if (!sortState) {
+      return MODELO_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    let comparison = 0
+    switch (sortState.id) {
+      case "nombre":
+        comparison = MODELO_COLLATOR.compare(a.nombre, b.nombre)
+        break
+      case "familia":
+        comparison = MODELO_COLLATOR.compare(
+          familiaMap.get(a.familiaId ?? "")?.nombre ?? "",
+          familiaMap.get(b.familiaId ?? "")?.nombre ?? "",
+        )
+        break
+      case "linea":
+        comparison = MODELO_COLLATOR.compare(
+          lineaMap.get(familiaMap.get(a.familiaId ?? "")?.lineaId ?? "")?.nombre ?? "",
+          lineaMap.get(familiaMap.get(b.familiaId ?? "")?.lineaId ?? "")?.nombre ?? "",
+        )
+        break
+      case "estado":
+        comparison = Number(a.activo) - Number(b.activo)
+        break
+      case "actualizado":
+        comparison = new Date(a.actualizadoEn).getTime() - new Date(b.actualizadoEn).getTime()
+        break
+      default:
+        comparison = 0
+    }
+    if (comparison === 0) {
+      comparison = MODELO_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    return comparison * direction
+  })
+}
+
+function SortButton({
+  label,
+  active,
+  desc,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  desc: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+    >
+      <span>{label}</span>
+      {active ? (
+        desc ? <IconChevronDown className="size-3" /> : <IconChevronUp className="size-3" />
+      ) : (
+        <IconArrowsUpDown className="size-3" />
+      )}
+    </button>
+  )
+}
+
 export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
   const familiaMap = useMemo(() => {
     const map = new Map<string, FamiliaProducto>()
     familias.forEach((familia) => map.set(familia.id, familia))
     return map
   }, [familias])
+  const lineaMap = useMemo(() => {
+    const map = new Map<string, LineaDeNegocio>()
+    lineas.forEach((linea) => map.set(linea.id, linea))
+    return map
+  }, [lineas])
   const [modelosState, setModelosState] = useState(modelos)
+  const [sortState, setSortState] = useState<SortState>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<ModeloProducto | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -199,6 +281,11 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     })
   }, [modelosState, filterFamilia, filterLinea, familias])
 
+  const visibleModelos = useMemo(
+    () => sortModelos(filteredModelos, familiaMap, lineaMap, sortState),
+    [familiaMap, filteredModelos, lineaMap, sortState],
+  )
+
   const modelosIds = useMemo(() => modelosState.map((modelo) => modelo.id), [modelosState])
   const allModelosSelected = modelosIds.length > 0 && selectedModelos.length === modelosIds.length
   const selectedModelosSet = useMemo(() => new Set(selectedModelos), [selectedModelos])
@@ -217,6 +304,18 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
   const handleToggleSelectAllModelos = useCallback(() => {
     setSelectedModelos(allModelosSelected ? [] : [...modelosIds])
   }, [allModelosSelected, modelosIds])
+
+  const handleSort = useCallback((id: SortKey) => {
+    setSortState((current) => {
+      if (!current || current.id !== id) {
+        return { id, desc: false }
+      }
+      if (!current.desc) {
+        return { id, desc: true }
+      }
+      return null
+    })
+  }, [])
 
   const handleDeleteModelo = (modelo: ModeloProducto) => {
     if (
@@ -418,74 +517,139 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
               Aprovecha los modelos para documentar variantes homologadas de productos o servicios.
             </div>
           ) : (
-            <ScrollArea className="h-[min(600px,calc(100vh-24rem))] rounded-xl bg-background p-4">
-              <div className="space-y-4">
-                {filteredModelos.map((modelo) => (
-                  <Card key={modelo.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-start gap-3">
+            <div className="overflow-hidden rounded-xl border">
+              <Table className="table-fixed">
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-12 px-3">
+                      <Checkbox
+                        checked={allModelosSelected}
+                        onCheckedChange={handleToggleSelectAllModelos}
+                        aria-label="Seleccionar todos los modelos"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[360px]">
+                      <SortButton
+                        label="Modelo"
+                        active={sortState?.id === "nombre"}
+                        desc={sortState?.id === "nombre" ? sortState.desc : false}
+                        onClick={() => handleSort("nombre")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[260px]">
+                      <SortButton
+                        label="Familia"
+                        active={sortState?.id === "familia"}
+                        desc={sortState?.id === "familia" ? sortState.desc : false}
+                        onClick={() => handleSort("familia")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[240px]">
+                      <SortButton
+                        label="Línea"
+                        active={sortState?.id === "linea"}
+                        desc={sortState?.id === "linea" ? sortState.desc : false}
+                        onClick={() => handleSort("linea")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px]">
+                      <SortButton
+                        label="Estado"
+                        active={sortState?.id === "estado"}
+                        desc={sortState?.id === "estado" ? sortState.desc : false}
+                        onClick={() => handleSort("estado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[180px]">
+                      <SortButton
+                        label="Actualizado"
+                        active={sortState?.id === "actualizado"}
+                        desc={sortState?.id === "actualizado" ? sortState.desc : false}
+                        onClick={() => handleSort("actualizado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleModelos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                        No hay modelos registrados.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    visibleModelos.map((modelo) => (
+                      <TableRow key={modelo.id} className={cn(!modelo.activo && "bg-muted/30")}>
+                        <TableCell className="px-3">
                           <Checkbox
                             checked={selectedModelosSet.has(modelo.id)}
                             onCheckedChange={() => toggleSelectModelo(modelo.id)}
                             aria-label={`Seleccionar modelo ${modelo.nombre}`}
-                            className="mt-1"
                           />
-                          <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
-                            {modelo.fotoUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={modelo.fotoUrl}
-                                alt={modelo.nombre}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                Sin imagen
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <CardTitle className="text-lg">{modelo.nombre}</CardTitle>
-                            <CardDescription>
-                              {modelo.descripcion ?? "Sin descripción disponible"}
-                            </CardDescription>
-                            {modelo.familiaId ? (
-                              <p className="text-sm text-muted-foreground">
-                                Familia: {familiaMap.get(modelo.familiaId)?.nombre ?? "—"}
+                        </TableCell>
+                        <TableCell className="overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
+                              {modelo.fotoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={modelo.fotoUrl}
+                                  alt={modelo.nombre}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                  Sin imagen
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{modelo.nombre}</p>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {modelo.descripcion ?? "Sin descripción disponible"}
                               </p>
-                            ) : null}
+                            </div>
                           </div>
-                        </div>
-                        <Badge variant={modelo.activo ? "secondary" : "outline"}>
-                          {modelo.activo ? "Activo" : "Archivado"}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Actualizado</p>
-                        <p className="text-base font-medium">{formatDate(modelo.actualizadoEn)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(modelo)}>
-                          Editar modelo
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteModelo(modelo)}
-                          disabled={isProcessing}
-                          className="text-destructive"
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                        </TableCell>
+                        <TableCell className="truncate text-sm text-muted-foreground">
+                          {modelo.familiaId ? familiaMap.get(modelo.familiaId)?.nombre ?? "—" : "Sin familia"}
+                        </TableCell>
+                        <TableCell className="truncate text-sm text-muted-foreground">
+                          {modelo.familiaId
+                            ? lineaMap.get(familiaMap.get(modelo.familiaId)?.lineaId ?? "")?.nombre ?? "—"
+                            : "Sin línea"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={modelo.activo ? "secondary" : "outline"}>
+                            {modelo.activo ? "Activo" : "Archivado"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(modelo.actualizadoEn)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(modelo)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteModelo(modelo)}
+                              disabled={isProcessing}
+                              className="text-destructive"
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

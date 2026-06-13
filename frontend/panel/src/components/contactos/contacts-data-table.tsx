@@ -713,7 +713,7 @@ export function ContactsDataTable({
   }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
-    if (!reassignOpen || permissionsLoading || !canReassign) return;
+    if (permissionsLoading || !canReassign) return;
     const controller = new AbortController();
 
     const run = async () => {
@@ -759,7 +759,7 @@ export function ContactsDataTable({
 
     run();
     return () => controller.abort();
-  }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
+  }, [permissionsLoading, canReassign, canReassignAny]);
 
   const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
@@ -1041,6 +1041,11 @@ export function ContactsDataTable({
 
   const ownerOptions = React.useMemo(() => {
     const options = new Map<string, string>();
+    for (const vendor of vendorOptions) {
+      if (!vendor || typeof vendor !== "object") continue;
+      if (!vendor.id) continue;
+      options.set(vendor.id, vendor.label);
+    }
     for (const row of sourceData) {
       const raw = row.raw as Record<string, unknown> | undefined;
       const ownerKey = getOwnerFilterKey(raw);
@@ -1053,7 +1058,7 @@ export function ContactsDataTable({
     return Array.from(options.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((left, right) => left.label.localeCompare(right.label, "es"));
-  }, [ownerFilter, sourceData]);
+  }, [ownerFilter, sourceData, vendorOptions]);
 
   const activeAdvancedFilterCount = React.useMemo(() => countAdvancedFilterSelections(advancedFilters), [advancedFilters]);
   const puestoOptions = React.useMemo(

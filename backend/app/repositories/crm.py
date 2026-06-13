@@ -12404,80 +12404,70 @@ class CRMRepository:
         estado_direccion: str | None = None,
         municipio: str | None = None,
     ) -> dict[str, Any]:
-        rows: list[dict[str, Any]] = []
-        offset = 0
-        page_size = 500
-        while True:
-            batch = await self.personas_list(
-                usuario_token=usuario_token or "",
-                limit=page_size,
-                offset=offset,
-                search=search,
-                estado=None,
-                captura=captura,
-                origen=origen,
-                propietario=propietario,
-                date_from=date_from,
-                date_to=date_to,
-                puesto=puesto,
-                rol_decision=rol_decision,
-                estado_contacto=estado_contacto,
-                ligado=ligado,
-                tipo_cuenta=tipo_cuenta,
-                tamano=tamano,
-                clasificacion=clasificacion,
-                cuenta_from=cuenta_from,
-                cuenta_to=cuenta_to,
-                fecha_incorporacion_from=fecha_incorporacion_from,
-                fecha_incorporacion_to=fecha_incorporacion_to,
-                fusionada=fusionada,
-                pais=pais,
-                estado_direccion=estado_direccion,
-                municipio=municipio,
-            )
-            rows.extend(batch)
-            if len(batch) < page_size or offset >= 100000:
-                break
-            offset += page_size
+        if not usuario_token:
+            return {
+                "total": 0,
+                "completos": 0,
+                "incompletos": 0,
+                "activos": 0,
+                "leads": 0,
+                "webchat": 0,
+                "propietarios": 0,
+                "ultimo": None,
+            }
 
-        total = len(rows)
-        completos = 0
-        incompletos = 0
-        activos = 0
-        leads = 0
-        webchat = 0
-        propietarios: set[str] = set()
-        ultimo: datetime | None = None
+        payload: dict[str, Any] = {}
+        if date_from:
+            payload["p_from"] = date_from.astimezone(timezone.utc).isoformat()
+        if date_to:
+            payload["p_to"] = date_to.astimezone(timezone.utc).isoformat()
+        if propietario:
+            payload["p_propietario"] = str(propietario)
+        if search and search.strip():
+            payload["p_search"] = search.strip()
+        if origen and origen.strip():
+            payload["p_origen"] = origen.strip()
+        if puesto and puesto.strip():
+            payload["p_puesto"] = puesto.strip()
+        if rol_decision and rol_decision.strip():
+            payload["p_rol_decision"] = rol_decision.strip()
+        if estado_contacto and estado_contacto.strip():
+            payload["p_estado_contacto"] = estado_contacto.strip()
+        if ligado and ligado.strip():
+            payload["p_ligado"] = ligado.strip()
+        if tipo_cuenta and tipo_cuenta.strip():
+            payload["p_tipo_cuenta"] = tipo_cuenta.strip()
+        if tamano and tamano.strip():
+            payload["p_tamano"] = tamano.strip()
+        if clasificacion and clasificacion.strip():
+            payload["p_clasificacion"] = clasificacion.strip()
+        if cuenta_from:
+            payload["p_cuenta_from"] = cuenta_from.astimezone(timezone.utc).isoformat()
+        if cuenta_to:
+            payload["p_cuenta_to"] = cuenta_to.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_from:
+            payload["p_fecha_incorporacion_from"] = fecha_incorporacion_from.astimezone(timezone.utc).isoformat()
+        if fecha_incorporacion_to:
+            payload["p_fecha_incorporacion_to"] = fecha_incorporacion_to.astimezone(timezone.utc).isoformat()
+        if fusionada and fusionada.strip():
+            payload["p_fusionada"] = fusionada.strip()
+        if pais and pais.strip():
+            payload["p_pais"] = pais.strip()
+        if estado_direccion and estado_direccion.strip():
+            payload["p_estado_direccion"] = estado_direccion.strip()
+        if municipio and municipio.strip():
+            payload["p_municipio"] = municipio.strip()
 
-        for row in rows:
-            if self._contact_capture_is_complete(row):
-                completos += 1
-            else:
-                incompletos += 1
-            estado_value = str(row.get("estado") or "").strip().lower()
-            if estado_value == "activo":
-                activos += 1
-            if estado_value == "lead":
-                leads += 1
-            if str(row.get("origen") or "").strip().lower() == "webchat":
-                webchat += 1
-            owner_id = str(row.get("propietario_id") or "").strip()
-            if owner_id:
-                propietarios.add(owner_id)
-            created_at = _normalize_provider_timestamp(row.get("creado_en"))
-            if created_at and (ultimo is None or created_at > ultimo):
-                ultimo = created_at
-
-        return {
-            "total": total,
-            "completos": completos,
-            "incompletos": incompletos,
-            "activos": activos,
-            "leads": leads,
-            "webchat": webchat,
-            "propietarios": len(propietarios),
-            "ultimo": ultimo.isoformat() if ultimo else None,
-        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_contactos_resumen",
+            token=usuario_token,
+            json=payload,
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError(f"Respuesta inesperada en personas_resumen: {data!r}")
+        return data
 
     async def personas_list(
         self,

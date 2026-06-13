@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react"
 import { useForm, useWatch } from "react-hook-form"
+import { IconArrowsUpDown, IconChevronDown, IconChevronUp } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,10 +10,11 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 
 import {
   FamiliaProducto,
@@ -51,9 +53,84 @@ const FAMILIA_FORM_DEFAULTS: FamiliaFormValues = {
 
 type Feedback = { type: "success" | "error"; message: string }
 type PendingAction = "save" | "delete" | "bulk-delete"
+type SortKey = "nombre" | "linea" | "estado" | "actualizado"
+type SortState = { id: SortKey; desc: boolean } | null
+
+const FAMILIA_COLLATOR = new Intl.Collator("es", { sensitivity: "base", numeric: true })
+const FAMILIA_UPDATED_FORMATTER = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "America/Mexico_City",
+})
+
+function sortFamilias(
+  familias: FamiliaProducto[],
+  lineas: LineaDeNegocio[],
+  sortState: SortState,
+): FamiliaProducto[] {
+  const lineaMap = new Map(lineas.map((linea) => [linea.id, linea.nombre]))
+  return [...familias].sort((a, b) => {
+    const direction = sortState?.desc ? -1 : 1
+    if (!sortState) {
+      return FAMILIA_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    let comparison = 0
+    switch (sortState.id) {
+      case "nombre":
+        comparison = FAMILIA_COLLATOR.compare(a.nombre, b.nombre)
+        break
+      case "linea":
+        comparison = FAMILIA_COLLATOR.compare(
+          lineaMap.get(a.lineaId ?? "") ?? "",
+          lineaMap.get(b.lineaId ?? "") ?? "",
+        )
+        break
+      case "estado":
+        comparison = Number(a.activo) - Number(b.activo)
+        break
+      case "actualizado":
+        comparison = new Date(a.actualizadoEn).getTime() - new Date(b.actualizadoEn).getTime()
+        break
+      default:
+        comparison = 0
+    }
+    if (comparison === 0) {
+      comparison = FAMILIA_COLLATOR.compare(a.nombre, b.nombre)
+    }
+    return comparison * direction
+  })
+}
+
+function SortButton({
+  label,
+  active,
+  desc,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  desc: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+    >
+      <span>{label}</span>
+      {active ? (
+        desc ? <IconChevronDown className="size-3" /> : <IconChevronUp className="size-3" />
+      ) : (
+        <IconArrowsUpDown className="size-3" />
+      )}
+    </button>
+  )
+}
 
 export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   const [familiasState, setFamiliasState] = useState(familias)
+  const [sortState, setSortState] = useState<SortState>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<FamiliaProducto | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -168,6 +245,11 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     return familiasState.filter((familia) => familia.lineaId === filterLinea)
   }, [familiasState, filterLinea])
 
+  const visibleFamiliasSorted = useMemo(
+    () => sortFamilias(visibleFamilias, lineas, sortState),
+    [lineas, sortState, visibleFamilias],
+  )
+
   const familiasIds = useMemo(() => familiasState.map((familia) => familia.id), [familiasState])
   const allFamiliasSelected = familiasIds.length > 0 && selectedFamilias.length === familiasIds.length
   const selectedFamiliasSet = useMemo(() => new Set(selectedFamilias), [selectedFamilias])
@@ -186,6 +268,18 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   const handleToggleSelectAllFamilias = useCallback(() => {
     setSelectedFamilias(allFamiliasSelected ? [] : [...familiasIds])
   }, [allFamiliasSelected, familiasIds])
+
+  const handleSort = useCallback((id: SortKey) => {
+    setSortState((current) => {
+      if (!current || current.id !== id) {
+        return { id, desc: false }
+      }
+      if (!current.desc) {
+        return { id, desc: true }
+      }
+      return null
+    })
+  }, [])
 
   const handleDeleteFamilia = (familia: FamiliaProducto) => {
     if (
@@ -384,73 +478,126 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
               Una familia necesita una línea. Crea primero una línea para poder asignarla.
             </div>
           ) : (
-            <ScrollArea
-              className="h-[min(60vh,600px)] max-h-[600px] rounded-xl bg-background p-4"
-            >
-              <div className="space-y-4">
-                {visibleFamilias.map((familia) => (
-                  <Card key={familia.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-start gap-3">
+            <div className="overflow-hidden rounded-xl border">
+              <Table className="table-fixed">
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-12 px-3">
+                      <Checkbox
+                        checked={allFamiliasSelected}
+                        onCheckedChange={handleToggleSelectAllFamilias}
+                        aria-label="Seleccionar todas las familias"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[360px]">
+                      <SortButton
+                        label="Familia"
+                        active={sortState?.id === "nombre"}
+                        desc={sortState?.id === "nombre" ? sortState.desc : false}
+                        onClick={() => handleSort("nombre")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[280px]">
+                      <SortButton
+                        label="Línea asociada"
+                        active={sortState?.id === "linea"}
+                        desc={sortState?.id === "linea" ? sortState.desc : false}
+                        onClick={() => handleSort("linea")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px]">
+                      <SortButton
+                        label="Estado"
+                        active={sortState?.id === "estado"}
+                        desc={sortState?.id === "estado" ? sortState.desc : false}
+                        onClick={() => handleSort("estado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[180px]">
+                      <SortButton
+                        label="Actualizado"
+                        active={sortState?.id === "actualizado"}
+                        desc={sortState?.id === "actualizado" ? sortState.desc : false}
+                        onClick={() => handleSort("actualizado")}
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleFamiliasSorted.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        No hay familias registradas.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    visibleFamiliasSorted.map((familia) => (
+                      <TableRow key={familia.id} className={cn(!familia.activo && "bg-muted/30")}>
+                        <TableCell className="px-3">
                           <Checkbox
                             checked={selectedFamiliasSet.has(familia.id)}
                             onCheckedChange={() => toggleSelectFamilia(familia.id)}
                             aria-label={`Seleccionar familia ${familia.nombre}`}
-                            className="mt-1"
                           />
-                          <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
-                            {familia.fotoUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={familia.fotoUrl}
-                                alt={familia.nombre}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                Sin imagen
-                              </div>
-                            )}
+                        </TableCell>
+                        <TableCell className="overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
+                              {familia.fotoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={familia.fotoUrl}
+                                  alt={familia.nombre}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                  Sin imagen
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{familia.nombre}</p>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {familia.descripcion ?? "Sin descripción disponible"}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <CardTitle className="text-lg">{familia.nombre}</CardTitle>
-                            <CardDescription>
-                              {familia.descripcion ?? "Sin descripción disponible"}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <Badge variant={familia.activo ? "secondary" : "outline"}>
-                          {familia.activo ? "Activa" : "Archivada"}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Línea asociada</p>
-                        <p className="text-base font-medium">
+                        </TableCell>
+                        <TableCell className="truncate text-sm text-muted-foreground">
                           {lineaMap.get(familia.lineaId ?? "") ?? "Sin línea"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(familia)}>
-                          Editar familia
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteFamilia(familia)}
-                          disabled={isProcessing}
-                          className="text-destructive"
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={familia.activo ? "secondary" : "outline"}>
+                            {familia.activo ? "Activa" : "Archivada"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {familia.actualizadoEn ? FAMILIA_UPDATED_FORMATTER.format(new Date(familia.actualizadoEn)) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(familia)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteFamilia(familia)}
+                              disabled={isProcessing}
+                              className="text-destructive"
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

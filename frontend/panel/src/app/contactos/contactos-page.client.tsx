@@ -8,23 +8,10 @@ import { SessionRecovery } from "@/components/session-recovery"
 import type { ContactFilters, ContactCards, ContactTableRow } from "@/lib/contactos/types"
 
 type ContactosPageClientProps = {
-  initialCards?: ContactCards
   table?: ContactTableRow[]
 }
 
-const EMPTY_CARDS: ContactCards = {
-  total: 0,
-  completos: 0,
-  incompletos: 0,
-  activos: 0,
-  leads: 0,
-  propietarios: 0,
-  topPropietarioNombre: null,
-  topPropietarioTotal: 0,
-  ultimo: null,
-}
-
-export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table = [] }: ContactosPageClientProps) {
+export default function ContactosPageClient({ table = [] }: ContactosPageClientProps) {
   const [filters, setFilters] = React.useState<ContactFilters>({
     search: "",
     owner: "all",
@@ -50,10 +37,8 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
       municipio: "",
     },
   })
-  const [cards, setCards] = React.useState<ContactCards>(initialCards)
   const [tableRows, setTableRows] = React.useState<ContactTableRow[]>(table)
   const [visibleRows, setVisibleRows] = React.useState<ContactTableRow[]>(table)
-  const [loadingCards, setLoadingCards] = React.useState(true)
   const [loadingTable, setLoadingTable] = React.useState(true)
   const [errors, setErrors] = React.useState<string[]>([])
 
@@ -76,52 +61,43 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
 
     setTableRows((current) => current.filter((row) => !matchesDeleted(row)))
     setVisibleRows((current) => current.filter((row) => !matchesDeleted(row)))
-    setCards((current) => {
-      const nextRows = tableRows.filter((row) => !matchesDeleted(row))
-      return isDefaultFilterSet(filters) ? mapCardsFromRows(nextRows) : current
-    })
-  }, [filters, tableRows])
+  }, [])
 
   React.useEffect(() => {
     const controller = new AbortController()
     let alive = true
 
-    const loadCards = async () => {
-      try {
-        const response = await fetch("/api/contactos/summary", {
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { error?: string }
-          throw new Error(body.error || `Error ${response.status}`)
-        }
-        const body = (await response.json()) as ContactCards
-        if (alive) setCards(body)
-      } catch (error) {
-        if ((error as Error).name !== "AbortError" && alive) {
-          setErrors((current) => [...current, error instanceof Error ? error.message : "No se pudo cargar el resumen de contactos."])
-        }
-      } finally {
-        if (alive) setLoadingCards(false)
-      }
-    }
-
     const loadTable = async () => {
+      setLoadingTable(true)
       try {
-        const response = await fetch("/api/contactos/list?limit=200", {
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { error?: string }
-          throw new Error(body.error || `Error ${response.status}`)
-        }
-        const body = (await response.json()) as { items?: ContactTableRow[] }
-        if (alive) {
+        const pageSize = 500
+        let offset = 0
+        let accumulated: ContactTableRow[] = []
+        let totalRows: number | null = null
+
+        while (true) {
+          const response = await fetch(`/api/contactos/list?limit=${pageSize}&offset=${offset}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          })
+          if (!response.ok) {
+            const body = (await response.json().catch(() => ({}))) as { error?: string }
+            throw new Error(body.error || `Error ${response.status}`)
+          }
+          const body = (await response.json()) as { items?: ContactTableRow[]; totalRows?: number }
           const nextRows = Array.isArray(body.items) ? body.items : []
-          setTableRows(nextRows)
-          setVisibleRows(nextRows)
+          if (totalRows === null && typeof body.totalRows === "number") {
+            totalRows = body.totalRows
+          }
+          accumulated = accumulated.concat(nextRows)
+          if (nextRows.length < pageSize) break
+          if (typeof totalRows === "number" && accumulated.length >= totalRows) break
+          offset += pageSize
+        }
+
+        if (alive) {
+          setTableRows(accumulated)
+          setVisibleRows(accumulated)
         }
       } catch (error) {
         if ((error as Error).name !== "AbortError" && alive) {
@@ -132,7 +108,6 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
       }
     }
 
-    void loadCards()
     void loadTable()
 
     return () => {
@@ -145,11 +120,8 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
     if (!isDefaultFilterSet(filters)) {
       return mapCardsFromRows(visibleRows)
     }
-    if (hasMeaningfulCards(cards)) {
-      return cards
-    }
     return mapCardsFromRows(tableRows)
-  }, [cards, filters, tableRows, visibleRows])
+  }, [filters, tableRows, visibleRows])
 
   return (
     <div className="space-y-4">
@@ -166,7 +138,7 @@ export default function ContactosPageClient({ initialCards = EMPTY_CARDS, table 
           </div>
         </div>
       ) : null}
-      <ContactSectionCards data={derivedCards} loading={loadingCards} />
+      <ContactSectionCards data={derivedCards} loading={loadingTable} />
       <ContactsDataTable
         data={tableRows}
         onFiltersChange={handleFiltersChange}
@@ -187,20 +159,6 @@ function sanitizeMessage(message: string) {
     return "Tu sesión en Supabase caducó. Estamos intentando renovarla automáticamente; si persiste, vuelve a iniciar sesión."
   }
   return trimmed
-}
-
-function hasMeaningfulCards(cards: ContactCards): boolean {
-  return (
-    cards.total > 0 ||
-    cards.completos > 0 ||
-    cards.incompletos > 0 ||
-    cards.activos > 0 ||
-    cards.leads > 0 ||
-    cards.propietarios > 0 ||
-    cards.topPropietarioTotal > 0 ||
-    Boolean(cards.topPropietarioNombre) ||
-    Boolean(cards.ultimo)
-  )
 }
 
 function isDefaultFilterSet(filters: ContactFilters): boolean {

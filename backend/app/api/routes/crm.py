@@ -10078,6 +10078,19 @@ class CRMPersonaSummary(CRMContactSummary):
     pass
 
 
+class CRMContactCardsSummary(BaseModel):
+    total: int = 0
+    completos: int = 0
+    incompletos: int = 0
+    activos: int = 0
+    leads: int = 0
+    webchat: int = 0
+    propietarios: int = 0
+    topPropietarioNombre: str | None = None
+    topPropietarioTotal: int = 0
+    ultimo: datetime | None = None
+
+
 class CRMAccountSummary(BaseModel):
     id: UUID
     nombre: str | None = None
@@ -16074,6 +16087,7 @@ async def list_sales_reps(
     organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    scope: Literal["all", "team"] = Query(default="team"),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[CRMUserSummary]:
     if usuario_id is None:
@@ -16085,8 +16099,12 @@ async def list_sales_reps(
     if not can_any and not can_team:
         return []
 
+    requested_scope = scope if scope in {"all", "team"} else "team"
+
     try:
-        if can_any:
+        if requested_scope == "all":
+            if not can_any:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
             rows = await repo.list_sales_reps(organizacion_id=organizacion_id, limit=limit)
         else:
             rows = await repo.list_supervised_sales_reps(
@@ -22390,7 +22408,7 @@ async def update_reminder_settings(
     return CRMReminderSettings.model_validate(row)
 
 
-@router.get("/contacts/summary", response_model=CRMPersonaSummary)
+@router.get("/contacts/summary", response_model=CRMContactCardsSummary)
 async def get_personas_summary_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -22418,7 +22436,7 @@ async def get_personas_summary_legacy(
     pais: str | None = Query(default=None),
     estado_direccion: str | None = Query(default=None),
     municipio: str | None = Query(default=None),
-) -> CRMPersonaSummary:
+) -> CRMContactCardsSummary:
     try:
         row = await repo.personas_resumen(
             usuario_token=user_token,
@@ -22447,10 +22465,10 @@ async def get_personas_summary_legacy(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMPersonaSummary.model_validate(row)
+    return CRMContactCardsSummary.model_validate(row)
 
 
-@router.get("/personas/summary", response_model=CRMPersonaSummary)
+@router.get("/personas/summary", response_model=CRMContactCardsSummary)
 async def get_personas_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -22478,7 +22496,7 @@ async def get_personas_summary(
     pais: str | None = Query(default=None),
     estado_direccion: str | None = Query(default=None),
     municipio: str | None = Query(default=None),
-) -> CRMPersonaSummary:
+) -> CRMContactCardsSummary:
     row = await get_personas_summary_legacy(
         repo=repo,
         _=_,
@@ -22506,7 +22524,7 @@ async def get_personas_summary(
         estado_direccion=estado_direccion,
         municipio=municipio,
     )
-    return CRMPersonaSummary.model_validate(row.model_dump())
+    return CRMContactCardsSummary.model_validate(row.model_dump())
 
 
 @router.get("/contacts/list", response_model=list[CRMPersonaListRow])

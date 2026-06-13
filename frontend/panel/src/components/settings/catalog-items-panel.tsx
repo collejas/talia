@@ -1,11 +1,27 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react"
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { useForm, useWatch } from "react-hook-form"
 import {
   IconArchive,
+  IconArrowsUpDown,
   IconCircleCheck,
   IconCircleX,
+  IconChevronDown,
+  IconChevronUp,
+  IconGripVertical,
+  IconLayoutColumns,
   IconPencil,
   IconPlus,
   IconRefresh,
@@ -125,11 +141,100 @@ const EMPTY_FORM: CatalogItemFormValues = {
 
 const CURRENCY_OPTIONS = ["MXN", "USD", "COP", "CLP", "EUR"]
 const EMPTY_SELECT_VALUE = "__none__"
+const CATALOG_COLUMN_ORDER_STORAGE_KEY = "settings-productos-items:column-order"
+const CATALOG_SORTING_STORAGE_KEY = "settings-productos-items:sorting"
 const UPDATED_AT_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
   timeZone: "America/Mexico_City",
 })
+const CATALOG_COLLATOR = new Intl.Collator("es", {
+  sensitivity: "base",
+  numeric: true,
+})
+
+type CatalogColumnId = "producto" | "tipo" | "precio" | "estado" | "actualizado"
+type CatalogSortDirection = "asc" | "desc"
+type CatalogSortState = {
+  columnId: CatalogColumnId
+  direction: CatalogSortDirection
+} | null
+
+type CatalogColumnConfig = {
+  id: CatalogColumnId
+  label: string
+  widthClass: string
+  sortable: boolean
+  reorderable: boolean
+}
+
+const DEFAULT_CATALOG_COLUMN_ORDER: CatalogColumnId[] = [
+  "producto",
+  "tipo",
+  "precio",
+  "estado",
+  "actualizado",
+]
+
+const CATALOG_COLUMN_CONFIGS: Record<CatalogColumnId, CatalogColumnConfig> = {
+  producto: {
+    id: "producto",
+    label: "Producto / servicio",
+    widthClass: "w-[360px]",
+    sortable: true,
+    reorderable: true,
+  },
+  tipo: {
+    id: "tipo",
+    label: "Tipo",
+    widthClass: "w-[170px]",
+    sortable: true,
+    reorderable: true,
+  },
+  precio: {
+    id: "precio",
+    label: "Precio base",
+    widthClass: "w-[140px]",
+    sortable: true,
+    reorderable: true,
+  },
+  estado: {
+    id: "estado",
+    label: "Estado",
+    widthClass: "w-[120px]",
+    sortable: true,
+    reorderable: true,
+  },
+  actualizado: {
+    id: "actualizado",
+    label: "Actualizado",
+    widthClass: "w-[150px]",
+    sortable: true,
+    reorderable: true,
+  },
+}
+
+function isCatalogColumnId(value: string): value is CatalogColumnId {
+  return value in CATALOG_COLUMN_CONFIGS
+}
+
+function normalizeCatalogColumnOrder(order: string[]): CatalogColumnId[] {
+  const filtered = order.filter(isCatalogColumnId)
+  const missing = DEFAULT_CATALOG_COLUMN_ORDER.filter((id) => !filtered.includes(id))
+  return [...filtered, ...missing]
+}
+
+function areCatalogColumnOrdersEqual(left: CatalogColumnId[], right: CatalogColumnId[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
+function catalogColumnDragId(columnId: CatalogColumnId): string {
+  return `catalog-column:${columnId}`
+}
+
+function stripCatalogColumnDragId(dragId: string): string {
+  return dragId.replace("catalog-column:", "")
+}
 
 function formatCurrency(value: number | null | undefined, currency: string): string {
   if (value == null || Number.isNaN(value)) {
@@ -198,6 +303,252 @@ function getCatalogScope(item: CatalogItem): {
 
 function sortItems(list: CatalogItem[]): CatalogItem[] {
   return [...list].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
+}
+
+function getCatalogColumnValue(item: CatalogItem, columnId: CatalogColumnId): string | number {
+  switch (columnId) {
+    case "producto":
+      return item.nombre ?? ""
+    case "tipo":
+      return getCatalogScope(item).label
+    case "precio":
+      return typeof item.precioBase === "number" && Number.isFinite(item.precioBase)
+        ? item.precioBase
+        : Number.POSITIVE_INFINITY
+    case "estado":
+      return item.activo ? "Activo" : "Archivado"
+    case "actualizado":
+      return item.actualizadoEn ? new Date(item.actualizadoEn).getTime() : Number.POSITIVE_INFINITY
+    default:
+      return ""
+  }
+}
+
+function sortCatalogItems(items: CatalogItem[], sortState: CatalogSortState): CatalogItem[] {
+  const sorted = [...items].sort((left, right) => {
+    if (!sortState) {
+      return left.nombre.localeCompare(right.nombre, "es", { sensitivity: "base" })
+    }
+
+    const leftValue = getCatalogColumnValue(left, sortState.columnId)
+    const rightValue = getCatalogColumnValue(right, sortState.columnId)
+
+    const leftMissing = leftValue === Number.POSITIVE_INFINITY || leftValue === ""
+    const rightMissing = rightValue === Number.POSITIVE_INFINITY || rightValue === ""
+    if (leftMissing !== rightMissing) {
+      return leftMissing ? 1 : -1
+    }
+
+    let comparison = 0
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+      comparison = leftValue - rightValue
+    } else {
+      comparison = CATALOG_COLLATOR.compare(String(leftValue), String(rightValue))
+    }
+
+    if (comparison === 0) {
+      comparison = CATALOG_COLLATOR.compare(left.nombre, right.nombre)
+    }
+
+    return sortState.direction === "asc" ? comparison : -comparison
+  })
+
+  return sorted
+}
+
+function renderCatalogColumnCell(item: CatalogItem, columnId: CatalogColumnId): ReactNode {
+  switch (columnId) {
+    case "producto":
+      return (
+        <div className="min-w-0 overflow-hidden">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
+              {item.fotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.fotoUrl} alt={item.nombre} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                  Sin imagen
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium leading-tight">{item.nombre}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {item.descripcionCorta || "Sin descripción"}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex max-w-full gap-2 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+            {item.lineaNombre ? (
+              <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                Línea: {item.lineaNombre}
+              </span>
+            ) : null}
+            {item.familiaNombre ? (
+              <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                Familia: {item.familiaNombre}
+              </span>
+            ) : null}
+            {item.modeloNombre ? (
+              <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                Modelo: {item.modeloNombre}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )
+    case "tipo":
+      return (
+        <div className="overflow-hidden">
+          <div className="flex max-w-full flex-nowrap gap-2 overflow-hidden">
+            <Badge variant={getCatalogScope(item).tone} className="capitalize">
+              {getCatalogScope(item).label}
+            </Badge>
+            <Badge variant="secondary" className="capitalize">
+              {item.tipo}
+            </Badge>
+          </div>
+          <div className="mt-2 flex max-w-full flex-nowrap gap-2 overflow-hidden">
+            <Badge
+              variant={item.manejaInventario ? "default" : "outline"}
+              className="text-[10px] uppercase tracking-wide"
+            >
+              {item.manejaInventario ? "Con inventario" : "Sin inventario"}
+            </Badge>
+            <Badge
+              variant={item.activoCompra ? "secondary" : "outline"}
+              className="text-[10px] uppercase tracking-wide"
+            >
+              {item.activoCompra ? "Compra activa" : "No compra"}
+            </Badge>
+          </div>
+        </div>
+      )
+    case "precio":
+      return (
+        <div className="overflow-hidden">
+          <div className="truncate font-semibold">
+            {formatCurrency(item.precioBase, item.moneda || "MXN")}
+          </div>
+          <div className="truncate text-xs text-muted-foreground">{item.unidad}</div>
+        </div>
+      )
+    case "estado":
+      return (
+        <div className="overflow-hidden">
+          <Badge variant={item.activo ? "default" : "outline"}>
+            {item.activo ? "Activo" : "Archivado"}
+          </Badge>
+        </div>
+      )
+    case "actualizado":
+      return (
+        <div className="truncate text-sm text-muted-foreground">
+          {item.actualizadoEn ? UPDATED_AT_FORMATTER.format(new Date(item.actualizadoEn)) : "—"}
+        </div>
+      )
+    default:
+      return null
+  }
+}
+
+function CatalogSortIndicator({ direction }: { direction: false | CatalogSortDirection }) {
+  if (direction === "asc") {
+    return <IconChevronUp className="size-3" aria-hidden />
+  }
+  if (direction === "desc") {
+    return <IconChevronDown className="size-3" aria-hidden />
+  }
+  return <IconArrowsUpDown className="size-3" aria-hidden />
+}
+
+function CatalogSortableHeader({
+  column,
+  mounted,
+  sortState,
+  onSort,
+}: {
+  column: CatalogColumnConfig
+  mounted: boolean
+  sortState: CatalogSortState
+  onSort: (columnId: CatalogColumnId) => void
+}) {
+  if (!mounted) {
+    return (
+      <TableHead className={column.widthClass}>
+        <span className="inline-flex items-center gap-1">
+          {column.label}
+          {column.sortable ? <IconArrowsUpDown className="size-3 text-muted-foreground" /> : null}
+        </span>
+      </TableHead>
+    )
+  }
+
+  const activeDirection =
+    sortState?.columnId === column.id ? sortState.direction : false
+
+  return (
+    <CatalogSortableHeaderMounted
+      column={column}
+      activeDirection={activeDirection}
+      onSort={onSort}
+    />
+  )
+}
+
+function CatalogSortableHeaderMounted({
+  column,
+  activeDirection,
+  onSort,
+}: {
+  column: CatalogColumnConfig
+  activeDirection: false | CatalogSortDirection
+  onSort: (columnId: CatalogColumnId) => void
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: catalogColumnDragId(column.id) })
+
+  return (
+    <TableHead
+      ref={setNodeRef}
+      className={cn(column.widthClass, "select-none")}
+      style={{
+        transform: `translate3d(${transform?.x ?? 0}px, 0, 0)`,
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Reordenar columna ${column.label}`}
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          className="text-muted-foreground hover:text-foreground focus:outline-none"
+        >
+          <IconGripVertical className="size-3" aria-hidden />
+        </button>
+        {column.sortable ? (
+          <button
+            type="button"
+            onClick={() => onSort(column.id)}
+            className="flex min-w-0 flex-1 items-center gap-1 text-left"
+          >
+            <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {column.label}
+            </span>
+            <CatalogSortIndicator direction={activeDirection} />
+          </button>
+        ) : (
+          <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {column.label}
+          </span>
+        )}
+      </div>
+    </TableHead>
+  )
 }
 
 function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
@@ -288,10 +639,12 @@ export function CatalogItemsPanel({
   familias: FamiliaOption[]
   modelos: ModeloOption[]
   unidadesMedida: UnidadMedidaOption[]
-}) {
+  }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [search, setSearch] = useState("")
   const [includeInactive, setIncludeInactive] = useState(true)
+  const [sortState, setSortState] = useState<CatalogSortState>(null)
+  const [columnOrder, setColumnOrder] = useState<CatalogColumnId[]>(DEFAULT_CATALOG_COLUMN_ORDER)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogItem | null>(null)
   const [feedback, setFeedback] = useState<StatusBanner>(null)
@@ -308,6 +661,14 @@ export function CatalogItemsPanel({
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
   const [newMetadataKey, setNewMetadataKey] = useState("")
   const [newMetadataValue, setNewMetadataValue] = useState("")
+  const [mounted, setMounted] = useState(false)
+  const hasLoadedColumnOrder = useRef(false)
+  const hasLoadedSortState = useRef(false)
+  const sensors = useSensors(
+    useSensor(MouseSensor, {}),
+    useSensor(TouchSensor, {}),
+    useSensor(KeyboardSensor, {}),
+  )
 
   const tipoWatch = useWatch({ control: form.control, name: "tipo" }) as CatalogItemFormValues["tipo"] | undefined;
   const monedaWatch = useWatch({ control: form.control, name: "moneda" }) as string | undefined;
@@ -321,6 +682,84 @@ export function CatalogItemsPanel({
   const activoCompraWatch = useWatch({ control: form.control, name: "activoCompra" }) as boolean | undefined
   const requiereLoteWatch = useWatch({ control: form.control, name: "requiereLote" }) as boolean | undefined
   const requiereSerieWatch = useWatch({ control: form.control, name: "requiereSerie" }) as boolean | undefined
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || hasLoadedColumnOrder.current) {
+      return
+    }
+    try {
+      const stored = window.localStorage.getItem(CATALOG_COLUMN_ORDER_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          setColumnOrder(normalizeCatalogColumnOrder(parsed))
+        }
+      }
+    } catch (error) {
+      console.warn("[catalog] No se pudo leer el orden de columnas", error)
+    } finally {
+      hasLoadedColumnOrder.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasLoadedColumnOrder.current) {
+      return
+    }
+    try {
+      window.localStorage.setItem(CATALOG_COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder))
+    } catch (error) {
+      console.warn("[catalog] No se pudo guardar el orden de columnas", error)
+    }
+  }, [columnOrder])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || hasLoadedSortState.current) {
+      return
+    }
+    try {
+      const stored = window.localStorage.getItem(CATALOG_SORTING_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          typeof (parsed as { columnId?: unknown }).columnId === "string" &&
+          ((parsed as { direction?: unknown }).direction === "asc" ||
+            (parsed as { direction?: unknown }).direction === "desc") &&
+          isCatalogColumnId((parsed as { columnId: string }).columnId)
+        ) {
+          setSortState({
+            columnId: (parsed as { columnId: CatalogColumnId }).columnId,
+            direction: (parsed as { direction: CatalogSortDirection }).direction,
+          })
+        }
+      }
+    } catch (error) {
+      console.warn("[catalog] No se pudo leer el ordenamiento", error)
+    } finally {
+      hasLoadedSortState.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasLoadedSortState.current) {
+      return
+    }
+    try {
+      if (sortState) {
+        window.localStorage.setItem(CATALOG_SORTING_STORAGE_KEY, JSON.stringify(sortState))
+      } else {
+        window.localStorage.removeItem(CATALOG_SORTING_STORAGE_KEY)
+      }
+    } catch (error) {
+      console.warn("[catalog] No se pudo guardar el ordenamiento", error)
+    }
+  }, [sortState])
 
   const filteredFamilias = useMemo(() => {
     if (!lineaWatch) {
@@ -356,7 +795,7 @@ export function CatalogItemsPanel({
     }
   }, [filteredModelos, modeloWatch, form])
 
-  const visibleItems = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((item) => {
       if (!includeInactive && !item.activo) {
@@ -378,6 +817,11 @@ export function CatalogItemsPanel({
       return haystack.includes(query)
     })
   }, [items, search, includeInactive, filterLinea, filterFamilia, filterModelo])
+
+  const visibleItems = useMemo(
+    () => sortCatalogItems(filteredItems, sortState),
+    [filteredItems, sortState],
+  )
 
   const activeCount = useMemo(() => items.filter((item) => item.activo).length, [items])
   const inactiveCount = items.length - activeCount
@@ -428,6 +872,32 @@ export function CatalogItemsPanel({
       setSelectedIds(new Set())
     },
     [visibleItems],
+  )
+
+  const handleSortColumn = useCallback((columnId: CatalogColumnId) => {
+    setSortState((current) => {
+      if (current?.columnId !== columnId) {
+        return { columnId, direction: "asc" }
+      }
+      if (current.direction === "asc") {
+        return { columnId, direction: "desc" }
+      }
+      return null
+    })
+  }, [])
+
+  const handleResetColumnOrder = useCallback(() => {
+    setColumnOrder(DEFAULT_CATALOG_COLUMN_ORDER)
+  }, [])
+
+  const reorderableColumns = useMemo(
+    () => columnOrder.map((columnId) => CATALOG_COLUMN_CONFIGS[columnId]),
+    [columnOrder],
+  )
+
+  const isDefaultColumnOrder = useMemo(
+    () => areCatalogColumnOrdersEqual(columnOrder, DEFAULT_CATALOG_COLUMN_ORDER),
+    [columnOrder],
   )
 
   const metadataEntries = useMemo(
@@ -674,6 +1144,35 @@ const handleDelete = useCallback(
     })
   }, [includeInactive])
 
+  const handleColumnDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over) {
+      return
+    }
+
+    if (
+      typeof active.id === "string" &&
+      typeof over.id === "string" &&
+      active.id.startsWith("catalog-column:") &&
+      over.id.startsWith("catalog-column:")
+    ) {
+      const sourceId = stripCatalogColumnDragId(active.id)
+      const targetId = stripCatalogColumnDragId(over.id)
+      if (!isCatalogColumnId(sourceId) || !isCatalogColumnId(targetId) || sourceId === targetId) {
+        return
+      }
+
+      setColumnOrder((current) => {
+        const oldIndex = current.indexOf(sourceId)
+        const newIndex = current.indexOf(targetId)
+        if (oldIndex === -1 || newIndex === -1) {
+          return current
+        }
+        return arrayMove(current, oldIndex, newIndex)
+      })
+    }
+  }, [])
+
   return (
     <Card>
       <CardHeader className="gap-4 space-y-0 border-b py-4">
@@ -693,6 +1192,12 @@ const handleDelete = useCallback(
             <label htmlFor="toggle-inactive">Mostrar archivados</label>
           </div>
         <div className="ms-auto flex flex-wrap items-center gap-2">
+          {!isDefaultColumnOrder ? (
+            <Button variant="outline" size="sm" onClick={handleResetColumnOrder}>
+              <IconLayoutColumns className="me-2 size-4" />
+              Restablecer columnas
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -848,136 +1353,93 @@ const handleDelete = useCallback(
             </div>
           </div>
         <div className="rounded-lg border">
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 px-3">
-                  <Checkbox
-                    id="select-all-items"
-                    checked={selectAllChecked}
-                    onCheckedChange={(checked) => handleSelectAllChange(Boolean(checked))}
-                  />
-                </TableHead>
-                <TableHead className="w-[360px]">Producto / servicio</TableHead>
-                <TableHead className="w-[170px]">Tipo</TableHead>
-                <TableHead className="w-[140px]">Precio base</TableHead>
-                <TableHead className="w-[120px]">Estado</TableHead>
-                <TableHead className="w-[150px]">Actualizado</TableHead>
-                <TableHead className="w-[120px] text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleItems.length === 0 ? (
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={handleColumnDragEnd}
+            sensors={sensors}
+          >
+            <Table className="table-fixed">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No encontramos elementos que coincidan con tu búsqueda.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                visibleItems.map((item) => (
-                  <TableRow key={item.id} className={!item.activo ? "bg-muted/30" : undefined}>
-                    <TableCell className="px-3">
-                      <Checkbox
-                        id={`select-item-${item.id}`}
-                        checked={selectedIds.has(item.id)}
-                        onCheckedChange={(checked) => handleToggleSelection(item.id, Boolean(checked))}
+                  <TableHead className="w-12 px-3">
+                    <Checkbox
+                      id="select-all-items"
+                      checked={selectAllChecked}
+                      onCheckedChange={(checked) => handleSelectAllChange(Boolean(checked))}
+                    />
+                  </TableHead>
+                  <SortableContext
+                    items={reorderableColumns.map((column) => catalogColumnDragId(column.id))}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    {reorderableColumns.map((column) => (
+                      <CatalogSortableHeader
+                        key={column.id}
+                        column={column}
+                        mounted={mounted}
+                        sortState={sortState}
+                        onSort={handleSortColumn}
                       />
-                    </TableCell>
-                    <TableCell className="max-w-0 overflow-hidden">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
-                          {item.fotoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.fotoUrl} alt={item.nombre} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                              Sin imagen
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium leading-tight">{item.nombre}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {item.descripcionCorta || "Sin descripción"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex max-w-full gap-2 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                        {item.lineaNombre ? (
-                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                            Línea: {item.lineaNombre}
-                          </span>
-                        ) : null}
-                        {item.familiaNombre ? (
-                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                            Familia: {item.familiaNombre}
-                          </span>
-                        ) : null}
-                        {item.modeloNombre ? (
-                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                            Modelo: {item.modeloNombre}
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="overflow-hidden">
-                      <div className="flex max-w-full flex-nowrap gap-2 overflow-hidden">
-                        <Badge variant={getCatalogScope(item).tone} className="capitalize">
-                          {getCatalogScope(item).label}
-                        </Badge>
-                        <Badge variant="secondary" className="capitalize">
-                          {item.tipo}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex max-w-full flex-nowrap gap-2 overflow-hidden">
-                        <Badge variant={item.manejaInventario ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
-                          {item.manejaInventario ? "Con inventario" : "Sin inventario"}
-                        </Badge>
-                        <Badge variant={item.activoCompra ? "secondary" : "outline"} className="text-[10px] uppercase tracking-wide">
-                          {item.activoCompra ? "Compra activa" : "No compra"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="overflow-hidden">
-                      <div className="truncate font-semibold">
-                        {formatCurrency(item.precioBase, item.moneda || "MXN")}
-                      </div>
-                      <div className="truncate text-xs text-muted-foreground">{item.unidad}</div>
-                    </TableCell>
-                    <TableCell className="overflow-hidden">
-                      <Badge variant={item.activo ? "default" : "outline"}>
-                        {item.activo ? "Activo" : "Archivado"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="truncate text-sm text-muted-foreground">
-                      {item.actualizadoEn ? UPDATED_AT_FORMATTER.format(new Date(item.actualizadoEn)) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon" onClick={() => openEditSheet(item)}>
-                          <IconPencil className="size-4" />
-                          <span className="sr-only">Editar</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleToggleActive(item)}
-                          disabled={isPending && pendingAction === "toggle"}
-                        >
-                          {item.activo ? (
-                            <IconArchive className="size-4" />
-                          ) : (
-                            <IconCircleCheck className="size-4" />
-                          )}
-                          <span className="sr-only">{item.activo ? "Archivar" : "Reactivar"}</span>
-                        </Button>
-                      </div>
+                    ))}
+                  </SortableContext>
+                  <TableHead className="w-[120px] text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No encontramos elementos que coincidan con tu búsqueda.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  visibleItems.map((item) => (
+                    <TableRow key={item.id} className={!item.activo ? "bg-muted/30" : undefined}>
+                      <TableCell className="px-3">
+                        <Checkbox
+                          id={`select-item-${item.id}`}
+                          checked={selectedIds.has(item.id)}
+                          onCheckedChange={(checked) => handleToggleSelection(item.id, Boolean(checked))}
+                        />
+                      </TableCell>
+                      {reorderableColumns.map((column) => (
+                        <TableCell
+                          key={`${item.id}-${column.id}`}
+                          className={cn(
+                            column.widthClass,
+                            "overflow-hidden",
+                          )}
+                        >
+                          {renderCatalogColumnCell(item, column.id)}
+                        </TableCell>
+                      ))}
+                      <TableCell className="w-[120px] text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="icon" onClick={() => openEditSheet(item)}>
+                            <IconPencil className="size-4" />
+                            <span className="sr-only">Editar</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleToggleActive(item)}
+                            disabled={isPending && pendingAction === "toggle"}
+                          >
+                            {item.activo ? (
+                              <IconArchive className="size-4" />
+                            ) : (
+                              <IconCircleCheck className="size-4" />
+                            )}
+                            <span className="sr-only">{item.activo ? "Archivar" : "Reactivar"}</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </DndContext>
         </div>
       </CardContent>
 
