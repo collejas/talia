@@ -1,16 +1,11 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { ChartAreaInteractive } from "@/components/chart-area-interactive";
-import { SectionCards } from "@/components/section-cards";
-import { RestartKpiCards } from "@/components/leads/restart-kpi-cards";
-import { IconChevronDown } from "@tabler/icons-react";
 import { fetchPermissionContext } from "@/lib/auth/permissions";
-import { callCrmApi } from "@/lib/api/crm";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
-import { loadLeadsData } from "@/lib/leads/data";
 import {
   type OportunidadesFilterOptions,
   type OportunidadesFiltersState,
 } from "./oportunidades-filters.client";
+import { OportunidadesSummaryLazy } from "./oportunidades-summary-lazy.client";
 import { OportunidadesTableClient } from "./oportunidades-table.client";
 
 export const dynamic = "force-dynamic";
@@ -48,58 +43,33 @@ export default async function OportunidadesPage({
       : undefined;
   const filters = resolveFilters(resolvedParams, assignedScopeId);
 
-  const [payload, leadsOverview, filterOptions] = await Promise.all([
-    loadCrmOpportunities({ ...filters, asignadoId: assignedScopeId }),
-    loadLeadsData(),
-    loadFilterOptions(assignedScopeId),
-  ]);
+  const payload = await loadCrmOpportunities({ ...filters, asignadoId: assignedScopeId });
 
   const filteredRows = payload.errors.length
     ? payload.rows
     : applyServerFilters(payload.rows, filters);
   const channelOptions = buildChannelOptions(payload.rows);
-  const mergedOptions: OportunidadesFilterOptions = {
-    ...filterOptions,
+  const initialFilterOptions: OportunidadesFilterOptions = {
+    etapas: [],
+    estados: normalizeOptions([
+      { id: "abierta", label: "abierta" },
+      { id: "ganada", label: "ganada" },
+      { id: "perdida", label: "perdida" },
+    ]),
+    asignados: [],
+    cuentas: [],
+    contactos: [],
     canales: channelOptions,
   };
 
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
-        <details className="group px-4 lg:px-6">
-          <summary className="list-none">
-            <div className="flex cursor-pointer items-center justify-between rounded-xl border bg-muted/50 px-3 py-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Resumen
-                </span>
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  KPIs y gráfica de oportunidades
-                </span>
-              </div>
-              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Mostrar/Ocultar
-                <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-              </span>
-            </div>
-          </summary>
-          <div className="mt-0 space-y-4 rounded-b-xl border border-t-0 bg-transparent pb-4 pt-4">
-            <SectionCards data={leadsOverview.cards} />
-            <div className="px-4 lg:px-6">
-              <ChartAreaInteractive data={leadsOverview.chart} />
-            </div>
-            <div className="px-4 lg:px-6">
-              <RestartKpiCards kpis={leadsOverview.restartKpis} />
-            </div>
-          </div>
-        </details>
-        {leadsOverview.errors.length > 0 ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            {leadsOverview.errors.map((error) => (
-              <p key={error}>{error}</p>
-            ))}
-          </div>
-        ) : null}
+        <OportunidadesSummaryLazy
+          days={filters.creadoDesde && filters.creadoHasta ? undefined : 30}
+          desde={filters.creadoDesde || undefined}
+          hasta={filters.creadoHasta || undefined}
+        />
         {payload.errors.length > 0 ? (
           <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             {payload.errors.map((error) => (
@@ -110,7 +80,7 @@ export default async function OportunidadesPage({
           <OportunidadesTableClient
             rows={filteredRows}
             filters={filters}
-            filterOptions={mergedOptions}
+            filterOptions={initialFilterOptions}
             filterInitial={filters}
             permissionContext={permissionContext}
             columnLabels={{
@@ -126,51 +96,6 @@ export default async function OportunidadesPage({
       </div>
     </AppViewLayout>
   );
-}
-
-type StageOption = { id: string; nombre: string };
-type AccountOption = { id: string; nombre: string | null; razon_social?: string | null };
-type ContactOption = { contacto_id: string; nombre: string | null; correo: string | null };
-type UserOption = { id: string; nombre_completo: string | null; correo: string | null };
-
-async function loadFilterOptions(assignedScopeId?: string): Promise<OportunidadesFilterOptions> {
-  const [stagesResp, accountsResp, contactsResp, usersResp] = await Promise.all([
-    callCrmApi<StageOption[]>("/crm/etapas"),
-    callCrmApi<{ items: AccountOption[] }>("/crm/cuentas", { searchParams: { limit: "200", offset: "0" } }),
-    callCrmApi<ContactOption[]>("/crm/contacts/list", { searchParams: { limit: "200" } }),
-    callCrmApi<UserOption[]>("/crm/usuarios", { searchParams: { limit: "200" } }),
-  ]);
-
-  return {
-    etapas: normalizeOptions(
-      stagesResp.ok && Array.isArray(stagesResp.data) ? stagesResp.data.map((s) => ({ id: s.id, label: s.nombre })) : [],
-    ),
-    estados: normalizeOptions(
-      [
-        { id: "abierta", label: "abierta" },
-        { id: "ganada", label: "ganada" },
-        { id: "perdida", label: "perdida" },
-      ],
-    ),
-    asignados: normalizeOptions(
-      usersResp.ok && Array.isArray(usersResp.data)
-        ? usersResp.data
-            .filter((u) => !assignedScopeId || u.id === assignedScopeId)
-            .map((u) => ({ id: u.id, label: u.nombre_completo || u.correo || u.id }))
-        : [],
-    ),
-    cuentas: normalizeOptions(
-      accountsResp.ok && accountsResp.data?.items
-        ? accountsResp.data.items.map((c) => ({ id: c.id, label: c.nombre || c.razon_social || c.id }))
-        : [],
-    ),
-    contactos: normalizeOptions(
-      contactsResp.ok && Array.isArray(contactsResp.data)
-        ? contactsResp.data.map((c) => ({ id: c.contacto_id, label: c.nombre || c.correo || c.contacto_id }))
-        : [],
-    ),
-    canales: [],
-  };
 }
 
 function resolveFilters(params: PageSearchParams, assignedScopeId?: string): OportunidadesFiltersState {

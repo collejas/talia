@@ -64,6 +64,9 @@ export function OportunidadesTableClient({
   permissionContext,
 }: Props) {
   const router = useRouter();
+  const [resolvedFilterOptions, setResolvedFilterOptions] = useState<OportunidadesFilterOptions | undefined>(
+    filterOptions,
+  );
   const normalizedPerms = useMemo(
     () => (permissionContext?.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext?.permisos],
@@ -90,6 +93,37 @@ export function OportunidadesTableClient({
   const [auditItems, setAuditItems] = useState<AuditAssignment[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setResolvedFilterOptions((current) => mergeFilterOptions(current ?? filterOptions, filterOptions));
+  }, [filterOptions]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch("/api/oportunidades/filter-options", {
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`filter_options_${response.status}`);
+          }
+          return response.json();
+        })
+        .then((json) => {
+          setResolvedFilterOptions((current) => mergeFilterOptions(current, json as OportunidadesFilterOptions));
+        })
+        .catch((error) => {
+          if ((error as Error).name === "AbortError") return;
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!reassignOpen || !canReassign) {
@@ -164,7 +198,7 @@ export function OportunidadesTableClient({
           <DialogTitle>Filtros de oportunidades</DialogTitle>
         </DialogHeader>
         <OportunidadesFiltersClient
-          options={filterOptions}
+          options={resolvedFilterOptions ?? filterOptions}
           initial={filterInitial}
           variant="modal"
           onApplied={() => setFiltersOpen(false)}
@@ -337,6 +371,37 @@ export function OportunidadesTableClient({
       </Dialog>
     </>
   );
+}
+
+function mergeFilterOptions(
+  base: OportunidadesFilterOptions | undefined,
+  incoming: OportunidadesFilterOptions | undefined,
+): OportunidadesFilterOptions | undefined {
+  if (!base && !incoming) return undefined;
+  if (!base) return incoming;
+  if (!incoming) return base;
+  return {
+    etapas: mergeUniqueOptions(base.etapas, incoming.etapas),
+    estados: incoming.estados.length ? incoming.estados : base.estados,
+    asignados: mergeUniqueOptions(base.asignados, incoming.asignados),
+    cuentas: mergeUniqueOptions(base.cuentas, incoming.cuentas),
+    contactos: mergeUniqueOptions(base.contactos, incoming.contactos),
+    canales: mergeUniqueOptions(base.canales, incoming.canales),
+  };
+}
+
+function mergeUniqueOptions(
+  base: { id: string; label: string }[],
+  incoming: { id: string; label: string }[],
+) {
+  const seen = new Set<string>();
+  const merged: { id: string; label: string }[] = [];
+  for (const option of [...base, ...incoming]) {
+    if (!option.id || seen.has(option.id)) continue;
+    seen.add(option.id);
+    merged.push(option);
+  }
+  return merged;
 }
 
 type ExtraColumnOptions = {
