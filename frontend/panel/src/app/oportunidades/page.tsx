@@ -112,6 +112,7 @@ export default async function OportunidadesPage({
             filters={filters}
             filterOptions={mergedOptions}
             filterInitial={filters}
+            permissionContext={permissionContext}
             columnLabels={{
               header: "Oportunidad",
               type: "Contacto",

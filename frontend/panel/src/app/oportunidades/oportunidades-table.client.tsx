@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePermissions } from "@/hooks/use-permissions";
 import {
   OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
@@ -49,6 +48,11 @@ type Props = {
   };
   filterOptions?: OportunidadesFilterOptions;
   filterInitial?: Partial<OportunidadesFiltersState>;
+  permissionContext?: {
+    permisos?: string[];
+    es_admin?: boolean;
+    es_owner?: boolean;
+  };
 };
 
 export function OportunidadesTableClient({
@@ -57,20 +61,20 @@ export function OportunidadesTableClient({
   filters,
   filterOptions,
   filterInitial,
+  permissionContext,
 }: Props) {
   const router = useRouter();
-  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = useMemo(
-    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
-    [permissionContext.permisos],
+    () => (permissionContext?.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext?.permisos],
   );
   const canReassignAny =
-    permissionContext.es_admin ||
-    permissionContext.es_owner ||
+    Boolean(permissionContext?.es_admin) ||
+    Boolean(permissionContext?.es_owner) ||
     normalizedPerms.includes("pipeline.reassign.any");
   const canReassignTeam =
-    permissionContext.es_admin ||
-    permissionContext.es_owner ||
+    Boolean(permissionContext?.es_admin) ||
+    Boolean(permissionContext?.es_owner) ||
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
 
@@ -88,7 +92,7 @@ export function OportunidadesTableClient({
   const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!reassignOpen || permissionsLoading || !canReassign) {
+    if (!reassignOpen || !canReassign) {
       return;
     }
     const controller = new AbortController();
@@ -132,7 +136,7 @@ export function OportunidadesTableClient({
     };
     fetchVendors();
     return () => controller.abort();
-  }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
+  }, [reassignOpen, canReassign, canReassignAny]);
 
   const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns({
     canReassign,

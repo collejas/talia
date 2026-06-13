@@ -14019,12 +14019,9 @@ async def _can_view_contact_sensitive_fields(
         return True
     if current_user_id is None:
         return False
-    if persona_id is not None:
-        try:
-            return await repo.can_view_contact_sensitive_fields(persona_id=persona_id)
-        except CRMRepositoryError:
-            pass
-    return bool(owner_user_id and current_user_id == owner_user_id)
+    if owner_user_id is not None and current_user_id == owner_user_id:
+        return True
+    return False
 
 
 async def _can_view_account_sensitive_fields(
@@ -14044,12 +14041,9 @@ async def _can_view_account_sensitive_fields(
         return True
     if current_user_id is None:
         return False
-    if cuenta_id is not None:
-        try:
-            return await repo.can_view_account_sensitive_fields(cuenta_id=cuenta_id)
-        except CRMRepositoryError:
-            pass
-    return bool(owner_user_id and current_user_id == owner_user_id)
+    if owner_user_id is not None and current_user_id == owner_user_id:
+        return True
+    return False
 
 
 def _apply_contact_visibility_mask(

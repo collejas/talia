@@ -13,7 +13,7 @@ from decimal import Decimal
 from functools import lru_cache
 from hashlib import sha1
 from time import monotonic
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Iterable, Literal, Mapping, Sequence
 from urllib.parse import quote as urlquote
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -1110,6 +1110,8 @@ class CRMRepository:
         self._service_role = settings.supabase_service_role
         self._timeout = timeout
         self._user_token = user_token.strip() if isinstance(user_token, str) and user_token.strip() else None
+        self._permission_context_cache: dict[str, Any] | None = None
+        self._current_user_perm_cache: dict[str, bool] = {}
 
     async def list_accounts(
         self,
@@ -14057,17 +14059,22 @@ class CRMRepository:
         return direct_org_id == organizacion_id
 
     async def current_user_has_perm(self, *, codigo: str) -> bool:
-        perm_code = (codigo or "").strip()
+        perm_code = (codigo or "").strip().lower()
         if not perm_code:
             return False
+        cached = self._current_user_perm_cache.get(perm_code)
+        if cached is not None:
+            return cached
         data = await self._rpc("current_user_has_perm", {"perm_code": perm_code})
+        result = False
         if isinstance(data, bool):
-            return data
-        if isinstance(data, dict):
+            result = data
+        elif isinstance(data, dict):
             value = data.get("current_user_has_perm")
             if isinstance(value, bool):
-                return value
-        return False
+                result = value
+        self._current_user_perm_cache[perm_code] = result
+        return result
 
     async def can_view_contact_sensitive_fields(self, *, persona_id: UUID) -> bool:
         data = await self._rpc(
@@ -14096,12 +14103,18 @@ class CRMRepository:
         return False
 
     async def get_permission_context(self) -> dict[str, Any]:
+        if self._permission_context_cache is not None:
+            return dict(self._permission_context_cache)
         data = await self._rpc("mi_contexto_permisos", {})
+        context: dict[str, Any]
         if isinstance(data, list) and data:
-            return data[0] if isinstance(data[0], dict) else {}
-        if isinstance(data, dict):
-            return data
-        return {}
+            context = data[0] if isinstance(data[0], dict) else {}
+        elif isinstance(data, dict):
+            context = data
+        else:
+            context = {}
+        self._permission_context_cache = dict(context)
+        return dict(self._permission_context_cache)
 
     async def list_clientes(
         self,
