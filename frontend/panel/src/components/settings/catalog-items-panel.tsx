@@ -848,7 +848,7 @@ const handleDelete = useCallback(
             </div>
           </div>
         <div className="rounded-lg border">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12 px-3">
@@ -858,12 +858,12 @@ const handleDelete = useCallback(
                     onCheckedChange={(checked) => handleSelectAllChange(Boolean(checked))}
                   />
                 </TableHead>
-                <TableHead>Producto / servicio</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Precio base</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Actualizado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="w-[360px]">Producto / servicio</TableHead>
+                <TableHead className="w-[170px]">Tipo</TableHead>
+                <TableHead className="w-[140px]">Precio base</TableHead>
+                <TableHead className="w-[120px]">Estado</TableHead>
+                <TableHead className="w-[150px]">Actualizado</TableHead>
+                <TableHead className="w-[120px] text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -883,8 +883,8 @@ const handleDelete = useCallback(
                         onCheckedChange={(checked) => handleToggleSelection(item.id, Boolean(checked))}
                       />
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
+                    <TableCell className="max-w-0 overflow-hidden">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
                           {item.fotoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -895,33 +895,33 @@ const handleDelete = useCallback(
                             </div>
                           )}
                         </div>
-                        <div>
-                          <div className="font-medium leading-tight">{item.nombre}</div>
-                          <div className="text-muted-foreground text-xs">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium leading-tight">{item.nombre}</div>
+                          <div className="truncate text-xs text-muted-foreground">
                             {item.descripcionCorta || "Sin descripción"}
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <div className="mt-2 flex max-w-full gap-2 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
                         {item.lineaNombre ? (
-                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
                             Línea: {item.lineaNombre}
                           </span>
                         ) : null}
                         {item.familiaNombre ? (
-                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
                             Familia: {item.familiaNombre}
                           </span>
                         ) : null}
                         {item.modeloNombre ? (
-                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
                             Modelo: {item.modeloNombre}
                           </span>
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
+                    <TableCell className="overflow-hidden">
+                      <div className="flex max-w-full flex-nowrap gap-2 overflow-hidden">
                         <Badge variant={getCatalogScope(item).tone} className="capitalize">
                           {getCatalogScope(item).label}
                         </Badge>
@@ -929,7 +929,7 @@ const handleDelete = useCallback(
                           {item.tipo}
                         </Badge>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2 flex max-w-full flex-nowrap gap-2 overflow-hidden">
                         <Badge variant={item.manejaInventario ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
                           {item.manejaInventario ? "Con inventario" : "Sin inventario"}
                         </Badge>
@@ -938,18 +938,18 @@ const handleDelete = useCallback(
                         </Badge>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-semibold">
+                    <TableCell className="overflow-hidden">
+                      <div className="truncate font-semibold">
                         {formatCurrency(item.precioBase, item.moneda || "MXN")}
                       </div>
-                      <div className="text-muted-foreground text-xs">{item.unidad}</div>
+                      <div className="truncate text-xs text-muted-foreground">{item.unidad}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="overflow-hidden">
                       <Badge variant={item.activo ? "default" : "outline"}>
                         {item.activo ? "Activo" : "Archivado"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="truncate text-sm text-muted-foreground">
                       {item.actualizadoEn ? UPDATED_AT_FORMATTER.format(new Date(item.actualizadoEn)) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
