@@ -423,6 +423,24 @@ def _looks_like_placeholder_insight(value: str) -> bool:
     }
 
 
+def _looks_like_placeholder_opportunity_description(value: str) -> bool:
+    lowered = " ".join(value.strip().lower().split())
+    if not lowered:
+        return True
+    if _looks_like_placeholder_insight(value):
+        return True
+    return any(
+        fragment in lowered
+        for fragment in (
+            "nuevo contacto",
+            "se ha presentado como un nuevo contacto",
+            "oportunidad abierta en el embudo de ventas",
+            "seguimiento para explorar sus necesidades",
+            "soluciones adecuadas",
+        )
+    )
+
+
 def _build_opportunity_title(
     *,
     contact: dict[str, Any],
@@ -3212,6 +3230,20 @@ async def sync_persona_opportunity_context(
     summary = need or notes
     proposed_title = _build_opportunity_title(contact=persona, summary=summary)
     persona_account_id = persona.get("cuenta_id")
+    current_description = _clean_text(opportunity.get("descripcion"))
+    current_contact_need = _clean_text(metadata.get("contacto_necesidad"))
+    description_auto_generated = _normalize_manual_override(metadata.get("description_auto_generated"))
+    should_refresh_description = bool(summary) and (
+        not current_description
+        or description_auto_generated
+        or _looks_like_placeholder_opportunity_description(current_description)
+    )
+    should_refresh_contact_need = bool(summary) and (
+        not current_contact_need
+        or description_auto_generated
+        or _looks_like_placeholder_insight(current_contact_need)
+        or _looks_like_placeholder_opportunity_description(current_description)
+    )
 
     if full_name:
         metadata["contacto_nombre"] = full_name
@@ -3224,10 +3256,16 @@ async def sync_persona_opportunity_context(
         metadata["contacto_telefono"] = phone
     if company_name:
         metadata["contacto_empresa"] = company_name
-    if summary:
+    if summary and should_refresh_contact_need:
         metadata["contacto_necesidad"] = summary
-        if not _clean_text(opportunity.get("descripcion")):
-            patch["descripcion"] = summary[:1000]
+        metadata["contacto_necesidad_auto_generated"] = True
+        metadata["contacto_necesidad_auto_source"] = "persona_sync"
+        metadata["contacto_necesidad_auto_updated_at"] = datetime.now(timezone.utc).isoformat()
+    if summary and should_refresh_description:
+        patch["descripcion"] = summary[:1000]
+        metadata["description_auto_generated"] = True
+        metadata["description_auto_source"] = "persona_sync"
+        metadata["description_auto_updated_at"] = datetime.now(timezone.utc).isoformat()
     if proposed_title and _is_generic_opportunity_title(
         current_title=_clean_text(opportunity.get("titulo")),
         contact=persona,
