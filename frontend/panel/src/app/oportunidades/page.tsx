@@ -3,6 +3,7 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { SectionCards } from "@/components/section-cards";
 import { RestartKpiCards } from "@/components/leads/restart-kpi-cards";
 import { IconChevronDown } from "@tabler/icons-react";
+import { fetchPermissionContext } from "@/lib/auth/permissions";
 import { callCrmApi } from "@/lib/api/crm";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
 import { loadLeadsData } from "@/lib/leads/data";
@@ -22,12 +23,35 @@ export default async function OportunidadesPage({
   searchParams?: Promise<PageSearchParams>;
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
-  const filters = resolveFilters(resolvedParams);
+  const permissionContext = await fetchPermissionContext();
+  const normalizedRoles = (permissionContext.roles ?? [])
+    .map((role) => (role ?? "").toString().trim().toLowerCase())
+    .filter(Boolean);
+  const isAdminRole =
+    Boolean(permissionContext.es_admin || permissionContext.es_owner) ||
+    normalizedRoles.some((value) => value === "admin" || value.includes("admin"));
+  const isSupervisorRole = normalizedRoles.some(
+    (value) => value === "0002" || value === "supervisor" || value.includes("supervisor"),
+  );
+  const isPrivilegedRole = isAdminRole || isSupervisorRole;
+  const isAgenteRole = normalizedRoles.some(
+    (value) =>
+      value === "0003" ||
+      value === "agente" ||
+      value === "vendedor" ||
+      value.includes("agente") ||
+      value.includes("vendedor"),
+  );
+  const assignedScopeId =
+    isAgenteRole && !isPrivilegedRole && permissionContext.usuario_id
+      ? permissionContext.usuario_id
+      : undefined;
+  const filters = resolveFilters(resolvedParams, assignedScopeId);
 
   const [payload, leadsOverview, filterOptions] = await Promise.all([
-    loadCrmOpportunities(filters),
+    loadCrmOpportunities({ ...filters, asignadoId: assignedScopeId }),
     loadLeadsData(),
-    loadFilterOptions(),
+    loadFilterOptions(assignedScopeId),
   ]);
 
   const filteredRows = payload.errors.length
@@ -108,7 +132,7 @@ type AccountOption = { id: string; nombre: string | null; razon_social?: string 
 type ContactOption = { contacto_id: string; nombre: string | null; correo: string | null };
 type UserOption = { id: string; nombre_completo: string | null; correo: string | null };
 
-async function loadFilterOptions(): Promise<OportunidadesFilterOptions> {
+async function loadFilterOptions(assignedScopeId?: string): Promise<OportunidadesFilterOptions> {
   const [stagesResp, accountsResp, contactsResp, usersResp] = await Promise.all([
     callCrmApi<StageOption[]>("/crm/etapas"),
     callCrmApi<{ items: AccountOption[] }>("/crm/cuentas", { searchParams: { limit: "200", offset: "0" } }),
@@ -129,7 +153,9 @@ async function loadFilterOptions(): Promise<OportunidadesFilterOptions> {
     ),
     asignados: normalizeOptions(
       usersResp.ok && Array.isArray(usersResp.data)
-        ? usersResp.data.map((u) => ({ id: u.id, label: u.nombre_completo || u.correo || u.id }))
+        ? usersResp.data
+            .filter((u) => !assignedScopeId || u.id === assignedScopeId)
+            .map((u) => ({ id: u.id, label: u.nombre_completo || u.correo || u.id }))
         : [],
     ),
     cuentas: normalizeOptions(
@@ -146,7 +172,7 @@ async function loadFilterOptions(): Promise<OportunidadesFilterOptions> {
   };
 }
 
-function resolveFilters(params: PageSearchParams): OportunidadesFiltersState {
+function resolveFilters(params: PageSearchParams, assignedScopeId?: string): OportunidadesFiltersState {
   const pick = (key: string) => {
     const value = params[key];
     return typeof value === "string" ? value : "";
@@ -156,7 +182,7 @@ function resolveFilters(params: PageSearchParams): OportunidadesFiltersState {
     q: pick("q"),
     etapaId: pick("etapa_id") || "all",
     estado: pick("estado") || "all",
-    asignadoId: pick("asignado_id") || "all",
+    asignadoId: assignedScopeId || pick("asignado_id") || "all",
     cuentaId: pick("cuenta_id") || "all",
     contactoId: pick("contacto_id") || "all",
     canal: pick("canal") || "all",

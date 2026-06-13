@@ -5294,6 +5294,25 @@ def _is_sales_level_context(permission_context: dict[str, Any]) -> bool:
     return False
 
 
+def _is_privileged_permission_context(permission_context: dict[str, Any]) -> bool:
+    if _coerce_bool(permission_context.get("es_admin")) is True:
+        return True
+    if _coerce_bool(permission_context.get("es_owner")) is True:
+        return True
+    roles = permission_context.get("roles")
+    if not isinstance(roles, list):
+        return False
+    for role in roles:
+        normalized = str(role or "").strip().lower()
+        if not normalized:
+            continue
+        if normalized in {"admin", "0002", "supervisor"}:
+            return True
+        if "admin" in normalized or "supervisor" in normalized:
+            return True
+    return False
+
+
 async def _require_edit_scope(
     *,
     repo: CRMRepository,
@@ -16114,6 +16133,12 @@ async def list_opportunities(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMOpportunitiesResponse:
+    permission_context = await _get_permission_context_or_raise(repo)
+    if _is_sales_level_context(permission_context) and not _is_privileged_permission_context(permission_context):
+        current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+        if current_user_id:
+            asignado_id = current_user_id
+
     effective_timezone, _ = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
