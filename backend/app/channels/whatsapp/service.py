@@ -263,6 +263,54 @@ def _trim_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _build_whatsapp_openai_metadata_payload(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    message_sid: str | None,
+    inbound_message_id: str | None,
+    prospeccion_mode: bool,
+    origin_type: str | None,
+) -> dict[str, str]:
+    return {
+        "conversation_id": conversation_id,
+        "persona_id": persona_id,
+        "channel": "whatsapp",
+        "message_sid": str(message_sid or "").strip(),
+        "inbound_message_id": str(inbound_message_id or "").strip(),
+        "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
+        "origin_type": str(origin_type or "").strip().lower() or "general_whatsapp",
+    }
+
+
+def _summarize_openai_response_payload(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        return {}
+    output_items = payload.get("output") or []
+    output_types: list[str] = []
+    message_text_count = 0
+    for item in output_items:
+        if not isinstance(item, Mapping):
+            continue
+        item_type = str(item.get("type") or "").strip()
+        if item_type:
+            output_types.append(item_type)
+        for content in item.get("content") or []:
+            if not isinstance(content, Mapping):
+                continue
+            if str(content.get("type") or "").strip() == "output_text":
+                text = content.get("text")
+                if isinstance(text, str) and text.strip():
+                    message_text_count += 1
+    return {
+        "response_id": _trim_text(payload.get("id")),
+        "status": _trim_text(payload.get("status")),
+        "output_count": len(output_items) if isinstance(output_items, list) else None,
+        "output_types": output_types[:6],
+        "output_text_count": message_text_count,
+    }
+
+
 def _normalize_whatsapp_provider(value: Any) -> str:
     provider = str(value or "").strip().lower()
     return provider if provider in {"twilio", "meta"} else "twilio"
@@ -2962,15 +3010,14 @@ async def _generate_assistant_reply(
         api_key=whatsapp_settings.voice_api_key,
         project_id=whatsapp_settings.project_id,
     )
-    metadata_payload = {
-        "conversation_id": conversation_id,
-        "persona_id": persona_id,
-        "channel": "whatsapp",
-        "message_sid": message.message_sid,
-        "inbound_message_id": inbound_message_id,
-        "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
-        "origin_type": str(origin_type or "").strip().lower() or "general_whatsapp",
-    }
+    metadata_payload = _build_whatsapp_openai_metadata_payload(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        message_sid=message.message_sid,
+        inbound_message_id=inbound_message_id,
+        prospeccion_mode=prospeccion_mode,
+        origin_type=origin_type,
+    )
     assistant_spec = None
     if not assistant.is_prompt:
         if not assistant.assistant_id:
@@ -3387,6 +3434,14 @@ async def _generate_assistant_reply(
         )
         if quality_reason == "empty":
             final_text = None
+            log_event(
+                logger,
+                "whatsapp.empty_reply_payload",
+                conversation_id=conversation_id,
+                inbound_message_id=inbound_message_id,
+                assistant_response_id=final_response_id,
+                response_summary=_summarize_openai_response_payload(result.response),
+            )
             logger.info(
                 "whatsapp.reply_quality_skip_retry",
                 extra={"conversation_id": conversation_id, "reason": quality_reason},
