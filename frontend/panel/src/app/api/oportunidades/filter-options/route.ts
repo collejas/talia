@@ -26,7 +26,9 @@ const STATUSES: FilterOption[] = [
 export async function GET() {
   const [stagesResp, accountsResp, contactsResp, usersResp] = await Promise.all([
     callCrmApi<StageOption[]>("/crm/etapas"),
-    callCrmApi<{ items: AccountOption[] }>("/crm/cuentas", { searchParams: { limit: "200", offset: "0" } }),
+    callCrmApi<{ items: AccountOption[] }>("/crm/cuentas", {
+      searchParams: { limit: "200", offset: "0", lite: "true" },
+    }),
     callCrmApi<ContactOption[]>("/crm/contacts/list", { searchParams: { limit: "200" } }),
     callCrmApi<UserOption[]>("/crm/usuarios", { searchParams: { limit: "200" } }),
   ]);

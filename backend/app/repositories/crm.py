@@ -1120,13 +1120,18 @@ class CRMRepository:
         limit: int = 50,
         offset: int = 0,
         order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
+        lite: bool = False,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": order,
             "limit": str(limit),
             "offset": str(offset),
-            "select": (
+        }
+        if lite:
+            params["select"] = "id,organizacion_id,nombre,razon_social,codigo_cuenta,creado_en,actualizado_en"
+        else:
+            params["select"] = (
                 "id,organizacion_id,nombre,alias,tipo,estado,industria,tamano,sitio_web,telefono,correo,direccion,"
                 "propietario_usuario_id,propietario:usuarios!cuentas_propietario_usuario_org_fkey(id,nombre_completo,correo),"
                 "metadata,creado_en,actualizado_en,codigo_cuenta,razon_social,rfc,regimen_capital,uso_cfdi,metodo_pago,forma_pago,"
@@ -1135,8 +1140,7 @@ class CRMRepository:
                 "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
                 "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
                 "archived_at,merged_into_cuenta_id,merge_metadata"
-            ),
-        }
+            )
         resp = await self._request("GET", "/rest/v1/cuentas", params=params)
         data = resp.json()
         if not isinstance(data, list):

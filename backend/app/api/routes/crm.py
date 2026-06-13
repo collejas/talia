@@ -15301,15 +15301,32 @@ async def list_accounts(
     _: str = Depends(require_permission("contacts.read")),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    lite: bool = Query(default=False),
 ) -> CRMAccountsResponse:
     try:
         rows = await repo.list_accounts(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
+            lite=lite,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if lite:
+        items = []
+        for row in rows:
+            payload = {
+                "id": row.get("id"),
+                "organizacion_id": row.get("organizacion_id"),
+                "nombre": row.get("nombre") or row.get("razon_social") or "Sin nombre",
+                "codigo_cuenta": row.get("codigo_cuenta"),
+                "razon_social": row.get("razon_social"),
+                "creado_en": row.get("creado_en") or "",
+                "actualizado_en": row.get("actualizado_en") or row.get("creado_en") or "",
+            }
+            items.append(CRMAccount.model_validate(payload))
+        return CRMAccountsResponse(items=items, limit=limit, offset=offset)
 
     current_user_id, can_view_all_sensitive = await _resolve_sensitive_access_context(
         repo=repo,
