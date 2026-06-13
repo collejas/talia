@@ -1139,8 +1139,8 @@ export function ContactsDataTable({
 
   const toolbarBelowActions = (
     <div className="rounded-xl border bg-muted/20 p-3 shadow-sm">
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px_auto]">
-        <div className="grid gap-1.5">
+      <div className="grid gap-2 lg:grid-cols-[320px_200px_160px_160px_auto_auto]">
+        <div className="grid min-w-0 gap-1.5">
           <Label className="text-xs font-medium text-muted-foreground">Búsqueda</Label>
           <div className="relative">
             <Input
@@ -1148,7 +1148,7 @@ export function ContactsDataTable({
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Nombre, correo, teléfono, empresa o código"
               aria-label="Buscar contacto"
-              className="pr-24"
+              className="min-w-0 pr-24"
             />
             {searchTerm ? (
               <Button
@@ -1166,7 +1166,7 @@ export function ContactsDataTable({
         <div className="grid gap-1.5">
           <Label className="text-xs font-medium text-muted-foreground">Propietario</Label>
           <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-9 w-full min-w-0">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
