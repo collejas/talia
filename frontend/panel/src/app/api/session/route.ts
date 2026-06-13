@@ -15,8 +15,11 @@ import { callSupabaseRest } from "@/lib/supabase/rest"
 import { FeatureFlags, SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
 import { resolveOrganizacionId } from "@/lib/settings/org"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 type TenantSettingsResponse = {
-  organizacion_id: string
+  id: string
   nombre: string
   razon_social?: string | null
   config?: Record<string, unknown> | null
@@ -29,6 +32,26 @@ type SupabaseEmployeeRow = {
 
 type ScoringFeatureStatus = {
   profiling_enabled?: boolean
+}
+
+function extractOrganizacionIdFromUser(user: SupabaseUser): string | null {
+  const candidates = [
+    user.app_metadata,
+    user.user_metadata,
+  ]
+  for (const metadata of candidates) {
+    if (!metadata || typeof metadata !== "object") continue
+    const record = metadata as Record<string, unknown>
+    const value =
+      record.organizacion_id ??
+      record.organization_id ??
+      record.tenant_id ??
+      record.tenantId
+    if (typeof value === "string" && value.trim()) {
+      return value.trim()
+    }
+  }
+  return null
 }
 
 async function fetchPlatformAdminStatus(): Promise<boolean> {
@@ -85,20 +108,32 @@ type TenantContextData = {
   featureFlags: FeatureFlags
 }
 
-async function fetchTenantContextData(): Promise<TenantContextData> {
-  const response = await callCrmApi<TenantSettingsResponse>("/tenant/me/settings", {
-    organizacionId: null,
-    withUserToken: true,
-  })
-  if (!response.ok || !response.data) {
+async function fetchTenantContextData(organizacionId: string | null): Promise<TenantContextData> {
+  if (!organizacionId) {
     return {
       tenant: null,
       tenantConfig: null,
       featureFlags: {},
     }
   }
-  const { nombre, razon_social } = response.data
-  const config = response.data.config
+
+  const response = await callSupabaseRest<TenantSettingsResponse[]>("/rest/v1/organizaciones", {
+    searchParams: {
+      select: "id,nombre,razon_social,config",
+      id: `eq.${organizacionId}`,
+      limit: "1",
+    },
+    forceServiceToken: true,
+  })
+  if (!response.ok || !Array.isArray(response.data) || !response.data.length) {
+    return {
+      tenant: null,
+      tenantConfig: null,
+      featureFlags: {},
+    }
+  }
+  const { nombre, razon_social } = response.data[0]
+  const config = response.data[0].config
   const features =
     config && typeof config === "object" && !Array.isArray(config)
       ? (config.features as Record<string, unknown> | null | undefined)
@@ -159,9 +194,11 @@ async function fetchEmployeePosition(usuarioId: string | null): Promise<string |
 }
 
 async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
-  const [tenantContext, organizacionId, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
-    fetchTenantContextData(),
-    resolveOrganizacionId(),
+  const sessionOrganizacionId = await resolveOrganizacionId()
+  const metadataOrganizacionId = extractOrganizacionIdFromUser(user)
+  const organizacionId = sessionOrganizacionId || metadataOrganizacionId
+  const [tenantContext, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
+    fetchTenantContextData(organizacionId),
     fetchEmployeePosition(user.id),
     fetchPlatformAdminStatus(),
     fetchScoringFeatureStatus(),

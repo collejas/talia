@@ -19,6 +19,7 @@ type UseCurrentUserState = {
 async function fetchSessionPayload(): Promise<SessionPayload> {
   const response = await fetch("/api/session", {
     method: "GET",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
   })
   if (response.status === 401) {

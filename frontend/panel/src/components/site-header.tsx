@@ -13,43 +13,22 @@ type SiteHeaderProps = {
 }
 
 export function SiteHeader({ title = "Panel" }: SiteHeaderProps) {
-  const { user, tenant, employeePosition, loading } = useCurrentUser()
+  const { user, tenant, loading } = useCurrentUser()
 
   const displayName = useMemo(() => {
     if (!user) {
       if (loading) return "Cargando usuario..."
       return null
     }
-    const metadataName =
-      typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim()
-        ? user.user_metadata.full_name.trim()
-        : null
-    return (
-      metadataName ||
-      (user.email ? user.email.split("@")[0] || "Usuario" : "Usuario Tal-IA")
-    )
+    const metadataName = resolveUserDisplayName(user.user_metadata, user.app_metadata)
+    return metadataName || (user.email ? user.email.split("@")[0] || "Usuario" : "Usuario Tal-IA")
   }, [loading, user])
-
-  const headerTitle = useMemo(() => {
-    if (displayName) return `Tal-IA · ${displayName}`
-    return "Tal-IA"
-  }, [displayName])
-
-  const jobLabel = useMemo(() => {
-    if (!employeePosition) return null
-    return `Puesto · ${employeePosition}`
-  }, [employeePosition])
 
   const companyLabel = useMemo(() => {
     if (!tenant) return null
-    const candidate = tenant.razon_social?.trim() || tenant.nombre?.trim()
+    const candidate = tenant.nombre?.trim() || tenant.razon_social?.trim()
     return candidate || null
   }, [tenant])
-
-  const companySubtitle = useMemo(() => {
-    if (!companyLabel) return null
-    return `Razón social · ${companyLabel}`
-  }, [companyLabel])
 
   return (
     <header className="sticky top-0 z-[1100] flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-sidebar">
@@ -67,18 +46,42 @@ export function SiteHeader({ title = "Panel" }: SiteHeaderProps) {
             className="rounded-lg border border-border/40 bg-surface-alt p-1"
           />
           <div className="flex flex-col items-end text-right">
-            <span className="text-base font-semibold leading-4 text-foreground">{headerTitle}</span>
-            {jobLabel ? (
-            <span className="text-xs font-medium text-muted-foreground leading-tight">
-              {jobLabel}
+            <span className="text-sm font-semibold leading-5 text-foreground">
+              {loading ? "Usuario: Cargando..." : `Usuario: ${displayName || "Sin nombre"}`}
             </span>
-            ) : null}
-            {companySubtitle ? (
-              <span className="text-xs text-muted-foreground">{companySubtitle}</span>
-            ) : null}
+            <span className="text-xs leading-4 text-muted-foreground">
+              {loading
+                ? "Empresa: Cargando..."
+                : `Empresa: ${companyLabel || "Sin empresa"}`}
+            </span>
           </div>
         </div>
       </div>
     </header>
   )
+}
+
+function resolveUserDisplayName(
+  userMetadata: Record<string, unknown> | undefined,
+  appMetadata: Record<string, unknown> | undefined,
+): string | null {
+  const candidates = [
+    userMetadata?.full_name,
+    userMetadata?.nombre_completo,
+    userMetadata?.nombre,
+    userMetadata?.name,
+    userMetadata?.display_name,
+    appMetadata?.full_name,
+    appMetadata?.nombre_completo,
+    appMetadata?.nombre,
+    appMetadata?.name,
+    appMetadata?.display_name,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const value = candidate.trim()
+      if (value) return value
+    }
+  }
+  return null
 }
