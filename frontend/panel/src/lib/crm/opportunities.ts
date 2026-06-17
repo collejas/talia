@@ -95,6 +95,7 @@ export async function loadCrmOpportunities(
   const searchParams: Record<string, string> = { limit: "100", offset: "0" };
   const contactId = options.contactId ?? options.contactoId;
   if (contactId && contactId.trim().length && contactId !== "all") {
+    searchParams.persona_id = contactId.trim();
     searchParams.contacto_id = contactId.trim();
   }
   if (options.etapaId && options.etapaId !== "all") searchParams.etapa_id = options.etapaId;

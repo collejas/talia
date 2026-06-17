@@ -16204,12 +16204,13 @@ async def list_opportunities(
         timezone_name=effective_timezone,
         is_end=True,
     )
+    resolved_persona_id = persona_id or contacto_id
     try:
         rows = await repo.list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
-            contacto_id=contacto_id,
+            contacto_id=resolved_persona_id,
             etapa_id=etapa_id,
             estado=estado,
             asignado_id=asignado_id,

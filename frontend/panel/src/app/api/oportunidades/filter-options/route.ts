@@ -4,7 +4,7 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type StageOption = { id: string; nombre: string };
 type AccountOption = { id: string; nombre: string | null; razon_social?: string | null };
-type ContactOption = { contacto_id: string; nombre: string | null; correo: string | null };
+type ContactOption = { persona_id?: string; contacto_id?: string; nombre: string | null; correo: string | null };
 type UserOption = { id: string; nombre_completo: string | null; correo: string | null };
 
 type FilterOption = { id: string; label: string };
@@ -59,8 +59,8 @@ export async function GET() {
     contactos: normalizeOptions(
       contactsResp.ok && Array.isArray(contactsResp.data)
         ? contactsResp.data.map((contact) => ({
-            id: contact.contacto_id,
-            label: contact.nombre || contact.correo || contact.contacto_id,
+            id: contact.persona_id || contact.contacto_id || "",
+            label: contact.nombre || contact.correo || contact.persona_id || contact.contacto_id || "",
           }))
         : [],
     ),

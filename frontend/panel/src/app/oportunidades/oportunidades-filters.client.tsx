@@ -96,6 +96,7 @@ export function OportunidadesFiltersClient({
     params.delete("asignado_id");
     params.delete("cuenta_id");
     params.delete("contacto_id");
+    params.delete("persona_id");
     params.delete("canal");
     params.delete("monto_min");
     params.delete("monto_max");
@@ -110,7 +111,7 @@ export function OportunidadesFiltersClient({
     if (filters.estado !== "all") params.set("estado", filters.estado);
     if (filters.asignadoId !== "all") params.set("asignado_id", filters.asignadoId);
     if (filters.cuentaId !== "all") params.set("cuenta_id", filters.cuentaId);
-    if (filters.contactoId !== "all") params.set("contacto_id", filters.contactoId);
+    if (filters.contactoId !== "all") params.set("persona_id", filters.contactoId);
     if (filters.canal !== "all") params.set("canal", filters.canal);
     if (filters.montoMin) params.set("monto_min", filters.montoMin);
     if (filters.montoMax) params.set("monto_max", filters.montoMax);

@@ -110,7 +110,7 @@ function resolveFilters(params: PageSearchParams, assignedScopeId?: string): Opo
     estado: pick("estado") || "all",
     asignadoId: assignedScopeId || pick("asignado_id") || "all",
     cuentaId: pick("cuenta_id") || "all",
-    contactoId: pick("contacto_id") || "all",
+    contactoId: pick("persona_id") || pick("contacto_id") || "all",
     canal: pick("canal") || "all",
     montoMin: pick("monto_min"),
     montoMax: pick("monto_max"),
