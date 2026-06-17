@@ -45,6 +45,7 @@ Se avanzo el corte operativo de compatibilidad entre `contacto_id` y `persona_id
 - El inbox webchat ya resuelve sesión, reply y adjuntos con `persona_id` primero.
 - `webchat_followups` y `storage.resolve_webchat_conversation_from_session` ya rehidratan `persona_id` como llave principal.
 - `reply_inbox_conversation` y `upload_inbox_attachment` ya usan `persona_id` primero en la ruta interna.
+- `messenger` ya normaliza `persona_id` como identidad interna para oportunidad, contexto, resumen y metadatos de salida, manteniendo `contact_id` solo como alias de compatibilidad.
 
 ### Registro
 

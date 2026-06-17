@@ -383,18 +383,20 @@ async def _handle_message(
         return
 
     conversation_id = str(registro.get("conversation_id") or "")
-    contact_id = str(registro.get("contact_id") or "")
-    if not conversation_id or not contact_id:
+    persona_id = str(registro.get("persona_id") or registro.get("contact_id") or "")
+    contact_id = persona_id
+    if not conversation_id or not persona_id:
         logger.warning(
             "messenger.registration_incomplete",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return
 
     try:
         await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
+            contact_id=persona_id,
             channel="messenger",
             force_new_opportunity_on_restart=True,
             include_restart_metadata=False,
@@ -404,7 +406,7 @@ async def _handle_message(
             "messenger.ensure_opportunity_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -413,7 +415,7 @@ async def _handle_message(
     try:
         contact_context = await storage.fetch_persona_context(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
         )
     except StorageError as exc:
         logger.warning(
@@ -427,7 +429,7 @@ async def _handle_message(
     try:
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             organizacion_id=org_id,
             context_data=contact_context,
         )
@@ -452,6 +454,7 @@ async def _handle_message(
     metadata_payload = {
         "conversation_id": conversation_id,
         "contact_id": contact_id,
+        "persona_id": persona_id,
         "channel": "messenger",
         "sender_id": payload.sender_id,
         "page_id": payload.recipient_id,
@@ -466,7 +469,7 @@ async def _handle_message(
     booking_context_text = None
     try:
         booking_context_text = await build_booking_context_message(
-            persona_id=contact_id,
+            persona_id=persona_id,
             conversation_id=conversation_id,
             channel="messenger",
             persona=None,
@@ -476,7 +479,7 @@ async def _handle_message(
             "messenger.booking_context_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -573,7 +576,7 @@ async def _handle_message(
 
     runtime_context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         session_id=f"messenger:{conversation_id}",
         channel="messenger",
     )
@@ -610,7 +613,8 @@ async def _handle_message(
         if sent_ok:
             outgoing_metadata = {
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "contact_id": persona_id,
+                "persona_id": persona_id,
                 "channel": "messenger",
                 "sender_id": payload.sender_id,
                 "page_id": payload.recipient_id,
