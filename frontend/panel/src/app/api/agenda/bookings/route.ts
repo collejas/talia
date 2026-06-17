@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const oportunidadId = payload.oportunidad_id?.trim()
 
   if (!personaId) {
-    return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
+    return NextResponse.json({ error: "persona_id_required" }, { status: 400 })
   }
   if (!startAt) {
     return NextResponse.json({ error: "start_at_required" }, { status: 400 })

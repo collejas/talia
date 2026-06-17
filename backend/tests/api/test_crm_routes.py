@@ -2575,7 +2575,7 @@ async def test_create_agenda_booking_can_skip_opportunity_creation(
         "/crm/agenda/bookings",
         headers=_headers(include_user_token=True),
         json={
-            "contacto_id": str(uuid.uuid4()),
+            "persona_id": str(uuid.uuid4()),
             "start_at": "2026-01-01T10:00:00Z",
             "crear_oportunidad": False,
             "modalidad": "virtual",
@@ -2672,7 +2672,7 @@ async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_fl
         "/crm/agenda/bookings",
         headers=_headers(include_user_token=True),
         json={
-            "contacto_id": str(uuid.uuid4()),
+            "persona_id": str(uuid.uuid4()),
             "start_at": "2026-01-01T10:00:00Z",
             "crear_oportunidad": False,
             "modalidad": "presencial",

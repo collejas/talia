@@ -27,16 +27,17 @@ type StageRow = {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const contactoId = (searchParams.get("contacto_id") || "").trim()
+  const personaId = (searchParams.get("persona_id") || searchParams.get("contacto_id") || "").trim()
 
-  if (!contactoId) {
-    return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
+  if (!personaId) {
+    return NextResponse.json({ error: "persona_id_required" }, { status: 400 })
   }
 
   const response = await callCrmApi<OpportunitiesResponse>("/crm/oportunidades", {
     method: "GET",
     searchParams: {
-      contacto_id: contactoId,
+      contacto_id: personaId,
+      persona_id: personaId,
       estado: "abierta",
       limit: 20,
       offset: 0,
@@ -55,18 +56,18 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let payload: { contacto_id?: string; titulo?: string }
+  let payload: { persona_id?: string; contacto_id?: string; titulo?: string }
   try {
-    payload = (await request.json()) as { contacto_id?: string; titulo?: string }
+    payload = (await request.json()) as { persona_id?: string; contacto_id?: string; titulo?: string }
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
 
-  const contactoId = payload.contacto_id?.trim()
+  const personaId = payload.persona_id?.trim() || payload.contacto_id?.trim()
   const titulo = payload.titulo?.trim()
 
-  if (!contactoId) {
-    return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
+  if (!personaId) {
+    return NextResponse.json({ error: "persona_id_required" }, { status: 400 })
   }
   if (!titulo) {
     return NextResponse.json({ error: "titulo_required" }, { status: 400 })
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
   const createResponse = await callCrmApi<OpportunityRow>("/crm/oportunidades", {
     method: "POST",
     body: {
-      contacto_principal_id: contactoId,
+      contacto_principal_id: personaId,
       etapa_id: selectedStage.id,
       titulo,
       estado: "abierta",
@@ -122,4 +123,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(createResponse.data, { status: 201 })
 }
-

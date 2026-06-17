@@ -178,7 +178,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
     async function loadOpportunities() {
       try {
         setOpportunitiesLoading(true)
-        const params = new URLSearchParams({ contacto_id: contactId })
+        const params = new URLSearchParams({ persona_id: contactId })
         const response = await fetch(`/api/agenda/opportunities?${params.toString()}`, {
           method: "GET",
           cache: "no-store",
@@ -289,6 +289,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        persona_id: contactId,
         contacto_id: contactId,
         titulo: title,
       }),
