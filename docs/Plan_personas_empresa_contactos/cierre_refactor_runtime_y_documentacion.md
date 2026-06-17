@@ -151,6 +151,23 @@ Regla practica:
 - compatibilidad temporal: `contacto_id`
 - trazabilidad tecnica e historico: se queda hasta migracion final
 
+### 2.8 Barrido de compatibilidad `persona_id`
+
+Se arranco un barrido puntual para dejar de usar `contacto_id` como llave operativa en capas de consumo del panel.
+
+Lo que ya se ajusto en esta fase:
+
+- `prospeccion_whatsapp_atribucion_eventos` ya opera con `persona_id`
+- `web_booking_sessions` ya persiste `persona_id`
+- los accesos desde reinicios, oportunidades y tarjetas operativas ya usan `persona_id` en URLs nuevas
+- el listado de contactos ya publica `persona_id` como alias de lectura
+- `inbox` ya conserva `personaId` en su modelo local
+- `leads` ya prefiere `persona_id` al presentar reinicios y resúmenes
+
+El detalle vivo del siguiente barrido queda en:
+
+- `docs/Plan_personas_empresa_contactos/backlog_compatibilidad_persona_id.md`
+
 ## 3. Limpieza semantica que se hizo
 
 La base de codigo original se escribio con el concepto `contact`, y por eso quedaron contratos y helpers con ese nombre. Durante esta etapa se limpio bastante semantica interna para que el codigo hable mas de `persona` y menos de `contacto`.

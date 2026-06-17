@@ -16,6 +16,22 @@ Nota histórica:
 - el runtime activo del panel ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 - el backend de contactos ya no lee ni escribe `legacy_*`; usa `personas.id` y `cuenta_personas.persona_id` de forma directa
 
+### Avance reciente: barrido de compatibilidad `persona_id`
+
+Se empezó a retirar `contacto_id` como identidad operativa en pantallas y helpers del panel.
+
+Ya quedó ajustado o documentado:
+
+- `prospeccion_whatsapp_atribucion_eventos` ya quedó migrado en runtime y base de datos para usar `persona_id`
+- `web_booking_sessions` ya quedó migrado para persistir `persona_id`
+- los enlaces desde reinicios y oportunidades ya priorizan `persona_id`
+- el listado de contactos ya expone `persona_id` junto a `contacto_id` como alias temporal
+- `inbox` ya mapea y conserva `personaId` en el modelo local
+- `leads` ya prioriza `persona_id` en resúmenes y etiquetas de reinicios
+
+Backlog vivo:
+- `docs/Plan_personas_empresa_contactos/backlog_compatibilidad_persona_id.md`
+
 ### Cierre reciente del contrato público
 
 - la ruta pública dedicada del panel ya quedó en `/personas/[personaId]`
