@@ -3220,8 +3220,11 @@ class AgendaBookingCreatePayload(BaseModel):
     conversation_id: UUID | None = Field(
         default=None, description="Conversación existente vinculada al lead."
     )
+    persona_id: UUID | None = Field(
+        default=None, description="Persona asociada a la cita."
+    )
     contacto_id: UUID | None = Field(
-        default=None, description="Contacto asociado a la oportunidad."
+        default=None, description="Alias legacy de persona_id."
     )
     oportunidad_id: UUID | None = Field(default=None, description="Oportunidad asociada a la cita.")
     crear_oportunidad: bool = Field(
@@ -9717,9 +9720,10 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
     oportunidad_id = (
         row.get("oportunidad_id") or metadata.get("oportunidad_id") or row.get("tarjeta_id")
     )
+    persona_id = row.get("persona_id") or row.get("contacto_id") or row.get("contact_id")
 
     contacto_payload = {
-        "id": row.get("contacto_id") or row.get("contact_id"),
+        "id": persona_id,
         "nombre": row.get("contacto_nombre") or "Contacto sin nombre",
         "correo": row.get("contacto_correo"),
         "telefono": row.get("contacto_telefono"),
@@ -9745,6 +9749,7 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
         "hold_id": row.get("hold_id"),
         "oportunidad_id": oportunidad_id,
         "tarjeta_id": row.get("tarjeta_id"),
+        "persona_id": persona_id,
         "contacto_id": contacto_payload["id"],
         "conversacion_id": row.get("conversacion_id"),
         "start_at": row.get("start_at"),
@@ -25537,7 +25542,7 @@ async def list_agenda_bookings(
 
     select_clause = (
         "id,resource_id,hold_id,tarjeta_id,conversacion_id,"
-        "contact_id,contacto_id:contact_id,"
+        "persona_id,contact_id,contacto_id:contact_id,"
         "start_at,end_at,timezone,status,notes,meeting_url,external_join_url,metadata,"
         "created_at,updated_at,tarjeta_canal,tarjeta_lead_score,"
         "etapa_nombre,asignado_a_usuario_id,asignado_nombre,"
@@ -25692,7 +25697,7 @@ async def create_agenda_booking(
         if opportunity_row is None:
             raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
 
-    contact_uuid = payload.contacto_id
+    contact_uuid = payload.persona_id or payload.contacto_id
     if opportunity_row:
         if contact_uuid is None:
             contact_uuid = _extract_opportunity_contact_id(opportunity_row)
@@ -25750,6 +25755,7 @@ async def create_agenda_booking(
     hold_metadata: dict[str, Any] = {
         "source": "panel_agenda",
         "session_id": payload.session_id,
+        "persona_id": contact_id,
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,
@@ -25764,6 +25770,7 @@ async def create_agenda_booking(
     booking_metadata: dict[str, Any] = {
         "source": "panel_agenda",
         "session_id": payload.session_id,
+        "persona_id": contact_id,
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,

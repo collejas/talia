@@ -22,6 +22,7 @@ export type AgendaApiItem = {
   hold_id: string | null;
   oportunidad_id: string | null;
   tarjeta_id?: string | null;
+  persona_id?: string | null;
   contacto_id: string | null;
   conversacion_id: string | null;
   start_at: string;
@@ -104,6 +105,7 @@ export type AgendaActionResponse = {
 export type AgendaItem = {
   id: string;
   oportunidadId: string | null;
+  personaId: string | null;
   contactoId: string | null;
   conversacionId: string | null;
   asunto: string | null;
@@ -237,10 +239,12 @@ function mapAgenda(rows: AgendaApiItem[]): AgendaItem[] {
           : typeof metadata.titulo === "string"
             ? metadata.titulo
             : null;
+    const personaId = row.persona_id ?? row.contacto_id ?? null;
     return {
       id: row.id,
       oportunidadId: row.oportunidad_id ?? null,
-      contactoId: row.contacto_id,
+      personaId,
+      contactoId: personaId,
       conversacionId: row.conversacion_id,
       asunto,
       startAt: row.start_at,
@@ -275,7 +279,7 @@ function computeMetrics(items: AgendaItem[]): AgendaMetrics {
     if (estado === "cancelada") metrics.canceladas += 1;
     if (estado === "realizada") metrics.realizadas += 1;
     if (item.conversacionId) metrics.linkedToConversation += 1;
-    if (item.contactoId) metrics.linkedToContact += 1;
+    if (item.personaId || item.contactoId) metrics.linkedToContact += 1;
     if (item.meetingUrl || item.externalJoinUrl) metrics.virtuales += 1;
     if (!item.asignadoNombre) metrics.unassigned += 1;
     if (ACTIVE_STATES.has(estado)) {

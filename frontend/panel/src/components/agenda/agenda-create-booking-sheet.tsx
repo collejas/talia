@@ -326,6 +326,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          persona_id: sinContacto ? undefined : selectedContact?.id,
           contacto_id: sinContacto ? undefined : selectedContact?.id,
           oportunidad_id: oportunidadId || undefined,
           crear_oportunidad: crearOportunidad,

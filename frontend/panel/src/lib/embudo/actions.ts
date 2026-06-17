@@ -205,6 +205,7 @@ function logDebug(step: string, payload?: Record<string, unknown>) {
 export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<ScheduleLeadDemoResult> {
   const payload = removeUndefined({
     conversation_id: input.conversationId ?? undefined,
+    persona_id: input.contactoId ?? undefined,
     contacto_id: input.contactoId ?? undefined,
     oportunidad_id: input.oportunidadId ?? undefined,
     canal: input.canal ?? undefined,
