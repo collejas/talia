@@ -30890,7 +30890,7 @@ async def prospeccion_metricas_dashboard(
 
     for row in frase_events:
         conversation_id_value = _clean_text(row.get("conversacion_id"))
-        contact_id_value = _clean_text(row.get("contacto_id"))
+        contact_id_value = _clean_text(row.get("persona_id")) or _clean_text(row.get("contacto_id"))
         channel_value = _clean_text(row.get("canal_publicitario")) or "sin_canal"
         rule_id_value = _clean_text(row.get("regla_id"))
         rule_key = rule_id_value or f"sin_regla::{channel_value}"

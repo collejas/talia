@@ -18200,26 +18200,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_reglas_active_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
-    async def worker_get_recent_whatsapp_atribucion_event_for_contact(
+    async def worker_get_recent_whatsapp_atribucion_event_for_persona(
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         since_iso: str,
+        legacy_contact_id: UUID | None = None,
     ) -> dict[str, Any] | None:
-        """Devuelve el evento de atribución más reciente por contacto en una ventana."""
+        """Devuelve el evento de atribución más reciente por persona en una ventana."""
+
+        params: dict[str, str] = {
+            "select": "id,conversacion_id,persona_id,contacto_id,regla_id,canal_publicitario,creado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "creado_en": f"gte.{since_iso}",
+            "order": "creado_en.desc",
+            "limit": "1",
+        }
+        if legacy_contact_id and legacy_contact_id != persona_id:
+            params["or"] = f"(persona_id.eq.{persona_id},contacto_id.eq.{legacy_contact_id})"
+        else:
+            params["persona_id"] = f"eq.{persona_id}"
 
         resp = await self._request_service_role(
             "GET",
             "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
-            params={
-                "select": "id,conversacion_id,contacto_id,regla_id,canal_publicitario,creado_en",
-                "organizacion_id": f"eq.{organizacion_id}",
-                "contacto_id": f"eq.{contacto_id}",
-                "creado_en": f"gte.{since_iso}",
-                "order": "creado_en.desc",
-                "limit": "1",
-            },
+            params=params,
             organizacion_id=organizacion_id,
         )
         data = resp.json() or []
@@ -18230,6 +18236,20 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_event_recent_invalid:{row!r}")
         return row
 
+    async def worker_get_recent_whatsapp_atribucion_event_for_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        since_iso: str,
+    ) -> dict[str, Any] | None:
+        """Alias de compatibilidad para el contrato legacy."""
+        return await self.worker_get_recent_whatsapp_atribucion_event_for_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+            since_iso=since_iso,
+        )
+
     async def worker_create_whatsapp_atribucion_event(
         self,
         *,
@@ -18239,11 +18259,15 @@ class CRMRepository:
         """Crea un evento de atribución; ignora duplicado por conversación."""
 
         contacto_id = payload.get("contacto_id")
+        persona_id = payload.get("persona_id")
+        normalized_payload = dict(payload)
+        if persona_id and not normalized_payload.get("contacto_id"):
+            normalized_payload["contacto_id"] = contacto_id if contacto_id else None
         resp = await self._request_service_role(
             "POST",
             "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
             params={"on_conflict": "organizacion_id,conversacion_id"},
-            json=[payload],
+            json=[normalized_payload],
             prefer="resolution=ignore-duplicates,return=representation",
             organizacion_id=organizacion_id,
         )
@@ -18271,7 +18295,7 @@ class CRMRepository:
         if not safe_ids:
             return []
         params = {
-            "select": "conversacion_id,regla_id,canal_publicitario,campana_publicitaria,adset,anuncio,creado_en",
+            "select": "conversacion_id,persona_id,contacto_id,regla_id,canal_publicitario,campana_publicitaria,adset,anuncio,creado_en",
             "organizacion_id": f"eq.{organizacion_id}",
             "conversacion_id": _postgrest_in_clause(safe_ids),
             "order": "creado_en.desc",
@@ -18413,7 +18437,7 @@ class CRMRepository:
 
         params: dict[str, str] = {
             "select": (
-                "id,regla_id,conversacion_id,contacto_id,canal_publicitario,"
+                "id,regla_id,conversacion_id,persona_id,contacto_id,canal_publicitario,"
                 "campana_publicitaria,adset,anuncio,creado_en"
             ),
             "order": "creado_en.desc",

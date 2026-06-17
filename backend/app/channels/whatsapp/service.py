@@ -145,6 +145,19 @@ def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
     return {}
 
 
+def _persona_legacy_contact_id(persona: Mapping[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    persona_data = _persona_datos(persona)
+    legacy_contact_id = str(persona_data.get("legacy_contacto_id") or "").strip()
+    if not legacy_contact_id:
+        return None
+    try:
+        return str(UUID(legacy_contact_id))
+    except (TypeError, ValueError):
+        return None
+
+
 def _contact_email_value(contact: Mapping[str, Any] | None) -> str | None:
     if not contact:
         return None
@@ -1308,9 +1321,22 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
 
     since_iso = (datetime.now(timezone.utc) - timedelta(minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES)).isoformat()
     try:
-        recent_event = await repo.worker_get_recent_whatsapp_atribucion_event_for_contact(
+        persona_row = await repo.get_persona_by_id(persona_id=persona_id)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_persona_fetch_failed",
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            error=str(exc),
+        )
+        persona_row = None
+    legacy_contact_id = _persona_legacy_contact_id(persona_row)
+    try:
+        recent_event = await repo.worker_get_recent_whatsapp_atribucion_event_for_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contact_uuid,
+            persona_id=contact_uuid,
+            legacy_contact_id=UUID(legacy_contact_id) if legacy_contact_id else None,
             since_iso=since_iso,
         )
     except CRMRepositoryError as exc:
@@ -1340,6 +1366,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         "regla_id": _trim_text(matched_rule.get("id")),
         "conversacion_id": conversation_id,
         "persona_id": persona_id,
+        "contacto_id": legacy_contact_id,
         "mensaje_id": _trim_text(message.message_sid),
         "frase_original": phrase_original,
         "frase_normalizada": normalized_phrase,
@@ -1424,17 +1451,6 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                     error=str(exc),
                 )
 
-    try:
-        persona_row = await repo.get_persona_by_id(persona_id=persona_id)
-    except CRMRepositoryError as exc:
-        log_event(
-            logger,
-            "whatsapp.publicidad_atribucion_contact_fetch_failed",
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            error=str(exc),
-        )
-        persona_row = None
     if isinstance(persona_row, dict):
         persona_data = _persona_datos(persona_row)
         patched_persona_data = {
