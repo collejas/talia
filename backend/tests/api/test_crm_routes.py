@@ -1206,7 +1206,7 @@ async def test_reassign_opportunity_aligns_contact_and_conversation(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     opportunity_id = uuid.uuid4()
-    contacto_id = uuid.uuid4()
+    persona_id = uuid.uuid4()
     conversation_id = uuid.uuid4()
     seller_id = uuid.uuid4()
 
@@ -1216,12 +1216,12 @@ async def test_reassign_opportunity_aligns_contact_and_conversation(
         return_value={
             "id": str(opportunity_id),
             "organizacion_id": str(uuid.uuid4()),
-            "contacto_principal_id": str(contacto_id),
+            "contacto_principal_id": str(persona_id),
             "metadata": {},
         }
     )
     fake_repo.update_opportunity = AsyncMock(return_value={"id": str(opportunity_id)})
-    fake_repo.update_persona = AsyncMock(return_value={"id": str(contacto_id)})
+    fake_repo.update_persona = AsyncMock(return_value={"id": str(persona_id)})
     fake_repo.update_conversation = AsyncMock(return_value={"id": str(conversation_id)})
     fake_repo.insert_sales_assignment_audit = AsyncMock(return_value={"id": str(uuid.uuid4())})
     monkeypatch.setattr(crm_routes, "CRMRepository", lambda *args, **kwargs: fake_repo)
@@ -1231,9 +1231,9 @@ async def test_reassign_opportunity_aligns_contact_and_conversation(
         headers=_headers(include_user_token=True),
         json={
             "asignado_usuario_id": str(seller_id),
-            "contacto_id": str(contacto_id),
+            "persona_id": str(persona_id),
             "conversacion_id": str(conversation_id),
-            "alinear_contacto": True,
+            "alinear_persona": True,
             "alinear_conversacion": True,
         },
     )
@@ -1242,7 +1242,7 @@ async def test_reassign_opportunity_aligns_contact_and_conversation(
     payload = resp.json()
     assert payload["ok"] is True
     assert payload["oportunidad_id"] == str(opportunity_id)
-    assert payload["contacto_actualizado"] is True
+    assert payload["persona_actualizada"] is True
     assert payload["conversacion_actualizada"] is True
 
     assert fake_repo.update_opportunity.await_count == 1
@@ -1251,7 +1251,7 @@ async def test_reassign_opportunity_aligns_contact_and_conversation(
     assert fake_repo.insert_sales_assignment_audit.await_count == 1
 
     persona_kwargs = fake_repo.update_persona.await_args.kwargs
-    assert persona_kwargs["persona_id"] == contacto_id
+    assert persona_kwargs["persona_id"] == persona_id
     assert "contacto_id" not in persona_kwargs
 
 

@@ -3,10 +3,10 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type ReassignPayload = {
   asignado_usuario_id: string;
-  contacto_id?: string | null;
+  persona_id?: string | null;
   conversacion_id?: string | null;
   motivo?: string | null;
-  alinear_contacto?: boolean;
+  alinear_persona?: boolean;
   alinear_conversacion?: boolean;
 };
 

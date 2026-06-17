@@ -4,7 +4,7 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type StageOption = { id: string; nombre: string };
 type AccountOption = { id: string; nombre: string | null; razon_social?: string | null };
-type ContactOption = { persona_id?: string; contacto_id?: string; nombre: string | null; correo: string | null };
+type PersonaOption = { persona_id?: string; nombre: string | null; correo: string | null };
 type UserOption = { id: string; nombre_completo: string | null; correo: string | null };
 
 type FilterOption = { id: string; label: string };
@@ -13,7 +13,7 @@ type FilterOptionsPayload = {
   estados: FilterOption[];
   asignados: FilterOption[];
   cuentas: FilterOption[];
-  contactos: FilterOption[];
+  personas: FilterOption[];
   canales: FilterOption[];
 };
 
@@ -29,7 +29,7 @@ export async function GET() {
     callCrmApi<{ items: AccountOption[] }>("/crm/cuentas", {
       searchParams: { limit: "200", offset: "0", lite: "true" },
     }),
-    callCrmApi<ContactOption[]>("/crm/contacts/list", { searchParams: { limit: "200" } }),
+    callCrmApi<PersonaOption[]>("/crm/contacts/list", { searchParams: { limit: "200" } }),
     callCrmApi<UserOption[]>("/crm/usuarios", { searchParams: { limit: "200" } }),
   ]);
 
@@ -56,11 +56,11 @@ export async function GET() {
           }))
         : [],
     ),
-    contactos: normalizeOptions(
+    personas: normalizeOptions(
       contactsResp.ok && Array.isArray(contactsResp.data)
         ? contactsResp.data.map((contact) => ({
-            id: contact.persona_id || contact.contacto_id || "",
-            label: contact.nombre || contact.correo || contact.persona_id || contact.contacto_id || "",
+            id: contact.persona_id || "",
+            label: contact.nombre || contact.correo || contact.persona_id || "",
           }))
         : [],
     ),

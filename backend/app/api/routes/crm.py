@@ -10021,10 +10021,10 @@ class CRMUserSummary(BaseModel):
 
 class CRMReassignOpportunityPayload(BaseModel):
     asignado_usuario_id: UUID = Field(..., description="Nuevo vendedor asignado")
-    contacto_id: UUID | None = None
+    persona_id: UUID | None = None
     conversacion_id: UUID | None = None
     motivo: str | None = Field(default=None, max_length=500)
-    alinear_contacto: bool = True
+    alinear_persona: bool = True
     alinear_conversacion: bool = True
 
 
@@ -10032,9 +10032,9 @@ class CRMReassignOpportunityResponse(BaseModel):
     ok: bool = True
     oportunidad_id: UUID
     asignado_usuario_id: UUID
-    contacto_id: UUID | None = None
+    persona_id: UUID | None = None
     conversacion_id: UUID | None = None
-    contacto_actualizado: bool = False
+    persona_actualizada: bool = False
     conversacion_actualizada: bool = False
 
 
@@ -10107,6 +10107,7 @@ class CRMOpportunity(BaseModel):
     id: UUID
     organizacion_id: UUID
     cuenta_id: UUID | None = None
+    persona_id: UUID | None = None
     contacto_principal_id: UUID | None = None
     etapa_id: UUID
     titulo: str
@@ -10129,6 +10130,15 @@ class CRMOpportunity(BaseModel):
     contacto: CRMContactSummary | None = None
     cuenta: CRMAccountSummary | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_persona_id(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if not value.get("persona_id") and value.get("contacto_principal_id"):
+            value["persona_id"] = value.get("contacto_principal_id")
+        return value
+
 
 class CRMSaleReadyOpportunity(BaseModel):
     id: UUID
@@ -10143,11 +10153,21 @@ class CRMSaleReadyOpportunity(BaseModel):
     etapa_categoria: str | None = None
     cuenta_id: UUID | None = None
     cuenta_nombre: str | None = None
+    persona_id: UUID | None = None
     contacto_id: UUID | None = None
     contacto_nombre: str | None = None
     contacto_correo: str | None = None
     contacto_telefono: str | None = None
     metadata: dict | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_persona_id(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if not value.get("persona_id") and value.get("contacto_id"):
+            value["persona_id"] = value.get("contacto_id")
+        return value
 
 
 class CRMOpportunityCreate(BaseModel):
@@ -16267,15 +16287,15 @@ async def reassign_opportunity(
     if not oportunidad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_not_found")
 
-    contacto_id_raw = payload.contacto_id or oportunidad.get("contacto_principal_id") or oportunidad.get(
+    persona_id_raw = payload.persona_id or oportunidad.get("contacto_principal_id") or oportunidad.get(
         "contacto_id"
     )
-    contacto_id: UUID | None = None
-    if contacto_id_raw:
+    persona_id: UUID | None = None
+    if persona_id_raw:
         try:
-            contacto_id = UUID(str(contacto_id_raw))
+            persona_id = UUID(str(persona_id_raw))
         except (TypeError, ValueError):
-            contacto_id = None
+            persona_id = None
 
     await repo.update_opportunity(
         organizacion_id=organizacion_id,
@@ -16293,11 +16313,11 @@ async def reassign_opportunity(
                     conversation_id = UUID(str(raw_conv))
                 except (TypeError, ValueError):
                     conversation_id = None
-    if conversation_id is None and contacto_id:
+    if conversation_id is None and persona_id:
         service_repo = CRMRepository()
         resolved = await service_repo.get_latest_conversation_id_by_contact(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            contacto_id=persona_id,
         )
         if resolved:
             try:
@@ -16305,8 +16325,8 @@ async def reassign_opportunity(
             except (TypeError, ValueError):
                 conversation_id = None
 
-    contacto_actualizado = False
-    if payload.alinear_contacto and contacto_id:
+    persona_actualizada = False
+    if payload.alinear_persona and persona_id:
         can_contact_any = await repo.current_user_has_perm(codigo="contacts.reassign.any")
         can_contact_team = await repo.current_user_has_perm(codigo="contacts.reassign.team")
         if not can_contact_any and not can_contact_team:
@@ -16319,10 +16339,10 @@ async def reassign_opportunity(
                 )
         await repo.update_persona(
             organizacion_id=organizacion_id,
-            persona_id=contacto_id,
+            persona_id=persona_id,
             payload={"propietario_usuario_id": str(payload.asignado_usuario_id)},
         )
-        contacto_actualizado = True
+        persona_actualizada = True
 
     conversacion_actualizada = False
     if payload.alinear_conversacion and conversation_id:
@@ -16343,7 +16363,7 @@ async def reassign_opportunity(
             oportunidad_id=oportunidad_id,
             vendedor_id=payload.asignado_usuario_id,
             conversation_id=str(conversation_id),
-            contact_id=str(contacto_id) if contacto_id else None,
+            contact_id=str(persona_id) if persona_id else None,
             trigger="manual_reassign",
             metadata=metadata,
             canal="panel",
@@ -16354,7 +16374,7 @@ async def reassign_opportunity(
             extra={
                 "organizacion_id": str(organizacion_id),
                 "oportunidad_id": str(oportunidad_id),
-                "contacto_id": str(contacto_id) if contacto_id else None,
+                "persona_id": str(persona_id) if persona_id else None,
                 "actor_id": str(usuario_id),
             },
         )
@@ -16362,9 +16382,9 @@ async def reassign_opportunity(
     return CRMReassignOpportunityResponse(
         oportunidad_id=oportunidad_id,
         asignado_usuario_id=payload.asignado_usuario_id,
-        contacto_id=contacto_id,
+        persona_id=persona_id,
         conversacion_id=conversation_id,
-        contacto_actualizado=contacto_actualizado,
+        persona_actualizada=persona_actualizada,
         conversacion_actualizada=conversacion_actualizada,
     )
 

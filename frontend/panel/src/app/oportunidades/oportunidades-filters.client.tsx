@@ -20,7 +20,7 @@ export type OportunidadesFilterOptions = {
   estados: FilterOption[];
   asignados: FilterOption[];
   cuentas: FilterOption[];
-  contactos: FilterOption[];
+  personas: FilterOption[];
   canales: FilterOption[];
 };
 
@@ -174,7 +174,7 @@ export function OportunidadesFiltersClient({
         <SelectField
           label="Persona"
           value={filters.personaId}
-          options={options.contactos}
+          options={options.personas}
           onChange={(value) => updateFilter("personaId", value)}
         />
         <SelectField

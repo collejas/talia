@@ -48,6 +48,8 @@ Se avanzo el corte operativo de compatibilidad entre `contacto_id` y `persona_id
 - `messenger` ya normaliza `persona_id` como identidad interna para oportunidad, contexto, resumen y metadatos de salida, manteniendo `contact_id` solo como alias de compatibilidad.
 - `GET /crm/oportunidades` y el wrapper de agenda quedaron con `persona_id` como único query param operativo; `contacto_id` ya no se reenvía en ese contrato.
 - `CRMRepository.list_opportunities` y sus llamadas internas ya usan `persona_id` como nombre de parámetro, dejando `contacto_id` fuera del contrato Python de oportunidades.
+- Las respuestas de oportunidad ya exponen `persona_id` como llave explícita y el panel de oportunidades la consume primero, sin depender del nodo `contacto`.
+- La reasignación de oportunidad ya usa `persona_id` en el payload y devuelve `persona_id` / `persona_actualizada`.
 
 ### Registro
 

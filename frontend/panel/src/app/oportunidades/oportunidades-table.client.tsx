@@ -209,7 +209,7 @@ export function OportunidadesTableClient({
 
   const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
   const activeOportunidadId = extractString(activeRaw, ["id"]) ?? activeRow?.id?.toString() ?? null;
-  const activePersonaId = extractString(activeRaw, ["contacto", "id"]) || extractString(activeRaw, ["contacto_principal_id"]);
+  const activePersonaId = extractString(activeRaw, ["persona_id"]) || extractString(activeRaw, ["contacto_principal_id"]);
   const activeAsignadoId = extractAsignadoId(activeRow);
 
   const handleReassign = async () => {
@@ -223,9 +223,9 @@ export function OportunidadesTableClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asignado_usuario_id: selectedVendorId,
-          contacto_id: activePersonaId || null,
+          persona_id: activePersonaId || null,
           conversacion_id: null,
-          alinear_contacto: true,
+          alinear_persona: true,
           alinear_conversacion: false,
         }),
       });
@@ -385,7 +385,7 @@ function mergeFilterOptions(
     estados: incoming.estados.length ? incoming.estados : base.estados,
     asignados: mergeUniqueOptions(base.asignados, incoming.asignados),
     cuentas: mergeUniqueOptions(base.cuentas, incoming.cuentas),
-    contactos: mergeUniqueOptions(base.contactos, incoming.contactos),
+    personas: mergeUniqueOptions(base.personas, incoming.personas),
     canales: mergeUniqueOptions(base.canales, incoming.canales),
   };
 }
@@ -650,7 +650,7 @@ function applyClientFilters(
     const estado = extractString(raw, ["estado"]) || "";
     const asignadoId = extractString(raw, ["asignado", "id"]) || extractString(raw, ["asignado_a_usuario_id"]) || "";
     const cuentaId = extractString(raw, ["cuenta", "id"]) || extractString(raw, ["cuenta_id"]) || "";
-    const personaId = extractString(raw, ["contacto", "id"]) || extractString(raw, ["contacto_principal_id"]) || "";
+    const personaId = extractString(raw, ["persona_id"]) || extractString(raw, ["contacto_principal_id"]) || "";
     const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "";
 
     if (search) {
