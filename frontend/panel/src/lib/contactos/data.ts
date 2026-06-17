@@ -16,6 +16,7 @@ type CrmContactSummary = {
 };
 
 type CrmContactListRow = {
+  persona_id?: string | null;
   contacto_id: string;
   codigo_contacto: string | null;
   codigo_cuenta: string | null;
@@ -218,7 +219,9 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
       target: conversations.toString(),
       limit: lastContact,
       reviewer: row.propietario_nombre || "Sin asignar",
+      personaId: row.persona_id ?? row.contacto_id,
       raw: {
+        persona_id: row.persona_id ?? row.contacto_id,
         contacto_id: row.contacto_id,
         codigo_contacto: row.codigo_contacto,
         codigo_cuenta: row.codigo_cuenta,

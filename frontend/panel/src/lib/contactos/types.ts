@@ -39,6 +39,7 @@ export type ContactTableRow = {
   limit: string;
   reviewer: string;
   raw?: Record<string, unknown>;
+  personaId?: string | null;
 };
 
 export type ContactFilters = {
