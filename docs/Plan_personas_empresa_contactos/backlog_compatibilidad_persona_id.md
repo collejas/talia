@@ -31,10 +31,11 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 ### P1
 
 - [x] Normalizar la UI de `frontend/panel/src/app/oportunidades/*` para que el estado visible ya use `personaId`.
-- Normalizar los tipos del inbox para que `personaId` sea la llave de lectura principal y `contactoId` quede como alias temporal.
-- Revisar `frontend/panel/src/components/inbox/split-view.tsx` y demas merges locales para que no vuelvan a degradar `personaId`.
+- [x] Normalizar los tipos del inbox para que `personaId` sea la llave de lectura principal y `contactoId` quede como alias temporal.
+- [x] Revisar `frontend/panel/src/components/inbox/split-view.tsx` y dejar `personaId` como fuente principal del merge local.
 - [x] Retirar el dual query param en `frontend/panel/src/lib/crm/opportunities.ts`; ahora solo se emite `persona_id` hacia el backend.
 - [x] Retirar el alias de entrada `contactoId` en `frontend/panel/src/lib/crm/opportunities.ts`; ahora el helper usa `personaId`.
+- [x] Mantener `contactoId` solo como alias derivado dentro del inbox, sin usarlo como llave principal de merge.
 
 ### P2
 

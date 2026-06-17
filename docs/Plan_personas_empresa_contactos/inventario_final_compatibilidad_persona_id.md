@@ -80,7 +80,7 @@ Resumen ejecutivo del corte actual:
 - contratos viejos que ya solo son nombre de ruta o prop: `contactoId`
 - contratos que no conviene tocar todavia: los que siguen actuando como puente de compatibilidad entre panel, CRM y eventos historicos
 - el helper de oportunidades ya usa `personaId` de forma directa
-- la UI de oportunidades ya quedo alineada a `personaId` como estado interno
+- la UI de oportunidades y el inbox ya quedaron alineados a `personaId` como estado interno
 
 ## 5. Conclusion
 

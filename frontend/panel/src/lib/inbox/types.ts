@@ -85,7 +85,7 @@ export type InboxMessageRow = {
 export type InboxThread = {
   id: string;
   personaId: string;
-  contactoId: string;
+  contactoId?: string;
   contactoNombre: string;
   contactoProfileName: string | null;
   contactoCorreo: string | null;

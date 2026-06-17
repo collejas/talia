@@ -2426,13 +2426,15 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     const resolvedSourceDetail =
       incomingSourceDetail ??
       (existing.sourceDetail && Object.keys(existing.sourceDetail).length > 0 ? existing.sourceDetail : null);
+    const resolvedPersonaId =
+      preferIncomingString(thread.personaId, existing.personaId) ??
+      preferIncomingString(thread.contactoId, existing.contactoId) ??
+      existing.personaId ??
+      existing.contactoId;
     return {
       ...thread,
-      personaId: preferIncomingString(thread.personaId, existing.personaId) ?? existing.personaId,
-      contactoId:
-        preferIncomingString(thread.personaId, existing.personaId) ??
-        preferIncomingString(thread.contactoId, existing.contactoId) ??
-        existing.contactoId,
+      personaId: resolvedPersonaId,
+      contactoId: resolvedPersonaId,
       contactoNombre: preferIncomingContactName(thread.contactoNombre, existing.contactoNombre) ?? "",
       contactoProfileName: preferIncomingString(thread.contactoProfileName, existing.contactoProfileName),
       contactoCorreo: preferIncomingString(thread.contactoCorreo, existing.contactoCorreo),
