@@ -33,3 +33,20 @@ Se implemento y documente la nueva experiencia de CRUD de contactos en el panel,
 - Refinamiento de mobile y accesibilidad.
 - Evaluar si se requieren endpoints nativos adicionales para relaciones.
 
+## 2026-06-17 - Barrido de compatibilidad `persona_id`
+
+Se avanzo el corte operativo de compatibilidad entre `contacto_id` y `persona_id` en backend y panel.
+
+### Entregado hoy
+
+- `prospeccion_whatsapp_atribucion_eventos` ya usa `persona_id` como identidad canónica en escritura y lectura.
+- El worker de atribución WhatsApp normaliza `persona_id` en la salida y conserva `contacto_id` solo como sombra temporal.
+- `conversaciones` y `v_asignaciones_vendedores` ya priorizan `persona_id` al resolver lecturas operativas.
+- El inbox webchat ya resuelve sesión, reply y adjuntos con `persona_id` primero.
+- `webchat_followups` y `storage.resolve_webchat_conversation_from_session` ya rehidratan `persona_id` como llave principal.
+- `reply_inbox_conversation` y `upload_inbox_attachment` ya usan `persona_id` primero en la ruta interna.
+
+### Registro
+
+- Se actualizo `progreso.md` y el inventario final de compatibilidad para reflejar el corte.
+- Se dejo el resto de `contacto_id` restante como compatibilidad real o legado cosmetico segun el contrato.
