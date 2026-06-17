@@ -67,7 +67,6 @@ El motivo para dejarlos por ahora es evitar romper enlaces, tabs abiertas, bookm
 
 Estos son los puntos que siguen valiendo como backlog tecnico y no solo como alias cosmetico:
 
-- retirar el uso dual de `contacto_id` en `frontend/panel/src/lib/crm/opportunities.ts`
 - normalizar la UI de `frontend/panel/src/app/oportunidades/*` para que el estado visible sea `personaId`
 - revisar si las rutas del panel bajo `api/contactos/*` ya pueden pasar a `personaId` como contrato visible sin romper historial
 - seguir reduciendo el uso de `contacto_id` en `backend/app/repositories/crm.py` solo donde no sea una FK o un contrato historico
@@ -81,6 +80,7 @@ Resumen ejecutivo del corte actual:
 - contratos viejos que siguen vivos: `contacto_id`
 - contratos viejos que ya solo son nombre de ruta o prop: `contactoId`
 - contratos que no conviene tocar todavia: los que siguen actuando como puente de compatibilidad entre panel, CRM y eventos historicos
+- el query dual de oportunidades ya se retiro; queda solo la entrada legacy `contactoId` en el helper del panel
 
 ## 5. Conclusion
 
