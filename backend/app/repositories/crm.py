@@ -18240,6 +18240,8 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"whatsapp_atribucion_event_recent_invalid:{row!r}")
+        if not row.get("persona_id") and row.get("contacto_id"):
+            row["persona_id"] = row.get("contacto_id")
         return row
 
     async def worker_get_recent_whatsapp_atribucion_event_for_contact(
@@ -18264,11 +18266,17 @@ class CRMRepository:
     ) -> dict[str, Any] | None:
         """Crea un evento de atribución; ignora duplicado por conversación."""
 
-        contacto_id = payload.get("contacto_id")
-        persona_id = payload.get("persona_id")
+        persona_id = str(payload.get("persona_id") or "").strip()
+        contacto_id = str(payload.get("contacto_id") or "").strip()
+        resolved_persona_id = persona_id or contacto_id
+        if not resolved_persona_id:
+            raise CRMRepositoryError("whatsapp_atribucion_persona_id_required")
         normalized_payload = dict(payload)
-        if persona_id and not normalized_payload.get("contacto_id"):
-            normalized_payload["contacto_id"] = contacto_id if contacto_id else None
+        normalized_payload["persona_id"] = resolved_persona_id
+        if not normalized_payload.get("contacto_id"):
+            # Compatibilidad temporal: mientras existan lectores legacy,
+            # el contrato sigue duplicando el identificador canónico.
+            normalized_payload["contacto_id"] = resolved_persona_id
         resp = await self._request_service_role(
             "POST",
             "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
@@ -18316,7 +18324,14 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"whatsapp_atribucion_events_by_conversation_invalid:{data!r}")
-        return [row for row in data if isinstance(row, dict)]
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            if not row.get("persona_id") and row.get("contacto_id"):
+                row["persona_id"] = row.get("contacto_id")
+            rows.append(row)
+        return rows
 
     async def worker_list_whatsapp_atribucion_reglas_by_ids(
         self,
@@ -18475,7 +18490,14 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"whatsapp_atribucion_eventos_metrics_invalid:{data!r}")
-        return [row for row in data if isinstance(row, dict)]
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            if not row.get("persona_id") and row.get("contacto_id"):
+                row["persona_id"] = row.get("contacto_id")
+            rows.append(row)
+        return rows
 
     async def list_opportunities_by_conversation_ids(
         self,

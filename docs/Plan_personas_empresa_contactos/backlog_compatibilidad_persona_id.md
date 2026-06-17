@@ -7,6 +7,7 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 ## Hecho hasta ahora
 
 - `prospeccion_whatsapp_atribucion_eventos` ya quedo migrado a `persona_id`
+- el worker de atribución ya persiste `persona_id` canónico y normaliza la salida para consumidores legacy
 - `web_booking_sessions` ya quedo migrado a `persona_id`
 - `contacts-data-table` ya prioriza `persona_id` en edicion, borrado, refresh y linkeo
 - `restart-details` ya genera enlaces con `persona_id`
