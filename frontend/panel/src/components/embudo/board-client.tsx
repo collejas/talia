@@ -964,6 +964,8 @@ export function EmbudoBoardClient({
     let patchedResult = result;
     if (result.ok && result.card) {
       const patchedCard: EmbudoCard = { ...result.card };
+      const previousProjectNeeds = selectedCard?.proyectoNecesidades ?? null;
+      const previousProjectName = selectedCard?.proyectoNombre ?? null;
       const contactPayload = payload.contacto ?? {};
       const opportunityPayload = payload.oportunidad ?? {};
 
@@ -998,7 +1000,7 @@ export function EmbudoBoardClient({
             project_name: nextTitle,
           };
         } else if (!patchedCard.titulo) {
-          patchedCard.titulo = patchedCard.nombre ?? "Oportunidad sin nombre";
+          patchedCard.titulo = previousProjectName ?? patchedCard.nombre ?? "Oportunidad sin nombre";
           if (patchedCard.metadata) {
             delete patchedCard.metadata.project_name;
           }
@@ -1011,6 +1013,8 @@ export function EmbudoBoardClient({
             ? nextDescRaw.trim()
             : null;
         patchedCard.proyectoNecesidades = nextDesc ?? patchedCard.proyectoNecesidades ?? null;
+      } else {
+        patchedCard.proyectoNecesidades = previousProjectNeeds;
       }
       if ("metadata" in opportunityPayload && isPlainRecord(opportunityPayload.metadata)) {
         patchedCard.metadata = {

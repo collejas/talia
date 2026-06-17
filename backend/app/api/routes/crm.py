@@ -41441,7 +41441,8 @@ def _build_pipeline_table(
                     "monto_estimado": monto_estimado,
                     "moneda": moneda,
                     "probabilidad": row.get("probabilidad"),
-                    "proyecto_nombre": row.get("descripcion"),
+                    "proyecto_nombre": row.get("titulo") or row.get("descripcion"),
+                    "proyecto_necesidades": row.get("descripcion"),
                     "lead_score": (row.get("metadata") or {}).get("lead_score"),
                     "asignado_id": row.get("asignado_a_usuario_id"),
                     "asignado_nombre": reviewer,
@@ -42215,6 +42216,13 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         or cuenta.get("necesidad_proposito")
         or metadata.get("necesidad_proposito")
     )
+    proyecto_nombre = (
+        _clean_text(metadata.get("project_name"))
+        or _clean_text(row.get("titulo"))
+        or _clean_text(cuenta.get("nombre"))
+        or None
+    )
+    proyecto_necesidades = _clean_text(metadata.get("proyecto_necesidades")) or _clean_text(row.get("descripcion")) or None
 
     return CRMPipelineBoardCard(
         tarjeta_id=oportunidad_id,
@@ -42237,8 +42245,8 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         monto=row.get("monto_estimado"),
         moneda=row.get("moneda"),
         probabilidad=row.get("probabilidad"),
-        proyecto_nombre=row.get("descripcion"),
-        proyecto_necesidades=metadata.get("proyecto_necesidades"),
+        proyecto_nombre=proyecto_nombre,
+        proyecto_necesidades=proyecto_necesidades,
         asignado_id=_safe_uuid(row.get("asignado_a_usuario_id")),
         asignado_nombre=asignado_nombre,
         prioridad=float(prioridad) if isinstance(prioridad, (int, float)) else None,
