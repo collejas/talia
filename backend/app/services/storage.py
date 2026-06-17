@@ -1854,10 +1854,11 @@ async def resolve_webchat_conversation_from_session(
         return None
     ctrl = row.get("conversaciones_controles")
     manual_override = _normalize_manual_override(ctrl)
+    resolved_persona_id = row.get("persona_id") or row.get("contacto_id") or persona_id
     return {
         "id": row.get("id"),
-        "persona_id": row.get("persona_id") or row.get("contacto_id"),
-        "contact_id": row.get("contacto_id"),
+        "persona_id": resolved_persona_id,
+        "contact_id": row.get("contacto_id") or resolved_persona_id,
         "channel": row.get("canal"),
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),

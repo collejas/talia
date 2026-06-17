@@ -677,6 +677,10 @@ async def _process_conversation(
         return
     conversation_id = str(convo_id)
     persona_id_str = str(persona_id)
+    if not conversation.get("persona_id"):
+        conversation["persona_id"] = persona_id_str
+    if not conversation.get("contacto_id"):
+        conversation["contacto_id"] = persona_id_str
     last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
     if not last_out or last_out > reference_time:
         return
