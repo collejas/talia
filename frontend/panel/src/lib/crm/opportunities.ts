@@ -72,8 +72,7 @@ export type CrmOpportunitiesPayload = {
 };
 
 type LoadCrmOpportunitiesOptions = {
-  contactId?: string;
-  contactoId?: string;
+  personaId?: string;
   etapaId?: string;
   estado?: string;
   asignadoId?: string;
@@ -93,9 +92,8 @@ export async function loadCrmOpportunities(
   options: LoadCrmOpportunitiesOptions = {},
 ): Promise<CrmOpportunitiesPayload> {
   const searchParams: Record<string, string> = { limit: "100", offset: "0" };
-  const contactId = options.contactId ?? options.contactoId;
-  if (contactId && contactId.trim().length && contactId !== "all") {
-    searchParams.persona_id = contactId.trim();
+  if (options.personaId && options.personaId.trim().length && options.personaId !== "all") {
+    searchParams.persona_id = options.personaId.trim();
   }
   if (options.etapaId && options.etapaId !== "all") searchParams.etapa_id = options.etapaId;
   if (options.estado && options.estado !== "all") searchParams.estado = options.estado;

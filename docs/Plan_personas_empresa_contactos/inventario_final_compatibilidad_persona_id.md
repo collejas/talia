@@ -79,7 +79,7 @@ Resumen ejecutivo del corte actual:
 - contratos viejos que siguen vivos: `contacto_id`
 - contratos viejos que ya solo son nombre de ruta o prop: `contactoId`
 - contratos que no conviene tocar todavia: los que siguen actuando como puente de compatibilidad entre panel, CRM y eventos historicos
-- el query dual de oportunidades ya se retiro; queda solo la entrada legacy `contactoId` en el helper del panel
+- el helper de oportunidades ya usa `personaId` de forma directa
 - la UI de oportunidades ya quedo alineada a `personaId` como estado interno
 
 ## 5. Conclusion
