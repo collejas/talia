@@ -24,6 +24,7 @@ Ya quedó ajustado o documentado:
 
 - `prospeccion_whatsapp_atribucion_eventos` ya quedó migrado en runtime y base de datos para usar `persona_id`
 - el worker de atribución de WhatsApp ya escribe `persona_id` canónico y normaliza `persona_id` en la salida aunque la fila legacy todavía venga con `contacto_id`
+- los helpers de `conversaciones` y `v_asignaciones_vendedores` ya priorizan `persona_id` en lectura operativa
 - `web_booking_sessions` ya quedó migrado para persistir `persona_id`
 - los enlaces desde reinicios y oportunidades ya priorizan `persona_id`
 - el listado de contactos ya expone `persona_id` junto a `contacto_id` como alias temporal

@@ -5380,10 +5380,10 @@ class CRMRepository:
             return None
         params = {
             "select": (
-                "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
+                "id,persona_id,contacto_id,canal,conversacion_openai_id,last_response_id,"
                 "conversaciones_controles(manual_override)"
             ),
-            "contacto_id": f"eq.{persona_key}",
+            "persona_id": f"eq.{persona_key}",
             "canal": "eq.webchat",
             "order": "iniciada_en.desc",
             "limit": "1",
@@ -5398,6 +5398,8 @@ class CRMRepository:
             return None
         if not isinstance(row, dict):
             return None
+        if not row.get("persona_id") and row.get("contacto_id"):
+            row["persona_id"] = row.get("contacto_id")
         return row
 
     async def get_latest_whatsapp_conversation(self, *, persona_id: str) -> dict[str, Any] | None:
@@ -5405,8 +5407,8 @@ class CRMRepository:
         if not persona_key:
             return None
         params = {
-            "select": "id,contacto_id,canal,estado",
-            "contacto_id": f"eq.{persona_key}",
+            "select": "id,persona_id,contacto_id,canal,estado",
+            "persona_id": f"eq.{persona_key}",
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": "1",
@@ -5421,6 +5423,8 @@ class CRMRepository:
             return None
         if not isinstance(row, dict):
             return None
+        if not row.get("persona_id") and row.get("contacto_id"):
+            row["persona_id"] = row.get("contacto_id")
         if str(row.get("estado") or "").lower() == "cerrada":
             return None
         return row
@@ -13689,7 +13693,7 @@ class CRMRepository:
             params["oportunidad_id"] = f"eq.{oportunidad_id}"
         resolved_persona_id = persona_id or contacto_id
         if resolved_persona_id:
-            params["contacto_id"] = f"eq.{resolved_persona_id}"
+            params["persona_id"] = f"eq.{resolved_persona_id}"
         if conversacion_id:
             params["conversacion_id"] = f"eq.{conversacion_id}"
         if vendedor_id:
@@ -13704,7 +13708,14 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inesperada al listar asignaciones WhatsApp: {data!r}"
             )
-        return data
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            if not row.get("persona_id") and row.get("contacto_id"):
+                row["persona_id"] = row.get("contacto_id")
+            rows.append(row)
+        return rows
 
     async def list_persona_whatsapp_assignments(
         self,

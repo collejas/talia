@@ -97,6 +97,7 @@ Resumen ejecutivo del corte actual:
 - el panel ya consume `api/personas/list`, `summary`, `export` y `catalogos`
 - el panel ya consume `api/personas/bulk-delete`
 - el worker de atribución WhatsApp ya escribe y normaliza `persona_id` en runtime, aunque mantiene `contacto_id` como sombra temporal
+- los helpers de lectura de `conversaciones` y `v_asignaciones_vendedores` ya usan `persona_id` como llave principal cuando existe
 
 ## 5. Conclusion
 
