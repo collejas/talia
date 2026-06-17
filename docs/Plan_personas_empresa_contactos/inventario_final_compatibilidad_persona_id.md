@@ -25,6 +25,8 @@ La regla para leerlo es simple:
 - `frontend/panel/src/app/api/contactos/[contactoId]/reassign/route.ts`
   - conserva el nombre de ruta legacy
   - sigue reenviando al backend, pero ya proxy a `/crm/personas/{persona_id}/reasignar`
+- `frontend/panel/src/app/api/personas/create/route.ts`
+  - contrato visible de alta del panel; proxy a `/crm/personas/alta`
 - `frontend/panel/src/app/api/contactos/list/route.ts`, `summary/route.ts`, `export/route.ts` y `catalogos/*`
   - conservan la ruta legacy, pero ya proxy a `/crm/personas/*`
 - `frontend/panel/src/app/api/contactos/bulk-delete/route.ts`
@@ -66,6 +68,7 @@ Estos nombres siguen viendose en la UI o en la firma de ruta, pero ya no implica
 - `frontend/panel/src/app/api/contactos/export/route.ts`
 - `frontend/panel/src/app/api/contactos/catalogos/*`
 - `frontend/panel/src/app/api/contactos/bulk-delete/route.ts`
+- `frontend/panel/src/app/api/personas/create/route.ts`
 - `frontend/panel/src/app/oportunidades/page.tsx`
 - `frontend/panel/src/app/oportunidades/oportunidades-filters.client.tsx`
 - `frontend/panel/src/app/oportunidades/oportunidades-table.client.tsx`
@@ -90,6 +93,7 @@ Resumen ejecutivo del corte actual:
 - contratos que no conviene tocar todavia: los que siguen actuando como puente de compatibilidad entre panel, CRM y eventos historicos
 - el helper de oportunidades ya usa `personaId` de forma directa
 - la UI de oportunidades y el inbox ya quedaron alineados a `personaId` como estado interno
+- el panel ya consume `api/personas/create` para alta
 - el panel ya consume `api/personas/list`, `summary`, `export` y `catalogos`
 - el panel ya consume `api/personas/bulk-delete`
 

@@ -41,6 +41,7 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 
 - [x] Hacer inventario final de rutas API que todavia usan nombres `contactoId` o `contacto_id` solo por compatibilidad.
 - [x] Documentar que contratos ya pueden migrar a `persona_id` de forma directa y cuales deben quedarse legacy hasta el cierre de DB.
+- [x] Mover el contrato visible de alta del panel a `api/personas/create`.
 - [x] Mover el consumo del panel para listado, resumen, export y catálogos a `api/personas/*`.
 - [x] Mover `bulk-delete` del panel a `api/personas/bulk-delete` como contrato visible.
 

@@ -1103,7 +1103,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         }
       }
 
-      const response = await fetch("/api/personas/alta", {
+      const response = await fetch("/api/personas/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
