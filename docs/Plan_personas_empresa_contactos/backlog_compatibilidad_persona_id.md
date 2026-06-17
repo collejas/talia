@@ -12,6 +12,7 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 - `restart-details` ya genera enlaces con `persona_id`
 - `embudo/card-item` ya envía a inbox con `persona_id`
 - `embudo` ya empezó a exponer `personaId` en el modelo local y a priorizarlo en los submits principales
+- `embudo/card-item` ya prioriza `personaId` para abrir el historial en Inbox
 - `visitas` ya expone `persona_id` en el raw y lo usa para conteos e identificación interna
 - `lib/contactos` ya expone `persona_id` en la tabla local como alias de lectura
 - `inbox` ya conserva `personaId` en el modelo local

@@ -27,6 +27,7 @@ Ya quedó ajustado o documentado:
 - los enlaces desde reinicios y oportunidades ya priorizan `persona_id`
 - el listado de contactos ya expone `persona_id` junto a `contacto_id` como alias temporal
 - `embudo` ya empezó a exponer `personaId` en el modelo local y a priorizarlo en los submits principales
+- `embudo/card-item` ya prioriza `personaId` para abrir el historial en Inbox
 - `visitas` ya expone `persona_id` en el raw y lo usa para conteos e identificación interna
 - `lib/contactos` ya expone `persona_id` en la tabla local como alias de lectura
 - `inbox` ya mapea y conserva `personaId` en el modelo local
