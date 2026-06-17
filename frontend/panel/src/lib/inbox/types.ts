@@ -13,6 +13,7 @@ export type InboxSummary = {
 
 export type InboxThreadRow = {
   conversacion_id: string;
+  persona_id?: string | null;
   contacto_id: string;
   contacto_nombre: string | null;
   contacto_profile_name?: string | null;
@@ -83,6 +84,7 @@ export type InboxMessageRow = {
 
 export type InboxThread = {
   id: string;
+  personaId: string;
   contactoId: string;
   contactoNombre: string;
   contactoProfileName: string | null;

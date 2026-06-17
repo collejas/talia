@@ -6,6 +6,7 @@ import { callCrmApi } from "@/lib/api/crm";
 type CRMLead = {
   id: string;
   campana_id: string | null;
+  persona_id?: string | null;
   contacto_id: string | null;
   cuenta_id: string | null;
   origen: string | null;
@@ -33,6 +34,7 @@ type LeadRestartCycleDetail = {
 };
 
 type CRMLeadRestartStat = {
+  persona_id?: string | null;
   contacto_id: string;
   contacto_nombre: string | null;
   contacto_correo: string | null;
@@ -93,7 +95,7 @@ export async function loadCrmLeads(): Promise<CrmLeadsPayload> {
     header: resolveLeadHeader(lead),
     type: lead.estado,
     status: lead.origen || "Desconocido",
-    target: lead.contacto_id || "Sin contacto",
+    target: lead.persona_id || lead.contacto_id || "Sin contacto",
     limit: lead.campana_id || "Sin campaña",
     reviewer: lead.cuenta_id || "Cuenta pendiente",
     raw: lead,
@@ -155,7 +157,8 @@ function formatContactName(stat: CRMLeadRestartStat): string {
   if (stat.contacto_nombre && stat.contacto_nombre.trim().length) {
     return stat.contacto_nombre.trim();
   }
-  return `Contacto ${stat.contacto_id.slice(0, 8)}`;
+  const personaId = stat.persona_id?.trim();
+  return `Contacto ${(personaId || stat.contacto_id).slice(0, 8)}`;
 }
 
 function formatSellerName(stat: CRMLeadRestartStat): string {

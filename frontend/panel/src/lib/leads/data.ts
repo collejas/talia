@@ -119,6 +119,7 @@ type CRMOpportunitiesResponse = {
 };
 
 type CRMLeadRestartStat = {
+  persona_id?: string | null;
   contacto_id: string;
   contacto_nombre: string | null;
   contacto_correo: string | null;
@@ -522,6 +523,7 @@ function buildRestartTable(stats: CRMLeadRestartStat[]): LeadTableRow[] {
     reviewer: formatSellerName(stat),
     raw: {
       ...stat,
+      persona_id: stat.persona_id ?? stat.contacto_id,
       status_meta: {
         label: formatRestartStatus(stat),
         variant: "default",
@@ -534,7 +536,8 @@ function formatContactName(stat: CRMLeadRestartStat): string {
   if (stat.contacto_nombre && stat.contacto_nombre.trim().length) {
     return stat.contacto_nombre.trim();
   }
-  return `Contacto ${stat.contacto_id.slice(0, 8)}`;
+  const personaId = stat.persona_id?.trim();
+  return `Contacto ${(personaId || stat.contacto_id).slice(0, 8)}`;
 }
 
 function formatSellerName(stat: CRMLeadRestartStat): string {
