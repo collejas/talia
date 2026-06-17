@@ -47,11 +47,12 @@ async function resolveContactDeleteTarget(contactoId: string): Promise<string> {
 
   for (const row of response.data as Array<Record<string, unknown>>) {
     if (!row || typeof row !== "object") continue
+    const persona = typeof row.persona_id === "string" ? row.persona_id.trim() : ""
     const codigo = typeof row.codigo_contacto === "string" ? row.codigo_contacto.trim() : ""
     const rowContactoId = typeof row.contacto_id === "string" ? row.contacto_id.trim() : ""
     const rowId = typeof row.id === "string" ? row.id.trim() : ""
-    if (codigo === trimmed || rowContactoId === trimmed || rowId === trimmed) {
-      return rowContactoId || rowId || trimmed
+    if (codigo === trimmed || persona === trimmed || rowContactoId === trimmed || rowId === trimmed) {
+      return persona || rowContactoId || rowId || trimmed
     }
   }
 

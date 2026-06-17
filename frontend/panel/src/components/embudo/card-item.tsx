@@ -60,7 +60,7 @@ export function EmbudoCardItem({
   const originBadge = useMemo(() => resolveOriginBadge(card), [card]);
   const contactOriginBadge = useMemo(() => resolveContactOriginBadge(card), [card]);
   const channelBadge = useMemo(() => resolveChannelBadge(card.canal), [card.canal]);
-  const inboxHref = card.contactoId ? `/inbox?contactId=${encodeURIComponent(card.contactoId)}` : "/inbox";
+  const inboxHref = card.contactoId ? `/inbox?persona_id=${encodeURIComponent(card.contactoId)}` : "/inbox";
 
   return (
     <button

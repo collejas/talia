@@ -256,7 +256,13 @@ function matchesAdvancedFilters(raw: Record<string, unknown> | undefined, filter
 
 function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: TableRow | null): TableRow {
   const previousRaw = previous?.raw as Record<string, unknown> | undefined;
-  const contactId = extractString(detail, ["contacto_id"]) || extractString(detail, ["id"]) || extractString(previousRaw, ["contacto_id"]) || "";
+  const contactId =
+    extractString(detail, ["persona_id"]) ||
+    extractString(detail, ["contacto_id"]) ||
+    extractString(detail, ["id"]) ||
+    extractString(previousRaw, ["persona_id"]) ||
+    extractString(previousRaw, ["contacto_id"]) ||
+    "";
   const createdAtRaw = extractString(detail, ["creado_en"]) || extractString(detail, ["actualizado_en"]) || extractString(previousRaw, ["creado_en"]) || "";
   const createdAt = createdAtRaw && !Number.isNaN(Date.parse(createdAtRaw)) ? new Date(createdAtRaw).toISOString() : previous?.limit || "";
   const conversationsRaw = extractString(detail, ["conversaciones"]) || extractString(previousRaw, ["conversaciones"]) || "0";
@@ -286,6 +292,7 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
     raw: {
       ...(previous?.raw ?? {}),
       ...detail,
+      persona_id: contactId || extractString(previousRaw, ["persona_id"]) || extractString(previousRaw, ["contacto_id"]) || "",
       contacto_id: contactId || extractString(previousRaw, ["contacto_id"]) || "",
       codigo_contacto: extractString(detail, ["codigo_contacto"]) || extractString(previousRaw, ["codigo_contacto"]) || "",
       propietario_id: extractString(detail, ["propietario_id"]) || extractString(previousRaw, ["propietario_id"]) || "",
@@ -763,14 +770,20 @@ export function ContactsDataTable({
 
   const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
-  const activePersonaId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
+  const activePersonaId =
+    extractString(activeRaw, ["persona_id"]) ??
+    extractString(activeRaw, ["contacto_id"]) ??
+    extractString(activeRaw, ["id"]);
   const activeContactDeleteKey =
     extractString(activeRaw, ["codigo_contacto"]) ?? activePersonaId;
   const activePropietarioId = getContactOwnerId(activeRaw);
 
   const openEdit = (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
-    const personaId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
+    const personaId =
+      extractString(raw, ["persona_id"]) ??
+      extractString(raw, ["contacto_id"]) ??
+      extractString(raw, ["id"]);
     setActiveRow(row);
     setEditPersonaId(personaId);
     setError(null);
@@ -794,17 +807,17 @@ export function ContactsDataTable({
       setTableRows((current) => {
         const previous = current.find((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
-          return extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
+          return extractString(rowRaw, ['persona_id']) === id || extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
         }) ?? null;
         const nextRow = mapContactDetailToTableRow(detail, previous);
         const replaced = current.map((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
-          const rowId = extractString(rowRaw, ['contacto_id']) || extractString(rowRaw, ['id']);
+          const rowId = extractString(rowRaw, ['persona_id']) || extractString(rowRaw, ['contacto_id']) || extractString(rowRaw, ['id']);
           return rowId === id ? nextRow : row;
         });
         if (!replaced.some((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
-          return extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
+          return extractString(rowRaw, ['persona_id']) === id || extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
         })) {
           return [nextRow, ...current];
         }
@@ -832,7 +845,10 @@ export function ContactsDataTable({
       return;
     }
     const raw = (row.raw ?? {}) as Record<string, unknown>;
-    const personaId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
+    const personaId =
+      extractString(raw, ["persona_id"]) ??
+      extractString(raw, ["contacto_id"]) ??
+      extractString(raw, ["id"]);
     if (!personaId) return;
     setLinkInitialContact({
       id: personaId,
@@ -958,6 +974,7 @@ export function ContactsDataTable({
           const rowRaw = row.raw as Record<string, unknown> | undefined;
           const rowKeys = new Set([
             extractString(rowRaw, ["codigo_contacto"]),
+            extractString(rowRaw, ["persona_id"]),
             extractString(rowRaw, ["contacto_id"]),
             extractString(rowRaw, ["id"]),
           ].filter((value): value is string => Boolean(value)));
@@ -973,6 +990,7 @@ export function ContactsDataTable({
       .map(
         (row) =>
           extractString(row.raw as Record<string, unknown> | undefined, ["codigo_contacto"]) ??
+          extractString(row.raw as Record<string, unknown> | undefined, ["persona_id"]) ??
           extractString(row.raw as Record<string, unknown> | undefined, ["contacto_id"]) ??
           extractString(row.raw as Record<string, unknown> | undefined, ["id"]),
       )
@@ -1003,6 +1021,7 @@ export function ContactsDataTable({
           const rowRaw = row.raw as Record<string, unknown> | undefined;
           const rowKeys = new Set([
             extractString(rowRaw, ["codigo_contacto"]),
+            extractString(rowRaw, ["persona_id"]),
             extractString(rowRaw, ["contacto_id"]),
             extractString(rowRaw, ["id"]),
           ].filter((value): value is string => Boolean(value)));

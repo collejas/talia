@@ -25,6 +25,7 @@ type RestartCycleDetail = {
 };
 
 type RestartRowRaw = {
+  persona_id?: string | null;
   contacto_id?: string | null;
   contacto_correo?: string | null;
   contacto_telefono?: string | null;
@@ -71,6 +72,9 @@ export function LeadRestartDetails({ row, salesReps }: Props) {
   const options = useMemo(() => {
     return [{ id: UNASSIGNED_VALUE, name: "Sin asignar", phone: null, email: null }, ...salesReps];
   }, [salesReps]);
+  const personaId = raw.persona_id ?? raw.contacto_id ?? null;
+  const oportunidadesHref = personaId ? `/oportunidades?persona_id=${encodeURIComponent(personaId)}` : "/oportunidades";
+  const inboxHref = personaId ? `/inbox?persona_id=${encodeURIComponent(personaId)}` : "/inbox";
 
   const handleAssigneeChange = useCallback(
     (value: string) => {
@@ -240,7 +244,7 @@ export function LeadRestartDetails({ row, salesReps }: Props) {
                 </div>
                 {cycle.oportunidad_id ? (
                   <Link
-                    href={`/oportunidades?contactId=${raw.contacto_id ?? ""}`}
+                    href={oportunidadesHref}
                     className="text-sm font-medium text-primary hover:underline"
                   >
                     Ver oportunidad
@@ -256,12 +260,12 @@ export function LeadRestartDetails({ row, salesReps }: Props) {
         <h3 className="text-sm font-semibold text-slate-900">Acciones rápidas</h3>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="secondary" asChild>
-            <Link href={`/oportunidades?contactId=${raw.contacto_id ?? ""}`}>
+            <Link href={oportunidadesHref}>
               Ir a oportunidades
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href={`/inbox?contactId=${raw.contacto_id ?? ""}`}>Abrir en Inbox</Link>
+            <Link href={inboxHref}>Abrir en Inbox</Link>
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">

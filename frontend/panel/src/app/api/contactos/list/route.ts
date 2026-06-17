@@ -4,6 +4,7 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type CrmContactListRow = {
   contacto_id: string;
+  persona_id?: string | null;
   codigo_contacto: string | null;
   codigo_cuenta: string | null;
   nombre: string | null;
@@ -88,6 +89,7 @@ export async function GET(request: Request) {
       limit: lastContact,
       reviewer: row.propietario_nombre || "Sin asignar",
       raw: {
+        persona_id: row.persona_id ?? row.contacto_id,
         contacto_id: row.contacto_id,
         codigo_contacto: row.codigo_contacto,
         codigo_cuenta: row.codigo_cuenta,
