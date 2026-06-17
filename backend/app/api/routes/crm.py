@@ -2382,8 +2382,6 @@ async def _render_quote_pdf_after_sale(
         total=total_value,
         moneda=_clean_text(quote_row.get("moneda") or "MXN") or "MXN",
         valido_hasta=_parse_date(quote_row.get("valida_hasta")),
-        descripcion=_clean_text(opportunity.get("descripcion") or opportunity.get("titulo")),
-        notes=_clean_text(contact.get("notes") or opportunity.get("metadata", {}).get("notas")),
         items=items_list if isinstance(items_list, list) else [],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
@@ -26651,9 +26649,6 @@ async def preview_lead_quote_pdf(
         total=base_payload.total,
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
-        descripcion=base_payload.descripcion or base_payload.titulo,
-        notes=base_payload.message or oportunidad_metadata.get("proyecto_necesidades")
-        or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
         vendor_company_name=vendor_context["vendor_company_name"],

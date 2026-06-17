@@ -2382,7 +2382,10 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     const normalized = (value ?? "").trim().toLowerCase();
     return normalized === "contacto sin nombre";
   };
-  const preferIncomingString = (incomingValue: string | null, currentValue: string | null): string | null => {
+  const preferIncomingString = (
+    incomingValue: string | null | undefined,
+    currentValue: string | null | undefined,
+  ): string | null => {
     if (typeof incomingValue === "string" && incomingValue.trim().length) {
       return incomingValue;
     }
