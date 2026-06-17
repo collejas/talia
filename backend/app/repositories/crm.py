@@ -1947,7 +1947,7 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 50,
         offset: int = 0,
-        contacto_id: UUID | None = None,
+        persona_id: UUID | None = None,
         etapa_id: UUID | None = None,
         estado: str | None = None,
         asignado_id: UUID | None = None,
@@ -1971,8 +1971,8 @@ class CRMRepository:
             "select": self._PIPELINE_SELECT,
         }
         and_filters: list[str] = []
-        if contacto_id:
-            params["contacto_principal_id"] = f"eq.{contacto_id}"
+        if persona_id:
+            params["contacto_principal_id"] = f"eq.{persona_id}"
         if etapa_id:
             params["etapa_id"] = f"eq.{etapa_id}"
         if estado:

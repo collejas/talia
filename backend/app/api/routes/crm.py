@@ -16208,7 +16208,7 @@ async def list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
-            contacto_id=persona_id,
+            persona_id=persona_id,
             etapa_id=etapa_id,
             estado=estado,
             asignado_id=asignado_id,
@@ -21333,7 +21333,7 @@ async def merge_persona(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
-            contacto_id=source_id,
+            persona_id=source_id,
             include_contact_rows=False,
         )
         if not rows:
