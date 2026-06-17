@@ -326,3 +326,5 @@ Avance reciente:
 
 - la UI de `frontend/panel/src/app/oportunidades/*` ya habla de `personaId` como estado interno
 - el helper de `frontend/panel/src/lib/crm/opportunities.ts` ya no emite `contacto_id` en el query hacia backend
+- el wrapper de reasignación del panel ya usa `/api/personas/[personaId]/reassign`
+- `frontend/panel/src/app/api/contactos/[contactoId]/*` quedó como alias de compatibilidad que ya proxy a `/crm/personas/*`

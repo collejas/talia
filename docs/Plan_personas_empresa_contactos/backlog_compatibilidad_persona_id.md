@@ -39,8 +39,8 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 
 ### P2
 
-- Hacer inventario final de rutas API que todavia usan nombres `contactoId` o `contacto_id` solo por compatibilidad.
-- Documentar que contratos ya pueden migrar a `persona_id` de forma directa y cuales deben quedarse legacy hasta el cierre de DB.
+- [x] Hacer inventario final de rutas API que todavia usan nombres `contactoId` o `contacto_id` solo por compatibilidad.
+- [x] Documentar que contratos ya pueden migrar a `persona_id` de forma directa y cuales deben quedarse legacy hasta el cierre de DB.
 
 ## Criterio para cerrar un punto
 

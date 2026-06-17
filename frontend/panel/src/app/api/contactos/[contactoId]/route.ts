@@ -124,7 +124,7 @@ export async function GET(
     return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
   }
 
-  const response = await callCrmApi(`/crm/contacts/${contactoId}`, {
+  const response = await callCrmApi(`/crm/personas/${contactoId}`, {
     method: "GET",
     withUserToken: true,
   })
@@ -160,7 +160,7 @@ export async function PATCH(
     return NextResponse.json({ error: "payload_empty" }, { status: 400 })
   }
 
-  const response = await callCrmApi(`/crm/contacts/${contactoId}`, {
+  const response = await callCrmApi(`/crm/personas/${contactoId}`, {
     method: "PATCH",
     body: sanitized,
     withUserToken: true,
@@ -187,7 +187,7 @@ export async function DELETE(
 
   const resolvedContactId = await resolveContactDeleteTarget(contactoId)
 
-  const response = await callCrmApi(`/crm/contacts/${resolvedContactId}`, {
+  const response = await callCrmApi(`/crm/personas/${resolvedContactId}`, {
     method: "DELETE",
     withUserToken: true,
   })

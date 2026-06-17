@@ -12,11 +12,11 @@ type ReassignPayload = {
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ contactoId: string }> },
+  { params }: { params: Promise<{ personaId: string }> },
 ) {
-  const { contactoId } = await params;
-  if (!contactoId) {
-    return NextResponse.json({ error: "contacto_id_required" }, { status: 400 });
+  const { personaId } = await params;
+  if (!personaId) {
+    return NextResponse.json({ error: "missing_persona_id" }, { status: 400 });
   }
 
   let payload: ReassignPayload;
@@ -26,7 +26,7 @@ export async function POST(
     return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
   }
 
-  const response = await callCrmApi(`/crm/personas/${contactoId}/reasignar`, {
+  const response = await callCrmApi(`/crm/personas/${personaId}/reasignar`, {
     method: "POST",
     body: payload,
     withUserToken: true,

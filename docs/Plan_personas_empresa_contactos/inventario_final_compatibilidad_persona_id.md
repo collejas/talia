@@ -21,10 +21,10 @@ La regla para leerlo es simple:
   - crea y consulta oportunidades con ambos nombres por compatibilidad
 - `frontend/panel/src/app/api/contactos/[contactoId]/route.ts`
   - conserva el nombre de ruta legacy
-  - sigue resolviendo borrado y detalle con el contrato viejo
+  - sigue resolviendo borrado y detalle por compatibilidad, pero ya proxy a `/crm/personas/{persona_id}`
 - `frontend/panel/src/app/api/contactos/[contactoId]/reassign/route.ts`
   - conserva el nombre de ruta legacy
-  - sigue reenviando al backend con `contactoId`
+  - sigue reenviando al backend, pero ya proxy a `/crm/personas/{persona_id}/reasignar`
 
 ### 1.2 Contratos de oportunidades del panel
 

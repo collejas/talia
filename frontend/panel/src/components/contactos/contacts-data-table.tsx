@@ -1036,7 +1036,7 @@ export function ContactsDataTable({
   const handleReassign = async () => {
     if (!activePersonaId || !selectedVendorId) return;
     await runAndReload(async () => {
-      const response = await fetch(`/api/contactos/${activePersonaId}/reassign`, {
+      const response = await fetch(`/api/personas/${activePersonaId}/reassign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
