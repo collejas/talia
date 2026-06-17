@@ -18,6 +18,7 @@ import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
 export type UpdateLeadInput = {
   oportunidadId: string;
+  personaId?: string | null;
   contactoId?: string | null;
   contacto?: Record<string, unknown>;
   oportunidad?: Record<string, unknown>;
@@ -29,6 +30,7 @@ export type CreateLeadInput = {
   tableroId: string;
   contacto: Record<string, unknown>;
   oportunidad: Record<string, unknown>;
+  personaId?: string | null;
   contactId?: string | null;
   originStageId?: string | null;
 };
@@ -44,6 +46,7 @@ export type MoveLeadInput = {
 
 export type DeleteLeadInput = {
   oportunidadId: string;
+  personaId?: string | null;
   contactoId?: string | null;
   motivo?: string | null;
 };
@@ -74,6 +77,7 @@ type CalendarBookingResponseRow = {
 
 export type ScheduleLeadDemoInput = {
   conversationId?: string | null;
+  personaId?: string | null;
   contactoId?: string | null;
   oportunidadId?: string | null;
   canal?: string | null;
@@ -205,8 +209,8 @@ function logDebug(step: string, payload?: Record<string, unknown>) {
 export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<ScheduleLeadDemoResult> {
   const payload = removeUndefined({
     conversation_id: input.conversationId ?? undefined,
-    persona_id: input.contactoId ?? undefined,
-    contacto_id: input.contactoId ?? undefined,
+    persona_id: input.personaId ?? input.contactoId ?? undefined,
+    contacto_id: input.personaId ?? input.contactoId ?? undefined,
     oportunidad_id: input.oportunidadId ?? undefined,
     canal: input.canal ?? undefined,
     start_at: input.startAt,
@@ -286,7 +290,12 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     contactUpdatePayload.telefono_e164 = telefonoValue;
   }
 
-  const usingExistingContactId = typeof input.contactId === "string" ? input.contactId.trim() : "";
+  const usingExistingContactId =
+    typeof input.personaId === "string" && input.personaId.trim().length
+      ? input.personaId.trim()
+      : typeof input.contactId === "string"
+        ? input.contactId.trim()
+        : "";
   let contactId = usingExistingContactId.length ? usingExistingContactId : null;
   let createdContactId: string | null = null;
 
@@ -491,7 +500,11 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
   const hasOpportunityUpdates = Object.keys(opportunityPayload).length > 0;
 
   let contactId =
-    typeof input.contactoId === "string" && input.contactoId.trim().length ? input.contactoId.trim() : null;
+    typeof input.personaId === "string" && input.personaId.trim().length
+      ? input.personaId.trim()
+      : typeof input.contactoId === "string" && input.contactoId.trim().length
+        ? input.contactoId.trim()
+        : null;
 
   let contactUpdated = false;
 
@@ -501,7 +514,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
       if (!currentCard.ok) {
         return { ok: false, error: currentCard.error };
       }
-      contactId = currentCard.data.card.contacto_id ?? null;
+      contactId = currentCard.data.card.persona_id ?? currentCard.data.card.contacto_id ?? null;
     }
 
     if (!contactId) {
@@ -641,7 +654,7 @@ export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDelete
     if (!cardResponse.ok) {
       return { ok: false, error: cardResponse.error };
     }
-    contactoId = cardResponse.data.card.contacto_id ?? null;
+      contactoId = cardResponse.data.card.persona_id ?? cardResponse.data.card.contacto_id ?? null;
   }
 
   const response = await callCrmApi<unknown>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {

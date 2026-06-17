@@ -26,6 +26,8 @@ Ya quedó ajustado o documentado:
 - `web_booking_sessions` ya quedó migrado para persistir `persona_id`
 - los enlaces desde reinicios y oportunidades ya priorizan `persona_id`
 - el listado de contactos ya expone `persona_id` junto a `contacto_id` como alias temporal
+- `embudo` ya empezó a exponer `personaId` en el modelo local y a priorizarlo en los submits principales
+- `visitas` ya expone `persona_id` en el raw y lo usa para conteos e identificación interna
 - `inbox` ya mapea y conserva `personaId` en el modelo local
 - `leads` ya prioriza `persona_id` en resúmenes y etiquetas de reinicios
 

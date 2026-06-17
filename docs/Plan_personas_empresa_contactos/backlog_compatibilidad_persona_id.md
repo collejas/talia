@@ -11,6 +11,8 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 - `contacts-data-table` ya prioriza `persona_id` en edición, borrado, refresh y linkeo
 - `restart-details` ya genera enlaces con `persona_id`
 - `embudo/card-item` ya envía a inbox con `persona_id`
+- `embudo` ya empezó a exponer `personaId` en el modelo local y a priorizarlo en los submits principales
+- `visitas` ya expone `persona_id` en el raw y lo usa para conteos e identificación interna
 - `inbox` ya conserva `personaId` en el modelo local
 - `leads` ya prioriza `persona_id` en resúmenes y reinicios
 
@@ -18,8 +20,8 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 
 ### P0
 
-- Revisar `frontend/panel/src/lib/embudo/*` para ver si todavía hay lógica que use `contactoId` como llave primaria operativa.
-- Revisar `frontend/panel/src/lib/visitas/*` para separar contratos que ya deberían leer `persona_id`.
+- Revisar `frontend/panel/src/lib/embudo/*` para completar la migración de los consumers que todavía leen `contactoId` como llave primaria operativa.
+- Revisar `frontend/panel/src/lib/visitas/*` para terminar de separar contratos que ya deberían leer `persona_id` como identidad principal.
 - Revisar `frontend/panel/src/lib/contactos/*` para distinguir lectura legacy real de alias de transición.
 
 ### P1

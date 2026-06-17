@@ -163,6 +163,7 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "mensajes_salientes", key: "mensajes_salientes", label: "Mensajes salientes", type: "number" },
   { id: "primer_mensaje_en", key: "primer_mensaje_en", label: "Primer mensaje", type: "datetime" },
   { id: "ultimo_mensaje_conversacion", key: "ultimo_mensaje_conversacion", label: "Último mensaje", type: "datetime" },
+  { id: "persona_id", key: "persona_id", label: "Persona ID", type: "code" },
   { id: "contacto_id", key: "contacto_id", label: "Contacto ID", type: "code" },
   { id: "contacto_nombre", key: "contacto_nombre", label: "Contacto", type: "string", defaultVisible: true },
   {

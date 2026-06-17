@@ -1893,6 +1893,7 @@ export function LeadDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asignado_usuario_id: selectedVendorId,
+          persona_id: card.personaId || null,
           contacto_id: card.contactoId || null,
           conversacion_id: card.conversacionId || null,
           alinear_contacto: true,

@@ -56,6 +56,7 @@ type WhatsappConversationRow = {
     template_nombre?: string | null;
   } | null;
   contacto: {
+    persona_id?: string | null;
     nombre_completo?: string | null;
     correo?: string | null;
     telefono_e164?: string | null;
@@ -71,6 +72,7 @@ type ContactoTemplateRow = {
 type WebSessionAttributionRow = {
   session_id?: string | null;
   eid?: string | null;
+  persona_id?: string | null;
   contacto_id?: string | null;
   contacto_nombre?: string | null;
   contacto_origen?: string | null;
@@ -144,6 +146,7 @@ export type VisitDetailRaw = {
   mensajes_salientes: number | null;
   primer_mensaje_en: string | null;
   ultimo_mensaje_conversacion: string | null;
+  persona_id: string | null;
   contacto_id: string | null;
   contacto_nombre: string | null;
   contacto_origen?: string | null;
@@ -325,6 +328,7 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         mensajes_salientes: null,
         primer_mensaje_en: null,
         ultimo_mensaje_conversacion: null,
+        persona_id: row.persona_id ?? row.contacto_id ?? null,
         contacto_id: row.contacto_id ?? null,
         contacto_nombre: row.contacto_nombre ?? null,
         contacto_origen: row.contacto_origen ?? null,
@@ -721,7 +725,7 @@ function mapCards(
         sinChat += 1;
       }
 
-      const contactId = row.contacto_id || row.contacto_correo || row.contacto_nombre;
+      const contactId = row.persona_id || row.contacto_id || row.contacto_correo || row.contacto_nombre;
       if (contactId) contactos.add(contactId);
     });
 
@@ -1170,6 +1174,7 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       mensajes_salientes: null,
       primer_mensaje_en: row.iniciada_en,
       ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
+      persona_id: row.contacto?.persona_id || row.contacto?.telefono_e164 || row.contacto?.correo || null,
       contacto_id: row.contacto?.telefono_e164 || row.contacto?.correo || null,
       contacto_nombre: row.contacto?.nombre_completo || null,
       contacto_correo: row.contacto?.correo || null,

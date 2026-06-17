@@ -705,6 +705,7 @@ export function EmbudoBoardClient({
 
       const updateResult = await updateLeadCard({
         oportunidadId: card.oportunidadId,
+        personaId: card.personaId,
         contactoId: card.contactoId,
         oportunidad: {
           metadata: {
@@ -812,6 +813,7 @@ export function EmbudoBoardClient({
 
     const bookingPayload = {
       conversationId: sanitizeString(scheduleContext.card.conversacionId),
+      personaId: sanitizeString(scheduleContext.card.personaId),
       contactoId: sanitizeString(scheduleContext.card.contactoId),
       oportunidadId: scheduleContext.card.oportunidadId,
       canal: sanitizeString(scheduleContext.card.canal),
@@ -952,6 +954,7 @@ export function EmbudoBoardClient({
 
     const result = await updateLeadCard({
       oportunidadId: selectedCard.oportunidadId,
+      personaId: selectedCard.personaId,
       contactoId: selectedCard.contactoId,
       contacto: payload.contacto,
       oportunidad: payload.oportunidad,
@@ -1123,6 +1126,7 @@ export function EmbudoBoardClient({
       if (!shouldReuseExistingBooking) {
         const bookingResult = await scheduleLeadDemo({
           conversationId: sanitizeString(selectedCard.conversacionId),
+          personaId: sanitizeString(selectedCard.personaId),
           contactoId: sanitizeString(selectedCard.contactoId),
           oportunidadId: selectedCard.oportunidadId,
           canal: sanitizeString(selectedCard.canal),
@@ -1187,7 +1191,11 @@ export function EmbudoBoardClient({
       return { ok: false, error: "No se encontró el lead seleccionado." };
     }
 
-    const result = await deleteLeadCard({ oportunidadId: selectedCard.oportunidadId, contactoId: selectedCard.contactoId });
+    const result = await deleteLeadCard({
+      oportunidadId: selectedCard.oportunidadId,
+      personaId: selectedCard.personaId,
+      contactoId: selectedCard.contactoId,
+    });
     if (result.ok) {
       setStages((prev) =>
         sortStages(

@@ -79,8 +79,10 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const restartSequence = extractRestartSequence(metadata);
   const leadScoring = extractLeadScoring(metadata);
   const resolvedTitulo = resolveTitulo(card, resolvedNombre, resolvedProfileName);
+  const personaId = card.persona_id ?? card.contacto_id ?? "";
   return {
     oportunidadId,
+    personaId,
     contactoId: card.contacto_id ?? "",
     conversacionId: resolvedConversationId,
     createdVia,
