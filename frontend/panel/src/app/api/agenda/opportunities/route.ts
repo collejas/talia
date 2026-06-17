@@ -27,7 +27,7 @@ type StageRow = {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const personaId = (searchParams.get("persona_id") || searchParams.get("contacto_id") || "").trim()
+  const personaId = (searchParams.get("persona_id") || "").trim()
 
   if (!personaId) {
     return NextResponse.json({ error: "persona_id_required" }, { status: 400 })
@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
   const response = await callCrmApi<OpportunitiesResponse>("/crm/oportunidades", {
     method: "GET",
     searchParams: {
-      contacto_id: personaId,
       persona_id: personaId,
       estado: "abierta",
       limit: 20,

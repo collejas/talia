@@ -16156,7 +16156,6 @@ async def list_opportunities(
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     usuario_id: UUID | None = Depends(optional_usuario_id),
     persona_id: UUID | None = Query(default=None),
-    contacto_id: UUID | None = Query(default=None),
     etapa_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
@@ -16204,13 +16203,12 @@ async def list_opportunities(
         timezone_name=effective_timezone,
         is_end=True,
     )
-    resolved_persona_id = persona_id or contacto_id
     try:
         rows = await repo.list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
-            contacto_id=resolved_persona_id,
+            contacto_id=persona_id,
             etapa_id=etapa_id,
             estado=estado,
             asignado_id=asignado_id,
