@@ -6209,6 +6209,12 @@ class CRMRepository:
         if not session_key:
             raise CRMRepositoryError("booking_session_id_required")
         body = {"booking_session_id": session_key, **payload}
+        persona_id = body.get("persona_id")
+        contacto_id = body.get("contacto_id")
+        if persona_id and not body.get("contacto_id"):
+            body["contacto_id"] = persona_id
+        if contacto_id and not body.get("persona_id"):
+            body["persona_id"] = contacto_id
         resp = await self._request(
             "POST",
             "/rest/v1/web_booking_sessions",

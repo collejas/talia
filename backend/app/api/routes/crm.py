@@ -36790,6 +36790,7 @@ async def public_web_booking_availability(
             booking_session_id=(payload.booking_session_id or "").strip(),
             payload={
                 "organizacion_id": organizacion_id,
+                "persona_id": str(payload.contacto_id) if payload.contacto_id else None,
                 "contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
                 "campana_id": str(payload.cid) if payload.cid else None,
                 "template_id": str(payload.tid) if payload.tid else None,
@@ -37035,6 +37036,7 @@ async def public_web_booking_create(
             booking_session_id=(payload.booking_session_id or "").strip(),
             payload={
                 "organizacion_id": organizacion_id,
+                "persona_id": str(contact_uuid),
                 "contacto_id": str(contact_uuid),
                 "campana_id": str(payload.cid) if payload.cid else None,
                 "template_id": str(payload.tid) if payload.tid else None,
