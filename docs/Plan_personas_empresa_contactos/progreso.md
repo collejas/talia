@@ -328,3 +328,5 @@ Avance reciente:
 - el helper de `frontend/panel/src/lib/crm/opportunities.ts` ya no emite `contacto_id` en el query hacia backend
 - el wrapper de reasignación del panel ya usa `/api/personas/[personaId]/reassign`
 - `frontend/panel/src/app/api/contactos/[contactoId]/*` quedó como alias de compatibilidad que ya proxy a `/crm/personas/*`
+- el panel ya consume `api/personas/list`, `api/personas/summary`, `api/personas/export` y `api/personas/catalogos/*`
+- el panel ya consume `api/personas/bulk-delete`

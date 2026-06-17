@@ -77,7 +77,7 @@ export function GeoLocationSelects({
     let mounted = true;
     setLoadingCountries(true);
     setError(null);
-    fetchGeoJson<GeoCountryOption>("/api/contactos/catalogos/paises", controller.signal)
+    fetchGeoJson<GeoCountryOption>("/api/personas/catalogos/paises", controller.signal)
       .then((items) => {
         if (!mounted) return;
         const next = items.filter((item) => item.code && item.name);
@@ -115,7 +115,7 @@ export function GeoLocationSelects({
     }
     setLoadingStates(true);
     setError(null);
-    fetchGeoJson<GeoStateOption>(`/api/contactos/catalogos/estados?pais=${encodeURIComponent(countryCode)}`, controller.signal)
+    fetchGeoJson<GeoStateOption>(`/api/personas/catalogos/estados?pais=${encodeURIComponent(countryCode)}`, controller.signal)
       .then((items) => {
         if (!mounted) return;
         const next = items.filter((item) => item.code && item.name);
@@ -150,7 +150,7 @@ export function GeoLocationSelects({
     setLoadingMunicipalities(true);
     setError(null);
     fetchGeoJson<GeoMunicipalityOption>(
-      `/api/contactos/catalogos/municipios?pais=${encodeURIComponent(countryCode)}&estado=${encodeURIComponent(stateCode)}`,
+      `/api/personas/catalogos/municipios?pais=${encodeURIComponent(countryCode)}&estado=${encodeURIComponent(stateCode)}`,
       controller.signal,
     )
       .then((items) => {

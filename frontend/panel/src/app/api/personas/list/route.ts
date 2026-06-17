@@ -191,9 +191,7 @@ function buildSearchParams(searchParams: URLSearchParams, limit: number, offset:
     "municipio",
   ]) {
     const value = searchParams.get(key)?.trim();
-    if (value) {
-      params[key] = value;
-    }
+    if (value) params[key] = value;
   }
   return params;
 }

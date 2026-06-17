@@ -76,7 +76,7 @@ export default function ContactosPageClient({ table = [] }: ContactosPageClientP
         let totalRows: number | null = null
 
         while (true) {
-          const response = await fetch(`/api/contactos/list?limit=${pageSize}&offset=${offset}`, {
+          const response = await fetch(`/api/personas/list?limit=${pageSize}&offset=${offset}`, {
             cache: "no-store",
             signal: controller.signal,
           })

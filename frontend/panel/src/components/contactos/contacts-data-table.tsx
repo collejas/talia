@@ -686,7 +686,7 @@ export function ContactsDataTable({
           },
           500,
         );
-        const response = await fetch(`/api/contactos/list?${params.toString()}`, {
+        const response = await fetch(`/api/personas/list?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -1009,7 +1009,7 @@ export function ContactsDataTable({
     }
     setBulkDeleteOpen(false);
     await runAndReload(async () => {
-      const response = await fetch("/api/contactos/bulk-delete", {
+      const response = await fetch("/api/personas/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: bulkDeleteIds }),
@@ -1314,7 +1314,7 @@ export function ContactsDataTable({
           variant="outline"
           size="sm"
           onClick={() => {
-            const exportUrl = new URL("/api/contactos/export", window.location.origin);
+            const exportUrl = new URL("/api/personas/export", window.location.origin);
             buildListParams(
               {
                 search: searchTerm.trim(),

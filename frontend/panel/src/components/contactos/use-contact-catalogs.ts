@@ -55,7 +55,7 @@ export function useTenantContactCatalogs() {
 
     const load = async () => {
       try {
-        const response = await fetch("/api/contactos/catalogos/config", {
+        const response = await fetch("/api/personas/catalogos/config", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
