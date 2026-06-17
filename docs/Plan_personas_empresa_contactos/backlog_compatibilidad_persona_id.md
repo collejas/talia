@@ -15,6 +15,7 @@ Este backlog lista el trabajo pendiente para terminar el barrido de compatibilid
 - `visitas` ya expone `persona_id` en el raw y lo usa para conteos e identificación interna
 - `lib/contactos` ya expone `persona_id` en la tabla local como alias de lectura
 - `inbox` ya conserva `personaId` en el modelo local
+- `inbox/split-view` ya conserva `personaId` como fuente principal al rehidratar y fusionar threads
 - `leads` ya prioriza `persona_id` en resúmenes y reinicios
 - la tabla técnica de `visitas` ya muestra `Persona` y `Persona ID` como identidad visible primaria
 
