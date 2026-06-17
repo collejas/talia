@@ -31,6 +31,7 @@ Ya quedó ajustado o documentado:
 - `lib/contactos` ya expone `persona_id` en la tabla local como alias de lectura
 - `inbox` ya mapea y conserva `personaId` en el modelo local
 - `leads` ya prioriza `persona_id` en resúmenes y etiquetas de reinicios
+- la tabla técnica de `visitas` ya muestra `Persona` y `Persona ID` como identidad visible primaria
 
 Backlog vivo:
 - `docs/Plan_personas_empresa_contactos/backlog_compatibilidad_persona_id.md`
