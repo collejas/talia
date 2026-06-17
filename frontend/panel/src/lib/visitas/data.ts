@@ -329,7 +329,7 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         primer_mensaje_en: null,
         ultimo_mensaje_conversacion: null,
         persona_id: row.persona_id ?? row.contacto_id ?? null,
-        contacto_id: row.contacto_id ?? null,
+        contacto_id: row.persona_id ?? row.contacto_id ?? null,
         contacto_nombre: row.contacto_nombre ?? null,
         contacto_origen: row.contacto_origen ?? null,
         contacto_correo: row.correo_envio ?? row.contacto_correo ?? null,
@@ -1175,7 +1175,11 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       primer_mensaje_en: row.iniciada_en,
       ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
       persona_id: row.contacto?.persona_id || row.contacto?.telefono_e164 || row.contacto?.correo || null,
-      contacto_id: row.contacto?.telefono_e164 || row.contacto?.correo || null,
+      contacto_id:
+        row.contacto?.persona_id ||
+        row.contacto?.telefono_e164 ||
+        row.contacto?.correo ||
+        null,
       contacto_nombre: row.contacto?.nombre_completo || null,
       contacto_correo: row.contacto?.correo || null,
       contacto_telefono: row.contacto?.telefono_e164 || null,
