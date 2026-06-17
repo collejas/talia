@@ -85,7 +85,7 @@ export default async function OportunidadesPage({
             permissionContext={permissionContext}
             columnLabels={{
               header: "Oportunidad",
-              type: "Contacto",
+              type: "Persona",
               status: "Etapa",
               target: "Monto",
               limit: "Cierre probable",
@@ -110,7 +110,7 @@ function resolveFilters(params: PageSearchParams, assignedScopeId?: string): Opo
     estado: pick("estado") || "all",
     asignadoId: assignedScopeId || pick("asignado_id") || "all",
     cuentaId: pick("cuenta_id") || "all",
-    contactoId: pick("persona_id") || pick("contacto_id") || "all",
+    personaId: pick("persona_id") || pick("contacto_id") || "all",
     canal: pick("canal") || "all",
     montoMin: pick("monto_min"),
     montoMax: pick("monto_max"),
@@ -164,7 +164,7 @@ function applyServerFilters(
     const estado = extractString(raw, ["estado"]) || "";
     const asignadoId = extractString(raw, ["asignado", "id"]) || extractString(raw, ["asignado_a_usuario_id"]) || "";
     const cuentaId = extractString(raw, ["cuenta", "id"]) || extractString(raw, ["cuenta_id"]) || "";
-    const contactoId = extractString(raw, ["contacto", "id"]) || extractString(raw, ["contacto_principal_id"]) || "";
+    const personaId = extractString(raw, ["contacto", "id"]) || extractString(raw, ["contacto_principal_id"]) || "";
     const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "";
 
     if (search) {
@@ -178,7 +178,7 @@ function applyServerFilters(
     if (filters.estado !== "all" && estado !== filters.estado) return false;
     if (filters.asignadoId !== "all" && asignadoId !== filters.asignadoId) return false;
     if (filters.cuentaId !== "all" && cuentaId !== filters.cuentaId) return false;
-    if (filters.contactoId !== "all" && contactoId !== filters.contactoId) return false;
+    if (filters.personaId !== "all" && personaId !== filters.personaId) return false;
     if (filters.canal !== "all" && canal !== filters.canal) return false;
 
     const monto = parseNumber(extractUnknown(raw, ["monto_estimado"]));

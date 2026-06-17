@@ -36,7 +36,7 @@ type Props = {
     estado?: string;
     asignadoId?: string;
     cuentaId?: string;
-    contactoId?: string;
+    personaId?: string;
     canal?: string;
     montoMin?: string;
     montoMax?: string;
@@ -209,7 +209,7 @@ export function OportunidadesTableClient({
 
   const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
   const activeOportunidadId = extractString(activeRaw, ["id"]) ?? activeRow?.id?.toString() ?? null;
-  const activeContactoId = extractString(activeRaw, ["contacto", "id"]) || extractString(activeRaw, ["contacto_principal_id"]);
+  const activePersonaId = extractString(activeRaw, ["contacto", "id"]) || extractString(activeRaw, ["contacto_principal_id"]);
   const activeAsignadoId = extractAsignadoId(activeRow);
 
   const handleReassign = async () => {
@@ -223,7 +223,7 @@ export function OportunidadesTableClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asignado_usuario_id: selectedVendorId,
-          contacto_id: activeContactoId || null,
+          contacto_id: activePersonaId || null,
           conversacion_id: null,
           alinear_contacto: true,
           alinear_conversacion: false,
@@ -650,7 +650,7 @@ function applyClientFilters(
     const estado = extractString(raw, ["estado"]) || "";
     const asignadoId = extractString(raw, ["asignado", "id"]) || extractString(raw, ["asignado_a_usuario_id"]) || "";
     const cuentaId = extractString(raw, ["cuenta", "id"]) || extractString(raw, ["cuenta_id"]) || "";
-    const contactoId = extractString(raw, ["contacto", "id"]) || extractString(raw, ["contacto_principal_id"]) || "";
+    const personaId = extractString(raw, ["contacto", "id"]) || extractString(raw, ["contacto_principal_id"]) || "";
     const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "";
 
     if (search) {
@@ -664,7 +664,7 @@ function applyClientFilters(
     if (filters.estado && filters.estado !== "all" && estado !== filters.estado) return false;
     if (filters.asignadoId && filters.asignadoId !== "all" && asignadoId !== filters.asignadoId) return false;
     if (filters.cuentaId && filters.cuentaId !== "all" && cuentaId !== filters.cuentaId) return false;
-    if (filters.contactoId && filters.contactoId !== "all" && contactoId !== filters.contactoId) return false;
+    if (filters.personaId && filters.personaId !== "all" && personaId !== filters.personaId) return false;
     if (filters.canal && filters.canal !== "all" && canal !== filters.canal) return false;
 
     const monto = parseNumber(extractUnknown(raw, ["monto_estimado"]));

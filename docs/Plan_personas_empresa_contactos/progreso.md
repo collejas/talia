@@ -321,3 +321,8 @@ Inventario de compatibilidad:
 
 - `docs/Plan_personas_empresa_contactos/backlog_compatibilidad_persona_id.md`
 - `docs/Plan_personas_empresa_contactos/inventario_final_compatibilidad_persona_id.md`
+
+Avance reciente:
+
+- la UI de `frontend/panel/src/app/oportunidades/*` ya habla de `personaId` como estado interno
+- el helper de `frontend/panel/src/lib/crm/opportunities.ts` ya no emite `contacto_id` en el query hacia backend
