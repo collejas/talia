@@ -7871,13 +7871,13 @@ def _extract_session_id_from_contact(contact_data: Any) -> str | None:
     return None
 
 
-async def _resolve_webchat_session_id(contact_id: str) -> str | None:
+async def _resolve_webchat_session_id(persona_id: str) -> str | None:
     try:
-        contact = await storage.fetch_persona(contact_id)
+        contact = await storage.fetch_persona(persona_id)
     except storage.StorageError as exc:
         logger.exception(
             "panel.inbox.fetch_contact_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         contact = None
 
@@ -7889,11 +7889,11 @@ async def _resolve_webchat_session_id(contact_id: str) -> str | None:
             return session_id
 
     try:
-        return await storage.fetch_webchat_session_id_by_persona(contact_id)
+        return await storage.fetch_webchat_session_id_by_persona(persona_id)
     except storage.StorageError as exc:
         logger.exception(
             "panel.inbox.fetch_session_id_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         return None
 
@@ -24553,7 +24553,7 @@ async def promote_inbox_conversation_to_opportunity(
     except StorageError as exc:
         raise HTTPException(status_code=502, detail=f"conversation_lookup_failed:{exc}") from exc
 
-    contact_id_value = conversation_meta.get("contact_id")
+    contact_id_value = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
     if not contact_id_value:
         raise HTTPException(status_code=409, detail="conversation_contact_missing")
 
@@ -24717,7 +24717,7 @@ async def reply_inbox_conversation(
 
     channel = (conversation_meta.get("channel") or "").lower()
 
-    contact_id = conversation_meta.get("contact_id")
+    contact_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
     if channel not in {"webchat", "whatsapp", "correo"}:
         raise HTTPException(status_code=400, detail="unsupported_channel")
     if not contact_id:
@@ -25172,7 +25172,7 @@ async def upload_inbox_attachment(
     if channel != "webchat":
         raise HTTPException(status_code=400, detail="unsupported_channel")
 
-    contact_id = conversation_meta.get("contact_id")
+    contact_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
     session_id = None
     if contact_id:
         session_id = await _resolve_webchat_session_id(str(contact_id))
