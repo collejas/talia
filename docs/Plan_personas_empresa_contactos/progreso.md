@@ -316,3 +316,8 @@ Plan de coordinación:
 - `docs/Plan_3D/plan_3D.md`
 - `docs/Plan_3D/plan_migracion_tecnica_inventario_ventas_personas.md`
 - `docs/Plan_3D/checklist_prs_inventario_ventas_personas.md`
+
+Inventario de compatibilidad:
+
+- `docs/Plan_personas_empresa_contactos/backlog_compatibilidad_persona_id.md`
+- `docs/Plan_personas_empresa_contactos/inventario_final_compatibilidad_persona_id.md`
