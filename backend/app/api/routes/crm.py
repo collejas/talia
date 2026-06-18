@@ -16425,7 +16425,7 @@ async def list_sale_ready_opportunities(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
-    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    user_token: str | None = Depends(optional_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     contacto_captura_estado: str | None = Query(default=None),
 ) -> list[CRMSaleReadyOpportunity]:
@@ -16449,6 +16449,22 @@ async def list_sale_ready_opportunities(
         contacto_profile_name = None
         if isinstance(contacto_datos, dict):
             contacto_profile_name = _clean_text(contacto_datos.get("profile_name")) or None
+        contacto_correo = (
+            contacto.get("correo")
+            or contacto.get("correo_principal")
+            or contacto.get("correo_secundario")
+            or contacto.get("correo_institucional")
+            or contacto.get("email")
+        )
+        contacto_telefono = (
+            contacto.get("telefono_e164")
+            or contacto.get("telefono_principal_e164")
+            or contacto.get("telefono_movil_1_e164")
+            or contacto.get("telefono_secundario_e164")
+            or contacto.get("phone_e164")
+            or contacto.get("telefono")
+            or contacto.get("phone")
+        )
         allowed.append(
             CRMSaleReadyOpportunity(
                 id=_safe_uuid(row.get("id")),
@@ -16470,8 +16486,8 @@ async def list_sale_ready_opportunities(
                     or contacto.get("nombres")
                     or None
                 ),
-                contacto_correo=contacto.get("correo"),
-                contacto_telefono=contacto.get("telefono_e164"),
+                contacto_correo=contacto_correo,
+                contacto_telefono=contacto_telefono,
                 metadata=row.get("metadata"),
             )
         )

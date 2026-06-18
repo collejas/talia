@@ -7,6 +7,8 @@ export async function GET(request: Request) {
   const limit = url.searchParams.get("limit") ?? "100";
   const response = await callCrmApi("/crm/oportunidades/ventas/lista", {
     searchParams: { limit },
+    // Este listado usa el token de panel para evitar el RPC pesado de contexto por usuario.
+    withUserToken: false,
   });
 
   if (!response.ok) {

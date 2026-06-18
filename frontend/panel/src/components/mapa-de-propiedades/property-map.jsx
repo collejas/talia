@@ -2570,6 +2570,10 @@ export function PropertyMap() {
       return;
     }
     try {
+      const mapInstance = mapInstanceRef.current;
+      if (!mapInstance || !mapInstance.getContainer?.()?.isConnected) {
+        return;
+      }
       if (skipRegionAutoFitRef.current) {
         skipRegionAutoFitRef.current = false;
         return;
@@ -2587,7 +2591,7 @@ export function PropertyMap() {
         const overviewBounds = leaflet.geoJSON(overviewCollection).getBounds();
         if (overviewBounds.isValid()) {
           const maxZoom = 11;
-          mapInstanceRef.current.fitBounds(overviewBounds, { padding: [30, 30], maxZoom });
+          mapInstance.fitBounds(overviewBounds, { padding: [30, 30], maxZoom });
         }
         return;
       }
@@ -2596,7 +2600,7 @@ export function PropertyMap() {
         const focusBounds = leaflet.geoJSON(pendingRegionFocus).getBounds();
         if (focusBounds.isValid()) {
           const maxZoom = mapLevel === "municipio" ? 15 : mapLevel === "estado" ? 10 : 7;
-          mapInstanceRef.current.fitBounds(focusBounds, { padding: [30, 30], maxZoom });
+          mapInstance.fitBounds(focusBounds, { padding: [30, 30], maxZoom });
         }
         pendingRegionFocusRef.current = null;
         return;
@@ -2606,7 +2610,7 @@ export function PropertyMap() {
         return;
       }
       const maxZoom = mapLevel === "municipio" ? 15 : mapLevel === "estado" ? 10 : 7;
-      mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom });
+      mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom });
     } catch {
       // ignore invalid bounds
     }

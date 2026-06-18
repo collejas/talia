@@ -2076,6 +2076,7 @@ class CRMRepository:
         select_fields = ",".join(
             [
                 "id",
+                "contacto_principal_id",
                 "titulo",
                 "descripcion",
                 "estado",
@@ -2083,6 +2084,11 @@ class CRMRepository:
                 "moneda",
                 "probabilidad",
                 "metadata",
+                "contacto:personas!oportunidades_contacto_principal_org_fkey("
+                "id,nombre_completo,nombre,correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
+                "telefono_principal_e164,telefono_movil_1_e164,telefono_movil_2_e164,telefono_secundario_e164,"
+                "persona_datos,metadata"
+                ")",
                 "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre)",
                 "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden)",
             ]
@@ -2107,11 +2113,19 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades de venta: {data!r}")
         rows = [row for row in data if isinstance(row, dict)]
         if rows:
-            await self._attach_contact_rows(
-                organizacion_id=organizacion_id,
-                rows=rows,
-                source_fields=("contacto_principal_id",),
-            )
+            filtered_rows: list[dict[str, Any]] = []
+            for row in rows:
+                stage = row.get("etapa") or {}
+                stage_code = ""
+                if isinstance(stage, dict):
+                    stage_code = str(stage.get("codigo") or "").strip().lower()
+                if not self._is_sale_ready_stage_code(stage_code):
+                    continue
+                contact = row.get("contacto") or {}
+                if not self._contact_has_basic_channel(contact):
+                    continue
+                filtered_rows.append(row)
+            rows = filtered_rows
         return rows
 
 
@@ -2142,6 +2156,45 @@ class CRMRepository:
                 _text("area"),
             ]
         )
+
+    @classmethod
+    def _contact_has_basic_channel(cls, contact: dict[str, Any]) -> bool:
+        if not isinstance(contact, dict):
+            return False
+        email = cls._pick_text(
+            contact,
+            "correo",
+            "correo_principal",
+            "correo_secundario",
+            "correo_institucional",
+            "email",
+        )
+        phone = cls._pick_text(
+            contact,
+            "telefono_e164",
+            "telefono_principal_e164",
+            "telefono_movil_1_e164",
+            "phone_e164",
+            "telefono",
+            "phone",
+        )
+        return bool(email or phone)
+
+    @staticmethod
+    def _is_sale_ready_stage_code(stage_code: str) -> bool:
+        normalized = (stage_code or "").strip().lower()
+        if not normalized:
+            return False
+        if normalized in {
+            "prospeccion_primer_contacto",
+            "general_visitantes_sin_chat",
+            "visitantes_sin_chat",
+            "sin_conversacion",
+        }:
+            return False
+        if "visitantes" in normalized or "sin_conversacion" in normalized:
+            return False
+        return True
 
     async def _list_contact_ids_by_captura_estado(
         self,
