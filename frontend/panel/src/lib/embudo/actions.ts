@@ -42,6 +42,8 @@ export type MoveLeadInput = {
   metadata?: Record<string, unknown>;
   fuente?: "humano" | "asistente" | "api";
   expectedEtapa?: string | null;
+  estado?: "abierta" | "ganada" | "perdida";
+  motivoPerdida?: string | null;
 };
 
 export type DeleteLeadInput = {
@@ -584,6 +586,14 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
     }
     if (input.expectedEtapa) {
       payload.expected_etapa_id = input.expectedEtapa;
+    }
+    if (input.estado) {
+      payload.estado = input.estado;
+    }
+    if (input.estado === "perdida") {
+      payload.motivo_perdida = input.motivoPerdida ?? "No especificado";
+    } else if (input.motivoPerdida !== undefined) {
+      payload.motivo_perdida = input.motivoPerdida;
     }
     if (input.metadata) {
       const metadata = normalizeMetadata(input.metadata);

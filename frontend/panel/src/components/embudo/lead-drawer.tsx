@@ -372,13 +372,11 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
             key: "demo_scheduled_at",
             type: "datetime",
             label: "Fecha y hora programada",
-            required: true,
           },
           {
             key: "demo_format",
             type: "select",
             label: "Modalidad",
-            required: true,
             options: [
               { value: "virtual", label: "Virtual" },
               { value: "presencial", label: "Presencial" },

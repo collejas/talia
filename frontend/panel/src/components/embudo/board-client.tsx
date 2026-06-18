@@ -124,9 +124,7 @@ const DEMO_FORMAT_OPTIONS = [
 ];
 
 const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
-  demo: [
-    { key: "demo_format", label: "Modalidad" },
-  ],
+  demo: [],
   cerrado_ganado: [
     { key: "close_date", label: "Fecha de cierre" },
   ],
@@ -159,6 +157,8 @@ async function requestMoveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
         metadata: input.metadata ?? undefined,
         fuente: input.fuente ?? "humano",
         expected_etapa_id: input.expectedEtapa ?? undefined,
+        estado: input.estado ?? undefined,
+        motivo_perdida: input.motivoPerdida ?? undefined,
       }),
     });
     const body = (await response.json().catch(() => ({}))) as LeadActionResult | { error?: string };
@@ -732,6 +732,7 @@ export function EmbudoBoardClient({
         etapaDestino: furthestValidStage.id,
         fuente: "humano",
         expectedEtapa: originStage.id,
+        estado: resolveStageTerminalEstado(furthestValidStage),
       });
 
       if (!moveResult.ok) {
@@ -791,55 +792,52 @@ export function EmbudoBoardClient({
     event.preventDefault();
     if (!scheduleContext) return;
 
-    if (!scheduleDateTime.trim()) {
-      setScheduleError("Selecciona la fecha y hora de la cita.");
-      return;
-    }
-
-    if (!scheduleFormat.trim()) {
-      setScheduleError("Selecciona la modalidad de la cita.");
-      return;
-    }
-
-    const isoValue = fromDateTimeLocalInput(scheduleDateTime);
-    if (!isoValue) {
-      setScheduleError("La fecha no tiene un formato válido.");
-      return;
-    }
-
     setScheduleError(null);
     setSchedulePending(true);
     setMovePending(true);
 
-    const bookingPayload = {
-      conversationId: sanitizeString(scheduleContext.card.conversacionId),
-      personaId: sanitizeString(scheduleContext.card.personaId),
-      contactoId: sanitizeString(scheduleContext.card.contactoId),
-      oportunidadId: scheduleContext.card.oportunidadId,
-      canal: sanitizeString(scheduleContext.card.canal),
-      startAt: isoValue,
-    };
-
-    const bookingResult = await scheduleLeadDemo({
-      ...bookingPayload,
-    });
-
-    if (!bookingResult.ok) {
-      setScheduleError(bookingResult.error || "No se pudo agendar la cita.");
-      setSchedulePending(false);
-      setMovePending(false);
-      return;
+    const extraFields: Record<string, unknown> = {};
+    if (scheduleFormat.trim()) {
+      extraFields.demo_format = scheduleFormat.trim();
     }
-
-    const extraFields: Record<string, unknown> = { demo_format: scheduleFormat.trim() };
     const linkValue = scheduleLink.trim();
     if (linkValue.length) {
       extraFields.demo_link = linkValue;
     }
+
+    let bookingId: string | null = null;
+    let scheduledIso: string | null = null;
+    if (scheduleDateTime.trim()) {
+      const isoValue = fromDateTimeLocalInput(scheduleDateTime);
+      if (!isoValue) {
+        setScheduleError("La fecha no tiene un formato válido.");
+        setSchedulePending(false);
+        setMovePending(false);
+        return;
+      }
+      const bookingResult = await scheduleLeadDemo({
+        conversationId: sanitizeString(scheduleContext.card.conversacionId),
+        personaId: sanitizeString(scheduleContext.card.personaId),
+        contactoId: sanitizeString(scheduleContext.card.contactoId),
+        oportunidadId: scheduleContext.card.oportunidadId,
+        canal: sanitizeString(scheduleContext.card.canal),
+        startAt: isoValue,
+      });
+
+      if (!bookingResult.ok) {
+        setScheduleError(bookingResult.error || "No se pudo agendar la cita.");
+        setSchedulePending(false);
+        setMovePending(false);
+        return;
+      }
+
+      bookingId = bookingResult.booking.booking_id;
+      scheduledIso = isoValue;
+    }
     const stagePrep = buildUpdatedDemoStagePrep(
       scheduleContext.card,
-      isoValue,
-      bookingResult.booking.booking_id,
+      scheduledIso,
+      bookingId,
       scheduleContext.destinationStage.codigo,
       extraFields,
     );
@@ -853,6 +851,7 @@ export function EmbudoBoardClient({
       metadata: {
         stage_prep: stagePrep,
       },
+      estado: resolveStageTerminalEstado(destinationStage),
     });
 
     if (!moveResult.ok) {
@@ -1070,6 +1069,7 @@ export function EmbudoBoardClient({
       etapaDestino: nextStage.id,
       fuente: "humano",
       expectedEtapa: selectedCard.etapaId,
+      estado: resolveStageTerminalEstado(nextStage),
     });
     setMovePending(false);
     if (!result.ok) {
@@ -1102,49 +1102,50 @@ export function EmbudoBoardClient({
       localValue,
       stagePrepKeys: Object.keys(stagePrepState ?? {}),
     });
-    if (!localValue) {
-      return {
-        ok: false as const,
-        error: "Completa la fecha de la cita en la tarjeta antes de avanzar.",
-      };
-    }
-    const isoValue = fromDateTimeLocalInput(localValue);
-    if (!isoValue) {
-      return { ok: false as const, error: "La fecha de la cita no tiene un formato válido." };
-    }
-    const currentScheduledRaw = readDemoScheduledAt(selectedCard, targetStage.codigo, DEMO_STAGE_CODE);
-    const currentScheduledIso = currentScheduledRaw?.includes("T")
-      ? fromDateTimeLocalInput(currentScheduledRaw) ?? currentScheduledRaw
-      : currentScheduledRaw ?? null;
-    const existingBookingId =
-      typeof stagePrepEntry?.demo_booking_id === "string" && stagePrepEntry.demo_booking_id.trim().length
-        ? stagePrepEntry.demo_booking_id.trim()
-        : readDemoPrepValue(selectedCard, "demo_booking_id", targetStage.codigo, DEMO_STAGE_CODE);
-    const shouldReuseExistingBooking =
-      Boolean(currentScheduledIso) && currentScheduledIso === isoValue;
-
     setMovePending(true);
     try {
       const extraFields = stagePrepStateEntryToMetadata(stagePrepEntry, ["demo_scheduled_at"]);
-      let bookingId: string | null = existingBookingId ?? null;
-      if (!shouldReuseExistingBooking) {
-        const bookingResult = await scheduleLeadDemo({
-          conversationId: sanitizeString(selectedCard.conversacionId),
-          personaId: sanitizeString(selectedCard.personaId),
-          contactoId: sanitizeString(selectedCard.contactoId),
-          oportunidadId: selectedCard.oportunidadId,
-          canal: sanitizeString(selectedCard.canal),
-          startAt: isoValue,
-        });
-        if (!bookingResult.ok) {
-          return { ok: false as const, error: bookingResult.error || "No se pudo agendar la cita." };
+      const existingBookingId =
+        typeof stagePrepEntry?.demo_booking_id === "string" && stagePrepEntry.demo_booking_id.trim().length
+          ? stagePrepEntry.demo_booking_id.trim()
+          : readDemoPrepValue(selectedCard, "demo_booking_id", targetStage.codigo, DEMO_STAGE_CODE);
+
+      let bookingId: string | null = null;
+      let scheduledIso: string | null = null;
+      if (localValue.length) {
+        const isoValue = fromDateTimeLocalInput(localValue);
+        if (!isoValue) {
+          return { ok: false as const, error: "La fecha de la cita no tiene un formato válido." };
         }
-        bookingId = bookingResult.booking.booking_id;
+        scheduledIso = isoValue;
+        const currentScheduledRaw = readDemoScheduledAt(selectedCard, targetStage.codigo, DEMO_STAGE_CODE);
+        const currentScheduledIso = currentScheduledRaw?.includes("T")
+          ? fromDateTimeLocalInput(currentScheduledRaw) ?? currentScheduledRaw
+          : currentScheduledRaw ?? null;
+        const shouldReuseExistingBooking =
+          Boolean(currentScheduledIso) && currentScheduledIso === isoValue;
+
+        if (!shouldReuseExistingBooking) {
+          const bookingResult = await scheduleLeadDemo({
+            conversationId: sanitizeString(selectedCard.conversacionId),
+            personaId: sanitizeString(selectedCard.personaId),
+            contactoId: sanitizeString(selectedCard.contactoId),
+            oportunidadId: selectedCard.oportunidadId,
+            canal: sanitizeString(selectedCard.canal),
+            startAt: isoValue,
+          });
+          if (!bookingResult.ok) {
+            return { ok: false as const, error: bookingResult.error || "No se pudo agendar la cita." };
+          }
+          bookingId = bookingResult.booking.booking_id;
+        } else {
+          bookingId = existingBookingId ?? null;
+        }
       }
 
       const demoStagePrep = buildUpdatedDemoStagePrep(
         selectedCard,
-        isoValue,
+        scheduledIso,
         bookingId,
         targetStage.codigo,
         extraFields ?? undefined,
@@ -1157,6 +1158,7 @@ export function EmbudoBoardClient({
         metadata: {
           stage_prep: demoStagePrep,
         },
+        estado: resolveStageTerminalEstado(targetStage),
       });
 
       console.info("[Board] demo-advance-result", {
@@ -1306,13 +1308,13 @@ export function EmbudoBoardClient({
       handleDragCancel();
       return;
     }
-    const pathStages = orderedDraggableStages.slice(currentStageIndex + 1, destinationStageIndex + 1);
-    if (pathStages.length > 1) {
+    const destinationRequirements = getStageRequirements(destinationStage);
+    if (destinationRequirements.length > 0 && !matchesStageCode(normalizeStageCode(destinationStage), DEMO_STAGE_CODE)) {
       openProgressionDialog({
         card: activeDragCard,
         originStage: activeDragStage,
         destinationStage,
-        pathStages,
+        pathStages: [destinationStage],
       });
       handleDragCancel();
       return;
@@ -1367,6 +1369,7 @@ export function EmbudoBoardClient({
       etapaDestino: destinationStage.id,
       fuente: "humano",
       expectedEtapa: activeDragStage.id,
+      estado: resolveStageTerminalEstado(destinationStage),
     });
     setMovePending(false);
 
@@ -1756,28 +1759,28 @@ export function EmbudoBoardClient({
       />
 
       <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
-        <SheetContent side="right" className="sm:max-w-md">
-          <SheetHeader>
+      <SheetContent side="right" className="sm:max-w-md">
+        <SheetHeader>
             <SheetTitle>Agendar cita</SheetTitle>
             <SheetDescription>
               {scheduleContext
-                ? `Define la fecha y hora antes de mover “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}”.`
-                : "Define la fecha y hora de la cita."}
+                ? `La cita es opcional. Si no habrá demo, puedes avanzar “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}” sin llenar fecha.`
+                : "La cita es opcional."}
             </SheetDescription>
-          </SheetHeader>
+        </SheetHeader>
           <form className="flex flex-col gap-4 px-4 pb-6" onSubmit={handleScheduleSubmit}>
             <DateTimeCalendarPicker
               id="schedule-demo-datetime"
-              label="Fecha y hora de la cita *"
+              label="Fecha y hora de la cita"
               value={scheduleDateTime}
               onChange={setScheduleDateTime}
               minValue={scheduleMinValue || undefined}
               disabled={schedulePending}
-              description="Usa tu zona horaria local."
+              description="Opcional. Usa tu zona horaria local si deseas registrar una cita."
             />
             <div className="space-y-2">
               <Label htmlFor="schedule-demo-format" className="text-sm font-medium">
-                Modalidad *
+                Modalidad
               </Label>
               <select
                 id="schedule-demo-format"
@@ -1819,7 +1822,7 @@ export function EmbudoBoardClient({
                 Cancelar
               </Button>
               <Button type="submit" disabled={schedulePending}>
-                Confirmar cita
+                Confirmar y continuar
               </Button>
             </SheetFooter>
           </form>
@@ -2015,6 +2018,21 @@ function normalizeStageCode(stage: EmbudoStage | null): string {
   return stage?.codigo?.toLowerCase() ?? "";
 }
 
+function resolveStageTerminalEstado(stage: EmbudoStage | null): "ganada" | "perdida" | undefined {
+  const stageCode = normalizeStageCode(stage);
+  if (matchesStageCode(stageCode, "cerrado_ganado")) {
+    return "ganada";
+  }
+  if (matchesStageCode(stageCode, "cerrado_perdido")) {
+    return "perdida";
+  }
+  const stageCategory = typeof stage?.categoria === "string" ? stage.categoria.trim().toLowerCase() : "";
+  if (stageCategory === "ganada" || stageCategory === "perdida") {
+    return stageCategory;
+  }
+  return undefined;
+}
+
 function matchesStageCode(value: string, expected: string): boolean {
   if (!value || !expected) {
     return false;
@@ -2131,7 +2149,7 @@ function readDemoScheduledAt(card: EmbudoCard | null, ...preferredStageCodes: Ar
 
 function buildUpdatedDemoStagePrep(
   card: EmbudoCard,
-  isoValue: string,
+  isoValue?: string | null,
   bookingId?: string | null,
   stageCode?: string | null,
   extraFields?: Record<string, unknown> | null,
@@ -2140,9 +2158,15 @@ function buildUpdatedDemoStagePrep(
   const resolvedEntry = resolveStagePrepEntry(current, stageCode, DEMO_STAGE_CODE);
   const targetKey = resolvedEntry?.key ?? (stageCode?.trim().toLowerCase() || DEMO_STAGE_CODE);
   const demoPrep: Record<string, unknown> = { ...(resolvedEntry?.value ?? {}) };
-  demoPrep["demo_scheduled_at"] = isoValue;
-  if (bookingId) {
-    demoPrep["demo_booking_id"] = bookingId;
+  if (typeof isoValue === "string" && isoValue.trim().length) {
+    demoPrep["demo_scheduled_at"] = isoValue.trim();
+  } else {
+    delete demoPrep["demo_scheduled_at"];
+  }
+  if (typeof bookingId === "string" && bookingId.trim().length) {
+    demoPrep["demo_booking_id"] = bookingId.trim();
+  } else {
+    delete demoPrep["demo_booking_id"];
   }
   if (extraFields) {
     for (const [fieldKey, fieldValue] of Object.entries(extraFields)) {

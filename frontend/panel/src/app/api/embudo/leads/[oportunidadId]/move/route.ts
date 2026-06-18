@@ -16,11 +16,58 @@ type MoveLeadPayload = {
   metadata?: Record<string, unknown>;
   fuente?: "humano" | "asistente" | "api";
   expected_etapa_id?: string | null;
+  estado?: "abierta" | "ganada" | "perdida";
+  motivo_perdida?: string | null;
 };
 
 type MoveLeadApiResult =
   | { ok: true; stage: EmbudoStage; card: EmbudoCard }
   | { ok: false; error: string; latestStage?: EmbudoStage; latestCard?: EmbudoCard };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeStageToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function looksLikeUuid(value: string): boolean {
+  return UUID_PATTERN.test(value.trim());
+}
+
+async function resolveStageIdentifier(value: string): Promise<string> {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (looksLikeUuid(trimmed)) {
+    return trimmed;
+  }
+
+  const boardResult = await callCrmApi<{ stages?: PipelineBoardStage[] }>("/crm/pipeline/board", {
+    searchParams: { limit: 200 },
+    withUserToken: true,
+  });
+  if (!boardResult.ok) {
+    return trimmed;
+  }
+
+  const normalized = normalizeStageToken(trimmed);
+  const stage = (boardResult.data.stages ?? []).find((candidate) => {
+    if (candidate.id === trimmed) return true;
+    if (typeof candidate.codigo === "string" && normalizeStageToken(candidate.codigo) === normalized) return true;
+    if (typeof candidate.nombre === "string" && normalizeStageToken(candidate.nombre) === normalized) return true;
+    return false;
+  });
+  return stage?.id ?? trimmed;
+}
 
 function mapPipelineCardResponse(payload: PipelineCardResponse): { stage: EmbudoStage; card: EmbudoCard } {
   const stageMeta = parseMetadatos(payload.stage.metadatos);
@@ -75,8 +122,21 @@ export async function POST(
   if (payload.expected_etapa_id) {
     body.expected_etapa_id = payload.expected_etapa_id;
   }
+  if (payload.estado) {
+    body.estado = payload.estado;
+  }
+  if (payload.motivo_perdida !== undefined) {
+    body.motivo_perdida = payload.motivo_perdida;
+  }
   if (payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)) {
     body.metadata = payload.metadata;
+  }
+
+  if (typeof body.etapa_id === "string" && !looksLikeUuid(body.etapa_id)) {
+    body.etapa_id = await resolveStageIdentifier(body.etapa_id);
+  }
+  if (typeof body.expected_etapa_id === "string" && !looksLikeUuid(body.expected_etapa_id)) {
+    body.expected_etapa_id = await resolveStageIdentifier(body.expected_etapa_id);
   }
 
   try {
