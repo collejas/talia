@@ -568,7 +568,6 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
     client_email = _safe_text(context.contact_email, "Sin email")
     client_phone = _safe_text(context.contact_phone, "Sin teléfono")
     project_name = _safe_text(context.lead_label, "Sin proyecto")
-    project_description = _safe_text(context.descripcion, "")
     logo_url = _safe_text(context.logo_url, "")
     logo_html = (
         f'<div><img class="brand-logo" src="{html_escape(logo_url, quote=True)}" alt="Logo de la empresa" /></div>'
@@ -598,7 +597,6 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
               {logo_html}
               <div>
                 <h1 class="title">{html_escape(project_name)}</h1>
-                {f'<p class="subtitle">{html_escape(project_description)}</p>' if project_description else ''}
               </div>
             </div>
             <div class="top-meta">
@@ -633,7 +631,6 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
             <div class="card">
               <h3>Proyecto</h3>
               <p><strong>{html_escape(project_name)}</strong></p>
-              {f'<p>{html_escape(project_description)}</p>' if project_description else ''}
             </div>
             <div class="card">
               <h3>Vendedor</h3>
