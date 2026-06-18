@@ -16445,6 +16445,10 @@ async def list_sale_ready_opportunities(
         code = stage.get("codigo")
         contacto = row.get("contacto") or {}
         cuenta = row.get("cuenta") or {}
+        contacto_datos = contacto.get("persona_datos") or contacto.get("contacto_datos") or {}
+        contacto_profile_name = None
+        if isinstance(contacto_datos, dict):
+            contacto_profile_name = _clean_text(contacto_datos.get("profile_name")) or None
         allowed.append(
             CRMSaleReadyOpportunity(
                 id=_safe_uuid(row.get("id")),
@@ -16460,7 +16464,12 @@ async def list_sale_ready_opportunities(
                 cuenta_id=_safe_uuid(cuenta.get("id")),
                 cuenta_nombre=cuenta.get("nombre"),
                 contacto_id=_safe_uuid(contacto.get("id")),
-                contacto_nombre=contacto.get("nombre_completo") or contacto.get("nombres") or None,
+                contacto_nombre=(
+                    contacto_profile_name
+                    or contacto.get("nombre_completo")
+                    or contacto.get("nombres")
+                    or None
+                ),
                 contacto_correo=contacto.get("correo"),
                 contacto_telefono=contacto.get("telefono_e164"),
                 metadata=row.get("metadata"),

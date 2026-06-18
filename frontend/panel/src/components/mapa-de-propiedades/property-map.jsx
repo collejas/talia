@@ -23,12 +23,25 @@ import {
   matchesPropertyFeatureFilters,
 } from "./property-map.logic.mjs";
 
-function formatDescriptionLabel(value) {
-  if (!value) return null;
-  const trimmed = value.toString().trim();
-  if (!trimmed.length) return null;
-  const maxLen = 50;
-  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen - 3)}...`;
+function buildOpportunityOptionLabel(opportunity) {
+  const contactLabel =
+    opportunity.contacto_profile_name ??
+    opportunity.persona_nombre ??
+    opportunity.contacto_nombre ??
+    opportunity.contacto?.nombre_completo ??
+    opportunity.contacto?.nombre ??
+    opportunity.metadata?.contacto_nombre ??
+    opportunity.metadata?.profile_name ??
+    opportunity.contacto_correo ??
+    opportunity.contacto_telefono ??
+    "Contacto sin datos";
+  const projectLabel =
+    opportunity.cuenta_nombre?.toString().trim() ||
+    opportunity.metadata?.project_name?.toString().trim() ||
+    "Proyecto sin nombre";
+  const opportunityLabel =
+    opportunity.titulo?.toString().trim() || `Oportunidad ${opportunity.id}`;
+  return `Contacto: ${contactLabel} · Proyecto: ${projectLabel} · Oportunidad: ${opportunityLabel}`;
 }
 const STATUS_COLORS = {
   disponible: "#2ECC71",
@@ -4208,18 +4221,9 @@ export function PropertyMap() {
                                     >
                                       <option value="">Selecciona una oportunidad</option>
                                       {availableOpportunities.map((opportunity) => {
-                                        const contactLabel =
-                                          opportunity.contacto_nombre ??
-                                          opportunity.contacto_correo ??
-                                          opportunity.contacto_telefono ??
-                                          "Contacto sin datos";
-                                        const descriptionLabel = formatDescriptionLabel(
-                                          opportunity.descripcion,
-                                        );
                                         return (
                                           <option key={opportunity.id} value={opportunity.id}>
-                                            {contactLabel} · {opportunity.titulo ?? `Oportunidad ${opportunity.id}`}
-                                            {descriptionLabel ? ` · ${descriptionLabel}` : ""}
+                                            {buildOpportunityOptionLabel(opportunity)}
                                           </option>
                                         );
                                       })}
@@ -4289,18 +4293,9 @@ export function PropertyMap() {
                                   >
                                     <option value="">Selecciona una oportunidad</option>
                                     {availableOpportunities.map((opportunity) => {
-                                      const contactLabel =
-                                        opportunity.contacto_nombre ??
-                                        opportunity.contacto_correo ??
-                                        opportunity.contacto_telefono ??
-                                        "Contacto sin datos";
-                                      const descriptionLabel = formatDescriptionLabel(
-                                        opportunity.descripcion,
-                                      );
                                       return (
                                         <option key={opportunity.id} value={opportunity.id}>
-                                          {contactLabel} · {opportunity.titulo ?? `Oportunidad ${opportunity.id}`}
-                                          {descriptionLabel ? ` · ${descriptionLabel}` : ""}
+                                          {buildOpportunityOptionLabel(opportunity)}
                                         </option>
                                       );
                                     })}
