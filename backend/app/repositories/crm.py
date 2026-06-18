@@ -1098,7 +1098,7 @@ class CRMRepository:
             "etapa_destino_id",
             "cambiado_por_usuario_id",
             "etapa_origen:etapas_pipeline!oportunidad_historial_etapa_origen_org_fkey(id,nombre)",
-            "etapa_destino:etapas_pipeline!oportunidad_historial_etapa_destino_org_fkey(id,nombre)",
+            "etapa_destino:etapas_pipeline!oportunidad_historial_etapa_destino_org_fkey(id,nombre,categoria)",
             "cambiado_por:usuarios!oportunidad_historial_cambiado_por_usuario_org_fkey(id,nombre_completo,correo)",
         ]
     )
@@ -2018,6 +2018,40 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
         rows = [row for row in data if isinstance(row, dict)]
+        if rows and include_contact_rows:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=rows,
+                source_fields=("contacto_principal_id",),
+            )
+        return rows
+
+    async def list_opportunities_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        opportunity_ids: Sequence[UUID],
+        include_contact_rows: bool = True,
+    ) -> list[dict[str, Any]]:
+        unique_ids = sorted({str(opportunity_id) for opportunity_id in opportunity_ids if opportunity_id})
+        if not unique_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        chunk_size = 200
+        for start in range(0, len(unique_ids), chunk_size):
+            chunk = unique_ids[start : start + chunk_size]
+            params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"in.({','.join(chunk)})",
+                "select": self._PIPELINE_SELECT,
+                "order": "creado_en.desc",
+                "limit": str(len(chunk)),
+            }
+            resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades por id: {data!r}")
+            rows.extend(row for row in data if isinstance(row, dict))
         if rows and include_contact_rows:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
@@ -9864,6 +9898,37 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener historial: {row!r}")
         return row
+
+    async def list_opportunity_stage_history_by_range(
+        self,
+        *,
+        organizacion_id: UUID,
+        cambiado_desde: str | None = None,
+        cambiado_hasta: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "cambiado_en.desc",
+            "limit": str(limit),
+            "offset": str(offset),
+            "select": self._HISTORY_SELECT,
+        }
+        and_filters: list[str] = []
+        if cambiado_desde:
+            and_filters.append(f"cambiado_en.gte.{cambiado_desde}")
+        if cambiado_hasta:
+            and_filters.append(f"cambiado_en.lte.{cambiado_hasta}")
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
+        resp = await self._request("GET", "/rest/v1/oportunidad_etapas_historial", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar historial de oportunidades por rango: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
 
     async def append_note_history(
         self,

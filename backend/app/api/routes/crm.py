@@ -37805,7 +37805,7 @@ async def _dashboard_fetch_all_lead_rows(
 ) -> list[dict[str, Any]]:
     page_size = 200
     offset = 0
-    rows: list[dict[str, Any]] = []
+    rows_by_id: dict[str, dict[str, Any]] = {}
     creado_desde = _format_utc(date_from) if date_from else None
     creado_hasta = _format_utc(date_to) if date_to else None
 
@@ -37821,12 +37821,76 @@ async def _dashboard_fetch_all_lead_rows(
         filtered_page = [row for row in page if isinstance(row, dict)]
         if not filtered_page:
             break
-        rows.extend(filtered_page)
+        for row in filtered_page:
+            opportunity_id = _clean_text(row.get("id"))
+            if opportunity_id:
+                rows_by_id[opportunity_id] = row
         if len(filtered_page) < page_size:
             break
         offset += len(filtered_page)
 
-    return rows
+    changed_desde = creado_desde
+    changed_hasta = creado_hasta
+    history_offset = 0
+    closed_event_by_opportunity: dict[str, datetime] = {}
+    closed_category_by_opportunity: dict[str, str] = {}
+
+    while True:
+        history_page = await repo.list_opportunity_stage_history_by_range(
+            organizacion_id=organizacion_id,
+            cambiado_desde=changed_desde,
+            cambiado_hasta=changed_hasta,
+            limit=page_size,
+            offset=history_offset,
+        )
+        if not history_page:
+            break
+        for entry in history_page:
+            opportunity_id = _clean_text(entry.get("oportunidad_id"))
+            changed_at = _parse_datetime(entry.get("cambiado_en"))
+            etapa_destino = _single_related(entry.get("etapa_destino")) or {}
+            etapa_categoria = _clean_text(etapa_destino.get("categoria")).lower()
+            if not opportunity_id or not changed_at:
+                continue
+            if etapa_categoria not in {"ganada", "perdida"}:
+                continue
+            current_changed = closed_event_by_opportunity.get(opportunity_id)
+            if current_changed is None or changed_at > current_changed:
+                closed_event_by_opportunity[opportunity_id] = changed_at
+                closed_category_by_opportunity[opportunity_id] = etapa_categoria
+        if len(history_page) < page_size:
+            break
+        history_offset += len(history_page)
+
+    missing_ids = [
+        UUID(opportunity_id)
+        for opportunity_id, category in closed_category_by_opportunity.items()
+        if category in {"ganada", "perdida"} and opportunity_id not in rows_by_id
+    ]
+    if missing_ids:
+        closed_rows = await repo.list_opportunities_by_ids(
+            organizacion_id=organizacion_id,
+            opportunity_ids=missing_ids,
+            include_contact_rows=True,
+        )
+        for row in closed_rows:
+            opportunity_id = _clean_text(row.get("id"))
+            if opportunity_id:
+                rows_by_id[opportunity_id] = row
+
+    for opportunity_id, closed_at in closed_event_by_opportunity.items():
+        row = rows_by_id.get(opportunity_id)
+        if not row:
+            continue
+        etapa = _single_related(row.get("etapa")) or {}
+        categoria = _clean_text(etapa.get("categoria")).lower() or _clean_text(row.get("estado")).lower()
+        if categoria not in {"ganada", "perdida"}:
+            continue
+        existing_closed = _parse_datetime(row.get("cerrado_en")) or _parse_datetime(row.get("actualizado_en"))
+        if existing_closed is None or closed_at > existing_closed:
+            row["cerrado_en"] = _format_utc(closed_at)
+
+    return list(rows_by_id.values())
 
 
 @router.get("/dashboard/overview")
