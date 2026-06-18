@@ -62,6 +62,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
@@ -26722,7 +26723,7 @@ async def send_lead_quote(
         uploaded_attachments = [
             file
             for file in form.getlist("attachments")
-            if isinstance(file, UploadFile)
+            if isinstance(file, StarletteUploadFile)
         ]
     else:
         try:
