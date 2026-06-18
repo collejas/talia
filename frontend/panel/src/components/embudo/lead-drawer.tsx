@@ -2218,8 +2218,7 @@ export function LeadDrawer({
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
   const quoteClientEmail = card?.correo?.trim() || "Sin email";
-  const quoteProjectName = card?.proyectoNombre?.trim() || card?.titulo?.trim() || "Sin proyecto";
-  const quoteProjectLocation = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin ubicación";
+  const quoteProjectNeeds = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin necesidades";
   const quoteAssignedVendorName =
     quoteAssignedVendor?.nombre_completo?.trim() || card?.asignadoNombre?.trim() || "Sin vendedor";
   const quoteAssignedVendorEmail = quoteAssignedVendor?.correo?.trim() || "Sin correo";
@@ -3671,17 +3670,6 @@ export function LeadDrawer({
                     <IconMail className="size-4" />
                     Correo
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-1"
-                    variant={quoteChannel === "whatsapp" ? "default" : "outline"}
-                    onClick={() => handleQuoteChannelChange("whatsapp")}
-                    disabled={quotePending}
-                  >
-                    <IconBrandWhatsapp className="size-4" />
-                    WhatsApp
-                  </Button>
                   <Button type="button" size="sm" onClick={handleSendQuote} disabled={quotePending}>
                     {quotePending ? "Enviando..." : "Enviar cotización"}
                   </Button>
@@ -3720,54 +3708,28 @@ export function LeadDrawer({
                           className={quoteCompactInputClass}
                         />
                       </div>
-                      {quoteChannel === "email" ? (
-                        <div className="grid gap-1">
-                          <label className="text-[11px] font-medium text-muted-foreground">Destinatarios</label>
-                          <Input
-                            value={quoteEmailTo}
-                            onChange={(event) => setQuoteEmailTo(event.target.value)}
-                            disabled={quotePending}
-                            placeholder="correo@empresa.com"
-                            className={quoteCompactInputClass}
-                          />
-                        </div>
-                      ) : (
-                        <div className="grid gap-1">
-                          <label className="text-[11px] font-medium text-muted-foreground">WhatsApp destino</label>
-                          <Input
-                            value={quoteWhatsappTo}
-                            onChange={(event) => setQuoteWhatsappTo(event.target.value)}
-                            disabled={quotePending}
-                            placeholder="+52..."
-                            className={quoteCompactInputClass}
-                          />
-                        </div>
-                      )}
+                      <div className="grid gap-1">
+                        <label className="text-[11px] font-medium text-muted-foreground">Destinatarios</label>
+                        <Input
+                          value={quoteEmailTo}
+                          onChange={(event) => setQuoteEmailTo(event.target.value)}
+                          disabled={quotePending}
+                          placeholder="correo@empresa.com"
+                          className={quoteCompactInputClass}
+                        />
+                      </div>
                     </div>
                     <div className="mt-2 grid gap-2 md:grid-cols-3">
-                      {quoteChannel === "email" ? (
-                        <div className="grid gap-1 md:col-span-2">
-                          <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
-                          <Input
-                            value={quoteSubject}
-                            onChange={(event) => setQuoteSubject(event.target.value)}
-                            disabled={quotePending}
-                            placeholder="Cotización Tal-IA"
-                            className={quoteCompactInputClass}
-                          />
-                        </div>
-                      ) : (
-                        <div className="grid gap-1 md:col-span-2">
-                          <label className="text-[11px] font-medium text-muted-foreground">Mensaje introductorio</label>
-                          <Input
-                            value={quoteMessage}
-                            onChange={(event) => setQuoteMessage(event.target.value)}
-                            disabled={quotePending}
-                            placeholder="Texto que acompañará al PDF."
-                            className={quoteCompactInputClass}
-                          />
-                        </div>
-                      )}
+                      <div className="grid gap-1 md:col-span-2">
+                        <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                        <Input
+                          value={quoteSubject}
+                          onChange={(event) => setQuoteSubject(event.target.value)}
+                          disabled={quotePending}
+                          placeholder="Cotización Tal-IA"
+                          className={quoteCompactInputClass}
+                        />
+                      </div>
                       <div className="grid gap-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Vigente hasta</label>
                         <Input
@@ -3828,12 +3790,8 @@ export function LeadDrawer({
                       </div>
                       <div className="grid gap-1 text-xs">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-muted-foreground">Nombre</span>
-                          <span className="font-medium text-foreground">{quoteProjectName}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-muted-foreground">Ubicación</span>
-                          <span className="font-medium text-foreground">{quoteProjectLocation}</span>
+                          <span className="text-muted-foreground">Necesidades</span>
+                          <span className="font-medium text-foreground">{quoteProjectNeeds}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Referencia</span>
@@ -4463,14 +4421,6 @@ export function LeadDrawer({
 
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</h4>
-                      <div className="mt-2 space-y-1">
-                        <p className="font-medium text-foreground">{quoteAssignedVendorName}</p>
-                        <p className="text-muted-foreground">{quoteAssignedVendorEmail}</p>
-                        <p className="text-muted-foreground">{quoteAssignedVendorPhone}</p>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
                       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cliente</h4>
                       <div className="mt-2 space-y-1">
                         <p className="font-medium text-foreground">{quoteClientName}</p>
@@ -4482,9 +4432,16 @@ export function LeadDrawer({
                     <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
                       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proyecto</h4>
                       <div className="mt-2 space-y-1">
-                        <p className="font-medium text-foreground">{quoteProjectName}</p>
-                        <p className="text-muted-foreground">{quoteProjectLocation}</p>
+                        <p className="font-medium text-foreground">{quoteProjectNeeds}</p>
                         <p className="text-muted-foreground">Referencia: {card.oportunidadId.slice(0, 8).toUpperCase()}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</h4>
+                      <div className="mt-2 space-y-1">
+                        <p className="font-medium text-foreground">{quoteAssignedVendorName}</p>
+                        <p className="text-muted-foreground">{quoteAssignedVendorEmail}</p>
+                        <p className="text-muted-foreground">{quoteAssignedVendorPhone}</p>
                       </div>
                     </div>
                   </div>
@@ -4697,9 +4654,6 @@ export function LeadDrawer({
                   </Button>
                   <Button type="button" variant="outline" disabled>
                     Enviar por email
-                  </Button>
-                  <Button type="button" variant="outline" disabled>
-                    Enviar por WhatsApp
                   </Button>
                   <Button type="button" onClick={() => setQuotePreviewOpen(false)}>
                     Cerrar

@@ -568,6 +568,7 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
     client_email = _safe_text(context.contact_email, "Sin email")
     client_phone = _safe_text(context.contact_phone, "Sin teléfono")
     project_name = _safe_text(context.lead_label, "Sin proyecto")
+    project_description = _safe_text(context.descripcion, "")
     logo_url = _safe_text(context.logo_url, "")
     logo_html = (
         f'<div><img class="brand-logo" src="{html_escape(logo_url, quote=True)}" alt="Logo de la empresa" /></div>'
@@ -630,7 +631,7 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
             </div>
             <div class="card">
               <h3>Proyecto</h3>
-              <p><strong>{html_escape(project_name)}</strong></p>
+              <p><strong>{html_escape(project_description or "Sin necesidades")}</strong></p>
             </div>
             <div class="card">
               <h3>Vendedor</h3>
@@ -845,6 +846,12 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(f"Teléfono: {context.contact_phone or '—'}")
     lines.append("")
 
+    if context.descripcion:
+        lines.append("Proyecto")
+        lines.append(sub_divider)
+        lines.extend(_wrap_text(context.descripcion))
+        lines.append("")
+
     lines.append("Vendedor")
     lines.append(sub_divider)
     lines.append(f"Empresa: {context.vendor_company_name or context.issuer_name or '—'}")
@@ -852,12 +859,6 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(f"Asesor: {context.vendor_assessor_name or context.issuer_name or '—'}")
     lines.append(f"Teléfono, Asesor: {context.vendor_assessor_phone or '—'}")
     lines.append("")
-
-    if context.descripcion:
-        lines.append("Resumen del proyecto")
-        lines.append(sub_divider)
-        lines.extend(_wrap_text(context.descripcion))
-        lines.append("")
 
     if context.notes:
         lines.append("Notas")
