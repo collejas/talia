@@ -91,7 +91,7 @@ const formSchema = z.object({
     .string()
     .trim()
     .optional()
-    .refine((value) => !value || !Number.isNaN(Number(value)), {
+    .refine((value) => !value || parseNumberInput(value) != null, {
       message: "El monto debe ser un número válido.",
     }),
   moneda: z
@@ -107,8 +107,8 @@ const formSchema = z.object({
     .optional()
     .refine((value) => {
       if (!value) return true;
-      const parsed = Number(value);
-      return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
+      const parsed = parseNumberInput(value);
+      return parsed != null && parsed >= 0 && parsed <= 100;
     }, { message: "La probabilidad debe estar entre 0 y 100." }),
   notas: z.string().trim().optional().or(z.literal("")),
   necesidadProposito: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -728,9 +728,9 @@ export function LeadDrawer({
       correo: card?.correo ?? "",
       telefono: card?.telefono ?? "",
       empresa: card?.empresa ?? "",
-      monto,
+      monto: formatCurrencyInputValue(parseNumberInput(monto), card?.moneda ?? "MXN"),
       moneda: card?.moneda ?? "",
-      probabilidad,
+      probabilidad: formatPercentInputValue(parseNumberInput(probabilidad)),
       notas: card?.notas ?? "",
       necesidadProposito: card?.necesidadProposito ?? "",
       proyectoNombre: card?.proyectoNombre ?? "",
@@ -841,8 +841,11 @@ export function LeadDrawer({
     handleSubmit,
     reset,
     setValue,
+    getValues,
     formState: { errors },
   } = form;
+  const montoField = register("monto");
+  const probabilidadField = register("probabilidad");
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1659,13 +1662,19 @@ export function LeadDrawer({
 
       const oportunidadPayload: Record<string, unknown> = {};
       if (montoRaw.length) {
-        oportunidadPayload.monto_estimado = Number(montoRaw);
+        const montoParsed = parseNumberInput(montoRaw);
+        if (montoParsed != null) {
+          oportunidadPayload.monto_estimado = montoParsed;
+        }
       }
       if (monedaRaw.length) {
         oportunidadPayload.moneda = monedaRaw;
       }
       if (probRaw.length) {
-        oportunidadPayload.probabilidad = Number(probRaw);
+        const probabilidadParsed = parseNumberInput(probRaw);
+        if (probabilidadParsed != null) {
+          oportunidadPayload.probabilidad = probabilidadParsed;
+        }
       }
       if (proyectoNombreRaw.length) {
         oportunidadPayload.titulo = proyectoNombreRaw;
@@ -3083,17 +3092,28 @@ export function LeadDrawer({
             </section>
 
               <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
-                <h4 className="text-sm font-semibold text-foreground">Lead</h4>
+                <h4 className="text-sm font-semibold text-foreground">Estimación</h4>
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-monto">
                     Monto estimado
                   </label>
                   <Input
                     id="lead-monto"
-                    placeholder="0"
+                    placeholder="$0.00"
+                    inputMode="decimal"
                     disabled={isBusy}
                     aria-invalid={errors.monto ? "true" : "false"}
-                    {...register("monto")}
+                    {...montoField}
+                    onBlur={(event) => {
+                      montoField.onBlur(event);
+                      const formatted = formatCurrencyInputValue(
+                        parseNumberInput(event.target.value),
+                        getValues("moneda") || card?.moneda || "MXN",
+                      );
+                      if (formatted !== event.target.value) {
+                        setValue("monto", formatted, { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
                   />
                   {errors.monto ? (
                     <p className="text-xs text-destructive">{errors.monto.message}</p>
@@ -3122,10 +3142,18 @@ export function LeadDrawer({
                   </label>
                   <Input
                     id="lead-probabilidad"
-                    placeholder="0-100"
+                    placeholder="0%"
+                    inputMode="numeric"
                     disabled={isBusy}
                     aria-invalid={errors.probabilidad ? "true" : "false"}
-                    {...register("probabilidad")}
+                    {...probabilidadField}
+                    onBlur={(event) => {
+                      probabilidadField.onBlur(event);
+                      const formatted = formatPercentInputValue(parseNumberInput(event.target.value));
+                      if (formatted !== event.target.value) {
+                        setValue("probabilidad", formatted, { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
                   />
                   {errors.probabilidad ? (
                     <p className="text-xs text-destructive">{errors.probabilidad.message}</p>
@@ -5667,10 +5695,35 @@ function formatQuoteCurrency(value: number | null, currency: string | null): str
 
 function parseNumberInput(value: string): number | null {
   if (!value) return null;
-  const sanitized = value.replace(/,/g, "").trim();
+  const sanitized = value.replace(/[^0-9.-]/g, "").trim();
   if (!sanitized) return null;
   const parsed = Number(sanitized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCurrencyInputValue(value: number | null, currency: string | null): string {
+  if (value == null) return "";
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: (currency || "MXN").toUpperCase(),
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency || "MXN"} ${value.toFixed(2)}`;
+  }
+}
+
+function formatPercentInputValue(value: number | null): string {
+  if (value == null) return "";
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      maximumFractionDigits: 0,
+    }).format(value) + "%";
+  } catch {
+    return `${Math.round(value)}%`;
+  }
 }
 
 function addDays(date: Date, days: number): Date {
