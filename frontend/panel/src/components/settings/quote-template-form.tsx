@@ -468,8 +468,8 @@ export function QuoteTemplateSettingsForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Notas y términos</CardTitle>
-          <CardDescription>Personaliza los bloques finales con recordatorios y condiciones.</CardDescription>
+          <CardTitle>Condiciones comerciales</CardTitle>
+          <CardDescription>Personaliza los bloques finales con las condiciones de la cotización.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">

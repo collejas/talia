@@ -538,7 +538,16 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
 
 async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
-    html_doc = _build_modern_quote_html(context)
+    template_config: dict[str, Any] | None = None
+    try:
+        template = await quote_templates_service.fetch_active_template()
+        template_config = template.config if isinstance(template.config, dict) else None
+    except quote_templates_service.QuoteTemplateError as exc:
+        logger.warning("quote_template_unavailable: %s", exc)
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.exception("quote_template_load_failed", exc_info=exc)
+
+    html_doc = _build_modern_quote_html(context, template_config=template_config)
     base_url = _resolve_template_base_url()
     try:
         pdf_bytes = await asyncio.to_thread(
@@ -551,7 +560,10 @@ async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
-def _build_modern_quote_html(context: QuoteRenderContext) -> str:
+def _build_modern_quote_html(
+    context: QuoteRenderContext,
+    template_config: dict[str, Any] | None = None,
+) -> str:
     folio = f"COT-{context.reference.upper()}"
     issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
     valid_until = context.valido_hasta.isoformat() if context.valido_hasta else "Sin vigencia"
@@ -576,10 +588,7 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
         else ""
     )
     notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
-    conditions_html = _build_quote_rich_text_block(
-        context.economic_details_html,
-        "Sin condiciones comerciales adicionales.",
-    )
+    conditions_html = _build_quote_conditions_html(template_config, context.economic_details_html)
     items_html = _build_modern_quote_items_html(context)
     subtotal = _format_currency(context.subtotal, context.moneda)
     taxes = _format_currency(context.impuestos, context.moneda)
@@ -694,6 +703,28 @@ def _build_modern_quote_html(context: QuoteRenderContext) -> str:
       </body>
     </html>
     """
+
+
+def _build_quote_conditions_html(
+    template_config: dict[str, Any] | None,
+    fallback_html: str | None,
+) -> str:
+    if isinstance(template_config, dict):
+        notes_title = _safe_text(template_config.get("notesTitle"), "Notas")
+        notes_body = _safe_text(template_config.get("notesBody"), "")
+        terms_title = _safe_text(template_config.get("termsTitle"), "Términos")
+        terms_body = _safe_text(template_config.get("termsBody"), "")
+        pieces = [
+            '<div class="proposal-details">',
+            f'<div class="proposal-detail"><h3>{html_escape(notes_title)}</h3><p>{html_escape(notes_body)}</p></div>',
+            f'<div class="proposal-detail"><h3>{html_escape(terms_title)}</h3><p>{html_escape(terms_body)}</p></div>',
+            "</div>",
+        ]
+        return "".join(pieces)
+    return _build_quote_rich_text_block(
+        fallback_html,
+        "Sin condiciones comerciales adicionales.",
+    )
 
 
 def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:

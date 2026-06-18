@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
+import { DEFAULT_TEMPLATE_CONFIG, type QuoteTemplateConfig } from "@/app/settings/formato-cotizacion/template-schema";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   IconAlertTriangle,
@@ -877,6 +878,8 @@ export function LeadDrawer({
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
+  const [quoteTemplateConfig, setQuoteTemplateConfig] = useState<QuoteTemplateConfig>(DEFAULT_TEMPLATE_CONFIG);
+  const [quoteTemplateLoading, setQuoteTemplateLoading] = useState(false);
   const quoteAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
@@ -2214,6 +2217,53 @@ export function LeadDrawer({
   const handleOpenQuotePreview = useCallback(() => {
     setQuotePreviewOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!quoteDialogOpen) return;
+    let cancelled = false;
+
+    const pickString = (value: unknown, fallback: string) =>
+      typeof value === "string" && value.trim().length ? value.trim() : fallback;
+
+    const loadTemplate = async () => {
+      setQuoteTemplateLoading(true);
+      try {
+        const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || cancelled) return;
+        const rawConfig = payload && typeof payload === "object" ? (payload as Record<string, unknown>).config : null;
+        if (!rawConfig || typeof rawConfig !== "object") return;
+        const config = rawConfig as Record<string, unknown>;
+        setQuoteTemplateConfig({
+          logoUrl: pickString(config.logoUrl, DEFAULT_TEMPLATE_CONFIG.logoUrl),
+          primaryColor: pickString(config.primaryColor, DEFAULT_TEMPLATE_CONFIG.primaryColor),
+          accentColor: pickString(config.accentColor, DEFAULT_TEMPLATE_CONFIG.accentColor),
+          headerTitle: pickString(config.headerTitle, DEFAULT_TEMPLATE_CONFIG.headerTitle),
+          headerSubtitle: pickString(config.headerSubtitle, DEFAULT_TEMPLATE_CONFIG.headerSubtitle),
+          introText: pickString(config.introText, DEFAULT_TEMPLATE_CONFIG.introText),
+          highlights: Array.isArray(config.highlights)
+            ? config.highlights
+                .map((item) => (typeof item === "string" ? item.trim() : ""))
+                .filter((item) => item.length > 0)
+            : [...DEFAULT_TEMPLATE_CONFIG.highlights],
+          notesTitle: pickString(config.notesTitle, DEFAULT_TEMPLATE_CONFIG.notesTitle),
+          notesBody: pickString(config.notesBody, DEFAULT_TEMPLATE_CONFIG.notesBody),
+          termsTitle: pickString(config.termsTitle, DEFAULT_TEMPLATE_CONFIG.termsTitle),
+          termsBody: pickString(config.termsBody, DEFAULT_TEMPLATE_CONFIG.termsBody),
+          signatureName: pickString(config.signatureName, DEFAULT_TEMPLATE_CONFIG.signatureName),
+          signatureRole: pickString(config.signatureRole, DEFAULT_TEMPLATE_CONFIG.signatureRole),
+          footerNote: pickString(config.footerNote, DEFAULT_TEMPLATE_CONFIG.footerNote),
+        });
+      } finally {
+        if (!cancelled) setQuoteTemplateLoading(false);
+      }
+    };
+
+    void loadTemplate();
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteDialogOpen]);
 
   const handleSaveQuoteDraft = () => {
     if (!card || !quoteDraftStorageKey || typeof window === "undefined") return;
@@ -4650,17 +4700,19 @@ export function LeadDrawer({
                     <div className="space-y-3">
                       <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
                         <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
-                        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Contado</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Crédito 15 días</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Anticipo + saldo</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Entrega 7 días</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">Garantía 1 año</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">IVA incluido</span>
-                          <span className="rounded-full bg-background px-2.5 py-1 text-foreground">{quoteSummaryCurrency}</span>
-                        </div>
-                        <div className="mt-3 rounded-md bg-background px-3 py-2 text-sm text-foreground">
-                          {quoteEconomicDetails.trim() || "Sin condiciones comerciales adicionales."}
+                        <div className="mt-3 space-y-3 rounded-md bg-background px-3 py-3 text-sm text-foreground">
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              {quoteTemplateLoading ? "Cargando..." : quoteTemplateConfig.notesTitle}
+                            </p>
+                            <p className="text-sm text-foreground">{quoteTemplateConfig.notesBody}</p>
+                          </div>
+                          <div className="space-y-1 border-t border-border/30 pt-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              {quoteTemplateConfig.termsTitle}
+                            </p>
+                            <p className="text-sm text-foreground">{quoteTemplateConfig.termsBody}</p>
+                          </div>
                         </div>
                       </div>
 
