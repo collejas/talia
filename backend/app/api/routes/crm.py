@@ -14659,6 +14659,15 @@ class CRMHistoryNoteCreate(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+def _opportunity_state_for_stage_category(category: Any) -> str:
+    normalized = str(category or "").strip().lower()
+    if normalized == "ganada":
+        return "ganada"
+    if normalized == "perdida":
+        return "perdida"
+    return "abierta"
+
+
 class CRMActivity(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -16978,6 +16987,104 @@ async def pipeline_append_history_note(
         )
     row = enriched or entry
     return _history_item_from_row(row)
+
+
+@router.post(
+    "/pipeline/opportunities/{oportunidad_id}/revert-stage",
+    response_model=CRMPipelineCardResponse,
+)
+async def pipeline_revert_opportunity_stage(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    oportunidad_id: UUID,
+) -> CRMPipelineCardResponse:
+    current = await repo.get_pipeline_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if current is None:
+        raise HTTPException(status_code=404, detail="opportunity_not_found")
+
+    current_stage_id = _safe_uuid(current.get("etapa_id"))
+    if current_stage_id is None:
+        raise HTTPException(status_code=400, detail="opportunity_stage_missing")
+    await _require_edit_scope(
+        repo=repo,
+        owner_user_id=_safe_uuid(current.get("propietario_usuario_id")),
+        assigned_user_id=_safe_uuid(current.get("asignado_a_usuario_id")),
+    )
+
+    history_rows = await repo.list_opportunity_stage_history(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        limit=20,
+        offset=0,
+    )
+    previous_move: dict[str, Any] | None = None
+    for row in history_rows:
+        origen_id = _safe_uuid(row.get("etapa_origen_id"))
+        destino_id = _safe_uuid(row.get("etapa_destino_id"))
+        if origen_id and destino_id and origen_id != destino_id:
+            previous_move = row
+            break
+
+    if previous_move is None:
+        raise HTTPException(status_code=409, detail="opportunity_stage_history_empty")
+
+    previous_stage_id = _safe_uuid(previous_move.get("etapa_origen_id"))
+    moved_stage_id = _safe_uuid(previous_move.get("etapa_destino_id"))
+    if previous_stage_id is None or moved_stage_id is None:
+        raise HTTPException(status_code=409, detail="opportunity_stage_history_invalid")
+    if current_stage_id != moved_stage_id:
+        raise HTTPException(status_code=409, detail="opportunity_stage_conflict")
+
+    update_body: dict[str, Any] = {
+        "etapa_id": str(previous_stage_id),
+        "estado": "abierta",
+    }
+    update_body["motivo_perdida"] = ""
+
+    try:
+        await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            payload=update_body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    history_payload: dict[str, Any] = {
+        "oportunidad_id": str(oportunidad_id),
+        "etapa_origen_id": str(moved_stage_id),
+        "etapa_destino_id": str(previous_stage_id),
+        "fuente": "humano",
+        "motivo": "Reversión manual",
+        "metadata": {
+            "action": "revert_stage",
+            "reverted_history_id": str(previous_move.get("id")) if previous_move.get("id") else None,
+            "reverted_from_stage_id": str(moved_stage_id),
+            "reverted_to_stage_id": str(previous_stage_id),
+        },
+    }
+    if usuario_id:
+        history_payload["cambiado_por_usuario_id"] = str(usuario_id)
+
+    try:
+        await repo.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload=history_payload,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return await _build_pipeline_card_response(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
 
 
 @router.get("/catalog/items", response_model=list[CRMCatalogItem])

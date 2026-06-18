@@ -147,6 +147,7 @@ type LeadDrawerProps = {
     stage: EmbudoStage,
     context: LeadAdvanceStagePayload,
   ) => Promise<{ ok: boolean; error?: string }>;
+  onRevertStage?: () => Promise<LeadActionResult>;
   onScheduleDemo?: (context: {
     card: EmbudoCard;
     originStage: EmbudoStage | null;
@@ -704,6 +705,7 @@ export function LeadDrawer({
   onCreate,
   onDelete,
   onAdvanceStage,
+  onRevertStage,
   onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
@@ -913,6 +915,7 @@ export function LeadDrawer({
   const [reassignError, setReassignError] = useState<string | null>(null);
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [revertPending, setRevertPending] = useState(false);
   const [selectedContact, setSelectedContact] = useState<ContactSearchResult | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
@@ -922,9 +925,20 @@ export function LeadDrawer({
   const contactSearchAbortRef = useRef<AbortController | null>(null);
   const deferredContactSearchQuery = useDeferredValue(contactSearchQuery);
   const [quotePending, startQuoteAction] = useTransition();
-  const isBusy = pending || deletePending;
+  const isBusy = pending || deletePending || revertPending;
   const wasOpenRef = useRef(false);
   const lastDrawerRecordKeyRef = useRef<string | null>(null);
+  const latestStageMove = useMemo(
+    () =>
+      historyState.data.find(
+        (entry) =>
+          (entry.tipo ?? "movimiento") !== "nota" &&
+          !!entry.etapa_origen_id &&
+          !!entry.etapa_destino_id &&
+          entry.etapa_origen_id !== entry.etapa_destino_id,
+      ) ?? null,
+    [historyState.data],
+  );
 
   const runContactSearch = useCallback(async (term: string, requestId: number) => {
     const trimmed = term.trim();
@@ -1924,6 +1938,20 @@ export function LeadDrawer({
       setReassignPending(false);
     }
   }, [card, selectedVendorId]);
+
+  const handleRevertStage = useCallback(async () => {
+    if (!onRevertStage) return;
+    setError(null);
+    setRevertPending(true);
+    try {
+      const result = await onRevertStage();
+      if (!result.ok) {
+        setError(result.error || "No se pudo restaurar la etapa anterior.");
+      }
+    } finally {
+      setRevertPending(false);
+    }
+  }, [onRevertStage]);
 
   const handleAddCatalogItem = useCallback(
     (option: CatalogItemOption) => {
@@ -3658,6 +3686,28 @@ export function LeadDrawer({
           {!isCreateMode && card ? (
           <TabsContent value="historial" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <div className="flex flex-1 min-h-0 flex-col space-y-3 overflow-y-auto px-4 pb-6">
+              {latestStageMove && onRevertStage ? (
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Revertir última etapa</p>
+                    <p className="text-xs text-muted-foreground">
+                      Regresa esta oportunidad de “
+                      {latestStageMove.etapa_destino_nombre ?? latestStageMove.etapa_destino_id ?? "etapa anterior"}
+                      ” a “
+                      {latestStageMove.etapa_origen_nombre ?? latestStageMove.etapa_origen_id ?? "etapa previa"}
+                      ”.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleRevertStage}
+                    disabled={isBusy}
+                  >
+                    {revertPending ? "Restaurando..." : "Volver a etapa anterior"}
+                  </Button>
+                </div>
+              ) : null}
               {historyState.status === "loading" && historyState.data.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
                   Cargando historial...

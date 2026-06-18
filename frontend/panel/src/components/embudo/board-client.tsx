@@ -23,6 +23,7 @@ import {
   createLeadCard,
   deleteLeadCard,
   scheduleLeadDemo,
+  revertLeadCardStage,
   updateLeadCard,
   type LeadActionResult,
   type LeadDeleteResult,
@@ -1218,6 +1219,20 @@ export function EmbudoBoardClient({
     return result;
   }
 
+  async function handleRevertLeadStage(): Promise<LeadActionResult> {
+    if (!selectedCard) {
+      return { ok: false, error: "No se encontró el lead seleccionado." };
+    }
+
+    const result = await revertLeadCardStage({
+      oportunidadId: selectedCard.oportunidadId,
+    });
+    if (result.ok) {
+      applyLeadResult(result);
+    }
+    return result;
+  }
+
   const handleDrawerOpenChange = (open: boolean) => {
     setDrawerOpen(open);
     if (!open) {
@@ -1750,6 +1765,7 @@ export function EmbudoBoardClient({
         onSubmit={handleLeadSubmit}
         onCreate={handleLeadCreate}
         onDelete={handleLeadDelete}
+        onRevertStage={handleRevertLeadStage}
         onAdvanceStage={handleAutoAdvanceStage}
         onScheduleDemo={
           selectedCard

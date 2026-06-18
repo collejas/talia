@@ -46,6 +46,10 @@ export type MoveLeadInput = {
   motivoPerdida?: string | null;
 };
 
+export type RevertLeadStageInput = {
+  oportunidadId: string;
+};
+
 export type DeleteLeadInput = {
   oportunidadId: string;
   personaId?: string | null;
@@ -648,6 +652,45 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo mover el lead.";
     console.error("[embudo:moveLeadCard] unexpected-error", {
+      oportunidadId: input.oportunidadId,
+      error: message,
+    });
+    return { ok: false, error: message };
+  }
+}
+
+export async function revertLeadCardStage(input: RevertLeadStageInput): Promise<LeadActionResult> {
+  try {
+    const response = await callCrmApi<PipelineCardResponse>(
+      `/crm/pipeline/opportunities/${input.oportunidadId}/revert-stage`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+        if (latest.ok) {
+          const mapped = mapPipelineCardResponse(latest.data);
+          return {
+            ok: false,
+            error: response.error || "La oportunidad cambió de etapa en otra sesión. Actualizamos la información.",
+            latestStage: mapped.stage,
+            latestCard: mapped.card,
+          };
+        }
+      }
+      return { ok: false, error: response.error };
+    }
+
+    updateTag("embudo");
+
+    const mapped = mapPipelineCardResponse(response.data);
+    return { ok: true, stage: mapped.stage, card: mapped.card };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo restaurar la etapa previa.";
+    console.error("[embudo:revertLeadCardStage] unexpected-error", {
       oportunidadId: input.oportunidadId,
       error: message,
     });
