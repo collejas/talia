@@ -4329,8 +4329,8 @@ export function LeadDrawer({
                         <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
                           {quotePending ? "Enviando..." : "Enviar cotización"}
                         </Button>
-                        <Button type="button" variant="ghost" disabled>
-                          Más acciones
+                        <Button type="button" variant="ghost" onClick={() => setQuoteDialogOpen(false)}>
+                          Cerrar
                         </Button>
                       </div>
                     </div>
@@ -4582,21 +4582,11 @@ export function LeadDrawer({
                   </div>
 
                   <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="space-y-1 text-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Título interno</p>
-                        <p className="text-foreground">{quoteTitle || "Nueva cotización"}</p>
-                      </div>
-                      <div className="space-y-1 text-sm md:col-span-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Descripción / resumen</p>
-                        <p className="text-foreground">{quoteDescription || "Resumen de la propuesta comercial."}</p>
-                      </div>
-                      <div className="space-y-1 text-sm">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-md bg-background/80 p-3 text-sm">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vigente hasta</p>
                         <p className="text-foreground">{quoteValidoHasta || "Sin vigencia"}</p>
                       </div>
-                    </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <div className="rounded-md bg-background/80 p-3 text-sm">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {quoteChannel === "email" ? "Destinatarios" : "WhatsApp destino"}
