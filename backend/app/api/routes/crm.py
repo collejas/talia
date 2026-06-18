@@ -26721,12 +26721,15 @@ async def convertir_oportunidad_cliente(
             organizacion_id=organizacion_id,
             oportunidad_row=oportunidad_row,
         )
-    await repo.convert_oportunidad_en_cliente(
-        organizacion_id=organizacion_id,
-        usuario_token=user_token,
-        oportunidad_id=oportunidad_id,
-        forzar=payload.forzar,
-    )
+    try:
+        await repo.convert_oportunidad_en_cliente(
+            organizacion_id=organizacion_id,
+            usuario_token=user_token,
+            oportunidad_id=oportunidad_id,
+            forzar=payload.forzar,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     cliente = await repo.get_cliente_por_oportunidad(
         organizacion_id=organizacion_id,
         usuario_token=user_token,

@@ -63,6 +63,24 @@ class DummyCRMRepository(CRMRepository):
         self.calls.append(("get_permission_context", {}))
         return dict(self.permission_context)
 
+    async def ensure_contact_record_for_persona(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        persona_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "ensure_contact_record_for_persona",
+                {"organizacion_id": organizacion_id, "persona_id": persona_id},
+            )
+        )
+        return {
+            "id": str(persona_id),
+            "organizacion_id": str(organizacion_id),
+            "codigo_contacto": "Con-1",
+        }
+
     async def get_organizacion_config(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("get_organizacion_config", kwargs))
         return {

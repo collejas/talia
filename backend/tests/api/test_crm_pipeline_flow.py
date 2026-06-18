@@ -22,6 +22,7 @@ class InMemoryPipelineRepository(CRMRepository):
         self.notes: dict[str, dict[str, Any]] = {}
         self.quotes: dict[str, dict[str, Any]] = {}
         self.clients: dict[str, dict[str, Any]] = {}
+        self.contacts: dict[str, dict[str, Any]] = {}
         self.assigned_reps: list[uuid.UUID] = []
         self._permission_context_cache: dict[str, Any] | None = None
         self._current_user_perm_cache: dict[str, bool] = {}
@@ -89,6 +90,7 @@ class InMemoryPipelineRepository(CRMRepository):
         contacto_id = payload.get("contacto_principal_id") or uuid.uuid4()
         contact = {
             "id": str(contacto_id),
+            "codigo_contacto": f"Con-{len(self.contacts) + 1}",
             "nombre_completo": "Contacto Demo",
             "correo": "demo@example.com",
             "telefono_e164": "+521111111111",
@@ -99,6 +101,7 @@ class InMemoryPipelineRepository(CRMRepository):
         return {
             "id": str(oportunidad_id),
             "organizacion_id": str(organizacion_id),
+            "contacto_principal_id": str(contacto_id),
             "etapa_id": str(stage["id"]),
             "etapa": stage,
             "titulo": payload.get("titulo") or "Oportunidad demo",
@@ -358,10 +361,18 @@ class InMemoryPipelineRepository(CRMRepository):
         usuario_token: str | None = None,
         forzar: bool,
     ) -> dict[str, Any]:
+        opportunity = self.opportunities[str(oportunidad_id)]
+        persona_id = str(opportunity.get("contacto_principal_id") or "")
+        if persona_id:
+            await self.ensure_contact_record_for_persona(
+                organizacion_id=organizacion_id,
+                persona_id=uuid.UUID(persona_id),
+            )
         record = {
             "id": str(uuid.uuid4()),
             "oportunidad_id": str(oportunidad_id),
             "legacy_lead_id": str(oportunidad_id),
+            "contacto_id": persona_id or str(uuid.uuid4()),
             "estado_onboarding": "pendiente",
             "razon_social": "Cliente Demo",
         }
@@ -376,6 +387,36 @@ class InMemoryPipelineRepository(CRMRepository):
         usuario_token: str | None = None,
     ) -> dict[str, Any] | None:
         return self.clients.get(str(oportunidad_id))
+
+    async def ensure_contact_record_for_persona(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        persona_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        contact = self.contacts.get(str(persona_id))
+        if contact is not None:
+            return contact
+        for opportunity in self.opportunities.values():
+            if str(opportunity.get("contacto_principal_id")) != str(persona_id):
+                continue
+            source = dict(opportunity.get("contacto") or {})
+            contact = {
+                "id": str(persona_id),
+                "organizacion_id": str(organizacion_id),
+                "codigo_contacto": source.get("codigo_contacto") or f"Con-{len(self.contacts) + 1}",
+                "nombre_completo": source.get("nombre_completo") or "Contacto Demo",
+                "correo": source.get("correo"),
+                "telefono_e164": source.get("telefono_e164"),
+                "estado": "activo",
+                "contacto_datos": source.get("contacto_datos") or {},
+                "persona_datos": source.get("persona_datos") or {},
+                "captura_estado": "completo",
+                "cuenta_id": str(opportunity.get("cuenta_id")) if opportunity.get("cuenta_id") else None,
+            }
+            self.contacts[str(persona_id)] = contact
+            return contact
+        raise crm_routes.CRMRepositoryError("persona_not_found_for_contact_sync")
 
     async def get_permission_context(self) -> dict[str, Any]:
         return {
@@ -526,6 +567,10 @@ async def test_crm_pipeline_end_to_end(
     cliente_payload = convert_resp.json()["cliente"]
     assert cliente_payload["oportunidad_id"] == str(oportunidad_id)
     assert cliente_payload["legacy_lead_id"] == str(oportunidad_id)
+    assert (
+        str(pipeline_repo.opportunities[str(oportunidad_id)]["contacto_principal_id"])
+        in pipeline_repo.contacts
+    )
 
     cliente_resp = await pipeline_client.get(
         f"/crm/oportunidades/{oportunidad_id}/cliente",

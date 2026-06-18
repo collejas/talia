@@ -9235,6 +9235,113 @@ class CRMRepository:
             return None
         return await self.get_persona_by_id(persona_id=resolved_persona_id)
 
+    async def ensure_contact_record_for_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{persona_id}",
+            "limit": "1",
+            "select": "id,organizacion_id,codigo_contacto,nombre_completo,correo,telefono_e164,origen,propietario_usuario_id,estado,contacto_datos,company_name,notes,necesidad_proposito,captura_estado,cuenta_id,persona_datos,nombre_nombres,apellido_paterno,apellido_materno,persona_fisica_moral,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,email_facturacion,tipo_industria,tamano,puesto,area,rol_decision,tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,pais,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion",
+        }
+        existing_resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        existing_data = existing_resp.json() or []
+        existing_row = self._first_row(existing_data)
+        if isinstance(existing_row, dict):
+            return existing_row
+
+        persona_row = await self.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+        )
+        if not isinstance(persona_row, dict):
+            raise CRMRepositoryError("persona_not_found_for_contact_sync")
+
+        contact_projection = await self._persona_to_contact_row(
+            persona=persona_row,
+            organizacion_id=organizacion_id,
+        )
+        codigo_contacto = str(contact_projection.get("codigo_contacto") or "").strip()
+        if not codigo_contacto:
+            codigo_contacto = await self.preview_contact_code(organizacion_id=organizacion_id)
+        created_at = contact_projection.get("creado_en") or datetime.now(timezone.utc).isoformat()
+        contact_body: dict[str, Any] = {
+            "id": str(persona_id),
+            "organizacion_id": str(organizacion_id),
+            "codigo_contacto": codigo_contacto,
+            "nombre_completo": contact_projection.get("nombre_completo") or persona_row.get("nombre_completo"),
+            "correo": contact_projection.get("correo"),
+            "telefono_e164": contact_projection.get("telefono_e164"),
+            "origen": contact_projection.get("origen") or persona_row.get("origen") or "crm",
+            "propietario_usuario_id": str(contact_projection.get("propietario_usuario_id"))
+            if contact_projection.get("propietario_usuario_id")
+            else None,
+            "estado": "activo",
+            "contacto_datos": contact_projection.get("contacto_datos") or {},
+            "company_name": contact_projection.get("company_name"),
+            "notes": contact_projection.get("notes"),
+            "necesidad_proposito": contact_projection.get("necesidad_proposito"),
+            "captura_estado": "completo",
+            "cuenta_id": str(contact_projection.get("cuenta_id")) if contact_projection.get("cuenta_id") else None,
+            "nombre_nombres": contact_projection.get("nombre_nombres"),
+            "apellido_paterno": contact_projection.get("apellido_paterno"),
+            "apellido_materno": contact_projection.get("apellido_materno"),
+            "persona_fisica_moral": contact_projection.get("persona_fisica_moral"),
+            "razon_social": contact_projection.get("razon_social"),
+            "rfc": contact_projection.get("rfc"),
+            "uso_cfdi": contact_projection.get("uso_cfdi"),
+            "metodo_pago": contact_projection.get("metodo_pago"),
+            "forma_pago": contact_projection.get("forma_pago"),
+            "email_facturacion": contact_projection.get("email_facturacion"),
+            "tipo_industria": contact_projection.get("tipo_industria"),
+            "tamano": contact_projection.get("tamano"),
+            "puesto": contact_projection.get("puesto"),
+            "area": contact_projection.get("area"),
+            "rol_decision": contact_projection.get("rol_decision"),
+            "tipo_vialidad": contact_projection.get("tipo_vialidad"),
+            "nombre_vialidad": contact_projection.get("nombre_vialidad"),
+            "numero_exterior": contact_projection.get("numero_exterior"),
+            "letra_exterior": contact_projection.get("letra_exterior"),
+            "edificio": contact_projection.get("edificio"),
+            "edificio_piso": contact_projection.get("edificio_piso"),
+            "numero_interior": contact_projection.get("numero_interior"),
+            "letra_interior": contact_projection.get("letra_interior"),
+            "tipo_asentamiento": contact_projection.get("tipo_asentamiento"),
+            "nombre_asentamiento": contact_projection.get("nombre_asentamiento"),
+            "tipo_centro_comercial": contact_projection.get("tipo_centro_comercial"),
+            "corredor_industrial": contact_projection.get("corredor_industrial"),
+            "numero_local": contact_projection.get("numero_local"),
+            "codigo_postal": contact_projection.get("codigo_postal"),
+            "clave_entidad": contact_projection.get("clave_entidad"),
+            "entidad": contact_projection.get("entidad"),
+            "clave_municipio": contact_projection.get("clave_municipio"),
+            "municipio": contact_projection.get("municipio"),
+            "clave_localidad": contact_projection.get("clave_localidad"),
+            "localidad": contact_projection.get("localidad"),
+            "pais": contact_projection.get("pais"),
+            "website": contact_projection.get("website"),
+            "tipo_establecimiento": contact_projection.get("tipo_establecimiento"),
+            "latitud": contact_projection.get("latitud"),
+            "longitud": contact_projection.get("longitud"),
+            "fecha_incorporacion": created_at,
+            "persona_datos": contact_projection.get("persona_datos") or {},
+        }
+        contact_body = {key: value for key, value in contact_body.items() if value is not None}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/contactos",
+            json=contact_body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("contacto_legacy_not_created")
+        return data[0]
+
     async def get_persona_by_codigo_contacto(
         self,
         *,
@@ -14435,6 +14542,42 @@ class CRMRepository:
             return row
         return None
 
+    async def get_cliente_por_contacto(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "contacto_id": f"eq.{contacto_id}",
+            "select": self._CLIENTE_SELECT,
+            "limit": "1",
+        }
+        if usuario_token:
+            try:
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/clientes",
+                    token=usuario_token,
+                    params=params,
+                )
+            except CRMRepositoryError as exc:
+                if not _is_jwt_expired_error(exc):
+                    raise
+            else:
+                data = resp.json() or []
+                row = self._first_row(data)
+                if isinstance(row, dict):
+                    return row
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
+        data = resp.json() or []
+        row = self._first_row(data)
+        if isinstance(row, dict):
+            return row
+        return None
+
     async def get_cliente_por_id(
         self,
         *,
@@ -14566,29 +14709,76 @@ class CRMRepository:
         usuario_token: str | None = None,
         forzar: bool = False,
     ) -> Any:
-        body = {"p_tarjeta_id": str(oportunidad_id), "p_forzar": forzar}
-        resp: httpx.Response | None = None
-        if usuario_token:
-            try:
-                resp = await self._request_with_user(
-                    "POST",
-                    "/rest/v1/rpc/convertir_lead_en_cliente",
-                    token=usuario_token,
-                    json=body,
-                )
-            except CRMRepositoryError as exc:
-                if not _is_jwt_expired_error(exc):
-                    raise
-        if resp is None:
+        opportunity = await self.get_opportunity_with_contact(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+        if not isinstance(opportunity, dict):
+            raise CRMRepositoryError("oportunidad_no_encontrada_para_convertir")
+
+        contact_id = _safe_uuid(opportunity.get("contacto_principal_id"))
+        if contact_id is None:
+            raise CRMRepositoryError("oportunidad_sin_contacto_principal")
+
+        await self.ensure_contact_record_for_persona(
+            organizacion_id=organizacion_id,
+            persona_id=contact_id,
+        )
+
+        existing = await self.get_cliente_por_oportunidad(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            usuario_token=usuario_token,
+        )
+        if isinstance(existing, dict):
+            return existing
+
+        account_id = _safe_uuid(opportunity.get("cuenta_id"))
+        if account_id is None:
+            raise CRMRepositoryError("cliente_conversion_cuenta_missing")
+
+        quotes_total = opportunity.get("monto_estimado")
+        metadata = _ensure_metadata(opportunity.get("metadata"))
+        body: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "contacto_id": str(contact_id),
+            "persona_id": str(contact_id),
+            "cuenta_id": str(account_id),
+            "oportunidad_id": str(oportunidad_id),
+            "legacy_lead_id": str(oportunidad_id),
+            "estado_onboarding": "pendiente",
+            "datos_facturacion": {},
+            "metadatos": {
+                "source": "crm",
+                "conversion_source": "oportunidad",
+                "conversion_forzada": bool(forzar),
+                "opportunity_stage": (opportunity.get("etapa") or {}).get("codigo"),
+            },
+            "moneda": opportunity.get("moneda") or "MXN",
+            "monto_estimado": quotes_total if isinstance(quotes_total, (int, float, Decimal)) else None,
+            "ganado_en": datetime.now(timezone.utc).isoformat(),
+            "tablero_id": _safe_uuid((metadata.get("stage_prep") or {}).get("tablero_id")) if isinstance(metadata, dict) else None,
+            "etapa_id": _safe_uuid(opportunity.get("etapa_id")),
+        }
+        body = {key: value for key, value in body.items() if value is not None}
+        params = {"on_conflict": "contacto_id"}
+        try:
             resp = await self._request(
                 "POST",
-                "/rest/v1/rpc/convertir_lead_en_cliente",
+                "/rest/v1/clientes",
+                params=params,
                 json=body,
+                prefer="resolution=merge-duplicates,return=representation",
+                organizacion_id=organizacion_id,
             )
-        try:
-            return resp.json()
-        except ValueError as exc:
-            raise CRMRepositoryError("convertir_lead_response_invalid") from exc
+        except CRMRepositoryError as exc:
+            if "clientes_contacto_org_fkey" not in str(exc).lower():
+                raise
+            raise CRMRepositoryError("cliente_conversion_contact_missing") from exc
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("convertir_lead_response_invalid")
+        return data[0]
 
     async def create_cliente_document(
         self,
