@@ -26626,13 +26626,7 @@ async def preview_lead_quote_pdf(
         base_payload.impuestos = totals["impuestos"]
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
-    project_needs = (
-        base_payload.descripcion
-        or _clean_text(oportunidad_metadata.get("proyecto_necesidades"))
-        or _clean_text(opportunity_row.get("descripcion"))
-        or _clean_text(contact.get("necesidad_proposito"))
-        or None
-    )
+    project_description = _clean_text(base_payload.descripcion) or None
     vendor_context = await _resolve_quote_vendor_context(
         repo=repo,
         organizacion_id=organizacion_id,
@@ -26657,7 +26651,7 @@ async def preview_lead_quote_pdf(
         total=base_payload.total,
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
-        descripcion=project_needs,
+        descripcion=project_description,
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
         vendor_company_name=vendor_context["vendor_company_name"],
@@ -26748,13 +26742,7 @@ async def send_lead_quote(
         base_payload.impuestos = totals["impuestos"]
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
-    project_needs = (
-        base_payload.descripcion
-        or _clean_text(oportunidad_metadata.get("proyecto_necesidades"))
-        or _clean_text(opportunity_row.get("descripcion"))
-        or _clean_text(contact.get("necesidad_proposito"))
-        or None
-    )
+    project_description = _clean_text(base_payload.descripcion) or None
     vendor_context = await _resolve_quote_vendor_context(
         repo=repo,
         organizacion_id=organizacion_id,
@@ -26816,7 +26804,7 @@ async def send_lead_quote(
         total=base_payload.total,
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
-        descripcion=project_needs,
+        descripcion=project_description,
         notes=base_payload.message or oportunidad_metadata.get("proyecto_necesidades")
         or contact.get("necesidad_proposito"),
         items=normalized_items,

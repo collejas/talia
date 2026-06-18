@@ -2100,10 +2100,9 @@ export function LeadDrawer({
       const latestQuote = quotesState.data[0];
       const fallbackTitle =
         card.proyectoNombre?.trim() || (card.titulo ? `Propuesta ${card.titulo}` : "Cotización Tal-IA");
-      const fallbackDescription =
-        card.proyectoNecesidades?.trim() || card.necesidadProposito?.trim() || "";
       const defaultTitle = latestQuote?.title?.trim() || fallbackTitle;
-      const defaultDescription = latestQuote?.description?.trim() || fallbackDescription;
+      const defaultDescription =
+        card.proyectoNecesidades?.trim() || latestQuote?.description?.trim() || "";
       const defaultSubject =
         `Cotización Tal-IA · ${card.empresa ?? card.titulo ?? ""}`.trim() || "Cotización Tal-IA";
       const defaultMessage = "";
