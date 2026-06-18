@@ -55,6 +55,7 @@ import {
   IconLoader2,
   IconMail,
   IconMessageCircle,
+  IconPaperclip,
   IconPlus,
   IconRobot,
   IconSearch,
@@ -67,6 +68,14 @@ import {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
 const QUOTE_TAX_RATE = 0.16;
+
+type QuoteAttachmentDraft = {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  type: string;
+};
 
 const formSchema = z.object({
   nombre: z.string().trim().max(120).optional().or(z.literal("")),
@@ -849,6 +858,7 @@ export function LeadDrawer({
   const [quoteMessage, setQuoteMessage] = useState("");
   const [quoteEmailTo, setQuoteEmailTo] = useState("");
   const [quoteWhatsappTo, setQuoteWhatsappTo] = useState("");
+  const [quoteAttachments, setQuoteAttachments] = useState<QuoteAttachmentDraft[]>([]);
   const [quoteSubtotal, setQuoteSubtotal] = useState("");
   const [quoteImpuestos, setQuoteImpuestos] = useState("");
   const [quoteTotal, setQuoteTotal] = useState("");
@@ -867,6 +877,7 @@ export function LeadDrawer({
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
+  const quoteAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -2013,6 +2024,30 @@ export function LeadDrawer({
     }
   };
 
+  const handleQuoteAttachmentTrigger = () => {
+    quoteAttachmentInputRef.current?.click();
+  };
+
+  const handleQuoteAttachmentsChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+    setQuoteAttachments((prev) => [
+      ...prev,
+      ...files.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      })),
+    ]);
+    event.target.value = "";
+  };
+
+  const handleRemoveQuoteAttachment = (attachmentId: string) => {
+    setQuoteAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+  };
+
   const updateWonStagePrep = useCallback(
     (totalValue: number | null) => {
       const today = new Date().toISOString().split("T")[0] ?? "";
@@ -2098,6 +2133,7 @@ export function LeadDrawer({
       setQuoteMessage(defaultMessage);
       setQuoteEmailTo(card.correo ?? "");
       setQuoteWhatsappTo(card.telefono ?? "");
+      setQuoteAttachments([]);
       setQuoteSubtotal(formatPresetNumberString(defaultSubtotal));
       setQuoteImpuestos(formatPresetNumberString(defaultTaxes));
       setQuoteTotal(formatPresetNumberString(defaultTotal));
@@ -2171,6 +2207,7 @@ export function LeadDrawer({
       setQuotePreviewOpen(false);
       setQuotePreviewError(null);
       setQuoteError(null);
+      setQuoteAttachments([]);
     }
   };
 
@@ -2311,6 +2348,10 @@ export function LeadDrawer({
         return;
       }
     }
+    if (quoteAttachments.length > 0 && quoteChannel !== "email") {
+      setQuoteError("Los archivos adjuntos solo se envían por correo.");
+      return;
+    }
     setQuoteError(null);
     startQuoteAction(async () => {
       try {
@@ -2331,15 +2372,19 @@ export function LeadDrawer({
           return;
         }
 
+        const formData = new FormData();
+        formData.set("payload", JSON.stringify(payload));
+        for (const attachment of quoteAttachments) {
+          formData.append("attachments", attachment.file, attachment.name);
+        }
         const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/send`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: formData,
         });
-        const body = await response.json().catch(() => ({}));
+        const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
           const message =
-            typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+            typeof responseBody?.error === "string" && responseBody.error ? responseBody.error : `Error ${response.status}`;
           setQuoteError(message);
           return;
         }
@@ -3674,9 +3719,9 @@ export function LeadDrawer({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="grid min-h-0 flex-1 gap-0 overflow-hidden grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_300px]">
               <ScrollArea className="h-full min-h-0">
-                <div className="space-y-3 px-3 py-3 pb-10 sm:px-4">
+                <div className="space-y-3 px-3 py-3 pb-28 sm:px-4">
                   <div className="space-y-2 pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -4044,20 +4089,65 @@ export function LeadDrawer({
                         onChange={(event) => setQuoteMessage(event.target.value)}
                         disabled={quotePending}
                         rows={3}
-                        placeholder="Captura aquí las notas y anexos que aparecerán en el PDF."
+                        placeholder="Captura aquí las notas de apoyo."
                         className={quoteCompactTextareaClass}
                       />
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" disabled>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleQuoteAttachmentTrigger}
+                          disabled={quotePending}
+                        >
+                          <IconPaperclip className="size-4" />
                           Agregar archivo
                         </Button>
-                        <Button type="button" size="sm" variant="outline" disabled>
-                          Ver archivo
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" disabled>
-                          Eliminar archivo
-                        </Button>
+                        <input
+                          ref={quoteAttachmentInputRef}
+                          type="file"
+                          className="hidden"
+                          multiple
+                          onChange={handleQuoteAttachmentsChange}
+                        />
+                        {quoteAttachments.length ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            {quoteAttachments.length} archivo{quoteAttachments.length === 1 ? "" : "s"} listo
+                            {quoteAttachments.length === 1 ? "" : "s"} para enviar.
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">Sin archivos adjuntos.</span>
+                        )}
                       </div>
+                      {quoteAttachments.length ? (
+                        <div className="space-y-1.5 rounded-md border border-dashed border-border/40 bg-background/70 p-2">
+                          {quoteAttachments.map((attachment) => (
+                            <div
+                              key={attachment.id}
+                              className="flex items-center justify-between gap-2 rounded-md bg-muted/30 px-2 py-1.5 text-xs"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-foreground">{attachment.name}</p>
+                                <p className="text-muted-foreground">
+                                  {(attachment.size / 1024).toFixed(1)} KB
+                                  {attachment.type ? ` · ${attachment.type}` : ""}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0"
+                                onClick={() => handleRemoveQuoteAttachment(attachment.id)}
+                                disabled={quotePending}
+                              >
+                                <IconTrash className="size-4" />
+                                <span className="sr-only">Eliminar archivo</span>
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -4398,10 +4488,10 @@ export function LeadDrawer({
               {quotePreviewError}
             </div>
           ) : null}
-          <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="min-h-0 rounded-lg bg-muted/20 p-3">
+          <div className="grid min-h-0 flex-1 gap-3 grid-rows-[minmax(0,1fr)] p-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="h-full min-h-0 rounded-lg bg-muted/20 p-3">
               <ScrollArea className="h-full">
-                <div className="mx-auto max-w-4xl space-y-3 rounded-xl border border-border/40 bg-white p-5 shadow-sm">
+                <div className="mx-auto max-w-4xl space-y-3 rounded-xl border border-border/40 bg-white px-5 pb-28 pt-5 shadow-sm">
                   <div className="flex items-start justify-between gap-4 border-b border-border/30 pb-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Cotización</p>
@@ -4581,7 +4671,22 @@ export function LeadDrawer({
                             {quoteMessage.trim()}
                           </div>
                           <div className="rounded-md border border-dashed border-border/40 bg-background px-3 py-2 text-sm text-muted-foreground">
-                            Anexos: no hay archivos cargados todavía.
+                            {quoteAttachments.length ? (
+                              <div className="space-y-1">
+                                <p className="font-medium text-foreground">
+                                  Anexos: {quoteAttachments.length} archivo{quoteAttachments.length === 1 ? "" : "s"}
+                                </p>
+                                <ul className="space-y-0.5">
+                                  {quoteAttachments.map((attachment) => (
+                                    <li key={attachment.id} className="truncate">
+                                      {attachment.name}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : (
+                              "Anexos: no hay archivos cargados todavía."
+                            )}
                           </div>
                         </div>
                       </div>
@@ -4617,7 +4722,7 @@ export function LeadDrawer({
               </ScrollArea>
             </div>
 
-            <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+            <div className="h-full min-h-0 space-y-3 overflow-y-auto pb-28 pr-1">
               <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
                 <h4 className="text-sm font-semibold text-foreground">Vendedor</h4>
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">

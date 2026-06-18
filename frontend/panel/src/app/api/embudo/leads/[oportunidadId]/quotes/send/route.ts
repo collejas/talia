@@ -13,16 +13,27 @@ export async function POST(
     return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
 
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+  const contentType = request.headers.get("content-type") ?? "";
+  let body: BodyInit;
+  if (contentType.toLowerCase().includes("multipart/form-data")) {
+    const formData = await request.formData();
+    if (!formData.has("payload")) {
+      return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+    }
+    body = formData;
+  } else {
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+    }
+    body = payload as BodyInit;
   }
 
   const response = await callCrmApi(`/crm/oportunidades/${oportunidadId}/quotes/send`, {
     method: "POST",
-    body: payload,
+    body,
     withUserToken: true,
   });
 

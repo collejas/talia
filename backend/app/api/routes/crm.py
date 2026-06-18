@@ -26683,7 +26683,7 @@ async def send_lead_quote(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("propuesta.view")),
     oportunidad_id: UUID,
-    payload: LeadQuoteSendPayload,
+    request: Request,
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> LeadQuoteResponse:
     oportunidad_row = await repo.get_opportunity_with_contact(
@@ -26708,6 +26708,32 @@ async def send_lead_quote(
         or cuenta.get("nombre")
         or "Oportunidad sin nombre"
     )
+    content_type = (request.headers.get("content-type") or "").lower()
+    uploaded_attachments: list[UploadFile] = []
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        raw_payload = form.get("payload")
+        if not isinstance(raw_payload, str) or not raw_payload.strip():
+            raise HTTPException(status_code=400, detail="quote_payload_required")
+        try:
+            payload = LeadQuoteSendPayload.model_validate_json(raw_payload)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail="invalid_quote_payload") from exc
+        uploaded_attachments = [
+            file
+            for file in form.getlist("attachments")
+            if isinstance(file, UploadFile)
+        ]
+    else:
+        try:
+            raw_json = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="quote_payload_required") from exc
+        try:
+            payload = LeadQuoteSendPayload.model_validate(raw_json)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail="invalid_quote_payload") from exc
+
     currency = payload.moneda or oportunidad_row.get("moneda") or "MXN"
     base_payload_data = payload.model_dump(
         include=set(LeadQuoteCreatePayload.model_fields.keys()),
@@ -26734,6 +26760,43 @@ async def send_lead_quote(
         opportunity=oportunidad_row,
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+
+    attachment_payloads: list[dict[str, object]] = []
+    attachment_total_bytes = 0
+    max_attachment_count = 10
+    max_attachment_size = 10 * 1024 * 1024
+    max_attachment_total_size = 20 * 1024 * 1024
+    if payload.channel != "email" and uploaded_attachments:
+        raise HTTPException(status_code=400, detail="quote_attachments_email_only")
+    for uploaded_file in uploaded_attachments:
+        try:
+            if not uploaded_file.filename:
+                continue
+            file_bytes = await uploaded_file.read()
+            file_size = len(file_bytes)
+            if file_size > max_attachment_size:
+                raise HTTPException(status_code=413, detail="quote_attachment_too_large")
+            attachment_total_bytes += file_size
+            if attachment_total_bytes > max_attachment_total_size:
+                raise HTTPException(status_code=413, detail="quote_attachments_too_large")
+            if len(attachment_payloads) >= max_attachment_count:
+                raise HTTPException(status_code=400, detail="quote_attachments_limit_exceeded")
+            cleaned_name = Path(uploaded_file.filename).name or "adjunto"
+            content_type = uploaded_file.content_type or guess_type(cleaned_name)[0] or "application/octet-stream"
+            if "/" in content_type:
+                maintype, subtype = content_type.split("/", 1)
+            else:
+                maintype, subtype = "application", "octet-stream"
+            attachment_payloads.append(
+                {
+                    "content": file_bytes,
+                    "maintype": maintype,
+                    "subtype": subtype,
+                    "filename": cleaned_name,
+                }
+            )
+        finally:
+            await uploaded_file.close()
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -26823,7 +26886,8 @@ async def send_lead_quote(
                         "maintype": "application",
                         "subtype": "pdf",
                         "filename": pdf_doc.filename,
-                    }
+                    },
+                    *attachment_payloads,
                 ],
                 mail_settings=mail_settings,
                 brevo_settings=brevo_settings,
