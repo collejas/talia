@@ -2068,10 +2068,7 @@ export function LeadDrawer({
       const defaultDescription = latestQuote?.description?.trim() || fallbackDescription;
       const defaultSubject =
         `Cotización Tal-IA · ${card.empresa ?? card.titulo ?? ""}`.trim() || "Cotización Tal-IA";
-      const defaultMessage =
-        channel === "email"
-          ? "Adjunto encontrarás la cotización actualizada. Quedo al pendiente de tus comentarios."
-          : "Te comparto la cotización en el PDF adjunto. Avísame si necesitas un ajuste.";
+      const defaultMessage = "";
       const defaultMoneda = (
         latestQuote?.currency ||
         card.moneda ||
@@ -3677,9 +3674,9 @@ export function LeadDrawer({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px]">
               <ScrollArea className="h-full min-h-0">
-                <div className="space-y-3 px-3 py-3 sm:px-4">
+                <div className="space-y-3 px-3 py-3 pb-10 sm:px-4">
                   <div className="space-y-2 pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -4047,7 +4044,7 @@ export function LeadDrawer({
                         onChange={(event) => setQuoteMessage(event.target.value)}
                         disabled={quotePending}
                         rows={3}
-                        placeholder="Notas para el cliente visibles en PDF o correo."
+                        placeholder="Captura aquí las notas y anexos que aparecerán en el PDF."
                         className={quoteCompactTextareaClass}
                       />
                       <div className="flex flex-wrap gap-2">
@@ -4580,8 +4577,8 @@ export function LeadDrawer({
                       <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
                         <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
                         <div className="mt-2 space-y-3">
-                          <div className="rounded-md bg-background px-3 py-2 text-sm text-foreground">
-                            {quoteMessage.trim() || "Sin notas para el cliente."}
+                          <div className="rounded-md bg-background px-3 py-2 text-sm text-foreground min-h-[48px]">
+                            {quoteMessage.trim()}
                           </div>
                           <div className="rounded-md border border-dashed border-border/40 bg-background px-3 py-2 text-sm text-muted-foreground">
                             Anexos: no hay archivos cargados todavía.
@@ -4620,7 +4617,7 @@ export function LeadDrawer({
               </ScrollArea>
             </div>
 
-            <div className="space-y-3">
+            <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
               <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
                 <h4 className="text-sm font-semibold text-foreground">Vendedor</h4>
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
