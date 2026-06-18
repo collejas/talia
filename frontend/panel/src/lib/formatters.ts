@@ -1,21 +1,37 @@
-const DEFAULT_TIME_ZONE = process.env.NEXT_PUBLIC_TIME_ZONE || "America/Mexico_City"
+import { DEFAULT_TIME_ZONE, getActiveTimeZone, normalizeTimeZone } from "@/lib/timezone"
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: DEFAULT_TIME_ZONE,
-})
+const formatterCache = new Map<string, Intl.DateTimeFormat>()
 
-export function formatDateTime(value: string | null | undefined): string {
+function resolveDisplayTimeZone(explicitTimeZone?: string | null): string {
+  return (
+    normalizeTimeZone(explicitTimeZone) ||
+    normalizeTimeZone(getActiveTimeZone()) ||
+    DEFAULT_TIME_ZONE
+  )
+}
+
+function getFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = formatterCache.get(timeZone)
+  if (cached) return cached
+  const formatter = new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  })
+  formatterCache.set(timeZone, formatter)
+  return formatter
+}
+
+export function formatDateTime(value: string | null | undefined, timeZone?: string | null): string {
   if (!value) return "—"
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
-  return DATE_TIME_FORMATTER.format(parsed)
+  return getFormatter(resolveDisplayTimeZone(timeZone)).format(parsed)
 }
 
-export function formatDate(value: string | null | undefined): string {
+export function formatDate(value: string | null | undefined, timeZone?: string | null): string {
   if (!value) return "—"
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) {
@@ -23,6 +39,6 @@ export function formatDate(value: string | null | undefined): string {
   }
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
-    timeZone: DEFAULT_TIME_ZONE,
+    timeZone: resolveDisplayTimeZone(timeZone),
   }).format(parsed)
 }

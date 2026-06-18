@@ -14,6 +14,7 @@ import { callCrmApi } from "@/lib/api/crm"
 import { callSupabaseRest } from "@/lib/supabase/rest"
 import { FeatureFlags, SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
 import { resolveOrganizacionId } from "@/lib/settings/org"
+import { resolveEffectiveTimeZone } from "@/lib/timezone"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -23,6 +24,10 @@ type TenantSettingsResponse = {
   nombre: string
   razon_social?: string | null
   config?: Record<string, unknown> | null
+}
+
+type SupabaseTimezoneRow = {
+  timezone?: string | null
 }
 
 type SupabaseEmployeeRow = {
@@ -105,7 +110,24 @@ async function refreshSupabaseTokens(
 type TenantContextData = {
   tenant: TenantInfo | null
   tenantConfig: Record<string, unknown> | null
+  tenantTimezone: string | null
   featureFlags: FeatureFlags
+}
+
+function extractNestedTimezone(config: Record<string, unknown> | null): string | null {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return null
+  }
+  const webchat = config.webchat
+  if (!webchat || typeof webchat !== "object" || Array.isArray(webchat)) {
+    return null
+  }
+  const calendar = (webchat as Record<string, unknown>).calendar
+  if (!calendar || typeof calendar !== "object" || Array.isArray(calendar)) {
+    return null
+  }
+  const timezone = (calendar as Record<string, unknown>).timezone
+  return typeof timezone === "string" && timezone.trim() ? timezone.trim() : null
 }
 
 async function fetchTenantContextData(organizacionId: string | null): Promise<TenantContextData> {
@@ -113,6 +135,7 @@ async function fetchTenantContextData(organizacionId: string | null): Promise<Te
     return {
       tenant: null,
       tenantConfig: null,
+      tenantTimezone: null,
       featureFlags: {},
     }
   }
@@ -129,6 +152,7 @@ async function fetchTenantContextData(organizacionId: string | null): Promise<Te
     return {
       tenant: null,
       tenantConfig: null,
+      tenantTimezone: null,
       featureFlags: {},
     }
   }
@@ -161,6 +185,7 @@ async function fetchTenantContextData(organizacionId: string | null): Promise<Te
           }
         : null,
     tenantConfig: config && typeof config === "object" && !Array.isArray(config) ? config : null,
+    tenantTimezone: extractNestedTimezone(config && typeof config === "object" && !Array.isArray(config) ? config : null),
     featureFlags: {
       webchatEnabled: readFlag("webchat"),
       whatsappEnabled: readFlag("whatsapp"),
@@ -193,21 +218,51 @@ async function fetchEmployeePosition(usuarioId: string | null): Promise<string |
   return response.data[0]?.puesto?.nombre?.trim() || null
 }
 
+async function fetchUserTimezone(usuarioId: string | null, organizacionId: string | null): Promise<string | null> {
+  if (!usuarioId || !organizacionId) {
+    return null
+  }
+
+  const response = await callSupabaseRest<SupabaseTimezoneRow[]>("/rest/v1/usuarios", {
+    searchParams: {
+      select: "timezone",
+      id: `eq.${usuarioId}`,
+      limit: "1",
+    },
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+  if (!response.ok || !Array.isArray(response.data) || !response.data.length) {
+    return null
+  }
+  const timezone = response.data[0]?.timezone
+  return typeof timezone === "string" && timezone.trim() ? timezone.trim() : null
+}
+
 async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
   const sessionOrganizacionId = await resolveOrganizacionId()
   const metadataOrganizacionId = extractOrganizacionIdFromUser(user)
   const organizacionId = sessionOrganizacionId || metadataOrganizacionId
-  const [tenantContext, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
+  const [tenantContext, employeePosition, isPlatformAdmin, profilingEnabled, userTimezone] = await Promise.all([
     fetchTenantContextData(organizacionId),
     fetchEmployeePosition(user.id),
     fetchPlatformAdminStatus(),
     fetchScoringFeatureStatus(),
+    fetchUserTimezone(user.id, organizacionId),
   ])
+  const timezoneResolution = resolveEffectiveTimeZone(
+    userTimezone,
+    tenantContext.tenantTimezone,
+  )
   return {
     user,
     tenant: tenantContext.tenant,
     tenantConfig: tenantContext.tenantConfig,
     organizacion_id: organizacionId,
+    userTimezone,
+    tenantTimezone: tenantContext.tenantTimezone,
+    effectiveTimezone: timezoneResolution.timeZone,
+    timezoneSource: timezoneResolution.source,
     employeePosition,
     isPlatformAdmin,
     profilingEnabled,

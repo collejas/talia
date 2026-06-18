@@ -12,6 +12,10 @@ type UseCurrentUserState = {
   isPlatformAdmin: boolean
   profilingEnabled: boolean
   featureFlags: SessionPayload["featureFlags"] | null
+  userTimezone: string | null
+  tenantTimezone: string | null
+  effectiveTimezone: string | null
+  timezoneSource: SessionPayload["timezoneSource"] | null
   loading: boolean
   error: string | null
 }
@@ -40,6 +44,10 @@ export function useCurrentUser() {
     isPlatformAdmin: false,
     profilingEnabled: true,
     featureFlags: null,
+    userTimezone: null,
+    tenantTimezone: null,
+    effectiveTimezone: null,
+    timezoneSource: null,
     loading: true,
     error: null,
   })
@@ -65,6 +73,10 @@ export function useCurrentUser() {
           isPlatformAdmin: false,
           profilingEnabled: true,
           featureFlags: null,
+          userTimezone: null,
+          tenantTimezone: null,
+          effectiveTimezone: null,
+          timezoneSource: null,
           error: "auth_required",
         }
       }
@@ -76,6 +88,10 @@ export function useCurrentUser() {
           isPlatformAdmin: false,
           profilingEnabled: true,
           featureFlags: null,
+          userTimezone: null,
+          tenantTimezone: null,
+          effectiveTimezone: null,
+          timezoneSource: null,
           error: (error as Error).message,
         }
       }
@@ -87,6 +103,10 @@ export function useCurrentUser() {
         isPlatformAdmin: false,
         profilingEnabled: true,
         featureFlags: null,
+        userTimezone: null,
+        tenantTimezone: null,
+        effectiveTimezone: null,
+        timezoneSource: null,
         error: "auth_network_error",
       }
     },
@@ -104,6 +124,10 @@ export function useCurrentUser() {
         isPlatformAdmin: Boolean(data.isPlatformAdmin),
         profilingEnabled: data.profilingEnabled ?? true,
         featureFlags: data.featureFlags ?? null,
+        userTimezone: data.userTimezone ?? null,
+        tenantTimezone: data.tenantTimezone ?? null,
+        effectiveTimezone: data.effectiveTimezone ?? null,
+        timezoneSource: data.timezoneSource ?? null,
         loading: false,
         error: data.user ? null : "auth_invalid_payload",
       })
@@ -122,14 +146,18 @@ export function useCurrentUser() {
         if (!mounted) return
         setState({
           user: data.user ?? null,
-          tenant: data.tenant ?? null,
-          employeePosition: data.employeePosition ?? null,
-          isPlatformAdmin: Boolean(data.isPlatformAdmin),
-          profilingEnabled: data.profilingEnabled ?? true,
-          featureFlags: data.featureFlags ?? null,
-          loading: false,
-          error: data.user ? null : "auth_invalid_payload",
-        })
+        tenant: data.tenant ?? null,
+        employeePosition: data.employeePosition ?? null,
+        isPlatformAdmin: Boolean(data.isPlatformAdmin),
+        profilingEnabled: data.profilingEnabled ?? true,
+        featureFlags: data.featureFlags ?? null,
+        userTimezone: data.userTimezone ?? null,
+        tenantTimezone: data.tenantTimezone ?? null,
+        effectiveTimezone: data.effectiveTimezone ?? null,
+        timezoneSource: data.timezoneSource ?? null,
+        loading: false,
+        error: data.user ? null : "auth_invalid_payload",
+      })
       })
       .catch((error) => {
         if (!mounted) return

@@ -25,6 +25,10 @@ export type SessionPayload = {
   tenant?: TenantInfo | null
   tenantConfig?: Record<string, unknown> | null
   organizacion_id?: string | null
+  userTimezone?: string | null
+  tenantTimezone?: string | null
+  effectiveTimezone?: string | null
+  timezoneSource?: "user" | "organization" | "default" | null
   employeePosition?: string | null
   isPlatformAdmin?: boolean
   profilingEnabled?: boolean
