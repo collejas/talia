@@ -26690,12 +26690,44 @@ async def obtener_cliente_de_oportunidad(
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
 ) -> dict[str, Any]:
+    oportunidad_row = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if oportunidad_row is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
     cliente = await repo.get_cliente_por_oportunidad(
         organizacion_id=organizacion_id,
         usuario_token=user_token,
         oportunidad_id=oportunidad_id,
     )
-    return {"ok": True, "cliente": cliente}
+    cliente_por_contacto = None
+    contacto_principal_id = _safe_uuid(oportunidad_row.get("contacto_principal_id"))
+    if contacto_principal_id is not None:
+        cliente_por_contacto = await repo.get_cliente_por_contacto(
+            organizacion_id=organizacion_id,
+            usuario_token=user_token,
+            contacto_id=contacto_principal_id,
+        )
+    cliente_activo = cliente or cliente_por_contacto
+    etapa = oportunidad_row.get("etapa") if isinstance(oportunidad_row.get("etapa"), dict) else {}
+    oportunidad_ganada = _clean_text((etapa or {}).get("categoria")).lower() == "ganada"
+    cliente_existente_por_contacto = bool(cliente_por_contacto and not cliente)
+    puede_convertir = oportunidad_ganada and not cliente_activo
+    razon_no_convertir: str | None = None
+    if not oportunidad_ganada:
+        razon_no_convertir = "oportunidad_no_ganada"
+    elif cliente_activo:
+        razon_no_convertir = "cliente_ya_existe"
+    return {
+        "ok": True,
+        "cliente": cliente_activo,
+        "cliente_por_oportunidad": cliente,
+        "cliente_existente_por_contacto": cliente_por_contacto,
+        "cliente_existente_por_contacto_bool": cliente_existente_por_contacto,
+        "puede_convertir": puede_convertir,
+        "razon_no_convertir": razon_no_convertir,
+    }
 
 
 @router.post("/oportunidades/{oportunidad_id}/convertir")
@@ -26721,6 +26753,16 @@ async def convertir_oportunidad_cliente(
             organizacion_id=organizacion_id,
             oportunidad_row=oportunidad_row,
         )
+    cliente_existente_por_contacto = None
+    contacto_principal_id = _safe_uuid(oportunidad_row.get("contacto_principal_id"))
+    if contacto_principal_id is not None:
+        cliente_existente_por_contacto = await repo.get_cliente_por_contacto(
+            organizacion_id=organizacion_id,
+            usuario_token=user_token,
+            contacto_id=contacto_principal_id,
+        )
+    if cliente_existente_por_contacto is not None:
+        return {"ok": True, "cliente": cliente_existente_por_contacto}
     try:
         await repo.convert_oportunidad_en_cliente(
             organizacion_id=organizacion_id,

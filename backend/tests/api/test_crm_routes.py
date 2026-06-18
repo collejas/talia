@@ -33,6 +33,8 @@ class DummyCRMRepository(CRMRepository):
         self.updated_propiedad_unidades: list[dict[str, Any]] = []
         self.updated_catalog_items: list[dict[str, Any]] = []
         self.created_propiedad_unidad_movimientos: list[dict[str, Any]] = []
+        self.clients: dict[str, dict[str, Any]] = {}
+        self.clients_by_contact: dict[str, dict[str, Any]] = {}
         self.permission_context: dict[str, Any] = {
             "usuario_id": str(uuid.uuid4()),
             "organizacion_id": str(uuid.uuid4()),
@@ -80,6 +82,14 @@ class DummyCRMRepository(CRMRepository):
             "organizacion_id": str(organizacion_id),
             "codigo_contacto": "Con-1",
         }
+
+    async def get_cliente_por_oportunidad(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_cliente_por_oportunidad", kwargs))
+        return self.clients.get(str(kwargs["oportunidad_id"]))
+
+    async def get_cliente_por_contacto(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_cliente_por_contacto", kwargs))
+        return self.clients_by_contact.get(str(kwargs["contacto_id"]))
 
     async def get_organizacion_config(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("get_organizacion_config", kwargs))
@@ -1429,6 +1439,48 @@ async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     assert isinstance(create_opportunity_call["payload"]["contacto_principal_id"], str)
     assert create_opportunity_call["payload"]["metadata"]["prospeccion_segmento"] == "Servicios"
     assert create_opportunity_call["payload"]["metadata"]["prospeccion_actividad"] == "Arquitectura"
+
+
+@pytest.mark.asyncio
+async def test_cliente_de_oportunidad_refleja_cliente_existente_por_contacto(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    oportunidad_id = uuid.uuid4()
+    contacto_id = uuid.uuid4()
+    fake_repo.clients_by_contact[str(contacto_id)] = {
+        "id": str(uuid.uuid4()),
+        "organizacion_id": str(uuid.uuid4()),
+        "contacto_id": str(contacto_id),
+        "oportunidad_id": None,
+        "legacy_lead_id": None,
+        "estado_onboarding": "pendiente",
+        "razon_social": "Cliente Existente",
+    }
+
+    async def _opportunity_with_contact(**kwargs: Any) -> dict[str, Any] | None:
+        fake_repo.calls.append(("get_opportunity_with_contact", kwargs))
+        return {
+            "id": str(kwargs["oportunidad_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "contacto_principal_id": str(contacto_id),
+            "cuenta_id": str(uuid.uuid4()),
+            "etapa": {"codigo": "cerrado_ganado", "categoria": "ganada"},
+        }
+
+    monkeypatch.setattr(fake_repo, "get_opportunity_with_contact", _opportunity_with_contact)
+
+    resp = await client.get(
+        f"/crm/oportunidades/{oportunidad_id}/cliente",
+        headers=_headers(include_user_token=True),
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["cliente"] is not None
+    assert payload["cliente_existente_por_contacto"] is not None
+    assert payload["puede_convertir"] is False
+    assert payload["razon_no_convertir"] == "cliente_ya_existe"
+    assert payload["cliente"]["contacto_id"] == str(contacto_id)
 
 
 

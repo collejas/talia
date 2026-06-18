@@ -368,6 +368,12 @@ class InMemoryPipelineRepository(CRMRepository):
                 organizacion_id=organizacion_id,
                 persona_id=uuid.UUID(persona_id),
             )
+            existing_client = await self.get_cliente_por_contacto(
+                organizacion_id=organizacion_id,
+                contacto_id=uuid.UUID(persona_id),
+            )
+            if existing_client is not None:
+                return existing_client
         record = {
             "id": str(uuid.uuid4()),
             "oportunidad_id": str(oportunidad_id),
@@ -387,6 +393,18 @@ class InMemoryPipelineRepository(CRMRepository):
         usuario_token: str | None = None,
     ) -> dict[str, Any] | None:
         return self.clients.get(str(oportunidad_id))
+
+    async def get_cliente_por_contacto(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        contacto_id: uuid.UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        for client in self.clients.values():
+            if str(client.get("contacto_id")) == str(contacto_id):
+                return client
+        return None
 
     async def ensure_contact_record_for_persona(
         self,
@@ -571,6 +589,41 @@ async def test_crm_pipeline_end_to_end(
         str(pipeline_repo.opportunities[str(oportunidad_id)]["contacto_principal_id"])
         in pipeline_repo.contacts
     )
+
+    segundo_create_payload = {
+        "etapa_id": str(pipeline_repo.stage_catalog["cerrado_ganado"]["id"]),
+        "titulo": "Segunda oportunidad",
+        "contacto_principal_id": pipeline_repo.opportunities[str(oportunidad_id)]["contacto_principal_id"],
+        "metadata": {"lead_source": "unit-test"},
+    }
+    segundo_resp = await pipeline_client.post(
+        "/crm/pipeline/opportunities", headers=headers, json=segundo_create_payload
+    )
+    assert segundo_resp.status_code == 201
+    segunda_oportunidad_id = segundo_resp.json()["card"]["tarjeta_id"]
+
+    segundo_cliente_resp = await pipeline_client.get(
+        f"/crm/oportunidades/{segunda_oportunidad_id}/cliente",
+        headers=headers,
+    )
+    assert segundo_cliente_resp.status_code == 200
+    segundo_cliente_payload = segundo_cliente_resp.json()
+    assert segundo_cliente_payload["puede_convertir"] is False
+    assert segundo_cliente_payload["razon_no_convertir"] == "cliente_ya_existe"
+    assert segundo_cliente_payload["cliente_existente_por_contacto"] is not None
+    assert (
+        segundo_cliente_payload["cliente"]["id"]
+        == cliente_payload["id"]
+    )
+
+    segundo_convert_resp = await pipeline_client.post(
+        f"/crm/oportunidades/{segunda_oportunidad_id}/convertir",
+        headers=headers,
+        json={"forzar": True},
+    )
+    assert segundo_convert_resp.status_code == 200
+    assert segundo_convert_resp.json()["cliente"]["id"] == cliente_payload["id"]
+    assert len(pipeline_repo.clients) == 1
 
     cliente_resp = await pipeline_client.get(
         f"/crm/oportunidades/{oportunidad_id}/cliente",

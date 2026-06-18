@@ -93,6 +93,15 @@ type PortalLinkResponse = {
   error?: string;
 };
 
+type ClienteContextResponse = {
+  cliente?: ClienteRecord | null;
+  cliente_por_oportunidad?: ClienteRecord | null;
+  cliente_existente_por_contacto?: ClienteRecord | null;
+  puede_convertir?: boolean;
+  razon_no_convertir?: string | null;
+  error?: string;
+};
+
 export function LeadOnboardingPanel({
   card,
   currentStage,
@@ -108,6 +117,13 @@ export function LeadOnboardingPanel({
   const [saving, setSaving] = useState(false);
   const [portalGenerating, setPortalGenerating] = useState(false);
   const [portalLink, setPortalLink] = useState<string | null>(null);
+  const [clienteContext, setClienteContext] = useState<{
+    puedeConvertir: boolean;
+    razonNoConvertir: string | null;
+  }>({
+    puedeConvertir: false,
+    razonNoConvertir: null,
+  });
   const [formState, setFormState] = useState<ClienteFormState>(EMPTY_FORM);
 
   const shouldLoad = active && isOpen && !isCreateMode && Boolean(oportunidadId);
@@ -128,11 +144,18 @@ export function LeadOnboardingPanel({
             : "No se pudo recuperar al cliente.",
         );
       }
-      setCliente(payload?.cliente ?? null);
+      const data = payload as ClienteContextResponse;
+      const clienteActivo = data?.cliente ?? data?.cliente_existente_por_contacto ?? null;
+      setCliente(clienteActivo);
+      setClienteContext({
+        puedeConvertir: Boolean(data?.puede_convertir),
+        razonNoConvertir: data?.razon_no_convertir ?? null,
+      });
     } catch (error) {
       setClienteError(
         error instanceof Error ? error.message : "No se pudo recuperar al cliente.",
       );
+      setClienteContext({ puedeConvertir: false, razonNoConvertir: null });
     } finally {
       setLoading(false);
     }
@@ -167,7 +190,8 @@ export function LeadOnboardingPanel({
     return map;
   }, [cliente?.documentos]);
 
-  const canConvert = currentStage?.categoria === "ganada";
+  const stageIsWon = currentStage?.categoria === "ganada";
+  const canConvert = clienteContext.puedeConvertir;
 
   const handleConvert = async () => {
     if (!oportunidadId) return;
@@ -306,9 +330,19 @@ export function LeadOnboardingPanel({
                 : "Convierte el lead a cliente para iniciar el onboarding."}
             </p>
           </div>
-          <Button onClick={handleConvert} disabled={converting || !oportunidadId} variant={canConvert ? "default" : "outline"}>
-            {converting ? "Convirtiendo..." : canConvert ? "Convertir a cliente" : "Forzar conversión"}
-          </Button>
+          {canConvert ? (
+            <Button onClick={handleConvert} disabled={converting || !oportunidadId} variant="default">
+              {converting ? "Convirtiendo..." : "Convertir a cliente"}
+            </Button>
+          ) : (
+            <div className="max-w-sm rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              {clienteContext.razonNoConvertir === "cliente_ya_existe"
+                ? "Ya existe un cliente con este contacto."
+                : stageIsWon
+                  ? "No está disponible porque ya existe un cliente previo."
+                  : "Disponible solo cuando la oportunidad esté ganada y no exista un cliente previo."}
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
