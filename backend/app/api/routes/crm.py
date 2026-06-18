@@ -2479,6 +2479,13 @@ async def _mark_quote_as_accepted_from_mapbox(
     )
     _write_propiedad_sale_event("quote_marked_from_mapbox", event_payload)
     if quote.oportunidad_id:
+        await _reject_previous_quotes_for_opportunity(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=UUID(str(quote.oportunidad_id)),
+            keep_quote_id=quote_id,
+            usuario_id=usuario_id,
+        )
         await _auto_move_opportunity_to_won(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -7921,6 +7928,86 @@ def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = dict(extra or {})
     payload.setdefault("proposal_sent_at", datetime.now(timezone.utc).isoformat())
     return payload
+
+
+async def _reject_previous_quotes_for_opportunity(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    keep_quote_id: UUID,
+    usuario_id: UUID | None = None,
+) -> None:
+    try:
+        quotes = await repo.list_quote_entries(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "quote_previous_rejection_list_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "keep_quote_id": str(keep_quote_id),
+                "error": str(exc),
+            },
+        )
+        return
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for row in quotes:
+        if not isinstance(row, dict):
+            continue
+        quote_row_id = _safe_uuid(row.get("id"))
+        if quote_row_id is None or quote_row_id == keep_quote_id:
+            continue
+        current_status = _clean_text(row.get("estatus") or row.get("estado")).lower()
+        if current_status in {"rechazada", "cancelada"}:
+            continue
+        metadata_patch: dict[str, Any] = {
+            "rechazada_en": now_iso,
+            "rechazada_motivo": "supercedida_por_otra_cotizacion",
+            "quote_reemplazada_por": str(keep_quote_id),
+        }
+        if usuario_id:
+            metadata_patch["rechazada_por"] = str(usuario_id)
+        if current_status == "aceptada":
+            try:
+                await repo.release_quote_inventory(
+                    organizacion_id=organizacion_id,
+                    quote_id=quote_row_id,
+                    liberado_por=usuario_id,
+                )
+            except CRMRepositoryError as exc:
+                logger.warning(
+                    "quote_previous_inventory_release_failed",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "oportunidad_id": str(oportunidad_id),
+                        "quote_id": str(quote_row_id),
+                        "keep_quote_id": str(keep_quote_id),
+                        "error": str(exc),
+                    },
+                )
+        try:
+            await repo.mark_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=quote_row_id,
+                estatus="rechazada",
+                metadata_patch=metadata_patch,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "quote_previous_rejection_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "oportunidad_id": str(oportunidad_id),
+                    "quote_id": str(quote_row_id),
+                    "keep_quote_id": str(keep_quote_id),
+                    "error": str(exc),
+                },
+            )
 
 
 async def _ensure_oportunidad_cuenta(
@@ -27207,6 +27294,13 @@ async def mark_lead_quote(
     if quote.estado == "aceptada":
         oportunidad_id = quote.oportunidad_id
         if oportunidad_id:
+            await _reject_previous_quotes_for_opportunity(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=UUID(str(oportunidad_id)),
+                keep_quote_id=cotizacion_id,
+                usuario_id=usuario_id,
+            )
             await _auto_move_opportunity_to_won(
                 repo=repo,
                 organizacion_id=organizacion_id,

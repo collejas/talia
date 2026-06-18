@@ -23,6 +23,8 @@ class InMemoryPipelineRepository(CRMRepository):
         self.quotes: dict[str, dict[str, Any]] = {}
         self.clients: dict[str, dict[str, Any]] = {}
         self.assigned_reps: list[uuid.UUID] = []
+        self._permission_context_cache: dict[str, Any] | None = None
+        self._current_user_perm_cache: dict[str, bool] = {}
 
     async def create_account(
         self,
@@ -263,6 +265,17 @@ class InMemoryPipelineRepository(CRMRepository):
             if quote.get("oportunidad_id") == str(oportunidad_id)
         ]
 
+    async def get_quote_entry(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        quote_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        quote = self.quotes.get(str(quote_id))
+        if quote is None:
+            raise RuntimeError("quote_not_found")
+        return quote
+
     async def create_quote_entry(
         self,
         *,
@@ -364,6 +377,16 @@ class InMemoryPipelineRepository(CRMRepository):
     ) -> dict[str, Any] | None:
         return self.clients.get(str(oportunidad_id))
 
+    async def get_permission_context(self) -> dict[str, Any]:
+        return {
+            "usuario_id": str(uuid.uuid4()),
+            "organizacion_id": str(uuid.uuid4()),
+            "es_admin": True,
+            "es_owner": True,
+            "roles": ["admin"],
+            "permisos": [],
+        }
+
 
 @pytest.fixture()
 def pipeline_repo() -> InMemoryPipelineRepository:
@@ -455,6 +478,18 @@ async def test_crm_pipeline_end_to_end(
     )
     assert quote_resp.status_code == 201
     quote_id = quote_resp.json()["quote"]["id"]
+    previous_quote_id = uuid.uuid4()
+    pipeline_repo.quotes[str(previous_quote_id)] = {
+        "id": str(previous_quote_id),
+        "oportunidad_id": str(oportunidad_id),
+        "estatus": "enviada",
+        "total": 980.0,
+        "moneda": "MXN",
+        "metadata": {"titulo": "Cotización previa"},
+        "items": [],
+        "creado_en": datetime.now(timezone.utc).isoformat(),
+        "actualizado_en": datetime.now(timezone.utc).isoformat(),
+    }
 
     mark_payload = {"estado": "enviada", "canal": "email"}
     resp = await pipeline_client.post(
@@ -472,6 +507,7 @@ async def test_crm_pipeline_end_to_end(
     )
     assert resp.status_code == 200
     assert resp.json()["quote"]["estado"] == "aceptada"
+    assert pipeline_repo.quotes[str(previous_quote_id)]["estatus"] == "rechazada"
 
     card_resp = await pipeline_client.get(
         f"/crm/pipeline/cards/{oportunidad_id}",

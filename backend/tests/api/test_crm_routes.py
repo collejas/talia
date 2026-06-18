@@ -1545,6 +1545,64 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert fake_repo.updated_catalog_items[0]["payload"]["persona_id"] == str(persona_id)
 
 
+@pytest.mark.asyncio
+async def test_reject_previous_quotes_for_opportunity_marks_prior_quotes_rejected(
+    fake_repo: DummyCRMRepository,
+) -> None:
+    oportunidad_id = uuid.uuid4()
+    keep_quote_id = uuid.uuid4()
+    previous_quote_1 = uuid.uuid4()
+    previous_quote_2 = uuid.uuid4()
+
+    async def fake_list_quote_entries(**_: Any) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": str(keep_quote_id),
+                "oportunidad_id": str(oportunidad_id),
+                "estatus": "aceptada",
+                "metadata": {},
+            },
+            {
+                "id": str(previous_quote_1),
+                "oportunidad_id": str(oportunidad_id),
+                "estatus": "enviada",
+                "metadata": {},
+            },
+            {
+                "id": str(previous_quote_2),
+                "oportunidad_id": str(oportunidad_id),
+                "estatus": "borrador",
+                "metadata": {},
+            },
+        ]
+
+    fake_repo.list_quote_entries = fake_list_quote_entries  # type: ignore[assignment]
+
+    await crm_routes._reject_previous_quotes_for_opportunity(
+        repo=fake_repo,
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        oportunidad_id=oportunidad_id,
+        keep_quote_id=keep_quote_id,
+        usuario_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+    )
+
+    mark_calls = [
+        kwargs
+        for call_name, kwargs in fake_repo.calls
+        if call_name == "mark_quote_entry"
+    ]
+    assert len(mark_calls) == 2
+    assert {str(call["quote_id"]) for call in mark_calls} == {
+        str(previous_quote_1),
+        str(previous_quote_2),
+    }
+    assert all(call["estatus"] == "rechazada" for call in mark_calls)
+    assert all(
+        call["metadata_patch"]["quote_reemplazada_por"] == str(keep_quote_id)
+        for call in mark_calls
+    )
+
+
 
 @pytest.mark.asyncio
 async def test_actualizar_status_propiedad_unidad_crea_movimiento(
