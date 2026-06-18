@@ -26928,7 +26928,10 @@ async def mark_lead_quote(
             "cantidad": float(item.cantidad or 0),
         }
         for item in current_quote.items
-        if item.catalog_item_id and float(item.cantidad or 0) > 0
+        if item.catalog_item_id
+        and float(item.cantidad or 0) > 0
+        and item.catalog_item is not None
+        and bool(getattr(item.catalog_item, "maneja_inventario", False))
     ]
     warehouse_id: UUID | None = None
     if should_reserve and reservation_items:
@@ -41516,6 +41519,29 @@ def _build_pipeline_board(
     if tablero_filter is None:
         tablero_filter = _infer_tablero_id(stage_rows, opportunity_rows)
     stage_map: dict[UUID, CRMPipelineBoardStage] = {}
+    stage_lookup_by_id: dict[UUID, CRMPipelineBoardStage] = {}
+    canonical_stage_by_code: dict[str, CRMPipelineBoardStage] = {}
+
+    def _stage_can_inherit_board(stage_code: str) -> bool:
+        normalized = stage_code.lower()
+        return normalized in {
+            "prospeccion_primer_contacto",
+            "cerrado_ganado",
+            "cerrado_perdido",
+            "ganado",
+            "perdido",
+        }
+
+    def _stage_dedup_key(stage_code: str) -> str | None:
+        normalized = stage_code.lower()
+        if normalized == "prospeccion_primer_contacto":
+            return normalized
+        if normalized == "ganado" or normalized.endswith("_ganado"):
+            return "cerrado_ganado"
+        if normalized == "perdido" or normalized.endswith("_perdido"):
+            return "cerrado_perdido"
+        return None
+
     def add_stage_rows() -> None:
         for stage_row in stage_rows:
             stage = _stage_from_row(stage_row)
@@ -41524,7 +41550,7 @@ def _build_pipeline_board(
             if (
                 tablero_filter
                 and not stage.tablero_id
-                and (stage.codigo or "").lower() == "prospeccion_primer_contacto"
+                and _stage_can_inherit_board(stage.codigo or "")
             ):
                 stage = CRMPipelineBoardStage(
                     **{
@@ -41534,7 +41560,15 @@ def _build_pipeline_board(
                 )
             if tablero_filter and stage.tablero_id != tablero_filter:
                 continue
+            dedup_key = _stage_dedup_key(stage.codigo or "")
+            if dedup_key:
+                existing = canonical_stage_by_code.get(dedup_key)
+                if existing is not None:
+                    stage_lookup_by_id[stage.id] = existing
+                    continue
+                canonical_stage_by_code[dedup_key] = stage
             stage_map[stage.id] = stage
+            stage_lookup_by_id[stage.id] = stage
 
     add_stage_rows()
     if not stage_map and stage_rows and tablero_filter:
@@ -41548,7 +41582,7 @@ def _build_pipeline_board(
         if card is None:
             continue
         card_tablero_id = _tablero_id_from_metadata(card.metadata)
-        stage = stage_map.get(card.etapa_id)
+        stage = stage_lookup_by_id.get(card.etapa_id) or stage_map.get(card.etapa_id)
         stage_tablero_id = stage.tablero_id if stage else _tablero_id_from_row(row)
         if tablero_filter:
             if card_tablero_id and card_tablero_id != tablero_filter:
@@ -41556,11 +41590,24 @@ def _build_pipeline_board(
             if stage_tablero_id and stage_tablero_id != tablero_filter:
                 continue
             if not card_tablero_id and not stage_tablero_id:
-                continue
+                stage_code = (stage.codigo or "").lower() if stage else ""
+                if _stage_can_inherit_board(stage_code):
+                    pass
+                else:
+                    continue
         if stage is None:
             stage = _stage_from_opportunity(row)
             if stage and (not tablero_filter or stage.tablero_id == tablero_filter):
+                dedup_key = _stage_dedup_key(stage.codigo or "")
+                if dedup_key:
+                    existing = canonical_stage_by_code.get(dedup_key)
+                    if existing is not None:
+                        stage_lookup_by_id[stage.id] = existing
+                        stage = existing
+                    else:
+                        canonical_stage_by_code[dedup_key] = stage
                 stage_map[stage.id] = stage
+                stage_lookup_by_id[stage.id] = stage
         if stage:
             stage.tarjetas.append(card)
         if not card.conversacion_id and not _is_manual_card(card.metadata):

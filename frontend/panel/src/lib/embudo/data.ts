@@ -283,14 +283,33 @@ function adaptPipelineBoard(
   }
 
   const stages = Array.isArray(payload.stages)
-    ? payload.stages
-        .map((stage) => {
+    ? (() => {
+        const stageMap = new Map<string, EmbudoStage>();
+        for (const stage of payload.stages) {
           const metadatos = parseMetadatos(stage.metadatos);
-          return { stage, metadatos };
-        })
-        .filter(({ metadatos }) => !isCounterOnlyStage(metadatos))
-        .map(({ stage, metadatos }) => adaptStage(stage, metadatos))
-        .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"))
+          if (isCounterOnlyStage(metadatos)) {
+            continue;
+          }
+          const adapted = adaptStage(stage, metadatos);
+          const dedupeKey = resolveTerminalStageKey(adapted.codigo, adapted.categoria);
+          if (!dedupeKey) {
+            stageMap.set(`${adapted.id}`, adapted);
+            continue;
+          }
+          const existing = stageMap.get(dedupeKey);
+          if (existing) {
+            existing.tarjetas.push(...adapted.tarjetas);
+            existing.orden = Math.min(existing.orden, adapted.orden);
+            if (!existing.tableroId && adapted.tableroId) {
+              existing.tableroId = adapted.tableroId;
+            }
+            continue;
+          }
+          stageMap.set(dedupeKey, { ...adapted, id: dedupeKey });
+        }
+
+        return [...stageMap.values()].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));
+      })()
     : [];
 
   const sinConversacion = Array.isArray(payload.sin_conversacion)
@@ -304,4 +323,26 @@ function adaptPipelineBoard(
     : [];
 
   return { stages, sinConversacion };
+}
+
+function resolveTerminalStageKey(code: string, categoria: string): string | null {
+  const normalizedCode = code.trim().toLowerCase();
+  const normalizedCategory = categoria.trim().toLowerCase();
+  if (
+    normalizedCode === "cerrado_ganado" ||
+    normalizedCode === "ganado" ||
+    normalizedCode.endsWith("_ganado") ||
+    normalizedCategory === "ganada"
+  ) {
+    return "cerrado_ganado";
+  }
+  if (
+    normalizedCode === "cerrado_perdido" ||
+    normalizedCode === "perdido" ||
+    normalizedCode.endsWith("_perdido") ||
+    normalizedCategory === "perdida"
+  ) {
+    return "cerrado_perdido";
+  }
+  return null;
 }

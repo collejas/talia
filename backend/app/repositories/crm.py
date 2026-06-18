@@ -35,10 +35,20 @@ def _normalize_pipeline_stage_row(row: dict[str, Any]) -> dict[str, Any]:
     code = str(normalized.get("codigo") or "").strip().lower()
     if code == "demo":
         normalized["nombre"] = "Cita agendada"
+    elif code == "ganado" or code.endswith("_ganado"):
+        normalized["codigo"] = "cerrado_ganado"
+        normalized["nombre"] = "Cerrado · Ganado"
+        if not normalized.get("categoria"):
+            normalized["categoria"] = "ganada"
+    elif code == "perdido" or code.endswith("_perdido"):
+        normalized["codigo"] = "cerrado_perdido"
+        normalized["nombre"] = "Cerrado · Perdido"
+        if not normalized.get("categoria"):
+            normalized["categoria"] = "perdida"
     return normalized
 
 
-QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta))"
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,maneja_inventario))"
 
 PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS = 30.0
 PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS = 30.0
