@@ -2100,7 +2100,7 @@ export function LeadDrawer({
       const latestQuote = quotesState.data[0];
       const fallbackTitle =
         card.proyectoNombre?.trim() || (card.titulo ? `Propuesta ${card.titulo}` : "Cotización Tal-IA");
-      const defaultTitle = latestQuote?.title?.trim() || fallbackTitle;
+      const defaultTitle = fallbackTitle;
       const defaultDescription =
         card.proyectoNecesidades?.trim() || latestQuote?.description?.trim() || "";
       const defaultSubject =
@@ -2116,8 +2116,8 @@ export function LeadDrawer({
         latestQuote?.subtotal != null && Number.isFinite(latestQuote.subtotal)
           ? String(latestQuote.subtotal)
           : typeof card.monto === "number" && Number.isFinite(card.monto)
-            ? String(card.monto)
-            : "";
+          ? String(card.monto)
+          : "";
       const defaultTotal =
         latestQuote?.total != null && Number.isFinite(latestQuote.total)
           ? String(latestQuote.total)
@@ -2301,6 +2301,8 @@ export function LeadDrawer({
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
   const quoteClientEmail = card?.correo?.trim() || "Sin email";
+  const quoteProjectName =
+    card?.proyectoNombre?.trim() || card?.titulo?.trim() || "Sin nombre de proyecto";
   const quoteProjectNeeds = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin necesidades";
   const quoteAssignedVendorName =
     quoteAssignedVendor?.nombre_completo?.trim() || card?.asignadoNombre?.trim() || "Sin vendedor";
@@ -4545,9 +4547,6 @@ export function LeadDrawer({
                     <div>
                       <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Cotización</p>
                       <h3 className="mt-1 text-2xl font-semibold text-foreground">{quoteTitle || "Nueva cotización"}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {quoteDescription || "Resumen de la propuesta comercial."}
-                      </p>
                     </div>
                     <div className="space-y-1 text-right text-sm">
                       <p className="font-semibold text-foreground">{quoteCurrentFolio}</p>
