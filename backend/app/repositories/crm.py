@@ -2220,6 +2220,17 @@ class CRMRepository:
         if not normalized:
             return False
         if normalized in {
+            "ganada",
+            "perdida",
+            "cerrado_ganado",
+            "cerrado_perdido",
+            "general_cerrado_ganado",
+            "general_cerrado_perdido",
+        }:
+            return False
+        if normalized.endswith("_ganado") or normalized.endswith("_perdido"):
+            return False
+        if normalized in {
             "prospeccion_primer_contacto",
             "general_visitantes_sin_chat",
             "visitantes_sin_chat",

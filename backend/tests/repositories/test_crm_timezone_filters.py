@@ -218,6 +218,68 @@ async def test_list_pipeline_opportunities_filters_by_email() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_sale_ready_opportunities_excludes_won_opportunities() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+
+    async def fake_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/rest/v1/oportunidades"
+        return DummyResponse(
+            [
+                {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "titulo": "Activa",
+                    "estado": "abierta",
+                    "contacto_principal_id": "contact-open",
+                    "contacto": {
+                        "correo_principal": "open@example.com",
+                        "telefono_e164": None,
+                    },
+                    "etapa": {
+                        "codigo": "captado",
+                        "categoria": "abierta",
+                    },
+                },
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "titulo": "Ganada",
+                    "estado": "ganada",
+                    "contacto_principal_id": "contact-won",
+                    "contacto": {
+                        "correo_principal": "won@example.com",
+                        "telefono_e164": "+521111111111",
+                    },
+                    "etapa": {
+                        "codigo": "cerrado_ganado",
+                        "categoria": "ganada",
+                    },
+                },
+            ]
+        )
+
+    async def fake_list_contact_ids_by_captura_estado(
+        organizacion_id: uuid.UUID,
+        captura_estado: str,
+    ) -> list[str]:
+        assert captura_estado == "completo"
+        return ["contact-open", "contact-won"]
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._list_contact_ids_by_captura_estado = AsyncMock(side_effect=fake_list_contact_ids_by_captura_estado)
+
+    rows = await repo.list_sale_ready_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        limit=50,
+        contacto_captura_estado="completo",
+    )
+
+    assert [row["id"] for row in rows] == ["11111111-1111-1111-1111-111111111111"]
+
+
+@pytest.mark.asyncio
 async def test_get_latest_conversation_id_by_contact_orders_by_iniciada_en() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"
