@@ -10,6 +10,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { canalLabel, contactHistoryDetail, contactStatusLabel, contactStatusVariant } from "@/lib/prospeccion/contact-utils";
+import { getActiveTimeZone } from "@/lib/timezone";
 import {
   listContactoEnviosPorProspecto,
   type ContactoEnvio,
@@ -259,5 +260,6 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: getActiveTimeZone(),
   }).format(date);
 }

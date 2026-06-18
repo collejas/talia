@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import type { NotificationItem } from "@/lib/notifications/client"
+import { getActiveTimeZone } from "@/lib/timezone"
 
 const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message", "opportunity.created"])
 
@@ -40,6 +41,7 @@ function formatDateTime(value: string | null | undefined) {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: getActiveTimeZone(),
   }).format(date)
 }
 

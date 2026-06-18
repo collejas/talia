@@ -15,6 +15,7 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { getActiveTimeZone } from "@/lib/timezone"
 
 import {
   FamiliaProducto,
@@ -61,7 +62,7 @@ type SortState = { id: SortKey; desc: boolean } | null
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "America/Mexico_City",
+  timeZone: getActiveTimeZone(),
 })
 const MODELO_COLLATOR = new Intl.Collator("es", { sensitivity: "base", numeric: true })
 const ALL_LINEA_OPTION = "__all_lines__"

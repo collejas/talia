@@ -38,6 +38,7 @@ import {
   updateCatalogItem,
 } from "@/app/settings/catalogo/actions"
 import { Button } from "@/components/ui/button"
+import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -146,7 +147,7 @@ const CATALOG_SORTING_STORAGE_KEY = "settings-productos-items:sorting"
 const UPDATED_AT_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "America/Mexico_City",
+  timeZone: getActiveTimeZone(),
 })
 const CATALOG_COLLATOR = new Intl.Collator("es", {
   sensitivity: "base",

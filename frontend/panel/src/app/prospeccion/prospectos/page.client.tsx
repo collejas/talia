@@ -27,6 +27,7 @@ import Link from "next/link"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
+import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -778,7 +779,7 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "America/Mexico_City",
+  timeZone: getActiveTimeZone(),
 })
 
 type FlowStepKey = "discover" | "enrich" | "prepare" | "launch" | "evaluate"

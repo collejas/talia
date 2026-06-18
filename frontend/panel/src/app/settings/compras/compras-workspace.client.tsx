@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select"
+import { getActiveTimeZone } from "@/lib/timezone"
 import { PedimentosImportacionPanel } from "./pedimentos-importacion-panel.client"
 import { ProveedorCreateModal } from "./proveedor-create-modal.client"
 
@@ -473,7 +474,7 @@ function formatDateTime(value: unknown): string {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "America/Mexico_City",
+    timeZone: getActiveTimeZone(),
   }).format(parsed)
 }
 

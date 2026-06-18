@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { ContactCards } from "@/lib/contactos/types";
+import { getActiveTimeZone } from "@/lib/timezone";
 
 type ContactSectionCardsProps = {
   data: ContactCards;
@@ -160,7 +161,7 @@ function formatDateRelative(value: string | null | undefined): string {
   const formatter = new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "UTC",
+    timeZone: getActiveTimeZone(),
   });
   return formatter.format(date);
 }

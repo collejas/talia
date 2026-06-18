@@ -8,6 +8,7 @@ import type { EmbudoCard } from "@/lib/embudo/data"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
+import { getActiveTimeZone } from "@/lib/timezone"
 
 type EmbudoCardItemProps = {
   card: EmbudoCard
@@ -31,7 +32,7 @@ export function EmbudoCardItem({
     if (!card.actualizadoEn) return "Sin fecha"
     try {
       const formatter = new Intl.DateTimeFormat("es-MX", {
-        timeZone: "America/Mexico_City",
+        timeZone: getActiveTimeZone(),
         dateStyle: "short",
         timeStyle: "short",
       })

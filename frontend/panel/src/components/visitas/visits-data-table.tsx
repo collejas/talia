@@ -8,6 +8,7 @@ import { IconChevronDown, IconChevronUp, IconArrowsUpDown } from "@tabler/icons-
 import { DataTable, schema } from "@/components/data-table";
 import type { VisitDetailRaw, VisitTableRow } from "@/lib/visitas/data";
 import { formatWaLabel } from "@/lib/visitas/formatting";
+import { getActiveTimeZone } from "@/lib/timezone";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -25,7 +26,7 @@ type VisitField = {
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "short",
   timeStyle: "short",
-  timeZone: "America/Mexico_City",
+  timeZone: getActiveTimeZone(),
 });
 
 const DASH = <span className="text-muted-foreground">—</span>;
