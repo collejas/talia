@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import type { GeoJSON as GeoJSONType } from "geojson";
 import type { VisibilityState } from "@tanstack/react-table";
+import Link from "next/link";
+import { IconDownload } from "@tabler/icons-react";
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { SessionRecovery } from "@/components/session-recovery";
@@ -193,6 +195,24 @@ function buildInitialVisibility(columns: Array<{ id: string }>): VisibilityState
   }, {})
 }
 
+function buildQueryString(params: PageSearchParams): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item.trim()) {
+          searchParams.append(key, item.trim());
+        }
+      }
+      continue;
+    }
+    if (typeof value === "string" && value.trim()) {
+      searchParams.set(key, value.trim());
+    }
+  }
+  return searchParams.toString();
+}
+
 type PageSearchParams = Record<string, string | string[] | undefined>;
 
 export default async function Page({
@@ -201,6 +221,8 @@ export default async function Page({
   searchParams?: Promise<PageSearchParams>;
 }) {
   const params = searchParams ? await searchParams : {};
+  const exportQueryString = buildQueryString(params);
+  const exportHref = `/api/crm/demografia/mapa-v2/export/xlsx${exportQueryString ? `?${exportQueryString}` : ""}`;
 
   const nivelParam = typeof params.nivel === "string" ? params.nivel.toLowerCase() : "pais";
   const requestedNivel = nivelParam === "pais" ? "pais" : nivelParam === "municipio" ? "municipio" : "estado";
@@ -560,6 +582,17 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <div className="px-4 lg:px-6">
+                <div className="flex justify-end">
+                  <Link
+                    href={exportHref}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <IconDownload className="size-4" />
+                    Descargar XLSX
+                  </Link>
+                </div>
+              </div>
               <div className="px-4 lg:px-6">
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch">
                   <DemografiaControls

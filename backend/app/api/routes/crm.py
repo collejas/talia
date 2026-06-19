@@ -34610,7 +34610,7 @@ async def get_visits_whatsapp_total(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str | None = Depends(optional_user_token),
+    user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
@@ -39234,6 +39234,418 @@ async def demografia_mapa_v2(
         extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
     )
     return response_payload
+
+
+@router.get("/demografia/mapa-v2/export/xlsx")
+async def demografia_mapa_v2_export_xlsx(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str | None = Depends(optional_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    source_class: str | None = Query(default=None),
+    utm_source: str | None = Query(default=None),
+    utm_medium: str | None = Query(default=None),
+    utm_campaign: str | None = Query(default=None),
+    campana_id: str | None = Query(default=None),
+    campana_tipo: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
+    wa_canal_publicitario: str | None = Query(default=None),
+    wa_campana_publicitaria: str | None = Query(default=None),
+    wa_regla_id: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> Response:
+    if Workbook is None:
+        raise HTTPException(status_code=500, detail="openpyxl_required")
+
+    effective_user_token = _normalize_reports_user_token(user_token)
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    source_class_value = (source_class or "").strip().lower() or None
+    utm_source_value = (utm_source or "").strip().lower() or None
+    utm_medium_value = (utm_medium or "").strip().lower() or None
+    utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    wa_canal_publicitario_value = (wa_canal_publicitario or "").strip().lower() or None
+    wa_campana_publicitaria_value = (wa_campana_publicitaria or "").strip().lower() or None
+    campana_id_raw = (campana_id or "").strip() or None
+    template_id_raw = (template_id or "").strip() or None
+    wa_regla_id_raw = (wa_regla_id or "").strip() or None
+
+    campana_uuid_value: UUID | None = None
+    if campana_id_raw:
+        try:
+            campana_uuid_value = UUID(campana_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
+
+    template_uuid_value: UUID | None = None
+    if template_id_raw:
+        try:
+            template_uuid_value = UUID(template_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="template_id_invalid") from exc
+
+    wa_regla_uuid_value: UUID | None = None
+    if wa_regla_id_raw:
+        try:
+            wa_regla_uuid_value = UUID(wa_regla_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+
+    resumen_payload, mapa_payload = await asyncio.gather(
+        demografia_resumen_v2(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token,
+            usuario_id=usuario_id,
+            nivel=nivel_normalizado,
+            estado=state_code,
+            canales=canales,
+            etapas=etapas,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+        demografia_mapa_v2(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token or "",
+            usuario_id=usuario_id,
+            nivel=nivel_normalizado,
+            estado=state_code,
+            canales=canales,
+            etapas=etapas,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+    )
+    visitas_web_rows, conversaciones_rows = await asyncio.gather(
+        get_visits_web_sessions(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            usuario_id=usuario_id,
+            limit=5000,
+            offset=0,
+            source_class=source_class_value,
+            estado=state_code,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+        get_visits_whatsapp_conversations(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token or "",
+            usuario_id=usuario_id,
+            limit=500,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+        ),
+    )
+
+    resumen_payload = resumen_payload if isinstance(resumen_payload, dict) else {}
+    mapa_payload = mapa_payload if isinstance(mapa_payload, dict) else {}
+    summary_visitantes = _ensure_dict(resumen_payload.get("visitantes"), default={})
+    summary_items = _ensure_list(summary_visitantes.get("items"), default=[])
+    summary_visitantes_totals = _ensure_dict(summary_visitantes.get("totals"), default={})
+    summary_leads = _ensure_dict(resumen_payload.get("leads"), default={})
+    summary_leads_totals = _ensure_dict(summary_leads.get("totals"), default={})
+    summary_catalog = _ensure_dict(
+        resumen_payload.get("attribution_catalog"),
+        default={},
+    )
+    map_dataset = _ensure_list(mapa_payload.get("dataset"), default=[])
+
+    workbook = Workbook()
+
+    def add_sheet(title: str, headers: list[str], rows: list[list[Any]]) -> None:
+        sheet = workbook.create_sheet(title)
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+        sheet.freeze_panes = "A2"
+
+    summary_sheet = workbook.active
+    summary_sheet.title = "Resumen"
+    summary_sheet.append(["Seccion", "Metrica", "Valor"])
+    summary_sheet.freeze_panes = "A2"
+
+    filters_rows: list[tuple[str, Any]] = [
+        ("nivel", nivel_normalizado),
+        ("estado", state_code),
+        ("rango", (rango or "").strip().lower() or None),
+        ("desde", desde),
+        ("hasta", hasta),
+        ("canales", canales),
+        ("etapas", etapas),
+        ("source_class", source_class_value),
+        ("utm_source", utm_source_value),
+        ("utm_medium", utm_medium_value),
+        ("utm_campaign", utm_campaign_value),
+        ("campana_id", str(campana_uuid_value) if campana_uuid_value else None),
+        ("campana_tipo", campana_tipo_value),
+        ("template_id", str(template_uuid_value) if template_uuid_value else None),
+        ("wa_canal_publicitario", wa_canal_publicitario_value),
+        ("wa_campana_publicitaria", wa_campana_publicitaria_value),
+        ("wa_regla_id", str(wa_regla_uuid_value) if wa_regla_uuid_value else None),
+    ]
+    for key, value in filters_rows:
+        summary_sheet.append(["filtros", key, value])
+
+    range_payload = _ensure_dict(resumen_payload.get("range"), default={})
+    for key, value in range_payload.items():
+        summary_sheet.append(["rango", key, value])
+
+    for key, value in summary_leads_totals.items():
+        summary_sheet.append(["leads", key, value])
+    for key, value in summary_visitantes_totals.items():
+        summary_sheet.append(["visitantes", key, value])
+
+    summary_sheet.append(
+        [
+            "visitantes",
+            "conversion_rate_pct",
+            round(
+                (_to_number(summary_visitantes_totals.get("con_chat")) / _to_number(summary_visitantes_totals.get("total")) * 100)
+                if _to_number(summary_visitantes_totals.get("total")) > 0
+                else 0.0,
+                2,
+            ),
+        ]
+    )
+
+    ubicaciones_headers = [
+        "nivel",
+        "key",
+        "name",
+        "leads_total",
+        "total_visitas",
+        "visitantes_total",
+        "visitantes_con_chat",
+        "visitantes_sin_chat",
+        "webchat_total",
+        "webchat_con_chat",
+        "webchat_sin_chat",
+        "whatsapp_total",
+        "voz_total",
+        "correo_total",
+        "leads_por_canal",
+        "visitantes_por_canal",
+        "etapa_captado",
+        "etapa_precalificado",
+        "etapa_demo",
+        "etapa_negociacion",
+        "etapa_ganado",
+        "etapa_perdido",
+        "has_data",
+        "next_level",
+        "parent_state",
+    ]
+    ubicaciones_rows: list[list[Any]] = []
+    for raw in map_dataset:
+        if not isinstance(raw, dict):
+            continue
+        leads_por_canal = _ensure_dict(raw.get("leads_totales_por_canal"), default={})
+        visitantes_por_canal = _ensure_dict(raw.get("visitantes_totales_por_canal"), default={})
+        etapas_totales = _ensure_dict(raw.get("etapas_totales"), default={})
+        ubicaciones_rows.append(
+            [
+                raw.get("nivel"),
+                raw.get("key"),
+                raw.get("name"),
+                _to_number(raw.get("leads_total")),
+                _to_number(raw.get("total_visitas")),
+                _to_number(raw.get("visitantes_total")),
+                _to_number(raw.get("visitantes_con_chat")),
+                _to_number(raw.get("visitantes_sin_chat")),
+                _to_number(raw.get("webchat_total")),
+                _to_number(raw.get("webchat_con_chat")),
+                _to_number(raw.get("webchat_sin_chat")),
+                _to_number(raw.get("whatsapp_total")),
+                _to_number(raw.get("voz_total")),
+                _to_number(raw.get("correo_total")),
+                json.dumps(leads_por_canal, ensure_ascii=False, sort_keys=True),
+                json.dumps(visitantes_por_canal, ensure_ascii=False, sort_keys=True),
+                _to_number(etapas_totales.get("captado")),
+                _to_number(etapas_totales.get("precalificado")),
+                _to_number(etapas_totales.get("demo")),
+                _to_number(etapas_totales.get("negociacion")),
+                _to_number(etapas_totales.get("ganado")),
+                _to_number(etapas_totales.get("perdido")),
+                bool(raw.get("has_data")),
+                raw.get("next_level"),
+                raw.get("parent_state"),
+            ]
+        )
+    add_sheet("Ubicaciones", ubicaciones_headers, ubicaciones_rows)
+
+    fuentes_totales: dict[str, int] = {}
+    utm_totales: dict[tuple[str, str, str], int] = {}
+    for item in summary_items:
+        if not isinstance(item, dict):
+            continue
+        location_key = str(item.get("key") or "")
+        location_name = str(item.get("name") or "")
+        for source_row in _ensure_list(item.get("fuentes_top"), default=[]):
+            if not isinstance(source_row, dict):
+                continue
+            source = str(source_row.get("source") or "").strip()
+            total = _to_number(source_row.get("total"))
+            if not source or total <= 0:
+                continue
+            fuentes_totales[source] = fuentes_totales.get(source, 0) + total
+        for utm_row in _ensure_list(item.get("utm_top"), default=[]):
+            if not isinstance(utm_row, dict):
+                continue
+            source = str(utm_row.get("utm_source") or "").strip()
+            medium = str(utm_row.get("utm_medium") or "").strip()
+            campaign = str(utm_row.get("utm_campaign") or "").strip()
+            total = _to_number(utm_row.get("total"))
+            if total <= 0:
+                continue
+            key = (source, medium, campaign)
+            utm_totales[key] = utm_totales.get(key, 0) + total
+
+    total_sessions = _to_number(summary_visitantes_totals.get("total"))
+    fuentes_rows = [
+        [source, total, round((total / total_sessions) * 100, 2) if total_sessions > 0 else 0.0]
+        for source, total in sorted(fuentes_totales.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    add_sheet("Fuentes", ["source", "total", "share_pct"], fuentes_rows)
+
+    utm_rows = [
+        [source, medium, campaign, total, round((total / total_sessions) * 100, 2) if total_sessions > 0 else 0.0]
+        for (source, medium, campaign), total in sorted(
+            utm_totales.items(), key=lambda item: (-item[1], item[0][0], item[0][1], item[0][2])
+        )
+    ]
+    add_sheet("UTM", ["utm_source", "utm_medium", "utm_campaign", "total", "share_pct"], utm_rows)
+
+    channel_totals: dict[str, dict[str, int]] = {}
+    for raw in map_dataset:
+        if not isinstance(raw, dict):
+            continue
+        for channel, total in _ensure_dict(raw.get("leads_totales_por_canal"), default={}).items():
+            channel_key = str(channel or "desconocido")
+            bucket = channel_totals.setdefault(channel_key, {"leads_total": 0, "visitantes_total": 0})
+            bucket["leads_total"] += _to_number(total)
+        for channel, total in _ensure_dict(raw.get("visitantes_totales_por_canal"), default={}).items():
+            channel_key = str(channel or "desconocido")
+            bucket = channel_totals.setdefault(channel_key, {"leads_total": 0, "visitantes_total": 0})
+            bucket["visitantes_total"] += _to_number(total)
+
+    canales_rows = [
+        [channel, bucket["leads_total"], bucket["visitantes_total"]]
+        for channel, bucket in sorted(channel_totals.items(), key=lambda item: (-item[1]["visitantes_total"], item[0]))
+    ]
+    add_sheet("Canales", ["canal", "leads_total", "visitantes_total"], canales_rows)
+
+    catalog_rows: list[list[Any]] = []
+    for key, value in sorted(summary_catalog.items(), key=lambda item: item[0]):
+        if isinstance(value, (dict, list)):
+            catalog_rows.append([key, json.dumps(value, ensure_ascii=False, sort_keys=True)])
+        else:
+            catalog_rows.append([key, value])
+    if catalog_rows:
+        add_sheet("Catalogo", ["clave", "valor"], catalog_rows)
+
+    def add_records_sheet(title: str, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            add_sheet(title, ["Sin datos"], [])
+            return
+        headers: list[str] = []
+        seen_headers: set[str] = set()
+        for row in rows:
+            for key in row.keys():
+                if key in seen_headers:
+                    continue
+                seen_headers.add(key)
+                headers.append(key)
+
+        normalized_rows: list[list[Any]] = []
+        for row in rows:
+            normalized_row: list[Any] = []
+            for key in headers:
+                value = row.get(key)
+                if isinstance(value, (dict, list)):
+                    normalized_row.append(json.dumps(value, ensure_ascii=False, sort_keys=True))
+                else:
+                    normalized_row.append(value)
+            normalized_rows.append(normalized_row)
+        add_sheet(title, headers, normalized_rows)
+
+    add_records_sheet(
+        "Visitas web",
+        [row for row in visitas_web_rows if isinstance(row, dict)],
+    )
+    add_records_sheet(
+        "Conversaciones",
+        [row for row in conversaciones_rows if isinstance(row, dict)],
+    )
+
+    output = io.BytesIO()
+    if "Sheet" in workbook.sheetnames:
+        workbook.remove(workbook["Sheet"])
+    workbook.save(output)
+    output.seek(0)
+
+    filename = (
+        f"mapa_conversion_{nivel_normalizado}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    )
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/demografia/geo/estados")
