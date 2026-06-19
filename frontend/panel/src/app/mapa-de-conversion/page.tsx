@@ -583,7 +583,14 @@ export default async function Page({
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
-                <div className="flex justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Link
+                    href={`/api/crm/demografia/mapa-v2/export/html${exportQueryString ? `?${exportQueryString}` : ""}`}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <IconDownload className="size-4" />
+                    Descargar HTML
+                  </Link>
                   <Link
                     href={exportHref}
                     className="inline-flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"

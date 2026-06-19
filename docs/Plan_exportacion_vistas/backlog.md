@@ -13,7 +13,7 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 - [x] Implementar el plan para la vista `mapa-de-conversion`
 - [ ] Diseñar el contrato de datos de exportación
 - [ ] Definir alcance exacto para `mapa-de-conversion`
-- [ ] Implementar exportación HTML
+- [x] Implementar exportación HTML
 - [ ] Implementar exportación PDF
 - [ ] Implementar exportación XLSX
 - [ ] Agregar acciones de descarga en el panel
@@ -32,7 +32,7 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 
 - [x] Implementar el plan para la vista `mapa-de-conversion`
 - [x] Payload de exportación para esta vista
-- [ ] Reporte HTML sin sección de filtros
+- [x] Reporte HTML sin sección de filtros
 - [ ] Exportación a PDF
 - [x] Exportación a Excel
 - [ ] Respeto de columnas configuradas por el usuario
@@ -51,6 +51,7 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 | 2026-06-19 | Backlog inicial creado | Se creó esta lista para registrar avance por fases. |
 | 2026-06-19 | Primera tarea priorizada | Se marcó explícitamente la implementación del plan para `mapa-de-conversion` como primer frente de trabajo. |
 | 2026-06-19 | Exportación XLSX completada | Se implementó la descarga XLSX de `mapa-de-conversion` con tablas incluidas. |
+| 2026-06-19 | Exportación HTML completada | Se implementó la descarga HTML de `mapa-de-conversion` como base para futuras exportaciones PDF. |
 
 ## Decisiones abiertas
 

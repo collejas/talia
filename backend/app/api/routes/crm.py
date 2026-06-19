@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 import time
+from html import escape as html_escape
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -39648,6 +39649,193 @@ async def demografia_mapa_v2_export_xlsx(
     )
 
 
+@router.get("/demografia/mapa-v2/export/html")
+async def demografia_mapa_v2_export_html(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str | None = Depends(optional_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    source_class: str | None = Query(default=None),
+    utm_source: str | None = Query(default=None),
+    utm_medium: str | None = Query(default=None),
+    utm_campaign: str | None = Query(default=None),
+    campana_id: str | None = Query(default=None),
+    campana_tipo: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
+    wa_canal_publicitario: str | None = Query(default=None),
+    wa_campana_publicitaria: str | None = Query(default=None),
+    wa_regla_id: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> Response:
+    effective_user_token = _normalize_reports_user_token(user_token)
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    source_class_value = (source_class or "").strip().lower() or None
+    utm_source_value = (utm_source or "").strip().lower() or None
+    utm_medium_value = (utm_medium or "").strip().lower() or None
+    utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    wa_canal_publicitario_value = (wa_canal_publicitario or "").strip().lower() or None
+    wa_campana_publicitaria_value = (wa_campana_publicitaria or "").strip().lower() or None
+    campana_id_raw = (campana_id or "").strip() or None
+    template_id_raw = (template_id or "").strip() or None
+    wa_regla_id_raw = (wa_regla_id or "").strip() or None
+
+    campana_uuid_value: UUID | None = None
+    if campana_id_raw:
+        try:
+            campana_uuid_value = UUID(campana_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
+
+    template_uuid_value: UUID | None = None
+    if template_id_raw:
+        try:
+            template_uuid_value = UUID(template_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="template_id_invalid") from exc
+
+    wa_regla_uuid_value: UUID | None = None
+    if wa_regla_id_raw:
+        try:
+            wa_regla_uuid_value = UUID(wa_regla_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+
+    resumen_payload, mapa_payload = await asyncio.gather(
+        demografia_resumen_v2(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token,
+            usuario_id=usuario_id,
+            nivel=nivel_normalizado,
+            estado=state_code,
+            canales=canales,
+            etapas=etapas,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+        demografia_mapa_v2(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token or "",
+            usuario_id=usuario_id,
+            nivel=nivel_normalizado,
+            estado=state_code,
+            canales=canales,
+            etapas=etapas,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+    )
+    visitas_web_rows, conversaciones_rows = await asyncio.gather(
+        get_visits_web_sessions(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            usuario_id=usuario_id,
+            limit=5000,
+            offset=0,
+            source_class=source_class_value,
+            estado=state_code,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+        ),
+        get_visits_whatsapp_conversations(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            _="reports.view",
+            user_token=effective_user_token or "",
+            usuario_id=usuario_id,
+            limit=500,
+            rango=rango,
+            desde=desde,
+            hasta=hasta,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+            campana_tipo=campana_tipo_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
+        ),
+    )
+
+    html_doc = _build_mapa_conversion_export_html(
+        nivel=nivel_normalizado,
+        state_code=state_code,
+        rango=rango,
+        desde=desde,
+        hasta=hasta,
+        canales=canales,
+        etapas=etapas,
+        source_class=source_class_value,
+        utm_source=utm_source_value,
+        utm_medium=utm_medium_value,
+        utm_campaign=utm_campaign_value,
+        campana_id=str(campana_uuid_value) if campana_uuid_value else None,
+        campana_tipo=campana_tipo_value,
+        template_id=str(template_uuid_value) if template_uuid_value else None,
+        wa_canal_publicitario=wa_canal_publicitario_value,
+        wa_campana_publicitaria=wa_campana_publicitaria_value,
+        wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+        resumen_payload=resumen_payload if isinstance(resumen_payload, dict) else {},
+        mapa_payload=mapa_payload if isinstance(mapa_payload, dict) else {},
+        visitas_web_rows=[row for row in visitas_web_rows if isinstance(row, dict)],
+        conversaciones_rows=[row for row in conversaciones_rows if isinstance(row, dict)],
+    )
+
+    filename = (
+        f"mapa_conversion_{nivel_normalizado}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.html"
+    )
+    return Response(
+        content=html_doc,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/demografia/geo/estados")
 async def demografia_geo_estados(
     *,
@@ -43933,6 +44121,501 @@ def _ensure_list(value: Any, default: list[Any]) -> list[Any]:
     if isinstance(value, list):
         return value
     return list(default)
+
+
+def _render_html_value(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, bool):
+        return "Sí" if value else "No"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{value:,.0f}".replace(",", ",")
+    text = str(value).strip()
+    return html_escape(text) if text else "—"
+
+
+_UTM_VALUE_LABELS: dict[str, str] = {
+    "(none)": "Sin dato",
+    "prospeccion": "Prospección",
+    "chatgpt.com": "ChatGPT",
+    "cold_outreach": "Prospección fría",
+    "whatsapp_cta": "CTA de WhatsApp",
+    "whatsapp_media": "WhatsApp",
+    "email_image": "Email",
+}
+
+
+def _normalize_lookup_key(value: str) -> str:
+    normalized = value.strip().lower()
+    return re.sub(r"[\s_-]+", "", normalized)
+
+
+def _format_utm_value(value: Any, label_map: dict[str, str] | None = None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "Sin dato"
+    normalized = raw.lower()
+    lookup_key = _normalize_lookup_key(raw)
+    if label_map:
+        label = label_map.get(lookup_key) or label_map.get(normalized) or label_map.get(raw.strip())
+        if label:
+            return label
+    if normalized in _UTM_VALUE_LABELS:
+        return _UTM_VALUE_LABELS[normalized]
+    if re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", normalized):
+        return f"Campaña {normalized[:8]}"
+    if len(raw) > 24 and re.fullmatch(r"[0-9a-f-]+", normalized):
+        return f"Campaña {normalized[:8]}"
+    friendly = raw.replace("_", " ").replace("-", " ").strip()
+    return friendly[:1].upper() + friendly[1:] if friendly else "Sin dato"
+
+
+def _build_report_table_html(title: str, headers: list[str], rows: list[list[Any]]) -> str:
+    header_html = "".join(f"<th>{html_escape(header)}</th>" for header in headers)
+    if rows:
+        body_html = "".join(
+            "<tr>"
+            + "".join(f"<td>{_render_html_value(cell)}</td>" for cell in row)
+            + "</tr>"
+            for row in rows
+        )
+    else:
+        body_html = f"<tr><td colspan='{len(headers)}'>Sin datos</td></tr>"
+    return f"""
+      <section class="report-section">
+        <h2>{html_escape(title)}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>{header_html}</tr></thead>
+            <tbody>{body_html}</tbody>
+          </table>
+        </div>
+      </section>
+    """
+
+
+def _build_report_bars_html(title: str, rows: list[tuple[str, int, float]]) -> str:
+    if not rows:
+        return f"""
+          <section class="report-section">
+            <h2>{html_escape(title)}</h2>
+            <p class="muted">Sin datos</p>
+          </section>
+        """
+    max_value = max((value for _label, value, _pct in rows), default=0)
+    bar_rows: list[str] = []
+    for label, value, pct in rows:
+        width = (value / max_value * 100) if max_value > 0 else 0
+        bar_rows.append(
+            f"""
+              <div class="bar-row">
+                <div class="bar-label">{html_escape(label)}</div>
+                <div class="bar-track">
+                  <div class="bar-fill" style="width: {width:.2f}%"></div>
+                </div>
+                <div class="bar-meta">{value} <span>{pct:.1f}%</span></div>
+              </div>
+            """
+        )
+    return f"""
+      <section class="report-section">
+        <h2>{html_escape(title)}</h2>
+        <div class="bar-list">{''.join(bar_rows)}</div>
+      </section>
+    """
+
+
+def _build_mapa_conversion_export_html(
+    *,
+    nivel: str,
+    state_code: str | None,
+    rango: str | None,
+    desde: str | None,
+    hasta: str | None,
+    canales: str | None,
+    etapas: str | None,
+    source_class: str | None,
+    utm_source: str | None,
+    utm_medium: str | None,
+    utm_campaign: str | None,
+    campana_id: str | None,
+    campana_tipo: str | None,
+    template_id: str | None,
+    wa_canal_publicitario: str | None,
+    wa_campana_publicitaria: str | None,
+    wa_regla_id: str | None,
+    resumen_payload: dict[str, Any],
+    mapa_payload: dict[str, Any],
+    visitas_web_rows: list[dict[str, Any]],
+    conversaciones_rows: list[dict[str, Any]],
+) -> str:
+    summary_visitantes = _ensure_dict(resumen_payload.get("visitantes"), default={})
+    summary_items = _ensure_list(summary_visitantes.get("items"), default=[])
+    summary_visitantes_totals = _ensure_dict(summary_visitantes.get("totals"), default={})
+    summary_leads = _ensure_dict(resumen_payload.get("leads"), default={})
+    summary_leads_totals = _ensure_dict(summary_leads.get("totals"), default={})
+    summary_catalog = _ensure_dict(resumen_payload.get("attribution_catalog"), default={})
+    map_dataset = _ensure_list(mapa_payload.get("dataset"), default=[])
+
+    total_visitantes = _to_number(summary_visitantes_totals.get("total"))
+    total_con_chat = _to_number(summary_visitantes_totals.get("con_chat"))
+    conversion_pct = round((total_con_chat / total_visitantes * 100) if total_visitantes > 0 else 0.0, 2)
+    total_leads = _to_number(summary_leads_totals.get("total"))
+
+    filters = [
+        ("Nivel", nivel),
+        ("Estado", state_code),
+        ("Rango", rango),
+        ("Desde", desde),
+        ("Hasta", hasta),
+        ("Canales", canales),
+        ("Etapas", etapas),
+        ("Source class", source_class),
+        ("UTM source", utm_source),
+        ("UTM medium", utm_medium),
+        ("UTM campaign", utm_campaign),
+        ("Campaña", campana_id),
+        ("Tipo de campaña", campana_tipo),
+        ("Template", template_id),
+        ("WA canal", wa_canal_publicitario),
+        ("WA campaña", wa_campana_publicitaria),
+        ("WA regla", wa_regla_id),
+    ]
+    filters_html = "".join(
+        f"<span class='chip'><strong>{html_escape(label)}:</strong> {_render_html_value(value)}</span>"
+        for label, value in filters
+        if value not in (None, "")
+    )
+    if not filters_html:
+        filters_html = "<span class='chip'>Sin filtros activos</span>"
+
+    cards_html = "".join(
+        [
+            f"<article class='card'><p>Visitas totales</p><strong>{_render_html_value(total_visitantes)}</strong></article>",
+            f"<article class='card'><p>Visitas con contacto</p><strong>{_render_html_value(total_con_chat)}</strong></article>",
+            f"<article class='card'><p>Porcentaje que convierte</p><strong>{_render_html_value(conversion_pct)}%</strong></article>",
+            f"<article class='card'><p>Leads totales</p><strong>{_render_html_value(total_leads)}</strong></article>",
+        ]
+    )
+
+    fuentes_totales: dict[str, int] = {}
+    utm_totales: dict[tuple[str, str, str], int] = {}
+    campaign_label_map: dict[str, str] = {}
+    for option in _ensure_list(summary_catalog.get("campana_options"), default=[]):
+        if not isinstance(option, dict):
+            continue
+        value = str(option.get("value") or "").strip()
+        label = str(option.get("label") or "").strip()
+        if value and label:
+            campaign_label_map[_normalize_lookup_key(value)] = label
+            campaign_label_map[value.lower()] = label
+    for key, label in _ensure_dict(summary_catalog.get("utm_campaign_labels"), default={}).items():
+        label_text = str(label or "").strip()
+        if not label_text:
+            continue
+        campaign_label_map[_normalize_lookup_key(str(key))] = label_text
+        campaign_label_map[str(key).strip().lower()] = label_text
+    for item in summary_items:
+        if not isinstance(item, dict):
+            continue
+        for source_row in _ensure_list(item.get("fuentes_top"), default=[]):
+            if not isinstance(source_row, dict):
+                continue
+            source = _format_utm_value(source_row.get("source"))
+            total = _to_number(source_row.get("total"))
+            if total > 0:
+                fuentes_totales[source] = fuentes_totales.get(source, 0) + total
+        for utm_row in _ensure_list(item.get("utm_top"), default=[]):
+            if not isinstance(utm_row, dict):
+                continue
+            source = _format_utm_value(utm_row.get("utm_source"))
+            medium = _format_utm_value(utm_row.get("utm_medium"))
+            campaign = _format_utm_value(utm_row.get("utm_campaign"), campaign_label_map)
+            total = _to_number(utm_row.get("total"))
+            if total > 0:
+                key = (source, medium, campaign)
+                utm_totales[key] = utm_totales.get(key, 0) + total
+
+    total_sessions = total_visitantes or 1
+    fuentes_rows = [
+        (source, total, round(total / total_sessions * 100, 1))
+        for source, total in sorted(fuentes_totales.items(), key=lambda item: (-item[1], item[0]))
+    ][:8]
+    utm_rows = [
+        (f"{source} / {medium} / {campaign}", total, round(total / total_sessions * 100, 1))
+        for (source, medium, campaign), total in sorted(
+            utm_totales.items(), key=lambda item: (-item[1], item[0][0], item[0][1], item[0][2])
+        )
+    ][:8]
+
+    location_rows: list[list[Any]] = []
+    for raw in map_dataset[:200]:
+        if not isinstance(raw, dict):
+            continue
+        location_rows.append(
+            [
+                raw.get("name"),
+                raw.get("key"),
+                raw.get("nivel"),
+                _to_number(raw.get("total_visitas")),
+                _to_number(raw.get("visitantes_total")),
+                _to_number(raw.get("leads_total")),
+            ]
+        )
+
+    visit_web_headers = [
+        "Creado",
+        "Promoción de prospección",
+        "Lote Prospección",
+        "Tipo de promoción",
+        "Canal WA",
+        "Promoción de WhatsApp",
+        "Regla WA",
+        "Persona ID",
+        "Contacto",
+        "Origen contacto",
+        "Correo prospección",
+        "Sitio de origen",
+        "Sitio que envió la visita",
+        "Página de entrada",
+        "Origen de la promoción",
+        "Medio de la promoción",
+        "Nombre de la promoción",
+        "Template",
+    ]
+    visit_web_rows_rendered = [
+        [
+            row.get("registrado_en"),
+            row.get("prospeccion_campana_nombre"),
+            row.get("prospeccion_batch_label"),
+            row.get("prospeccion_campana_tipo"),
+            row.get("wa_canal_publicitario"),
+            row.get("wa_campana_publicitaria"),
+            row.get("wa_regla_nombre"),
+            row.get("persona_id"),
+            row.get("contacto_nombre"),
+            row.get("contacto_origen"),
+            row.get("correo_envio"),
+            row.get("referrer"),
+            row.get("referrer_host"),
+            row.get("landing_url"),
+            row.get("utm_source"),
+            row.get("utm_medium"),
+            row.get("utm_campaign"),
+            row.get("template_nombre"),
+        ]
+        for row in visitas_web_rows[:100]
+    ]
+    conversations_headers = [
+        "Creado",
+        "Tipo de promoción",
+        "Promoción de prospección",
+        "Plantilla detectada",
+        "Canal de WhatsApp",
+        "Promoción de WhatsApp",
+        "Regla de origen",
+        "Contacto",
+        "Origen contacto",
+        "Correo prospección",
+        "Mensajes entrantes",
+        "Mensajes salientes",
+        "Último mensaje",
+    ]
+    conversations_rows_rendered = [
+        [
+            row.get("registrado_en"),
+            row.get("prospeccion_campana_tipo"),
+            row.get("prospeccion_campana_nombre"),
+            row.get("template_nombre"),
+            row.get("wa_canal_publicitario"),
+            row.get("wa_campana_publicitaria"),
+            row.get("wa_regla_nombre"),
+            row.get("contacto_nombre"),
+            row.get("contacto_origen"),
+            row.get("correo_envio"),
+            row.get("mensajes_entrantes"),
+            row.get("mensajes_salientes"),
+            row.get("ultimo_mensaje_conversacion"),
+        ]
+        for row in conversaciones_rows[:100]
+    ]
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mapa de Conversión</title>
+  <style>
+    :root {{
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe3ee;
+      --accent: #0f766e;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 240px);
+      color: var(--text);
+    }}
+    .page {{
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }}
+    .hero {{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 20px;
+    }}
+    .hero h1 {{ margin: 0 0 8px; font-size: 28px; }}
+    .hero p {{ margin: 0; color: var(--muted); }}
+    .meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }}
+    .chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.2;
+    }}
+    .card-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin: 18px 0 24px;
+    }}
+    .card {{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }}
+    .card p {{
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .card strong {{
+      font-size: 28px;
+      line-height: 1.1;
+    }}
+    .report-section {{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-bottom: 18px;
+      overflow: hidden;
+    }}
+    .report-section h2 {{
+      margin: 0 0 14px;
+      font-size: 18px;
+    }}
+    .table-wrap {{
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 920px;
+      font-size: 13px;
+      background: white;
+    }}
+    thead th {{
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      color: #334155;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      white-space: nowrap;
+    }}
+    tbody td {{
+      border-bottom: 1px solid #edf2f7;
+      padding: 10px 14px;
+      vertical-align: top;
+      color: #1f2937;
+    }}
+    tbody tr:nth-child(even) td {{ background: #fbfdff; }}
+    .bar-list {{ display: grid; gap: 10px; }}
+    .bar-row {{
+      display: grid;
+      grid-template-columns: minmax(140px, 320px) minmax(0, 1fr) 120px;
+      gap: 12px;
+      align-items: center;
+    }}
+    .bar-label {{ font-size: 13px; color: var(--text); }}
+    .bar-track {{
+      height: 12px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }}
+    .bar-fill {{
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #22c55e);
+      border-radius: inherit;
+    }}
+    .bar-meta {{
+      font-size: 13px;
+      text-align: right;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }}
+    .bar-meta span {{ color: var(--muted); }}
+    .muted {{ color: var(--muted); margin: 0; }}
+    @media print {{
+      body {{ background: white; }}
+      .page {{ max-width: none; padding: 0; }}
+      .hero, .card, .report-section {{ box-shadow: none; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <p class="muted">Exportación de la vista mapa-de-conversion</p>
+      <h1>Mapa de Conversión</h1>
+      <p>Generado el {html_escape(generated_at)}.</p>
+      <div class="meta">{filters_html}</div>
+    </section>
+
+    <section class="card-grid">
+      {cards_html}
+    </section>
+
+    {_build_report_bars_html("De dónde llegan las visitas", fuentes_rows)}
+    {_build_report_bars_html("Fuentes y campañas", utm_rows)}
+    {_build_report_table_html("Mapa por ubicación", ["Nombre", "Clave", "Nivel", "Visitas", "Visitantes", "Leads"], location_rows)}
+    {_build_report_table_html("Visitas web", visit_web_headers, visit_web_rows_rendered)}
+    {_build_report_table_html("Conversaciones", conversations_headers, conversations_rows_rendered)}
+  </main>
+</body>
+</html>"""
 
 
 def _params_to_dict(params: BuscadorParams) -> dict[str, Any]:

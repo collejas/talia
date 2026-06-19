@@ -12,3 +12,4 @@ Plan base: `plan_exportaciones_vistas.md`
 - Se priorizó como primer frente la implementación del plan para `mapa-de-conversion`.
 - Se implementó la exportación XLSX de `mapa-de-conversion`.
 - El archivo exportado ya incluye indicadores, gráficos derivados del resumen y las dos tablas de la vista: `Visitas web` y `Conversaciones`.
+- Se implementó la exportación HTML de `mapa-de-conversion` como base reutilizable para PDF.
