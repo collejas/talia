@@ -10,7 +10,7 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 ## Estado general
 
 - [x] Definir el plan general de exportaciones
-- [ ] Implementar el plan para la vista `mapa-de-conversion`
+- [x] Implementar el plan para la vista `mapa-de-conversion`
 - [ ] Diseñar el contrato de datos de exportación
 - [ ] Definir alcance exacto para `mapa-de-conversion`
 - [ ] Implementar exportación HTML
@@ -30,11 +30,11 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 
 ### Fase 2: `mapa-de-conversion`
 
-- [ ] Implementar el plan para la vista `mapa-de-conversion`
-- [ ] Payload de exportación para esta vista
+- [x] Implementar el plan para la vista `mapa-de-conversion`
+- [x] Payload de exportación para esta vista
 - [ ] Reporte HTML sin sección de filtros
 - [ ] Exportación a PDF
-- [ ] Exportación a Excel
+- [x] Exportación a Excel
 - [ ] Respeto de columnas configuradas por el usuario
 
 ### Fase 3: Reuso transversal
@@ -50,6 +50,7 @@ Registrar el avance de la funcionalidad de exportación de vistas del panel, emp
 | 2026-06-19 | Plan base creado | Se definió la idea general de exportar vistas filtradas sin incluir la UI de filtros. |
 | 2026-06-19 | Backlog inicial creado | Se creó esta lista para registrar avance por fases. |
 | 2026-06-19 | Primera tarea priorizada | Se marcó explícitamente la implementación del plan para `mapa-de-conversion` como primer frente de trabajo. |
+| 2026-06-19 | Exportación XLSX completada | Se implementó la descarga XLSX de `mapa-de-conversion` con tablas incluidas. |
 
 ## Decisiones abiertas
 
