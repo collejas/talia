@@ -136,22 +136,28 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
             <CardTitle>Sitios que envían visitas</CardTitle>
             <CardDescription>Sitios externos que enviaron tráfico al sitio.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2">
+          <CardContent className="grid min-w-0 gap-2">
             {referrerRows.length ? (
               referrerRows.map((item) => {
                 const rate = item.total > 0 ? (item.converted / item.total) * 100 : 0;
                 return (
                   <div
                     key={item.host}
-                    className="bg-muted/50 flex flex-col gap-2 rounded-lg px-3 py-2 text-sm"
+                    className="bg-muted/50 flex min-w-0 flex-col gap-2 rounded-lg px-3 py-2 text-sm"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium">{item.host}</span>
-                      <Badge variant="outline">{formatNumber(item.total)}</Badge>
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="min-w-0 flex-1 truncate font-medium" title={item.host}>
+                        {item.host}
+                      </span>
+                      <Badge className="shrink-0" variant="outline">
+                        {formatNumber(item.total)}
+                      </Badge>
                     </div>
-                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                      <span>Convertidas: {formatNumber(item.converted)}</span>
-                      <span>{formatPercent(rate)}</span>
+                    <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span className="min-w-0 truncate">
+                        Convertidas: {formatNumber(item.converted)}
+                      </span>
+                      <span className="shrink-0 tabular-nums">{formatPercent(rate)}</span>
                     </div>
                   </div>
                 );
@@ -231,15 +237,22 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                 </ChartContainer>
                 <div className="grid gap-2">
                   {whatsappChannelRows.map((item, index) => (
-                    <div key={item.source} className="flex items-center justify-between gap-3 text-sm">
-                      <div className="flex items-center gap-2">
+                    <div
+                      key={item.source}
+                      className="flex min-w-0 items-center justify-between gap-3 text-sm"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
                         <span
                           className="inline-block size-2.5 rounded-full"
                           style={{ backgroundColor: WHATSAPP_COLORS[index % WHATSAPP_COLORS.length] }}
                         />
-                        <span>{item.source}</span>
+                        <span className="min-w-0 truncate" title={item.source}>
+                          {item.source}
+                        </span>
                       </div>
-                      <Badge variant="outline">{formatNumber(item.total)}</Badge>
+                      <Badge className="shrink-0" variant="outline">
+                        {formatNumber(item.total)}
+                      </Badge>
                     </div>
                   ))}
                 </div>
