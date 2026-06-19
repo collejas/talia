@@ -113,21 +113,26 @@ function formatUtmFieldLabel(value: "utm_source" | "utm_medium" | "utm_campaign"
 }
 
 function renderBarValueLabel(props: {
-  x?: number;
-  y?: number;
-  width?: number;
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
   value?: number | string;
 }) {
   const { x, y, width, value } = props;
   const numericValue = toNumber(value);
+  const numericX = toNumber(x);
+  const numericY = toNumber(y);
+  const numericWidth = toNumber(width);
 
   if (!Number.isFinite(numericValue) || numericValue <= 0) return null;
-  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number") return null;
+  if (!Number.isFinite(numericX) || !Number.isFinite(numericY) || !Number.isFinite(numericWidth)) {
+    return null;
+  }
 
   return (
     <text
-      x={x + width / 2}
-      y={Math.max(y - 5, 11)}
+      x={numericX + numericWidth / 2}
+      y={Math.max(numericY - 5, 11)}
       fill="hsl(var(--muted-foreground))"
       fontSize={10}
       fontWeight={500}
