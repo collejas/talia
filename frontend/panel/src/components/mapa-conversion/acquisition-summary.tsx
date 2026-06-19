@@ -85,9 +85,24 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-function formatUtmValue(value: string): string {
+function normalizeLookupKey(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  return normalized.replace(/[\s_-]+/g, "");
+}
+
+function formatUtmValue(
+  value: string,
+  campaignLabels: Map<string, string> | null,
+): string {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return "Sin dato";
+
+  const campaignLabel =
+    campaignLabels?.get(normalizeLookupKey(normalized)) ??
+    campaignLabels?.get(normalized) ??
+    campaignLabels?.get(value.trim());
+  if (campaignLabel) return campaignLabel;
+
   return UTM_VALUE_LABELS[normalized] ?? normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -125,6 +140,27 @@ function renderBarValueLabel(props: {
 }
 
 export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
+  const campaignLabels = React.useMemo(() => {
+    const labels = new Map<string, string>();
+    const fromCatalog = summary?.attribution_catalog?.utm_campaign_labels ?? {};
+    for (const [key, label] of Object.entries(fromCatalog)) {
+      const normalizedKey = normalizeLookupKey(key);
+      if (!normalizedKey) continue;
+      labels.set(normalizedKey, label);
+      labels.set(key.trim().toLowerCase(), label);
+      labels.set(key.trim(), label);
+    }
+    for (const option of summary?.attribution_catalog?.campana_options ?? []) {
+      const value = String(option?.value || "").trim();
+      const label = String(option?.label || "").trim();
+      if (!value || !label) continue;
+      labels.set(normalizeLookupKey(value), label);
+      labels.set(value.toLowerCase(), label);
+      labels.set(value, label);
+    }
+    return labels;
+  }, [summary]);
+
   const {
     sourceClassRows,
     referrerRows,
@@ -291,19 +327,25 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           {formatUtmFieldLabel("utm_source")}
                         </span>
-                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_source)}</span>
+                        <span className="min-w-0 font-medium">
+                          {formatUtmValue(item.utm_source, campaignLabels)}
+                        </span>
                       </div>
                       <div className="flex min-w-0 flex-col">
                         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           {formatUtmFieldLabel("utm_medium")}
                         </span>
-                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_medium)}</span>
+                        <span className="min-w-0 font-medium">
+                          {formatUtmValue(item.utm_medium, campaignLabels)}
+                        </span>
                       </div>
                       <div className="flex min-w-0 flex-col">
                         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           {formatUtmFieldLabel("utm_campaign")}
                         </span>
-                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_campaign)}</span>
+                        <span className="min-w-0 font-medium">
+                          {formatUtmValue(item.utm_campaign, campaignLabels)}
+                        </span>
                       </div>
                     </div>
                     <Badge variant="outline">{formatNumber(item.total)}</Badge>
