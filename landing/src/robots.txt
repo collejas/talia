@@ -1,3 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /demo.html
+Disallow: /presentacion.html
+Disallow: /nota.html
+Disallow: /demo
+Disallow: /presentacion
+Disallow: /nota
 Sitemap: https://talia.mx/sitemap.xml
