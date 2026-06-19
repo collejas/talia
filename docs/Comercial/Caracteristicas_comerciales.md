@@ -1,3 +1,10 @@
+  0. Versión comercial para desarrolladores inmobiliarios y equipos de bienes raíces.
+
+  - Gestión comercial de propiedades en 3D con visualización por desarrollos, unidades y estatus.
+  - Mapa comercial con polígonos, capas, ubicaciones y seguimiento de inventario.
+  - Agenda de visitas, demos y seguimiento comercial orientado al cierre.
+
+
   1. IA
 
   - Asistente comercial multicanal con memoria.
