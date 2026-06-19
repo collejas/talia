@@ -280,7 +280,7 @@ export default async function Page({
     waCanalPublicitario || waCampanaPublicitaria || waReglaId,
   );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
-  const rango = rangoParam.length ? rangoParam : "mes";
+  const rango = rangoParam.length ? rangoParam : "ano_actual";
   const desdeParam = typeof params.desde === "string" ? params.desde.trim() : "";
   const hastaParam = typeof params.hasta === "string" ? params.hasta.trim() : "";
   const desde = desdeParam.length ? desdeParam : null;

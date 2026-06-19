@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import base64
 import csv
 import hmac
@@ -6035,7 +6036,117 @@ DATE_RANGE_PRESETS: dict[str, timedelta] = {
     "trimestre": timedelta(days=90),
     "semestre": timedelta(days=180),
     "ano": timedelta(days=365),
+    "ultimos_365_dias": timedelta(days=365),
 }
+
+CALENDAR_RANGE_PRESETS = {
+    "ano_actual",
+    "ano_anterior",
+    "bimestre_actual",
+    "trimestre_actual",
+    "semestre_actual",
+}
+
+
+def _start_of_period_for_range(rango_norm: str, now_local: datetime) -> tuple[datetime | None, datetime | None]:
+    def _safe_local_datetime(
+        *,
+        year: int,
+        month: int,
+        day: int,
+        hour: int,
+        minute: int,
+        second: int,
+        microsecond: int,
+    ) -> datetime:
+        max_day = calendar.monthrange(year, month)[1]
+        safe_day = min(day, max_day)
+        return now_local.replace(
+            year=year,
+            month=month,
+            day=safe_day,
+            hour=hour,
+            minute=minute,
+            second=second,
+            microsecond=microsecond,
+        )
+
+    if rango_norm == "ano_actual":
+        start = _safe_local_datetime(
+            year=now_local.year,
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        end = now_local
+        return start, end
+
+    if rango_norm == "ano_anterior":
+        year = now_local.year - 1
+        start = _safe_local_datetime(
+            year=year,
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        end = _safe_local_datetime(
+            year=year,
+            month=12,
+            day=31,
+            hour=23,
+            minute=59,
+            second=59,
+            microsecond=999999,
+        )
+        return start, end
+
+    if rango_norm in {"bimestre_actual", "trimestre_actual", "semestre_actual"}:
+        month = now_local.month
+        if rango_norm == "bimestre_actual":
+            start_month = ((month - 1) // 2) * 2 + 1
+            end_month = start_month + 1
+        elif rango_norm == "trimestre_actual":
+            start_month = ((month - 1) // 3) * 3 + 1
+            end_month = start_month + 2
+        else:
+            start_month = 1 if month <= 6 else 7
+            end_month = start_month + 5
+
+        start = _safe_local_datetime(
+            year=now_local.year,
+            month=start_month,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        next_month = end_month + 1
+        next_year = start.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+        end = (
+            _safe_local_datetime(
+                year=next_year,
+                month=next_month,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            - timedelta(microseconds=1)
+        )
+        return start, min(end, now_local)
+
+    return None, None
 
 AGENDA_ACTIVE_ESTADOS = {"confirmada"}
 AGENDA_UPCOMING_WINDOW = timedelta(hours=24)
@@ -6071,7 +6182,11 @@ def _resolve_date_range(
 
     rango_norm = (rango or "").strip().lower()
     if rango_norm:
-        if rango_norm in DATE_RANGE_PRESETS:
+        calendar_start, calendar_end = _start_of_period_for_range(rango_norm, now_local)
+        if calendar_start or calendar_end:
+            start = calendar_start
+            end = calendar_end
+        elif rango_norm in DATE_RANGE_PRESETS:
             if rango_norm == "hoy":
                 start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
                 end = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)

@@ -583,7 +583,7 @@ export function DemografiaControls({
                     Periodo
                   </p>
                   <Select
-                    value={rango ?? "mes"}
+                    value={rango ?? "ano_actual"}
                     onValueChange={(value) => {
                       const isCustom = value === "fechas";
                       updateParams({
@@ -596,11 +596,17 @@ export function DemografiaControls({
                     <SelectTrigger className="h-8 w-full">
                       <SelectValue placeholder="Periodo" />
                     </SelectTrigger>
-                    <SelectContent className="z-50">
-                      <SelectItem value="hoy">Hoy</SelectItem>
-                      <SelectItem value="ayer">Ayer</SelectItem>
+                    <SelectContent className="z-50" position="item-aligned" side="bottom" align="start" sideOffset={8}>
+                      <SelectItem value="ano_actual">Año actual</SelectItem>
+                      <SelectItem value="ano_anterior">Año anterior</SelectItem>
+                      <SelectItem value="ultimos_365_dias">Últimos 365 días</SelectItem>
+                      <SelectItem value="bimestre_actual">Bimestre actual</SelectItem>
+                      <SelectItem value="trimestre_actual">Trimestre actual</SelectItem>
+                      <SelectItem value="semestre_actual">Semestre actual</SelectItem>
                       <SelectItem value="7d">Últimos 7 días</SelectItem>
                       <SelectItem value="30d">Últimos 30 días</SelectItem>
+                      <SelectItem value="hoy">Hoy</SelectItem>
+                      <SelectItem value="ayer">Ayer</SelectItem>
                       <SelectItem value="mes">Último mes</SelectItem>
                       <SelectItem value="fechas">Rango personalizado</SelectItem>
                     </SelectContent>
