@@ -292,6 +292,18 @@ server {
         return 302 /nota.html;
     }
 
+    # Landing precios
+    location = /precios {
+        root /var/www/talia-landing;
+        try_files /precios.html =404;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /precios.html {
+        root /var/www/talia-landing;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
     # Fallback SPA
     location / {
         try_files $uri $uri/ /index.html;
