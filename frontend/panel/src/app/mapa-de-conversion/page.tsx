@@ -561,9 +561,6 @@ export default async function Page({
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
-                <MapKpis {...mapKpisData} />
-              </div>
-              <div className="px-4 lg:px-6">
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch">
                   <DemografiaControls
                     nivel={nivel}
@@ -717,6 +714,9 @@ export default async function Page({
                     </div>
                   </section>
                 </div>
+              </div>
+              <div className="px-4 lg:px-6">
+                <MapKpis {...mapKpisData} />
               </div>
               <SessionRecovery errors={errores} />
               <div className="px-4 lg:px-6">
