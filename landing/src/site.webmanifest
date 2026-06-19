@@ -1,12 +1,12 @@
 {
-  "name": "TalIA",
-  "short_name": "TalIA",
-  "description": "TalIA es inteligencia artificial que integra múltiples canales para automatizar ventas, atención y marketing.",
+  "name": "Talia",
+  "short_name": "Talia",
+  "description": "Talia es un CRM con IA para WhatsApp que automatiza ventas, atención y marketing.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fef9f5",
-  "theme_color": "#fdf4ff",
+  "background_color": "#f7f6f8",
+  "theme_color": "#7f13ec",
   "icons": [
     {
       "src": "/favicon-48.png",

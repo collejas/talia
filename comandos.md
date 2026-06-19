@@ -116,7 +116,8 @@ qOmfDOWUq7L9l5Nlsgdgd#$VD^^#&*XFHh_g
 
 login codex resume 019d541a-0287-73a2-8a45-885f987ab2e6
 
-sudo rsync -a landing/src/ /var/www/talia-landing/ 
+# REinicio de Landing:
+cd /var/www/talia/landing/src && node scripts/generate-sitemap.mjs && sudo rsync -a /var/www/talia/landing/src/ /var/www/talia-landing/
 
 # LIMPIEZA
   cd /var/www/talia
