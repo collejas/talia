@@ -42,6 +42,23 @@ const WHATSAPP_COLORS = [
   "var(--chart-5)",
 ];
 
+const SOURCE_CLASS_COLORS: Record<string, string> = {
+  ai_referral: "var(--chart-1)",
+  campaign: "var(--chart-3)",
+  direct: "var(--chart-4)",
+  organic_search: "var(--chart-5)",
+  organic_social: "#14b8a6",
+  referral: "#f97316",
+  unknown: "#94a3b8",
+};
+
+const CONVERTED_COLOR = "#16a34a";
+
+function getSourceClassColor(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  return SOURCE_CLASS_COLORS[normalized] ?? "#8b5cf6";
+}
+
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -93,13 +110,37 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     labelFormatter={(value) => formatSourceClassLabel(String(value))}
+                    formatter={(value, name, item) => {
+                      const isConverted = name === "converted";
+                      const sourceName = String(item?.payload?.source || "");
+                      const swatchColor = isConverted ? CONVERTED_COLOR : getSourceClassColor(sourceName);
+                      const label = isConverted ? "Convertidas" : "Sesiones";
+                      return (
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="shrink-0 rounded-[2px]"
+                              style={{
+                                backgroundColor: swatchColor,
+                                width: 10,
+                                height: 10,
+                              }}
+                            />
+                            <span className="text-muted-foreground">{label}</span>
+                          </div>
+                          <span className="font-mono font-medium tabular-nums text-foreground">
+                            {formatNumber(toNumber(value))}
+                          </span>
+                        </div>
+                      );
+                    }}
                   />
                   <Bar dataKey="total" radius={[6, 6, 0, 0]}>
                     {sourceClassRows.map((item) => (
-                      <Cell key={item.source} fill={`var(--color-total)`} />
+                      <Cell key={item.source} fill={getSourceClassColor(item.source)} />
                     ))}
                   </Bar>
-                  <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill="var(--color-converted)" />
+                  <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR} />
                 </BarChart>
               </ChartContainer>
             ) : (
