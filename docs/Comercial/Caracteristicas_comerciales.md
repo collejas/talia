@@ -2,6 +2,7 @@
 
   - Gestión comercial de propiedades en 3D con visualización por desarrollos, unidades y estatus.
   - Mapa comercial con polígonos, capas, ubicaciones y seguimiento de inventario.
+  - Manejo de inventario comercial y reserva patrimonial (reservado para futuros creciemientos)
   - Agenda de visitas, demos y seguimiento comercial orientado al cierre.
 
 
