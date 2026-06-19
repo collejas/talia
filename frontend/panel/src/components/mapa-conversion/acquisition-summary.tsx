@@ -124,55 +124,65 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
           </CardHeader>
           <CardContent>
             {sourceClassRows.length ? (
-              <ChartContainer config={SOURCE_CLASS_CONFIG} className="h-72">
-                <BarChart data={sourceClassRows} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="source"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={12}
-                    tickFormatter={(value) => formatSourceClassLabel(String(value))}
-                  />
-                  <ChartTooltip
-                    content={<ChartTooltipContent />}
-                    labelFormatter={(value) => formatSourceClassLabel(String(value))}
-                    formatter={(value, name, item) => {
-                      const isConverted = name === "converted";
-                      const sourceName = String(item?.payload?.source || "");
-                      const swatchColor = isConverted ? CONVERTED_COLOR : getSourceClassColor(sourceName);
-                      const label = isConverted ? "Convertidas" : "Sesiones";
-                      return (
-                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="shrink-0 rounded-[2px]"
-                              style={{
-                                backgroundColor: swatchColor,
-                                width: 10,
-                                height: 10,
-                              }}
-                            />
-                            <span className="text-muted-foreground">{label}</span>
+              <>
+                <ChartContainer config={SOURCE_CLASS_CONFIG} className="h-72">
+                  <BarChart data={sourceClassRows} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="source"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={12}
+                      tickFormatter={(value) => formatSourceClassLabel(String(value))}
+                    />
+                    <ChartTooltip
+                      content={<ChartTooltipContent />}
+                      labelFormatter={(value) => formatSourceClassLabel(String(value))}
+                      formatter={(value, name, item) => {
+                        const isConverted = name === "converted";
+                        const sourceName = String(item?.payload?.source || "");
+                        const swatchColor = isConverted ? CONVERTED_COLOR : getSourceClassColor(sourceName);
+                        const label = isConverted ? "Convertidas" : "Sesiones";
+                        return (
+                          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="shrink-0 rounded-[2px]"
+                                style={{
+                                  backgroundColor: swatchColor,
+                                  width: 10,
+                                  height: 10,
+                                }}
+                              />
+                              <span className="text-muted-foreground">{label}</span>
+                            </div>
+                            <span className="font-mono font-medium tabular-nums text-foreground">
+                              {formatNumber(toNumber(value))}
+                            </span>
                           </div>
-                          <span className="font-mono font-medium tabular-nums text-foreground">
-                            {formatNumber(toNumber(value))}
-                          </span>
-                        </div>
-                      );
-                    }}
+                        );
+                      }}
+                    />
+                    <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+                      {sourceClassRows.map((item) => (
+                        <Cell key={item.source} fill={getSourceClassColor(item.source)} />
+                      ))}
+                      <LabelList content={renderBarValueLabel} />
+                    </Bar>
+                    <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR}>
+                      <LabelList content={renderBarValueLabel} />
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <span
+                    className="h-2.5 w-2.5 rounded-[2px]"
+                    style={{ backgroundColor: CONVERTED_COLOR }}
+                    aria-hidden="true"
                   />
-                  <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-                    {sourceClassRows.map((item) => (
-                      <Cell key={item.source} fill={getSourceClassColor(item.source)} />
-                    ))}
-                    <LabelList content={renderBarValueLabel} />
-                  </Bar>
-                  <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR}>
-                    <LabelList content={renderBarValueLabel} />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
+                  <span>Verde = Vistas Convertidas</span>
+                </div>
+              </>
             ) : (
               <p className="text-muted-foreground text-sm">No hay sesiones web para el filtro actual.</p>
             )}
