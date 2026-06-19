@@ -23,6 +23,7 @@ import {
 } from "@/lib/mapa-conversion/stages";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
+import { loadVisitsData } from "@/lib/visitas/data";
 
 export const dynamic = "force-dynamic";
 
@@ -286,11 +287,38 @@ export default async function Page({
   const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
+  let visitsResponse: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
   const errores: string[] = [];
 
   const demografiaTask = loadDemografiaData(nivel, {
     canales: canalesFilter,
     etapas,
+    estado: nivel === "municipio" ? normalizedEstado : null,
+    sourceClass,
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    campanaId,
+    campanaTipo,
+    templateId,
+    waCanalPublicitario,
+    waCampanaPublicitaria,
+    waReglaId,
+    rango,
+    desde,
+    hasta,
+    })
+    .then((value) => ({ ok: true as const, value }))
+    .catch((error: unknown) => ({
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo obtener la información demográfica.",
+    }));
+
+  const visitsTask = loadVisitsData({
+    canales: canalesFilter,
     estado: nivel === "municipio" ? normalizedEstado : null,
     sourceClass,
     utmSource,
@@ -312,15 +340,20 @@ export default async function Page({
       error:
         error instanceof Error
           ? error.message
-          : "No se pudo obtener la información demográfica.",
+          : "No se pudieron obtener las visitas del mapa.",
     }));
 
-  const demografiaResult = await demografiaTask;
+  const [demografiaResult, visitsResult] = await Promise.all([demografiaTask, visitsTask]);
 
   if (demografiaResult.ok) {
     demografiaResponse = demografiaResult.value;
   } else {
     errores.push(demografiaResult.error);
+  }
+  if (visitsResult.ok) {
+    visitsResponse = visitsResult.value;
+  } else {
+    errores.push(visitsResult.error);
   }
 
   const datasetForTables =
@@ -362,7 +395,10 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
-  const acquisitionMetrics = buildAcquisitionMetrics(demografiaResponse?.summary ?? null);
+  const acquisitionMetrics = buildAcquisitionMetrics(
+    demografiaResponse?.summary ?? null,
+    visitsResponse ?? null,
+  );
   const sesionesWebchatTotales =
     demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
   const conversacionesWhatsapp =
@@ -684,7 +720,10 @@ export default async function Page({
               </div>
               <SessionRecovery errors={errores} />
               <div className="px-4 lg:px-6">
-                <AcquisitionSummary summary={demografiaResponse?.summary ?? null} />
+                <AcquisitionSummary
+                  summary={demografiaResponse?.summary ?? null}
+                  visitsPayload={visitsResponse}
+                />
               </div>
               {tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">

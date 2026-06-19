@@ -1,4 +1,5 @@
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
+import type { VisitTableRow, VisitsPayload } from "@/lib/visitas/data";
 import { normalizeAcquisitionSourceClass } from "@/lib/mapa-conversion/source-class";
 
 export type AcquisitionSourceBucket = {
@@ -55,6 +56,35 @@ function parseHost(value: string | null | undefined): string {
   }
 }
 
+function isConvertedVisit(row: VisitTableRow): boolean {
+  const raw = row.raw;
+  if (!raw || typeof raw !== "object") return false;
+  const canal = typeof raw.canal === "string" ? raw.canal.trim().toLowerCase() : "";
+  return Boolean(raw.tuvo_chat) || canal === "whatsapp";
+}
+
+function getSourceClassFromVisit(row: VisitTableRow): string {
+  const raw = row.raw;
+  if (!raw || typeof raw !== "object") return "desconocido";
+  return normalizeAcquisitionSourceClass({
+    sourceClass: typeof raw.source_class === "string" ? raw.source_class : null,
+    referrerHost: typeof raw.referrer_host === "string" ? raw.referrer_host : null,
+    referrer: typeof raw.referrer === "string" ? raw.referrer : null,
+    landingUrl: typeof raw.landing_url === "string" ? raw.landing_url : null,
+    utmSource: typeof raw.utm_source === "string" ? raw.utm_source : null,
+    utmMedium: typeof raw.utm_medium === "string" ? raw.utm_medium : null,
+    utmCampaign: typeof raw.utm_campaign === "string" ? raw.utm_campaign : null,
+  });
+}
+
+function getReferrerHostFromVisit(row: VisitTableRow): string {
+  const raw = row.raw;
+  if (!raw || typeof raw !== "object") return "";
+  const referrerHost = parseHost(typeof raw.referrer_host === "string" ? raw.referrer_host : null);
+  if (referrerHost) return referrerHost;
+  return parseHost(typeof raw.referrer === "string" ? raw.referrer : null);
+}
+
 function formatUtmPart(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
   return text.length ? text : "(none)";
@@ -107,46 +137,74 @@ function aggregateWhatsappChannels(summary: DemografiaSummaryResponse | null): A
 
 export function buildAcquisitionMetrics(
   summary: DemografiaSummaryResponse | null,
+  visitsPayload: VisitsPayload | null = null,
 ): AcquisitionMetrics {
   const sourceBuckets = new Map<string, AcquisitionSourceBucket>();
   const hostBuckets = new Map<string, AcquisitionHostBucket>();
 
   const items = Array.isArray(summary?.visitantes?.items) ? summary?.visitantes?.items ?? [] : [];
-  const sessions =
-    toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
-    items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
-  const converted =
-    toNumber(summary?.visitantes?.totals?.con_chat) ||
-    items.reduce((acc, item) => acc + toNumber(item.con_chat), 0);
+  const sourceSessionTotals = new Map<string, number>();
+  const sourceConvertedTotals = new Map<string, number>();
+  const hostSessionTotals = new Map<string, number>();
+  const hostConvertedTotals = new Map<string, number>();
 
-  for (const item of items) {
-    for (const sourceRow of item.fuentes_top ?? []) {
-      const source = String(sourceRow?.source || "").trim();
-      if (!source) continue;
-      const sourceClass = normalizeAcquisitionSourceClass({
-        sourceClass: source,
-        referrerHost: source,
-        referrer: source,
-      });
-      const sourceBucket = sourceBuckets.get(sourceClass) ?? {
-        source: sourceClass,
-        total: 0,
-        converted: 0,
-      };
-      sourceBucket.total += toNumber(sourceRow?.total);
-      sourceBuckets.set(sourceClass, sourceBucket);
+  if (visitsPayload?.table?.length) {
+    for (const row of visitsPayload.table) {
+      const raw = row.raw;
+      if (!raw || typeof raw !== "object") continue;
+      const sourceClass = getSourceClassFromVisit(row);
+      const host = getReferrerHostFromVisit(row);
+      const converted = isConvertedVisit(row) ? 1 : 0;
 
-      const host = parseHost(source);
-      if (!host) continue;
-      const hostBucket = hostBuckets.get(host) ?? {
-        host,
-        total: 0,
-        converted: 0,
-      };
-      hostBucket.total += toNumber(sourceRow?.total);
-      hostBuckets.set(host, hostBucket);
+      sourceSessionTotals.set(sourceClass, (sourceSessionTotals.get(sourceClass) ?? 0) + 1);
+      sourceConvertedTotals.set(sourceClass, (sourceConvertedTotals.get(sourceClass) ?? 0) + converted);
+      if (host) {
+        hostSessionTotals.set(host, (hostSessionTotals.get(host) ?? 0) + 1);
+        hostConvertedTotals.set(host, (hostConvertedTotals.get(host) ?? 0) + converted);
+      }
+    }
+  } else {
+    for (const item of items) {
+      for (const sourceRow of item.fuentes_top ?? []) {
+        const source = String(sourceRow?.source || "").trim();
+        if (!source) continue;
+        const sourceClass = normalizeAcquisitionSourceClass({
+          sourceClass: source,
+          referrerHost: source,
+          referrer: source,
+        });
+        sourceSessionTotals.set(sourceClass, (sourceSessionTotals.get(sourceClass) ?? 0) + toNumber(sourceRow?.total));
+
+        const host = parseHost(source);
+        if (!host) continue;
+        hostSessionTotals.set(host, (hostSessionTotals.get(host) ?? 0) + toNumber(sourceRow?.total));
+      }
     }
   }
+
+  for (const [source, total] of sourceSessionTotals.entries()) {
+    sourceBuckets.set(source, {
+      source,
+      total,
+      converted: sourceConvertedTotals.get(source) ?? 0,
+    });
+  }
+  for (const [host, total] of hostSessionTotals.entries()) {
+    hostBuckets.set(host, {
+      host,
+      total,
+      converted: hostConvertedTotals.get(host) ?? 0,
+    });
+  }
+
+  const sessions = visitsPayload?.cards?.totalVisits
+    ? toNumber(visitsPayload.cards.totalVisits)
+    : toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
+      items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
+  const converted = visitsPayload?.cards
+    ? toNumber(visitsPayload.cards.conChat) + toNumber(visitsPayload.cards.whatsapp)
+    : toNumber(summary?.visitantes?.totals?.con_chat) ||
+      items.reduce((acc, item) => acc + toNumber(item.con_chat), 0);
 
   const sourceClassRows = Array.from(sourceBuckets.values()).sort(
     (a, b) => b.total - a.total || a.source.localeCompare(b.source),
