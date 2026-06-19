@@ -94,5 +94,11 @@ export function formatSourceClassLabel(value: string | null | undefined): string
   if (!value) return SOURCE_CLASS_LABELS.unknown
   const normalized = value.trim().toLowerCase()
   if (!normalized) return SOURCE_CLASS_LABELS.unknown
-  return SOURCE_CLASS_LABELS[normalized] ?? normalized.charAt(0).toUpperCase() + normalized.slice(1)
+  if (SOURCE_CLASS_LABELS[normalized]) return SOURCE_CLASS_LABELS[normalized]
+  return normalized
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
 }

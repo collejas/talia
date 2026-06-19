@@ -63,6 +63,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
   const {
     sourceClassRows,
     referrerRows,
+    totalSessions,
     convertedSessions,
     conversionRate,
     topUtmRows,
@@ -91,10 +92,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                   />
                   <ChartTooltip
                     content={<ChartTooltipContent />}
-                    formatter={(value, name) => [
-                      formatNumber(toNumber(value)),
-                      name === "converted" ? "Convertidas" : "Sesiones",
-                    ]}
+                    labelFormatter={(value) => formatSourceClassLabel(String(value))}
                   />
                   <Bar dataKey="total" radius={[6, 6, 0, 0]}>
                     {sourceClassRows.map((item) => (
@@ -112,12 +110,15 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>De dónde llegan las visitas</CardTitle>
-            <CardDescription>
-              Vista de negocio para entender de dónde entra el tráfico y cómo convierte cada tipo de visita.
-            </CardDescription>
+            <CardTitle>Volumen y conversión de visitas</CardTitle>
+            <CardDescription>Resumen del volumen total de visitas.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <MetricTile
+              title="Visitas totales"
+              value={formatNumber(totalSessions)}
+              helper="Total de visitas registradas en el filtro"
+            />
             <MetricTile
               title="Visitas que terminan en contacto"
               value={formatNumber(convertedSessions)}
