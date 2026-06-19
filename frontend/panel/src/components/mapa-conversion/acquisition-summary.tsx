@@ -122,11 +122,11 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
             <CardTitle>Visitas por tipo de visita</CardTitle>
             <CardDescription>Visitas y contactos agrupados por tipo de visita.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex h-full flex-col">
             {sourceClassRows.length ? (
-              <>
-                <ChartContainer config={SOURCE_CLASS_CONFIG} className="h-72">
-                  <BarChart data={sourceClassRows} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
+              <div className="flex flex-1 flex-col">
+                <ChartContainer config={SOURCE_CLASS_CONFIG} className="min-h-[360px] flex-1">
+                  <BarChart data={sourceClassRows} margin={{ top: 38, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
                       dataKey="source"
@@ -182,7 +182,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                   />
                   <span>Verde = Vistas Convertidas</span>
                 </div>
-              </>
+              </div>
             ) : (
               <p className="text-muted-foreground text-sm">No hay sesiones web para el filtro actual.</p>
             )}
