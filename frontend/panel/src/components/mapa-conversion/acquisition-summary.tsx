@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bar, BarChart, Cell, Pie, PieChart, CartesianGrid, XAxis } from "recharts";
+import { Bar, BarChart, Cell, LabelList, Pie, PieChart, CartesianGrid, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -76,6 +76,33 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+function renderBarValueLabel(props: {
+  x?: number;
+  y?: number;
+  width?: number;
+  value?: number | string;
+}) {
+  const { x, y, width, value } = props;
+  const numericValue = toNumber(value);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return null;
+  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number") return null;
+
+  return (
+    <text
+      x={x + width / 2}
+      y={Math.max(y - 5, 11)}
+      fill="hsl(var(--muted-foreground))"
+      fontSize={10}
+      fontWeight={500}
+      textAnchor="middle"
+      className="tabular-nums"
+    >
+      {formatNumber(numericValue)}
+    </text>
+  );
+}
+
 export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
   const {
     sourceClassRows,
@@ -98,7 +125,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
           <CardContent>
             {sourceClassRows.length ? (
               <ChartContainer config={SOURCE_CLASS_CONFIG} className="h-72">
-                <BarChart data={sourceClassRows}>
+                <BarChart data={sourceClassRows} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
                     dataKey="source"
@@ -139,8 +166,11 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                     {sourceClassRows.map((item) => (
                       <Cell key={item.source} fill={getSourceClassColor(item.source)} />
                     ))}
+                    <LabelList content={renderBarValueLabel} />
                   </Bar>
-                  <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR} />
+                  <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR}>
+                    <LabelList content={renderBarValueLabel} />
+                  </Bar>
                 </BarChart>
               </ChartContainer>
             ) : (
