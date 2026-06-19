@@ -53,6 +53,15 @@ const SOURCE_CLASS_COLORS: Record<string, string> = {
 };
 
 const CONVERTED_COLOR = "#16a34a";
+const UTM_VALUE_LABELS: Record<string, string> = {
+  "(none)": "Sin dato",
+  prospeccion: "Prospección",
+  "chatgpt.com": "ChatGPT",
+  cold_outreach: "Prospección fría",
+  whatsapp_cta: "CTA de WhatsApp",
+  whatsapp_media: "WhatsApp",
+  email_image: "Email",
+};
 
 function getSourceClassColor(value: string): string {
   const normalized = value.trim().toLowerCase();
@@ -74,6 +83,18 @@ function formatNumber(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
+}
+
+function formatUtmValue(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "Sin dato";
+  return UTM_VALUE_LABELS[normalized] ?? normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatUtmFieldLabel(value: "utm_source" | "utm_medium" | "utm_campaign"): string {
+  if (value === "utm_source") return "Fuente";
+  if (value === "utm_medium") return "Medio";
+  return "Campaña";
 }
 
 function renderBarValueLabel(props: {
@@ -254,26 +275,43 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
       <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>Promociones y enlaces</CardTitle>
-            <CardDescription>Combinaciones de promoción y enlace observadas en el tráfico del sitio.</CardDescription>
+            <CardTitle>Fuentes y campañas</CardTitle>
+            <CardDescription>Origen, medio y campaña observados en el tráfico del sitio.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 min-h-72">
             {topUtmRows.length ? (
               topUtmRows.map((item) => (
                 <div
                   key={`${item.utm_source}-${item.utm_medium}-${item.utm_campaign}`}
-                  className="bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2 text-sm"
+                  className="bg-muted/50 flex flex-col gap-2 rounded-lg px-3 py-3 text-sm"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium">
-                      {item.utm_source} / {item.utm_medium} / {item.utm_campaign}
-                    </span>
+                    <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-2">
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {formatUtmFieldLabel("utm_source")}
+                        </span>
+                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_source)}</span>
+                      </div>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {formatUtmFieldLabel("utm_medium")}
+                        </span>
+                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_medium)}</span>
+                      </div>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {formatUtmFieldLabel("utm_campaign")}
+                        </span>
+                        <span className="min-w-0 font-medium">{formatUtmValue(item.utm_campaign)}</span>
+                      </div>
+                    </div>
                     <Badge variant="outline">{formatNumber(item.total)}</Badge>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-muted-foreground text-sm">No hay promociones destacadas en este filtro.</p>
+              <p className="text-muted-foreground text-sm">No hay fuentes ni campañas destacadas en este filtro.</p>
             )}
           </CardContent>
         </Card>
