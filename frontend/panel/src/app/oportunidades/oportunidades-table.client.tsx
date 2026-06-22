@@ -627,12 +627,6 @@ function OpportunityRowDetails({
   const raw = row.raw as Record<string, unknown> | undefined;
   const opportunityCode =
     formatOpportunityCode(extractString(raw, ["codigo_oportunidad"])) || "Sin código";
-  const contact =
-    extractString(raw, ["contacto", "nombre_completo"]) ||
-    extractString(raw, ["contacto_nombre"]) ||
-    extractString(raw, ["metadata", "contacto_nombre"]) ||
-    "Sin contacto";
-  const account = extractString(raw, ["cuenta", "nombre"]) || "Sin cuenta";
   const stage =
     extractString(raw, ["etapa", "nombre"]) ||
     extractString(raw, ["metadata", "etapa_nombre"]) ||
@@ -667,11 +661,6 @@ function OpportunityRowDetails({
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <p className="break-words text-sm text-muted-foreground">
-            {contact} · {account}
-          </p>
-        </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button asChild variant="outline" size="sm">
             <Link href={buildEmbudoHref(row)}>Abrir en embudo</Link>
