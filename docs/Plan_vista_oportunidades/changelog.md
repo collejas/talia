@@ -17,3 +17,4 @@
 - Se dejo fuera de alcance `public.spatial_ref_sys` porque pertenece a PostGIS y no a la capa de negocio de GEOACTIV.
 - Se agrego detalle ligero por fila en `/oportunidades` con resumen, acceso al embudo y reasignacion secundaria.
 - Se agrego acceso rapido al embudo desde las acciones de cada fila en `/oportunidades`.
+- Se reemplazo el sidepanel demo por una ficha formal de oportunidad dentro del drawer de la tabla.

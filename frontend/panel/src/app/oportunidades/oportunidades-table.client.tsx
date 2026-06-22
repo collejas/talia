@@ -654,6 +654,7 @@ function OpportunityRowDetails({
   const title = extractString(raw, ["titulo"]) || row.header || "Oportunidad sin nombre";
   const contact =
     extractString(raw, ["contacto", "nombre_completo"]) ||
+    extractString(raw, ["contacto_nombre"]) ||
     extractString(raw, ["metadata", "contacto_nombre"]) ||
     "Sin contacto";
   const account = extractString(raw, ["cuenta", "nombre"]) || "Sin cuenta";
@@ -664,6 +665,7 @@ function OpportunityRowDetails({
   const state = extractString(raw, ["estado"]) || "Sin estado";
   const assigned =
     extractString(raw, ["asignado", "nombre_completo"]) ||
+    extractString(raw, ["asignado", "correo"]) ||
     extractString(raw, ["asignado_a_usuario_id"]) ||
     "Sin asignar";
   const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "Sin canal";
@@ -706,9 +708,10 @@ function OpportunityRowDetails({
         <DetailField label="Creado" value={formatDate(extractString(raw, ["creado_en"]))} />
         <DetailField label="Actualizado" value={formatDate(extractString(raw, ["actualizado_en"]))} />
         <DetailField label="Asignado" value={assigned} />
-        <DetailField label="Oportunidad" value={opportunityId} monospace />
-        <DetailField label="Persona" value={extractString(raw, ["contacto_principal_id"]) || "—"} monospace />
-        <DetailField label="Cuenta" value={extractString(raw, ["cuenta_id"]) || "—"} monospace />
+        <DetailField label="Oportunidad" value={title} />
+        <DetailField label="Persona" value={contact} />
+        <DetailField label="Cuenta" value={account} />
+        <DetailField label="Referencia" value={opportunityId} monospace />
       </div>
     </div>
   );
