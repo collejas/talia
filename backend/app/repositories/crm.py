@@ -2119,7 +2119,7 @@ class CRMRepository:
             "order": "nombre_completo.asc",
             "limit": str(limit),
         }
-        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        resp = await self._request_service_role("GET", "/rest/v1/usuarios", params=params, organizacion_id=organizacion_id)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios: {data!r}")
@@ -2141,7 +2141,7 @@ class CRMRepository:
             "select": "id,nombre_completo,correo,telefono_e164",
             "limit": str(min(len(unique_ids), 500)),
         }
-        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        resp = await self._request_service_role("GET", "/rest/v1/usuarios", params=params, organizacion_id=organizacion_id)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios por id: {data!r}")
@@ -2159,63 +2159,68 @@ class CRMRepository:
             return users
 
         roles_by_id: dict[str, dict[str, str]] = {}
-        role_rows = await self._request(
-            "GET",
-            "/rest/v1/usuarios_roles",
-            params={
-                "organizacion_id": f"eq.{organizacion_id}",
-                "usuario_id": f"in.({','.join(unique_ids)})",
-                "select": "usuario_id,rol_id",
-                "limit": str(min(len(unique_ids) * 4, 500)),
-            },
-        )
-        role_rows_data = role_rows.json() or []
-        if isinstance(role_rows_data, list) and role_rows_data:
-            role_ids = sorted({
-                str(row.get("rol_id")).strip()
-                for row in role_rows_data
-                if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
-            })
-            role_names_by_id: dict[str, str] = {}
-            if role_ids:
-                roles_resp = await self._request(
-                    "GET",
-                    "/rest/v1/roles",
-                    params={
-                        "organizacion_id": f"eq.{organizacion_id}",
-                        "id": f"in.({','.join(role_ids)})",
-                        "select": "id,codigo,nombre",
-                        "limit": str(min(len(role_ids), 500)),
-                    },
-                )
-                roles_data = roles_resp.json() or []
-                if isinstance(roles_data, list):
-                    for role_row in roles_data:
-                        if not isinstance(role_row, dict):
-                            continue
-                        role_id = str(role_row.get("id") or "").strip()
-                        if not role_id:
-                            continue
-                        label = str(role_row.get("nombre") or role_row.get("codigo") or "").strip()
-                        if not label:
-                            continue
-                        role_names_by_id[role_id] = label
-            for row in role_rows_data:
-                if not isinstance(row, dict):
-                    continue
-                user_id = str(row.get("usuario_id") or "").strip()
-                role_id = str(row.get("rol_id") or "").strip()
-                if not user_id or not role_id:
-                    continue
-                role_label = role_names_by_id.get(role_id)
-                if not role_label:
-                    continue
-                entry = roles_by_id.setdefault(user_id, {"rol_principal": "", "roles": []})
-                roles = entry.setdefault("roles", [])
-                if role_label not in roles:
-                    roles.append(role_label)
-                if not entry.get("rol_principal") or role_label.lower() in {"admin", "owner", "supervisor", "vendedor"}:
-                    entry["rol_principal"] = role_label
+        try:
+            role_rows = await self._request_service_role(
+                "GET",
+                "/rest/v1/usuarios_roles",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "usuario_id": f"in.({','.join(unique_ids)})",
+                    "select": "usuario_id,rol_id",
+                    "limit": str(min(len(unique_ids) * 4, 500)),
+                },
+                organizacion_id=organizacion_id,
+            )
+            role_rows_data = role_rows.json() or []
+            if isinstance(role_rows_data, list) and role_rows_data:
+                role_ids = sorted({
+                    str(row.get("rol_id")).strip()
+                    for row in role_rows_data
+                    if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
+                })
+                role_names_by_id: dict[str, str] = {}
+                if role_ids:
+                    roles_resp = await self._request_service_role(
+                        "GET",
+                        "/rest/v1/roles",
+                        params={
+                            "organizacion_id": f"eq.{organizacion_id}",
+                            "id": f"in.({','.join(role_ids)})",
+                            "select": "id,codigo,nombre",
+                            "limit": str(min(len(role_ids), 500)),
+                        },
+                        organizacion_id=organizacion_id,
+                    )
+                    roles_data = roles_resp.json() or []
+                    if isinstance(roles_data, list):
+                        for role_row in roles_data:
+                            if not isinstance(role_row, dict):
+                                continue
+                            role_id = str(role_row.get("id") or "").strip()
+                            if not role_id:
+                                continue
+                            label = str(role_row.get("nombre") or role_row.get("codigo") or "").strip()
+                            if not label:
+                                continue
+                            role_names_by_id[role_id] = label
+                for row in role_rows_data:
+                    if not isinstance(row, dict):
+                        continue
+                    user_id = str(row.get("usuario_id") or "").strip()
+                    role_id = str(row.get("rol_id") or "").strip()
+                    if not user_id or not role_id:
+                        continue
+                    role_label = role_names_by_id.get(role_id)
+                    if not role_label:
+                        continue
+                    entry = roles_by_id.setdefault(user_id, {"rol_principal": "", "roles": []})
+                    roles = entry.setdefault("roles", [])
+                    if role_label not in roles:
+                        roles.append(role_label)
+                    if not entry.get("rol_principal") or role_label.lower() in {"admin", "owner", "supervisor", "vendedor"}:
+                        entry["rol_principal"] = role_label
+        except CRMRepositoryError:
+            roles_by_id = {}
 
         enriched: list[dict[str, Any]] = []
         for user in users:
@@ -2504,6 +2509,15 @@ class CRMRepository:
             params["asignado_a_usuario_id"] = f"eq.{asignado_a_usuario_id}"
         if estado:
             params["estado"] = f"eq.{estado}"
+        params["select"] = (
+            "*,"
+            "creado_por_usuario:usuarios!actividades_creado_por_usuario_org_fkey("
+            "id,nombre_completo,correo,telefono_e164"
+            "),"
+            "asignado_a_usuario:usuarios!actividades_asignado_usuario_org_fkey("
+            "id,nombre_completo,correo,telefono_e164"
+            ")"
+        )
         resp = await self._request("GET", "/rest/v1/actividades", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -6784,6 +6798,12 @@ class CRMRepository:
             params["relacion_id"] = f"eq.{relacion_id}"
         if actividad_id:
             params["actividad_id"] = f"eq.{actividad_id}"
+        params["select"] = (
+            "*,"
+            "creado_por_usuario:usuarios!notas_creado_por_usuario_org_fkey("
+            "id,nombre_completo,correo,telefono_e164"
+            ")"
+        )
         resp = await self._request("GET", "/rest/v1/notas", params=params)
         data = resp.json()
         if not isinstance(data, list):
