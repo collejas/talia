@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -83,18 +82,9 @@ export function OportunidadesTableClient({
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
 
-  const [reassignOpen, setReassignOpen] = useState(false);
-  const [activeRow, setActiveRow] = useState<DataTableRow | null>(null);
-  const [selectedVendorId, setSelectedVendorId] = useState("");
   const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorError, setVendorError] = useState<string | null>(null);
-  const [reassignPending, setReassignPending] = useState(false);
-  const [reassignError, setReassignError] = useState<string | null>(null);
-  const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
-  const [auditItems, setAuditItems] = useState<AuditAssignment[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
     setResolvedFilterOptions((current) => mergeFilterOptions(current ?? filterOptions, filterOptions));
@@ -128,7 +118,7 @@ export function OportunidadesTableClient({
   }, []);
 
   useEffect(() => {
-    if (!reassignOpen || !canReassign) {
+    if (!canReassign) {
       return;
     }
     const controller = new AbortController();
@@ -172,7 +162,32 @@ export function OportunidadesTableClient({
     };
     fetchVendors();
     return () => controller.abort();
-  }, [reassignOpen, canReassign, canReassignAny]);
+  }, [canReassign, canReassignAny]);
+
+  const handleReassign = async (row: DataTableRow, vendorId: string) => {
+    const raw = row.raw as Record<string, unknown> | undefined;
+    const opportunityId = extractString(raw, ["id"]) ?? String(row.id);
+    const currentVendorId = extractAsignadoId(row);
+    const personaId = extractString(raw, ["persona_id"]) || extractString(raw, ["contacto_principal_id"]);
+    if (!opportunityId || !vendorId || vendorId === currentVendorId) return;
+
+    const response = await fetch(`/api/embudo/leads/${opportunityId}/reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        asignado_usuario_id: vendorId,
+        persona_id: personaId || null,
+        conversacion_id: null,
+        alinear_persona: true,
+        alinear_conversacion: false,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error || `Error ${response.status}`);
+    }
+    router.refresh();
+  };
 
   const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns();
   const initialVisibility = buildInitialVisibility();
@@ -199,75 +214,6 @@ export function OportunidadesTableClient({
     </Dialog>
   ) : null;
 
-  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
-  const activeOportunidadId = extractString(activeRaw, ["id"]) ?? activeRow?.id?.toString() ?? null;
-  const activePersonaId = extractString(activeRaw, ["persona_id"]) || extractString(activeRaw, ["contacto_principal_id"]);
-  const activeAsignadoId = extractAsignadoId(activeRow);
-
-  function openReassignDialog(row: DataTableRow) {
-    setActiveRow(row);
-    setSelectedVendorId(extractAsignadoId(row) ?? "");
-    setReassignError(null);
-    setReassignSuccess(null);
-    setReassignOpen(true);
-  }
-
-  const handleReassign = async () => {
-    if (!activeOportunidadId || !selectedVendorId) return;
-    setReassignPending(true);
-    setReassignError(null);
-    setReassignSuccess(null);
-    try {
-      const response = await fetch(`/api/embudo/leads/${activeOportunidadId}/reassign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asignado_usuario_id: selectedVendorId,
-          persona_id: activePersonaId || null,
-          conversacion_id: null,
-          alinear_persona: true,
-          alinear_conversacion: false,
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setReassignError(body?.error || `Error ${response.status}`);
-        return;
-      }
-      setReassignSuccess("Vendedor reasignado.");
-      router.refresh();
-    } catch {
-      setReassignError("No se pudo reasignar el vendedor.");
-    } finally {
-      setReassignPending(false);
-    }
-  };
-
-  const handleLoadAudit = async () => {
-    if (!activeOportunidadId) return;
-    setAuditLoading(true);
-    setAuditError(null);
-    try {
-      const response = await fetch(
-        `/api/embudo/asignaciones?oportunidad_id=${activeOportunidadId}&limit=50`,
-        { cache: "no-store" },
-      );
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setAuditError(body?.error || `Error ${response.status}`);
-        setAuditItems([]);
-        return;
-      }
-      const items = Array.isArray(body?.items) ? body.items : [];
-      setAuditItems(items);
-    } catch {
-      setAuditError("No se pudo cargar la auditoría.");
-      setAuditItems([]);
-    } finally {
-      setAuditLoading(false);
-    }
-  };
-
   return (
     <>
       <ClientDataTable
@@ -278,101 +224,19 @@ export function OportunidadesTableClient({
         storageKey="oportunidades-table-columns"
         toolbarActions={toolbarActions}
         renderRowDetails={(row) => (
-          <OpportunityRowDetails row={row} onReassign={() => openReassignDialog(row)} />
+          <OpportunityRowDetails
+            row={row}
+            vendorOptions={vendorOptions}
+            vendorLoading={vendorLoading}
+            vendorError={vendorError}
+            canReassign={canReassign}
+            onReassign={async (vendorId) => {
+              await handleReassign(row, vendorId);
+            }}
+          />
         )}
         detailDescription="Consulta y acceso rápido al embudo. La reasignación y los movimientos operativos quedan en el detalle."
       />
-      <Dialog
-        open={reassignOpen}
-        onOpenChange={(open) => {
-          setReassignOpen(open);
-          if (open) {
-            setAuditItems([]);
-            setAuditError(null);
-            handleLoadAudit();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cambiar vendedor</DialogTitle>
-            <DialogDescription>
-              Selecciona el vendedor destino para esta oportunidad.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">
-              {activeRow?.header ?? "Oportunidad"}
-            </div>
-            <Select
-              value={selectedVendorId || undefined}
-              onValueChange={setSelectedVendorId}
-              disabled={vendorLoading || reassignPending}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={vendorLoading ? "Cargando..." : "Selecciona vendedor"} />
-              </SelectTrigger>
-              <SelectContent>
-                {vendorOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={handleReassign}
-                disabled={
-                  reassignPending ||
-                  vendorLoading ||
-                  !selectedVendorId ||
-                  (Boolean(activeAsignadoId) && selectedVendorId === activeAsignadoId)
-                }
-              >
-                {reassignPending ? "Reasignando..." : "Reasignar"}
-              </Button>
-              {reassignSuccess ? (
-                <span className="text-xs text-emerald-600">{reassignSuccess}</span>
-              ) : null}
-              {reassignError ? (
-                <span className="text-xs text-destructive">{reassignError}</span>
-              ) : null}
-            </div>
-            <div className="border-t border-border pt-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground">Auditoría</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLoadAudit}
-                  disabled={auditLoading}
-                >
-                  {auditLoading ? "Cargando..." : "Actualizar"}
-                </Button>
-              </div>
-              {auditError ? (
-                <p className="text-xs text-destructive">{auditError}</p>
-              ) : null}
-              {!auditLoading && !auditError && auditItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Sin movimientos registrados.</p>
-              ) : null}
-              <div className="mt-2 space-y-2">
-                {auditItems.map((item) => (
-                  <div key={item.id} className="rounded-md border border-border/60 bg-muted/40 p-2 text-xs">
-                    <div className="font-medium">{item.vendedor_nombre || item.vendedor_correo || "Vendedor"}</div>
-                    <div className="text-muted-foreground">
-                      {item.trigger_event} · {formatDate(item.creado_en)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
@@ -414,14 +278,6 @@ type SalesRepOption = {
   correo: string | null;
   telefono_e164: string | null;
   label: string;
-};
-
-type AuditAssignment = {
-  id: string;
-  creado_en: string;
-  trigger_event: string;
-  vendedor_nombre?: string | null;
-  vendedor_correo?: string | null;
 };
 
 function buildExtraColumns(): ColumnDef<DataTableRow>[] {
@@ -619,10 +475,18 @@ function buildInitialVisibility(): Record<string, boolean> {
 
 function OpportunityRowDetails({
   row,
+  vendorOptions,
+  vendorLoading,
+  vendorError,
   onReassign,
+  canReassign,
 }: {
   row: DataTableRow;
-  onReassign: () => void;
+  vendorOptions: SalesRepOption[];
+  vendorLoading: boolean;
+  vendorError: string | null;
+  onReassign: (vendorId: string) => Promise<void>;
+  canReassign: boolean;
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
   const opportunityCode =
@@ -657,16 +521,72 @@ function OpportunityRowDetails({
     extractString(raw, ["metadata", "source"]) ||
     "Sin origen";
   const lostReason = extractString(raw, ["motivo_perdida"]);
+  const currentVendorId = extractAsignadoId(row) ?? "";
+  const [selectedVendorId, setSelectedVendorId] = useState(currentVendorId);
+  const [reassignPending, setReassignPending] = useState(false);
+  const [reassignFeedback, setReassignFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setSelectedVendorId(currentVendorId);
+  }, [currentVendorId]);
+
+  const handleVendorChange = async (vendorId: string) => {
+    setSelectedVendorId(vendorId);
+    setReassignFeedback(null);
+    if (!vendorId || vendorId === currentVendorId) return;
+    setReassignPending(true);
+    try {
+      await onReassign(vendorId);
+      setReassignFeedback({ type: "success", message: "Vendedor reasignado." });
+    } catch (error) {
+      setSelectedVendorId(currentVendorId);
+      setReassignFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudo reasignar el vendedor.",
+      });
+    } finally {
+      setReassignPending(false);
+    }
+  };
 
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <Select
+            value={selectedVendorId || undefined}
+            onValueChange={handleVendorChange}
+            disabled={!canReassign || vendorLoading || reassignPending}
+          >
+            <SelectTrigger className="w-full min-w-0 max-w-[260px]">
+              <SelectValue
+                placeholder={
+                  vendorLoading ? "Cargando vendedores..." : "Reasignar vendedor"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {vendorOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
+          {reassignFeedback ? (
+            <p
+              className={reassignFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}
+            >
+              {reassignFeedback.message}
+            </p>
+          ) : null}
+        </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button asChild variant="outline" size="sm">
             <Link href={buildEmbudoHref(row)}>Abrir en embudo</Link>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onReassign}>
-            Reasignar vendedor
           </Button>
         </div>
       </div>
