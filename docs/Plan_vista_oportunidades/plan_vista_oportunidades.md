@@ -35,6 +35,44 @@ Debe concentrar:
 - Acceso al embudo para operar el flujo.
 - Auditoria visual y consulta rapida.
 
+## Comparativo base con `/embudo`
+
+### Lo que el embudo si muestra o genera y que `/oportunidades` debe poder consultar
+
+- Identidad de la oportunidad con codigo legible de negocio y no solo UUID.
+- Etapa actual, estado, vendedor, canal y datos de contexto.
+- Contacto relacionado y cuenta relacionada.
+- Insights generados por Tal-IA.
+- Resumen o captura automatica de Tal-IA.
+- Necesidades / objetivos del proyecto.
+- Monto estimado.
+- Probabilidad y fecha probable de cierre.
+- Cotizaciones asociadas.
+- Notas internas.
+- Actividades.
+- Historial de movimientos.
+- Acciones operativas del pipeline.
+
+### Lo que el embudo debe seguir haciendo y que `/oportunidades` no debe duplicar como flujo principal
+
+- Crear oportunidad.
+- Mover etapa.
+- Drag and drop.
+- Crear cotizaciones.
+- Crear notas.
+- Crear actividades.
+- Agendar citas.
+- Cerrar ganada o perdida.
+- Revertir etapa.
+
+### Lo que `/oportunidades` debe permitir de forma ligera
+
+- Reasignar vendedor si el permiso existe.
+- Ver detalle completo de lectura.
+- Crear o asignar actividades si se mantiene como accion secundaria.
+- Ir al embudo para operar cambios de flujo.
+- Consultar toda la informacion relevante sin duplicar la logica pesada.
+
 ## Lo que si debe hacer
 
 - Mostrar el universo de oportunidades con paginacion real.
@@ -86,4 +124,3 @@ Cuando este plan se implemente:
 - `/oportunidades` sera la vista maestra de consulta y control.
 - `/embudo` sera la consola operativa.
 - El usuario sabra donde listar, donde decidir y donde ejecutar.
-

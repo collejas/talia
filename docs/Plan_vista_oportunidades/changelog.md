@@ -5,6 +5,7 @@
 - Se definio la frontera funcional entre `/embudo` y `/oportunidades`.
 - `/embudo` queda como consola operativa del pipeline.
 - `/oportunidades` queda como listado maestro, consulta, control y acceso rapido.
+- Se agrego al plan la lista comparativa de lo que el embudo muestra o genera y que `/oportunidades` debe consultar sin duplicar la operacion.
 - Se acordaron reglas de CRUD: create ligero, read completo, update basico, delete secundario, move stage fuera de la vista.
 - Se identifico como riesgo que el listado actual no representa necesariamente el total real por paginacion fija.
 - Se genero el [backlog tecnico](/var/www/talia/docs/Plan_vista_oportunidades/backlog_tecnico.md) a partir del diagnostico por capa.

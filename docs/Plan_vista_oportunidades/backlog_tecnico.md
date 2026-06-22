@@ -46,6 +46,15 @@ Transformar `/oportunidades` en un listado maestro real, con paginacion, total r
 3. Mejorar el resumen superior para que sea informativo y no duplicado del embudo.
 4. Revisar columnas visibles por defecto para que el listado sea operativo.
 5. Hacer que la tabla soporte mejor volumen de datos con estados vacio, cargando y error.
+6. Incorporar en el detalle los bloques que hoy solo existen en el embudo:
+   - Insights generados por Tal-IA.
+   - Proyecto.
+   - Estimacion.
+   - Cotizaciones.
+   - Notas.
+   - Actividades.
+   - Historial.
+7. Sustituir UUID visibles por un codigo legible de negocio donde aplique.
 
 ### Backend
 
@@ -53,12 +62,14 @@ Transformar `/oportunidades` en un listado maestro real, con paginacion, total r
 2. Revisar si `GET /crm/oportunidades/{id}` debe devolver mas o menos campos para uso de listado.
 3. Confirmar que la reasignacion quede como accion secundaria y no como flujo principal.
 4. Alinear el contrato de respuesta para que el frontend no dependa de `metadata` para campos clave.
+5. Verificar que el detalle exponga todos los campos comerciales que el embudo ya conserva como datos materiales.
 
 ### Base de datos
 
 1. Verificar que `canal`, `contacto_nombre` y `restart_sequence` sigan siendo columnas materiales confiables.
 2. Revisar si el listado necesita un indice para `organizacion_id, canal, creado_en desc`.
 3. Revisar si el filtro por reinicios necesita soporte adicional.
+4. Confirmar que campos como necesidades, estimacion, codigos visibles y relaciones clave existan como columnas reales y no queden escondidos en `metadata`.
 
 ## P2 - Mejoras de producto
 

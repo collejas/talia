@@ -12,6 +12,14 @@ Normalizar los datos ya existentes para que la vista `/oportunidades` funcione c
 4. Generar y validar `codigo_oportunidad` como identificador legible de negocio.
 5. Verificar que el `historial` de etapa no tenga huecos obvios para los cambios recientes.
 6. Identificar oportunidades que deban quedar visibles en el listado maestro pero no en acciones operativas del embudo.
+7. Confirmar si existen oportunidades con informacion ya capturada en el embudo que deban materializarse para lectura en `/oportunidades`, incluyendo:
+   - insights de Tal-IA,
+   - necesidades / objetivos,
+   - monto estimado,
+   - cotizaciones,
+   - notas,
+   - actividades,
+   - historial resumido.
 
 ## Reglas
 
