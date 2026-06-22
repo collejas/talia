@@ -2,6 +2,7 @@
 
 import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableColumnLabels, DataTableRow } from "@/components/data-table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,12 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import {
   OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
   type OportunidadesFiltersState,
 } from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -58,7 +61,6 @@ type Props = {
 export function OportunidadesTableClient({
   rows,
   columnLabels,
-  filters,
   filterOptions,
   filterInitial,
   permissionContext,
@@ -174,16 +176,9 @@ export function OportunidadesTableClient({
 
   const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns({
     canReassign,
-    onReassignClick: (row) => {
-      setActiveRow(row);
-      setSelectedVendorId(extractAsignadoId(row) ?? "");
-      setReassignError(null);
-      setReassignSuccess(null);
-      setReassignOpen(true);
-    },
+    onReassignClick: (row) => openReassignDialog(row),
   });
   const initialVisibility = buildInitialVisibility();
-  const filteredRows = filters ? applyClientFilters(rows, filters) : rows;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const toolbarActions = filterOptions ? (
@@ -211,6 +206,14 @@ export function OportunidadesTableClient({
   const activeOportunidadId = extractString(activeRaw, ["id"]) ?? activeRow?.id?.toString() ?? null;
   const activePersonaId = extractString(activeRaw, ["persona_id"]) || extractString(activeRaw, ["contacto_principal_id"]);
   const activeAsignadoId = extractAsignadoId(activeRow);
+
+  function openReassignDialog(row: DataTableRow) {
+    setActiveRow(row);
+    setSelectedVendorId(extractAsignadoId(row) ?? "");
+    setReassignError(null);
+    setReassignSuccess(null);
+    setReassignOpen(true);
+  }
 
   const handleReassign = async () => {
     if (!activeOportunidadId || !selectedVendorId) return;
@@ -271,12 +274,16 @@ export function OportunidadesTableClient({
   return (
     <>
       <ClientDataTable
-        rows={filteredRows}
+        rows={rows}
         columnLabels={columnLabels}
         extraColumns={extraColumns}
         initialVisibility={initialVisibility}
         storageKey="oportunidades-table-columns"
         toolbarActions={toolbarActions}
+        renderRowDetails={(row) => (
+          <OpportunityRowDetails row={row} onReassign={() => openReassignDialog(row)} />
+        )}
+        detailDescription="Resumen de la oportunidad y accesos rapidos al embudo."
       />
       <Dialog
         open={reassignOpen}
@@ -592,9 +599,25 @@ function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow
       id: "acciones",
       header: () => <div className="w-full text-right">Acciones</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={buildEmbudoHref(row.original)}>Embudo</Link>
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => options.onReassignClick(row.original)}>
             Reasignar
+          </Button>
+        </div>
+      ),
+      meta: { label: "Acciones", reorderable: false },
+    });
+  } else {
+    extraColumns.push({
+      id: "acciones",
+      header: () => <div className="w-full text-right">Acciones</div>,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={buildEmbudoHref(row.original)}>Embudo</Link>
           </Button>
         </div>
       ),
@@ -620,72 +643,99 @@ function buildInitialVisibility(): Record<string, boolean> {
   };
 }
 
+function OpportunityRowDetails({
+  row,
+  onReassign,
+}: {
+  row: DataTableRow;
+  onReassign: () => void;
+}) {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const title = extractString(raw, ["titulo"]) || row.header || "Oportunidad sin nombre";
+  const contact =
+    extractString(raw, ["contacto", "nombre_completo"]) ||
+    extractString(raw, ["metadata", "contacto_nombre"]) ||
+    "Sin contacto";
+  const account = extractString(raw, ["cuenta", "nombre"]) || "Sin cuenta";
+  const stage =
+    extractString(raw, ["etapa", "nombre"]) ||
+    extractString(raw, ["metadata", "etapa_nombre"]) ||
+    "Sin etapa";
+  const state = extractString(raw, ["estado"]) || "Sin estado";
+  const assigned =
+    extractString(raw, ["asignado", "nombre_completo"]) ||
+    extractString(raw, ["asignado_a_usuario_id"]) ||
+    "Sin asignar";
+  const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "Sin canal";
+  const opportunityId = extractString(raw, ["id"]) || String(row.id);
+  const restartSequence = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
+  const monetaryValue = extractNumber(raw, ["monto_estimado"]);
+  const currency = extractString(raw, ["moneda"]) || "MXN";
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{stage}</Badge>
+            <Badge variant="outline">Reinicio #{restartSequence}</Badge>
+            <Badge variant="outline">{state}</Badge>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{title}</h3>
+            <p className="text-sm text-muted-foreground">
+              {contact} · {account} · {canal}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={buildEmbudoHref(row)}>Abrir en embudo</Link>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onReassign}>
+            Reasignar vendedor
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
+        <DetailField label="Cierre probable" value={formatDate(extractString(raw, ["fecha_cierre_probable"]))} />
+        <DetailField label="Creado" value={formatDate(extractString(raw, ["creado_en"]))} />
+        <DetailField label="Actualizado" value={formatDate(extractString(raw, ["actualizado_en"]))} />
+        <DetailField label="Asignado" value={assigned} />
+        <DetailField label="Oportunidad" value={opportunityId} monospace />
+        <DetailField label="Persona" value={extractString(raw, ["contacto_principal_id"]) || "—"} monospace />
+        <DetailField label="Cuenta" value={extractString(raw, ["cuenta_id"]) || "—"} monospace />
+      </div>
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  monospace = false,
+}: {
+  label: string;
+  value: string;
+  monospace?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={["mt-1 text-sm", monospace ? "font-mono" : ""].join(" ")}>{value}</div>
+    </div>
+  );
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
-}
-
-function applyClientFilters(
-  rows: DataTableRow[],
-  filters: NonNullable<Props["filters"]>,
-): DataTableRow[] {
-  const search = (filters.q ?? "").trim().toLowerCase();
-  const minMonto = parseNumber(filters.montoMin);
-  const maxMonto = parseNumber(filters.montoMax);
-  const reinicioMin = parseNumber(filters.reinicioMin);
-  const cierreDesde = parseDate(filters.cierreDesde);
-  const cierreHasta = parseDate(filters.cierreHasta);
-  const creadoDesde = parseDate(filters.creadoDesde);
-  const creadoHasta = parseDate(filters.creadoHasta);
-
-  return rows.filter((row) => {
-    const raw = row.raw as Record<string, unknown> | undefined;
-    const contacto = extractString(raw, ["contacto", "nombre_completo"]) || extractString(raw, ["metadata", "contacto_nombre"]) || "";
-    const cuenta = extractString(raw, ["cuenta", "nombre"]) || "";
-    const titulo = extractString(raw, ["titulo"]) || row.header || "";
-    const etapaId = extractString(raw, ["etapa", "id"]) || extractString(raw, ["etapa_id"]) || "";
-    const etapaNombre = extractString(raw, ["etapa", "nombre"]) || extractString(raw, ["metadata", "etapa_nombre"]) || "";
-    const estado = extractString(raw, ["estado"]) || "";
-    const asignadoId = extractString(raw, ["asignado", "id"]) || extractString(raw, ["asignado_a_usuario_id"]) || "";
-    const cuentaId = extractString(raw, ["cuenta", "id"]) || extractString(raw, ["cuenta_id"]) || "";
-    const personaId = extractString(raw, ["persona_id"]) || extractString(raw, ["contacto_principal_id"]) || "";
-    const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "";
-
-    if (search) {
-      const haystack = `${titulo} ${contacto} ${cuenta}`.toLowerCase();
-      if (!haystack.includes(search)) return false;
-    }
-
-    if (filters.etapaId && filters.etapaId !== "all") {
-      if (filters.etapaId !== etapaId && filters.etapaId !== etapaNombre) return false;
-    }
-    if (filters.estado && filters.estado !== "all" && estado !== filters.estado) return false;
-    if (filters.asignadoId && filters.asignadoId !== "all" && asignadoId !== filters.asignadoId) return false;
-    if (filters.cuentaId && filters.cuentaId !== "all" && cuentaId !== filters.cuentaId) return false;
-    if (filters.personaId && filters.personaId !== "all" && personaId !== filters.personaId) return false;
-    if (filters.canal && filters.canal !== "all" && canal !== filters.canal) return false;
-
-    const monto = parseNumber(extractUnknown(raw, ["monto_estimado"]));
-    if (minMonto !== null && (monto === null || monto < minMonto)) return false;
-    if (maxMonto !== null && (monto === null || monto > maxMonto)) return false;
-
-    const cierre = parseDate(extractUnknown(raw, ["fecha_cierre_probable"]));
-    if (cierreDesde && (!cierre || cierre < cierreDesde)) return false;
-    if (cierreHasta && (!cierre || cierre > cierreHasta)) return false;
-
-    const creado = parseDate(extractUnknown(raw, ["creado_en"]));
-    if (creadoDesde && (!creado || creado < creadoDesde)) return false;
-    if (creadoHasta && (!creado || creado > creadoHasta)) return false;
-
-    if (reinicioMin !== null) {
-      const reinicio = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
-      if (reinicio < reinicioMin) return false;
-    }
-
-    return true;
-  });
 }
 
 function extractUnknown(raw: Record<string, unknown> | undefined, path: string[]): unknown {
@@ -721,9 +771,26 @@ function parseNumber(value: unknown): number | null {
   return parsed;
 }
 
-function parseDate(value: unknown): Date | null {
-  if (!value || typeof value !== "string") return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
+function extractNumber(raw: Record<string, unknown> | undefined, path: string[]): number | null {
+  const value = extractUnknown(raw, path);
+  return parseNumber(value);
+}
+
+function buildEmbudoHref(row: DataTableRow): string {
+  const raw = row.raw as Record<string, unknown> | undefined;
+  const oportunidadId = extractString(raw, ["id"]) || String(row.id);
+  return `/embudo?oportunidadId=${encodeURIComponent(oportunidadId)}`;
+}
+
+function formatCurrency(value: number | null, currency: string): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return value.toLocaleString("es-MX");
+  }
 }
