@@ -14899,7 +14899,9 @@ class CRMActivity(BaseModel):
     contacto_id: UUID | None = None
     oportunidad_id: UUID | None = None
     creado_por_usuario_id: UUID | None = None
+    creado_por_usuario: CRMUserSummary | None = None
     asignado_a_usuario_id: UUID | None = None
+    asignado_a_usuario: CRMUserSummary | None = None
     completado_en: datetime | None = None
     cancelado_en: datetime | None = None
     cerrado_por_usuario_id: UUID | None = None
@@ -15508,6 +15510,7 @@ class CRMNote(BaseModel):
     visible_para_cliente: bool
     tipo: str
     creado_por_usuario_id: UUID | None = None
+    creado_por_usuario: CRMUserSummary | None = None
     creado_en: datetime
     actualizado_en: datetime
 
@@ -34980,7 +34983,46 @@ async def list_activities(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    items = [CRMActivity.model_validate(row) for row in rows]
+    user_ids = sorted(
+        {
+            str(row.get("creado_por_usuario_id") or "").strip()
+            for row in rows
+            if isinstance(row, dict) and str(row.get("creado_por_usuario_id") or "").strip()
+        }
+        | {
+            str(row.get("asignado_a_usuario_id") or "").strip()
+            for row in rows
+            if isinstance(row, dict) and str(row.get("asignado_a_usuario_id") or "").strip()
+        }
+    )
+    users_by_id: dict[str, dict[str, Any]] = {}
+    if user_ids:
+        try:
+            users = await repo.list_users_with_primary_role_by_ids(
+                organizacion_id=organizacion_id,
+                user_ids=[UUID(user_id) for user_id in user_ids],
+            )
+            users_by_id = {
+                str(user.get("id")): user
+                for user in users
+                if isinstance(user, dict) and str(user.get("id") or "").strip()
+            }
+        except CRMRepositoryError:
+            users_by_id = {}
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        created_by_id = str(row.get("creado_por_usuario_id") or "").strip()
+        assigned_by_id = str(row.get("asignado_a_usuario_id") or "").strip()
+        payload.append(
+            {
+                **row,
+                "creado_por_usuario": users_by_id.get(created_by_id) if created_by_id else None,
+                "asignado_a_usuario": users_by_id.get(assigned_by_id) if assigned_by_id else None,
+            },
+        )
+    items = [CRMActivity.model_validate(row) for row in payload]
     return CRMActivitiesResponse(items=items, limit=limit, offset=offset)
 
 
@@ -35615,7 +35657,39 @@ async def list_notes(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMNote.model_validate(row) for row in rows]
+    user_ids = sorted(
+        {
+            str(row.get("creado_por_usuario_id") or "").strip()
+            for row in rows
+            if isinstance(row, dict) and str(row.get("creado_por_usuario_id") or "").strip()
+        }
+    )
+    users_by_id: dict[str, dict[str, Any]] = {}
+    if user_ids:
+        try:
+            users = await repo.list_users_with_primary_role_by_ids(
+                organizacion_id=organizacion_id,
+                user_ids=[UUID(user_id) for user_id in user_ids],
+            )
+            users_by_id = {
+                str(user.get("id")): user
+                for user in users
+                if isinstance(user, dict) and str(user.get("id") or "").strip()
+            }
+        except CRMRepositoryError:
+            users_by_id = {}
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        created_by_id = str(row.get("creado_por_usuario_id") or "").strip()
+        payload.append(
+            {
+                **row,
+                "creado_por_usuario": users_by_id.get(created_by_id) if created_by_id else None,
+            },
+        )
+    return [CRMNote.model_validate(row) for row in payload]
 
 
 @router.post("/notas", response_model=CRMNote, status_code=status.HTTP_201_CREATED)

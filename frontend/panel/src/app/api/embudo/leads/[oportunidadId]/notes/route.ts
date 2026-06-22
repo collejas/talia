@@ -73,7 +73,9 @@ export async function GET(
   const userMap = new Map(users.map((user) => [user.id, user] as const));
   const enrichedRows = rows.map((row) => ({
     ...row,
-    creado_por_usuario: row.creado_por_usuario_id ? userMap.get(row.creado_por_usuario_id) ?? null : null,
+    creado_por_usuario:
+      row.creado_por_usuario ??
+      (row.creado_por_usuario_id ? userMap.get(row.creado_por_usuario_id) ?? null : null),
   }));
 
   return NextResponse.json({ data: enrichedRows });

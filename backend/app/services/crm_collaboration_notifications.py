@@ -48,14 +48,35 @@ async def notify_activity_created(
     actor_user_id: UUID | None,
 ) -> dict[str, Any] | None:
     activity_id = _safe_uuid(activity_row.get("id"))
-    recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id"))
-    if not activity_id or not recipient_id or recipient_id == actor_user_id:
+    if not activity_id:
         return None
-
     asunto = _truncate(activity_row.get("asunto") or activity_row.get("tipo") or "Actividad", limit=90)
     opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
     contact_id = _safe_uuid(activity_row.get("contacto_id"))
     creator_id = _safe_uuid(activity_row.get("creado_por_usuario_id"))
+
+    recipient_id: UUID | None = None
+    if opportunity_id:
+        try:
+            opportunity_row = await repo.get_opportunity(
+                organizacion_id=organizacion_id,
+                opportunity_id=opportunity_id,
+            )
+        except CRMRepositoryError:
+            opportunity_row = None
+        if isinstance(opportunity_row, dict):
+            recipient_id = _safe_uuid(opportunity_row.get("asignado_a_usuario_id")) or _safe_uuid(
+                opportunity_row.get("propietario_usuario_id")
+            )
+            contact_id = contact_id or _safe_uuid(opportunity_row.get("contacto_principal_id"))
+
+    if recipient_id is None:
+        recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id")) or _safe_uuid(
+            activity_row.get("creado_por_usuario_id")
+        )
+
+    if not recipient_id or recipient_id == actor_user_id:
+        return None
 
     notification = UserNotificationCreate(
         organizacion_id=organizacion_id,
@@ -112,9 +133,6 @@ async def notify_note_created(
         except CRMRepositoryError:
             activity_row = None
         if isinstance(activity_row, dict):
-            recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id")) or _safe_uuid(
-                activity_row.get("creado_por_usuario_id")
-            )
             opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
             contact_id = _safe_uuid(activity_row.get("contacto_id"))
             source_label = _clean_text(activity_row.get("asunto")) or source_label
@@ -145,12 +163,25 @@ async def notify_note_created(
             except CRMRepositoryError:
                 activity_row = None
             if isinstance(activity_row, dict):
-                recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id")) or _safe_uuid(
-                    activity_row.get("creado_por_usuario_id")
-                )
                 opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
                 contact_id = _safe_uuid(activity_row.get("contacto_id"))
                 source_label = _clean_text(activity_row.get("asunto")) or source_label
+                if opportunity_id:
+                    try:
+                        opportunity_row = await repo.get_opportunity(
+                            organizacion_id=organizacion_id,
+                            opportunity_id=opportunity_id,
+                        )
+                    except CRMRepositoryError:
+                        opportunity_row = None
+                    if isinstance(opportunity_row, dict):
+                        recipient_id = _safe_uuid(opportunity_row.get("asignado_a_usuario_id")) or _safe_uuid(
+                            opportunity_row.get("propietario_usuario_id")
+                        )
+                if recipient_id is None:
+                    recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id")) or _safe_uuid(
+                        activity_row.get("creado_por_usuario_id")
+                    )
 
     if not recipient_id or recipient_id == actor_user_id:
         return None

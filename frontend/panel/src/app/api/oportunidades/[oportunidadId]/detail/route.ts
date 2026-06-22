@@ -194,16 +194,18 @@ export async function GET(
   }
   const notesWithAuthors = notes.map((note) => ({
     ...note,
-    creado_por_usuario: note.creado_por_usuario_id ? userMap.get(note.creado_por_usuario_id) ?? null : null,
+    creado_por_usuario:
+      note.creado_por_usuario ??
+      (note.creado_por_usuario_id ? userMap.get(note.creado_por_usuario_id) ?? null : null),
   }));
   const activitiesWithUsers = activities.map((activity) => ({
     ...activity,
-    creado_por_usuario: activity.creado_por_usuario_id
-      ? userMap.get(activity.creado_por_usuario_id) ?? null
-      : null,
-    asignado_a_usuario: activity.asignado_a_usuario_id
-      ? userMap.get(activity.asignado_a_usuario_id) ?? null
-      : null,
+    creado_por_usuario:
+      activity.creado_por_usuario ??
+      (activity.creado_por_usuario_id ? userMap.get(activity.creado_por_usuario_id) ?? null : null),
+    asignado_a_usuario:
+      activity.asignado_a_usuario ??
+      (activity.asignado_a_usuario_id ? userMap.get(activity.asignado_a_usuario_id) ?? null : null),
   }));
 
   const errors: Partial<Record<DetailErrorKey, string>> = {};
