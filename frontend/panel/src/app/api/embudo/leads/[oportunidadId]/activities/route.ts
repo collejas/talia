@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
+type PermissionContext = {
+  roles?: string[];
+  permisos?: string[];
+  es_admin?: boolean;
+  es_owner?: boolean;
+};
+
 type CrmUserRow = {
   id: string;
   nombre_completo: string | null;
@@ -41,6 +48,34 @@ type CrmActivityRow = {
   creado_en: string;
   actualizado_en: string;
 };
+
+function hasSupervisorActivityAccess(context: PermissionContext | null | undefined): boolean {
+  if (!context) return false;
+  if (context.es_admin || context.es_owner) return true;
+  const roles = Array.isArray(context.roles)
+    ? context.roles.map((role) => (role ?? "").toString().trim().toLowerCase()).filter(Boolean)
+    : [];
+  if (
+    roles.some((role) =>
+      role === "0002" ||
+      role.includes("supervisor") ||
+      role.includes("gerente") ||
+      role.includes("manager") ||
+      role.includes("admin"),
+    )
+  ) {
+    return true;
+  }
+  const permisos = Array.isArray(context.permisos)
+    ? context.permisos.map((permiso) => (permiso ?? "").toString().trim().toLowerCase()).filter(Boolean)
+    : [];
+  return permisos.some((permiso) =>
+    permiso === "activities.create.supervised" ||
+    permiso === "activities.write" ||
+    permiso === "activities.manage" ||
+    permiso === "activities.view",
+  );
+}
 
 export async function GET(
   _request: Request,
@@ -105,6 +140,13 @@ export async function POST(
   const { oportunidadId } = await params;
   if (!oportunidadId) {
     return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
+  }
+
+  const permissionsResponse = await callCrmApi<PermissionContext>("/crm/me/permissions", {
+    withUserToken: true,
+  });
+  if (!permissionsResponse.ok || !hasSupervisorActivityAccess(permissionsResponse.data)) {
+    return NextResponse.json({ error: "permiso_denegado" }, { status: 403 });
   }
 
   let payload: unknown;
