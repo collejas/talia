@@ -119,6 +119,7 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_on_round_robin(
     rep_id = uuid.uuid4()
     contact_id = str(uuid.uuid4())
     seen_contact_patch = False
+    seen_persona_patch = False
 
     async def fake_assign_next_sales_rep(**_: object) -> dict[str, object]:
         return {
@@ -136,10 +137,21 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_on_round_robin(
         json: dict[str, object] | None = None,
         prefer: str | None = None,
     ) -> SimpleNamespace:
-        nonlocal seen_contact_patch
+        nonlocal seen_contact_patch, seen_persona_patch
         if path == "/rest/v1/oportunidades":
             assert method == "PATCH"
             assert json == {"asignado_a_usuario_id": str(rep_id)}
+        elif path == "/rest/v1/personas":
+            if method == "GET":
+                return SimpleNamespace(
+                    status_code=200,
+                    json=lambda: [],
+                )
+            assert method == "PATCH"
+            assert params is not None
+            assert params.get("propietario_usuario_id") == "is.null"
+            assert json == {"propietario_usuario_id": str(rep_id)}
+            seen_persona_patch = True
         elif path == "/rest/v1/contactos":
             if method == "GET":
                 return SimpleNamespace(
@@ -168,7 +180,7 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_on_round_robin(
     )
 
     assert assigned == rep_id
-    assert seen_contact_patch is True
+    assert seen_persona_patch or seen_contact_patch
 
 
 @pytest.mark.asyncio
@@ -186,12 +198,19 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_when_already_assign
         json: dict[str, object] | None = None,
         prefer: str | None = None,
     ) -> SimpleNamespace:
-        assert method == "PATCH"
-        assert path == "/rest/v1/contactos"
-        assert params is not None
-        assert params.get("propietario_usuario_id") == "is.null"
-        assert json == {"propietario_usuario_id": str(existing)}
-        return SimpleNamespace(status_code=200, json=lambda: [])
+        if path == "/rest/v1/contactos":
+            assert method == "PATCH"
+            assert params is not None
+            assert params.get("propietario_usuario_id") == "is.null"
+            assert json == {"propietario_usuario_id": str(existing)}
+            return SimpleNamespace(status_code=200, json=lambda: [])
+        if path == "/rest/v1/personas":
+            assert method == "PATCH"
+            assert params is not None
+            assert params.get("propietario_usuario_id") == "is.null"
+            assert json == {"propietario_usuario_id": str(existing)}
+            return SimpleNamespace(status_code=200, json=lambda: [])
+        pytest.fail(f"Unexpected path {path}")
 
     monkeypatch.setattr(repo, "_request", fake_request)
 
@@ -203,3 +222,77 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_when_already_assign
     )
 
     assert assigned == existing
+
+
+@pytest.mark.asyncio
+async def test_ensure_contact_record_for_persona_reemplaza_codigo_legacy_cont(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = CRMRepository()
+    persona_id = uuid.uuid4()
+    organizacion_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    async def fake_request_service_role(
+        method: str,
+        path: str,
+        *,
+        params: dict[str, object] | None = None,
+        json: dict[str, object] | None = None,
+        prefer: str | None = None,
+        organizacion_id: uuid.UUID | None = None,
+    ) -> SimpleNamespace:
+        if method == "GET" and path == "/rest/v1/contactos":
+            return SimpleNamespace(status_code=200, json=lambda: [])
+        if method == "POST" and path == "/rest/v1/contactos":
+            captured["json"] = dict(json or {})
+            return SimpleNamespace(status_code=201, json=lambda: [{"id": str(persona_id)}])
+        pytest.fail(f"Solicitud inesperada: {method} {path}")
+
+    async def fake_get_persona(
+        *,
+        organizacion_id: uuid.UUID,
+        persona_id: uuid.UUID,
+        use_service_role: bool = False,
+    ) -> dict[str, object]:
+        return {
+            "id": str(persona_id),
+            "organizacion_id": str(organizacion_id),
+            "codigo_contacto": "Cont-77",
+            "nombre_completo": "Persona Demo",
+            "correo_principal": "demo@example.com",
+            "telefono_principal_e164": "+521111111111",
+        }
+
+    async def fake_persona_to_contact_row(
+        *,
+        persona: dict[str, object],
+        organizacion_id: uuid.UUID,
+    ) -> dict[str, object]:
+        return {
+            "codigo_contacto": "Cont-77",
+            "nombre_completo": "Persona Demo",
+            "correo": "demo@example.com",
+            "telefono_e164": "+521111111111",
+            "estado": "activo",
+            "contacto_datos": {},
+        }
+
+    async def fake_preview_contact_code(*, organizacion_id: uuid.UUID) -> str:
+        return "Con42"
+
+    monkeypatch.setattr(repo, "_request_service_role", fake_request_service_role)
+    monkeypatch.setattr(repo, "get_persona", fake_get_persona)
+    monkeypatch.setattr(repo, "_persona_to_contact_row", fake_persona_to_contact_row)
+    monkeypatch.setattr(repo, "preview_contact_code", fake_preview_contact_code)
+
+    await repo.ensure_contact_record_for_persona(
+        organizacion_id=organizacion_id,
+        persona_id=persona_id,
+        use_service_role=True,
+    )
+
+    assert isinstance(captured.get("json"), dict)
+    assert captured["json"]["organizacion_id"] == str(organizacion_id)
+    assert captured["json"]["codigo_contacto"] == "Con42"
+    assert captured["json"]["estado"] == "activo"

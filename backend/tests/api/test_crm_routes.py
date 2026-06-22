@@ -80,7 +80,7 @@ class DummyCRMRepository(CRMRepository):
         return {
             "id": str(persona_id),
             "organizacion_id": str(organizacion_id),
-            "codigo_contacto": "Con-1",
+            "codigo_contacto": "Con1",
         }
 
     async def get_cliente_por_oportunidad(self, **kwargs: Any) -> dict[str, Any] | None:

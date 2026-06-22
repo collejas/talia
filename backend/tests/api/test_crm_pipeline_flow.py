@@ -90,7 +90,7 @@ class InMemoryPipelineRepository(CRMRepository):
         contacto_id = payload.get("contacto_principal_id") or uuid.uuid4()
         contact = {
             "id": str(contacto_id),
-            "codigo_contacto": f"Con-{len(self.contacts) + 1}",
+            "codigo_contacto": f"Con{len(self.contacts) + 1}",
             "nombre_completo": "Contacto Demo",
             "correo": "demo@example.com",
             "telefono_e164": "+521111111111",
@@ -422,7 +422,7 @@ class InMemoryPipelineRepository(CRMRepository):
             contact = {
                 "id": str(persona_id),
                 "organizacion_id": str(organizacion_id),
-                "codigo_contacto": source.get("codigo_contacto") or f"Con-{len(self.contacts) + 1}",
+                "codigo_contacto": source.get("codigo_contacto") or f"Con{len(self.contacts) + 1}",
                 "nombre_completo": source.get("nombre_completo") or "Contacto Demo",
                 "correo": source.get("correo"),
                 "telefono_e164": source.get("telefono_e164"),
@@ -631,3 +631,72 @@ async def test_crm_pipeline_end_to_end(
     )
     assert cliente_resp.status_code == 200
     assert cliente_resp.json()["cliente"]["estado_onboarding"] == "pendiente"
+
+
+@pytest.mark.asyncio
+async def test_convert_oportunidad_en_cliente_usa_service_role_para_escrituras() -> None:
+    class FakeResponse:
+        def __init__(self, payload: list[dict[str, Any]]) -> None:
+            self._payload = payload
+
+        def json(self) -> list[dict[str, Any]]:
+            return self._payload
+
+    class SpyRepository:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, Any]]] = []
+            self.contact_id = uuid.uuid4()
+
+        async def get_opportunity_with_contact(self, **kwargs: Any) -> dict[str, Any] | None:
+            self.calls.append(("get_opportunity_with_contact", kwargs))
+            return {
+                "id": kwargs["oportunidad_id"],
+                "contacto_principal_id": self.contact_id,
+                "cuenta_id": uuid.uuid4(),
+                "monto_estimado": 1250,
+                "moneda": "MXN",
+                "metadata": {"stage_prep": {"tablero_id": str(uuid.uuid4())}},
+                "etapa_id": uuid.uuid4(),
+                "etapa": {"codigo": "cerrado_ganado"},
+            }
+
+        async def ensure_contact_record_for_persona(self, **kwargs: Any) -> dict[str, Any]:
+            self.calls.append(("ensure_contact_record_for_persona", kwargs))
+            return {"id": str(kwargs["persona_id"])}
+
+        async def get_cliente_por_oportunidad(self, **kwargs: Any) -> dict[str, Any] | None:
+            self.calls.append(("get_cliente_por_oportunidad", kwargs))
+            return None
+
+        async def _request_service_role(self, method: str, path: str, **kwargs: Any) -> FakeResponse:
+            self.calls.append((f"service_role:{method}:{path}", kwargs))
+            return FakeResponse(
+                [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "oportunidad_id": str(kwargs["json"]["oportunidad_id"]),
+                        "contacto_id": str(kwargs["json"]["contacto_id"]),
+                        "legacy_lead_id": str(kwargs["json"]["legacy_lead_id"]),
+                        "estado_onboarding": "pendiente",
+                    }
+                ]
+            )
+
+    repo = SpyRepository()
+    oportunidad_id = uuid.uuid4()
+    organizacion_id = uuid.uuid4()
+
+    result = await CRMRepository.convert_oportunidad_en_cliente(  # type: ignore[misc]
+        repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        usuario_token="token-de-prueba",
+        forzar=True,
+    )
+
+    assert result["oportunidad_id"] == str(oportunidad_id)
+    assert any(
+        name == "ensure_contact_record_for_persona" and call.get("use_service_role") is True
+        for name, call in repo.calls
+    )
+    assert any(name == "service_role:POST:/rest/v1/clientes" for name, _ in repo.calls)

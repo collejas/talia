@@ -1065,7 +1065,7 @@ class CRMRepository:
     _stage_code_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     _CLIENTE_SELECT = (
-        "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,"
+        "id,organizacion_id,contacto_id,persona_id,cuenta_id,oportunidad_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
         "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
@@ -1211,7 +1211,7 @@ class CRMRepository:
             if offset >= 2000:
                 break
         codes = [row.get("codigo_contacto") for row in rows if isinstance(row, dict)]
-        return _next_sequential_code("Cont-", codes, width=1)
+        return _next_sequential_code("Con", codes, width=1)
 
     async def get_propiedades_geojson(
         self,
@@ -8128,14 +8128,16 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         persona_id: UUID,
+        use_service_role: bool = False,
     ) -> dict[str, Any] | None:
+        request = self._request_service_role if use_service_role else self._request
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{persona_id}",
             "limit": "1",
             "select": PERSONA_SELECT_FIELDS,
         }
-        resp = await self._request("GET", "/rest/v1/personas", params=params)
+        resp = await request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list) or not data:
             return None
@@ -9240,14 +9242,16 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         persona_id: UUID,
+        use_service_role: bool = False,
     ) -> dict[str, Any]:
+        request = self._request_service_role if use_service_role else self._request
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{persona_id}",
             "limit": "1",
             "select": "id,organizacion_id,codigo_contacto,nombre_completo,correo,telefono_e164,origen,propietario_usuario_id,estado,contacto_datos,company_name,notes,necesidad_proposito,captura_estado,cuenta_id,persona_datos,nombre_nombres,apellido_paterno,apellido_materno,persona_fisica_moral,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,email_facturacion,tipo_industria,tamano,puesto,area,rol_decision,tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,edificio,edificio_piso,numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,pais,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion",
         }
-        existing_resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        existing_resp = await request("GET", "/rest/v1/contactos", params=params)
         existing_data = existing_resp.json() or []
         existing_row = self._first_row(existing_data)
         if isinstance(existing_row, dict):
@@ -9256,6 +9260,7 @@ class CRMRepository:
         persona_row = await self.get_persona(
             organizacion_id=organizacion_id,
             persona_id=persona_id,
+            use_service_role=use_service_role,
         )
         if not isinstance(persona_row, dict):
             raise CRMRepositoryError("persona_not_found_for_contact_sync")
@@ -9265,8 +9270,10 @@ class CRMRepository:
             organizacion_id=organizacion_id,
         )
         codigo_contacto = str(contact_projection.get("codigo_contacto") or "").strip()
-        if not codigo_contacto:
+        if not codigo_contacto or not re.fullmatch(r"Con\d+", codigo_contacto):
             codigo_contacto = await self.preview_contact_code(organizacion_id=organizacion_id)
+        if not codigo_contacto or not re.fullmatch(r"Con\d+", codigo_contacto):
+            raise CRMRepositoryError("contacto_codigo_invalido_para_sync")
         created_at = contact_projection.get("creado_en") or datetime.now(timezone.utc).isoformat()
         contact_body: dict[str, Any] = {
             "id": str(persona_id),
@@ -9327,10 +9334,9 @@ class CRMRepository:
             "latitud": contact_projection.get("latitud"),
             "longitud": contact_projection.get("longitud"),
             "fecha_incorporacion": created_at,
-            "persona_datos": contact_projection.get("persona_datos") or {},
         }
         contact_body = {key: value for key, value in contact_body.items() if value is not None}
-        resp = await self._request(
+        resp = await request(
             "POST",
             "/rest/v1/contactos",
             json=contact_body,
@@ -14723,6 +14729,7 @@ class CRMRepository:
         await self.ensure_contact_record_for_persona(
             organizacion_id=organizacion_id,
             persona_id=contact_id,
+            use_service_role=True,
         )
 
         existing = await self.get_cliente_por_oportunidad(
@@ -14763,7 +14770,7 @@ class CRMRepository:
         body = {key: value for key, value in body.items() if value is not None}
         params = {"on_conflict": "contacto_id"}
         try:
-            resp = await self._request(
+            resp = await self._request_service_role(
                 "POST",
                 "/rest/v1/clientes",
                 params=params,
