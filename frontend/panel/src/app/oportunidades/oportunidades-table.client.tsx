@@ -4,6 +4,7 @@ import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableColumnLabels, DataTableRow } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
@@ -280,6 +283,60 @@ type SalesRepOption = {
   label: string;
 };
 
+type OpportunityDetailResponse = {
+  ok: true;
+  opportunity: Record<string, unknown> | null;
+  notes: OpportunityNote[];
+  activities: OpportunityActivity[];
+  quotes: OpportunityQuote[];
+  history: OpportunityHistory[];
+  errors: Partial<Record<"notes" | "activities" | "quotes" | "history", string>>;
+};
+
+type OpportunityNote = {
+  id: string;
+  texto: string;
+  tipo: string;
+  actividad_id: string | null;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+type OpportunityActivity = {
+  id: string;
+  tipo: string;
+  asunto: string | null;
+  descripcion: string | null;
+  estado: string;
+  prioridad: string;
+  recordatorio_en: string | null;
+  fecha_vencimiento: string | null;
+  asignado_a_usuario_id: string | null;
+  creado_en: string;
+};
+
+type OpportunityQuote = {
+  id: string;
+  estatus: string;
+  total: number | null;
+  moneda: string;
+  valida_hasta: string | null;
+  creado_en: string;
+};
+
+type OpportunityHistory = {
+  movimiento_id?: string;
+  id?: string;
+  tipo: string;
+  cambiado_en: string;
+  cambiado_por_nombre?: string | null;
+  fuente?: string | null;
+  etapa_origen_nombre?: string | null;
+  etapa_destino_nombre?: string | null;
+  motivo?: string | null;
+  nota?: string | null;
+};
+
 function buildExtraColumns(): ColumnDef<DataTableRow>[] {
   const extraColumns: ColumnDef<DataTableRow>[] = [
     {
@@ -489,6 +546,7 @@ function OpportunityRowDetails({
   canReassign: boolean;
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
+  const opportunityId = extractString(raw, ["id"]) || String(row.id);
   const opportunityCode =
     formatOpportunityCode(extractString(raw, ["codigo_oportunidad"])) || "Sin código";
   const stage =
@@ -513,7 +571,6 @@ function OpportunityRowDetails({
   const staleDays = diffDays(updatedAt);
   const weightedValue =
     monetaryValue != null && probability != null ? (monetaryValue * probability) / 100 : null;
-  const description = extractString(raw, ["descripcion"]);
   const source =
     extractString(raw, ["created_via"]) ||
     extractString(raw, ["metadata", "created_via"]) ||
@@ -527,15 +584,110 @@ function OpportunityRowDetails({
   const [reassignFeedback, setReassignFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
     null,
   );
+  const [detailState, setDetailState] = useState<{
+    status: "idle" | "loading" | "loaded" | "error";
+    data: OpportunityDetailResponse | null;
+    error: string | null;
+  }>({
+    status: "idle",
+    data: null,
+    error: null,
+  });
+  const [activityType, setActivityType] = useState("seguimiento");
+  const [activitySubject, setActivitySubject] = useState("Seguimiento de oportunidad");
+  const [activityDescription, setActivityDescription] = useState("");
+  const [activityDueAt, setActivityDueAt] = useState("");
+  const [activityAssigneeId, setActivityAssigneeId] = useState(currentVendorId);
+  const [activityPending, setActivityPending] = useState(false);
+  const [activityFeedback, setActivityFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
+    null,
+  );
   const selectedVendorLabel =
     vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
 
+  const detailOpportunity = detailState.data?.opportunity ?? raw;
+  const opportunityDetail = (detailOpportunity ?? {}) as Record<string, unknown>;
+  const contactName =
+    extractString(opportunityDetail, ["contacto", "nombre_completo"]) ||
+    extractString(opportunityDetail, ["contacto", "nombres"]) ||
+    "Sin contacto";
+  const companyName = extractString(opportunityDetail, ["cuenta", "nombre"]) || "Sin cuenta";
+  const projectName =
+    extractString(opportunityDetail, ["metadata", "project_name"]) ||
+    extractString(opportunityDetail, ["titulo"]) ||
+    "Sin proyecto";
+  const projectNeeds =
+    extractString(opportunityDetail, ["metadata", "proyecto_necesidades"]) ||
+    extractString(opportunityDetail, ["descripcion"]) ||
+    "Sin necesidades";
+  const talIaSummary =
+    extractString(opportunityDetail, ["metadata", "tal_ia", "resumen"]) ||
+    extractString(opportunityDetail, ["contacto", "notes"]) ||
+    extractString(opportunityDetail, ["contacto", "notas"]) ||
+    "Sin resumen generado";
+  const talIaNeed =
+    extractString(opportunityDetail, ["contacto", "necesidad_proposito"]) ||
+    extractString(opportunityDetail, ["metadata", "tal_ia", "necesidad"]) ||
+    extractString(opportunityDetail, ["metadata", "proyecto_necesidades"]) ||
+    "Sin necesidad detectada";
+  const quoteItems = detailState.data?.quotes ?? [];
+  const noteItems = detailState.data?.notes ?? [];
+  const activityItems = detailState.data?.activities ?? [];
+  const historyItems = detailState.data?.history ?? [];
+
   useEffect(() => {
     setSelectedVendorId(currentVendorId);
+    setActivityAssigneeId(currentVendorId);
   }, [currentVendorId]);
+
+  useEffect(() => {
+    if (!opportunityId) {
+      setDetailState({ status: "error", data: null, error: "No se encontró la oportunidad." });
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    const loadDetail = async () => {
+      setDetailState((current) => ({ ...current, status: "loading", error: null }));
+      try {
+        const response = await fetch(`/api/oportunidades/${opportunityId}/detail`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok) {
+          setDetailState({
+            status: "error",
+            data: null,
+            error: typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`,
+          });
+          return;
+        }
+        setDetailState({
+          status: "loaded",
+          data: body as OpportunityDetailResponse,
+          error: null,
+        });
+      } catch (error) {
+        if (cancelled || (error as Error).name === "AbortError") return;
+        setDetailState({
+          status: "error",
+          data: null,
+          error: error instanceof Error ? error.message : "No se pudo cargar el detalle.",
+        });
+      }
+    };
+    void loadDetail();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [opportunityId]);
 
   const handleVendorChange = async (vendorId: string) => {
     setSelectedVendorId(vendorId);
+    setActivityAssigneeId(vendorId);
     setReassignFeedback(null);
     if (!vendorId || vendorId === currentVendorId) return;
     setReassignPending(true);
@@ -544,12 +696,74 @@ function OpportunityRowDetails({
       setReassignFeedback({ type: "success", message: "Vendedor reasignado." });
     } catch (error) {
       setSelectedVendorId(currentVendorId);
+      setActivityAssigneeId(currentVendorId);
       setReassignFeedback({
         type: "error",
         message: error instanceof Error ? error.message : "No se pudo reasignar el vendedor.",
       });
     } finally {
       setReassignPending(false);
+    }
+  };
+
+  const handleCreateActivity = async () => {
+    const subject = activitySubject.trim();
+    if (!subject) {
+      setActivityFeedback({ type: "error", message: "Escribe un asunto para la actividad." });
+      return;
+    }
+
+    setActivityPending(true);
+    setActivityFeedback(null);
+    try {
+      const response = await fetch(`/api/oportunidades/${opportunityId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: activityType,
+          asunto: subject,
+          descripcion: activityDescription.trim() || undefined,
+          estado: "pendiente",
+          prioridad: "media",
+          fecha_vencimiento: activityDueAt || undefined,
+          asignado_a_usuario_id: activityAssigneeId || undefined,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        throw new Error(message);
+      }
+      const created = body?.data as OpportunityActivity | undefined;
+      if (created) {
+        setDetailState((current) => {
+          if (!current.data) return current;
+          const nextActivities = [created, ...current.data.activities].filter(
+            (candidate, index, array) => array.findIndex((item) => item.id === candidate.id) === index,
+          );
+          return {
+            ...current,
+            status: "loaded",
+            data: {
+              ...current.data,
+              activities: nextActivities,
+            },
+          };
+        });
+      }
+      setActivityType("seguimiento");
+      setActivitySubject("Seguimiento de oportunidad");
+      setActivityDescription("");
+      setActivityDueAt("");
+      setActivityAssigneeId(selectedVendorId || currentVendorId);
+      setActivityFeedback({ type: "success", message: "Actividad creada." });
+    } catch (error) {
+      setActivityFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudo crear la actividad.",
+      });
+    } finally {
+      setActivityPending(false);
     }
   };
 
@@ -601,6 +815,11 @@ function OpportunityRowDetails({
       </div>
 
       <Separator />
+      {detailState.status === "error" && detailState.error ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          No se pudo cargar el detalle ampliado: {detailState.error}
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <SectionCard
@@ -623,10 +842,7 @@ function OpportunityRowDetails({
           ) : null}
         </SectionCard>
 
-        <SectionCard
-          title="Seguimiento"
-          description="Tiempos de vida, actualización y responsable actual."
-        >
+        <SectionCard title="Seguimiento" description="Tiempos de vida, actualización y responsable actual.">
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailField label="Creado" value={formatDate(createdAt)} />
             <DetailField label="Actualizado" value={formatDate(updatedAt)} />
@@ -640,18 +856,303 @@ function OpportunityRowDetails({
           description="Canal, trazabilidad y señales operativas sin repetir identidad."
         >
           <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Contacto" value={contactName} />
+            <DetailField label="Cuenta" value={companyName} />
             <DetailField label="Canal" value={canal} />
             <DetailField label="Código" value={opportunityCode} />
             <DetailField label="Etapa" value={stage} />
             <DetailField label="Estado" value={state} />
             <DetailField label="Origen" value={source} />
-            {description ? <DetailField label="Descripción" value={description} /> : null}
             {lostReason ? <DetailField label="Motivo pérdida" value={lostReason} /> : null}
           </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Insights generados por Tal-IA"
+          description="Lectura rápida de los campos que hoy se capturan en el embudo."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Resumen" value={talIaSummary} />
+            <DetailField label="Necesidad / propósito" value={talIaNeed} />
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Proyecto"
+          description="Nombre y alcance comercial del proyecto asociado a la oportunidad."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Nombre del proyecto" value={projectName} />
+            <DetailField label="Necesidades / objetivos" value={projectNeeds} />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Estimación" description="Valor económico y probabilidad de conversión.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
+            <DetailField label="Probabilidad" value={formatProbability(probability)} />
+            <DetailField label="Valor ponderado" value={formatCurrency(weightedValue, currency)} />
+            <DetailField label="Cierre probable" value={formatDate(closeAt)} />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Cotizaciones" description="Cotizaciones vinculadas a la oportunidad.">
+          {detailState.status === "loading" && quoteItems.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              Cargando cotizaciones...
+            </p>
+          ) : null}
+          {detailState.data?.errors?.quotes ? (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              {detailState.data.errors.quotes}
+            </p>
+          ) : null}
+          {quoteItems.length ? (
+            <div className="space-y-2">
+              {quoteItems.map((quote) => (
+                <div key={quote.id} className="rounded-lg border border-border/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {quote.moneda} {formatCurrency(quote.total, quote.moneda)}
+                    </p>
+                    <Badge
+                      variant={quote.estatus === "aceptada" ? "default" : quote.estatus === "borrador" ? "outline" : "secondary"}
+                    >
+                      {quote.estatus}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Vence: {formatDate(quote.valida_hasta)} · Creada: {formatDate(quote.creado_en)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : detailState.status === "loaded" ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              No hay cotizaciones registradas para esta oportunidad.
+            </p>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="Notas" description="Registro rápido de observaciones y seguimiento comercial.">
+          {detailState.status === "loading" && noteItems.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              Cargando notas...
+            </p>
+          ) : null}
+          {detailState.data?.errors?.notes ? (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              {detailState.data.errors.notes}
+            </p>
+          ) : null}
+          {noteItems.length ? (
+            <div className="space-y-2">
+              {noteItems.map((note) => (
+                <div key={note.id} className="rounded-lg border border-border/60 p-3">
+                  <p className="whitespace-pre-wrap text-sm text-foreground">{note.texto}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {note.tipo} · {formatDate(note.creado_en)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : detailState.status === "loaded" ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              No hay notas registradas para esta oportunidad.
+            </p>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="Actividades" description="Alta rápida de tareas y seguimiento asociado a la oportunidad.">
+          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-type-${opportunityId}`}>
+                  Tipo
+                </label>
+                <Select value={activityType} onValueChange={setActivityType}>
+                  <SelectTrigger id={`activity-type-${opportunityId}`}>
+                    <SelectValue placeholder="Selecciona tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="seguimiento">Seguimiento</SelectItem>
+                    <SelectItem value="llamada">Llamada</SelectItem>
+                    <SelectItem value="correo">Correo</SelectItem>
+                    <SelectItem value="reunion">Reunión</SelectItem>
+                    <SelectItem value="interno">Interno</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-due-${opportunityId}`}>
+                  Vencimiento
+                </label>
+                <Input
+                  id={`activity-due-${opportunityId}`}
+                  type="datetime-local"
+                  value={activityDueAt}
+                  onChange={(event) => setActivityDueAt(event.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-subject-${opportunityId}`}>
+                  Asunto
+                </label>
+                <Input
+                  id={`activity-subject-${opportunityId}`}
+                  value={activitySubject}
+                  onChange={(event) => setActivitySubject(event.target.value)}
+                  placeholder="Seguimiento de oportunidad"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-description-${opportunityId}`}>
+                  Descripción
+                </label>
+                <Textarea
+                  id={`activity-description-${opportunityId}`}
+                  value={activityDescription}
+                  onChange={(event) => setActivityDescription(event.target.value)}
+                  placeholder="Describe la tarea o el siguiente paso."
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-assignee-${opportunityId}`}>
+                  Asignar a
+                </label>
+                {canReassign ? (
+                  <Select value={activityAssigneeId || "default"} onValueChange={(value) => setActivityAssigneeId(value === "default" ? "" : value)}>
+                    <SelectTrigger id={`activity-assignee-${opportunityId}`}>
+                      <SelectValue placeholder="Asignado por defecto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Asignado por defecto</SelectItem>
+                      {vendorOptions.map((vendor) => (
+                        <SelectItem key={vendor.id} value={vendor.id}>
+                          {vendor.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+                    Se usará el vendedor asignado actual.
+                  </div>
+                )}
+              </div>
+            </div>
+            {activityFeedback ? (
+              <p className={activityFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
+                {activityFeedback.message}
+              </p>
+            ) : null}
+            <div className="flex justify-end">
+              <Button type="button" onClick={handleCreateActivity} disabled={activityPending}>
+                {activityPending ? "Creando..." : "Crear actividad"}
+              </Button>
+            </div>
+          </div>
+          {detailState.data?.errors?.activities ? (
+            <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              {detailState.data.errors.activities}
+            </p>
+          ) : null}
+          {activityItems.length ? (
+            <div className="mt-3 space-y-2">
+              {activityItems.map((activity) => (
+                <div key={activity.id} className="rounded-lg border border-border/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {activity.asunto ?? activity.tipo}
+                    </p>
+                    <Badge
+                      variant={
+                        activity.estado === "completada"
+                          ? "default"
+                          : activity.estado === "cancelada"
+                            ? "outline"
+                            : "secondary"
+                      }
+                    >
+                      {activity.estado}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                    {activity.descripcion ?? "Sin descripción."}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {activity.tipo} · {activity.fecha_vencimiento ? `Vence ${formatDate(activity.fecha_vencimiento)}` : "Sin vencimiento"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : detailState.status === "loaded" ? (
+            <p className="mt-3 rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              No hay actividades registradas para esta oportunidad.
+            </p>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="Historial" description="Trazabilidad de cambios, notas y movimientos del pipeline.">
+          {detailState.status === "loading" && historyItems.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              Cargando historial...
+            </p>
+          ) : null}
+          {detailState.data?.errors?.history ? (
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              {detailState.data.errors.history}
+            </p>
+          ) : null}
+          {historyItems.length ? (
+            <div className="space-y-2">
+              {historyItems.map((entry) => (
+                <div key={entry.movimiento_id || entry.id || entry.cambiado_en} className="rounded-lg border border-border/60 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {describeOpportunityHistory(entry)}
+                      </p>
+                      {entry.motivo ? (
+                        <p className="text-xs text-muted-foreground">Motivo: {entry.motivo}</p>
+                      ) : null}
+                      {entry.nota ? (
+                        <p className="whitespace-pre-wrap text-xs text-muted-foreground">{entry.nota}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-muted-foreground">{formatDate(entry.cambiado_en)}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{entry.cambiado_por_nombre || "Usuario desconocido"}</span>
+                    {entry.fuente ? <span>Fuente: {entry.fuente}</span> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : detailState.status === "loaded" ? (
+            <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+              No hay movimientos registrados todavía.
+            </p>
+          ) : null}
         </SectionCard>
       </div>
     </div>
   );
+}
+
+function describeOpportunityHistory(entry: OpportunityHistory): string {
+  if (entry.tipo === "nota") {
+    return entry.nota?.trim() || "Nota registrada";
+  }
+  if (entry.etapa_destino_nombre) {
+    return `Movido a ${entry.etapa_destino_nombre}`;
+  }
+  if (entry.etapa_origen_nombre) {
+    return `Cambio de etapa desde ${entry.etapa_origen_nombre}`;
+  }
+  return entry.tipo || "Movimiento";
 }
 
 function SectionCard({
