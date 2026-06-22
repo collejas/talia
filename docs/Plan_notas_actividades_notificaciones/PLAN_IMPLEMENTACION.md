@@ -1,16 +1,16 @@
 # Plan de implementacion: notas, actividades y notificaciones
 
-Fecha: 2026-05-12
+Fecha: 2026-06-22
 
 ## 1. Objetivo
 
-Unificar el flujo operativo del CRM para que una conversacion, una oportunidad o un contacto puedan generar:
+Unificar el flujo operativo del CRM para que una oportunidad, una conversacion o una revison comercial puedan generar:
 
-- una nota libre para contexto
+- una nota para contexto
 - una actividad accionable para seguimiento
-- un recordatorio visible en el centro de notificaciones
+- una notificacion visible en el centro de notificaciones
 
-La premisa de este plan es no usar `metadata` para el flujo principal. Todo lo importante debe vivir en columnas para facilitar filtros, orden, vencimientos, agendas y notificaciones.
+La premisa de este plan es no usar `metadata` para el flujo principal. Todo lo importante debe vivir en columnas para facilitar filtros, orden, vencimientos, asignacion, auditoria y notificaciones.
 
 ## 2. Principio de diseno
 
@@ -22,9 +22,10 @@ Separacion de responsabilidades:
 
 Regla de implementacion:
 
-- si algo se consulta, filtra o vence, va en columna
+- si algo se consulta, filtra, vence o audita, va en columna
 - si algo solo acompana contexto opcional, puede quedarse fuera del flujo principal
 - si algo requiere inbox o alertas, debe materializarse como registro propio
+- si un supervisor crea una accion para un vendedor, deben quedar claras la autoria, el destinatario y el motivo operativo
 
 ## 3. Estado actual
 
@@ -36,7 +37,7 @@ La base ya tiene las piezas principales:
 
 Lo relevante es que:
 
-- `notas` hoy es una tabla simple de texto por relacion
+- `notas` hoy es una tabla de texto por relacion
 - `actividades` ya incluye `estado`, `prioridad`, `fecha_vencimiento`, `inicio_en`, `fin_en`, `sla_horas`, `recordatorio_en` y relaciones a cuenta/contacto/oportunidad
 - `ui_notificaciones` ya funciona como centro de notificaciones por usuario con `read_at`, `hidden_at`, `expires_at` y `payload`
 
@@ -48,17 +49,28 @@ Conclusiones del estado actual:
 
 ## 4. Alcance funcional
 
-### 4.1 En el modal de oportunidad
+### 4.1 En el modal o sidepanel de oportunidad
 
 El usuario podra:
 
 - crear una nota
-- convertir esa nota en una actividad
+- crear una actividad
+- convertir una nota en actividad si se requiere
 - definir fecha y hora del recordatorio
 - asignar responsable
 - elegir tipo de accion: llamada, correo, seguimiento, reunion, interno
+- notificar al vendedor cuando la accion venga de un supervisor
 
-### 4.2 En el centro de notificaciones
+### 4.2 En el caso de supervisor comercial
+
+El gerente podra:
+
+- dejar una nota que quede registrada como autoria del supervisor
+- crear una actividad para un vendedor especifico
+- hacer que el vendedor reciba una notificacion clara
+- revisar la respuesta del equipo desde la misma oportunidad
+
+### 4.3 En el centro de notificaciones
 
 El usuario vera:
 
@@ -66,8 +78,9 @@ El usuario vera:
 - recordatorios proximos
 - recordatorios vencidos
 - notificaciones generadas por actividades pendientes
+- acciones creadas por supervisores o gerentes
 
-### 4.3 En la oportunidad
+### 4.4 En la oportunidad
 
 La oportunidad debera mostrar:
 
@@ -75,6 +88,7 @@ La oportunidad debera mostrar:
 - actividades abiertas
 - actividades completadas
 - proximos recordatorios
+- quien creo la accion y para quien fue dirigida
 
 ## 5. Modelo de datos propuesto
 
@@ -103,6 +117,7 @@ Uso:
 
 - opcionalmente enlazar una nota con la actividad que la origino
 - permitir rastrear desde la nota a la tarea creada
+- conservar la autoria real del supervisor o del vendedor
 
 No agregar:
 
@@ -145,6 +160,7 @@ Uso:
 - representar tareas reales
 - disparar recordatorios
 - servir como fuente para alertas y paneles de seguimiento
+- distinguir entre quien creo la actividad y quien la debe ejecutar
 
 ### 5.3 Tabla `ui_notificaciones`
 
@@ -181,19 +197,32 @@ Uso:
 - mostrar recordatorios ya vencidos o por vencer
 - agrupar alertas por usuario
 - enlazar cada notificacion a la actividad que la genero
+- avisar a un vendedor cuando un supervisor crea o asigna una accion
 
 ## 6. Flujo propuesto
 
-### 6.1 Crear nota y recordatorio
+### 6.1 Supervisor asigna una actividad
 
-1. El usuario registra una nota en la oportunidad.
-2. Desde el mismo modal marca `Crear recordatorio`.
+1. El gerente abre una oportunidad en `/oportunidades`.
+2. Crea una actividad para un vendedor.
+3. El backend guarda:
+   - quien la creo
+   - a quien va dirigida
+   - sobre que oportunidad aplica
+4. Si la actividad tiene `recordatorio_en`, se programa la notificacion.
+5. El vendedor recibe un aviso en su inbox.
+
+### 6.2 Supervisor deja una nota con seguimiento
+
+1. El gerente registra una nota en la oportunidad.
+2. Puede marcar que la nota debe notificar al vendedor.
 3. El backend crea:
    - la nota
-   - la actividad asociada
-4. Si la actividad tiene `recordatorio_en`, se programara la notificacion.
+   - la notificacion
+4. La nota queda como contexto o instruccion.
+5. La notificacion solo anuncia que existe una novedad.
 
-### 6.2 Programacion de notificaciones
+### 6.3 Programacion de notificaciones
 
 1. Un proceso backend revisa actividades pendientes.
 2. Busca actividades con:
@@ -202,7 +231,7 @@ Uso:
 3. Crea un registro en `ui_notificaciones`.
 4. La notificacion aparece en el centro de notificaciones del usuario asignado.
 
-### 6.3 Cierre de tarea
+### 6.4 Cierre de tarea
 
 1. El usuario marca la actividad como completada.
 2. Se rellena `completado_en`.
@@ -216,11 +245,13 @@ Objetivo:
 
 - permitir crear notas simples
 - permitir crear notas vinculadas a una actividad
+- permitir que una nota dispare una notificacion si la accion la origina un supervisor
 
 Cambios:
 
 - ampliar el create de notas para aceptar `actividad_id` si se decide persistir la relacion
 - validar que la actividad pertenezca a la misma organizacion
+- conservar `creado_por_usuario_id` como autoria real
 
 ### 7.2 API de actividades
 
@@ -235,27 +266,30 @@ Cambios:
 - endpoint para marcar como completada
 - endpoint para cancelar
 - endpoint para listar pendientes por oportunidad, contacto o usuario
+- respetar el origen de la actividad cuando la crea un supervisor
 
 ### 7.3 Generacion de notificaciones
 
 Objetivo:
 
-- crear `ui_notificaciones` a partir de actividades programadas
+- crear `ui_notificaciones` a partir de actividades programadas o acciones de supervision
 
 Cambios:
 
 - servicio que transforme actividades vencidas en notificaciones
+- servicio que genere notificacion al vendedor cuando la accion venga de un supervisor
 - control de duplicados por `dedupe_key`
 - opcion de agrupar notificaciones similares por `agrupacion_key`
 
 ## 8. Cambios de frontend
 
-### 8.1 Modal de oportunidad
+### 8.1 Modal o sidepanel de oportunidad
 
 Agregar seccion:
 
 - nota
 - checkbox `Crear recordatorio`
+- checkbox `Notificar al vendedor`
 - fecha y hora
 - responsable
 - tipo de actividad
@@ -268,6 +302,7 @@ Mostrar:
 - vencidas
 - proximas
 - completadas recientemente
+- acciones creadas por supervisores
 
 Acciones:
 
@@ -284,6 +319,7 @@ Mostrar una linea de tiempo simple:
 - actividades
 - recordatorios
 - cambios de estado
+- autoria y destinatario de acciones
 
 ## 9. Reglas de negocio recomendadas
 
@@ -293,6 +329,8 @@ Mostrar una linea de tiempo simple:
 - Toda actividad debe pertenecer a exactamente una organizacion.
 - Todo recordatorio debe tener un responsable o caer en una cola por defecto.
 - El inbox no debe leer directamente de `notas`.
+- Si un supervisor crea una accion, la autoria y el destinatario deben verse de forma explicita.
+- La notificacion no sustituye el registro de negocio; solo lo anuncia.
 
 ## 10. Indices y performance
 
@@ -320,12 +358,14 @@ Indices recomendados:
 - crear endpoints de actividades completos
 - vincular notas con actividades
 - generar notificaciones desde el scheduler o worker
+- preservar autoria y destinatario cuando la accion venga de supervisor
 
 ### Fase 3: Frontend
 
-- agregar UI en modal de oportunidad
+- agregar UI en modal o sidepanel de oportunidad
 - agregar panel de recordatorios y actividades
 - conectar el centro de notificaciones
+- mostrar claramente quien crea y quien recibe la accion
 
 ### Fase 4: Validacion
 
@@ -333,6 +373,7 @@ Indices recomendados:
 - pruebas de creacion de actividad con recordatorio
 - pruebas de generacion de notificacion
 - pruebas de visibilidad por usuario y tenant
+- pruebas de acciones creadas por supervisor
 
 ## 12. Decisiones cerradas por este plan
 
@@ -341,6 +382,7 @@ Indices recomendados:
 - Reutilizar `actividades` como fuente de verdad de tareas y recordatorios.
 - Reutilizar `ui_notificaciones` como inbox persistente.
 - Mantener `notas` como historial narrativo.
+- Permitir que supervisor y gerente creen acciones para vendedores sin perder autoria.
 
 ## 13. Proximo paso tecnico
 
@@ -349,4 +391,4 @@ Antes de implementar:
 1. revisar si `notas` debe llevar `actividad_id`
 2. definir si `asunto` basta en `actividades` o si conviene `titulo`
 3. acordar si la generacion de notificaciones saldra de un worker programado o de un job periodico en backend
-
+4. definir si la nota del supervisor tendra checkbox explicito para notificar al vendedor

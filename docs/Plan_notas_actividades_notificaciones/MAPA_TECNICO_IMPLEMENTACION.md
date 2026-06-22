@@ -1,6 +1,6 @@
 # Mapa tecnico de implementacion
 
-Fecha: 2026-05-12
+Fecha: 2026-06-22
 
 Documento de referencia para pasar de la propuesta funcional a la ejecucion.
 No contiene codigo; solo delimita archivos, capas y cambios esperados.
@@ -11,7 +11,7 @@ Implementar el flujo:
 
 `nota -> actividad -> notificacion`
 
-sin depender de `metadata` para el camino principal.
+sin depender de `metadata` para el camino principal y permitiendo que un supervisor cree acciones visibles para el vendedor.
 
 ## 2. Principios de implementacion
 
@@ -20,6 +20,7 @@ sin depender de `metadata` para el camino principal.
 - usar `actividades` como entidad operativa principal
 - usar `ui_notificaciones` como inbox persistente
 - evitar tablas duplicadas para el mismo concepto
+- conservar autoria real y destinatario explicito cuando una accion venga de un superior
 
 ## 3. Mapa de cambios por capa
 
@@ -41,6 +42,7 @@ Cambios esperados:
   - agregar `cancelado_en timestamptz null`
   - agregar `cerrado_por_usuario_id uuid null`
   - definir si `asunto` sera el label principal o si se agrega `titulo`
+  - conservar `creado_por_usuario_id` y `asignado_a_usuario_id`
   - indices sugeridos:
     - `organizacion_id, estado, recordatorio_en`
     - `organizacion_id, asignado_a_usuario_id, estado`
@@ -50,6 +52,7 @@ Cambios esperados:
   - agregar `actividad_id uuid null`
   - agregar `oportunidad_id uuid null`
   - agregar `contacto_id uuid null`
+  - relacionar de forma clara el usuario destinatario con el evento generado
   - indice sugerido:
     - `usuario_id, created_at desc`
     - `usuario_id, read_at, hidden_at`
@@ -59,6 +62,7 @@ Notas:
 
 - no se recomienda una tabla nueva de recordatorios
 - no se recomienda usar `metadata` para relaciones principales
+- si una nota de supervisor debe notificar, el evento debe salir de `ui_notificaciones`, no de la nota misma
 
 ### 3.2 Backend API
 
@@ -73,7 +77,7 @@ Modelos a revisar o extender:
 - `CRMActivity`
 - `CRMActivityCreate`
 - posible modelo nuevo para marcar actividad completada o cancelada
-- posible modelo nuevo para notificacion derivada de actividad
+- posible modelo nuevo para notificacion derivada de actividad o de nota con instruccion
 
 Endpoints a definir o ajustar:
 
@@ -92,10 +96,11 @@ Endpoints a definir o ajustar:
 Comportamiento esperado:
 
 - crear nota con o sin actividad vinculada
-- crear actividad desde el modal de oportunidad
+- crear actividad desde el modal o sidepanel de oportunidad
 - completar o cancelar actividad
 - listar actividades por oportunidad, contacto, usuario o estado
-- alimentar el centro de notificaciones desde actividades pendientes
+- identificar claramente cuando una actividad fue creada por un supervisor para un vendedor
+- alimentar el centro de notificaciones desde actividades pendientes o acciones de supervision
 
 ### 3.3 Repositorio CRM
 
@@ -122,6 +127,7 @@ Comportamiento esperado:
 - persistir `completado_en` y `cancelado_en`
 - crear notificaciones usando columnas directas
 - evitar escribir relaciones importantes dentro de JSON
+- conservar `creado_por_usuario_id` y `asignado_a_usuario_id` para trazabilidad
 
 ### 3.4 Servicio de notificaciones
 
@@ -136,6 +142,7 @@ Responsabilidad:
 - convertir una actividad vencida o programada en una fila de `ui_notificaciones`
 - emitir evento realtime al usuario correcto
 - evitar duplicados con una clave estable
+- notificar al vendedor cuando un supervisor le asigne una accion relevante
 
 Estrategia sugerida:
 
@@ -143,6 +150,7 @@ Estrategia sugerida:
 - consulta de actividades con `recordatorio_en <= now()` y `estado = 'pendiente'`
 - insercion en `ui_notificaciones`
 - emision realtime al canal del usuario
+- opcion de generar notificacion al crear una nota marcada como "requiere aviso"
 
 ### 3.5 Frontend panel
 
@@ -156,9 +164,10 @@ Archivos probables:
 
 Cambios esperados:
 
-- modal de oportunidad:
+- modal o sidepanel de oportunidad:
   - bloque para nota
   - checkbox `Crear recordatorio`
+  - checkbox `Notificar al vendedor`
   - fecha/hora
   - responsable
   - tipo de actividad
@@ -173,13 +182,14 @@ Cambios esperados:
   - timeline de notas y actividades
   - proximos recordatorios
   - actividades abiertas y completadas
+  - etiqueta visible de supervisor/autor/destinatario
 
 ### 3.6 Panel de contactos u otras vistas relacionadas
 
 Posibles impactos:
 
 - detalle de contacto si una actividad se vincula a contacto
-- embudo/opportunidad si la actividad se crea desde una etapa
+- embudo/oportunidad si la actividad se crea desde una etapa
 - vista de inbox si se usa el mismo patron de notificaciones en toda la app
 
 ## 4. Secuencia tecnica de ejecucion
@@ -197,12 +207,14 @@ Posibles impactos:
 2. agregar endpoints de actividad
 3. enlazar notas con actividades
 4. crear notificaciones persistentes desde actividades
+5. conservar autor y destinatario cuando la accion venga de un supervisor
 
 ### Fase C. Frontend
 
-1. agregar controles en modal de oportunidad
+1. agregar controles en modal o sidepanel de oportunidad
 2. mostrar actividad creada en el timeline
 3. integrar inbox de notificaciones
+4. mostrar el origen supervisor/vendedor sin ambiguedad
 
 ### Fase D. Validacion
 
@@ -210,6 +222,7 @@ Posibles impactos:
 2. pruebas de creacion de actividad con recordatorio
 3. pruebas de notificacion generada
 4. pruebas de permisos y tenant scope
+5. pruebas de visibilidad de acciones creadas por supervisor
 
 ## 5. Casos de prueba que deben pasar
 
@@ -219,6 +232,7 @@ Posibles impactos:
 - completar actividad
 - cancelar actividad
 - generar notificacion al vencer el recordatorio
+- generar notificacion al supervisor crear una instruccion para el vendedor
 - ver solo notificaciones del usuario autenticado
 - ver solo actividades del tenant actual
 
@@ -229,6 +243,7 @@ Posibles impactos:
 - `ui_notificaciones` sera la fuente de verdad del inbox
 - si hace falta relacionar entidades, se hace con columnas FKs
 - no se usara JSON como canal principal de consulta
+- la autoria y el destinatario deben quedar visibles en acciones de supervision
 
 ## 7. Orden recomendado de implementacion
 
@@ -236,7 +251,6 @@ Posibles impactos:
 2. extensiones de backend para `actividades`
 3. integracion de `notas` con `actividad_id`
 4. generacion de `ui_notificaciones`
-5. UI del modal de oportunidad
+5. UI del modal o sidepanel de oportunidad
 6. UI del centro de notificaciones
 7. pruebas y ajustes
-
