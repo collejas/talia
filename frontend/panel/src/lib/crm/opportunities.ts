@@ -192,7 +192,7 @@ function formatEtapa(op: CRMOpportunity): string {
       return stageName;
     }
   }
-  return `Etapa ${op.etapa_id.slice(0, 8)}`;
+  return "Etapa sin nombre";
 }
 
 function formatOpportunityCode(code: string | null | undefined): string {
@@ -208,9 +208,6 @@ function buildContactLabel(op: CRMOpportunity): string {
   }
   if (op.cuenta?.nombre && op.cuenta.nombre.trim().length) {
     return op.cuenta.nombre.trim();
-  }
-  if (op.contacto_principal_id) {
-    return `Contacto ${op.contacto_principal_id.slice(0, 8)}`;
   }
   return "Contacto sin nombre";
 }

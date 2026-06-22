@@ -52,6 +52,7 @@ export function EmbudoCardItem({
         : "Oportunidad sin nombre";
   const contactName = isGenericConversationLabel(rawContactName) ? "<->" : rawContactName;
   const opportunityName = isGenericConversationLabel(rawOpportunityName) ? "<->" : rawOpportunityName;
+  const opportunityCode = formatOpportunityReference(card.codigoOportunidad);
   const contactInfo = card.correo || card.telefono || card.empresa || null;
   const scoreValue = card.leadScoring?.scoreTotal;
   const gradeValue = card.leadScoring?.grade;
@@ -87,6 +88,11 @@ export function EmbudoCardItem({
             <h4 className="truncate font-semibold leading-tight" title={opportunityName}>
               {opportunityName}
             </h4>
+            {opportunityCode ? (
+              <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] font-semibold uppercase tracking-wide">
+                {opportunityCode}
+              </Badge>
+            ) : null}
             <p className="truncate text-xs text-muted-foreground">Contacto: {contactName}</p>
             <p className="truncate text-xs text-muted-foreground">{contactInfo || "Sin datos de contacto"}</p>
           </div>
@@ -407,4 +413,10 @@ function isGenericConversationLabel(value: string | null | undefined): boolean {
   const normalized = value.trim().toLowerCase();
   if (!normalized.length) return false;
   return normalized.startsWith("conversación ") || normalized.startsWith("conversacion ");
+}
+
+function formatOpportunityReference(code: string | null | undefined): string {
+  const raw = typeof code === "string" ? code.trim() : "";
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*/g, " - ");
 }

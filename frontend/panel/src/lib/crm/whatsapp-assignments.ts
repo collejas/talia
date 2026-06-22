@@ -79,9 +79,6 @@ function buildContactLabel(assignment: WhatsAppAssignment): string {
   if (parts.length > 0) {
     return parts[0]!;
   }
-  if (assignment.conversacion_id) {
-    return `Conv ${assignment.conversacion_id.slice(0, 8)}`;
-  }
   return "Contacto WhatsApp";
 }
 

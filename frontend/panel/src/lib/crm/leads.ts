@@ -150,15 +150,14 @@ function resolveLeadHeader(lead: CRMLead): string {
       ? metadata.nombre
       : null;
   if (nombre && nombre.trim().length) return nombre.trim();
-  return `Lead ${lead.id.slice(0, 8)}`;
+  return "Lead sin nombre";
 }
 
 function formatContactName(stat: CRMLeadRestartStat): string {
   if (stat.contacto_nombre && stat.contacto_nombre.trim().length) {
     return stat.contacto_nombre.trim();
   }
-  const personaId = stat.persona_id?.trim();
-  return `Contacto ${(personaId || stat.contacto_id).slice(0, 8)}`;
+  return "Contacto sin nombre";
 }
 
 function formatSellerName(stat: CRMLeadRestartStat): string {
