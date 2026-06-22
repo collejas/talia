@@ -174,10 +174,7 @@ export function OportunidadesTableClient({
     return () => controller.abort();
   }, [reassignOpen, canReassign, canReassignAny]);
 
-  const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns({
-    canReassign,
-    onReassignClick: (row) => openReassignDialog(row),
-  });
+  const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns();
   const initialVisibility = buildInitialVisibility();
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -283,7 +280,7 @@ export function OportunidadesTableClient({
         renderRowDetails={(row) => (
           <OpportunityRowDetails row={row} onReassign={() => openReassignDialog(row)} />
         )}
-        detailDescription="Resumen de la oportunidad y accesos rapidos al embudo."
+        detailDescription="Consulta y acceso rápido al embudo. La reasignación y los movimientos operativos quedan en el detalle."
       />
       <Dialog
         open={reassignOpen}
@@ -411,11 +408,6 @@ function mergeUniqueOptions(
   return merged;
 }
 
-type ExtraColumnOptions = {
-  canReassign: boolean;
-  onReassignClick: (row: DataTableRow) => void;
-};
-
 type SalesRepOption = {
   id: string;
   nombre_completo: string | null;
@@ -432,7 +424,7 @@ type AuditAssignment = {
   vendedor_correo?: string | null;
 };
 
-function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow>[] {
+function buildExtraColumns(): ColumnDef<DataTableRow>[] {
   const extraColumns: ColumnDef<DataTableRow>[] = [
     {
       id: "cuenta",
@@ -594,36 +586,18 @@ function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow
     },
   ];
 
-  if (options?.canReassign) {
-    extraColumns.push({
-      id: "acciones",
-      header: () => <div className="w-full text-right">Acciones</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={buildEmbudoHref(row.original)}>Embudo</Link>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => options.onReassignClick(row.original)}>
-            Reasignar
-          </Button>
-        </div>
-      ),
-      meta: { label: "Acciones", reorderable: false },
-    });
-  } else {
-    extraColumns.push({
-      id: "acciones",
-      header: () => <div className="w-full text-right">Acciones</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-end">
-          <Button asChild variant="outline" size="sm">
-            <Link href={buildEmbudoHref(row.original)}>Embudo</Link>
-          </Button>
-        </div>
-      ),
-      meta: { label: "Acciones", reorderable: false },
-    });
-  }
+  extraColumns.push({
+    id: "acciones",
+    header: () => <div className="w-full text-right">Acciones</div>,
+    cell: ({ row }) => (
+      <div className="flex justify-end">
+        <Button asChild variant="outline" size="sm">
+          <Link href={buildEmbudoHref(row.original)}>Embudo</Link>
+        </Button>
+      </div>
+    ),
+    meta: { label: "Acciones", reorderable: false },
+  });
 
   return extraColumns;
 }

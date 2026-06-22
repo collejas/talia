@@ -63,6 +63,10 @@ export default async function OportunidadesPage({
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
+        <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          Listado maestro para consultar, filtrar y revisar oportunidades. El cambio de etapa vive en el embudo;
+          aquí solo se muestra el resumen y el acceso rápido a esa operación.
+        </div>
         <OportunidadesSummaryLazy
           days={filters.creadoDesde && filters.creadoHasta ? undefined : 30}
           desde={filters.creadoDesde || undefined}
