@@ -122,6 +122,7 @@ SELECT
     a.conversacion_id,
     conv.canal AS conversacion_canal,
     a.oportunidad_id,
+    opp.codigo_oportunidad,
     opp.titulo AS oportunidad_titulo,
     a.contacto_id,
     p.nombre_completo AS contacto_nombre,

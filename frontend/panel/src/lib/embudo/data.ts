@@ -32,6 +32,7 @@ export type EmbudoStage = {
 
 export type EmbudoCard = {
   oportunidadId: string;
+  codigoOportunidad: string | null;
   personaId: string;
   contactoId: string;
   conversacionId: string | null;
@@ -114,6 +115,7 @@ export type EmbudoScoringKpisSlice = {
 export type PipelineBoardCard = {
   tarjeta_id?: string | null;
   oportunidad_id?: string | null;
+  codigo_oportunidad?: string | null;
   persona_id?: string | null;
   contacto_id: string | null;
   conversacion_id: string | null;

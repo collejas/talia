@@ -19,3 +19,4 @@
 - Se agrego acceso rapido al embudo desde las acciones de cada fila en `/oportunidades`.
 - Se reemplazo el sidepanel demo por una ficha formal de oportunidad dentro del drawer de la tabla.
 - Se agrego `codigo_oportunidad` como identificador legible de negocio para mostrar en frontend, dejando el UUID como llave tecnica interna.
+- Se propago `codigo_oportunidad` al embudo y a la auditoria de asignaciones para evitar exponer UUIDs al usuario.

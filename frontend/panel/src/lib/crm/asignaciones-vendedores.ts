@@ -9,6 +9,7 @@ type AssignmentRow = {
   conversacion_id: string | null;
   conversacion_canal: string | null;
   oportunidad_id: string | null;
+  codigo_oportunidad: string | null;
   oportunidad_titulo: string | null;
   contacto_id: string | null;
   contacto_nombre: string | null;
@@ -49,7 +50,10 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
     header: item.vendedor_nombre || item.vendedor_correo || "Vendedor",
     type: item.trigger_event,
     status: item.contacto_nombre || "Contacto",
-    target: item.oportunidad_titulo || item.oportunidad_id || "Oportunidad",
+    target:
+      item.codigo_oportunidad?.trim()
+        ? `${item.codigo_oportunidad.trim().replace(/\s*-\s*/g, " - ")} · ${item.oportunidad_titulo || "Oportunidad"}`
+        : item.oportunidad_titulo || item.oportunidad_id || "Oportunidad",
     limit: item.conversacion_canal || "—",
     reviewer: item.creado_en,
     raw: item,

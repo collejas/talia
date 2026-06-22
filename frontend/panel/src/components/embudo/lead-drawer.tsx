@@ -3964,7 +3964,11 @@ export function LeadDrawer({
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Referencia</span>
-                          <span className="font-medium text-foreground">{card.oportunidadId.slice(0, 8).toUpperCase()}</span>
+                          <span className="font-medium text-foreground">
+                            {card.codigoOportunidad?.trim()
+                              ? card.codigoOportunidad.replace(/\s*-\s*/g, " - ")
+                              : card.oportunidadId.slice(0, 8).toUpperCase()}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -4644,7 +4648,11 @@ export function LeadDrawer({
                       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proyecto</h4>
                       <div className="mt-2 space-y-1">
                         <p className="font-medium text-foreground">{quoteProjectNeeds}</p>
-                        <p className="text-muted-foreground">Referencia: {card.oportunidadId.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-muted-foreground">
+                          Referencia: {card.codigoOportunidad?.trim()
+                            ? card.codigoOportunidad.replace(/\s*-\s*/g, " - ")
+                            : card.oportunidadId.slice(0, 8).toUpperCase()}
+                        </p>
                       </div>
                     </div>
                     <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">

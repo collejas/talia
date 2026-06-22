@@ -16,6 +16,12 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const metadata = parseMetadatos(card.metadata);
   const etapaCodigo = typeof card.etapa_codigo === "string" ? card.etapa_codigo : null;
   const oportunidadId = card.oportunidad_id ?? card.tarjeta_id ?? "";
+  const codigoOportunidad =
+    typeof card.codigo_oportunidad === "string" && card.codigo_oportunidad.trim().length
+      ? card.codigo_oportunidad.trim()
+      : typeof metadata.codigo_oportunidad === "string" && metadata.codigo_oportunidad.trim().length
+        ? metadata.codigo_oportunidad.trim()
+        : null;
   const metadataConversationId =
     typeof metadata.conversation_id === "string" && metadata.conversation_id.trim().length
       ? metadata.conversation_id.trim()
@@ -82,6 +88,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const personaId = card.persona_id ?? card.contacto_id ?? "";
   return {
     oportunidadId,
+    codigoOportunidad,
     personaId,
     contactoId: card.contacto_id ?? "",
     conversacionId: resolvedConversationId,

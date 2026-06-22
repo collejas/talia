@@ -11,6 +11,7 @@ type WhatsAppAssignment = {
   conversacion_id: string | null;
   conversacion_canal: string | null;
   oportunidad_id: string | null;
+  codigo_oportunidad: string | null;
   oportunidad_titulo: string | null;
   contacto_id: string | null;
   contacto_nombre: string | null;
@@ -55,6 +56,7 @@ export async function loadCrmWhatsAppAssignments(): Promise<CrmWhatsAppAssignmen
     target: assignment.vendedor_nombre || assignment.vendedor_usuario_id || "Sin vendedor",
     limit: formatTimestamp(assignment.creado_en),
     reviewer:
+      formatOpportunityReference(assignment.codigo_oportunidad) ||
       assignment.oportunidad_titulo ||
       (assignment.oportunidad_id ? `Opp ${assignment.oportunidad_id.slice(0, 8)}` : "Sin oportunidad"),
     raw: assignment,
@@ -95,4 +97,10 @@ function formatTimestamp(value: string | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function formatOpportunityReference(code: string | null | undefined): string {
+  const raw = typeof code === "string" ? code.trim() : "";
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*/g, " - ");
 }

@@ -2993,6 +2993,7 @@ class WhatsAppSalesAssignment(BaseModel):
     conversacion_id: str | None = None
     conversacion_canal: str | None = None
     oportunidad_id: UUID | None = None
+    codigo_oportunidad: str | None = None
     oportunidad_titulo: str | None = None
     contacto_id: UUID | None = None
     contacto_nombre: str | None = None
@@ -15275,6 +15276,7 @@ class CRMPipelineBoardCard(BaseModel):
     contacto_id: UUID | None = None
     conversacion_id: UUID | None = None
     origen: str | None = None
+    codigo_oportunidad: str | None = None
     titulo: str
     nombre: str | None = None
     contacto_profile_name: str | None = None
@@ -43398,6 +43400,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         contacto_id=_safe_uuid(contacto.get("id")),
         conversacion_id=conversacion_id,
         origen=origen_contacto,
+        codigo_oportunidad=_clean_text(row.get("codigo_oportunidad")) or None,
         titulo=titulo_value,
         nombre=nombre,
         contacto_profile_name=contacto_profile_name,
