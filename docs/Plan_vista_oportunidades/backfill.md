@@ -9,8 +9,9 @@ Normalizar los datos ya existentes para que la vista `/oportunidades` funcione c
 1. Revisar registros existentes en `public.oportunidades`.
 2. Verificar que `canal`, `contacto_nombre` y `restart_sequence` esten poblados de forma consistente.
 3. Corregir filas que aun dependan de `metadata` para datos que ya deben existir como columnas.
-4. Verificar que el `historial` de etapa no tenga huecos obvios para los cambios recientes.
-5. Identificar oportunidades que deban quedar visibles en el listado maestro pero no en acciones operativas del embudo.
+4. Generar y validar `codigo_oportunidad` como identificador legible de negocio.
+5. Verificar que el `historial` de etapa no tenga huecos obvios para los cambios recientes.
+6. Identificar oportunidades que deban quedar visibles en el listado maestro pero no en acciones operativas del embudo.
 
 ## Reglas
 
@@ -24,6 +25,7 @@ Normalizar los datos ya existentes para que la vista `/oportunidades` funcione c
 - `canal` no nulo cuando exista informacion de canal real.
 - `contacto_nombre` coherente con la persona asociada.
 - `restart_sequence >= 1`.
+- `codigo_oportunidad` unico por organizacion, legible y estable.
 - Filtros por fecha y canal funcionando con columnas reales.
 - Oportunidades cerradas y abiertas con estados consistentes.
 
@@ -37,4 +39,3 @@ Normalizar los datos ya existentes para que la vista `/oportunidades` funcione c
 ## Resultado esperado
 
 La base debe quedar lista para que `/oportunidades` sea confiable como listado maestro, sin depender de datos incompletos o de campos derivados solo en cliente.
-

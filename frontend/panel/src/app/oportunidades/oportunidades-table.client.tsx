@@ -652,6 +652,8 @@ function OpportunityRowDetails({
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
   const title = extractString(raw, ["titulo"]) || row.header || "Oportunidad sin nombre";
+  const opportunityCode =
+    formatOpportunityCode(extractString(raw, ["codigo_oportunidad"])) || "Sin código";
   const contact =
     extractString(raw, ["contacto", "nombre_completo"]) ||
     extractString(raw, ["contacto_nombre"]) ||
@@ -669,7 +671,6 @@ function OpportunityRowDetails({
     extractString(raw, ["asignado_a_usuario_id"]) ||
     "Sin asignar";
   const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "Sin canal";
-  const opportunityId = extractString(raw, ["id"]) || String(row.id);
   const restartSequence = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
   const monetaryValue = extractNumber(raw, ["monto_estimado"]);
   const currency = extractString(raw, ["moneda"]) || "MXN";
@@ -679,6 +680,7 @@ function OpportunityRowDetails({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{opportunityCode}</Badge>
             <Badge variant="secondary">{stage}</Badge>
             <Badge variant="outline">Reinicio #{restartSequence}</Badge>
             <Badge variant="outline">{state}</Badge>
@@ -703,6 +705,7 @@ function OpportunityRowDetails({
       <Separator />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <DetailField label="Código" value={opportunityCode} />
         <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
         <DetailField label="Cierre probable" value={formatDate(extractString(raw, ["fecha_cierre_probable"]))} />
         <DetailField label="Creado" value={formatDate(extractString(raw, ["creado_en"]))} />
@@ -711,7 +714,6 @@ function OpportunityRowDetails({
         <DetailField label="Oportunidad" value={title} />
         <DetailField label="Persona" value={contact} />
         <DetailField label="Cuenta" value={account} />
-        <DetailField label="Referencia" value={opportunityId} monospace />
       </div>
     </div>
   );
@@ -755,6 +757,12 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   const value = extractUnknown(raw, path);
   if (typeof value === "string" && value.trim().length) return value.trim();
   return null;
+}
+
+function formatOpportunityCode(code: string | null | undefined): string {
+  const raw = typeof code === "string" ? code.trim() : "";
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*/g, " - ");
 }
 
 function extractAsignadoId(row: DataTableRow | null): string | null {

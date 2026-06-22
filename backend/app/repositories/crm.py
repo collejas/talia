@@ -456,6 +456,7 @@ def _search_row_text(row: dict[str, Any]) -> str:
                 _collect(inner)
 
     for key in (
+        "codigo_oportunidad",
         "titulo",
         "descripcion",
         "contacto_nombre",
@@ -1031,6 +1032,7 @@ class CRMRepository:
         [
             "id",
             "organizacion_id",
+            "codigo_oportunidad",
             "cuenta_id",
             "contacto_principal_id",
             "contacto:personas!oportunidades_contacto_principal_org_fkey("
@@ -2121,6 +2123,7 @@ class CRMRepository:
                 "moneda",
                 "probabilidad",
                 "metadata",
+                "codigo_oportunidad",
                 "contacto:personas!oportunidades_contacto_principal_org_fkey("
                 "id,nombre_completo,nombre,correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
                 "telefono_principal_e164,telefono_movil_1_e164,telefono_movil_2_e164,telefono_secundario_e164,"

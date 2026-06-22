@@ -10,6 +10,7 @@ type CRMOpportunityStage = {
 
 type CRMOpportunity = {
   id: string;
+  codigo_oportunidad: string | null;
   etapa?: CRMOpportunityStage | null;
   etapa_id: string;
   monto_estimado: number | null;

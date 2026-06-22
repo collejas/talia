@@ -10308,6 +10308,7 @@ class CRMAccountSummary(BaseModel):
 class CRMOpportunity(BaseModel):
     id: UUID
     organizacion_id: UUID
+    codigo_oportunidad: str | None = None
     cuenta_id: UUID | None = None
     persona_id: UUID | None = None
     contacto_principal_id: UUID | None = None
@@ -10344,6 +10345,7 @@ class CRMOpportunity(BaseModel):
 
 class CRMSaleReadyOpportunity(BaseModel):
     id: UUID
+    codigo_oportunidad: str | None = None
     titulo: str
     estado: str
     monto_estimado: float | None = None

@@ -89,6 +89,7 @@ type CRMOpportunityAccount = {
 
 type CRMOpportunity = {
   id: string;
+  codigo_oportunidad: string | null;
   cuenta_id: string | null;
   contacto_principal_id: string | null;
   contacto?: CRMOpportunityContact | null;

@@ -31,6 +31,7 @@ Asegurar que el modelo soporte listado maestro, filtros, auditoria y crecimiento
 
 - Revisar indices de `public.oportunidades` para filtros frecuentes.
 - Confirmar cobertura de `organizacion_id`, `etapa_id`, `asignado_a_usuario_id`, `cuenta_id`, `contacto_principal_id`, `canal` y fechas.
+- Confirmar o crear un `codigo_oportunidad` legible para usuario, independiente del UUID maestro.
 - Validar si falta indice compuesto para listados frecuentes.
 - Revisar que las columnas materializadas sigan siendo confiables.
 
@@ -48,6 +49,7 @@ Definir un contrato de listado real, estable y compatible con la vista maestra.
 
 - Hacer que `GET /crm/oportunidades` devuelva total real.
 - Formalizar el contrato de paginacion.
+- Exponer `codigo_oportunidad` para que el frontend muestre un identificador humano, no el UUID maestro.
 - Confirmar si el contrato sera `limit/offset` o `page/page_size`.
 - Mantener filtros en backend como fuente principal.
 - Exponer detalle si la UI lo necesita para drawer o pagina individual.

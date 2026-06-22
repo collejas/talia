@@ -36,6 +36,7 @@ type CRMOpportunityAccount = {
 
 type CRMOpportunity = {
   id: string;
+  codigo_oportunidad: string | null;
   cuenta_id: string | null;
   contacto_principal_id: string | null;
   contacto?: CRMOpportunityContact | null;
@@ -131,6 +132,10 @@ export async function loadCrmOpportunities(
     total = response.data.total ?? total;
     const pageRows = response.data.items.map<DataTableRow>((op, index) => {
       const contactLabel = buildContactLabel(op);
+      const opportunityCode = formatOpportunityCode(op.codigo_oportunidad);
+      const headerLabel = opportunityCode
+        ? `${opportunityCode} · ${op.titulo || contactLabel || "Oportunidad sin nombre"}`
+        : op.titulo || contactLabel || "Oportunidad sin nombre";
       const restartSequence = extractRestartSequence(op.metadata);
       const stageLabel = formatEtapa(op);
       const statusLabel =
@@ -142,7 +147,7 @@ export async function loadCrmOpportunities(
 
       return {
         id: rows.length + index + 1,
-        header: op.titulo || contactLabel || "Oportunidad sin nombre",
+        header: headerLabel,
         type: contactLabel || op.estado || "Contacto sin nombre",
         status: statusLabel,
         target: formatCurrency(op.monto_estimado, op.moneda),
@@ -188,6 +193,12 @@ function formatEtapa(op: CRMOpportunity): string {
     }
   }
   return `Etapa ${op.etapa_id.slice(0, 8)}`;
+}
+
+function formatOpportunityCode(code: string | null | undefined): string {
+  const raw = typeof code === "string" ? code.trim() : "";
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*/g, " - ");
 }
 
 function buildContactLabel(op: CRMOpportunity): string {
