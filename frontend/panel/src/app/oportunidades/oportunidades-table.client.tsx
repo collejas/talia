@@ -527,6 +527,8 @@ function OpportunityRowDetails({
   const [reassignFeedback, setReassignFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
     null,
   );
+  const selectedVendorLabel =
+    vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
 
   useEffect(() => {
     setSelectedVendorId(currentVendorId);
@@ -560,12 +562,19 @@ function OpportunityRowDetails({
             onValueChange={handleVendorChange}
             disabled={!canReassign || vendorLoading || reassignPending}
           >
-            <SelectTrigger className="w-full min-w-0 max-w-[260px]">
-              <SelectValue
-                placeholder={
-                  vendorLoading ? "Cargando vendedores..." : "Reasignar vendedor"
-                }
-              />
+            <SelectTrigger
+              className={[
+                "w-full min-w-0 max-w-[260px]",
+                selectedVendorId ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "",
+              ].join(" ")}
+            >
+              {selectedVendorId ? (
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {`Asignado: ${selectedVendorLabel || "Sin nombre"}`}
+                </span>
+              ) : (
+                <SelectValue placeholder={vendorLoading ? "Cargando..." : "Reasignar vendedor"} />
+              )}
             </SelectTrigger>
             <SelectContent>
               {vendorOptions.map((option) => (
