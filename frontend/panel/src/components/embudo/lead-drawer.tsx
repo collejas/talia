@@ -912,6 +912,10 @@ export function LeadDrawer({
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
   );
+  const normalizedRoles = useMemo(
+    () => (permissionContext.roles ?? []).map((role) => role.toLowerCase()),
+    [permissionContext.roles],
+  );
   const canReassignAny =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -921,6 +925,21 @@ export function LeadDrawer({
     permissionContext.es_owner ||
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
+  const canCreateSupervisorNotes =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedRoles.some((role) =>
+      role === "0002" ||
+      role.includes("supervisor") ||
+      role.includes("gerente") ||
+      role.includes("manager") ||
+      role.includes("admin"),
+    ) ||
+    normalizedPerms.some((perm) =>
+      perm === "notes.create.supervised" ||
+      perm === "notes.write" ||
+      perm === "notes.manage",
+    );
 
   const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
@@ -3513,10 +3532,22 @@ export function LeadDrawer({
             <TabsContent value="notas" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-6">
               <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground">Agregar nota</h4>
+              <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-semibold text-foreground">
+                      {canCreateSupervisorNotes ? "Agregar nota como supervisor" : "Agregar nota"}
+                    </h4>
+                    {canCreateSupervisorNotes ? (
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        Supervisión
+                      </Badge>
+                    ) : null}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Las notas quedan registradas en CRM y pueden ligarse a un recordatorio.
+                    {canCreateSupervisorNotes
+                      ? " Esta nota se registra con tu usuario y rol de supervisión."
+                      : ""}
                   </p>
                 </div>
                 <Textarea
