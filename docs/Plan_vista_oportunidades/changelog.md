@@ -13,3 +13,5 @@
 - Se actualizo `GET /crm/oportunidades` para devolver `total` real y se ajustaron los consumidores internos del repositorio.
 - Se elimino el filtrado duplicado en cliente para que `/oportunidades` dependa del contrato del backend.
 - Se actualizo la carga del panel para paginar por el API hasta cubrir el universo consultado.
+- Se endurecio `public.asignar_vendedor_round_robin` para que solo `service_role` pueda ejecutarla.
+- Se dejo fuera de alcance `public.spatial_ref_sys` porque pertenece a PostGIS y no a la capa de negocio de GEOACTIV.

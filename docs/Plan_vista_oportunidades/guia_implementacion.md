@@ -67,7 +67,7 @@ Confirmar que lectura y escritura siguen protegidas por backend y por la capa de
 - Revisar permisos para listado, detalle, edicion y eliminacion.
 - Revisar la accion de reasignacion y sus permisos asociados.
 - Revisar funciones `SECURITY DEFINER` expuestas por Supabase.
-- Revisar el aviso de RLS en `public.spatial_ref_sys`.
+- Revisar el aviso de RLS en `public.spatial_ref_sys` solo si existe una necesidad real fuera de PostGIS; por ahora queda fuera de alcance porque es parte de la extension.
 
 ### Resultado esperado
 
@@ -107,4 +107,3 @@ La implementacion queda lista cuando:
 - Las acciones operativas viven en el embudo.
 - Los permisos estan validados por backend.
 - La base soporta el uso real de la vista.
-
