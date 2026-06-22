@@ -2,8 +2,8 @@
 
 import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableColumnLabels, DataTableRow } from "@/components/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import {
 } from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -625,7 +625,6 @@ function OpportunityRowDetails({
   onReassign: () => void;
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
-  const title = extractString(raw, ["titulo"]) || row.header || "Oportunidad sin nombre";
   const opportunityCode =
     formatOpportunityCode(extractString(raw, ["codigo_oportunidad"])) || "Sin código";
   const contact =
@@ -667,25 +666,13 @@ function OpportunityRowDetails({
 
   return (
     <div className="space-y-4 py-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{opportunityCode}</Badge>
-            <Badge variant="secondary">{stage}</Badge>
-            <Badge variant="outline">Reinicio #{restartSequence}</Badge>
-            <Badge variant="outline">{state}</Badge>
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-foreground">{title}</h3>
-            <p className="text-sm text-muted-foreground">
-              {contact} · {account} · {canal}
-            </p>
-            {description ? (
-              <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-            ) : null}
-          </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="break-words text-sm text-muted-foreground">
+            {contact} · {account}
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button asChild variant="outline" size="sm">
             <Link href={buildEmbudoHref(row)}>Abrir en embudo</Link>
           </Button>
@@ -697,21 +684,77 @@ function OpportunityRowDetails({
 
       <Separator />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
-        <DetailField label="Probabilidad" value={formatProbability(probability)} />
-        <DetailField label="Valor ponderado" value={formatCurrency(weightedValue, currency)} />
-        <DetailField label="Cierre probable" value={formatDate(closeAt)} />
-        <DetailField label="Antigüedad" value={formatDays(ageDays)} />
-        <DetailField label="Sin cambios" value={formatDays(staleDays)} />
-        <DetailField label="Creado" value={formatDate(createdAt)} />
-        <DetailField label="Actualizado" value={formatDate(updatedAt)} />
-        <DetailField label="Asignado" value={assigned} />
-        <DetailField label="Canal" value={canal} />
-        <DetailField label="Origen" value={source} />
-        {lostReason ? <DetailField label="Motivo pérdida" value={lostReason} /> : null}
+      <div className="space-y-4">
+        <SectionCard
+          title="Resumen comercial"
+          description="Lectura rápida del valor y del estado comercial de la oportunidad."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
+            <DetailField label="Probabilidad" value={formatProbability(probability)} />
+            <DetailField label="Valor ponderado" value={formatCurrency(weightedValue, currency)} />
+            <DetailField label="Cierre probable" value={formatDate(closeAt)} />
+            <DetailField label="Antigüedad" value={formatDays(ageDays)} />
+            <DetailField label="Sin cambios" value={formatDays(staleDays)} />
+          </div>
+          {lostReason ? (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="text-xs font-semibold uppercase tracking-wide">Motivo pérdida</p>
+              <p className="mt-1">{lostReason}</p>
+            </div>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard
+          title="Seguimiento"
+          description="Tiempos de vida, actualización y responsable actual."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Creado" value={formatDate(createdAt)} />
+            <DetailField label="Actualizado" value={formatDate(updatedAt)} />
+            <DetailField label="Asignado" value={assigned} />
+            <DetailField label="Reinicio" value={`#${restartSequence}`} />
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Relación y contexto"
+          description="Canal, trazabilidad y señales operativas sin repetir identidad."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Canal" value={canal} />
+            <DetailField label="Código" value={opportunityCode} />
+            <DetailField label="Etapa" value={stage} />
+            <DetailField label="Estado" value={state} />
+            <DetailField label="Origen" value={source} />
+            {description ? <DetailField label="Descripción" value={description} /> : null}
+            {lostReason ? <DetailField label="Motivo pérdida" value={lostReason} /> : null}
+          </div>
+        </SectionCard>
       </div>
     </div>
+  );
+}
+
+function SectionCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <Card className="gap-0 min-w-0 overflow-hidden">
+      <CardHeader className="pb-3 pt-4">
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        <p className="break-words text-xs text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className="space-y-0 pb-4">
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -725,9 +768,11 @@ function DetailField({
   monospace?: boolean;
 }) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={["mt-1 text-sm", monospace ? "font-mono" : ""].join(" ")}>{value}</div>
+    <div className="min-w-0 rounded-lg border bg-muted/20 p-3">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={["mt-1 break-words text-sm leading-snug", monospace ? "font-mono" : ""].join(" ")}>
+        {value}
+      </div>
     </div>
   );
 }

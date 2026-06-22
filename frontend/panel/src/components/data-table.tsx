@@ -1168,6 +1168,7 @@ function TableCellViewer({ item, renderDetails, detailDescription, open, onOpenC
   onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
+  const drawerDescription = resolveDrawerDescription(item, detailDescription)
 
   const fallbackChart = (
     <>
@@ -1239,7 +1240,7 @@ function TableCellViewer({ item, renderDetails, detailDescription, open, onOpenC
         <DrawerHeader className="gap-1">
           <DrawerTitle>{item.header}</DrawerTitle>
           <DrawerDescription>
-            {detailDescription ?? "Showing total visitors for the last 6 months"}
+            {drawerDescription}
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
@@ -1329,4 +1330,31 @@ function TableCellViewer({ item, renderDetails, detailDescription, open, onOpenC
       </DrawerContent>
     </Drawer>
   )
+}
+
+function resolveDrawerDescription(item: TableRowData, fallback?: string): string {
+  const raw = (item.raw ?? {}) as Record<string, unknown>
+  const contact =
+    extractString(raw, ["contacto", "nombre_completo"]) ??
+    extractString(raw, ["contacto_nombre"]) ??
+    extractString(raw, ["metadata", "contacto_nombre"])
+  const account =
+    extractString(raw, ["cuenta", "nombre"]) ??
+    extractString(raw, ["metadata", "cuenta_nombre"]) ??
+    extractString(raw, ["metadata", "empresa"])
+  if (contact || account) {
+    return [contact ?? "Sin contacto", account ?? "Sin empresa"].join(" · ")
+  }
+  return fallback ?? "Showing total visitors for the last 6 months"
+}
+
+function extractString(raw: Record<string, unknown> | undefined, path: string[]): string | null {
+  if (!raw) return null
+  let current: unknown = raw
+  for (const key of path) {
+    if (!current || typeof current !== "object") return null
+    current = (current as Record<string, unknown>)[key]
+  }
+  if (typeof current === "string" && current.trim().length) return current.trim()
+  return null
 }
