@@ -104,6 +104,21 @@ export function OportunidadesTableClient({
       perm === "notes.write" ||
       perm === "notes.manage",
     );
+  const canCreateActivities =
+    Boolean(permissionContext?.es_admin) ||
+    Boolean(permissionContext?.es_owner) ||
+    normalizedRoles.some((role) =>
+      role === "0002" ||
+      role.includes("supervisor") ||
+      role.includes("gerente") ||
+      role.includes("manager") ||
+      role.includes("admin"),
+    ) ||
+    normalizedPerms.some((perm) =>
+      perm === "activities.create.supervised" ||
+      perm === "activities.write" ||
+      perm === "activities.manage",
+    );
 
   const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
@@ -254,6 +269,7 @@ export function OportunidadesTableClient({
             vendorError={vendorError}
             canReassign={canReassign}
             canCreateNotes={canCreateNotes}
+            canCreateActivities={canCreateActivities}
             onReassign={async (vendorId) => {
               await handleReassign(row, vendorId);
             }}
@@ -576,6 +592,7 @@ function OpportunityRowDetails({
   onReassign,
   canReassign,
   canCreateNotes,
+  canCreateActivities,
 }: {
   row: DataTableRow;
   vendorOptions: SalesRepOption[];
@@ -584,6 +601,7 @@ function OpportunityRowDetails({
   onReassign: (vendorId: string) => Promise<void>;
   canReassign: boolean;
   canCreateNotes: boolean;
+  canCreateActivities: boolean;
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
   const opportunityId = extractString(raw, ["id"]) || String(row.id);
@@ -682,6 +700,7 @@ function OpportunityRowDetails({
   const activityItems = detailState.data?.activities ?? [];
   const historyItems = detailState.data?.history ?? [];
   const showNoteComposer = canCreateNotes;
+  const showActivityComposer = canCreateActivities;
 
   useEffect(() => {
     setSelectedVendorId(currentVendorId);
@@ -1109,96 +1128,109 @@ function OpportunityRowDetails({
         </SectionCard>
 
         <SectionCard title="Actividades" description="Alta rápida de tareas y seguimiento asociado a la oportunidad.">
-          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+          {showActivityComposer ? (
+            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-type-${opportunityId}`}>
-                  Tipo
-                </label>
-                <Select value={activityType} onValueChange={setActivityType}>
-                  <SelectTrigger id={`activity-type-${opportunityId}`}>
-                    <SelectValue placeholder="Selecciona tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="seguimiento">Seguimiento</SelectItem>
-                    <SelectItem value="llamada">Llamada</SelectItem>
-                    <SelectItem value="correo">Correo</SelectItem>
-                    <SelectItem value="reunion">Reunión</SelectItem>
-                    <SelectItem value="interno">Interno</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-semibold text-foreground">Agregar actividad como supervisor</h4>
+                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                    Supervisión
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  La actividad quedará registrada con tu usuario y podrá asignarse a un vendedor del equipo.
+                </p>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-due-${opportunityId}`}>
-                  Vencimiento
-                </label>
-                <Input
-                  id={`activity-due-${opportunityId}`}
-                  type="datetime-local"
-                  value={activityDueAt}
-                  onChange={(event) => setActivityDueAt(event.target.value)}
-                  placeholder="Opcional"
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-subject-${opportunityId}`}>
-                  Asunto
-                </label>
-                <Input
-                  id={`activity-subject-${opportunityId}`}
-                  value={activitySubject}
-                  onChange={(event) => setActivitySubject(event.target.value)}
-                  placeholder="Seguimiento de oportunidad"
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-description-${opportunityId}`}>
-                  Descripción
-                </label>
-                <Textarea
-                  id={`activity-description-${opportunityId}`}
-                  value={activityDescription}
-                  onChange={(event) => setActivityDescription(event.target.value)}
-                  placeholder="Describe la tarea o el siguiente paso."
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-assignee-${opportunityId}`}>
-                  Asignar a
-                </label>
-                {canReassign ? (
-                  <Select value={activityAssigneeId || "default"} onValueChange={(value) => setActivityAssigneeId(value === "default" ? "" : value)}>
-                    <SelectTrigger id={`activity-assignee-${opportunityId}`}>
-                      <SelectValue placeholder="Asignado por defecto" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-type-${opportunityId}`}>
+                    Tipo
+                  </label>
+                  <Select value={activityType} onValueChange={setActivityType}>
+                    <SelectTrigger id={`activity-type-${opportunityId}`}>
+                      <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="default">Asignado por defecto</SelectItem>
-                      {vendorOptions.map((vendor) => (
-                        <SelectItem key={vendor.id} value={vendor.id}>
-                          {vendor.label}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="seguimiento">Seguimiento</SelectItem>
+                      <SelectItem value="llamada">Llamada</SelectItem>
+                      <SelectItem value="correo">Correo</SelectItem>
+                      <SelectItem value="reunion">Reunión</SelectItem>
+                      <SelectItem value="interno">Interno</SelectItem>
                     </SelectContent>
                   </Select>
-                ) : (
-                  <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-                    Se usará el vendedor asignado actual.
-                  </div>
-                )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-due-${opportunityId}`}>
+                    Vencimiento
+                  </label>
+                  <Input
+                    id={`activity-due-${opportunityId}`}
+                    type="datetime-local"
+                    value={activityDueAt}
+                    onChange={(event) => setActivityDueAt(event.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-subject-${opportunityId}`}>
+                    Asunto
+                  </label>
+                  <Input
+                    id={`activity-subject-${opportunityId}`}
+                    value={activitySubject}
+                    onChange={(event) => setActivitySubject(event.target.value)}
+                    placeholder="Seguimiento de oportunidad"
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-description-${opportunityId}`}>
+                    Descripción
+                  </label>
+                  <Textarea
+                    id={`activity-description-${opportunityId}`}
+                    value={activityDescription}
+                    onChange={(event) => setActivityDescription(event.target.value)}
+                    placeholder="Describe la tarea o el siguiente paso."
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-assignee-${opportunityId}`}>
+                    Asignar a
+                  </label>
+                  {canReassign ? (
+                    <Select value={activityAssigneeId || "default"} onValueChange={(value) => setActivityAssigneeId(value === "default" ? "" : value)}>
+                      <SelectTrigger id={`activity-assignee-${opportunityId}`}>
+                        <SelectValue placeholder="Asignado por defecto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Asignado por defecto</SelectItem>
+                        {vendorOptions.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            {vendor.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+                      Se usará el vendedor asignado actual.
+                    </div>
+                  )}
+                </div>
+              </div>
+              {activityFeedback ? (
+                <p className={activityFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
+                  {activityFeedback.message}
+                </p>
+              ) : null}
+              <div className="flex justify-end">
+                <Button type="button" onClick={handleCreateActivity} disabled={activityPending}>
+                  {activityPending ? "Creando..." : "Crear actividad"}
+                </Button>
               </div>
             </div>
-            {activityFeedback ? (
-              <p className={activityFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
-                {activityFeedback.message}
-              </p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="button" onClick={handleCreateActivity} disabled={activityPending}>
-                {activityPending ? "Creando..." : "Crear actividad"}
-              </Button>
-            </div>
-          </div>
+          ) : null}
           {detailState.data?.errors?.activities ? (
             <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
               {detailState.data.errors.activities}
