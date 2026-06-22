@@ -32,7 +32,14 @@ import { cn } from "@/lib/utils"
 import type { NotificationItem } from "@/lib/notifications/client"
 import { getActiveTimeZone } from "@/lib/timezone"
 
-const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message", "opportunity.created"])
+const GROUPABLE_TYPES = new Set([
+  "scraper.finished",
+  "lookup.finished",
+  "inbox.message",
+  "opportunity.created",
+  "crm.activity.assigned",
+  "crm.note.created",
+])
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return ""
@@ -91,6 +98,20 @@ function summarizeGroup(type: string, items: NotificationItem[]) {
       title: "Oportunidades nuevas",
       description: `${pluralize(items.length, "oportunidad")} creada${items.length === 1 ? "" : "s"}.`,
       level: (items.some((item) => item.level === "error") ? "warning" : "success") as NotificationItem["level"],
+    }
+  }
+  if (type === "crm.activity.assigned") {
+    return {
+      title: "Actividades asignadas",
+      description: `${pluralize(items.length, "actividad")} pendiente${items.length === 1 ? "" : "s"} de seguimiento.`,
+      level: (items.some((item) => item.level === "error") ? "warning" : "info") as NotificationItem["level"],
+    }
+  }
+  if (type === "crm.note.created") {
+    return {
+      title: "Notas nuevas en CRM",
+      description: `${pluralize(items.length, "nota")} agregada${items.length === 1 ? "" : "s"} desde supervisión.`,
+      level: (items.some((item) => item.level === "error") ? "warning" : "info") as NotificationItem["level"],
     }
   }
   return {

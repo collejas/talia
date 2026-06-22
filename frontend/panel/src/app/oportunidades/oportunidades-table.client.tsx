@@ -298,6 +298,7 @@ type OpportunityNote = {
   texto: string;
   tipo: string;
   actividad_id: string | null;
+  creado_por_usuario_id: string | null;
   creado_en: string;
   actualizado_en: string;
 };
@@ -312,6 +313,10 @@ type OpportunityActivity = {
   recordatorio_en: string | null;
   fecha_vencimiento: string | null;
   asignado_a_usuario_id: string | null;
+  creado_por_usuario_id: string | null;
+  completado_en: string | null;
+  cancelado_en: string | null;
+  cerrado_por_usuario_id: string | null;
   creado_en: string;
 };
 
@@ -604,6 +609,7 @@ function OpportunityRowDetails({
   );
   const selectedVendorLabel =
     vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
+  const opportunityAssigneeId = extractAsignadoId(row) ?? "";
 
   const detailOpportunity = detailState.data?.opportunity ?? raw;
   const opportunityDetail = (detailOpportunity ?? {}) as Record<string, unknown>;
@@ -950,8 +956,28 @@ function OpportunityRowDetails({
               {noteItems.map((note) => (
                 <div key={note.id} className="rounded-lg border border-border/60 p-3">
                   <p className="whitespace-pre-wrap text-sm text-foreground">{note.texto}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                      {note.tipo}
+                    </Badge>
+                    {note.actividad_id ? (
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        Vinculada a actividad
+                      </Badge>
+                    ) : null}
+                    {note.creado_por_usuario_id ? (
+                      <Badge
+                        variant={note.creado_por_usuario_id === opportunityAssigneeId ? "default" : "secondary"}
+                        className="text-[10px] uppercase tracking-wide"
+                      >
+                        {note.creado_por_usuario_id === opportunityAssigneeId
+                          ? "Creada por vendedor"
+                          : "Creada por supervisión"}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {note.tipo} · {formatDate(note.creado_en)}
+                    {formatDate(note.creado_en)}
                   </p>
                 </div>
               ))}
@@ -1082,8 +1108,30 @@ function OpportunityRowDetails({
                   <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
                     {activity.descripcion ?? "Sin descripción."}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                      {activity.tipo}
+                    </Badge>
+                    {activity.asignado_a_usuario_id ? (
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        {activity.asignado_a_usuario_id === opportunityAssigneeId
+                          ? "Asignada al vendedor"
+                          : "Asignada a otro usuario"}
+                      </Badge>
+                    ) : null}
+                    {activity.creado_por_usuario_id ? (
+                      <Badge
+                        variant={activity.creado_por_usuario_id === activity.asignado_a_usuario_id ? "default" : "secondary"}
+                        className="text-[10px] uppercase tracking-wide"
+                      >
+                        {activity.creado_por_usuario_id === activity.asignado_a_usuario_id
+                          ? "Creada por el mismo usuario"
+                          : "Creada por supervisión"}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {activity.tipo} · {activity.fecha_vencimiento ? `Vence ${formatDate(activity.fecha_vencimiento)}` : "Sin vencimiento"}
+                    {activity.fecha_vencimiento ? `Vence ${formatDate(activity.fecha_vencimiento)}` : "Sin vencimiento"}
                   </p>
                 </div>
               ))}

@@ -53,7 +53,14 @@ type BufferedGroup = {
 
 const PAGE_SIZE = 20
 const MAX_CACHE_ITEMS = 200
-const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message", "opportunity.created"])
+const GROUPABLE_TYPES = new Set([
+  "scraper.finished",
+  "lookup.finished",
+  "inbox.message",
+  "opportunity.created",
+  "crm.activity.assigned",
+  "crm.note.created",
+])
 const GROUP_FLUSH_MS = 6000
 
 function pluralize(count: number, singular: string, plural?: string) {
@@ -107,6 +114,20 @@ function summarizeGroupedNotifications(type: string, items: NotificationItem[]) 
       title: "Oportunidades nuevas",
       description: `${pluralize(items.length, "oportunidad")} creada${items.length === 1 ? "" : "s"}.`,
       level: items.some((item) => item.level === "error") ? "warning" : "success",
+    }
+  }
+  if (type === "crm.activity.assigned") {
+    return {
+      title: "Actividades asignadas",
+      description: `${pluralize(items.length, "actividad")} pendiente${items.length === 1 ? "" : "s"} de seguimiento.`,
+      level: items.some((item) => item.level === "error") ? "warning" : "info",
+    }
+  }
+  if (type === "crm.note.created") {
+    return {
+      title: "Notas nuevas en CRM",
+      description: `${pluralize(items.length, "nota")} agregada${items.length === 1 ? "" : "s"} desde supervisión.`,
+      level: items.some((item) => item.level === "error") ? "warning" : "info",
     }
   }
   return {
