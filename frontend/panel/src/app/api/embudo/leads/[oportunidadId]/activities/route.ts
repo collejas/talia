@@ -177,10 +177,6 @@ export async function POST(
   const recordatorioEn = typeof (payload as { recordatorio_en?: unknown })?.recordatorio_en === "string"
     ? ((payload as { recordatorio_en: string }).recordatorio_en ?? "")
     : "";
-  const asignadoAUsuarioId = typeof (payload as { asignado_a_usuario_id?: unknown })?.asignado_a_usuario_id === "string"
-    ? ((payload as { asignado_a_usuario_id: string }).asignado_a_usuario_id ?? "")
-    : "";
-
   const response = await callCrmApi<CrmActivityRow>("/crm/actividades", {
     method: "POST",
     body: {
@@ -191,7 +187,6 @@ export async function POST(
       estado,
       fecha_vencimiento: fechaVencimiento || undefined,
       recordatorio_en: recordatorioEn || undefined,
-      asignado_a_usuario_id: asignadoAUsuarioId || undefined,
       oportunidad_id: oportunidadId,
     },
     withUserToken: true,

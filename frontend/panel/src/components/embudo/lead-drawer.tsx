@@ -902,7 +902,6 @@ export function LeadDrawer({
   const [noteReminderEnabled, setNoteReminderEnabled] = useState(false);
   const [noteReminderAt, setNoteReminderAt] = useState("");
   const [noteActivityType, setNoteActivityType] = useState("seguimiento");
-  const [noteAssignedTo, setNoteAssignedTo] = useState("");
   const [notesState, setNotesState] = useState<NotesState>({ status: "idle", data: [] });
   const [activitiesState, setActivitiesState] = useState<ActivitiesState>({ status: "idle", data: [] });
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -1062,7 +1061,6 @@ export function LeadDrawer({
     setNoteReminderEnabled(false);
     setNoteReminderAt("");
     setNoteActivityType("seguimiento");
-    setNoteAssignedTo(card?.asignadoId ?? "");
     setActivityError(null);
   }, [card?.asignadoId, card?.oportunidadId]);
 
@@ -1521,7 +1519,6 @@ export function LeadDrawer({
             estado: "pendiente",
             fecha_vencimiento: noteReminderAt,
             recordatorio_en: noteReminderAt,
-            asignado_a_usuario_id: noteAssignedTo.trim() || undefined,
           }),
         });
         const activityBody = await activityResponse.json().catch(() => ({}));
@@ -1556,7 +1553,6 @@ export function LeadDrawer({
       setNoteReminderEnabled(false);
       setNoteReminderAt("");
       setNoteActivityType("seguimiento");
-      setNoteAssignedTo("");
       setNotesState((prev) => {
         const existing =
           prev.status === "loaded" || prev.status === "loading" ? prev.data : [];
@@ -1582,7 +1578,6 @@ export function LeadDrawer({
     fetchActivities,
     fetchNotes,
     noteActivityType,
-    noteAssignedTo,
     noteReminderAt,
     noteReminderEnabled,
     noteText,
@@ -3593,27 +3588,6 @@ export function LeadDrawer({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <label htmlFor="note-assigned-to" className="text-xs font-medium text-muted-foreground">
-                        Asignar a
-                      </label>
-                      <Select
-                        value={noteAssignedTo || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) => setNoteAssignedTo(value === EMPTY_SELECT_VALUE ? "" : value)}
-                      >
-                        <SelectTrigger id="note-assigned-to">
-                          <SelectValue placeholder="Asignado por defecto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>Asignado por defecto</SelectItem>
-                          {vendorOptions.map((vendor) => (
-                            <SelectItem key={vendor.id} value={vendor.id}>
-                              {vendor.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                 ) : null}
                 {noteError ? (
@@ -3733,9 +3707,6 @@ export function LeadDrawer({
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {renderUserLine(activity.creado_por_usuario, "Actividad", activity.creado_en)}
-                          {activity.asignado_a_usuario?.id
-                            ? ` · Asignada a ${formatUserDisplay(activity.asignado_a_usuario)}`
-                            : " · Sin asignación"}
                         </p>
                         {activity.estado === "pendiente" ? (
                           <div className="flex flex-wrap gap-2">

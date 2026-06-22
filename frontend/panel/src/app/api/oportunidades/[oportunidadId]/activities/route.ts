@@ -114,10 +114,6 @@ export async function POST(
         typeof (payload as { recordatorio_en?: unknown })?.recordatorio_en === "string"
           ? (payload as { recordatorio_en: string }).recordatorio_en
           : undefined,
-      asignado_a_usuario_id:
-        typeof (payload as { asignado_a_usuario_id?: unknown })?.asignado_a_usuario_id === "string"
-          ? (payload as { asignado_a_usuario_id: string }).asignado_a_usuario_id
-          : undefined,
       oportunidad_id: oportunidadId,
     },
     withUserToken: true,

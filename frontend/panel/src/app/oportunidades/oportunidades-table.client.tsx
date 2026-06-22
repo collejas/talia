@@ -655,7 +655,6 @@ function OpportunityRowDetails({
   const [activitySubject, setActivitySubject] = useState("Seguimiento de oportunidad");
   const [activityDescription, setActivityDescription] = useState("");
   const [activityDueAt, setActivityDueAt] = useState("");
-  const [activityAssigneeId, setActivityAssigneeId] = useState(currentVendorId);
   const [activityPending, setActivityPending] = useState(false);
   const [activityFeedback, setActivityFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
     null,
@@ -671,7 +670,6 @@ function OpportunityRowDetails({
 
   const detailOpportunity = detailState.data?.opportunity ?? raw;
   const opportunityDetail = (detailOpportunity ?? {}) as Record<string, unknown>;
-  const opportunityAssigneeLabel = selectedVendorLabel || opportunityAssigneeId || "Sin asignar";
   const contactName =
     extractString(opportunityDetail, ["contacto", "nombre_completo"]) ||
     extractString(opportunityDetail, ["contacto", "nombres"]) ||
@@ -704,7 +702,6 @@ function OpportunityRowDetails({
 
   useEffect(() => {
     setSelectedVendorId(currentVendorId);
-    setActivityAssigneeId(currentVendorId);
   }, [currentVendorId]);
 
   const fetchDetail = useCallback(async () => {
@@ -778,7 +775,6 @@ function OpportunityRowDetails({
 
   const handleVendorChange = async (vendorId: string) => {
     setSelectedVendorId(vendorId);
-    setActivityAssigneeId(vendorId);
     setReassignFeedback(null);
     if (!vendorId || vendorId === currentVendorId) return;
     setReassignPending(true);
@@ -787,7 +783,6 @@ function OpportunityRowDetails({
       setReassignFeedback({ type: "success", message: "Vendedor reasignado." });
     } catch (error) {
       setSelectedVendorId(currentVendorId);
-      setActivityAssigneeId(currentVendorId);
       setReassignFeedback({
         type: "error",
         message: error instanceof Error ? error.message : "No se pudo reasignar el vendedor.",
@@ -817,7 +812,6 @@ function OpportunityRowDetails({
           estado: "pendiente",
           prioridad: "media",
           fecha_vencimiento: activityDueAt || undefined,
-          asignado_a_usuario_id: activityAssigneeId || undefined,
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -846,7 +840,6 @@ function OpportunityRowDetails({
       setActivitySubject("Seguimiento de oportunidad");
       setActivityDescription("");
       setActivityDueAt("");
-      setActivityAssigneeId(selectedVendorId || currentVendorId);
       setActivityFeedback({ type: "success", message: "Actividad creada." });
     } catch (error) {
       setActivityFeedback({
@@ -1194,30 +1187,6 @@ function OpportunityRowDetails({
                     rows={3}
                   />
                 </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`activity-assignee-${opportunityId}`}>
-                    Asignar a
-                  </label>
-                  {canReassign ? (
-                    <Select value={activityAssigneeId || "default"} onValueChange={(value) => setActivityAssigneeId(value === "default" ? "" : value)}>
-                      <SelectTrigger id={`activity-assignee-${opportunityId}`}>
-                        <SelectValue placeholder="Asignado por defecto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Asignado por defecto</SelectItem>
-                        {vendorOptions.map((vendor) => (
-                          <SelectItem key={vendor.id} value={vendor.id}>
-                            {vendor.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-                      Se usará el vendedor asignado actual.
-                    </div>
-                  )}
-                </div>
               </div>
               {activityFeedback ? (
                 <p className={activityFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
@@ -1263,13 +1232,6 @@ function OpportunityRowDetails({
                     <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                       {activity.tipo}
                     </Badge>
-                    {activity.asignado_a_usuario_id ? (
-                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                        {activity.asignado_a_usuario_id === opportunityAssigneeId
-                          ? `Asignada a ${opportunityAssigneeLabel}`
-                          : "Asignada a otro usuario"}
-                      </Badge>
-                    ) : null}
                     {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
