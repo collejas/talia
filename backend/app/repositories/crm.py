@@ -1972,7 +1972,8 @@ class CRMRepository:
         creado_hasta: str | None = None,
         reinicio_min: int | None = None,
         include_contact_rows: bool = True,
-    ) -> list[dict[str, Any]]:
+        count_exact: bool = False,
+    ) -> tuple[list[dict[str, Any]], int | None]:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.desc",
@@ -2013,7 +2014,8 @@ class CRMRepository:
             params["restart_sequence"] = f"gte.{reinicio_min}"
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
-        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        prefer = "count=exact" if count_exact else None
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params, prefer=prefer)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
@@ -2024,7 +2026,8 @@ class CRMRepository:
                 rows=rows,
                 source_fields=("contacto_principal_id",),
             )
-        return rows
+        total = self._extract_total_count(resp.headers.get("content-range")) if count_exact else None
+        return rows, total
 
     async def list_opportunities_by_ids(
         self,
@@ -8577,7 +8580,7 @@ class CRMRepository:
         offset = 0
         page_size = 200
         while True:
-            batch = await self.list_opportunities(
+            batch, _ = await self.list_opportunities(
                 organizacion_id=organizacion_id,
                 cuenta_id=cuenta_id,
                 limit=page_size,
@@ -9148,7 +9151,7 @@ class CRMRepository:
         offset = 0
         limit = 200
         while True:
-            rows = await self.list_opportunities(
+            rows, _ = await self.list_opportunities(
                 organizacion_id=organizacion_id,
                 limit=limit,
                 offset=offset,

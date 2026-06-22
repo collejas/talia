@@ -10414,6 +10414,7 @@ class CRMOpportunitiesResponse(BaseModel):
     items: list[CRMOpportunity]
     limit: int
     offset: int
+    total: int = 0
 
 
 class CRMContact(BaseModel):
@@ -16435,7 +16436,7 @@ async def list_opportunities(
         is_end=True,
     )
     try:
-        rows = await repo.list_opportunities(
+        rows, total = await repo.list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
@@ -16454,11 +16455,12 @@ async def list_opportunities(
             creado_hasta=creado_hasta_utc,
             reinicio_min=reinicio_min,
             include_contact_rows=False,
+            count_exact=True,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [CRMOpportunity.model_validate(row) for row in rows]
-    return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset)
+    return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset, total=total or len(items))
 
 
 @router.post("/oportunidades/{oportunidad_id}/reasignar", response_model=CRMReassignOpportunityResponse)
@@ -21683,7 +21685,7 @@ async def merge_persona(
     offset = 0
     limit = 200
     while True:
-        rows = await repo.list_opportunities(
+        rows, _ = await repo.list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
@@ -38065,7 +38067,7 @@ async def _dashboard_fetch_all_lead_rows(
     creado_hasta = _format_utc(date_to) if date_to else None
 
     while True:
-        page = await repo.list_opportunities(
+        page, _ = await repo.list_opportunities(
             organizacion_id=organizacion_id,
             limit=page_size,
             offset=offset,

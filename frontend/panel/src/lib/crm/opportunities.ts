@@ -63,6 +63,7 @@ type CRMOpportunitiesResponse = {
   items: CRMOpportunity[];
   limit: number;
   offset: number;
+  total: number;
 };
 
 export type CrmOpportunitiesPayload = {
@@ -91,65 +92,86 @@ type LoadCrmOpportunitiesOptions = {
 export async function loadCrmOpportunities(
   options: LoadCrmOpportunitiesOptions = {},
 ): Promise<CrmOpportunitiesPayload> {
-  const searchParams: Record<string, string> = { limit: "100", offset: "0" };
+  const baseParams: Record<string, string> = {};
   if (options.personaId && options.personaId.trim().length && options.personaId !== "all") {
-    searchParams.persona_id = options.personaId.trim();
+    baseParams.persona_id = options.personaId.trim();
   }
-  if (options.etapaId && options.etapaId !== "all") searchParams.etapa_id = options.etapaId;
-  if (options.estado && options.estado !== "all") searchParams.estado = options.estado;
-  if (options.asignadoId && options.asignadoId !== "all") searchParams.asignado_id = options.asignadoId;
-  if (options.cuentaId && options.cuentaId !== "all") searchParams.cuenta_id = options.cuentaId;
-  if (options.canal && options.canal !== "all") searchParams.canal = options.canal;
-  if (options.q) searchParams.q = options.q;
-  if (options.montoMin) searchParams.monto_min = options.montoMin;
-  if (options.montoMax) searchParams.monto_max = options.montoMax;
-  if (options.cierreDesde) searchParams.cierre_desde = options.cierreDesde;
-  if (options.cierreHasta) searchParams.cierre_hasta = options.cierreHasta;
-  if (options.creadoDesde) searchParams.creado_desde = options.creadoDesde;
-  if (options.creadoHasta) searchParams.creado_hasta = options.creadoHasta;
-  if (options.reinicioMin) searchParams.reinicio_min = options.reinicioMin;
+  if (options.etapaId && options.etapaId !== "all") baseParams.etapa_id = options.etapaId;
+  if (options.estado && options.estado !== "all") baseParams.estado = options.estado;
+  if (options.asignadoId && options.asignadoId !== "all") baseParams.asignado_id = options.asignadoId;
+  if (options.cuentaId && options.cuentaId !== "all") baseParams.cuenta_id = options.cuentaId;
+  if (options.canal && options.canal !== "all") baseParams.canal = options.canal;
+  if (options.q) baseParams.q = options.q;
+  if (options.montoMin) baseParams.monto_min = options.montoMin;
+  if (options.montoMax) baseParams.monto_max = options.montoMax;
+  if (options.cierreDesde) baseParams.cierre_desde = options.cierreDesde;
+  if (options.cierreHasta) baseParams.cierre_hasta = options.cierreHasta;
+  if (options.creadoDesde) baseParams.creado_desde = options.creadoDesde;
+  if (options.creadoHasta) baseParams.creado_hasta = options.creadoHasta;
+  if (options.reinicioMin) baseParams.reinicio_min = options.reinicioMin;
 
-  const response = await callCrmApi<CRMOpportunitiesResponse>("/crm/oportunidades", {
-    searchParams,
-  });
+  const pageSize = 200;
+  let offset = 0;
+  let total = 0;
+  const rows: DataTableRow[] = [];
 
-  if (!response.ok) {
-    return { rows: [], total: 0, errors: [response.error] };
-  }
-
-  const rows = response.data.items.map<DataTableRow>((op, index) => {
-    const contactLabel = buildContactLabel(op);
-    const restartSequence = extractRestartSequence(op.metadata);
-    const stageLabel = formatEtapa(op);
-    const statusLabel =
-      restartSequence > 1 ? `${stageLabel} · Reinicio #${restartSequence}` : stageLabel;
-    const assignedLabel =
-      op.asignado?.nombre_completo?.trim() ||
-      op.asignado_a_usuario_id ||
-      "Sin asignar";
-
-    return {
-      id: index + 1,
-      header: op.titulo || contactLabel || "Oportunidad sin nombre",
-      type: contactLabel || op.estado || "Contacto sin nombre",
-      status: statusLabel,
-      target: formatCurrency(op.monto_estimado, op.moneda),
-      limit: op.fecha_cierre_probable || "Sin fecha",
-      reviewer: assignedLabel,
-      raw: {
-        ...op,
-        restartSequence,
-        status_meta: {
-          label: statusLabel,
-          variant: "outline",
-        },
+  while (true) {
+    const response = await callCrmApi<CRMOpportunitiesResponse>("/crm/oportunidades", {
+      searchParams: {
+        ...baseParams,
+        limit: String(pageSize),
+        offset: String(offset),
       },
-    };
-  });
+    });
+
+    if (!response.ok) {
+      return { rows: [], total: 0, errors: [response.error] };
+    }
+
+    total = response.data.total ?? total;
+    const pageRows = response.data.items.map<DataTableRow>((op, index) => {
+      const contactLabel = buildContactLabel(op);
+      const restartSequence = extractRestartSequence(op.metadata);
+      const stageLabel = formatEtapa(op);
+      const statusLabel =
+        restartSequence > 1 ? `${stageLabel} · Reinicio #${restartSequence}` : stageLabel;
+      const assignedLabel =
+        op.asignado?.nombre_completo?.trim() ||
+        op.asignado_a_usuario_id ||
+        "Sin asignar";
+
+      return {
+        id: rows.length + index + 1,
+        header: op.titulo || contactLabel || "Oportunidad sin nombre",
+        type: contactLabel || op.estado || "Contacto sin nombre",
+        status: statusLabel,
+        target: formatCurrency(op.monto_estimado, op.moneda),
+        limit: op.fecha_cierre_probable || "Sin fecha",
+        reviewer: assignedLabel,
+        raw: {
+          ...op,
+          restartSequence,
+          status_meta: {
+            label: statusLabel,
+            variant: "outline",
+          },
+        },
+      };
+    });
+    rows.push(...pageRows);
+
+    const received = response.data.items.length;
+    const hasMoreByPage = received >= pageSize;
+    const hasMoreByTotal = total > 0 ? rows.length < total : hasMoreByPage;
+    if (!hasMoreByPage || !hasMoreByTotal) {
+      break;
+    }
+    offset += received;
+  }
 
   return {
     rows,
-    total: response.data.items.length,
+    total: total || rows.length,
     errors: [],
   };
 }

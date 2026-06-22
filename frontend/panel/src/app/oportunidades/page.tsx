@@ -45,9 +45,7 @@ export default async function OportunidadesPage({
 
   const payload = await loadCrmOpportunities({ ...filters, asignadoId: assignedScopeId });
 
-  const filteredRows = payload.errors.length
-    ? payload.rows
-    : applyServerFilters(payload.rows, filters);
+  const filteredRows = payload.rows;
   const channelOptions = buildChannelOptions(payload.rows);
   const initialFilterOptions: OportunidadesFilterOptions = {
     etapas: [],
@@ -139,96 +137,4 @@ function buildChannelOptions(rows: { raw?: Record<string, unknown> }[]) {
     if (typeof value === "string" && value.trim()) channels.add(value.trim());
   });
   return Array.from(channels).map((value) => ({ id: value, label: value }));
-}
-
-function applyServerFilters(
-  rows: import("@/components/data-table").DataTableRow[],
-  filters: OportunidadesFiltersState,
-): import("@/components/data-table").DataTableRow[] {
-  const search = filters.q.trim().toLowerCase();
-  const minMonto = parseNumber(filters.montoMin);
-  const maxMonto = parseNumber(filters.montoMax);
-  const reinicioMin = parseNumber(filters.reinicioMin);
-  const cierreDesde = parseDate(filters.cierreDesde);
-  const cierreHasta = parseDate(filters.cierreHasta);
-  const creadoDesde = parseDate(filters.creadoDesde);
-  const creadoHasta = parseDate(filters.creadoHasta);
-
-  return rows.filter((row) => {
-    const raw = row.raw as Record<string, unknown> | undefined;
-    const contacto = extractString(raw, ["contacto", "nombre_completo"]) || extractString(raw, ["metadata", "contacto_nombre"]) || "";
-    const cuenta = extractString(raw, ["cuenta", "nombre"]) || "";
-    const titulo = extractString(raw, ["titulo"]) || row.header || "";
-    const etapaId = extractString(raw, ["etapa", "id"]) || extractString(raw, ["etapa_id"]) || "";
-    const etapaNombre = extractString(raw, ["etapa", "nombre"]) || extractString(raw, ["metadata", "etapa_nombre"]) || "";
-    const estado = extractString(raw, ["estado"]) || "";
-    const asignadoId = extractString(raw, ["asignado", "id"]) || extractString(raw, ["asignado_a_usuario_id"]) || "";
-    const cuentaId = extractString(raw, ["cuenta", "id"]) || extractString(raw, ["cuenta_id"]) || "";
-    const personaId = extractString(raw, ["persona_id"]) || extractString(raw, ["contacto_principal_id"]) || "";
-    const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "";
-
-    if (search) {
-      const haystack = `${titulo} ${contacto} ${cuenta}`.toLowerCase();
-      if (!haystack.includes(search)) return false;
-    }
-
-    if (filters.etapaId !== "all") {
-      if (filters.etapaId !== etapaId && filters.etapaId !== etapaNombre) return false;
-    }
-    if (filters.estado !== "all" && estado !== filters.estado) return false;
-    if (filters.asignadoId !== "all" && asignadoId !== filters.asignadoId) return false;
-    if (filters.cuentaId !== "all" && cuentaId !== filters.cuentaId) return false;
-    if (filters.personaId !== "all" && personaId !== filters.personaId) return false;
-    if (filters.canal !== "all" && canal !== filters.canal) return false;
-
-    const monto = parseNumber(extractUnknown(raw, ["monto_estimado"]));
-    if (minMonto !== null && (monto === null || monto < minMonto)) return false;
-    if (maxMonto !== null && (monto === null || monto > maxMonto)) return false;
-
-    const cierre = parseDate(extractUnknown(raw, ["fecha_cierre_probable"]));
-    if (cierreDesde && (!cierre || cierre < cierreDesde)) return false;
-    if (cierreHasta && (!cierre || cierre > cierreHasta)) return false;
-
-    const creado = parseDate(extractUnknown(raw, ["creado_en"]));
-    if (creadoDesde && (!creado || creado < creadoDesde)) return false;
-    if (creadoHasta && (!creado || creado > creadoHasta)) return false;
-
-    if (reinicioMin !== null) {
-      const reinicio = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
-      if (reinicio < reinicioMin) return false;
-    }
-
-    return true;
-  });
-}
-
-function extractUnknown(raw: Record<string, unknown> | undefined, path: string[]): unknown {
-  if (!raw) return undefined;
-  let current: unknown = raw;
-  for (const key of path) {
-    if (!current || typeof current !== "object") return undefined;
-    const value = (current as Record<string, unknown>)[key];
-    current = value;
-  }
-  return current;
-}
-
-function extractString(raw: Record<string, unknown> | undefined, path: string[]): string | null {
-  const value = extractUnknown(raw, path);
-  if (typeof value === "string" && value.trim().length) return value.trim();
-  return null;
-}
-
-function parseNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) return null;
-  return parsed;
-}
-
-function parseDate(value: unknown): Date | null {
-  if (!value || typeof value !== "string") return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
 }
