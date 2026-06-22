@@ -81,13 +81,13 @@ export function InboxWorkspace({
       const value = item.value?.trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      values.push({ value, label: item.label?.trim() || `Batch ${value.slice(0, 8)}` });
+      values.push({ value, label: item.label?.trim() || "Batch" });
     }
     for (const thread of threads) {
       const value = thread.batchId?.trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      values.push({ value, label: `Batch ${value.slice(0, 8)}` });
+      values.push({ value, label: "Batch" });
     }
     values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
     return values;
@@ -101,13 +101,13 @@ export function InboxWorkspace({
       const value = item.value?.trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      values.push({ value, label: item.label?.trim() || `Campaña ${value.slice(0, 8)}` });
+      values.push({ value, label: item.label?.trim() || "Campaña" });
     }
     for (const thread of threads) {
       const value = thread.campanaId?.trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      values.push({ value, label: `Campaña ${value.slice(0, 8)}` });
+      values.push({ value, label: "Campaña" });
     }
     values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
     return values;

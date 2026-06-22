@@ -42,7 +42,7 @@ export async function loadCrmAuditLogs(): Promise<CrmAuditLogsPayload> {
     header: log.accion || "Acción",
     type: log.tabla,
     status: log.usuario_id || "Sistema",
-    target: log.registro_id?.slice(0, 8) || "N/A",
+    target: log.tabla || "Registro",
     limit: log.ip || "Sin IP",
     reviewer: log.creado_en,
     raw: log,

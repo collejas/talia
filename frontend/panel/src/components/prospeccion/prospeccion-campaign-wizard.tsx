@@ -380,7 +380,7 @@ export function ProspeccionCampaignWizard({
       if (group.id) {
         options.push({
           value: group.id,
-          label: group.nombre ?? `Campaña ${group.id.slice(0, 8)}`,
+          label: group.nombre?.trim() || "Campaña",
         })
       }
     })

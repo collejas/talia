@@ -66,7 +66,7 @@ function summarizePipeline(rows: CatalogPipelineRow[]): PipelineEntry[] {
   return rows
     .map((row) => {
       const name = row.item_nombre?.trim() || "Sin nombre"
-      const etapa = row.etapa_id?.slice(0, 8) || "Etapa"
+      const etapa = "Etapa"
       const monto = Number(row.monto_estimado ?? 0)
       const leads = Number(row.leads_con_cotizacion ?? 0)
       return {

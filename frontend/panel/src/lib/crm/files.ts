@@ -44,7 +44,7 @@ export async function loadCrmFiles(): Promise<CrmFilesPayload> {
     type: file.content_type || "Sin tipo",
     status: formatSize(file.tamano_bytes),
     target: file.relacion_tipo,
-    limit: file.relacion_id.slice(0, 8),
+    limit: "Relacionado",
     reviewer: file.subido_por_usuario_id || "Desconocido",
     raw: file,
   }));

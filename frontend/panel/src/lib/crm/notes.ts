@@ -43,7 +43,7 @@ export async function loadCrmNotes(): Promise<CrmNotesPayload> {
     type: note.tipo,
     status: note.visible_para_cliente ? "Visible" : "Privada",
     target: note.relacion_tipo,
-    limit: note.relacion_id.slice(0, 8),
+    limit: "Relacionado",
     reviewer: note.creado_por_usuario_id || "Sistema",
     raw: note,
   }));

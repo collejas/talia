@@ -221,7 +221,7 @@ export function CampanasMetricsClient() {
         return (
           fromResumen ?? {
             campana_id: campaign.id,
-            campana_nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            campana_nombre: campaign.nombre?.trim() || "Campaña",
             batches: [],
             totales: {},
           }
@@ -323,7 +323,7 @@ export function CampanasMetricsClient() {
     const campaignMap = new Map<string, HierarchyCampaignNode>()
     const campaignNameFallback = new Map<string, string>()
     crmCampaigns.forEach((campaign) => {
-      campaignNameFallback.set(campaign.id, campaign.nombre || `Campaña ${campaign.id.slice(0, 8)}`)
+      campaignNameFallback.set(campaign.id, campaign.nombre?.trim() || "Campaña")
     })
     campanas.forEach((group, index) => {
       const key = group.campana_id || `sin-campana-${index}`
@@ -1154,7 +1154,7 @@ ${secondCellHtml}
           ? campaign.canal
           : null
       setTemplatesCampanaId(campanaId)
-      setTemplatesCampanaNombre(campanaNombre ?? `Campaña ${campanaId.slice(0, 8)}`)
+      setTemplatesCampanaNombre(campanaNombre?.trim() || "Campaña")
       setTemplatesCampanaCanal(canal)
       setSelectedLogoUrl("")
       setTemplateForm({

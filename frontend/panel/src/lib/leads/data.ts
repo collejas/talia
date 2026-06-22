@@ -473,7 +473,6 @@ function buildOpportunityContactLabel(row: CRMOpportunity): string {
   if (name) return name;
   const company = row.cuenta?.nombre?.trim() || row.contacto?.company_name?.trim();
   if (company) return company;
-  if (row.contacto_principal_id) return `Contacto ${row.contacto_principal_id.slice(0, 8)}`;
   return "Oportunidad sin nombre";
 }
 
@@ -537,8 +536,7 @@ function formatContactName(stat: CRMLeadRestartStat): string {
   if (stat.contacto_nombre && stat.contacto_nombre.trim().length) {
     return stat.contacto_nombre.trim();
   }
-  const personaId = stat.persona_id?.trim();
-  return `Contacto ${(personaId || stat.contacto_id).slice(0, 8)}`;
+  return "Contacto sin nombre";
 }
 
 function formatSellerName(stat: CRMLeadRestartStat): string {

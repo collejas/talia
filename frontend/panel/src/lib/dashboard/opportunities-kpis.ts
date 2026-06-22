@@ -113,7 +113,7 @@ function summarizeOpportunities(rows: CRMOpportunity[], staleDays: number): Oppo
 
     const stageLabel = row.etapa?.nombre?.trim()
       ? row.etapa.nombre.trim()
-      : `Etapa ${row.etapa_id.slice(0, 8)}`;
+      : "Etapa";
     if (isActive) {
       stageCounts.set(stageLabel, (stageCounts.get(stageLabel) ?? 0) + 1);
     }

@@ -1501,7 +1501,7 @@ function ProspectosView() {
       )
     }
     if (filters.campanaId) {
-      chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
+      chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? "Campaña"}`)
     }
     if (filters.conEnvioCanales.length || filters.conEnvioModo) {
       const labels = filters.conEnvioCanales.length
@@ -2824,7 +2824,7 @@ function ProspectosView() {
             canalRaw === "correo" || canalRaw === "whatsapp" || canalRaw === "llamada" ? canalRaw : null
           return {
             id: campaign.id,
-            nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            nombre: campaign.nombre?.trim() || "Campaña",
             canal,
           }
         })
@@ -2870,7 +2870,7 @@ function ProspectosView() {
             canalRaw === "correo" || canalRaw === "whatsapp" || canalRaw === "llamada" ? canalRaw : null
           return {
             id: campaign.id,
-            nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            nombre: campaign.nombre?.trim() || "Campaña",
             canal,
           }
         })
@@ -3651,7 +3651,7 @@ function ProspectosView() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold">
-                      {batch.titulo?.trim() || `Lote ${batch.id.slice(0, 8)}`}
+                      {batch.titulo?.trim() || "Lote"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(batch.programado_en ?? batch.creado_en)}
@@ -6041,7 +6041,7 @@ function formatContactLogDetail(entry: ContactoLog) {
   if (typeof sid === "string" && sid.trim().length) {
     parts.push(`SID ${sid.trim()}`)
   } else if (entry.envio_id) {
-    parts.push(`Envio ${String(entry.envio_id).slice(0, 8)}`)
+    parts.push("Envío registrado")
   }
   return parts.length ? parts.join(" · ") : "—"
 }

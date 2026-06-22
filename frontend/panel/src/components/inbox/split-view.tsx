@@ -713,11 +713,11 @@ export function InboxSplitView({
   const inboxStreamRefreshTimeoutRef = React.useRef<number | null>(null);
   const { user: currentUser } = useCurrentUser();
   const batchLabelMap = React.useMemo(
-    () => new Map((batchOptions ?? []).map((item) => [item.value, item.label])),
+    () => new Map((batchOptions ?? []).map((item) => [item.value, item.label?.trim() || "Lote"])),
     [batchOptions],
   );
   const campanaLabelMap = React.useMemo(
-    () => new Map((campanaOptions ?? []).map((item) => [item.value, item.label])),
+    () => new Map((campanaOptions ?? []).map((item) => [item.value, item.label?.trim() || "Campaña"])),
     [campanaOptions],
   );
 
@@ -1819,7 +1819,7 @@ export function InboxSplitView({
                           <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
                             {thread.campanaLabel ??
                               campanaLabelMap.get(thread.campanaId) ??
-                              `Campaña ${thread.campanaId.slice(0, 8)}`}
+                              "Campaña"}
                           </Badge>
                         ) : null}
                         {thread.templateLabel ? (
@@ -1831,7 +1831,7 @@ export function InboxSplitView({
                           <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
                             {thread.batchLabel ??
                               batchLabelMap.get(thread.batchId) ??
-                              `Lote ${thread.batchId.slice(0, 8)}`}
+                              "Lote"}
                           </Badge>
                         ) : null}
                         {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
@@ -1929,7 +1929,7 @@ export function InboxSplitView({
                   <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.campanaLabel ??
                       campanaLabelMap.get(selectedThread.campanaId) ??
-                      `Campaña ${selectedThread.campanaId.slice(0, 8)}`}
+                      "Campaña"}
                   </Badge>
                 ) : null}
                 {selectedThread.templateLabel ? (
@@ -1941,7 +1941,7 @@ export function InboxSplitView({
                   <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.batchLabel ??
                       batchLabelMap.get(selectedThread.batchId) ??
-                      `Lote ${selectedThread.batchId.slice(0, 8)}`}
+                      "Lote"}
                   </Badge>
                 ) : null}
                 {selectedThread.contactoTelefono ? (
