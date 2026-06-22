@@ -140,6 +140,10 @@ from app.services.ui_realtime_hub import (
     user_notifications_topic_for_user,
     ui_realtime_hub,
 )
+from app.services.crm_collaboration_notifications import (
+    notify_activity_created,
+    notify_note_created,
+)
 from app.services.user_notifications import user_notification_row_to_event
 from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
 from app.services.storage import StorageError
@@ -34988,6 +34992,19 @@ async def create_activity(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if usuario_id:
+        try:
+            await notify_activity_created(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                activity_row=row,
+                actor_user_id=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.activity_created_notification_failed",
+                extra={"error": str(exc), "activity_id": str(row.get("id") or "")},
+            )
     return CRMActivity.model_validate(row)
 
 
@@ -35619,6 +35636,19 @@ async def create_note(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if usuario_id:
+        try:
+            await notify_note_created(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                note_row=row,
+                actor_user_id=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.note_created_notification_failed",
+                extra={"error": str(exc), "note_id": str(row.get("id") or "")},
+            )
     return CRMNote.model_validate(row)
 
 
