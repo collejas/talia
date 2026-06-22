@@ -647,7 +647,23 @@ function OpportunityRowDetails({
   const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "Sin canal";
   const restartSequence = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
   const monetaryValue = extractNumber(raw, ["monto_estimado"]);
+  const probability = extractNumber(raw, ["probabilidad"]);
   const currency = extractString(raw, ["moneda"]) || "MXN";
+  const createdAt = extractString(raw, ["creado_en"]);
+  const updatedAt = extractString(raw, ["actualizado_en"]);
+  const closeAt = extractString(raw, ["fecha_cierre_probable"]);
+  const ageDays = diffDays(createdAt);
+  const staleDays = diffDays(updatedAt);
+  const weightedValue =
+    monetaryValue != null && probability != null ? (monetaryValue * probability) / 100 : null;
+  const description = extractString(raw, ["descripcion"]);
+  const source =
+    extractString(raw, ["created_via"]) ||
+    extractString(raw, ["metadata", "created_via"]) ||
+    extractString(raw, ["metadata", "origen"]) ||
+    extractString(raw, ["metadata", "source"]) ||
+    "Sin origen";
+  const lostReason = extractString(raw, ["motivo_perdida"]);
 
   return (
     <div className="space-y-4 py-2">
@@ -664,6 +680,9 @@ function OpportunityRowDetails({
             <p className="text-sm text-muted-foreground">
               {contact} · {account} · {canal}
             </p>
+            {description ? (
+              <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -679,15 +698,18 @@ function OpportunityRowDetails({
       <Separator />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <DetailField label="Código" value={opportunityCode} />
         <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
-        <DetailField label="Cierre probable" value={formatDate(extractString(raw, ["fecha_cierre_probable"]))} />
-        <DetailField label="Creado" value={formatDate(extractString(raw, ["creado_en"]))} />
-        <DetailField label="Actualizado" value={formatDate(extractString(raw, ["actualizado_en"]))} />
+        <DetailField label="Probabilidad" value={formatProbability(probability)} />
+        <DetailField label="Valor ponderado" value={formatCurrency(weightedValue, currency)} />
+        <DetailField label="Cierre probable" value={formatDate(closeAt)} />
+        <DetailField label="Antigüedad" value={formatDays(ageDays)} />
+        <DetailField label="Sin cambios" value={formatDays(staleDays)} />
+        <DetailField label="Creado" value={formatDate(createdAt)} />
+        <DetailField label="Actualizado" value={formatDate(updatedAt)} />
         <DetailField label="Asignado" value={assigned} />
-        <DetailField label="Oportunidad" value={title} />
-        <DetailField label="Persona" value={contact} />
-        <DetailField label="Cuenta" value={account} />
+        <DetailField label="Canal" value={canal} />
+        <DetailField label="Origen" value={source} />
+        {lostReason ? <DetailField label="Motivo pérdida" value={lostReason} /> : null}
       </div>
     </div>
   );
@@ -715,6 +737,26 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatProbability(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return `${Math.round(Number(value))}%`;
+}
+
+function formatDays(value: number | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value <= 0) return "Hoy";
+  if (value === 1) return "1 día";
+  return `${value} días`;
+}
+
+function diffDays(value?: string | null): number | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const diff = Date.now() - date.getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
 function extractUnknown(raw: Record<string, unknown> | undefined, path: string[]): unknown {
