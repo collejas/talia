@@ -20,3 +20,5 @@
 - Se reemplazo el sidepanel demo por una ficha formal de oportunidad dentro del drawer de la tabla.
 - Se agrego `codigo_oportunidad` como identificador legible de negocio para mostrar en frontend, dejando el UUID como llave tecnica interna.
 - Se propago `codigo_oportunidad` al embudo y a la auditoria de asignaciones para evitar exponer UUIDs al usuario.
+- Se habilito busqueda directa por `codigo_oportunidad` en los listados de oportunidades.
+- Se eliminaron los ultimos fallbacks de UUID visibles en las vistas de oportunidad y asignaciones.

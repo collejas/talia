@@ -142,7 +142,7 @@ export function OportunidadesFiltersClient({
           <Label htmlFor="search">Búsqueda</Label>
           <Input
             id="search"
-            placeholder="Buscar por título, contacto o cuenta"
+            placeholder="Buscar por código, título, contacto o cuenta"
             value={filters.q}
             onChange={(event) => updateFilter("q", event.target.value)}
           />

@@ -58,7 +58,7 @@ export async function loadCrmWhatsAppAssignments(): Promise<CrmWhatsAppAssignmen
     reviewer:
       formatOpportunityReference(assignment.codigo_oportunidad) ||
       assignment.oportunidad_titulo ||
-      (assignment.oportunidad_id ? `Opp ${assignment.oportunidad_id.slice(0, 8)}` : "Sin oportunidad"),
+      "Sin oportunidad",
     raw: assignment,
   }));
 

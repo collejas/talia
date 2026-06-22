@@ -470,6 +470,38 @@ def _search_row_text(row: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _opportunity_code_search_candidates(value: str | None) -> list[str]:
+    sanitized = _sanitize_search_pattern(value)
+    if not sanitized:
+        return []
+
+    normalized = re.sub(r"[\s._/\\-]+", "", sanitized).casefold()
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def _push(candidate: str | None) -> None:
+        text = str(candidate or "").strip()
+        if not text:
+            return
+        key = text.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(text)
+
+    _push(sanitized)
+    _push(sanitized.replace(" ", ""))
+    _push(sanitized.replace(" ", "").replace("_", "-"))
+
+    match = re.search(r"opo(\d{1,})$", normalized)
+    if match:
+        number = int(match.group(1))
+        _push(f"Opo-{number:04d}")
+        _push(f"Opo-{number}")
+
+    return candidates
+
+
 _EMAIL_PATTERN = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", re.IGNORECASE)
 
 
@@ -1999,7 +2031,17 @@ class CRMRepository:
         if q:
             safe = q.replace("%", "").replace(",", " ").strip()
             if safe:
-                params["or"] = f"(titulo.ilike.*{safe}*,contacto_nombre.ilike.*{safe}*)"
+                opportunity_code_terms = [
+                    f"codigo_oportunidad.ilike.*{candidate}*"
+                    for candidate in _opportunity_code_search_candidates(safe)
+                ]
+                params["or"] = "(" + ",".join(
+                    [
+                        f"titulo.ilike.*{safe}*",
+                        f"contacto_nombre.ilike.*{safe}*",
+                        *opportunity_code_terms,
+                    ]
+                ) + ")"
         if monto_min is not None:
             and_filters.append(f"monto_estimado.gte.{monto_min}")
         if monto_max is not None:
@@ -6849,6 +6891,20 @@ class CRMRepository:
             params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
         if canal:
             params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
+        if q:
+            safe = q.replace("%", "").replace(",", " ").strip()
+            if safe:
+                opportunity_code_terms = [
+                    f"codigo_oportunidad.ilike.*{candidate}*"
+                    for candidate in _opportunity_code_search_candidates(safe)
+                ]
+                params["or"] = "(" + ",".join(
+                    [
+                        f"titulo.ilike.*{safe}*",
+                        f"contacto_nombre.ilike.*{safe}*",
+                        *opportunity_code_terms,
+                    ]
+                ) + ")"
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
         prefer = "count=exact" if count_exact else None

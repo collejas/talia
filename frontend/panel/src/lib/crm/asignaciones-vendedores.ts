@@ -53,7 +53,7 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
     target:
       item.codigo_oportunidad?.trim()
         ? `${item.codigo_oportunidad.trim().replace(/\s*-\s*/g, " - ")} · ${item.oportunidad_titulo || "Oportunidad"}`
-        : item.oportunidad_titulo || item.oportunidad_id || "Oportunidad",
+        : item.oportunidad_titulo || "Sin oportunidad",
     limit: item.conversacion_canal || "—",
     reviewer: item.creado_en,
     raw: item,

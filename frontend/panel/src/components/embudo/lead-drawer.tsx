@@ -3964,11 +3964,7 @@ export function LeadDrawer({
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Referencia</span>
-                          <span className="font-medium text-foreground">
-                            {card.codigoOportunidad?.trim()
-                              ? card.codigoOportunidad.replace(/\s*-\s*/g, " - ")
-                              : card.oportunidadId.slice(0, 8).toUpperCase()}
-                          </span>
+                          <span className="font-medium text-foreground">{formatOpportunityReference(card.codigoOportunidad)}</span>
                         </div>
                       </div>
                     </div>
@@ -4648,11 +4644,7 @@ export function LeadDrawer({
                       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proyecto</h4>
                       <div className="mt-2 space-y-1">
                         <p className="font-medium text-foreground">{quoteProjectNeeds}</p>
-                        <p className="text-muted-foreground">
-                          Referencia: {card.codigoOportunidad?.trim()
-                            ? card.codigoOportunidad.replace(/\s*-\s*/g, " - ")
-                            : card.oportunidadId.slice(0, 8).toUpperCase()}
-                        </p>
+                        <p className="text-muted-foreground">Referencia: {formatOpportunityReference(card.codigoOportunidad)}</p>
                       </div>
                     </div>
                     <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
@@ -6030,4 +6022,12 @@ function formatIsoDateForInput(value: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function formatOpportunityReference(code: string | null | undefined): string {
+  const raw = typeof code === "string" ? code.trim() : "";
+  if (!raw) {
+    return "Sin referencia";
+  }
+  return raw.replace(/\s*-\s*/g, " - ");
 }
