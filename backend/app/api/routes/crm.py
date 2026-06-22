@@ -10224,6 +10224,8 @@ class CRMUserSummary(BaseModel):
     nombre_completo: str | None = None
     correo: str | None = None
     telefono_e164: str | None = None
+    rol_principal: str | None = None
+    roles: list[str] = Field(default_factory=list)
 
 
 class CRMReassignOpportunityPayload(BaseModel):
@@ -16320,7 +16322,16 @@ async def list_users(
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[CRMUserSummary]:
     try:
-        rows = await repo.list_users(organizacion_id=organizacion_id, limit=limit)
+        user_rows = await repo.list_users(organizacion_id=organizacion_id, limit=limit)
+        user_ids = [
+            UUID(str(row["id"]))
+            for row in user_rows
+            if isinstance(row, dict) and str(row.get("id") or "").strip()
+        ]
+        rows = await repo.list_users_with_primary_role_by_ids(
+            organizacion_id=organizacion_id,
+            user_ids=user_ids,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMUserSummary.model_validate(row) for row in rows]

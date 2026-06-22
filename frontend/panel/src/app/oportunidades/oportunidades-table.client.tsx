@@ -299,6 +299,7 @@ type OpportunityNote = {
   tipo: string;
   actividad_id: string | null;
   creado_por_usuario_id: string | null;
+  creado_por_usuario?: OpportunityUserSummary | null;
   creado_en: string;
   actualizado_en: string;
 };
@@ -314,10 +315,21 @@ type OpportunityActivity = {
   fecha_vencimiento: string | null;
   asignado_a_usuario_id: string | null;
   creado_por_usuario_id: string | null;
+  creado_por_usuario?: OpportunityUserSummary | null;
+  asignado_a_usuario?: OpportunityUserSummary | null;
   completado_en: string | null;
   cancelado_en: string | null;
   cerrado_por_usuario_id: string | null;
   creado_en: string;
+};
+
+type OpportunityUserSummary = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  rol_principal?: string | null;
+  roles?: string[];
 };
 
 type OpportunityQuote = {
@@ -613,6 +625,7 @@ function OpportunityRowDetails({
 
   const detailOpportunity = detailState.data?.opportunity ?? raw;
   const opportunityDetail = (detailOpportunity ?? {}) as Record<string, unknown>;
+  const opportunityAssigneeLabel = selectedVendorLabel || opportunityAssigneeId || "Sin asignar";
   const contactName =
     extractString(opportunityDetail, ["contacto", "nombre_completo"]) ||
     extractString(opportunityDetail, ["contacto", "nombres"]) ||
@@ -965,19 +978,10 @@ function OpportunityRowDetails({
                         Vinculada a actividad
                       </Badge>
                     ) : null}
-                    {note.creado_por_usuario_id ? (
-                      <Badge
-                        variant={note.creado_por_usuario_id === opportunityAssigneeId ? "default" : "secondary"}
-                        className="text-[10px] uppercase tracking-wide"
-                      >
-                        {note.creado_por_usuario_id === opportunityAssigneeId
-                          ? "Creada por vendedor"
-                          : "Creada por supervisión"}
-                      </Badge>
-                    ) : null}
+                    {renderUserAuthorBadge(note.creado_por_usuario, opportunityAssigneeId)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDate(note.creado_en)}
+                    {renderUserLine(note.creado_por_usuario, "Nota", note.creado_en)}
                   </p>
                 </div>
               ))}
@@ -1115,23 +1119,15 @@ function OpportunityRowDetails({
                     {activity.asignado_a_usuario_id ? (
                       <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
                         {activity.asignado_a_usuario_id === opportunityAssigneeId
-                          ? "Asignada al vendedor"
+                          ? `Asignada a ${opportunityAssigneeLabel}`
                           : "Asignada a otro usuario"}
                       </Badge>
                     ) : null}
-                    {activity.creado_por_usuario_id ? (
-                      <Badge
-                        variant={activity.creado_por_usuario_id === activity.asignado_a_usuario_id ? "default" : "secondary"}
-                        className="text-[10px] uppercase tracking-wide"
-                      >
-                        {activity.creado_por_usuario_id === activity.asignado_a_usuario_id
-                          ? "Creada por el mismo usuario"
-                          : "Creada por supervisión"}
-                      </Badge>
-                    ) : null}
+                    {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {activity.fecha_vencimiento ? `Vence ${formatDate(activity.fecha_vencimiento)}` : "Sin vencimiento"}
+                    {renderUserLine(activity.creado_por_usuario, "Actividad", activity.creado_en)}
+                    {activity.fecha_vencimiento ? ` · Vence ${formatDate(activity.fecha_vencimiento)}` : " · Sin vencimiento"}
                   </p>
                 </div>
               ))}
@@ -1249,6 +1245,41 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatUserDisplay(user: OpportunityUserSummary | null | undefined): string {
+  if (!user) return "Usuario no identificado";
+  const name = user.nombre_completo?.trim();
+  const role = user.rol_principal?.trim();
+  if (name && role) return `${role} ${name}`;
+  if (name) return name;
+  if (role) return role;
+  return user.correo?.trim() || "Usuario no identificado";
+}
+
+function renderUserAuthorBadge(
+  user: OpportunityUserSummary | null | undefined,
+  assigneeId: string,
+) {
+  if (!user) return null;
+  const isAssignee = user.id === assigneeId;
+  return (
+    <Badge
+      variant={isAssignee ? "default" : "secondary"}
+      className="text-[10px] uppercase tracking-wide"
+    >
+      {isAssignee ? `Creada por ${formatUserDisplay(user)}` : `Enviada por ${formatUserDisplay(user)}`}
+    </Badge>
+  );
+}
+
+function renderUserLine(
+  user: OpportunityUserSummary | null | undefined,
+  entityLabel: string,
+  createdAt: string,
+) {
+  const author = formatUserDisplay(user);
+  return `${entityLabel} · ${author} · ${formatDate(createdAt)}`;
 }
 
 function formatProbability(value: number | null | undefined): string {

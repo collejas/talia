@@ -4,6 +4,15 @@ import { NextResponse } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
+type CrmUserRow = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  rol_principal?: string | null;
+  roles?: string[];
+};
+
 type CrmActivityRow = {
   id: string;
   organizacion_id: string;
@@ -23,6 +32,8 @@ type CrmActivityRow = {
   oportunidad_id: string | null;
   creado_por_usuario_id: string | null;
   asignado_a_usuario_id: string | null;
+  creado_por_usuario?: CrmUserRow | null;
+  asignado_a_usuario?: CrmUserRow | null;
   completado_en: string | null;
   cancelado_en: string | null;
   cerrado_por_usuario_id: string | null;
@@ -61,7 +72,30 @@ export async function GET(
       ? (response.data as { items: CrmActivityRow[] }).items
       : [];
 
-  return NextResponse.json({ data: rows });
+  const userIds = Array.from(
+    new Set(
+      rows
+        .flatMap((row) => [row.creado_por_usuario_id, row.asignado_a_usuario_id])
+        .filter((value): value is string => !!value),
+    ),
+  );
+  const usersResponse = userIds.length
+    ? await callCrmApi<{ items?: CrmUserRow[] } | CrmUserRow[]>("/crm/usuarios", {
+        searchParams: {
+          limit: "500",
+        },
+        withUserToken: true,
+      })
+    : null;
+  const users = usersResponse?.ok ? normalizeItems(usersResponse.data) : [];
+  const userMap = new Map(users.map((user) => [user.id, user] as const));
+  const enrichedRows = rows.map((row) => ({
+    ...row,
+    creado_por_usuario: row.creado_por_usuario_id ? userMap.get(row.creado_por_usuario_id) ?? null : null,
+    asignado_a_usuario: row.asignado_a_usuario_id ? userMap.get(row.asignado_a_usuario_id) ?? null : null,
+  }));
+
+  return NextResponse.json({ data: enrichedRows });
 }
 
 export async function POST(
@@ -129,4 +163,10 @@ export async function POST(
   }
 
   return NextResponse.json({ data: response.data });
+}
+
+function normalizeItems<T>(payload: T[] | { items?: T[] } | null | undefined): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.items)) return payload.items;
+  return [];
 }

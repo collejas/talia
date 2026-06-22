@@ -8,6 +8,7 @@
 - Se establecio que la notificacion debe llegar al vendedor sin perder autoria del supervisor.
 - Se agregaron backlog, backfill y mapa tecnico de implementacion.
 - Se conecto el backend para notificar automaticamente al crear notas o actividades con destinatario distinto al autor.
+- Se ajusto el detalle de oportunidades para mostrar nombre y rol del autor en notas y actividades.
 
 ## Proximo cambio esperado
 

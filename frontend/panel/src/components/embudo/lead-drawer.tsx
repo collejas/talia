@@ -569,6 +569,7 @@ type LeadNoteEntry = {
   visible_para_cliente: boolean;
   tipo: string;
   creado_por_usuario_id: string | null;
+  creado_por_usuario?: LeadUserSummary | null;
   creado_en: string;
   actualizado_en: string;
 };
@@ -592,12 +593,23 @@ type LeadActivityEntry = {
   oportunidad_id: string | null;
   creado_por_usuario_id: string | null;
   asignado_a_usuario_id: string | null;
+  creado_por_usuario?: LeadUserSummary | null;
+  asignado_a_usuario?: LeadUserSummary | null;
   completado_en: string | null;
   cancelado_en: string | null;
   cerrado_por_usuario_id: string | null;
   metadata: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string;
+};
+
+type LeadUserSummary = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  rol_principal?: string | null;
+  roles?: string[];
 };
 
 type HistoryState = {
@@ -2327,6 +2339,7 @@ export function LeadDrawer({
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
   const quotePreviewItems = quoteItems.filter((item) => !isBlankQuoteItem(item));
+  const opportunityAssigneeId = card?.asignadoId ?? selectedVendorId ?? "";
   const quoteAssignedVendor =
     vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
   const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
@@ -2336,8 +2349,6 @@ export function LeadDrawer({
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
   const quoteClientEmail = card?.correo?.trim() || "Sin email";
-  const quoteProjectName =
-    card?.proyectoNombre?.trim() || card?.titulo?.trim() || "Sin nombre de proyecto";
   const quoteProjectNeeds = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin necesidades";
   const quoteAssignedVendorName =
     quoteAssignedVendor?.nombre_completo?.trim() || card?.asignadoNombre?.trim() || "Sin vendedor";
@@ -3607,10 +3618,16 @@ export function LeadDrawer({
                       <p className="text-sm text-foreground whitespace-pre-wrap">
                         {entry.texto ?? ""}
                       </p>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>{entry.tipo === "interna" ? "Nota interna" : entry.tipo}</span>
-                        <span>{formatDateTime(entry.creado_en)}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                          {entry.tipo === "interna" ? "Nota interna" : entry.tipo}
+                        </Badge>
+                        {renderUserAuthorBadge(entry.creado_por_usuario, opportunityAssigneeId)}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {renderUserLine(entry.creado_por_usuario, "Nota", entry.creado_en)}
+                        {entry.actividad_id ? " · Vinculada a actividad" : ""}
+                      </p>
                     </div>
                   ))
                 ) : notesState.status === "loaded" ? (
@@ -3673,11 +3690,22 @@ export function LeadDrawer({
                           </Badge>
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <span>Tipo: {activity.tipo}</span>
+                          <span className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                              {activity.tipo}
+                            </Badge>
+                            {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
+                          </span>
                           <span>
                             {activity.recordatorio_en ? `Recordatorio: ${formatDateTime(activity.recordatorio_en)}` : "Sin recordatorio"}
                           </span>
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                          {renderUserLine(activity.creado_por_usuario, "Actividad", activity.creado_en)}
+                          {activity.asignado_a_usuario?.id
+                            ? ` · Asignada a ${formatUserDisplay(activity.asignado_a_usuario)}`
+                            : " · Sin asignación"}
+                        </p>
                         {activity.estado === "pendiente" ? (
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -5469,6 +5497,41 @@ function formatDateTime(value: string): string {
   } catch {
     return value;
   }
+}
+
+function formatUserDisplay(user: LeadUserSummary | null | undefined): string {
+  if (!user) return "Usuario no identificado";
+  const name = user.nombre_completo?.trim();
+  const role = user.rol_principal?.trim();
+  if (name && role) return `${role} ${name}`;
+  if (name) return name;
+  if (role) return role;
+  return user.correo?.trim() || "Usuario no identificado";
+}
+
+function renderUserAuthorBadge(
+  user: LeadUserSummary | null | undefined,
+  assigneeId: string,
+) {
+  if (!user) return null;
+  const isAssignee = user.id === assigneeId;
+  return (
+    <Badge
+      variant={isAssignee ? "default" : "secondary"}
+      className="text-[10px] uppercase tracking-wide"
+    >
+      {isAssignee ? `Creada por ${formatUserDisplay(user)}` : `Enviada por ${formatUserDisplay(user)}`}
+    </Badge>
+  );
+}
+
+function renderUserLine(
+  user: LeadUserSummary | null | undefined,
+  entityLabel: string,
+  createdAt: string,
+) {
+  const author = formatUserDisplay(user);
+  return `${entityLabel} · ${author} · ${formatDateTime(createdAt)}`;
 }
 
 function describeHistoryEntry(entry: LeadHistoryEntry): string {

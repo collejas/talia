@@ -2147,6 +2147,93 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios por id: {data!r}")
         return data
 
+    async def list_users_with_primary_role_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        user_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        users = await self.list_users_by_ids(organizacion_id=organizacion_id, user_ids=user_ids)
+        unique_ids = sorted({str(user_id) for user_id in user_ids if user_id})
+        if not users or not unique_ids:
+            return users
+
+        roles_by_id: dict[str, dict[str, str]] = {}
+        role_rows = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"in.({','.join(unique_ids)})",
+                "select": "usuario_id,rol_id",
+                "limit": str(min(len(unique_ids) * 4, 500)),
+            },
+        )
+        role_rows_data = role_rows.json() or []
+        if isinstance(role_rows_data, list) and role_rows_data:
+            role_ids = sorted({
+                str(row.get("rol_id")).strip()
+                for row in role_rows_data
+                if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
+            })
+            role_names_by_id: dict[str, str] = {}
+            if role_ids:
+                roles_resp = await self._request(
+                    "GET",
+                    "/rest/v1/roles",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"in.({','.join(role_ids)})",
+                        "select": "id,codigo,nombre",
+                        "limit": str(min(len(role_ids), 500)),
+                    },
+                )
+                roles_data = roles_resp.json() or []
+                if isinstance(roles_data, list):
+                    for role_row in roles_data:
+                        if not isinstance(role_row, dict):
+                            continue
+                        role_id = str(role_row.get("id") or "").strip()
+                        if not role_id:
+                            continue
+                        label = str(role_row.get("nombre") or role_row.get("codigo") or "").strip()
+                        if not label:
+                            continue
+                        role_names_by_id[role_id] = label
+            for row in role_rows_data:
+                if not isinstance(row, dict):
+                    continue
+                user_id = str(row.get("usuario_id") or "").strip()
+                role_id = str(row.get("rol_id") or "").strip()
+                if not user_id or not role_id:
+                    continue
+                role_label = role_names_by_id.get(role_id)
+                if not role_label:
+                    continue
+                entry = roles_by_id.setdefault(user_id, {"rol_principal": "", "roles": []})
+                roles = entry.setdefault("roles", [])
+                if role_label not in roles:
+                    roles.append(role_label)
+                if not entry.get("rol_principal") or role_label.lower() in {"admin", "owner", "supervisor", "vendedor"}:
+                    entry["rol_principal"] = role_label
+
+        enriched: list[dict[str, Any]] = []
+        for user in users:
+            if not isinstance(user, dict):
+                continue
+            user_id = str(user.get("id") or "").strip()
+            if not user_id:
+                continue
+            role_entry = roles_by_id.get(user_id, {})
+            enriched.append(
+                {
+                    **user,
+                    "rol_principal": role_entry.get("rol_principal") or None,
+                    "roles": role_entry.get("roles") or [],
+                }
+            )
+        return enriched
+
     async def list_sale_ready_opportunities(
         self,
         *,
