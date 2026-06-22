@@ -29,7 +29,7 @@ import {
 } from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -54,6 +54,7 @@ type Props = {
   filterOptions?: OportunidadesFilterOptions;
   filterInitial?: Partial<OportunidadesFiltersState>;
   permissionContext?: {
+    roles?: string[];
     permisos?: string[];
     es_admin?: boolean;
     es_owner?: boolean;
@@ -75,6 +76,10 @@ export function OportunidadesTableClient({
     () => (permissionContext?.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext?.permisos],
   );
+  const normalizedRoles = useMemo(
+    () => (permissionContext?.roles ?? []).map((role) => role.toLowerCase()),
+    [permissionContext?.roles],
+  );
   const canReassignAny =
     Boolean(permissionContext?.es_admin) ||
     Boolean(permissionContext?.es_owner) ||
@@ -84,6 +89,21 @@ export function OportunidadesTableClient({
     Boolean(permissionContext?.es_owner) ||
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
+  const canCreateNotes =
+    Boolean(permissionContext?.es_admin) ||
+    Boolean(permissionContext?.es_owner) ||
+    normalizedRoles.some((role) =>
+      role === "0002" ||
+      role.includes("supervisor") ||
+      role.includes("gerente") ||
+      role.includes("manager") ||
+      role.includes("admin"),
+    ) ||
+    normalizedPerms.some((perm) =>
+      perm === "notes.create.supervised" ||
+      perm === "notes.write" ||
+      perm === "notes.manage",
+    );
 
   const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
@@ -233,6 +253,7 @@ export function OportunidadesTableClient({
             vendorLoading={vendorLoading}
             vendorError={vendorError}
             canReassign={canReassign}
+            canCreateNotes={canCreateNotes}
             onReassign={async (vendorId) => {
               await handleReassign(row, vendorId);
             }}
@@ -554,6 +575,7 @@ function OpportunityRowDetails({
   vendorError,
   onReassign,
   canReassign,
+  canCreateNotes,
 }: {
   row: DataTableRow;
   vendorOptions: SalesRepOption[];
@@ -561,6 +583,7 @@ function OpportunityRowDetails({
   vendorError: string | null;
   onReassign: (vendorId: string) => Promise<void>;
   canReassign: boolean;
+  canCreateNotes: boolean;
 }) {
   const raw = row.raw as Record<string, unknown> | undefined;
   const opportunityId = extractString(raw, ["id"]) || String(row.id);
@@ -619,6 +642,11 @@ function OpportunityRowDetails({
   const [activityFeedback, setActivityFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
     null,
   );
+  const [noteText, setNoteText] = useState("");
+  const [notePending, setNotePending] = useState(false);
+  const [noteFeedback, setNoteFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
+    null,
+  );
   const selectedVendorLabel =
     vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
   const opportunityAssigneeId = extractAsignadoId(row) ?? "";
@@ -653,11 +681,36 @@ function OpportunityRowDetails({
   const noteItems = detailState.data?.notes ?? [];
   const activityItems = detailState.data?.activities ?? [];
   const historyItems = detailState.data?.history ?? [];
+  const showNoteComposer = canCreateNotes;
 
   useEffect(() => {
     setSelectedVendorId(currentVendorId);
     setActivityAssigneeId(currentVendorId);
   }, [currentVendorId]);
+
+  const fetchDetail = useCallback(async () => {
+    if (!opportunityId) {
+      setDetailState({ status: "error", data: null, error: "No se encontró la oportunidad." });
+      return;
+    }
+    const response = await fetch(`/api/oportunidades/${opportunityId}/detail`, {
+      cache: "no-store",
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setDetailState({
+        status: "error",
+        data: null,
+        error: typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`,
+      });
+      return;
+    }
+    setDetailState({
+      status: "loaded",
+      data: body as OpportunityDetailResponse,
+      error: null,
+    });
+  }, [opportunityId]);
 
   useEffect(() => {
     if (!opportunityId) {
@@ -783,6 +836,42 @@ function OpportunityRowDetails({
       });
     } finally {
       setActivityPending(false);
+    }
+  };
+
+  const handleCreateNote = async () => {
+    const text = noteText.trim();
+    if (!text) {
+      setNoteFeedback({ type: "error", message: "Escribe una nota antes de guardar." });
+      return;
+    }
+
+    setNotePending(true);
+    setNoteFeedback(null);
+    try {
+      const response = await fetch(`/api/oportunidades/${opportunityId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          texto: text,
+          tipo: "interna",
+          visible_para_cliente: false,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`);
+      }
+      setNoteText("");
+      setNoteFeedback({ type: "success", message: "Nota creada." });
+      await fetchDetail();
+    } catch (error) {
+      setNoteFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudo crear la nota.",
+      });
+    } finally {
+      setNotePending(false);
     }
   };
 
@@ -954,6 +1043,32 @@ function OpportunityRowDetails({
         </SectionCard>
 
         <SectionCard title="Notas" description="Registro rápido de observaciones y seguimiento comercial.">
+          {showNoteComposer ? (
+            <div className="mb-3 space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold text-foreground">Agregar nota</h4>
+                <p className="text-xs text-muted-foreground">
+                  La nota quedará registrada como emitida por el supervisor, gerente o usuario con permiso.
+                </p>
+              </div>
+              <Textarea
+                value={noteText}
+                onChange={(event) => setNoteText(event.target.value)}
+                placeholder="Escribe una nota interna para esta oportunidad..."
+                disabled={notePending}
+              />
+              {noteFeedback ? (
+                <p className={noteFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
+                  {noteFeedback.message}
+                </p>
+              ) : null}
+              <div className="flex justify-end">
+                <Button type="button" onClick={handleCreateNote} disabled={notePending}>
+                  {notePending ? "Guardando..." : "Guardar nota"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {detailState.status === "loading" && noteItems.length === 0 ? (
             <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
               Cargando notas...
