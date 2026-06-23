@@ -1755,63 +1755,32 @@ export function LeadDrawer({
       return;
     }
 
-    const contactoUpdates: Record<string, unknown> = {};
-    if (nombreRaw !== (defaultFormValues.nombre ?? "").trim()) {
-      contactoUpdates.nombre_completo = nombreRaw.length ? nombreRaw : null;
-    }
+    const contactoUpdates: Record<string, unknown> = {
+      nombre_completo: nombreRaw.length ? nombreRaw : null,
+      correo: correoRaw.length ? correoRaw : null,
+      telefono_e164: telefonoRaw.length ? telefonoRaw : null,
+      company_name: empresaRaw.length ? empresaRaw : null,
+      notes: notasRaw.length ? notasRaw : null,
+      necesidad_proposito: necesidadPropositoRaw.length ? necesidadPropositoRaw : null,
+    };
 
-    if (correoRaw !== (defaultFormValues.correo ?? "").trim()) {
-      contactoUpdates.correo = correoRaw.length ? correoRaw : null;
-    }
-
-    if (telefonoRaw !== (defaultFormValues.telefono ?? "").trim()) {
-      contactoUpdates.telefono_e164 = telefonoRaw.length ? telefonoRaw : null;
-    }
-
-    if (empresaRaw !== (defaultFormValues.empresa ?? "").trim()) {
-      contactoUpdates.company_name = empresaRaw.length ? empresaRaw : null;
-    }
-
-    if (notasRaw !== (defaultFormValues.notas ?? "").trim()) {
-      contactoUpdates.notes = notasRaw.length ? notasRaw : null;
-    }
-    if (necesidadPropositoRaw !== (defaultFormValues.necesidadProposito ?? "").trim()) {
-      contactoUpdates.necesidad_proposito = necesidadPropositoRaw.length ? necesidadPropositoRaw : null;
-    }
-
-    const oportunidadUpdates: Record<string, unknown> = {};
-    if (montoRaw !== (defaultFormValues.monto ?? "").trim()) {
-      oportunidadUpdates.monto_estimado = montoRaw.length ? Number(montoRaw) : null;
-    }
-
-    const defaultMoneda = (defaultFormValues.moneda ?? "").trim().toUpperCase();
-    if (monedaRaw !== defaultMoneda) {
-      oportunidadUpdates.moneda = monedaRaw.length ? monedaRaw : null;
-    }
-
-    if (probRaw !== (defaultFormValues.probabilidad ?? "").trim()) {
-      oportunidadUpdates.probabilidad = probRaw.length ? Number(probRaw) : null;
-    }
-    const defaultProyectoNombre = (defaultFormValues.proyectoNombre ?? "").trim();
-    if (proyectoNombreRaw !== defaultProyectoNombre) {
-      oportunidadUpdates.titulo = proyectoNombreRaw.length ? proyectoNombreRaw : null;
-    }
-    const defaultProyectoNecesidades = (defaultFormValues.proyectoNecesidades ?? "").trim();
-    if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
-      oportunidadUpdates.descripcion = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
-    }
+    const montoParsed = montoRaw.length ? parseNumberInput(montoRaw) : null;
+    const probabilidadParsed = probRaw.length ? parseNumberInput(probRaw) : null;
+    const oportunidadUpdates: Record<string, unknown> = {
+      monto_estimado: montoParsed ?? null,
+      moneda: monedaRaw.length ? monedaRaw : null,
+      probabilidad: probabilidadParsed ?? null,
+      titulo: proyectoNombreRaw.length ? proyectoNombreRaw : null,
+      descripcion: proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null,
+    };
 
     const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
     const metadataUpdates: Record<string, unknown> = {};
     if (stagePrepChanged) {
       metadataUpdates.stage_prep = normalizedStagePrep;
     }
-    if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
-      metadataUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
-    }
-    if (proyectoNombreRaw !== defaultProyectoNombre) {
-      metadataUpdates.project_name = proyectoNombreRaw.length ? proyectoNombreRaw : null;
-    }
+    metadataUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
+    metadataUpdates.project_name = proyectoNombreRaw.length ? proyectoNombreRaw : null;
     if (Object.keys(metadataUpdates).length) {
       oportunidadUpdates.metadata = {
         ...(isRecord(card.metadata) ? card.metadata : {}),
@@ -1845,28 +1814,6 @@ export function LeadDrawer({
       shouldPersistTargetStageOnSave,
       stagePrepKeys: Object.keys(stagePrep ?? {}),
     });
-
-    if (!Object.keys(contactoUpdates).length && !Object.keys(oportunidadUpdates).length) {
-      if (targetStage && advanceStage) {
-        console.info("[LeadDrawer] submit-auto-advance-no-diff", {
-          opportunityId: card?.oportunidadId,
-          targetStageCode: targetStage.codigo,
-          targetStageId: targetStage.id,
-        });
-        setPending(true);
-        const advanceResult = await advanceStage(targetStage, { stagePrep });
-        setPending(false);
-        if (!advanceResult.ok) {
-          setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
-          return;
-        }
-        setError(null);
-        onOpenChange(false);
-        return;
-      }
-      setError("No hay cambios por guardar.");
-      return;
-    }
 
     setPending(true);
     const result = await onSubmit({

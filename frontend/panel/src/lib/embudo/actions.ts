@@ -20,6 +20,8 @@ export type UpdateLeadInput = {
   oportunidadId: string;
   personaId?: string | null;
   contactoId?: string | null;
+  currentCard?: EmbudoCard | null;
+  currentStage?: EmbudoStage | null;
   contacto?: Record<string, unknown>;
   oportunidad?: Record<string, unknown>;
   mergeMetadata?: boolean;
@@ -200,6 +202,84 @@ function mapPipelineCardResponse(payload: PipelineCardResponse): { stage: Embudo
     },
     card,
   };
+}
+
+function patchCardFromLeadPayload(
+  card: EmbudoCard,
+  contactoPayload: Record<string, unknown>,
+  opportunityPayload: Record<string, unknown>,
+): EmbudoCard {
+  const patched: EmbudoCard = {
+    ...card,
+    metadata: normalizeMetadata(card.metadata),
+  };
+
+  if ("nombre_completo" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.nombre_completo);
+    patched.nombre = value;
+  }
+  if ("correo" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.correo);
+    patched.correo = value;
+  }
+  if ("telefono_e164" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.telefono_e164);
+    patched.telefono = value;
+  }
+  if ("company_name" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.company_name);
+    patched.empresa = value;
+  }
+  if ("notes" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.notes);
+    patched.notas = value;
+  }
+  if ("necesidad_proposito" in contactoPayload) {
+    const value = sanitizeNullableString(contactoPayload.necesidad_proposito);
+    patched.necesidadProposito = value;
+  }
+
+  if ("titulo" in opportunityPayload) {
+    const value = sanitizeNullableString(opportunityPayload.titulo);
+    if (value !== null) {
+      patched.titulo = value;
+      patched.proyectoNombre = value;
+      patched.metadata = {
+        ...patched.metadata,
+        project_name: value,
+      };
+    }
+  }
+  if ("descripcion" in opportunityPayload) {
+    const value = sanitizeNullableString(opportunityPayload.descripcion);
+    patched.proyectoNecesidades = value;
+  }
+  if ("monto_estimado" in opportunityPayload || "monto" in opportunityPayload) {
+    const montoValue =
+      opportunityPayload.monto_estimado ?? opportunityPayload.monto;
+    patched.monto =
+      typeof montoValue === "number" && Number.isFinite(montoValue) ? montoValue : null;
+  }
+  if ("moneda" in opportunityPayload) {
+    const value = sanitizeNullableString(opportunityPayload.moneda);
+    patched.moneda = value ? value.toUpperCase() : null;
+  }
+  if ("probabilidad" in opportunityPayload || "probabilidad_override" in opportunityPayload) {
+    const value = opportunityPayload.probabilidad ?? opportunityPayload.probabilidad_override;
+    patched.probabilidad =
+      typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  if ("metadata" in opportunityPayload) {
+    const metadata = normalizeMetadata(opportunityPayload.metadata);
+    if (Object.keys(metadata).length) {
+      patched.metadata = {
+        ...patched.metadata,
+        ...metadata,
+      };
+    }
+  }
+
+  return patched;
 }
 
 const LOG_PREFIX = "[embudo:createLeadCard]";
@@ -454,6 +534,22 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     return { ok: true, data: cachedCardResponse };
   }
 
+  async function recoverLatestCard(fallbackError: string): Promise<LeadActionResult> {
+    const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+    if (latest.ok) {
+      try {
+        const mapped = mapPipelineCardResponse(latest.data);
+        return { ok: true, stage: mapped.stage, card: mapped.card };
+      } catch (mapError) {
+        console.warn("[embudo:updateLeadCard] latest-card-parse-failed", {
+          oportunidadId: input.oportunidadId,
+          error: mapError instanceof Error ? mapError.message : String(mapError),
+        });
+      }
+    }
+    return { ok: false, error: fallbackError };
+  }
+
   const opportunityPayload: Record<string, unknown> = {};
 
   if ("monto_estimado" in opportunityInput || "monto" in opportunityInput) {
@@ -533,6 +629,11 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     });
 
     if (!contactResult.ok) {
+      const recovered = await recoverLatestCard(contactResult.error);
+      if (recovered.ok) {
+        updateTag("embudo");
+        return recovered;
+      }
       return { ok: false, error: contactResult.error };
     }
     contactUpdated = true;
@@ -558,11 +659,24 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
           };
         }
       }
+      const recovered = await recoverLatestCard(response.error);
+      if (recovered.ok) {
+        updateTag("embudo");
+        return recovered;
+      }
       return { ok: false, error: response.error };
     }
     cardResponse = response.data;
   } else {
-    if (!contactUpdated && cachedCardResponse) {
+    if (input.currentCard && input.currentStage && contactUpdated) {
+      updateTag("embudo");
+      return {
+        ok: true,
+        stage: input.currentStage,
+        card: patchCardFromLeadPayload(input.currentCard, contactoPayload, opportunityPayload),
+      };
+    }
+    if (cachedCardResponse) {
       cardResponse = cachedCardResponse;
     } else {
       const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
@@ -574,8 +688,18 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
   }
 
   updateTag("embudo");
-  const mapped = mapPipelineCardResponse(cardResponse);
-  return { ok: true, stage: mapped.stage, card: mapped.card };
+  try {
+    const mapped = mapPipelineCardResponse(cardResponse);
+    return { ok: true, stage: mapped.stage, card: mapped.card };
+  } catch (mapError) {
+    console.warn("[embudo:updateLeadCard] response-parse-failed", {
+      oportunidadId: input.oportunidadId,
+      error: mapError instanceof Error ? mapError.message : String(mapError),
+    });
+    return await recoverLatestCard(
+      "No se pudo interpretar la respuesta del CRM después de guardar la oportunidad.",
+    );
+  }
 }
 
 export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResult> {

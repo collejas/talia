@@ -956,6 +956,8 @@ export function EmbudoBoardClient({
       oportunidadId: selectedCard.oportunidadId,
       personaId: selectedCard.personaId,
       contactoId: selectedCard.contactoId,
+      currentCard: selectedCard,
+      currentStage: selectedStage,
       contacto: payload.contacto,
       oportunidad: payload.oportunidad,
       mergeMetadata: payload.mergeMetadata ?? true,
