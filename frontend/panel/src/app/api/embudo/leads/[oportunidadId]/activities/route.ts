@@ -4,15 +4,6 @@ import { NextResponse } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type CrmUserRow = {
-  id: string;
-  nombre_completo: string | null;
-  correo: string | null;
-  telefono_e164: string | null;
-  rol_principal?: string | null;
-  roles?: string[];
-};
-
 type PermissionContext = {
   roles?: string[];
   permisos?: string[];
@@ -39,8 +30,6 @@ type CrmActivityRow = {
   oportunidad_id: string | null;
   creado_por_usuario_id: string | null;
   asignado_a_usuario_id: string | null;
-  creado_por_usuario?: CrmUserRow | null;
-  asignado_a_usuario?: CrmUserRow | null;
   completado_en: string | null;
   cancelado_en: string | null;
   cerrado_por_usuario_id: string | null;

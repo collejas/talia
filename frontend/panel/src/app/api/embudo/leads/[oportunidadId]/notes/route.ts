@@ -4,15 +4,6 @@ import { NextResponse } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type CrmUserRow = {
-  id: string;
-  nombre_completo: string | null;
-  correo: string | null;
-  telefono_e164: string | null;
-  rol_principal?: string | null;
-  roles?: string[];
-};
-
 type CrmNoteRow = {
   id: string;
   organizacion_id: string;
@@ -23,7 +14,6 @@ type CrmNoteRow = {
   visible_para_cliente: boolean;
   tipo: string;
   creado_por_usuario_id: string | null;
-  creado_por_usuario?: CrmUserRow | null;
   creado_en: string;
   actualizado_en: string;
 };
