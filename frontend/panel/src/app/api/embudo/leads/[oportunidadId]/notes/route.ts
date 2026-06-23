@@ -58,27 +58,7 @@ export async function GET(
       ? (response.data as { items: CrmNoteRow[] }).items
       : [];
 
-  const userIds = Array.from(
-    new Set(rows.map((row) => row.creado_por_usuario_id).filter((value): value is string => !!value)),
-  );
-  const usersResponse = userIds.length
-    ? await callCrmApi<{ items?: CrmUserRow[] } | CrmUserRow[]>("/crm/usuarios", {
-        searchParams: {
-          limit: "500",
-        },
-        withUserToken: true,
-      })
-    : null;
-  const users = usersResponse?.ok ? normalizeItems(usersResponse.data) : [];
-  const userMap = new Map(users.map((user) => [user.id, user] as const));
-  const enrichedRows = rows.map((row) => ({
-    ...row,
-    creado_por_usuario:
-      row.creado_por_usuario ??
-      (row.creado_por_usuario_id ? userMap.get(row.creado_por_usuario_id) ?? null : null),
-  }));
-
-  return NextResponse.json({ data: enrichedRows });
+  return NextResponse.json({ data: rows });
 }
 
 export async function POST(
@@ -132,8 +112,3 @@ export async function POST(
   return NextResponse.json({ data: response.data });
 }
 
-function normalizeItems<T>(payload: T[] | { items?: T[] } | null | undefined): T[] {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.items)) return payload.items;
-  return [];
-}

@@ -6,6 +6,15 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type CRMOpportunityDetailRow = Record<string, unknown>;
 
+type CRMUserRow = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  rol_principal?: string | null;
+  roles?: string[];
+};
+
 type CRMNoteRow = {
   id: string;
   organizacion_id: string;
@@ -83,15 +92,6 @@ type CRMHistoryRow = {
   metadata: Record<string, unknown> | null;
 };
 
-type CRMUserRow = {
-  id: string;
-  nombre_completo: string | null;
-  correo: string | null;
-  telefono_e164: string | null;
-  rol_principal?: string | null;
-  roles?: string[];
-};
-
 type DetailErrorKey = "opportunity" | "notes" | "activities" | "quotes" | "history";
 
 type DetailResponse = {
@@ -145,7 +145,7 @@ export async function GET(
     );
   }
 
-  const [notesResult, activitiesResult, quotesResult, historyResult, usersResult] = await Promise.all([
+  const [notesResult, activitiesResult, quotesResult, historyResult] = await Promise.all([
     callCrmApi<{ items?: CRMNoteRow[] } | CRMNoteRow[]>("/crm/notas", {
       searchParams: {
         relacion_tipo: "oportunidad",
@@ -173,40 +173,12 @@ export async function GET(
       },
       withUserToken: true,
     }),
-    callCrmApi<{ items?: CRMUserRow[] } | CRMUserRow[]>("/crm/usuarios", {
-      searchParams: {
-        limit: "500",
-      },
-      withUserToken: true,
-    }),
   ]);
 
   const notes = normalizeItems(notesResult);
   const activities = normalizeItems(activitiesResult);
   const quotes = normalizeItems(quotesResult);
   const history = normalizeItems(historyResult);
-  const users = normalizeItems(usersResult);
-  const userMap = new Map<string, CRMUserRow>();
-  for (const user of users) {
-    if (user?.id) {
-      userMap.set(user.id, user);
-    }
-  }
-  const notesWithAuthors = notes.map((note) => ({
-    ...note,
-    creado_por_usuario:
-      note.creado_por_usuario ??
-      (note.creado_por_usuario_id ? userMap.get(note.creado_por_usuario_id) ?? null : null),
-  }));
-  const activitiesWithUsers = activities.map((activity) => ({
-    ...activity,
-    creado_por_usuario:
-      activity.creado_por_usuario ??
-      (activity.creado_por_usuario_id ? userMap.get(activity.creado_por_usuario_id) ?? null : null),
-    asignado_a_usuario:
-      activity.asignado_a_usuario ??
-      (activity.asignado_a_usuario_id ? userMap.get(activity.asignado_a_usuario_id) ?? null : null),
-  }));
 
   const errors: Partial<Record<DetailErrorKey, string>> = {};
   if (!notesResult.ok) errors.notes = notesResult.error || "No se pudieron cargar las notas.";
@@ -217,8 +189,8 @@ export async function GET(
   return NextResponse.json<DetailResponse>({
     ok: true,
     opportunity: opportunityResult.data,
-    notes: notesWithAuthors,
-    activities: activitiesWithUsers,
+    notes,
+    activities,
     quotes,
     history,
     errors,

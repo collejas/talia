@@ -4,13 +4,6 @@ import { NextResponse } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type PermissionContext = {
-  roles?: string[];
-  permisos?: string[];
-  es_admin?: boolean;
-  es_owner?: boolean;
-};
-
 type CrmUserRow = {
   id: string;
   nombre_completo: string | null;
@@ -18,6 +11,13 @@ type CrmUserRow = {
   telefono_e164: string | null;
   rol_principal?: string | null;
   roles?: string[];
+};
+
+type PermissionContext = {
+  roles?: string[];
+  permisos?: string[];
+  es_admin?: boolean;
+  es_owner?: boolean;
 };
 
 type CrmActivityRow = {
@@ -107,34 +107,7 @@ export async function GET(
       ? (response.data as { items: CrmActivityRow[] }).items
       : [];
 
-  const userIds = Array.from(
-    new Set(
-      rows
-        .flatMap((row) => [row.creado_por_usuario_id, row.asignado_a_usuario_id])
-        .filter((value): value is string => !!value),
-    ),
-  );
-  const usersResponse = userIds.length
-    ? await callCrmApi<{ items?: CrmUserRow[] } | CrmUserRow[]>("/crm/usuarios", {
-        searchParams: {
-          limit: "500",
-        },
-        withUserToken: true,
-      })
-    : null;
-  const users = usersResponse?.ok ? normalizeItems(usersResponse.data) : [];
-  const userMap = new Map(users.map((user) => [user.id, user] as const));
-  const enrichedRows = rows.map((row) => ({
-    ...row,
-    creado_por_usuario:
-      row.creado_por_usuario ??
-      (row.creado_por_usuario_id ? userMap.get(row.creado_por_usuario_id) ?? null : null),
-    asignado_a_usuario:
-      row.asignado_a_usuario ??
-      (row.asignado_a_usuario_id ? userMap.get(row.asignado_a_usuario_id) ?? null : null),
-  }));
-
-  return NextResponse.json({ data: enrichedRows });
+  return NextResponse.json({ data: rows });
 }
 
 export async function POST(
@@ -206,8 +179,3 @@ export async function POST(
   return NextResponse.json({ data: response.data });
 }
 
-function normalizeItems<T>(payload: T[] | { items?: T[] } | null | undefined): T[] {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.items)) return payload.items;
-  return [];
-}
