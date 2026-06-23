@@ -651,6 +651,7 @@ function OpportunityRowDetails({
     data: null,
     error: null,
   });
+  const opportunityAssigneeId = extractAsignadoId(row) ?? "";
   const [activityType, setActivityType] = useState("seguimiento");
   const [activitySubject, setActivitySubject] = useState("Seguimiento de oportunidad");
   const [activityDescription, setActivityDescription] = useState("");
@@ -1104,7 +1105,7 @@ function OpportunityRowDetails({
                         Vinculada a actividad
                       </Badge>
                     ) : null}
-                    {renderUserAuthorBadge(note.creado_por_usuario)}
+                    {renderUserAuthorBadge(note.creado_por_usuario, opportunityAssigneeId)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {renderUserLine(note.creado_por_usuario, "Nota", note.creado_en)}
@@ -1231,7 +1232,7 @@ function OpportunityRowDetails({
                     <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                       {activity.tipo}
                     </Badge>
-                    {renderUserAuthorBadge(activity.creado_por_usuario)}
+                    {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {renderUserLine(activity.creado_por_usuario, "Actividad", activity.creado_en)}
@@ -1365,11 +1366,18 @@ function formatUserDisplay(user: OpportunityUserSummary | null | undefined): str
   return user.correo?.trim() || "Usuario no identificado";
 }
 
-function renderUserAuthorBadge(user: OpportunityUserSummary | null | undefined) {
+function renderUserAuthorBadge(
+  user: OpportunityUserSummary | null | undefined,
+  assigneeId: string,
+) {
   if (!user) return null;
+  const isAssignee = user.id === assigneeId;
   return (
-    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-      {`Por ${formatUserDisplay(user)}`}
+    <Badge
+      variant={isAssignee ? "default" : "secondary"}
+      className="text-[10px] uppercase tracking-wide"
+    >
+      {isAssignee ? `Creada por ${formatUserDisplay(user)}` : `Enviada por ${formatUserDisplay(user)}`}
     </Badge>
   );
 }
