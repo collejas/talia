@@ -2353,7 +2353,6 @@ export function LeadDrawer({
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
   const quotePreviewItems = quoteItems.filter((item) => !isBlankQuoteItem(item));
-  const opportunityAssigneeId = card?.asignadoId ?? selectedVendorId ?? "";
   const quoteAssignedVendor =
     vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
   const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
@@ -3627,7 +3626,7 @@ export function LeadDrawer({
                         <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                           {entry.tipo === "interna" ? "Nota interna" : entry.tipo}
                         </Badge>
-                        {renderUserAuthorBadge(entry.creado_por_usuario, opportunityAssigneeId)}
+                        {renderUserAuthorBadge(entry.creado_por_usuario)}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {renderUserLine(entry.creado_por_usuario, "Nota", entry.creado_en)}
@@ -3699,7 +3698,7 @@ export function LeadDrawer({
                             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                               {activity.tipo}
                             </Badge>
-                            {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
+                            {renderUserAuthorBadge(activity.creado_por_usuario)}
                           </span>
                           <span>
                             {activity.recordatorio_en ? `Recordatorio: ${formatDateTime(activity.recordatorio_en)}` : "Sin recordatorio"}
@@ -5511,18 +5510,11 @@ function formatUserDisplay(user: LeadUserSummary | null | undefined): string {
   return user.correo?.trim() || "Usuario no identificado";
 }
 
-function renderUserAuthorBadge(
-  user: LeadUserSummary | null | undefined,
-  assigneeId: string,
-) {
+function renderUserAuthorBadge(user: LeadUserSummary | null | undefined) {
   if (!user) return null;
-  const isAssignee = user.id === assigneeId;
   return (
-    <Badge
-      variant={isAssignee ? "default" : "secondary"}
-      className="text-[10px] uppercase tracking-wide"
-    >
-      {isAssignee ? `Creada por ${formatUserDisplay(user)}` : `Enviada por ${formatUserDisplay(user)}`}
+    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+      {`Por ${formatUserDisplay(user)}`}
     </Badge>
   );
 }

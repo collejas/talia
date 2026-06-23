@@ -666,7 +666,6 @@ function OpportunityRowDetails({
   );
   const selectedVendorLabel =
     vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
-  const opportunityAssigneeId = extractAsignadoId(row) ?? "";
 
   const detailOpportunity = detailState.data?.opportunity ?? raw;
   const opportunityDetail = (detailOpportunity ?? {}) as Record<string, unknown>;
@@ -1105,7 +1104,7 @@ function OpportunityRowDetails({
                         Vinculada a actividad
                       </Badge>
                     ) : null}
-                    {renderUserAuthorBadge(note.creado_por_usuario, opportunityAssigneeId)}
+                    {renderUserAuthorBadge(note.creado_por_usuario)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {renderUserLine(note.creado_por_usuario, "Nota", note.creado_en)}
@@ -1232,7 +1231,7 @@ function OpportunityRowDetails({
                     <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                       {activity.tipo}
                     </Badge>
-                    {renderUserAuthorBadge(activity.creado_por_usuario, opportunityAssigneeId)}
+                    {renderUserAuthorBadge(activity.creado_por_usuario)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {renderUserLine(activity.creado_por_usuario, "Actividad", activity.creado_en)}
@@ -1366,18 +1365,11 @@ function formatUserDisplay(user: OpportunityUserSummary | null | undefined): str
   return user.correo?.trim() || "Usuario no identificado";
 }
 
-function renderUserAuthorBadge(
-  user: OpportunityUserSummary | null | undefined,
-  assigneeId: string,
-) {
+function renderUserAuthorBadge(user: OpportunityUserSummary | null | undefined) {
   if (!user) return null;
-  const isAssignee = user.id === assigneeId;
   return (
-    <Badge
-      variant={isAssignee ? "default" : "secondary"}
-      className="text-[10px] uppercase tracking-wide"
-    >
-      {isAssignee ? `Creada por ${formatUserDisplay(user)}` : `Enviada por ${formatUserDisplay(user)}`}
+    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+      {`Por ${formatUserDisplay(user)}`}
     </Badge>
   );
 }
