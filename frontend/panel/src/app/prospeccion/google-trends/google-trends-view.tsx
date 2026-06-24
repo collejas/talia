@@ -445,7 +445,11 @@ export function GoogleTrendsView() {
   }
 
   function exportRegionCsv() {
-    if (!result?.by_region.length) return;
+    if (!result) return;
+    if (!result.by_region.length) {
+      setError("Esta consulta no devolvió datos regionales. Prueba con un periodo menor o desactiva Incluir región.");
+      return;
+    }
     const headers = ["region", ...result.keywords];
     const rows = result.by_region.map((row) => [
       row.region ?? "",
@@ -831,10 +835,13 @@ export function GoogleTrendsView() {
                   type="button"
                   variant="outline"
                   onClick={exportRegionCsv}
-                  disabled={!result.by_region.length}
+                  disabled={!result}
                 >
                   Exportar regiones CSV
                 </Button>
+                <Badge variant={result.by_region.length ? "secondary" : "outline"}>
+                  {result.by_region.length ? `${result.by_region.length} regiones` : "Sin datos regionales"}
+                </Badge>
               </div>
               <div className="grid gap-4 lg:[grid-template-columns:minmax(0,6fr)_minmax(0,1fr)]">
                 <div className="min-w-0 space-y-2 rounded-xl border border-slate-200 bg-white p-3">
