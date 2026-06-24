@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   IconBuilding,
   IconChevronDown,
@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 type CatalogOption = {
   id: string;
@@ -1319,10 +1320,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [isImportDropActive, setIsImportDropActive] = useState(false);
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [isDeletingNode, setIsDeletingNode] = useState(false);
+  const importDropCounterRef = useRef(0);
 
   const desarrolloMap = useMemo(() => {
     const map = new Map<string, DesarrolloNode>();
@@ -1424,17 +1427,21 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     return features;
   }, [hierarchy]);
 
-  const handleImportFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0] ?? null;
+  const applyImportFile = useCallback((file: File | null) => {
     if (!file) {
       setImportFile(null);
       setImportFileName(null);
+      setImportStatus("idle");
+      setImportError(null);
+      setImportResult(null);
       return;
     }
     if (!file.name.toLowerCase().endsWith(".csv")) {
       setImportError("Solo se aceptan archivos CSV.");
       setImportFile(null);
       setImportFileName(null);
+      setImportStatus("idle");
+      setImportResult(null);
       return;
     }
     setImportFile(file);
@@ -1443,6 +1450,43 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setImportError(null);
     setImportResult(null);
   }, []);
+
+  const handleImportFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      applyImportFile(event.currentTarget.files?.[0] ?? null);
+      event.currentTarget.value = "";
+    },
+    [applyImportFile],
+  );
+
+  const handleImportDropZoneDragEnter = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    importDropCounterRef.current += 1;
+    setIsImportDropActive(true);
+  }, []);
+
+  const handleImportDropZoneDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleImportDropZoneDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    importDropCounterRef.current = Math.max(0, importDropCounterRef.current - 1);
+    if (importDropCounterRef.current === 0) {
+      setIsImportDropActive(false);
+    }
+  }, []);
+
+  const handleImportDropZoneDrop = useCallback(
+    (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      importDropCounterRef.current = 0;
+      setIsImportDropActive(false);
+      applyImportFile(event.dataTransfer.files?.[0] ?? null);
+    },
+    [applyImportFile],
+  );
 
   const handleDownloadImportTemplate = useCallback(() => {
     const csv = buildPropertyImportTemplateCsv();
@@ -1510,6 +1554,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setImportResult("Importación completada. Actualizando la jerarquía…");
       setImportFile(null);
       setImportFileName(null);
+      setIsImportDropActive(false);
+      importDropCounterRef.current = 0;
       await loadHierarchy();
     } catch (error) {
       setImportStatus("idle");
@@ -2788,6 +2834,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (!open) {
         setImportFile(null);
         setImportFileName(null);
+        setIsImportDropActive(false);
+        importDropCounterRef.current = 0;
         setImportStatus("idle");
         setImportError(null);
         setImportResult(null);
@@ -2821,17 +2869,42 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             Exportar datos actuales
           </Button>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-2">
           <Label className="text-[0.7rem]">Archivo CSV</Label>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="text-xs text-slate-500"
-            onChange={handleImportFileChange}
-          />
-          {importFileName && (
-            <p className="text-[0.65rem] text-slate-500">Archivo listo: {importFileName}</p>
-          )}
+          <label
+            htmlFor="property-import-file"
+            onDragEnter={handleImportDropZoneDragEnter}
+            onDragOver={handleImportDropZoneDragOver}
+            onDragLeave={handleImportDropZoneDragLeave}
+            onDrop={handleImportDropZoneDrop}
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-5 text-center transition-colors",
+              isImportDropActive
+                ? "border-sky-500 bg-sky-50"
+                : "border-slate-300 bg-slate-50/80 hover:border-slate-400 hover:bg-slate-50",
+            )}
+          >
+            <IconSquares className={cn("size-5", isImportDropActive ? "text-sky-600" : "text-slate-400")} />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-700">Haz clic para seleccionar un CSV</p>
+              <p className="text-xs text-slate-500">o arrastra el archivo aquí</p>
+            </div>
+            <input
+              id="property-import-file"
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              onChange={handleImportFileChange}
+            />
+          </label>
+          <div className="space-y-1">
+            <p className="text-[0.65rem] text-slate-500">
+              {importFileName ? `Archivo listo: ${importFileName}` : "Ningún archivo seleccionado"}
+            </p>
+            <p className="text-[0.65rem] text-slate-400">
+              El área acepta arrastrar y soltar. Solo se permiten archivos CSV.
+            </p>
+          </div>
         </div>
         <p className="text-[0.65rem] text-slate-500">
           Si ya tienes un CSV propio, basta con respetar la plantilla mínima. También puedes exportar
