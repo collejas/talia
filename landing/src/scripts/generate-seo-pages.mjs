@@ -467,6 +467,28 @@ const pages = [
       ["Movimiento", "Asigna etapas y responsables.", "violet"],
       ["Seguimiento", "Mantiene vivo el flujo hasta el cierre.", "green"],
     ],
+    bodySections: [
+      {
+        title: "Qué automatiza",
+        lead: "La página debe explicar qué partes del flujo comercial dejan de ser manuales y por qué eso mejora la operación.",
+        mode: "cards",
+        items: [
+          ["Captura", "Registra leads sin pasos extra.", "blue"],
+          ["Asignación", "Distribuye oportunidades a la persona correcta.", "violet"],
+          ["Recordatorio", "Mantiene el seguimiento activo sin depender de memoria humana.", "green"],
+        ],
+      },
+      {
+        title: "Cuándo conviene usarla",
+        lead: "Sirve cuando el equipo ya siente el costo de hacer todo a mano.",
+        mode: "steps",
+        items: [
+          ["Muchos leads", "Cuando la entrada de prospectos supera la capacidad manual."],
+          ["Trabajo repetitivo", "Cuando el equipo pierde tiempo copiando, asignando o avisando."],
+          ["Seguimiento disperso", "Cuando el pipeline se enfría por falta de procesos."],
+        ],
+      },
+    ],
     related: [
       ["/seguimiento-ventas", "Seguimiento de ventas"],
       ["/ia-para-ventas", "IA para ventas"],
@@ -663,6 +685,29 @@ const pages = [
       ["Depura", "Evita bases infladas y poco útiles.", "violet"],
       ["Entrega", "Pasa contactos listos al flujo de seguimiento.", "green"],
     ],
+    bodySections: [
+      {
+        title: "Qué aporta buscar contactos",
+        lead: "La búsqueda de contactos debe terminar en una base que ventas pueda usar de inmediato.",
+        mode: "cards",
+        items: [
+          ["Foco", "Busca solo lo que tenga sentido comercial.", "blue"],
+          ["Orden", "Evita listas largas que no se pueden trabajar.", "violet"],
+          ["Velocidad", "Entrega contactos listos para el siguiente paso.", "green"],
+        ],
+      },
+      {
+        title: "Cómo se utiliza",
+        lead: "La página debe mostrar el tránsito desde búsqueda hasta activación comercial.",
+        mode: "steps",
+        items: [
+          ["Definir criterio", "Elegir el tipo de contacto o empresa que sí vale la pena."],
+          ["Encontrar", "Localizar contactos con señales de interés o encaje."],
+          ["Limpiar", "Eliminar ruido antes de pasar la base al equipo."],
+          ["Activar", "Mover la lista a seguimiento, WhatsApp o campañas."],
+        ],
+      },
+    ],
     related: [
       ["/prospectos-google-denue", "Prospectos Google y DENUE"],
       ["/prospeccion-comercial", "Prospección comercial"],
@@ -695,6 +740,28 @@ const pages = [
       ["DENUE", "Aprovecha datos empresariales públicos.", "violet"],
       ["Activación", "Lleva esa base al flujo comercial.", "green"],
     ],
+    bodySections: [
+      {
+        title: "Por qué importa esta fuente",
+        lead: "Google y DENUE son útiles porque permiten empezar con señales públicas y llevarlas a una base comercial.",
+        mode: "cards",
+        items: [
+          ["Google", "Descubre empresas visibles en búsquedas y directorios.", "blue"],
+          ["DENUE", "Aprovecha información empresarial pública.", "violet"],
+          ["Base real", "Convierte esas fuentes en una lista trabajable.", "green"],
+        ],
+      },
+      {
+        title: "Qué problema resuelve",
+        lead: "La página debe decir por qué vale la pena usar estas fuentes y no empezar desde cero.",
+        mode: "steps",
+        items: [
+          ["Evitar arranque en cero", "No empezar cada búsqueda manualmente."],
+          ["Tener contexto", "Saber quién puede tener valor comercial."],
+          ["Pasar a ventas", "Convertir las fuentes públicas en acción comercial."],
+        ],
+      },
+    ],
     related: [
       ["/prospeccion-comercial", "Prospección comercial"],
       ["/buscar-contactos", "Buscar contactos"],
@@ -726,6 +793,29 @@ const pages = [
       ["Campañas", "Diseña activaciones con propósito.", "blue"],
       ["Medición", "Mide aperturas, respuestas y avance.", "violet"],
       ["Reactivación", "Recupera leads que se enfriaron.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué hace una campaña útil",
+        lead: "No basta con enviar mensajes; una campaña útil tiene objetivo, seguimiento y aprendizaje.",
+        mode: "cards",
+        items: [
+          ["Activa", "Pone en movimiento bases que estaban quietas.", "blue"],
+          ["Mide", "Registra respuesta y avance para aprender.", "violet"],
+          ["Recupera", "Sirve para reactivar leads fríos o dormidos.", "green"],
+        ],
+      },
+      {
+        title: "Cuándo usar campañas",
+        lead: "La página debe dejar claro que esto sirve para trabajar bases con intención y no para spam.",
+        mode: "steps",
+        items: [
+          ["Base lista", "Ya tienes contactos o prospectos definidos."],
+          ["Objetivo claro", "Quieres agendar, cotizar o reactivar."],
+          ["Seguimiento", "Necesitas saber qué pasó después del envío."],
+          ["Aprendizaje", "Quieres ajustar mensajes y flujo según respuesta."],
+        ],
+      },
     ],
     related: [
       ["/prospeccion-comercial", "Prospección comercial"],
