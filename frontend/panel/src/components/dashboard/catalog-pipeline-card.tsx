@@ -63,20 +63,38 @@ export function CatalogPipelineCard({ data, className }: CatalogPipelineCardProp
 }
 
 function summarizePipeline(rows: CatalogPipelineRow[]): PipelineEntry[] {
-  return rows
-    .map((row) => {
-      const name = row.item_nombre?.trim() || "Sin nombre"
-      const etapa = "Etapa"
-      const monto = Number(row.monto_estimado ?? 0)
-      const leads = Number(row.leads_con_cotizacion ?? 0)
-      return {
-        name,
-        etapa,
-        monto: Number.isFinite(monto) ? monto : 0,
-        moneda: (row.moneda || "MXN").toUpperCase(),
-        leads: Number.isFinite(leads) ? leads : 0,
-      }
+  const aggregated = new Map<
+    string,
+    { name: string; etapa: string; monto: number; moneda: string; leads: number }
+  >()
+
+  for (const row of rows) {
+    const name = row.item_nombre?.trim() || "Sin nombre"
+    const etapa = "Etapa"
+    const monto = Number(row.monto_estimado ?? 0)
+    const leads = Number(row.leads_con_cotizacion ?? 0)
+    const moneda = (row.moneda || "MXN").toUpperCase()
+    const key = `${name}::${etapa}::${moneda}`
+    const current = aggregated.get(key)
+    const nextMonto = Number.isFinite(monto) ? monto : 0
+    const nextLeads = Number.isFinite(leads) ? leads : 0
+
+    if (current) {
+      current.monto += nextMonto
+      current.leads += nextLeads
+      continue
+    }
+
+    aggregated.set(key, {
+      name,
+      etapa,
+      monto: nextMonto,
+      moneda,
+      leads: nextLeads,
     })
+  }
+
+  return Array.from(aggregated.values())
     .filter((row) => row.monto > 0 || row.leads > 0)
     .sort((a, b) => b.monto - a.monto)
 }
