@@ -2796,7 +2796,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   >
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Importar jerarquía inmobiliaria</DialogTitle>
+        <DialogTitle>Importar/Exportar Datos</DialogTitle>
         <DialogDescription>
           Descarga la plantilla mínima si quieres empezar rápido. El CSV solo necesita
           <span className="font-semibold text-slate-700">
