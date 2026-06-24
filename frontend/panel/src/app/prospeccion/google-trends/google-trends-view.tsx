@@ -41,6 +41,8 @@ const TIMEFRAME_OPTIONS = [
   { value: "now 7-d", label: "Últimos 7 días" },
   { value: "today 1-m", label: "Últimos 30 días" },
   { value: "today 3-m", label: "Últimos 90 días" },
+  { value: "today 4-m", label: "Últimos 4 meses" },
+  { value: "today 6-m", label: "Últimos 6 meses" },
   { value: "today 12-m", label: "Últimos 12 meses" },
   { value: "today 5-y", label: "Últimos 5 años" },
   { value: "all", label: "Desde 2004 - presente" },
