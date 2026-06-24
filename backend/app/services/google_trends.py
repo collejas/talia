@@ -17,6 +17,11 @@ from app.core.logging import get_logger
 
 logger = get_logger("app.services.google_trends")
 WORLD_GEOJSON_PATH = Path(__file__).resolve().parent.parent / "data" / "geo" / "world.geojson"
+GOOGLE_TRENDS_TIMEOUT = (8, 20)
+GOOGLE_TRENDS_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 
 try:
     from pytrends.request import TrendReq
@@ -138,6 +143,19 @@ def _wait_between_requests(min_sleep: float, max_sleep: float) -> None:
     upper = max(min_sleep, max_sleep)
     lower = max(0.0, min(min_sleep, max_sleep))
     time.sleep(random.uniform(lower, upper))
+
+
+def _build_trends_client(*, hl: str, tz: int) -> Any:
+    return TrendReq(
+        hl=hl,
+        tz=tz,
+        timeout=GOOGLE_TRENDS_TIMEOUT,
+        requests_args={
+            "headers": {
+                "User-Agent": GOOGLE_TRENDS_USER_AGENT,
+            },
+        },
+    )
 
 
 def _serialize_scalar(value: Any) -> Any:
@@ -262,70 +280,82 @@ def fetch_google_trends(
             status_code=500,
         )
 
-    # Evita bloqueos indefinidos cuando Google no responde.
-    pytrends = TrendReq(
-        hl=hl,
-        tz=tz,
-        timeout=(8, 20),  # (connect_timeout, read_timeout)
-    )
-    try:
-        pytrends.build_payload(keywords, timeframe=timeframe, geo=geo, gprop=source)
-        timeline_df = pytrends.interest_over_time()
-    except TooManyRequestsError as exc:
+    last_rate_limit_error: Exception | None = None
+    for attempt in range(1, 3):
+        pytrends = _build_trends_client(hl=hl, tz=tz)
+        try:
+            pytrends.build_payload(keywords, timeframe=timeframe, geo=geo, gprop=source)
+            timeline_df = pytrends.interest_over_time()
+        except TooManyRequestsError as exc:
+            last_rate_limit_error = exc
+            if attempt < 2:
+                logger.warning(
+                    "google_trends.rate_limited_retry",
+                    extra={"attempt": attempt, "max_attempts": 2, "keywords": keywords, "geo": geo},
+                )
+                _wait_between_requests(min_sleep=1.0, max_sleep=2.0)
+                continue
+            raise GoogleTrendsServiceError(
+                "google_trends_rate_limited",
+                status_code=429,
+            ) from exc
+        except Exception as exc:
+            if "timed out" in str(exc).lower() or "timeout" in str(exc).lower():
+                raise GoogleTrendsServiceError(
+                    "google_trends_timeout",
+                    status_code=504,
+                ) from exc
+            raise GoogleTrendsServiceError(f"google_trends_request_failed: {exc}") from exc
+
+        if timeline_df is None or timeline_df.empty:
+            raise GoogleTrendsServiceError(
+                "google_trends_empty_response",
+                status_code=404,
+            )
+
+        _wait_between_requests(min_sleep=min_sleep, max_sleep=max_sleep)
+
+        by_region: list[dict[str, Any]] = []
+        if include_region:
+            try:
+                by_region_df = pytrends.interest_by_region(
+                    resolution=region_resolution,
+                    inc_low_vol=inc_low_vol,
+                    inc_geo_code=inc_geo_code,
+                )
+            except TooManyRequestsError as exc:
+                logger.warning("google_trends.by_region.rate_limited", extra={"error": str(exc)})
+            except Exception as exc:  # pragma: no cover
+                logger.warning("google_trends.by_region.failed", extra={"error": str(exc)})
+            else:
+                by_region = _serialize_by_region(by_region_df)
+
+        related_queries: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        try:
+            related_raw = pytrends.related_queries()
+            related_queries = _serialize_related_queries(related_raw)
+        except TooManyRequestsError as exc:
+            logger.warning("google_trends.related_queries.rate_limited", extra={"error": str(exc)})
+        except Exception as exc:  # pragma: no cover
+            logger.warning("google_trends.related_queries.failed", extra={"error": str(exc)})
+
+        return {
+            "keywords": keywords,
+            "timeframe": timeframe,
+            "geo": geo,
+            "source": source,
+            "hl": hl,
+            "tz": tz,
+            "points": _serialize_interest_points(timeline_df, keywords),
+            "latest": _serialize_latest_values(timeline_df, keywords),
+            "by_region": by_region,
+            "related_queries": related_queries,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    if last_rate_limit_error is not None:
         raise GoogleTrendsServiceError(
             "google_trends_rate_limited",
             status_code=429,
-        ) from exc
-    except Exception as exc:
-        if "timed out" in str(exc).lower() or "timeout" in str(exc).lower():
-            raise GoogleTrendsServiceError(
-                "google_trends_timeout",
-                status_code=504,
-            ) from exc
-        raise GoogleTrendsServiceError(f"google_trends_request_failed: {exc}") from exc
-
-    if timeline_df is None or timeline_df.empty:
-        raise GoogleTrendsServiceError(
-            "google_trends_empty_response",
-            status_code=404,
-        )
-
-    _wait_between_requests(min_sleep=min_sleep, max_sleep=max_sleep)
-
-    by_region: list[dict[str, Any]] = []
-    if include_region:
-        try:
-            by_region_df = pytrends.interest_by_region(
-                resolution=region_resolution,
-                inc_low_vol=inc_low_vol,
-                inc_geo_code=inc_geo_code,
-            )
-        except TooManyRequestsError as exc:
-            logger.warning("google_trends.by_region.rate_limited", extra={"error": str(exc)})
-        except Exception as exc:  # pragma: no cover
-            logger.warning("google_trends.by_region.failed", extra={"error": str(exc)})
-        else:
-            by_region = _serialize_by_region(by_region_df)
-
-    related_queries: dict[str, dict[str, list[dict[str, Any]]]] = {}
-    try:
-        related_raw = pytrends.related_queries()
-        related_queries = _serialize_related_queries(related_raw)
-    except TooManyRequestsError as exc:
-        logger.warning("google_trends.related_queries.rate_limited", extra={"error": str(exc)})
-    except Exception as exc:  # pragma: no cover
-        logger.warning("google_trends.related_queries.failed", extra={"error": str(exc)})
-
-    return {
-        "keywords": keywords,
-        "timeframe": timeframe,
-        "geo": geo,
-        "source": source,
-        "hl": hl,
-        "tz": tz,
-        "points": _serialize_interest_points(timeline_df, keywords),
-        "latest": _serialize_latest_values(timeline_df, keywords),
-        "by_region": by_region,
-        "related_queries": related_queries,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
-    }
+        ) from last_rate_limit_error
+    raise GoogleTrendsServiceError("google_trends_request_failed")

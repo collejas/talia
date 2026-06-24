@@ -480,6 +480,10 @@ export function GoogleTrendsView() {
       setResult(data);
     } catch (requestError) {
       const rawMessage = requestError instanceof Error ? requestError.message : "No se pudo consultar Google Trends.";
+      if (rawMessage.includes("google_trends_rate_limited") || rawMessage.includes("429") || rawMessage.toLowerCase().includes("too many requests")) {
+        setError("Google Trends está limitando consultas desde este servidor. Espera unos minutos y vuelve a intentar.");
+        return;
+      }
       if (rawMessage.includes("google_trends_empty_response") || rawMessage.includes("404")) {
         if (source === "news") {
           setError("No hay datos en Noticias para esas frases y periodo. Prueba frases más amplias o un periodo más corto.");
