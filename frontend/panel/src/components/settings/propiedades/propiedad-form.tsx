@@ -2642,7 +2642,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 Mixto
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(true)}>
-                Importar/Exportar Datos
+                Importar y exportar datos
               </Button>
               <Button size="sm" onClick={loadHierarchy} disabled={isHierarchyLoading}>
                 {isHierarchyLoading ? "Actualizando…" : "Actualizar"}
@@ -2796,7 +2796,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   >
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Importar/Exportar Datos</DialogTitle>
+        <DialogTitle>Importar y exportar datos</DialogTitle>
         <DialogDescription>
           Importa un CSV con la plantilla mínima o exporta los datos actuales para usarlos como base.
           La plantilla de datos solo necesita
