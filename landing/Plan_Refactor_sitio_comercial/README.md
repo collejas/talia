@@ -52,6 +52,80 @@ Cada botón principal puede abrir un dropdown o una vista agrupada, pero el text
     └── turismo
 ```
 
+## URLs canónicas
+
+Estas son las rutas públicas que deben quedar visibles y enlazadas en el sitio:
+
+- `/`
+- `/que-es-talia`
+- `/caracteristicas`
+- `/crm-con-ia-para-whatsapp`
+- `/asistente-ia-empresas`
+- `/ia-de-whatsapp`
+- `/ia-para-ventas`
+- `/automatizacion-de-ventas`
+- `/seguimiento-ventas`
+- `/agenda-y-cotizaciones`
+- `/prospeccion-comercial`
+- `/buscar-contactos`
+- `/prospectos-google-denue`
+- `/campanas-marketing`
+- `/precios`
+- `/industrias`
+- `/industrias/inmobiliarias`
+- `/industrias/servicios`
+- `/industrias/negocios-locales`
+- `/industrias/ventas-b2b`
+- `/industrias/turismo`
+
+### Dominio canónico
+
+- Canonical público: `https://talia.mx`
+- Alias que deben redirigir a `https://talia.mx`:
+  - `https://www.talia.mx`
+  - `https://tal-ia.mx`
+  - `https://www.tal-ia.mx`
+
+### Variantes que deben redirigir
+
+- `/caracteristicas.html` -> `/caracteristicas`
+- `/caracteristicas/` -> `/caracteristicas`
+- `/que-es-talia.html` -> `/que-es-talia`
+- `/que-es-talia/` -> `/que-es-talia`
+- `/crm-con-ia-para-whatsapp.html` -> `/crm-con-ia-para-whatsapp`
+- `/crm-con-ia-para-whatsapp/` -> `/crm-con-ia-para-whatsapp`
+- `/asistente-ia-empresas.html` -> `/asistente-ia-empresas`
+- `/asistente-ia-empresas/` -> `/asistente-ia-empresas`
+- `/ia-de-whatsapp.html` -> `/ia-de-whatsapp`
+- `/ia-de-whatsapp/` -> `/ia-de-whatsapp`
+- `/ia-para-ventas.html` -> `/ia-para-ventas`
+- `/ia-para-ventas/` -> `/ia-para-ventas`
+- `/automatizacion-de-ventas.html` -> `/automatizacion-de-ventas`
+- `/automatizacion-de-ventas/` -> `/automatizacion-de-ventas`
+- `/seguimiento-ventas.html` -> `/seguimiento-ventas`
+- `/seguimiento-ventas/` -> `/seguimiento-ventas`
+- `/agenda-y-cotizaciones.html` -> `/agenda-y-cotizaciones`
+- `/agenda-y-cotizaciones/` -> `/agenda-y-cotizaciones`
+- `/prospeccion-comercial.html` -> `/prospeccion-comercial`
+- `/prospeccion-comercial/` -> `/prospeccion-comercial`
+- `/buscar-contactos.html` -> `/buscar-contactos`
+- `/buscar-contactos/` -> `/buscar-contactos`
+- `/prospectos-google-denue.html` -> `/prospectos-google-denue`
+- `/prospectos-google-denue/` -> `/prospectos-google-denue`
+- `/campanas-marketing.html` -> `/campanas-marketing`
+- `/campanas-marketing/` -> `/campanas-marketing`
+- `/precios/` -> `/precios`
+- `/precios/index` -> `/precios`
+- `/precios/index.html` -> `/precios`
+- `/industrias/` -> `/industrias`
+- `/industrias/index` -> `/industrias`
+- `/industrias/index.html` -> `/industrias`
+- `/industrias/inmobiliarias/` -> `/industrias/inmobiliarias`
+- `/industrias/servicios/` -> `/industrias/servicios`
+- `/industrias/negocios-locales/` -> `/industrias/negocios-locales`
+- `/industrias/ventas-b2b/` -> `/industrias/ventas-b2b`
+- `/industrias/turismo/` -> `/industrias/turismo`
+
 ## Inicio
 
 - URL: `/`
