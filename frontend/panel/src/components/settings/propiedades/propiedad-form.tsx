@@ -2798,7 +2798,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       <DialogHeader>
         <DialogTitle>Importar/Exportar Datos</DialogTitle>
         <DialogDescription>
-          Descarga la plantilla mínima si quieres empezar rápido. El CSV de importación solo necesita
+          Importa un CSV con la plantilla mínima o exporta los datos actuales para usarlos como base.
+          La plantilla de datos solo necesita
           <span className="font-semibold text-slate-700">
             entidad, grupo, nombre, status y poligono
           </span>;
@@ -2813,11 +2814,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={handleDownloadImportTemplate}>
             <IconDownload className="mr-2 h-4 w-4" />
-            Descargar plantilla mínima
+            Plantilla de datos
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={handleDownloadPropertyExport}>
             <IconDownload className="mr-2 h-4 w-4" />
-            Descargar datos actuales
+            Exportar datos actuales
           </Button>
         </div>
         <div className="space-y-1">
@@ -2833,9 +2834,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           )}
         </div>
         <p className="text-[0.65rem] text-slate-500">
-          Si ya tienes un CSV propio, basta con respetar la plantilla mínima. También puedes
-          descargar los datos actuales con la misma estructura para usarlos como base. Las columnas de
-          volumen 3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
+          Si ya tienes un CSV propio, basta con respetar la plantilla mínima. También puedes exportar
+          los datos actuales con la misma estructura para usarlos como base. Las columnas de volumen
+          3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
           La altura de capa sigue siendo <code>altura</code> y solo aplica a <code>propiedad_capas</code>.
           La columna <code>identificador</code> concatena las iniciales del desarrollo con capa y
           unidad para ubicar rápido cada fila en la estructura, pero es opcional para importar.
@@ -2850,10 +2851,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       <DialogFooter className="flex gap-2 pt-4">
         <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(false)}>
           Cerrar
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleDownloadImportTemplate}>
-          <IconDownload className="mr-2 h-4 w-4" />
-          Plantilla
         </Button>
         <Button
           size="sm"
