@@ -2642,7 +2642,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 Mixto
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(true)}>
-                Importar CSV
+                Importar/Exportar Datos
               </Button>
               <Button size="sm" onClick={loadHierarchy} disabled={isHierarchyLoading}>
                 {isHierarchyLoading ? "Actualizando…" : "Actualizar"}
