@@ -43,8 +43,8 @@ export function CatalogPipelineCard({ data, className }: CatalogPipelineCardProp
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={`${row.name}-${row.etapa}`}>
+                {rows.map((row, index) => (
+                  <TableRow key={`${row.name}-${row.etapa}-${index}-${row.monto}-${row.leads}`}>
                     <TableCell className="font-medium text-foreground">{row.name}</TableCell>
                     <TableCell>{row.etapa}</TableCell>
                     <TableCell className="text-right font-medium">
