@@ -226,6 +226,17 @@ const pages = [
           ["Dirección", "Quienes necesitan ver el estado real del pipeline.", "green"],
         ],
       },
+      {
+        title: "Cómo se implementa",
+        lead: "Conviene explicar la adopción para que el visitante entienda que no es solo software, sino orden comercial.",
+        mode: "steps",
+        items: [
+          ["Conecta WhatsApp", "Se integra el canal donde realmente entran los prospectos."],
+          ["Define pipeline", "Se ajustan etapas, responsables y prioridades."],
+          ["Activa seguimiento", "Se automatizan recordatorios y tareas clave."],
+          ["Mide resultados", "Ventas ve respuesta, avance y cierre con más claridad."],
+        ],
+      },
     ],
     related: [
       ["/ia-de-whatsapp", "IA de WhatsApp"],
@@ -311,6 +322,16 @@ const pages = [
           ["Leads entrantes", "Cuando llegan muchas consultas y hay riesgo de dejar prospectos en visto.", "blue"],
           ["Fuera de horario", "Cuando necesitas atender después de horas sin perder oportunidades.", "violet"],
           ["Precalificación", "Cuando quieres filtrar antes de pasar el lead a un asesor humano.", "green"],
+        ],
+      },
+      {
+        title: "Qué debe sentir el usuario",
+        lead: "La explicación debe dejar claro que la IA resuelve el primer contacto sin volver opaco el proceso.",
+        mode: "cards",
+        items: [
+          ["Rapidez", "El lead siente respuesta inmediata y no espera sin contexto.", "blue"],
+          ["Orden", "La empresa sabe qué pasó en cada conversación.", "violet"],
+          ["Control", "El equipo decide cuándo entra una persona y cuándo no.", "green"],
         ],
       },
     ],
@@ -487,6 +508,29 @@ const pages = [
       ["Agenda", "Reduce fricción para coordinar citas.", "blue"],
       ["Cotiza", "Envía propuestas con contexto comercial.", "violet"],
       ["Confirma", "Asegura asistencia y continuidad.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué pasa entre interés y cita",
+        lead: "El usuario debe ver que aquí se resuelve el tramo donde muchas ventas se pierden: después del primer interés.",
+        mode: "steps",
+        items: [
+          ["Recibe interés", "El lead pregunta, pide precio o muestra intención de agendar."],
+          ["Se califica", "La IA obtiene datos para dar una respuesta útil."],
+          ["Se agenda o cotiza", "Se avanza a cita o propuesta sin retrasos innecesarios."],
+          ["Se confirma", "El flujo mantiene la continuidad hasta la acción real."],
+        ],
+      },
+      {
+        title: "Casos donde aporta más",
+        lead: "La página debe aterrizar cuándo esta solución es más valiosa.",
+        mode: "cards",
+        items: [
+          ["Servicios consultivos", "Cuando necesitas cotizar antes de cerrar.", "blue"],
+          ["Agendas comerciales", "Cuando el paso siguiente es una cita.", "violet"],
+          ["Seguimiento postinterés", "Cuando el prospecto no debe enfriarse.", "green"],
+        ],
+      },
     ],
     related: [
       ["/ia-de-whatsapp", "IA de WhatsApp"],
