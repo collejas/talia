@@ -1,1341 +1,219 @@
-<!DOCTYPE html>
-
-<html class="light scroll-smooth" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Talia | CRM con IA para WhatsApp, ventas y automatización</title>
-<meta name="description" content="Talia es un CRM con IA para WhatsApp que centraliza leads, automatiza seguimiento, califica prospectos y agenda citas 24/7."/>
-<link rel="canonical" href="https://talia.mx/"/>
-<link rel="alternate" hreflang="es-MX" href="https://talia.mx/"/>
-<link rel="alternate" hreflang="x-default" href="https://talia.mx/"/>
-<meta property="og:type" content="website"/>
-<meta property="og:locale" content="es_MX"/>
-<meta property="og:site_name" content="Talia"/>
-<meta property="og:title" content="Talia | CRM con IA para WhatsApp, ventas y automatización"/>
-<meta property="og:description" content="Centraliza leads y conversaciones en un CRM con IA para WhatsApp con seguimiento, agenda y automatización comercial."/>
-<meta property="og:url" content="https://talia.mx/"/>
-<meta property="og:image" content="https://talia.mx/android-chrome-512x512.png"/>
-<meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="Talia | CRM con IA para WhatsApp + automatización"/>
-<meta name="twitter:description" content="Talia centraliza leads, conversaciones y seguimiento en un CRM con IA que responde, califica y agenda prospectos 24/7."/>
-<meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png"/>
-<meta name="keywords" content="CRM con IA, CRM para WhatsApp, CRM comercial, WhatsApp IA, IA para WhatsApp, automatización comercial, seguimiento de leads, agenda de citas"/>
-<meta name="theme-color" content="#7f13ec"/>
-<link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
-<link rel="manifest" href="/site.webmanifest"/>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./assets/css/webchat.css?v=20260220a">
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              "primary": "#7f13ec",
-              "background-light": "#f7f6f8",
-              "background-dark": "#191022",
-            },
-            fontFamily: {
-              "display": ["Inter", "sans-serif"]
-            },
-            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-          },
-        },
-      }
-    </script>
-<style>
-        body { font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        .whatsapp-float {
-          position: fixed;
-          right: 18px;
-          bottom: 18px;
-          z-index: 60;
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          border-radius: 9999px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #ffffff;
-          font-weight: 800;
-          letter-spacing: 0.02em;
-          box-shadow: 0 18px 40px rgba(22, 163, 74, 0.35);
-          transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-        }
-        .whatsapp-float:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 22px 46px rgba(22, 163, 74, 0.45);
-          filter: brightness(1.02);
-        }
-        .whatsapp-float__icon {
-          width: 20px;
-          height: 20px;
-        }
-        .whatsapp-float__pulse {
-          position: absolute;
-          inset: -6px;
-          border-radius: 9999px;
-          background: rgba(34, 197, 94, 0.25);
-          animation: whatsappPulse 1.8s ease-out infinite;
-          z-index: -1;
-        }
-        @keyframes whatsappPulse {
-          0% { transform: scale(0.9); opacity: 0.8; }
-          70% { transform: scale(1.25); opacity: 0; }
-          100% { transform: scale(1.25); opacity: 0; }
-        }
-        @media (max-width: 640px) {
-          .whatsapp-float {
-            padding: 12px;
-          }
-          .whatsapp-float__label {
-            display: none;
-          }
-        }
-        .whatsapp-bar {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 55;
-          padding: 12px 16px 16px;
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(12px);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          display: none;
-        }
-        .whatsapp-bar__button {
-          width: 100%;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 14px 18px;
-          border-radius: 9999px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #ffffff;
-          font-weight: 900;
-          letter-spacing: 0.02em;
-          box-shadow: 0 16px 32px rgba(22, 163, 74, 0.35);
-        }
-        @media (max-width: 768px) {
-          .whatsapp-bar { display: block; }
-          body { padding-bottom: 88px; }
-        }
-    </style>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://talia.mx/#organization",
-      "name": "Talia",
-      "alternateName": "Tal-IA",
-      "url": "https://talia.mx/",
-      "logo": "https://talia.mx/android-chrome-512x512.png",
-      "sameAs": [
-        "https://wa.me/5214443354450"
-      ],
-      "contactPoint": [
-        {
-          "@type": "ContactPoint",
-          "contactType": "sales",
-          "telephone": "+52-1-444-335-4450",
-          "availableLanguage": ["es"]
-        }
-      ]
-    },
-    {
-      "@type": "WebSite",
-      "@id": "https://talia.mx/#website",
-      "url": "https://talia.mx/",
-      "name": "Talia",
-      "description": "CRM con IA para WhatsApp, ventas y automatización.",
-      "publisher": {
-        "@id": "https://talia.mx/#organization"
-      },
-      "inLanguage": "es-MX"
-    },
-    {
-      "@type": "WebPage",
-      "@id": "https://talia.mx/#webpage",
-      "url": "https://talia.mx/",
-      "name": "Talia | CRM con IA para WhatsApp, ventas y automatización",
-      "description": "Talia es un CRM con IA para WhatsApp que centraliza leads, automatiza seguimiento, califica prospectos y agenda citas 24/7.",
-      "isPartOf": {
-        "@id": "https://talia.mx/#website"
-      },
-      "about": {
-        "@id": "https://talia.mx/#software"
-      },
-      "inLanguage": "es-MX"
-    },
-    {
-      "@type": "SoftwareApplication",
-      "@id": "https://talia.mx/#software",
-      "name": "Tal-IA",
-      "applicationCategory": "BusinessApplication",
-      "applicationSubCategory": "CRM",
-      "operatingSystem": "Web",
-      "url": "https://talia.mx/",
-      "description": "CRM con IA para WhatsApp que centraliza leads, automatiza seguimiento y agenda citas 24/7.",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "MXN",
-        "availability": "https://schema.org/InStock"
-      }
-    },
-    {
-      "@type": "FAQPage",
-      "@id": "https://talia.mx/#faq",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "¿Qué hace Talia como CRM con IA?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Talia centraliza conversaciones, automatiza seguimientos y ayuda a convertir prospectos en un flujo comercial ordenado."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "¿Talia es un CRM para WhatsApp?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Sí. Talia centraliza WhatsApp, seguimiento, agenda y pipeline en un CRM con IA para equipos comerciales."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "¿La IA para WhatsApp de Talia funciona en otros canales?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "No. También centraliza la atención y seguimiento desde canales como Facebook e Instagram."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "¿El CRM con IA sirve para ventas y soporte?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Sí. El CRM con IA de Talia opera ventas, soporte y operación 24/7 con seguimiento y trazabilidad."
-          }
-        }
-      ]
-    }
-  ]
-}
-</script>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TalIA | Prospección, IA de WhatsApp y CRM</title>
+  <meta name="description" content="TalIA convierte prospectos en ventas con prospección, IA de WhatsApp, CRM y automatización comercial." />
+  <link rel="canonical" href="https://talia.mx/" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/css/landing-home.css?v=20260624b" />
 </head>
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 selection:bg-primary/30">
-<!-- Navigation -->
-<nav class="fixed top-0 w-full z-50 border-b border-primary/10 glass">
-<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-<div class="flex items-center gap-3">
-<a href="/auth/login" class="hidden sm:inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
-Acceder
-</a>
-<a class="flex items-center gap-2" href="/">
-<img src="/assets/logos/Logo8.png" alt="Talia | Tal-IA" class="size-9 object-contain" />
-<span class="text-xl font-bold tracking-tight text-slate-900">Talia | Tal-IA</span>
-</a>
-</div>
-<div class="hidden lg:flex items-center gap-10">
-<a class="text-sm font-medium hover:text-primary transition-colors" href="#problemas">Soluciones</a>
-<a class="text-sm font-medium hover:text-primary transition-colors" href="#agentes">Agentes</a>
-<a class="text-sm font-medium hover:text-primary transition-colors" href="/caracteristicas">Características</a>
-<a class="text-sm font-medium hover:text-primary transition-colors" href="/precios">Precios</a>
-</div>
-<div class="flex items-center gap-4">
-<details class="relative">
-<summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
-Menú
-</summary>
-<div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/">Inicio</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/caracteristicas">Características</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/precios">Precios</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/demo.html">Demo</a>
-<div class="my-1 border-t border-slate-100"></div>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/automatizar-ventas-whatsapp">Automatizar ventas WhatsApp</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/automatizacion-whatsapp">Automatización WhatsApp</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/ia-para-whatsapp">IA para WhatsApp</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/whatsapp-ia">WhatsApp IA</a>
-<a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/ia-para-inmobiliarias">IA para inmobiliarias</a>
-</div>
-</details>
-<a class="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-500 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-600 hover:border-emerald-700" data-cta-id="CTA_NAV_VER_COMO_FUNCIONA" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer" aria-label="Contacto por WhatsApp">
-<svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
-<path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
-</svg>
-<span>Ver cómo funciona</span>
-</a>
-<a data-cta-id="CTA_NAV_DEMO_POR_WHATSAPP" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" class="hidden sm:inline-flex bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-primary/20 transition-all" target="_blank" rel="noopener noreferrer">
-                    Demo por WhatsApp
-                </a>
-</div>
-</div>
-</nav>
-<!-- Hero Section -->
-<section class="relative pt-40 pb-24 overflow-hidden">
-<div class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
-<div class="relative z-10">
-<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-6">
-<span class="relative flex h-2 w-2">
-<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-</span>
-<span class="text-xs font-bold text-primary uppercase tracking-wider italic">Nueva Era: CRM con IA para WhatsApp</span>
-</div>
-<h1 id="hero-title" class="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] mb-8 tracking-tight">
-                    Talia: tu CRM con IA para WhatsApp y ventas
-</h1>
-<p id="hero-sub" class="text-lg text-slate-600 mb-10 max-w-xl leading-relaxed">
-                    Centraliza leads, conversaciones y seguimiento en un solo CRM con IA que atiende, califica y agenda 24/7. Escríbenos y te mostramos una demo en minutos.
-                </p>
-<p class="mt-4 text-sm font-bold text-primary">
-  Descubre cómo 
-  <a href="/automatizar-ventas-whatsapp" class="underline hover:text-primary/80">
-    automatizar ventas por WhatsApp con IA
-  </a>
-</p>
-<p class="mt-2 text-sm font-bold text-primary">
-  Revisa todas las
-  <a href="/caracteristicas" class="underline hover:text-primary/80">
-    características de Tal-IA
-  </a>
-</p>
-<p class="mt-2 text-sm font-bold text-primary">
-  O explora cómo 
-  <a href="/ia-para-inmobiliarias" class="underline hover:text-primary/80">
-    usar IA para inmobiliarias y desarrolladoras
-  </a>
-</p>
-<p class="mt-2 text-sm font-bold text-primary">
-  También puedes ver:
-  <a href="/ia-para-whatsapp" class="underline hover:text-primary/80"> IA para WhatsApp</a>,
-  <a href="/whatsapp-ia" class="underline hover:text-primary/80"> WhatsApp IA</a> y
-  <a href="/automatizacion-whatsapp" class="underline hover:text-primary/80"> automatización WhatsApp</a>,
-  <a href="/precios" class="underline hover:text-primary/80"> precios</a>.
-</p>
-<div class="flex flex-col sm:flex-row gap-4">
-<a data-cta-id="CTA_HERO_HABLAR_AHORA" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-8 rounded-xl shadow-xl shadow-emerald-500/40 transition-all text-lg flex items-center justify-center gap-2" target="_blank" rel="noopener noreferrer">
-                        Hablar por WhatsApp ahora
-                        <span class="material-symbols-outlined">bolt</span>
-</a>
-<a data-cta-id="CTA_HERO_VER_EJEMPLO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20un%20ejemplo%20rápido%20de%20Tal-IA" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2" target="_blank" rel="noopener noreferrer">
-                        Ver ejemplo rápido
-                        <span class="material-symbols-outlined">play_arrow</span>
-</a>
-</div>
-<p id="hero-footnote" class="mt-4 text-sm text-slate-500 font-semibold uppercase tracking-widest">
-                    Respuesta en minutos · Demo real por WhatsApp
-                </p>
-</div>
-<div class="relative lg:h-[600px] flex items-center justify-center">
-<!-- Abstract UI Representation -->
-<!-- Marquesina original (comentada)
-<div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
-                <div class="marquee-track" aria-hidden="true" data-speed="0.8">
-                  <article class="marquee-item">
-                    <h3>🧠 La automatización tradicional 'Bot' se transforma en IA agente humano.</h3>
-                    <p>
-                      Ni reglas ni respuestas automáticas sin contexto: tu IA califica, prioriza y negocia como si fuera parte de tu equipo.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>📈 Menos seguimiento manual. Más decisiones automáticas.</h3>
-                    <p>
-                      La IA detecta a los clientes con intención de compra, los avanza en el proceso
-                      y actúa por ti en el momento correcto.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🗣️ Conversaciones inteligentes con contexto y memoria.</h3>
-                    <p>
-                      Recuerda histórico, preferencias y tono para dar respuestas personalizadas y naturales en cada hilo.
-                    </p>
-                  </article>
-                </div>
-</div>
--->
-<div class="relative w-full max-w-[560px] rounded-[2rem] bg-gradient-to-tr from-primary/20 to-transparent p-3 md:p-4">
-<div class="mb-3 flex flex-wrap items-center gap-2" id="hero-demo-tabs">
-<button type="button" data-hero-demo="ventas" class="hero-demo-tab inline-flex items-center rounded-full bg-white border border-primary/40 px-3 py-1 text-[11px] font-semibold text-primary shadow-sm">Ventas</button>
-<a href="/ia-para-inmobiliarias" class="hero-demo-tab relative inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 overflow-visible">
-Bienes Raices
-<span class="pointer-events-none absolute -top-2 -right-3 rotate-12 rounded bg-primary px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white shadow">NUEVO</span>
-</a>
-<button type="button" data-hero-demo="turismo" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Turismo</button>
-<button type="button" data-hero-demo="soporte" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Soporte</button>
-<button type="button" data-hero-demo="condominios" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Condominios</button>
-<button type="button" data-hero-demo="prospeccion" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Prospeccion</button>
-</div>
-<img id="hero-demo-image" class="hidden w-full rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl object-cover" alt="Vista de demo de TalIA" src="/assets/images/ventas.png" />
-<div id="hero-demo-carousel" class="hidden relative">
-<img id="hero-demo-carousel-image" class="w-full rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl object-cover" alt="Condominios demo" src="/assets/images/Condo%201.png" />
-<button type="button" id="hero-carousel-prev" class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 text-white w-9 h-9 text-lg">‹</button>
-<button type="button" id="hero-carousel-next" class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 text-white w-9 h-9 text-lg">›</button>
-</div>
-<p class="mt-3 text-xs text-slate-600" id="hero-demo-caption">Vista: Ventas</p>
-</div>
-<!-- Background decoration -->
-<div class="absolute -top-10 -right-10 size-64 bg-primary/10 rounded-full blur-3xl -z-10"></div>
-<div class="absolute -bottom-10 -left-10 size-80 bg-primary/5 rounded-full blur-3xl -z-10"></div>
-</div>
-</div>
-</section>
-<!-- WhatsApp Inline CTA -->
-<section class="py-16 bg-white">
-  <div class="max-w-5xl mx-auto px-6">
-    <div class="rounded-3xl border border-emerald-100 bg-emerald-50 px-6 py-10 text-center shadow-xl shadow-emerald-500/10">
-      <p class="text-sm font-bold uppercase tracking-[0.25em] text-emerald-700 mb-3">Atención inmediata</p>
-      <h3 class="text-3xl md:text-4xl font-black text-slate-900 mb-4">Prueba el CRM con IA por WhatsApp</h3>
-      <p class="text-slate-600 text-base md:text-lg mb-8">Envíanos tu caso y te mostramos cómo centraliza leads, pipeline, seguimiento y agenda en tu operación.</p>
-      <a data-cta-id="CTA_INLINE_EMPEZAR" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20cómo%20Tal-IA%20funciona%20como%20CRM%20con%20IA%20en%20mi%20industria" class="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3 text-white text-base font-black shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-colors" target="_blank" rel="noopener noreferrer">
-        Ver demo del CRM
-        <span class="material-symbols-outlined text-base">chat</span>
+<body>
+  <main class="page">
+    <nav class="nav">
+      <a class="brand" href="#producto">Tal<span>IA</span></a>
+
+      <div class="nav-links">
+        <a href="#producto">Producto</a>
+        <a href="#soluciones">Soluciones</a>
+        <a href="#industrias">Industrias</a>
+        <a href="#demo">Demo</a>
+      </div>
+
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Agenda una demo
       </a>
-    </div>
-  </div>
-</section>
-<!-- SEO Keyword Section -->
-<section class="pb-10 bg-white">
-  <div class="max-w-5xl mx-auto px-6">
-    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-6">
-      <h2 class="text-2xl md:text-3xl font-black text-slate-900 mb-3">CRM con IA para WhatsApp y automatización comercial</h2>
-      <p class="text-slate-600 leading-relaxed">
-        Tal-IA combina <strong>CRM para WhatsApp</strong>, <strong>CRM comercial</strong>, <strong>WhatsApp IA</strong>, <strong>IA para WhatsApp</strong> y <strong>asistente de IA</strong> en una sola plataforma para
-        <strong>automatización</strong> de respuesta, calificación de leads y seguimiento comercial.
-      </p>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <span class="rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-bold text-primary">CRM para WhatsApp</span>
-        <span class="rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-bold text-primary">CRM comercial</span>
-        <span class="rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-bold text-primary">CRM con IA</span>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- Prediction Section -->
-<section class="py-24 relative overflow-hidden bg-slate-900 text-white">
-<!-- Decoration -->
-<div class="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-primary/20 to-transparent"></div>
-<div class="absolute -bottom-24 -left-24 size-96 bg-primary/30 rounded-full blur-[100px] opacity-20"></div>
-<div class="max-w-5xl mx-auto px-6 relative z-10 text-center">
-<div class="size-16 rounded-full bg-primary flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-primary/40">
-<span class="material-symbols-outlined text-3xl">auto_awesome</span>
-</div>
-<h2 class="text-3xl md:text-5xl font-black leading-tight mb-8">
-                En <span class="text-primary italic">2026</span> ganarán las empresas con mejores agentes de IA.
-            </h2>
-<p class="text-slate-400 text-lg mb-12 max-w-2xl mx-auto uppercase tracking-widest font-bold">
-                Prepárate para la revolución de la eficiencia autónoma.
-            </p>
-<div class="flex justify-center mb-12">
-  <a data-cta-id="CTA_PRED_90S" class="bg-primary hover:bg-primary/90 text-white font-black py-3 px-6 rounded-xl shadow-xl shadow-primary/30 transition-all text-sm flex items-center justify-center gap-2" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20cómo%20funciona%20Tal-IA%20en%2090%20segundos%20por%20WhatsApp" target="_blank" rel="noopener noreferrer">
-    Ver cómo funciona en 90 segundos
-    <span class="material-symbols-outlined text-base">play_arrow</span>
-  </a>
-</div>
+    </nav>
 
-<div class="flex flex-wrap justify-center gap-12">
-<div class="text-center">
-<div class="text-4xl font-black text-white mb-1">98%</div>
-<div class="text-slate-500 text-sm font-bold uppercase">Precisión</div>
-</div>
-<div class="text-center">
-<div class="text-4xl font-black text-white mb-1">24/7</div>
-<div class="text-slate-500 text-sm font-bold uppercase">Operativo</div>
-</div>
-<div class="text-center">
-<div class="text-4xl font-black text-white mb-1">-65%</div>
-<div class="text-slate-500 text-sm font-bold uppercase">Coste Op.</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Problems vs Solutions Section -->
-<section class="py-24 bg-white" id="problemas">
-<div class="max-w-7xl mx-auto px-6">
-<div class="text-center max-w-3xl mx-auto mb-20">
-<h2 class="text-4xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight">Desafíos vs Soluciones</h2>
-<h3 class="text-primary font-bold tracking-widest uppercase text-sm mb-6">Transformamos cuellos de botella</h3>
-<p class="text-slate-500 text-lg leading-relaxed">Las limitaciones humanas frenan el crecimiento. Talia elimina las barreras operativas con agentes autónomos y un CRM con IA para centralizar seguimiento, pipeline y conversaciones.</p>
-</div>
-<div class="grid md:grid-cols-3 gap-8">
-<!-- Problem Card 1 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-br from-violet-50 via-indigo-50 to-fuchsia-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">person_remove</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Atención Manual</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Dependencia total de equipos humanos para tareas repetitivas, limitando la escalabilidad de tu negocio.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Automatización total del 80% de consultas comunes.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: menos carga operativa y más velocidad de respuesta.</p>
-</div>
-</div>
-<!-- Problem Card 2 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-b from-sky-50 via-indigo-50 to-violet-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">schedule</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Respuesta Lenta</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Clientes que esperan horas por una respuesta pierden el interés. El 50% compra al que responde primero.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Tiempo de respuesta inferior a 2 segundos 24/7.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: más contactabilidad y mayor conversión.</p>
-</div>
-</div>
-<!-- Problem Card 3 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-tr from-emerald-50 via-teal-50 to-cyan-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">cloud_off</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Datos Fragmentados</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Información perdida entre chats, correos y hojas de cálculo. Falta de visión clara del cliente.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Integración nativa bidireccional con tu CRM actual.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: 100% trazabilidad del funnel y datos consistentes.</p>
-</div>
-</div>
+    <section class="hero-grid" id="producto">
+      <div class="hero-copy">
+        <div class="eyebrow">Prospección · IA de WhatsApp · CRM · Marketing</div>
+        <h1><span class="gradient-text">TalIA</span> convierte prospectos en ventas</h1>
+        <p>
+          Busca clientes, los contacta, responde por ti, los organiza en tu CRM
+          y da seguimiento hasta que estén listos para comprar.
+        </p>
 
-</div>
-</div>
-<div class="mt-10 text-center">
-  <a href="/automatizar-ventas-whatsapp" 
-     class="inline-block bg-primary text-white font-bold px-6 py-3 rounded-xl hover:bg-primary/90">
-    Ver cómo automatizar ventas por WhatsApp
-  </a>
-</div>
-<div class="mt-20 text-center max-w-3xl mx-auto mb-12">
-
-<h3 class="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tight">Más cuellos de botella que resolvemos</h3>
-<p class="text-slate-500 text-lg">Casos operativos adicionales donde Talia automatiza, escala y mejora conversión.</p>
-</div>
-<div class="grid md:grid-cols-3 gap-8">
-<!-- Problem/Solution Card 1 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">groups_3</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Saturación en horas pico</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">La demanda se concentra en momentos críticos y el equipo no alcanza a responder todos los mensajes a tiempo.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Escalabilidad infinita con agentes que no duermen y gestionan miles de chats simultáneos.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: atención estable en picos y menor pérdida de oportunidades.</p>
-</div>
-</div>
-<!-- Problem/Solution Card 2 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-br from-rose-50 via-pink-50 to-violet-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">psychology</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Falta de personalización</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Conversaciones genéricas reducen el interés del cliente y afectan la confianza en el proceso de compra.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Memoria contextual avanzada para recordar cada detalle y preferencia de tus clientes recurrentes.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: conversaciones más relevantes y mayor afinidad con cada prospecto.</p>
-</div>
-</div>
-<!-- Problem/Solution Card 3 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-br from-violet-50 via-indigo-50 to-fuchsia-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">lan</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Procesos manuales lentos</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Procesos operativos lentos y repetitivos que frenan la ejecución diaria y elevan la carga del equipo.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Automatización de flujos de trabajo en tiempo real, desde el registro hasta la resolución final.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: menos tiempos operativos y mayor productividad del equipo.</p>
-</div>
-</div>
-<!-- Problem/Solution Card 4 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-b from-sky-50 via-indigo-50 to-violet-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">payments</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Licencias caras para escalar</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">El crecimiento exige más usuarios y más operación, pero el software tradicional incrementa costos mes a mes.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">5 licencias incluidas en la versión general, con opción de escalar según la operación comercial.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: escalabilidad sostenible con mejor control de costos operativos.</p>
-</div>
-</div>
-<!-- Problem/Solution Card 5 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-tr from-emerald-50 via-teal-50 to-cyan-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">hub</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Falta de alcance multicanal</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">Los prospectos están en distintos canales y sin una estrategia unificada se pierde seguimiento y oportunidad.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Mensajería masiva y proactiva que se siente humana, manteniendo el interés de tus prospectos.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: mayor cobertura, más interacción y mejor tasa de respuesta.</p>
-</div>
-</div>
-<!-- Problem/Solution Card 6 -->
-<div class="group p-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-rose-100 border border-primary/20 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500">
-<div class="size-14 rounded-xl bg-white/80 border border-primary/20 text-primary flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">person_search</span>
-</div>
-<h4 class="text-xl font-bold mb-4 text-slate-900">Dificultad para prospectar</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-6">La prospección manual consume tiempo y suele generar bases incompletas o poco accionables para ventas.</p>
-<div class="pt-6 border-t border-primary/20">
-<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
-<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
-                        </div>
-<p class="mt-2 text-slate-900 text-sm font-semibold italic">Búsquedas inteligentes que generan prospectos listos, extrayendo datos de Google y fuentes oficiales.</p>
-<p class="mt-2 text-slate-600 text-xs font-semibold uppercase tracking-wider">Impacto esperado: pipeline más robusto y menor tiempo para encontrar oportunidades.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Specialized Agents Section -->
-<section class="py-24 bg-background-light" id="agentes">
-<div class="max-w-7xl mx-auto px-6">
-<div class="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
-<div class="max-w-2xl">
-<h2 class="text-4xl font-black text-slate-900 mb-6 tracking-tight italic uppercase">Agentes, CRM &amp; Herramientas Especializados</h2>
-<p class="text-slate-500 text-lg leading-relaxed">Cada industria tiene reglas diferentes. Entrenamos modelos específicos para que Talia hable el idioma de tu negocio y se apoye en un CRM con IA que ordena la operación comercial.</p>
-<p class="mt-4 text-sm font-bold text-primary">
-  <a href="/ia-para-inmobiliarias" class="underline hover:text-primary/80">Ver página especializada de IA para inmobiliarias</a>
-</p>
-</div>
-</div>
-<div class="grid md:grid-cols-3 gap-6">
-<!-- Industry 1 -->
-<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-1">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Modern business team meeting with laptops" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKJajibHguEuiKbrGZqnbvl03WwX0Dxinb4GPjer9bG2PKUMtNt-4iLAEH7vdgUuY1URFdMeFIIqxqwQCrXrO_mIPm6ysXSX_Ef-R12tyFbLKxTHDKX5casxOKJI8e7v8UO_Trx3-qjQ-SdDa1ho5BeJImpii9DQ-hGlYQs-Zr3HqbyNYVmIF577XUldXm-ijAo7EdaOtPJKB3J3lh7R68dtlMOu2Mcl9XTrqXLr7wEC7d1pcw4IukhY3yhmOqIfDPQ1QuN-T0wJkU"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">insights</span> Ventas
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Calificación automática de leads, agendamiento de citas y seguimiento proactivo en CRM.</p>
-</div>
-</div>
-<!-- Industry 2 -->
-<a href="/ia-para-inmobiliarias" class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-2 block">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Luxury real estate modern architecture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP2yem8tZjvbOVqtPoWnTut5KRsNIHCIzYsIkt27jFU9nHh7MafCGqgTD5gGgdFcmbQOVesFF_2zTAN8FZrGgJdiTpkZdaI2MacHssvZWHpqmNWxw7OMNA_tf2IRq44W76rieSR-emlh3iK4aEYXww3EYxtrKj8_5kHV-Ab3Uvt55gSWSicBHHqo3b96tNtBpEpiG1kcaCZF5J0I9sHkR5dl6tWHwp3KuFwT87Zf2gtZsCiNhti2_Aok3rQtA7iZrfOYvWUZ6PMXML"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">home_work</span> Bienes Raices
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Gestión inteligente de inventario, tours virtuales guiados y perfilamiento de compradores.</p>
-<p class="mt-3 text-sm font-bold text-primary">Ver solución para inmobiliarias →</p>
-</div>
-</a>
-<!-- Industry 3 -->
-<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-4">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Person planning a travel itinerary" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPWlEYrflcalRqvtoTPsww3kRRNqgOLUCMH0W1iCKRq-C6ZRdgdSGD6mJ7EA8xulQIrRA45kTp_-H4HUbXJWhuH0AFXZUg_4Nte4Yo_aPtTgOehIxSl6PrsMnQIPTymtQ8beBPBDAPitnBH28aFQrQqCKMy0eFZf7WjbmhWd2_3QMoefsguSH989Q055Ml20Wz5KVII9p5JYhzqXm7ka6erwlTexjsE0OvbLAYG6j8mxsbJwbQ5dsDON9_jqfHK6Q7IjQ2q_Ra6yKL"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">luggage</span> Turismo &amp; Viajes
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Reservas inmediatas, gestión de itinerarios personalizados y soporte post-venta multilingüe.</p>
-</div>
-</div>
-<!-- Industry 4 -->
-<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-3">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=400"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">support_agent</span> Soporte & FAQ
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Resolución instantánea de dudas frecuentes, consulta de estados de pedido y escalación inteligente a humanos.</p>
-</div>
-</div>
-<!-- Industry 5 -->
-<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-6">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Listado de prospectos en CRM" src="/assets/images/prospectos-listado.svg"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">person_search</span> Búsqueda de Prospectos
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Convierte información de Google y DENUE en listas de clientes potenciales automáticamente.</p>
-</div>
-</div>
-<!-- Industry 6 -->
-<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group md:order-5">
-<div class="w-full aspect-video rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=400"/>
-<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-</div>
-<div>
-<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-xl">location_city</span> Regimenes de Condominios
-                        </h5>
-<p class="text-sm text-slate-500 leading-relaxed">Atiende reportes, solicitudes y mantenimiento con respuestas automáticas y paneles para residentes.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Casos de Exito Section -->
-<section class="py-24 bg-white" id="casos-exito">
-<div class="max-w-7xl mx-auto px-6">
-<div class="text-center max-w-3xl mx-auto mb-16">
-<h2 class="text-primary font-bold tracking-widest uppercase text-sm mb-4">Casos de Exito</h2>
-<h3 class="text-4xl font-black text-slate-900 mb-6 tracking-tight">Resultados reales con TalIA como CRM con IA</h3>
-<p class="text-slate-500 text-lg leading-relaxed">Equipos comerciales y operativos que ya usan TalIA como CRM con IA para mejorar conversión, velocidad, trazabilidad y seguimiento.</p>
-<p class="mt-4 text-sm font-bold text-primary">
-  <a href="/ia-para-inmobiliarias" class="underline hover:text-primary/80">Conoce la solución de Tal-IA para bienes raíces</a>
-</p>
-</div>
-<div class="mb-12 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-<p class="text-center text-xs font-bold uppercase tracking-widest text-slate-500 mb-5">Empresas que ya confían en TalIA</p>
-<div class="grid grid-cols-2 md:grid-cols-4 gap-5 items-start">
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="5cc" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/LOGO_5CC.png" alt="Logo 5CC" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="5cc" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">5CC</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA para ventas y CRM inmobiliario.</p>
-<a href="https://5cc.mx" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="plusvalica" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/logo_plusvalica.png" alt="Logo Plusvalica" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="plusvalica" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">Plusvalica</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA de atención a clientes y CRM para blockchain inmobiliario.</p>
-<a href="https://plusvalica.com" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="gt" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/LOGO_GT.avif" alt="Logo GT Group" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="gt" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">GT Group</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA para ventas y CRM inmobiliario.</p>
-<a href="https://www.gtgroup.mx" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="gran-penon" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/LOGO_gran-penon.png" alt="Logo Gran Penon" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="gran-penon" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">Gran Penon</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA para ventas y CRM inmobiliario.</p>
-<a href="https://gpslp.mx/" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="light-pro-quattro" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/LOGO-LIGHT-PRO.png" alt="Logo Light Pro Quattro" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="light-pro-quattro" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">Light Pro Quattro</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Empresa que ya confía en TalIA para su operación comercial.</p>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="richards" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/Logo-Richards.png" alt="Logo Richards" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="richards" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">Richards</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">IA para GRP (Gestor de Reclutamiento de personal) y sistema de gestión de reclutamiento.</p>
-<a href="https://richards.com.mx/" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="imlux" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/LOGO_IMLUX.jpeg?v=20260317a" alt="Logo IMLUX" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="imlux" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">IMLUX</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA para ventas y CRM.</p>
-<a href="https://imlux.mx" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-<div class="success-logo-item relative flex justify-center">
-<button type="button" data-success-id="geoactiv" class="rounded-xl border border-slate-300 bg-slate-200 px-4 py-3 hover:border-primary/40 hover:bg-slate-100 transition-colors">
-<img src="/assets/images/logo_geoactiv.png" alt="Logo Geoactiv" class="h-8 w-24 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]" />
-</button>
-<div data-success-popover="geoactiv" class="hidden absolute top-full mt-3 z-30 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-<p class="text-sm font-semibold text-slate-900">Geoactiv</p>
-<p class="mt-2 text-xs text-slate-600 leading-relaxed">Asistente de IA para ventas y CRM.</p>
-<a href="https://geoactiv.mx" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-lg bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary/90">Ver sitio</a>
-</div>
-</div>
-</div>
-</div>
-<div class="grid md:grid-cols-3 gap-8">
-<article class="p-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-violet-50 to-white shadow-sm">
-<p class="text-xs font-bold uppercase tracking-wider text-primary mb-3">Bienes Raices</p>
-<h4 class="text-2xl font-black text-slate-900 mb-2">+41% en cierres</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-5">Automatizaron seguimiento de leads calientes y agenda de recorridos sin intervención manual.</p>
-<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">En 10 semanas</p>
-</article>
-<article class="p-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-cyan-50 to-white shadow-sm">
-<p class="text-xs font-bold uppercase tracking-wider text-primary mb-3">Turismo</p>
-<h4 class="text-2xl font-black text-slate-900 mb-2">-63% tiempo de respuesta</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-5">Atención continua 24/7 para cotizaciones y cambios de itinerario desde el primer mensaje.</p>
-<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">En 6 semanas</p>
-</article>
-<article class="p-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-rose-50 to-white shadow-sm">
-<p class="text-xs font-bold uppercase tracking-wider text-primary mb-3">Servicios</p>
-<h4 class="text-2xl font-black text-slate-900 mb-2">+2.3x en recuperación</h4>
-<p class="text-slate-700 text-sm leading-relaxed mb-5">Con campañas automatizadas lograron reactivar prospectos que llevaban meses sin respuesta.</p>
-<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">En 8 semanas</p>
-</article>
-</div>
-</div>
-</section>
-<!-- FAQ Section -->
-<section class="py-20 bg-slate-50" id="faq">
-<div class="max-w-5xl mx-auto px-6">
-<div class="text-center mb-12">
-<p class="text-xs font-bold uppercase tracking-widest text-primary mb-3">Preguntas frecuentes</p>
-<h3 class="text-4xl font-black text-slate-900 mb-4 tracking-tight">CRM con IA para WhatsApp sin complicaciones</h3>
-<p class="text-slate-500 text-lg leading-relaxed">Respuestas claras sobre el CRM con IA de Talia, la automatización y el seguimiento comercial.</p>
-</div>
-<div class="grid md:grid-cols-3 gap-6">
-<article class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-<h4 class="text-lg font-bold text-slate-900 mb-2">¿Qué hace Talia como CRM con IA?</h4>
-<p class="text-sm text-slate-600 leading-relaxed">Centraliza conversaciones, automatiza seguimientos y convierte prospectos en un flujo comercial ordenado.</p>
-</article>
-<article class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-<h4 class="text-lg font-bold text-slate-900 mb-2">¿Talia es un CRM para WhatsApp?</h4>
-<p class="text-sm text-slate-600 leading-relaxed">Sí. Centraliza WhatsApp, pipeline, agenda y seguimiento para equipos comerciales que necesitan más control.</p>
-</article>
-<article class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-<h4 class="text-lg font-bold text-slate-900 mb-2">¿La IA para WhatsApp de Talia funciona en otros canales?</h4>
-<p class="text-sm text-slate-600 leading-relaxed">Sí. Centraliza atención y seguimiento también en Facebook e Instagram.</p>
-</article>
-<article class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-<h4 class="text-lg font-bold text-slate-900 mb-2">¿El CRM con IA sirve para ventas y soporte?</h4>
-<p class="text-sm text-slate-600 leading-relaxed">Sí. Opera ventas, soporte y operación 24/7 con métricas, seguimiento automatizado y trazabilidad.</p>
-</article>
-</div>
-</div>
-</section>
-<!-- CTA Section -->
-<section class="py-24">
-<div class="max-w-7xl mx-auto px-6">
-<div class="bg-primary rounded-[2.5rem] p-12 lg:p-20 text-center relative overflow-hidden shadow-2xl shadow-primary/40">
-<div class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
-<h2 class="text-4xl lg:text-6xl font-black text-white mb-10 relative z-10">¿Listo para evolucionar?</h2>
-<div class="flex justify-center relative z-10">
-<a data-cta-id="CTA_FOOTER_EXPERTO" class="bg-white hover:bg-rose-50 text-primary border border-white/70 font-bold py-5 px-10 rounded-2xl transition-all text-xl shadow-lg shadow-black/10" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20con%20un%20experto%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
-                        Hablar con un experto por WhatsApp
-                    </a>
-</div>
-</div>
-</div>
-</section>
-<a class="whatsapp-float" data-cta-id="CTA_FLOAT_VER_COMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp Tal-IA">
-  <span class="whatsapp-float__pulse" aria-hidden="true"></span>
-  <svg aria-hidden="true" class="whatsapp-float__icon" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
-  </svg>
-  <span class="whatsapp-float__label">Ver cómo funciona</span>
-</a>
-<div class="whatsapp-bar">
-  <a class="whatsapp-bar__button" data-cta-id="CTA_BAR_EMPEZAR" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer">
-    <svg aria-hidden="true" class="whatsapp-float__icon" viewBox="0 0 16 16" fill="currentColor">
-      <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
-    </svg>
-    Empezar por WhatsApp
-  </a>
-</div>
-<!-- Footer -->
-<div class="webchat-widget" id="open-webchat" aria-live="polite" data-open="false">
-    <button
-      type="button"
-      class="webchat-widget__toggle"
-      data-open-webchat
-      aria-expanded="false"
-      aria-controls="webchat-panel"
-    >
-      <span>Tal-IA responde</span>
-      <span class="webchat-widget__toggle-subtitle">Atención 24/7</span>
-    </button>
-    <div class="webchat-widget__panel" id="webchat-panel" role="dialog" aria-label="Conversación con TalIA">
-      <div class="webchat-widget__header">
-        <button type="button" class="webchat-widget__close" data-close-webchat aria-label="Cerrar chat">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="webchat-widget__messages" aria-live="polite">
-        <div id="chat-log" class="chat-log" aria-label="Conversación con TalIA"></div>
-      </div>
-      <form id="chat-form" class="webchat-widget__form" autocomplete="off">
-        <div class="webchat-widget__inputs">
-          <button type="button" id="chat-attachment-button" class="composer-attach" aria-label="Adjuntar archivo">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-            <span class="sr-only">Adjuntar archivo</span>
-          </button>
-          <input id="chat-input" type="text" name="message" placeholder="Escribe tu pregunta" />
-          <button type="submit" id="chat-submit">Enviar</button>
+        <div class="hero-actions">
+          <a class="button primary" data-cta-id="CTA_HERO_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20una%20demo%20rápida%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">
+            Quiero ver una demo
+          </a>
+          <a class="button secondary" href="#como-funciona">Ver cómo funciona</a>
         </div>
-        <input type="file" id="chat-file-input" class="composer-file-input" multiple hidden />
-        <div id="chat-attachments" class="composer-attachments" aria-live="polite"></div>
-      </form>
-    </div>
-  </div>
 
-<footer class="bg-white py-16 border-t border-slate-100">
-<div class="max-w-7xl mx-auto px-6">
-<div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-<div class="col-span-1 md:col-span-1">
-<div class="flex items-center gap-2 mb-6">
-<img src="/assets/logos/Logo8.png" alt="TalIA" class="size-8 object-contain" />
-<span class="text-xl font-bold tracking-tight text-slate-900">Talia | Tal-IA</span>
-</div>
-<p class="text-slate-500 text-sm leading-relaxed">
-                        Redefiniendo el futuro de la atención al cliente con agentes autónomos inteligentes.
-                    </p>
-</div>
-<div>
-<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Plataforma</h6>
-<ul class="space-y-4">
-<li>
-  <a class="text-slate-500 text-sm hover:text-primary" href="/caracteristicas">
-    Características
-  </a>
-</li>
-<li>
-  <a class="text-slate-500 text-sm hover:text-primary" href="/automatizar-ventas-whatsapp">
-    Automatizar ventas por WhatsApp
-  </a>
-</li>
-<li>
-  <a class="text-slate-500 text-sm hover:text-primary" href="/ia-para-inmobiliarias">
-    IA para inmobiliarias
-  </a>
-</li>
+        <div class="proof-row">
+          <div class="proof">
+            <strong>Encuentra clientes</strong>
+            <span>Prospección desde Google, DENUE y sitios web.</span>
+          </div>
+          <div class="proof">
+            <strong>Atiende 24/7</strong>
+            <span>Respuestas con IA por WhatsApp.</span>
+          </div>
+          <div class="proof">
+            <strong>Da seguimiento</strong>
+            <span>Citas, cotizaciones, asesor humano y métricas.</span>
+          </div>
+        </div>
+      </div>
 
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Agentes IA</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Integraciones CRM</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Omnicanalidad</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Seguridad</a></li>
-</ul>
-</div>
-<div>
-<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Empresa</h6>
-<ul class="space-y-4">
-<li>
-  <a class="text-slate-500 text-sm hover:text-primary" href="/automatizar-ventas-whatsapp">
-    Automatizar ventas por WhatsApp
-  </a>
-</li>
-<li>
-  <a class="text-slate-500 text-sm hover:text-primary" href="/ia-para-inmobiliarias">
-    IA para inmobiliarias
-  </a>
-</li>
+      <section class="map-shell" aria-label="Mapa circular comercial de TalIA" id="como-funciona">
+        <div class="orbit">
+          <div class="core">
+            <div>
+              <strong>Tal<span>IA</span></strong>
+              <p>Tu asistente comercial para conseguir, atender y convertir clientes.</p>
+            </div>
+          </div>
 
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Sobre nosotros</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Blog</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Carreras</a></li>
-<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Contacto</a></li>
-</ul>
-</div>
-<div>
-<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Boletín</h6>
-<p class="text-slate-500 text-sm mb-4">Recibe las últimas novedades sobre IA aplicada.</p>
-<div class="flex gap-2">
-<input class="bg-slate-50 border-slate-200 rounded-lg text-sm w-full focus:ring-primary focus:border-primary" placeholder="Email" type="email"/>
-<button class="bg-primary text-white p-2 rounded-lg hover:bg-primary/90">
-<span class="material-symbols-outlined">send</span>
-</button>
-</div>
-</div>
-</div>
-<div class="pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
-<p class="text-slate-400 text-xs">© <span id="current-year"></span> Talia AI. Todos los derechos reservados.</p>
-<div class="flex gap-8">
-<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Privacidad</a>
-<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Términos</a>
-<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Cookies</a>
-</div>
-</div>
-</div>
-</footer>
+          <article class="step s1">
+            <div class="badge">1</div>
+            <div>
+              <h3>Encuentra prospectos</h3>
+              <p>Busca negocios en Google, DENUE y sitios web. Crea listas útiles para vender.</p>
+            </div>
+          </article>
 
-    <script>
-      const webchatWidget = document.querySelector('.webchat-widget');
-      const toggleButton = document.querySelector('.webchat-widget__toggle');
-      const closeButton = document.querySelector('[data-close-webchat]');
-      const openWebchatTriggers = document.querySelectorAll('[data-open-webchat]');
+          <article class="step s2">
+            <div class="badge">2</div>
+            <div>
+              <h3>Activa campañas</h3>
+              <p>Contacta por email, WhatsApp o voz con mensajes automáticos.</p>
+            </div>
+          </article>
 
-      const setWebchatState = (open) => {
-        if (!webchatWidget) return;
-        webchatWidget.setAttribute('data-open', open ? 'true' : 'false');
-        toggleButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
+          <article class="step s3">
+            <div class="badge">3</div>
+            <div>
+              <h3>Responde con IA</h3>
+              <p>Atiende 24/7, resuelve dudas, pide datos y mantiene viva la conversación.</p>
+            </div>
+          </article>
+
+          <article class="step s4">
+            <div class="badge">4</div>
+            <div>
+              <h3>Califica y organiza</h3>
+              <p>Guarda el contacto, mide interés y acomoda cada oportunidad en el CRM.</p>
+            </div>
+          </article>
+
+          <article class="step s5">
+            <div class="badge">5</div>
+            <div>
+              <h3>Cotiza o agenda</h3>
+              <p>Envía precios, propuestas o agenda citas y visitas automáticamente.</p>
+            </div>
+          </article>
+
+          <article class="step s6">
+            <div class="badge">6</div>
+            <div>
+              <h3>Avisa al asesor</h3>
+              <p>Cuando el prospecto está listo, notifica al asesor con todo el contexto.</p>
+            </div>
+          </article>
+
+          <article class="step s7">
+            <div class="badge">7</div>
+            <div>
+              <h3>Da seguimiento</h3>
+              <p>Envía recordatorios y mensajes automáticos para no dejar enfriar al cliente.</p>
+            </div>
+          </article>
+
+          <article class="step s8">
+            <div class="badge">8</div>
+            <div>
+              <h3>Mide resultados</h3>
+              <p>Ve aperturas, clicks, respuestas, conversaciones y oportunidades reales.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section class="section" id="soluciones">
+      <div class="section-head">
+        <h2>Todo el flujo comercial en un solo lugar</h2>
+        <p>TalIA no es solo un chat. Une prospección, campañas, atención, CRM y seguimiento para que cada prospecto tenga un camino claro hacia la venta.</p>
+      </div>
+
+      <div class="feature-grid five">
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--green)">☏</div>
+          <h3>IA de WhatsApp</h3>
+          <p>Atiende conversaciones, responde dudas, pide datos y mantiene activo al prospecto.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--blue)">●</div>
+          <h3>CRM</h3>
+          <p>Ordena leads, clientes, historial, etapas, asesores y próximas acciones.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--violet)">✦</div>
+          <h3>IA</h3>
+          <p>Califica prospectos, automatiza respuestas y ayuda a decidir el siguiente paso.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--orange)">↗</div>
+          <h3>Prospección / Marketing</h3>
+          <p>Busca prospectos, activa campañas y mide aperturas, clicks y respuestas.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--teal)">✓</div>
+          <h3>Ventas</h3>
+          <p>Convierte conversaciones en oportunidades con agenda, cotización y seguimiento.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="industrias">
+      <div class="section-head">
+        <h2>Hecho para empresas que venden por conversación</h2>
+        <p>Funciona para negocios que reciben prospectos, atienden por WhatsApp, cotizan, agendan o necesitan seguimiento constante.</p>
+      </div>
+
+      <div class="audience-grid">
+        <div class="audience">Inmobiliarias</div>
+        <div class="audience">Servicios</div>
+        <div class="audience">Negocios locales</div>
+        <div class="audience">Ventas B2B</div>
+        <div class="audience">Turismo y reservas</div>
+      </div>
+    </section>
+
+    <section class="final-cta" id="demo">
+      <h2>Deja que TalIA ordene tu operación comercial</h2>
+      <p>Consigue prospectos, atiéndelos con IA, organiza cada oportunidad y da seguimiento sin perder el control.</p>
+      <a class="button" data-cta-id="CTA_FINAL_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Agenda una demo
+      </a>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target.closest('a[data-cta-id]') : null;
+      if (!target) return;
+      const payload = {
+        cta_id: target.getAttribute('data-cta-id'),
+        location_href: window.location.href,
+        referrer: document.referrer || null,
+        user_agent: navigator.userAgent || null,
       };
-
-      const handleOpenWebchat = (event) => {
-        event?.preventDefault?.();
-        setWebchatState(true);
-      };
-
-      const handleCloseWebchat = () => setWebchatState(false);
-
-      openWebchatTriggers.forEach((trigger) => {
-        trigger.addEventListener('click', handleOpenWebchat);
-      });
-
-      closeButton?.addEventListener('click', handleCloseWebchat);
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && webchatWidget?.getAttribute('data-open') === 'true') {
-          handleCloseWebchat();
-        }
-      });
-
-      const currentYearEl = document.getElementById('current-year');
-      if (currentYearEl) {
-        currentYearEl.textContent = new Date().getFullYear();
-      }
-
-      const heroDemoTabs = document.querySelectorAll('.hero-demo-tab');
-      const heroDemoVideo = null;
-      const heroDemoImage = document.getElementById('hero-demo-image');
-      const heroDemoCarousel = document.getElementById('hero-demo-carousel');
-      const heroDemoCarouselImage = document.getElementById('hero-demo-carousel-image');
-      const heroCarouselPrev = document.getElementById('hero-carousel-prev');
-      const heroCarouselNext = document.getElementById('hero-carousel-next');
-      const heroDemoCaption = document.getElementById('hero-demo-caption');
-      const supportsWebP = (() => {
-        try {
-          const canvas = document.createElement('canvas');
-          return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
-        } catch (_error) {
-          return false;
-        }
-      })();
-      const resolveImageAsset = (path) => {
-        if (!supportsWebP) return path;
-        return path.replace(/\.(png|jpe?g)(\?.*)?$/i, '.webp$2');
-      };
-      const condoCarouselImages = [
-        resolveImageAsset('/assets/images/Condo%201.png'),
-        resolveImageAsset('/assets/images/Condo%202.png'),
-        resolveImageAsset('/assets/images/Condo%203.png'),
-      ];
-      let heroCarouselIndex = 0;
-      let heroCarouselTimer = null;
-
-      const setHeroTabActive = (demoKey) => {
-        heroDemoTabs.forEach((tab) => {
-          const active = tab.dataset.heroDemo === demoKey;
-          tab.classList.toggle('bg-white', active);
-          tab.classList.toggle('text-primary', active);
-          tab.classList.toggle('border-primary/40', active);
-          tab.classList.toggle('shadow-sm', active);
-          tab.classList.toggle('bg-white/90', !active);
-          tab.classList.toggle('text-slate-600', !active);
-          tab.classList.toggle('border-slate-200', !active);
-        });
-      };
-
-      const stopHeroCarousel = () => {
-        if (heroCarouselTimer) {
-          clearInterval(heroCarouselTimer);
-          heroCarouselTimer = null;
-        }
-      };
-
-      const renderHeroCarouselImage = () => {
-        if (!heroDemoCarouselImage) return;
-        heroDemoCarouselImage.src = condoCarouselImages[heroCarouselIndex];
-      };
-
-      const startHeroCarousel = () => {
-        stopHeroCarousel();
-        heroCarouselTimer = setInterval(() => {
-          heroCarouselIndex = (heroCarouselIndex + 1) % condoCarouselImages.length;
-          renderHeroCarouselImage();
-        }, 3500);
-      };
-
-      const setHeroMode = (mode, mediaSrc, caption) => {
-        if (!heroDemoImage || !heroDemoCarousel) return;
-        stopHeroCarousel();
-        heroDemoImage.classList.add('hidden');
-        heroDemoCarousel.classList.add('hidden');
-
-        if (mode === 'image') {
-          heroDemoImage.src = mediaSrc;
-          heroDemoImage.classList.remove('hidden');
-        } else if (mode === 'carousel') {
-          heroCarouselIndex = 0;
-          renderHeroCarouselImage();
-          heroDemoCarousel.classList.remove('hidden');
-          startHeroCarousel();
-        }
-
-        if (heroDemoCaption) {
-          heroDemoCaption.textContent = caption;
-        }
-      };
-
-      const applyHeroDemo = (demoKey) => {
-        setHeroTabActive(demoKey);
-        if (demoKey === 'ventas') {
-          setHeroMode('image', resolveImageAsset('/assets/images/ventas.png'), 'Vista: Ventas');
-        } else if (demoKey === 'bienes') {
-          return;
-        } else if (demoKey === 'turismo') {
-          setHeroMode('image', resolveImageAsset('/assets/images/chat.png'), 'Vista: Turismo');
-        } else if (demoKey === 'soporte') {
-          setHeroMode('image', resolveImageAsset('/assets/images/chat.png'), 'Vista: Soporte');
-        } else if (demoKey === 'condominios') {
-          setHeroMode('carousel', '', 'Vista: Condominios');
-        } else if (demoKey === 'prospeccion') {
-          setHeroMode('image', resolveImageAsset('/assets/images/Busquedas.png'), 'Vista: Prospeccion');
-        }
-      };
-
-      heroDemoTabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-          const demoKey = tab.dataset.heroDemo;
-          if (!demoKey) return;
-          applyHeroDemo(demoKey);
-        });
-      });
-
-      heroCarouselPrev?.addEventListener('click', () => {
-        heroCarouselIndex = (heroCarouselIndex - 1 + condoCarouselImages.length) % condoCarouselImages.length;
-        renderHeroCarouselImage();
-      });
-
-      heroCarouselNext?.addEventListener('click', () => {
-        heroCarouselIndex = (heroCarouselIndex + 1) % condoCarouselImages.length;
-        renderHeroCarouselImage();
-      });
-
-      if (heroDemoTabs.length) {
-        applyHeroDemo('ventas');
-      }
-
-      const successLogoButtons = document.querySelectorAll('[data-success-id]');
-      const successPopovers = document.querySelectorAll('[data-success-popover]');
-
-      const closeSuccessPopovers = () => {
-        successPopovers.forEach((popover) => popover.classList.add('hidden'));
-      };
-
-      successLogoButtons.forEach((button) => {
-        button.addEventListener('click', (event) => {
-          event.stopPropagation();
-          const id = button.getAttribute('data-success-id');
-          if (!id) return;
-          const popover = document.querySelector(`[data-success-popover="${id}"]`);
-          const willOpen = popover?.classList.contains('hidden');
-          closeSuccessPopovers();
-          if (willOpen) {
-            popover?.classList.remove('hidden');
-          }
-        });
-      });
-
-      document.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        if (target.closest('.success-logo-item')) return;
-        closeSuccessPopovers();
-      });
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          closeSuccessPopovers();
-        }
-      });
-
-      /* Lógica de marquesina comentada
-      (function animateMarquee() {
-        const track = document.querySelector('.marquee-track');
-        if (!track) return;
-        const speedAttr = Number(track.dataset.speed);
-        const speedValue = Number.isFinite(speedAttr) ? Math.max(0.1, speedAttr) : 0.35;
-        let offset = 0;
-        function step() {
-          offset -= speedValue;
-          track.style.transform = `translateX(${offset}px)`;
-          requestAnimationFrame(step);
-        }
-        step();
-      })();
-      */
-    </script>
-
-    
-    <script>
-      const heroCopyVariants = {
-        A: {
-          title: "CRM con IA para no dejar leads en visto.",
-          sub: "Cada mensaje sin respuesta es una oportunidad perdida. Tal-IA centraliza conversaciones en un CRM con IA, califica leads y agenda automáticamente 24/7.",
-          footnote: "CRM con IA · Respuesta en minutos"
-        },
-        B: {
-          title: "Tu CRM con IA responde en minutos y vende más.",
-          sub: "La mayoría de prospectos compra con quien responde primero. Tal-IA organiza cada conversación, asigna seguimiento y convierte leads en oportunidades reales.",
-          footnote: "CRM comercial · Atención inmediata"
-        },
-        C: {
-          title: "Automatización comercial en un CRM con IA.",
-          sub: "Tal-IA responde por tu negocio, registra prospectos, los califica y agenda citas automáticamente sin aumentar personal.",
-          footnote: "CRM · Prospección, seguimiento y agenda"
-        }
-      };
-
-      function getHeroVariantKey() {
-        const queryVariant = new URLSearchParams(window.location.search).get('ab');
-        if (queryVariant && heroCopyVariants[queryVariant]) {
-          localStorage.setItem('talia_hero_variant', queryVariant);
-          return queryVariant;
-        }
-        let variant = localStorage.getItem('talia_hero_variant');
-        if (!variant || !heroCopyVariants[variant]) {
-          const keys = Object.keys(heroCopyVariants);
-          variant = keys[Math.floor(Math.random() * keys.length)];
-          localStorage.setItem('talia_hero_variant', variant);
-        }
-        return variant;
-      }
-
-      function applyHeroCopyVariant() {
-        const variantKey = getHeroVariantKey();
-        const variant = heroCopyVariants[variantKey];
-        const heroTitle = document.getElementById('hero-title');
-        const heroSub = document.getElementById('hero-sub');
-        const heroFootnote = document.getElementById('hero-footnote');
-
-        if (heroTitle) heroTitle.textContent = variant.title;
-        if (heroSub) heroSub.textContent = variant.sub;
-        if (heroFootnote) heroFootnote.textContent = variant.footnote;
-
-        document.documentElement.dataset.heroVariant = variantKey;
-      }
-
-      applyHeroCopyVariant();
-
-      function ensureWebSessionId() {
-        const storageKey = 'talia-web-session';
-        try {
-          const existing = localStorage.getItem(storageKey);
-          if (existing && existing.trim()) {
-            return existing.trim();
-          }
-          const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-          localStorage.setItem(storageKey, random);
-          return random;
-        } catch (_error) {
-          return `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        }
-      }
-
-      function sendCtaClickEvent(target) {
-        if (!target) return;
-        const ctaId = target.getAttribute('data-cta-id');
-        if (!ctaId) return;
-        const tenantAlias = (() => {
-          try {
-            const stored = localStorage.getItem('talia-tenant-alias');
-            if (stored && stored.trim()) return stored.trim();
-          } catch (_error) {}
-          const meta = document.querySelector('meta[name="talia-tenant-alias"]');
-          if (meta && meta.getAttribute('content')) return meta.getAttribute('content');
-          return null;
-        })();
-        const payload = {
-          session_id: ensureWebSessionId(),
-          event_type: 'whatsapp_cta_click',
-          cta_id: ctaId,
-          hero_variant: localStorage.getItem('talia_hero_variant') || null,
-          tenant_alias: tenantAlias || null,
-          location_href: window.location.href,
-          referrer: document.referrer || null,
-          user_agent: navigator.userAgent || null,
-          metadata: {
-            cta_text: target.textContent?.trim() || null,
-            cta_href: target.getAttribute('href') || null,
-            hero_variant: localStorage.getItem('talia_hero_variant') || null,
-            tenant_alias: tenantAlias || null,
-          }
-        };
-
-        try {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon('/api/crm/web/cta-click', blob);
-            return;
-          }
-        } catch (_error) {}
-
-        fetch('/api/crm/web/cta-click', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          keepalive: true,
-        }).catch(() => {});
-      }
-
-      document.addEventListener('click', (event) => {
-        const target = event.target instanceof Element ? event.target.closest('a[data-cta-id]') : null;
-        if (!target) return;
-        sendCtaClickEvent(target);
-      });
-    </script>
-
-    <script type="module" src="./assets/js/main.js?v=20260313c"></script>
-
-</body></html>
+      try {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon?.('/api/crm/web/cta-click', blob);
+      } catch (_error) {}
+    });
+  </script>
+</body>
+</html>

@@ -88,18 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019e4b7a-649d-7980-9ffb-0563f57640e9   #################
 
-IDEA PROPIEDADES: codex resume 019e4b72-22f4-7610-aeb4-67be8a2b7c23
-
-MAPA DE CONVERSION codex resume 019ddea5-0634-7a70-a464-a6b789b1d26d
-REFACTO DE CONTACTOS codex resume 019ddec6-b7e9-7b30-9dd1-8a4ed30e58ba
-
-BUSQUEDAS DENUE codex resume 019dbbf0-3dc7-7e81-aca8-16ee42ae7984
-CORREO: codex resume 019dbc66-c341-76f2-a997-a8785463446c
-CORREO 2: codex resume 019e3858-2fb0-7310-9d73-b94ec6a53d71
-WHATSAPP MAPA CONVERSION codex resume 019e097e-9f8d-77c1-aa35-785ca75ad191
-codex resume 019e3c79-e643-7642-818f-ed264b0ef260
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git
 
@@ -114,7 +103,6 @@ sudo chown -R jorge:jorge /var/www/talia/.git
 
 qOmfDOWUq7L9l5Nlsgdgd#$VD^^#&*XFHh_g
 
-login codex resume 019d541a-0287-73a2-8a45-885f987ab2e6
 
 # REinicio de Landing:
 cd /var/www/talia/landing/src && node scripts/generate-sitemap.mjs && sudo rsync -a /var/www/talia/landing/src/ /var/www/talia-landing/
