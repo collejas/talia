@@ -190,7 +190,7 @@ const pages = [
     description: "CRM con IA para WhatsApp que centraliza leads, conversaciones, seguimiento y agenda comercial.",
     eyebrow: "Producto",
     headline: "CRM con IA para WhatsApp",
-    lede: "La categoría más fuerte de TalIA: un CRM que organiza conversaciones de WhatsApp, prioriza prospectos y mantiene trazabilidad comercial.",
+    lede: "La categoría más fuerte de TalIA: un CRM que organiza conversaciones de WhatsApp, prioriza prospectos y mantiene trazabilidad comercial para que ventas no dependa de chats sueltos.",
     primaryCta: { label: "Ver demo", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20el%20CRM%20con%20IA%20para%20WhatsApp%20de%20Tal-IA" },
     secondaryCta: { label: "Qué es TalIA", href: "/que-es-talia" },
     stats: [
@@ -199,11 +199,33 @@ const pages = [
       ["Agenda", "Citas y cotizaciones con contexto."],
     ],
     sectionTitle: "Por qué importa",
-    sectionLead: "Aquí se concentra la intención más comercial: CRM, IA, WhatsApp, ventas y seguimiento en una sola URL.",
+    sectionLead: "Aquí se concentra la intención más comercial: CRM, IA, WhatsApp, ventas y seguimiento en una sola URL. La página debe dejar claro que el valor no es solo responder, sino ordenar todo el proceso comercial.",
     cards: [
       ["Centraliza leads", "No pierdas prospectos entre chats o notas sueltas.", "blue"],
       ["Ordena el pipeline", "Ver etapas, responsables y próximos pasos es clave para convertir.", "violet"],
       ["Automatiza seguimiento", "Recordatorios y respuestas automáticas sin perder contexto humano.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué incluye el CRM",
+        lead: "La página debe explicar la estructura operativa del producto, no solo repetir la palabra CRM.",
+        mode: "cards",
+        items: [
+          ["Inbox comercial", "Todos los chats de WhatsApp organizados en un flujo de trabajo útil.", "blue"],
+          ["Pipeline visual", "Cada oportunidad tiene etapa, responsable y siguiente acción.", "violet"],
+          ["Seguimiento guiado", "Recordatorios y tareas para que el lead no se enfríe.", "green"],
+        ],
+      },
+      {
+        title: "Para quién es",
+        lead: "Funciona mejor cuando el equipo vive de responder prospectos, cotizar y dar seguimiento diario.",
+        mode: "cards",
+        items: [
+          ["Ventas", "Equipos que miden velocidad de respuesta y cierre.", "blue"],
+          ["Atención comercial", "Empresas que cotizan por WhatsApp todos los días.", "violet"],
+          ["Dirección", "Quienes necesitan ver el estado real del pipeline.", "green"],
+        ],
+      },
     ],
     related: [
       ["/ia-de-whatsapp", "IA de WhatsApp"],
@@ -254,7 +276,7 @@ const pages = [
     description: "IA de WhatsApp para responder, calificar y dar seguimiento comercial con CRM y automatización.",
     eyebrow: "Solución",
     headline: "IA de WhatsApp para responder, calificar y dar seguimiento",
-    lede: "TalIA funciona como una IA para WhatsApp que atiende conversaciones, pide datos, responde dudas y conecta al prospecto con tu CRM.",
+    lede: "TalIA funciona como una IA para WhatsApp que atiende conversaciones, pide datos, responde dudas y conecta al prospecto con tu CRM para que cada chat tenga siguiente paso.",
     primaryCta: { label: "Ver demo de WhatsApp", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20de%20WhatsApp%20de%20Tal-IA" },
     secondaryCta: { label: "Ver CRM con IA", href: "/crm-con-ia-para-whatsapp" },
     stats: [
@@ -263,11 +285,34 @@ const pages = [
       ["CRM", "cada chat se convierte en seguimiento."],
     ],
     sectionTitle: "Cómo se usa",
-    sectionLead: "La IA de WhatsApp resuelve el inicio del flujo comercial: responder rápido, entender intención y llevar el caso al siguiente paso.",
+    sectionLead: "La IA de WhatsApp resuelve el inicio del flujo comercial: responder rápido, entender intención y llevar el caso al siguiente paso. La intención de búsqueda suele ser muy práctica; por eso hay que explicar el flujo completo.",
     cards: [
       ["Responde", "Contesta preguntas frecuentes y da contexto comercial.", "blue"],
       ["Califica", "Pregunta lo necesario para saber si el lead vale tiempo humano.", "violet"],
       ["Agenda", "Lleva al prospecto a cita o cotización sin fricción.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Flujo de atención",
+        lead: "La página debe mostrar qué pasa desde que llega el mensaje hasta que el lead queda listo para un asesor.",
+        mode: "steps",
+        items: [
+          ["Recibe", "Entra el mensaje y se abre la conversación con contexto.",],
+          ["Pregunta", "La IA hace las preguntas mínimas para entender intención y necesidad."],
+          ["Clasifica", "Determina si el caso va a ventas, soporte o seguimiento."],
+          ["Entrega", "La oportunidad se manda al CRM o al asesor con toda la información."],
+        ],
+      },
+      {
+        title: "Cuándo conviene usarla",
+        lead: "Sirve cuando el volumen de chats o la velocidad de respuesta ya afectan conversiones.",
+        mode: "cards",
+        items: [
+          ["Leads entrantes", "Cuando llegan muchas consultas y hay riesgo de dejar prospectos en visto.", "blue"],
+          ["Fuera de horario", "Cuando necesitas atender después de horas sin perder oportunidades.", "violet"],
+          ["Precalificación", "Cuando quieres filtrar antes de pasar el lead a un asesor humano.", "green"],
+        ],
+      },
     ],
     related: [
       ["/ia-para-ventas", "IA para ventas"],
@@ -578,7 +623,7 @@ const pages = [
     description: "IA para inmobiliarias por WhatsApp que responde leads, perfila compradores y agenda citas automáticamente.",
     eyebrow: "Industrias",
     headline: "IA para inmobiliarias por WhatsApp",
-    lede: "TalIA responde leads inmobiliarios en segundos, pregunta lo necesario y agenda citas sin depender del seguimiento manual.",
+    lede: "TalIA responde leads inmobiliarios en segundos, pregunta lo necesario y agenda citas sin depender del seguimiento manual. La página debe dejar claro que la prioridad es no perder interesados por tardanza.",
     primaryCta: { label: "Ver demo inmobiliaria", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20para%20inmobiliarias%20de%20Tal-IA" },
     secondaryCta: { label: "Ver industrias", href: "/industrias" },
     stats: [
@@ -587,11 +632,33 @@ const pages = [
       ["Agenda", "citas y visitas automáticas."],
     ],
     sectionTitle: "En inmobiliarias",
-    sectionLead: "La intención es capturar búsquedas de IA para inmobiliarias y mostrar un flujo claro de respuesta, calificación y cita.",
+    sectionLead: "La intención es capturar búsquedas de IA para inmobiliarias y mostrar un flujo claro de respuesta, calificación y cita. La página debe explicar por qué una respuesta rápida cambia la conversión en portales, campañas y referidos.",
     cards: [
       ["Leads", "Responde prospectos que llegan por campañas o portales.", "blue"],
       ["Citas", "Reduce el tiempo entre interés y visita.", "violet"],
       ["Seguimiento", "No pierdas compradores por falta de respuesta.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Casos de uso inmobiliarios",
+        lead: "No todos los leads llegan igual. Esta sección explica dónde más valor aporta la automatización.",
+        mode: "cards",
+        items: [
+          ["Portales", "Respuestas rápidas para leads que llegan desde portales inmobiliarios.", "blue"],
+          ["Visitas", "Agenda recorridos y confirma asistencia sin fricción.", "violet"],
+          ["Seguimiento", "Mantén vivos prospectos que todavía están comparando opciones.", "green"],
+        ],
+      },
+      {
+        title: "Qué busca el usuario",
+        lead: "La página debe responder a la intención real: agendar más rápido, calificar mejor y perder menos interesados.",
+        mode: "steps",
+        items: [
+          ["Respuesta rápida", "El prospecto recibe atención antes de irse con otro asesor."],
+          ["Calificación", "Se capturan datos clave como zona, presupuesto y tipo de propiedad."],
+          ["Cita", "El lead pasa a una visita o conversación con más contexto."],
+        ],
+      },
     ],
     related: [
       ["/ia-de-whatsapp", "IA de WhatsApp"],
@@ -808,6 +875,48 @@ function renderPage(page) {
     .map(([q, a]) => `<details class="feature-card"><summary style="cursor:pointer;font-weight:850;">${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`)
     .join("\n");
 
+  const extraSections = (page.bodySections || [])
+    .map((block) => {
+      const blockContent =
+        block.mode === "steps"
+          ? `<div class="process-grid">
+              ${block.items
+                .map(
+                  ([title, copy], index) => `
+              <article class="step-card">
+                <div class="step-card__index">0${index + 1}</div>
+                <h3>${escapeHtml(title)}</h3>
+                <p>${escapeHtml(copy)}</p>
+              </article>`
+                )
+                .join("\n")}
+            </div>`
+          : `<div class="feature-grid">
+              ${block.items
+                .map(
+                  ([title, copy, color]) => `
+              <article class="feature-card">
+                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--${color}); background: rgba(37,99,235,.05);">${escapeHtml(sectionGroup.label)}</div>
+                <h3 style="margin: 12px 0 0; font-size: 18px;">${escapeHtml(title)}</h3>
+                <p>${escapeHtml(copy)}</p>
+              </article>`
+                )
+                .join("\n")}
+            </div>`;
+
+      return `
+    <section class="section">
+      <div class="section__head">
+        <div>
+          <h2>${escapeHtml(block.title)}</h2>
+          <p>${escapeHtml(block.lead)}</p>
+        </div>
+      </div>
+      ${blockContent}
+    </section>`;
+    })
+    .join("\n");
+
   const groupIntro =
     sectionGroup.introMode === "steps"
       ? `
@@ -917,6 +1026,8 @@ function renderPage(page) {
         ${relatedLinks}
       </div>
     </section>
+
+    ${extraSections}
 
     <section class="section">
       <div class="section__head">
