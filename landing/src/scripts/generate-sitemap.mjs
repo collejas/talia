@@ -28,11 +28,6 @@ const urls = [
   { loc: "/industrias/turismo", priority: "0.9" },
   { loc: "/caracteristicas", priority: "0.95" },
   { loc: "/precios", priority: "0.9" },
-  { loc: "/automatizar-ventas-whatsapp", priority: "0.9" },
-  { loc: "/ia-para-inmobiliarias", priority: "0.9" },
-  { loc: "/ia-para-whatsapp", priority: "0.9" },
-  { loc: "/whatsapp-ia", priority: "0.9" },
-  { loc: "/automatizacion-whatsapp", priority: "0.9" },
 ];
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
