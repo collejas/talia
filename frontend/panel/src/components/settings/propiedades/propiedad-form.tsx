@@ -2798,14 +2798,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       <DialogHeader>
         <DialogTitle>Importar/Exportar Datos</DialogTitle>
         <DialogDescription>
-          Descarga la plantilla mínima si quieres empezar rápido. El CSV solo necesita
+          Descarga la plantilla mínima si quieres empezar rápido. El CSV de importación solo necesita
           <span className="font-semibold text-slate-700">
             entidad, grupo, nombre, status y poligono
           </span>;
           el tipo de desarrollo vive en <code>tipo_desarrollo</code> y el tipo de unidad en
-          <code>tipo_unidad_nombre</code>. Para unidades, <code>area_m2</code> es opcional pero conviene
-          usar <code>identificador</code> como columna auxiliar para ubicar cada fila. Los
-          extras no operativos van al final en columnas como
+          <code>tipo_unidad_nombre</code>. Para unidades, <code>area_m2</code> es opcional. Puedes usar
+          <code>identificador</code> como columna auxiliar para ubicar cada fila. Los extras no
+          operativos van al final en columnas como
           <code>metadata_cuartos</code> y <code>metadata_patio_servicio</code>.
         </DialogDescription>
       </DialogHeader>
@@ -2837,9 +2837,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           descargar los datos actuales con la misma estructura para usarlos como base. Las columnas de
           volumen 3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
           La altura de capa sigue siendo <code>altura</code> y solo aplica a <code>propiedad_capas</code>.
-          La columna <code>identificador</code> concatena las iniciales del desarrollo con capa /
-          unidad para ubicar
-          rápido cada fila en la estructura, pero es opcional para importar.
+          La columna <code>identificador</code> concatena las iniciales del desarrollo con capa y
+          unidad para ubicar rápido cada fila en la estructura, pero es opcional para importar.
           Si necesitas mandar extras no operativos, agrega columnas <code>metadata_*</code> al final; si lo
           consultas o filtras seguido, mejor conviértelo en columna normal.
         </p>
