@@ -2857,7 +2857,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           onClick={handleRunImport}
           disabled={!importFile || importStatus === "submitting"}
         >
-          {importStatus === "submitting" ? "Importando…" : "Importar CSV"}
+          {importStatus === "submitting" ? "Importando…" : "Importar datos"}
         </Button>
       </DialogFooter>
     </DialogContent>
