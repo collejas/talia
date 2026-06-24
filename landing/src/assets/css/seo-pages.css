@@ -343,7 +343,22 @@ a {
   line-height: 1.5;
 }
 
+.section__subhead {
+  margin: 4px 0 14px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.process-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
@@ -354,6 +369,40 @@ a {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--line);
+}
+
+.step-card {
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+}
+
+.step-card__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(109, 40, 217, 0.12));
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.step-card h3 {
+  margin: 12px 0 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.step-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .feature-card p {
@@ -453,6 +502,7 @@ a {
   }
 
   .feature-grid,
+  .process-grid,
   .links-grid,
   .stats {
     grid-template-columns: 1fr;

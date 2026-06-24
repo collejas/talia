@@ -4,7 +4,116 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const root = resolve(process.cwd(), "..");
-const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624b`;
+const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624c`;
+
+const sectionGroups = {
+  producto: {
+    label: "Producto",
+    introTitle: "Cómo leer Producto",
+    introLead:
+      "Estas páginas explican qué es TalIA, qué incluye la plataforma y cómo se presenta la propuesta antes de llevar al usuario a demo o precios.",
+    introMode: "cards",
+    introItems: [
+      ["Qué es", "Define la propuesta completa y no solo una función aislada.", "blue"],
+      ["Componentes", "Conecta CRM, WhatsApp, asistente y características.", "violet"],
+      ["Conversión", "Lleva al usuario hacia una demo o una página de precios.", "green"],
+    ],
+  },
+  soluciones: {
+    label: "Soluciones",
+    introTitle: "Qué resuelve cada solución",
+    introLead:
+      "Aquí se explica el problema operativo que TalIA resuelve, cómo entra en el flujo comercial y qué mejora para ventas o atención.",
+    introMode: "steps",
+    introItems: [
+      ["Detecta el problema", "Identifica qué parte del flujo se rompe hoy: respuesta lenta, seguimiento débil o falta de orden."],
+      ["Activa la solución", "La IA entra en el punto correcto: WhatsApp, ventas, automatización o agenda."],
+      ["Entrega resultado", "El equipo trabaja con más contexto, menos fricción y mayor velocidad de cierre."],
+    ],
+  },
+  prospeccion: {
+    label: "Prospección",
+    introTitle: "Cómo se entiende la prospección",
+    introLead:
+      "Estas páginas cubren el trabajo previo a la venta: encontrar contactos, construir bases útiles y activar campañas que sí mueven oportunidades.",
+    introMode: "cards",
+    introItems: [
+      ["Fuentes", "Parte de búsquedas, directorios y contactos públicos con potencial comercial.", "blue"],
+      ["Limpieza", "Convierte datos dispersos en listas que el equipo realmente pueda usar.", "violet"],
+      ["Activación", "Lleva la base a campañas, WhatsApp o seguimiento comercial.", "green"],
+    ],
+  },
+  industrias: {
+    label: "Industrias",
+    introTitle: "Cómo se adaptan las industrias",
+    introLead:
+      "Cada vertical traduce TalIA a un caso real: inmobiliarias, servicios, negocios locales, ventas B2B y turismo tienen recorridos y objeciones distintas.",
+    introMode: "cards",
+    introItems: [
+      ["Contexto", "El mensaje usa el lenguaje y el proceso de cada industria.", "blue"],
+      ["Caso de uso", "Se enfoca en citas, cotizaciones, reservas o seguimiento según el sector.", "violet"],
+      ["Acción", "La página empuja al usuario hacia el flujo que más le conviene.", "green"],
+    ],
+  },
+};
+
+const sectionPages = {
+  producto: [
+    { href: "/que-es-talia", label: "Qué es TalIA" },
+    { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
+    { href: "/asistente-ia-empresas", label: "Asistente IA para empresas" },
+    { href: "/caracteristicas", label: "Características" },
+  ],
+  soluciones: [
+    { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
+    { href: "/ia-para-ventas", label: "IA para ventas" },
+    { href: "/automatizacion-de-ventas", label: "Automatización de ventas" },
+    { href: "/seguimiento-ventas", label: "Seguimiento de ventas" },
+    { href: "/agenda-y-cotizaciones", label: "Agenda y cotizaciones" },
+  ],
+  prospeccion: [
+    { href: "/prospeccion-comercial", label: "Prospección comercial" },
+    { href: "/buscar-contactos", label: "Buscar contactos" },
+    { href: "/prospectos-google-denue", label: "Prospectos Google y DENUE" },
+    { href: "/campanas-marketing", label: "Campañas y marketing" },
+  ],
+  industrias: [
+    { href: "/industrias", label: "Ver industrias" },
+    { href: "/industrias/inmobiliarias", label: "Inmobiliarias" },
+    { href: "/industrias/servicios", label: "Servicios" },
+    { href: "/industrias/negocios-locales", label: "Negocios locales" },
+    { href: "/industrias/ventas-b2b", label: "Ventas B2B" },
+    { href: "/industrias/turismo", label: "Turismo" },
+  ],
+};
+
+function getSectionKey(url) {
+  if (url.startsWith("/industrias")) {
+    return "industrias";
+  }
+  if (
+    [
+      "/ia-de-whatsapp",
+      "/ia-para-ventas",
+      "/automatizacion-de-ventas",
+      "/seguimiento-ventas",
+      "/agenda-y-cotizaciones",
+    ].includes(url)
+  ) {
+    return "soluciones";
+  }
+  if (
+    [
+      "/prospeccion-comercial",
+      "/buscar-contactos",
+      "/prospectos-google-denue",
+      "/campanas-marketing",
+    ].includes(url)
+  ) {
+    return "prospeccion";
+  }
+  return "producto";
+}
 
 const navGroups = [
   {
@@ -37,14 +146,7 @@ const navGroups = [
   },
   {
     label: "Industrias",
-    links: [
-      { href: "/industrias", label: "Ver industrias" },
-      { href: "/industrias/inmobiliarias", label: "Inmobiliarias" },
-      { href: "/industrias/servicios", label: "Servicios" },
-      { href: "/industrias/negocios-locales", label: "Negocios locales" },
-      { href: "/industrias/ventas-b2b", label: "Ventas B2B" },
-      { href: "/industrias/turismo", label: "Turismo" },
-    ],
+    links: sectionPages.industrias,
   },
 ];
 
@@ -676,6 +778,15 @@ function renderNav(depth = 0) {
 function renderPage(page) {
   const depth = page.url.split("/").filter(Boolean).length - 1;
   const prefix = "../".repeat(depth);
+  const sectionKey = getSectionKey(page.url);
+  const sectionGroup = sectionGroups[sectionKey];
+  const siblingLinks = sectionPages[sectionKey]
+    .filter((link) => link.href !== page.url)
+    .map(
+      (link) =>
+        `<a class="link-card" href="${link.href}"><strong>${escapeHtml(link.label)}</strong><span>Más páginas de ${escapeHtml(sectionGroup.label)}.</span></a>`
+    )
+    .join("\n");
   const relatedLinks = page.related
     .map(([href, label]) => `<a class="link-card" href="${href}"><strong>${escapeHtml(label)}</strong><span>Ir a esta página SEO relacionada.</span></a>`)
     .join("\n");
@@ -696,6 +807,35 @@ function renderPage(page) {
   const faq = page.faq
     .map(([q, a]) => `<details class="feature-card"><summary style="cursor:pointer;font-weight:850;">${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`)
     .join("\n");
+
+  const groupIntro =
+    sectionGroup.introMode === "steps"
+      ? `
+      <div class="process-grid">
+        ${sectionGroup.introItems
+          .map(
+            ([title, copy], index) => `
+        <article class="step-card">
+          <div class="step-card__index">0${index + 1}</div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(copy)}</p>
+        </article>`
+          )
+          .join("\n")}
+      </div>`
+      : `
+      <div class="feature-grid">
+        ${sectionGroup.introItems
+          .map(
+            ([title, copy, color]) => `
+        <article class="feature-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--${color}); background: rgba(37,99,235,.05);">${escapeHtml(sectionGroup.label)}</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">${escapeHtml(title)}</h3>
+          <p>${escapeHtml(copy)}</p>
+        </article>`
+          )
+          .join("\n")}
+      </div>`;
 
   return `<!doctype html>
 <html lang="es">
@@ -754,10 +894,25 @@ function renderPage(page) {
     <section class="section">
       <div class="section__head">
         <div>
+          <h2>${escapeHtml(sectionGroup.introTitle)}</h2>
+          <p>${escapeHtml(sectionGroup.introLead)}</p>
+        </div>
+      </div>
+      ${groupIntro}
+    </section>
+
+    <section class="section">
+      <div class="section__head">
+        <div>
           <h2>Enlaces relacionados</h2>
           <p>La navegación interna ayuda a que Google descubra y entienda mejor el sitio, y además guía al usuario a la siguiente página útil.</p>
         </div>
       </div>
+      <div class="section__subhead">Más de ${escapeHtml(sectionGroup.label)}</div>
+      <div class="links-grid">
+        ${siblingLinks}
+      </div>
+      <div class="section__subhead" style="margin-top: 18px;">Otras páginas útiles</div>
       <div class="links-grid">
         ${relatedLinks}
       </div>
