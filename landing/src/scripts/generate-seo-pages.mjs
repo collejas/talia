@@ -3,7 +3,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-const root = resolve(process.cwd(), "landing");
+const root = resolve(process.cwd(), "..");
 const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624a`;
 
 const navGroups = [
@@ -40,6 +40,10 @@ const navGroups = [
     links: [
       { href: "/industrias", label: "Ver industrias" },
       { href: "/industrias/inmobiliarias", label: "Inmobiliarias" },
+      { href: "/industrias/servicios", label: "Servicios" },
+      { href: "/industrias/negocios-locales", label: "Negocios locales" },
+      { href: "/industrias/ventas-b2b", label: "Ventas B2B" },
+      { href: "/industrias/turismo", label: "Turismo" },
     ],
   },
 ];
@@ -453,6 +457,10 @@ const pages = [
     ],
     related: [
       ["/industrias/inmobiliarias", "IA para inmobiliarias"],
+      ["/industrias/servicios", "IA para servicios"],
+      ["/industrias/negocios-locales", "IA para negocios locales"],
+      ["/industrias/ventas-b2b", "IA para ventas B2B"],
+      ["/industrias/turismo", "IA para turismo"],
       ["/ia-de-whatsapp", "IA de WhatsApp"],
       ["/crm-con-ia-para-whatsapp", "CRM con IA para WhatsApp"],
     ],
@@ -491,6 +499,134 @@ const pages = [
     faq: [
       ["¿Sirve para desarrollos inmobiliarios?", "Sí. Puede adaptarse a proyectos, inventario y visita."],
       ["¿Reemplaza al asesor?", "No. Lo ayuda a llegar con leads mejor calificados."],
+    ],
+  },
+  {
+    output: "industrias/servicios.html",
+    url: "/industrias/servicios",
+    title: "IA para servicios | TalIA",
+    description: "IA para servicios que ayuda a cotizar, agendar, responder WhatsApp y dar seguimiento a solicitudes.",
+    eyebrow: "Industrias",
+    headline: "IA para servicios",
+    lede: "TalIA ayuda a negocios de servicios a responder rápido, cotizar con contexto y mantener orden en las solicitudes entrantes.",
+    primaryCta: { label: "Ver demo de servicios", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20IA%20para%20servicios%20con%20Tal-IA" },
+    secondaryCta: { label: "Ver industrias", href: "/industrias" },
+    stats: [
+      ["Cotiza", "respuestas más claras y rápidas."],
+      ["Agenda", "citas y confirmaciones automáticas."],
+      ["Ordena", "seguimiento por solicitud."],
+    ],
+    sectionTitle: "En servicios",
+    sectionLead: "Los servicios necesitan rapidez, cotización clara y seguimiento. Esa es la intención de esta página.",
+    cards: [
+      ["Cotizaciones", "Respuestas más precisas y sin demora.", "blue"],
+      ["Agenda", "Reduce fricción al coordinar citas.", "violet"],
+      ["Seguimiento", "No dejes caer solicitudes por falta de respuesta.", "green"],
+    ],
+    related: [
+      ["/agenda-y-cotizaciones", "Agenda y cotizaciones"],
+      ["/ia-de-whatsapp", "IA de WhatsApp"],
+      ["/seguimiento-ventas", "Seguimiento de ventas"],
+    ],
+    faq: [
+      ["¿Sirve para servicios profesionales?", "Sí. Es útil para empresas que cotizan y agendan."],
+      ["¿Puede adaptarse por tipo de servicio?", "Sí. El flujo puede ajustarse al proceso real."],
+    ],
+  },
+  {
+    output: "industrias/negocios-locales.html",
+    url: "/industrias/negocios-locales",
+    title: "IA para negocios locales | TalIA",
+    description: "IA para negocios locales que responde por WhatsApp, organiza leads y ayuda a vender más sin perder seguimiento.",
+    eyebrow: "Industrias",
+    headline: "IA para negocios locales",
+    lede: "TalIA ayuda a pequeños negocios y comercios locales a responder mejor, atender más rápido y cerrar más oportunidades.",
+    primaryCta: { label: "Ver demo local", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20IA%20para%20negocios%20locales%20con%20Tal-IA" },
+    secondaryCta: { label: "Ver industrias", href: "/industrias" },
+    stats: [
+      ["Atención", "rápida y constante por WhatsApp."],
+      ["Ventas", "menos leads perdidos."],
+      ["Orden", "seguimiento simple y claro."],
+    ],
+    sectionTitle: "En negocios locales",
+    sectionLead: "La intención es dar una página sencilla para comercios que necesitan responder rápido y vender sin estructura pesada.",
+    cards: [
+      ["WhatsApp", "Atiende el canal más usado por el cliente.", "blue"],
+      ["Seguimiento", "No dejes preguntas sin respuesta.", "violet"],
+      ["Conversión", "Convierte interés en visitas o ventas.", "green"],
+    ],
+    related: [
+      ["/ia-de-whatsapp", "IA de WhatsApp"],
+      ["/seguimiento-ventas", "Seguimiento de ventas"],
+      ["/automatizacion-de-ventas", "Automatización de ventas"],
+    ],
+    faq: [
+      ["¿Sirve para comercios pequeños?", "Sí. Está pensada para equipos pequeños y ágiles."],
+      ["¿Necesita mucha configuración?", "No necesariamente; puede arrancar simple."],
+    ],
+  },
+  {
+    output: "industrias/ventas-b2b.html",
+    url: "/industrias/ventas-b2b",
+    title: "IA para ventas B2B | TalIA",
+    description: "IA para ventas B2B que ayuda a prospectar, calificar leads y dar seguimiento comercial estructurado.",
+    eyebrow: "Industrias",
+    headline: "IA para ventas B2B",
+    lede: "TalIA ayuda a equipos B2B a prospectar con más orden, atender mejor y seguir oportunidades con contexto comercial.",
+    primaryCta: { label: "Ver demo B2B", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20IA%20para%20ventas%20B2B%20con%20Tal-IA" },
+    secondaryCta: { label: "Ver prospección", href: "/prospeccion-comercial" },
+    stats: [
+      ["Prospección", "listas útiles y accionables."],
+      ["Seguimiento", "control del ciclo largo de venta."],
+      ["Cierre", "mejor contexto para el equipo."],
+    ],
+    sectionTitle: "En B2B",
+    sectionLead: "La venta consultiva necesita seguimiento y contexto. Esta página captura esa intención.",
+    cards: [
+      ["Prospección", "Busca cuentas y contactos con enfoque comercial.", "blue"],
+      ["Pipeline", "Mantén el ciclo de venta visible.", "violet"],
+      ["Seguimiento", "No pierdas tracción en ciclos largos.", "green"],
+    ],
+    related: [
+      ["/prospeccion-comercial", "Prospección comercial"],
+      ["/buscar-contactos", "Buscar contactos"],
+      ["/seguimiento-ventas", "Seguimiento de ventas"],
+    ],
+    faq: [
+      ["¿Sirve para ciclos de venta largos?", "Sí. B2B es justo donde más valor tiene el seguimiento."],
+      ["¿Puedo activar campañas?","Sí. Puede apoyarse con prospección y campañas."],
+    ],
+  },
+  {
+    output: "industrias/turismo.html",
+    url: "/industrias/turismo",
+    title: "IA para turismo | TalIA",
+    description: "IA para turismo que responde consultas, cotiza reservas y ayuda a agendar sin perder seguimiento.",
+    eyebrow: "Industrias",
+    headline: "IA para turismo",
+    lede: "TalIA ayuda a empresas de turismo y reservas a responder rápido, cotizar mejor y dar seguimiento a cada viaje o solicitud.",
+    primaryCta: { label: "Ver demo turismo", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20IA%20para%20turismo%20con%20Tal-IA" },
+    secondaryCta: { label: "Ver industrias", href: "/industrias" },
+    stats: [
+      ["Reservas", "respuestas ágiles y claras."],
+      ["Cotización", "mejor tiempo de respuesta."],
+      ["Seguimiento", "menos abandono de consulta."],
+    ],
+    sectionTitle: "En turismo",
+    sectionLead: "Turismo necesita disponibilidad, rapidez y claridad en la cotización. La página ataca esa búsqueda.",
+    cards: [
+      ["Reservas", "Responde disponibilidad y proceso.", "blue"],
+      ["Cotizaciones", "Agiliza precios y opciones.", "violet"],
+      ["Seguimiento", "Mantén viva la intención de compra.", "green"],
+    ],
+    related: [
+      ["/agenda-y-cotizaciones", "Agenda y cotizaciones"],
+      ["/ia-de-whatsapp", "IA de WhatsApp"],
+      ["/seguimiento-ventas", "Seguimiento de ventas"],
+    ],
+    faq: [
+      ["¿Sirve para agencias de viajes?", "Sí. Es una de las verticales más naturales para este flujo."],
+      ["¿Puedo personalizar el mensaje?", "Sí. El flujo se adapta a la operación."],
     ],
   },
 ];
