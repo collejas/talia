@@ -534,22 +534,6 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     return { ok: true, data: cachedCardResponse };
   }
 
-  async function recoverLatestCard(fallbackError: string): Promise<LeadActionResult> {
-    const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
-    if (latest.ok) {
-      try {
-        const mapped = mapPipelineCardResponse(latest.data);
-        return { ok: true, stage: mapped.stage, card: mapped.card };
-      } catch (mapError) {
-        console.warn("[embudo:updateLeadCard] latest-card-parse-failed", {
-          oportunidadId: input.oportunidadId,
-          error: mapError instanceof Error ? mapError.message : String(mapError),
-        });
-      }
-    }
-    return { ok: false, error: fallbackError };
-  }
-
   const opportunityPayload: Record<string, unknown> = {};
 
   if ("monto_estimado" in opportunityInput || "monto" in opportunityInput) {
@@ -600,6 +584,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
   const needsContactUpdate = Object.keys(contactoPayload).length > 0;
   const hasOpportunityUpdates = Object.keys(opportunityPayload).length > 0;
+  let contactError: string | null = null;
 
   let contactId =
     typeof input.personaId === "string" && input.personaId.trim().length
@@ -625,28 +610,34 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
     const contactResult = await callCrmApi<CrmContact>(`/crm/contacts/${contactId}`, {
       method: "PATCH",
+      searchParams: { skip_conversation_sync: true },
       body: contactoPayload,
     });
 
     if (!contactResult.ok) {
-      const recovered = await recoverLatestCard(contactResult.error);
-      if (recovered.ok) {
-        updateTag("embudo");
-        return recovered;
-      }
-      return { ok: false, error: contactResult.error };
+      contactError = contactResult.error;
+      console.error("[embudo:updateLeadCard] contact-update-failed", {
+        oportunidadId: input.oportunidadId,
+        contactoId: contactId,
+        error: contactResult.error,
+        status: contactResult.status,
+      });
+      cachedCardResponse = null;
+    } else {
+      contactUpdated = true;
+      cachedCardResponse = null;
     }
-    contactUpdated = true;
-    cachedCardResponse = null;
   }
 
   let cardResponse: PipelineCardResponse | null = null;
+  let opportunityError: string | null = null;
   if (hasOpportunityUpdates) {
     const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
       method: "PATCH",
       body: opportunityPayload,
     });
     if (!response.ok) {
+      opportunityError = response.error;
       if (response.status === 409) {
         const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
         if (latest.ok) {
@@ -659,14 +650,15 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
           };
         }
       }
-      const recovered = await recoverLatestCard(response.error);
-      if (recovered.ok) {
-        updateTag("embudo");
-        return recovered;
-      }
-      return { ok: false, error: response.error };
+      console.error("[embudo:updateLeadCard] opportunity-update-failed", {
+        oportunidadId: input.oportunidadId,
+        error: response.error,
+        status: response.status,
+        opportunityPayload,
+      });
+    } else {
+      cardResponse = response.data;
     }
-    cardResponse = response.data;
   } else {
     if (input.currentCard && input.currentStage && contactUpdated) {
       updateTag("embudo");
@@ -687,6 +679,38 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     }
   }
 
+  if (contactError || opportunityError) {
+    const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+    if (latest.ok) {
+      try {
+        const mapped = mapPipelineCardResponse(latest.data);
+        updateTag("embudo");
+        return {
+          ok: false,
+          error: [contactError, opportunityError].filter(Boolean).join(" / "),
+          latestStage: mapped.stage,
+          latestCard: mapped.card,
+        };
+      } catch (mapError) {
+        console.warn("[embudo:updateLeadCard] latest-card-parse-failed", {
+          oportunidadId: input.oportunidadId,
+          error: mapError instanceof Error ? mapError.message : String(mapError),
+        });
+      }
+    }
+    return {
+      ok: false,
+      error: [contactError, opportunityError].filter(Boolean).join(" / "),
+    };
+  }
+
+  if (!cardResponse) {
+    return {
+      ok: false,
+      error: "No se pudo actualizar la oportunidad.",
+    };
+  }
+
   updateTag("embudo");
   try {
     const mapped = mapPipelineCardResponse(cardResponse);
@@ -696,9 +720,15 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
       oportunidadId: input.oportunidadId,
       error: mapError instanceof Error ? mapError.message : String(mapError),
     });
-    return await recoverLatestCard(
-      "No se pudo interpretar la respuesta del CRM después de guardar la oportunidad.",
-    );
+    const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+    if (latest.ok) {
+      const mapped = mapPipelineCardResponse(latest.data);
+      return { ok: true, stage: mapped.stage, card: mapped.card };
+    }
+    return {
+      ok: false,
+      error: "No se pudo interpretar la respuesta del CRM después de guardar la oportunidad.",
+    };
   }
 }
 

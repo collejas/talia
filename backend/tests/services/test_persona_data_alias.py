@@ -52,6 +52,79 @@ def test_build_contact_write_parts_merges_persona_datos_into_metadata() -> None:
     assert persona_body["metadata"]["lead_scoring"]["answers"]["budget_range"] == "alto"
 
 
+def test_build_contact_write_parts_persists_company_and_need_aliases() -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+    parts = repo._build_contact_write_parts(
+        organizacion_id=uuid4(),
+        contact_id=uuid4(),
+        payload={
+            "company_name": "Demo SA",
+            "necesidad_proposito": "Automatizar atención",
+        },
+    )
+
+    persona_body = parts["persona_body"]
+    account_body = parts["account_body"]
+
+    assert persona_body["company_name"] == "Demo SA"
+    assert persona_body["persona_datos"]["company_name"] == "Demo SA"
+    assert persona_body["persona_datos"]["necesidad_proposito"] == "Automatizar atención"
+    assert persona_body["metadata"]["company_name"] == "Demo SA"
+    assert persona_body["metadata"]["necesidad_proposito"] == "Automatizar atención"
+    assert account_body is not None
+    assert account_body["necesidad_proposito"] == "Automatizar atención"
+
+
+def test_build_contact_write_parts_prefers_explicit_full_name_for_triggered_persona() -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+    parts = repo._build_contact_write_parts(
+        organizacion_id=uuid4(),
+        contact_id=uuid4(),
+        payload={
+            "nombre_completo": "Luis Perez",
+            "nombre_nombres": "Luis Perez",
+            "apellido_paterno": None,
+            "apellido_materno": None,
+            "nombre": "Visitante",
+        },
+        existing={
+            "nombre_completo": "Visitante WhatsApp",
+            "nombre": "Visitante",
+            "apellido_paterno": None,
+            "apellido_materno": None,
+        },
+    )
+
+    persona_body = parts["persona_body"]
+    assert persona_body["nombre"] == "Luis Perez"
+    assert persona_body["nombre_completo"] == "Luis Perez"
+    assert persona_body["apellido_paterno"] is None
+    assert persona_body["apellido_materno"] is None
+
+
+@pytest.mark.asyncio
+async def test_persona_to_contact_row_prefers_persona_company_and_need() -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+    async def fake_get_primary_account_for_persona(**_: object) -> dict[str, object]:
+        return {}
+
+    repo._get_primary_account_for_persona = fake_get_primary_account_for_persona  # type: ignore[attr-defined]
+    persona = {
+        "id": str(uuid4()),
+        "organizacion_id": str(uuid4()),
+        "nombre_completo": "Ada Lovelace",
+        "company_name": "Demo SA",
+        "necesidad_proposito": "Automatizar atención",
+        "metadata": {"company_name": "Demo SA", "necesidad_proposito": "Automatizar atención"},
+        "persona_datos": {"company_name": "Demo SA", "necesidad_proposito": "Automatizar atención"},
+    }
+
+    row = await repo._persona_to_contact_row(persona=persona, organizacion_id=uuid4())
+
+    assert row["company_name"] == "Demo SA"
+    assert row["necesidad_proposito"] == "Automatizar atención"
+
+
 @pytest.mark.parametrize(
     ("input_estado", "expected_estado"),
     [

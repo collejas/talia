@@ -7782,6 +7782,12 @@ class CRMRepository:
                 or account.get("alias")
                 or account.get("codigo_cuenta")
             )
+        persona_company_name = _clean_text(persona.get("company_name"))
+        persona_need = (
+            _clean_text(persona.get("necesidad_proposito"))
+            or _clean_text(persona_datos.get("necesidad_proposito"))
+            or _clean_text(metadata.get("necesidad_proposito"))
+        )
 
         contact_name_parts = [
             _clean_text(persona.get("nombre")),
@@ -7824,9 +7830,10 @@ class CRMRepository:
             "telefono_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
             "telefono": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
             "phone_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
-            "company_name": account_name,
+            "company_name": persona_company_name or account_name,
             "notes": persona.get("notas"),
-            "necesidad_proposito": account.get("necesidad_proposito") if isinstance(account, dict) else None,
+            "necesidad_proposito": persona_need
+            or (account.get("necesidad_proposito") if isinstance(account, dict) else None),
             "contacto_datos": {},
             "persona_datos": metadata,
             "contacto_datos": dict(metadata),
@@ -7991,6 +7998,21 @@ class CRMRepository:
                 apellido_paterno = split_apellido_paterno
                 apellido_materno = split_apellido_materno
 
+        explicit_full_name_update = (
+            isinstance(payload, dict)
+            and "nombre_completo" in payload
+            and self._pick_text(payload, "nombre_completo")
+            and (
+                "nombre" not in payload
+                or "nombre_nombres" in payload
+                or self._pick_text(payload, "nombre") == self._pick_text(payload, "nombre_completo")
+            )
+        )
+        if explicit_full_name_update:
+            given_name = full_name
+            apellido_paterno = None
+            apellido_materno = None
+
         account_type_raw = self._pick_text(merged, "tipo") or self._pick_text(merged, "tipo_cuenta")
         account_type = account_type_raw.casefold() if account_type_raw else ""
         contact_is_physical = account_type == "persona_fisica_actividad_empresarial"
@@ -7999,6 +8021,23 @@ class CRMRepository:
         company_name = self._pick_text(merged, "company_name")
         reason_name = self._pick_text(merged, "razon_social")
         account_name = company_name or reason_name or (full_name if contact_is_physical or contact_is_moral else None)
+        necesidad_proposito = self._pick_text(merged, "necesidad_proposito")
+        persona_datos = _ensure_metadata(merged.get("persona_datos"))
+        metadata = _ensure_metadata(merged.get("metadata"))
+        contacto_datos = _ensure_metadata(merged.get("contacto_datos"))
+        if persona_datos:
+            metadata = _deep_merge_metadata(metadata, persona_datos)
+        if contacto_datos:
+            metadata = _deep_merge_metadata(metadata, contacto_datos)
+
+        persona_data_payload = dict(persona_datos)
+        if company_name:
+            persona_data_payload.setdefault("company_name", company_name)
+            persona_data_payload.setdefault("empresa", company_name)
+        if necesidad_proposito:
+            persona_data_payload.setdefault("necesidad_proposito", necesidad_proposito)
+        if company_name or necesidad_proposito:
+            metadata = _deep_merge_metadata(metadata, persona_data_payload)
 
         has_account_fields = any(
             self._pick_text(merged, key)
@@ -8034,13 +8073,6 @@ class CRMRepository:
             or merged.get("cuenta_id")
         )
 
-        metadata = _ensure_metadata(merged.get("metadata"))
-        persona_datos = _ensure_metadata(merged.get("persona_datos"))
-        contacto_datos = _ensure_metadata(merged.get("contacto_datos"))
-        if persona_datos:
-            metadata = _deep_merge_metadata(metadata, persona_datos)
-        if contacto_datos:
-            metadata = _deep_merge_metadata(metadata, contacto_datos)
         now_value = datetime.now(timezone.utc)
 
         persona_body: dict[str, Any] = {
@@ -8109,6 +8141,8 @@ class CRMRepository:
             "estado": _normalize_persona_estado(self._pick_text(merged, "estado")),
             "origen": self._pick_text(merged, "origen"),
             "notas": self._pick_text(merged, "notas", "notes"),
+            "company_name": company_name,
+            "persona_datos": persona_data_payload or None,
             "metadata": metadata,
             "propietario_usuario_id": merged.get("propietario_usuario_id"),
             "creado_en": merged.get("creado_en") or merged.get("fecha_incorporacion") or now_value.isoformat(),

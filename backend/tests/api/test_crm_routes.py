@@ -333,6 +333,10 @@ class DummyCRMRepository(CRMRepository):
             "company_name": "Demo Inc.",
         }
 
+    async def get_latest_conversation_id_by_contact(self, **kwargs: Any) -> str | None:
+        self.calls.append(("get_latest_conversation_id_by_contact", kwargs))
+        return None
+
     async def get_stage_by_code(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(("get_stage_by_code", kwargs))
         return {
@@ -1989,12 +1993,44 @@ async def test_update_persona_legacy_allows_owner_when_not_elevated(
     resp = await client.patch(
         f"/crm/contacts/{uuid.uuid4()}",
         headers=_headers(),
+        params={"skip_conversation_sync": "true"},
         json={"nombre_completo": "Contacto actualizado"},
     )
 
     assert resp.status_code == 200, resp.text
     assert any(name == "get_persona" for name, _ in fake_repo.calls)
     assert any(name == "update_persona" for name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_update_persona_legacy_forwards_company_and_need(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    actor_user = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = actor_user
+
+    resp = await client.patch(
+        f"/crm/contacts/{uuid.uuid4()}",
+        headers=_headers(),
+        params={"skip_conversation_sync": "true"},
+        json={
+            "nombre_completo": "Contacto actualizado",
+            "company_name": "Demo SA",
+            "necesidad_proposito": "Automatizar atención",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    update_kwargs = next(kwargs for name, kwargs in fake_repo.calls if name == "update_persona")
+    assert update_kwargs["payload"]["company_name"] == "Demo SA"
+    assert update_kwargs["payload"]["necesidad_proposito"] == "Automatizar atención"
 
 
 @pytest.mark.asyncio

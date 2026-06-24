@@ -1673,6 +1673,7 @@ export function LeadDrawer({
 
       const contactoPayload: Record<string, unknown> = {
         nombre_completo: nombreRaw.length ? nombreRaw : null,
+        nombre_nombres: nombreRaw.length ? nombreRaw : null,
         correo: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
@@ -1720,6 +1721,15 @@ export function LeadDrawer({
       if (proyectoNecesidadesRaw.length) {
         metadata.proyecto_necesidades = proyectoNecesidadesRaw;
       }
+      if (nombreRaw.length) {
+        metadata.contacto_nombre = nombreRaw;
+      }
+      if (empresaRaw.length) {
+        metadata.contacto_empresa = empresaRaw;
+      }
+      if (necesidadPropositoRaw.length) {
+        metadata.contacto_necesidad = necesidadPropositoRaw;
+      }
       const autoTargetStage =
         findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep) ?? currentStage;
       oportunidadPayload.metadata = metadata;
@@ -1757,6 +1767,7 @@ export function LeadDrawer({
 
     const contactoUpdates: Record<string, unknown> = {
       nombre_completo: nombreRaw.length ? nombreRaw : null,
+      nombre_nombres: nombreRaw.length ? nombreRaw : null,
       correo: correoRaw.length ? correoRaw : null,
       telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       company_name: empresaRaw.length ? empresaRaw : null,
@@ -1785,6 +1796,14 @@ export function LeadDrawer({
       oportunidadUpdates.metadata = {
         ...(isRecord(card.metadata) ? card.metadata : {}),
         ...metadataUpdates,
+      };
+    }
+    if (nombreRaw.length || empresaRaw.length || necesidadPropositoRaw.length) {
+      oportunidadUpdates.metadata = {
+        ...(isRecord(oportunidadUpdates.metadata) ? oportunidadUpdates.metadata : {}),
+        ...(nombreRaw.length ? { contacto_nombre: nombreRaw } : {}),
+        ...(empresaRaw.length ? { contacto_empresa: empresaRaw } : {}),
+        ...(necesidadPropositoRaw.length ? { contacto_necesidad: necesidadPropositoRaw } : {}),
       };
     }
 
