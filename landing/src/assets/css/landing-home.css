@@ -50,6 +50,8 @@ a {
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 34px;
+  position: relative;
+  z-index: 20;
 }
 
 .brand {
@@ -77,6 +79,7 @@ a {
   color: #334155;
   font-size: 14px;
   font-weight: 760;
+  overflow: visible;
 }
 
 .nav-links a {
@@ -84,22 +87,43 @@ a {
 }
 
 .nav-links--desktop {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .nav-group {
   position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-self: stretch;
 }
 
-.nav-group summary {
+.nav-group > summary {
   list-style: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  user-select: none;
+  white-space: nowrap;
+  line-height: 1;
+  transition: background-color .18s ease, color .18s ease, transform .18s ease;
 }
 
-.nav-group summary::-webkit-details-marker {
+.nav-group > summary::after {
+  content: "▾";
+  font-size: 11px;
+  line-height: 1;
+  transition: transform .18s ease;
+}
+
+.nav-group[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.nav-group > summary::-webkit-details-marker {
   display: none;
 }
 
@@ -113,11 +137,16 @@ a {
   border: 1px solid rgba(15, 23, 42, .09);
   background: rgba(255,255,255,.98);
   box-shadow: 0 18px 50px rgba(15, 23, 42, .10);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 280px;
   opacity: 0;
   visibility: hidden;
   transform: translateY(6px);
   transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
   z-index: 30;
+  pointer-events: none;
 }
 
 .nav-group:hover .nav-dropdown,
@@ -126,6 +155,7 @@ a {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .nav-dropdown a {
@@ -134,6 +164,7 @@ a {
   border-radius: 14px;
   color: #334155;
   font-weight: 720;
+  white-space: nowrap;
 }
 
 .nav-dropdown a:hover {
@@ -552,6 +583,14 @@ h1 {
 }
 
 @media (max-width: 1180px) {
+  .nav {
+    align-items: flex-start;
+  }
+
+  .nav-links--desktop {
+    flex-wrap: wrap;
+  }
+
   .hero-grid {
     grid-template-columns: 1fr;
   }
