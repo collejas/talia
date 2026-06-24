@@ -323,6 +323,7 @@ const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
   "entidad",
   "grupo",
   "nombre",
+  "identificador",
   "status",
   "nivel",
   "capa_nivel",
@@ -368,6 +369,7 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "desarrollo",
     "Mirador",
     "Mirador Azul",
+    "Mirador Azul",
     "disponible",
     "",
     "",
@@ -407,6 +409,7 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "capa",
     "Mirador",
     "Planta baja",
+    "Mirador Azul / Planta baja",
     "disponible",
     "0",
     "",
@@ -446,6 +449,7 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "unidad",
     "Mirador",
     "LOTE-1",
+    "Mirador Azul / Planta baja / LOTE-1",
     "disponible",
     "",
     "0",
@@ -523,6 +527,25 @@ function csvMetadataField(metadata: Record<string, unknown> | undefined, suffix:
   return csvField(value);
 }
 
+function buildHierarchyIdentifier(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter((part) => part.length > 0)
+    .join(" / ");
+}
+
+function buildInitials(value: string | null | undefined): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 function buildPropertyExportCsv(
   hierarchy: DesarrolloNode[],
   tipos: PropiedadTipo[],
@@ -568,6 +591,7 @@ function buildPropertyExportCsv(
       "desarrollo",
       desarrollo.nombre,
       desarrollo.nombre,
+      buildHierarchyIdentifier([buildInitials(desarrollo.nombre) || desarrollo.nombre]),
       stringFromProps(desarrolloProps, ["status"]) || csvField(desarrollo.status || "disponible"),
       "",
       "",
@@ -602,6 +626,10 @@ function buildPropertyExportCsv(
         "capa",
         desarrollo.nombre,
         csvField(capa.nombre || `Nivel ${capa.nivel ?? ""}`),
+        buildHierarchyIdentifier([
+          buildInitials(desarrollo.nombre) || desarrollo.nombre,
+          capa.nombre || `Nivel ${capa.nivel ?? ""}`,
+        ]),
         stringFromProps(capaProps, ["status"]) || csvField(capa.status || "disponible"),
         stringFromProps(capaProps, ["nivel"]) || csvField(capa.nivel ?? ""),
         "",
@@ -635,6 +663,11 @@ function buildPropertyExportCsv(
           "unidad",
           desarrollo.nombre,
           csvField(unidad.nombre || unidad.unidad),
+          buildHierarchyIdentifier([
+            buildInitials(desarrollo.nombre) || desarrollo.nombre,
+            capa.nombre || `Nivel ${capa.nivel ?? ""}`,
+            unidad.nombre || unidad.unidad,
+          ]),
           stringFromProps(unidadProps, ["status"]) || csvField(unidad.status || "disponible"),
           "",
           stringFromProps(unidadProps, ["nivel"]) || csvField(capa.nivel ?? ""),
@@ -2771,7 +2804,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           </span>;
           el tipo de desarrollo vive en <code>tipo_desarrollo</code> y el tipo de unidad en
           <code>tipo_unidad_nombre</code>. Para unidades, <code>area_m2</code> es opcional pero conviene
-          mandarlo como columna. Los extras no operativos van al final en columnas como
+          usar <code>identificador</code> como columna auxiliar para ubicar cada fila. Los
+          extras no operativos van al final en columnas como
           <code>metadata_cuartos</code> y <code>metadata_patio_servicio</code>.
         </DialogDescription>
       </DialogHeader>
@@ -2803,6 +2837,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           descargar los datos actuales con la misma estructura para usarlos como base. Las columnas de
           volumen 3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
           La altura de capa sigue siendo <code>altura</code> y solo aplica a <code>propiedad_capas</code>.
+          La columna <code>identificador</code> concatena las iniciales del desarrollo con capa /
+          unidad para ubicar
+          rápido cada fila en la estructura, pero es opcional para importar.
           Si necesitas mandar extras no operativos, agrega columnas <code>metadata_*</code> al final; si lo
           consultas o filtras seguido, mejor conviértelo en columna normal.
         </p>
