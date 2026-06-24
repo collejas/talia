@@ -11,7 +11,7 @@ const sectionGroups = {
     label: "Producto",
     introTitle: "Cómo leer Producto",
     introLead:
-      "Estas páginas explican qué es TalIA, qué incluye la plataforma y cómo se presenta la propuesta antes de llevar al usuario a demo o precios.",
+      "TalIA presenta su propuesta comercial, sus módulos principales y el camino más claro hacia demo o precios.",
     introMode: "cards",
     introItems: [
       ["Qué es", "Define la propuesta completa y no solo una función aislada.", "blue"],
@@ -35,7 +35,7 @@ const sectionGroups = {
     label: "Prospección",
     introTitle: "Cómo se entiende la prospección",
     introLead:
-      "Estas páginas cubren el trabajo previo a la venta: encontrar contactos, construir bases útiles y activar campañas que sí mueven oportunidades.",
+      "Estas soluciones cubren el trabajo previo a la venta: encontrar contactos, construir bases útiles y activar campañas que sí generan oportunidades.",
     introMode: "cards",
     introItems: [
       ["Fuentes", "Parte de búsquedas, directorios y contactos públicos con potencial comercial.", "blue"],
@@ -167,7 +167,7 @@ const pages = [
       ["+ orden", "pipeline y tareas en un solo lugar."],
     ],
     sectionTitle: "Qué resuelve",
-    sectionLead: "TalIA no intenta ser un producto genérico. Su enfoque es comercial: responder, calificar, organizar y empujar oportunidades hacia una cita o cierre.",
+    sectionLead: "TalIA convierte la operación comercial en un flujo claro para responder, calificar, organizar y avanzar oportunidades hacia cita o cierre.",
     cards: [
       ["CRM con IA", "Centraliza leads y conversaciones con contexto comercial.", "blue"],
       ["IA para ventas", "Acelera la respuesta y reduce el tiempo perdido en seguimiento manual.", "violet"],
@@ -176,7 +176,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué es TalIA en la práctica",
-        lead: "La página debe explicar el producto como una operación comercial, no como un concepto abstracto.",
+        lead: "TalIA se entiende mejor como una operación comercial completa: responde, ordena y convierte.",
         mode: "cards",
         items: [
           ["Responder", "Atiende el primer contacto sin perder velocidad.", "blue"],
@@ -186,7 +186,7 @@ const pages = [
       },
       {
         title: "Dónde aporta más",
-        lead: "El visitante debe reconocer rápido si su problema se parece al de TalIA.",
+        lead: "El visitante puede identificar rápido si su operación necesita más orden, seguimiento y velocidad de respuesta.",
         mode: "steps",
         items: [
           ["Llegan prospectos", "La empresa recibe conversaciones y consultas todos los días."],
@@ -222,7 +222,7 @@ const pages = [
       ["Agenda", "Citas y cotizaciones con contexto."],
     ],
     sectionTitle: "Por qué importa",
-    sectionLead: "Aquí se concentra la intención más comercial: CRM, IA, WhatsApp, ventas y seguimiento en una sola URL. La página debe dejar claro que el valor no es solo responder, sino ordenar todo el proceso comercial.",
+    sectionLead: "Aquí se concentra la intención más comercial: CRM, IA, WhatsApp, ventas y seguimiento en una sola URL. El valor está en ordenar todo el proceso comercial.",
     cards: [
       ["Centraliza leads", "No pierdas prospectos entre chats o notas sueltas.", "blue"],
       ["Ordena el pipeline", "Ver etapas, responsables y próximos pasos es clave para convertir.", "violet"],
@@ -231,7 +231,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué incluye el CRM",
-        lead: "La página debe explicar la estructura operativa del producto, no solo repetir la palabra CRM.",
+        lead: "El CRM con IA organiza conversaciones, pipeline y seguimiento en una sola operación.",
         mode: "cards",
         items: [
           ["Inbox comercial", "Todos los chats de WhatsApp organizados en un flujo de trabajo útil.", "blue"],
@@ -241,7 +241,7 @@ const pages = [
       },
       {
         title: "Para quién es",
-        lead: "Funciona mejor cuando el equipo vive de responder prospectos, cotizar y dar seguimiento diario.",
+        lead: "Funciona mejor en equipos que responden prospectos, cotizan y dan seguimiento todos los días.",
         mode: "cards",
         items: [
           ["Ventas", "Equipos que miden velocidad de respuesta y cierre.", "blue"],
@@ -251,7 +251,7 @@ const pages = [
       },
       {
         title: "Cómo se implementa",
-        lead: "Conviene explicar la adopción para que el visitante entienda que no es solo software, sino orden comercial.",
+        lead: "La adopción se traduce en menos fricción y más control comercial desde el primer día.",
         mode: "steps",
         items: [
           ["Conecta WhatsApp", "Se integra el canal donde realmente entran los prospectos."],
@@ -287,7 +287,7 @@ const pages = [
       ["Conexión", "Entrega oportunidades listas al CRM."],
     ],
     sectionTitle: "Qué hace",
-    sectionLead: "El asistente no reemplaza al equipo: reduce trabajo repetitivo y mejora la velocidad de atención.",
+    sectionLead: "El asistente reduce trabajo repetitivo y mejora la velocidad de atención sin quitar control al equipo.",
     cards: [
       ["Atiende", "Da respuesta inmediata y mantiene viva la conversación.", "blue"],
       ["Registra", "Guarda datos clave para el equipo comercial.", "violet"],
@@ -296,7 +296,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué hace el asistente",
-        lead: "La página debe explicar su rol dentro del flujo, no solo presentarlo como una herramienta genérica.",
+        lead: "El asistente tiene un rol claro: atender, registrar y pasar solo los casos con valor comercial.",
         mode: "cards",
         items: [
           ["Recibir", "Responde el mensaje inicial sin demoras.", "blue"],
@@ -306,7 +306,7 @@ const pages = [
       },
       {
         title: "Cuándo conviene usarlo",
-        lead: "Aquí se aclara en qué escenarios realmente aporta y por qué no es solo un extra decorativo.",
+        lead: "Aporta más cuando hay volumen, poca disponibilidad o necesidad de separar curiosos de prospectos reales.",
         mode: "steps",
         items: [
           ["Mucho volumen", "Cuando entran muchas conversaciones y hace falta ordenar."],
@@ -341,7 +341,7 @@ const pages = [
       ["CRM", "cada chat se convierte en seguimiento."],
     ],
     sectionTitle: "Cómo se usa",
-    sectionLead: "La IA de WhatsApp resuelve el inicio del flujo comercial: responder rápido, entender intención y llevar el caso al siguiente paso. La intención de búsqueda suele ser muy práctica; por eso hay que explicar el flujo completo.",
+    sectionLead: "La IA de WhatsApp resuelve el inicio del flujo comercial: responder rápido, entender intención y llevar cada caso al siguiente paso.",
     cards: [
       ["Responde", "Contesta preguntas frecuentes y da contexto comercial.", "blue"],
       ["Califica", "Pregunta lo necesario para saber si el lead vale tiempo humano.", "violet"],
@@ -350,7 +350,7 @@ const pages = [
     bodySections: [
       {
         title: "Flujo de atención",
-        lead: "La página debe mostrar qué pasa desde que llega el mensaje hasta que el lead queda listo para un asesor.",
+        lead: "El flujo va desde el primer mensaje hasta que el lead queda listo para un asesor.",
         mode: "steps",
         items: [
           ["Recibe", "Entra el mensaje y se abre la conversación con contexto.",],
@@ -361,7 +361,7 @@ const pages = [
       },
       {
         title: "Cuándo conviene usarla",
-        lead: "Sirve cuando el volumen de chats o la velocidad de respuesta ya afectan conversiones.",
+        lead: "Sirve cuando el volumen de chats o la velocidad de respuesta ya afecta conversiones.",
         mode: "cards",
         items: [
           ["Leads entrantes", "Cuando llegan muchas consultas y hay riesgo de dejar prospectos en visto.", "blue"],
@@ -371,7 +371,7 @@ const pages = [
       },
       {
         title: "Qué debe sentir el usuario",
-        lead: "La explicación debe dejar claro que la IA resuelve el primer contacto sin volver opaco el proceso.",
+        lead: "La IA resuelve el primer contacto sin perder claridad ni control comercial.",
         mode: "cards",
         items: [
           ["Rapidez", "El lead siente respuesta inmediata y no espera sin contexto.", "blue"],
@@ -406,7 +406,7 @@ const pages = [
       ["Cierre", "más oportunidades llegan a asesor humano."],
     ],
     sectionTitle: "Enfoque",
-    sectionLead: "La IA para ventas no reemplaza al vendedor; le quita tareas repetitivas y le da mejor contexto para cerrar. La página debe hablar de productividad, conversión y control del pipeline, no solo de automatización.",
+    sectionLead: "La IA para ventas quita tareas repetitivas y da mejor contexto para cerrar con más productividad y control del pipeline.",
     cards: [
       ["Prioriza", "Detecta qué prospectos merecen atención primero.", "blue"],
       ["Acompaña", "No deja caer leads por falta de seguimiento.", "violet"],
@@ -415,7 +415,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué mejora en ventas",
-        lead: "La página debe mostrar el impacto práctico en el trabajo comercial diario.",
+        lead: "El impacto se ve en orden, velocidad de respuesta y más posibilidades de cierre.",
         mode: "cards",
         items: [
           ["Orden", "Saber qué lead va primero y por qué.", "blue"],
@@ -425,7 +425,7 @@ const pages = [
       },
       {
         title: "Flujo comercial recomendado",
-        lead: "Esta secuencia le da sentido al producto y ayuda a que el visitante entienda el uso real.",
+        lead: "La secuencia muestra el uso real del producto dentro del proceso comercial.",
         mode: "steps",
         items: [
           ["Entra el lead", "El prospecto llega por WhatsApp, formulario o campaña."],
@@ -461,7 +461,7 @@ const pages = [
       ["Más velocidad", "flujo comercial más rápido y claro."],
     ],
     sectionTitle: "Qué automatiza",
-    sectionLead: "No se trata de automatizar por automatizar. Se automatiza lo que consume tiempo y no aporta valor directo a la venta.",
+    sectionLead: "Se automatiza lo que consume tiempo y no aporta valor directo a la venta.",
     cards: [
       ["Captura", "Toma el lead y lo registra sin fricción.", "blue"],
       ["Movimiento", "Asigna etapas y responsables.", "violet"],
@@ -470,7 +470,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué automatiza",
-        lead: "La página debe explicar qué partes del flujo comercial dejan de ser manuales y por qué eso mejora la operación.",
+        lead: "El flujo deja de ser manual en captura, asignación, recordatorio y seguimiento.",
         mode: "cards",
         items: [
           ["Captura", "Registra leads sin pasos extra.", "blue"],
@@ -480,7 +480,7 @@ const pages = [
       },
       {
         title: "Cuándo conviene usarla",
-        lead: "Sirve cuando el equipo ya siente el costo de hacer todo a mano.",
+        lead: "Sirve cuando el equipo ya siente el costo de repetir tareas y perseguir leads manualmente.",
         mode: "steps",
         items: [
           ["Muchos leads", "Cuando la entrada de prospectos supera la capacidad manual."],
@@ -506,7 +506,7 @@ const pages = [
     description: "Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa.",
     eyebrow: "Solución",
     headline: "Seguimiento de ventas para no perder oportunidades",
-    lede: "El seguimiento correcto convierte conversaciones en cierres. TalIA mantiene recordatorios, estado y contexto para que nada se enfríe. Esta página debe dejar claro que el valor está en sostener la venta, no solo en iniciar la conversación.",
+    lede: "El seguimiento correcto convierte conversaciones en cierres. TalIA mantiene recordatorios, estado y contexto para que nada se enfríe.",
     primaryCta: { label: "Ver seguimiento", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA" },
     secondaryCta: { label: "Ver automatización", href: "/automatizacion-de-ventas" },
     stats: [
@@ -515,7 +515,7 @@ const pages = [
       ["Conversión", "menos fugas por falta de seguimiento."],
     ],
     sectionTitle: "Por qué importa",
-    sectionLead: "En ventas, la velocidad de seguimiento define buena parte del resultado. Esta página captura esa intención y la traduce a un flujo claro para equipos que no pueden dejar prospectos en pausa.",
+    sectionLead: "En ventas, la velocidad de seguimiento define buena parte del resultado. Este flujo ayuda a sostener oportunidades con claridad.",
     cards: [
       ["Persistencia", "Mantén la conversación sin perseguir manualmente.", "blue"],
       ["Orden", "Sabes qué toca hacer con cada oportunidad.", "violet"],
@@ -524,7 +524,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué resuelve el seguimiento",
-        lead: "No basta con responder. Hay que sostener el proceso hasta que el lead avance o se descarte con criterio.",
+        lead: "Responder no basta: hay que sostener el proceso hasta que el lead avance o se descarte con criterio.",
         mode: "cards",
         items: [
           ["Leads fríos", "Recupera prospectos que se quedaron sin respuesta.", "blue"],
@@ -534,7 +534,7 @@ const pages = [
       },
       {
         title: "Cómo se trabaja",
-        lead: "La página debe explicar el mecanismo, porque el usuario quiere saber cómo evitar fugas de seguimiento.",
+        lead: "El mecanismo evita fugas de seguimiento y mantiene viva la oportunidad.",
         mode: "steps",
         items: [
           ["Detectar", "Identificar oportunidades que necesitan nuevo contacto."],
@@ -570,7 +570,7 @@ const pages = [
       ["Seguimiento", "cada propuesta sigue viva."],
     ],
     sectionTitle: "Objetivo",
-    sectionLead: "El propósito es convertir intención en acción. Menos ida y vuelta, más citas y propuestas claras.",
+    sectionLead: "El objetivo es convertir intención en acción con menos ida y vuelta y más citas o propuestas claras.",
     cards: [
       ["Agenda", "Reduce fricción para coordinar citas.", "blue"],
       ["Cotiza", "Envía propuestas con contexto comercial.", "violet"],
@@ -579,7 +579,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué pasa entre interés y cita",
-        lead: "El usuario debe ver que aquí se resuelve el tramo donde muchas ventas se pierden: después del primer interés.",
+        lead: "Aquí se resuelve el tramo donde muchas ventas se pierden: después del primer interés.",
         mode: "steps",
         items: [
           ["Recibe interés", "El lead pregunta, pide precio o muestra intención de agendar."],
@@ -590,7 +590,7 @@ const pages = [
       },
       {
         title: "Casos donde aporta más",
-        lead: "La página debe aterrizar cuándo esta solución es más valiosa.",
+        lead: "La solución aporta más cuando el siguiente paso es agendar, cotizar o confirmar interés.",
         mode: "cards",
         items: [
           ["Servicios consultivos", "Cuando necesitas cotizar antes de cerrar.", "blue"],
@@ -625,7 +625,7 @@ const pages = [
       ["Menos tiempo", "menos horas de búsqueda manual."],
     ],
     sectionTitle: "Flujo",
-    sectionLead: "La prospección comercial debe terminar en una lista accionable, no en datos sueltos sin uso real. Esta página debe mostrar el paso previo a WhatsApp y a ventas, no solo la idea de 'buscar contactos'.",
+    sectionLead: "La prospección comercial termina en una lista accionable, no en datos sueltos. Aquí se muestra el paso previo a WhatsApp y a ventas.",
     cards: [
       ["Encuentra", "Localiza prospectos con criterio comercial.", "blue"],
       ["Filtra", "Separa lo útil de lo irrelevante.", "violet"],
@@ -634,7 +634,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué hace la prospección",
-        lead: "La página debe explicar que prospectar es construir una base que sí pueda convertirse en venta.",
+        lead: "Prospectar es construir una base que sí pueda convertirse en venta.",
         mode: "cards",
         items: [
           ["Buscar", "Encontrar empresas o contactos con intención comercial.", "blue"],
@@ -644,7 +644,7 @@ const pages = [
       },
       {
         title: "Resultado esperado",
-        lead: "No es solo encontrar datos; es dejar al equipo con una base lista para trabajar.",
+        lead: "El objetivo no es solo encontrar datos: es dejar al equipo con una base lista para trabajar.",
         mode: "steps",
         items: [
           ["Definir objetivo", "Saber qué tipo de cliente necesitas encontrar."],
@@ -679,7 +679,7 @@ const pages = [
       ["Contexto", "cada contacto nace listo para el flujo."],
     ],
     sectionTitle: "Cómo ayuda",
-    sectionLead: "La búsqueda de contactos debe acabar en una base que ventas pueda usar sin fricción.",
+    sectionLead: "La búsqueda de contactos debe terminar en una base que ventas pueda usar sin fricción.",
     cards: [
       ["Localiza", "Encuentra empresas y personas de interés.", "blue"],
       ["Depura", "Evita bases infladas y poco útiles.", "violet"],
@@ -688,7 +688,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué aporta buscar contactos",
-        lead: "La búsqueda de contactos debe terminar en una base que ventas pueda usar de inmediato.",
+        lead: "La base resultante debe servir de inmediato para ventas.",
         mode: "cards",
         items: [
           ["Foco", "Busca solo lo que tenga sentido comercial.", "blue"],
@@ -698,7 +698,7 @@ const pages = [
       },
       {
         title: "Cómo se utiliza",
-        lead: "La página debe mostrar el tránsito desde búsqueda hasta activación comercial.",
+        lead: "El tránsito ideal va de búsqueda a activación comercial sin pasos innecesarios.",
         mode: "steps",
         items: [
           ["Definir criterio", "Elegir el tipo de contacto o empresa que sí vale la pena."],
@@ -734,7 +734,7 @@ const pages = [
       ["Ventas", "listas para activar seguimiento."],
     ],
     sectionTitle: "Enfoque",
-    sectionLead: "La intención aquí es capturar búsquedas específicas de prospectos por fuente y convertirlas en oportunidad real.",
+    sectionLead: "La intención aquí es convertir búsquedas de prospectos por fuente en oportunidad real.",
     cards: [
       ["Google", "Extrae oportunidades de búsquedas y directorios.", "blue"],
       ["DENUE", "Aprovecha datos empresariales públicos.", "violet"],
@@ -743,7 +743,7 @@ const pages = [
     bodySections: [
       {
         title: "Por qué importa esta fuente",
-        lead: "Google y DENUE son útiles porque permiten empezar con señales públicas y llevarlas a una base comercial.",
+        lead: "Google y DENUE permiten empezar con señales públicas y llevarlas a una base comercial.",
         mode: "cards",
         items: [
           ["Google", "Descubre empresas visibles en búsquedas y directorios.", "blue"],
@@ -753,7 +753,7 @@ const pages = [
       },
       {
         title: "Qué problema resuelve",
-        lead: "La página debe decir por qué vale la pena usar estas fuentes y no empezar desde cero.",
+        lead: "Usar estas fuentes ahorra tiempo frente a empezar desde cero.",
         mode: "steps",
         items: [
           ["Evitar arranque en cero", "No empezar cada búsqueda manualmente."],
@@ -788,7 +788,7 @@ const pages = [
       ["Reactivación", "reactiva prospectos fríos."],
     ],
     sectionTitle: "Qué aporta",
-    sectionLead: "Marketing no es solo enviar mensajes; es saber a quién, cuándo y con qué seguimiento activar.",
+    sectionLead: "Marketing comercial es saber a quién activar, cuándo hacerlo y cómo medir la respuesta.",
     cards: [
       ["Campañas", "Diseña activaciones con propósito.", "blue"],
       ["Medición", "Mide aperturas, respuestas y avance.", "violet"],
@@ -797,7 +797,7 @@ const pages = [
     bodySections: [
       {
         title: "Qué hace una campaña útil",
-        lead: "No basta con enviar mensajes; una campaña útil tiene objetivo, seguimiento y aprendizaje.",
+        lead: "Una campaña útil tiene objetivo, seguimiento y aprendizaje.",
         mode: "cards",
         items: [
           ["Activa", "Pone en movimiento bases que estaban quietas.", "blue"],
@@ -807,7 +807,7 @@ const pages = [
       },
       {
         title: "Cuándo usar campañas",
-        lead: "La página debe dejar claro que esto sirve para trabajar bases con intención y no para spam.",
+        lead: "Esto sirve para trabajar bases con intención, no para spam.",
         mode: "steps",
         items: [
           ["Base lista", "Ya tienes contactos o prospectos definidos."],
@@ -843,7 +843,7 @@ const pages = [
       ["Conversión", "contenido más cercano al usuario."],
     ],
     sectionTitle: "Casos de uso",
-    sectionLead: "La sección industrias concentra la navegación por sector y sirve como puente para contenido especializado.",
+    sectionLead: "La sección industrias agrupa los sectores donde TalIA aporta más valor comercial.",
     cards: [
       ["Inmobiliarias", "Leads, citas y seguimiento comercial.", "blue"],
       ["Servicios", "Cotizaciones y atención rápida.", "violet"],
@@ -852,7 +852,7 @@ const pages = [
     bodySections: [
       {
         title: "Para qué sirve esta sección",
-        lead: "No solo agrupa industrias; también le ayuda al buscador y al usuario a entender cómo se organiza el sitio por vertical.",
+        lead: "Agrupa las verticales y ayuda al usuario a elegir el caso que mejor encaja con su negocio.",
         mode: "cards",
         items: [
           ["Descubrir", "Mostrar que cada industria tiene su propia página SEO.", "blue"],
@@ -862,7 +862,7 @@ const pages = [
       },
       {
         title: "Cómo pensar la vertical",
-        lead: "Cada industria tiene un lenguaje distinto, pero el objetivo sigue siendo el mismo: responder mejor y convertir más.",
+        lead: "Cada industria tiene un lenguaje distinto, pero el objetivo sigue siendo responder mejor y convertir más.",
         mode: "steps",
         items: [
           ["Detectar el caso", "Elegir la vertical que más se parece al negocio."],
@@ -892,7 +892,7 @@ const pages = [
     description: "IA para inmobiliarias por WhatsApp que responde leads, perfila compradores y agenda citas automáticamente.",
     eyebrow: "Industrias",
     headline: "IA para inmobiliarias por WhatsApp",
-    lede: "TalIA responde leads inmobiliarios en segundos, pregunta lo necesario y agenda citas sin depender del seguimiento manual. La página debe dejar claro que la prioridad es no perder interesados por tardanza.",
+    lede: "TalIA responde leads inmobiliarios en segundos, pregunta lo necesario y agenda citas sin depender del seguimiento manual.",
     primaryCta: { label: "Ver demo inmobiliaria", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20para%20inmobiliarias%20de%20Tal-IA" },
     secondaryCta: { label: "Ver industrias", href: "/industrias" },
     stats: [
@@ -901,7 +901,7 @@ const pages = [
       ["Agenda", "citas y visitas automáticas."],
     ],
     sectionTitle: "En inmobiliarias",
-    sectionLead: "La intención es capturar búsquedas de IA para inmobiliarias y mostrar un flujo claro de respuesta, calificación y cita. La página debe explicar por qué una respuesta rápida cambia la conversión en portales, campañas y referidos.",
+    sectionLead: "La intención es mostrar un flujo claro de respuesta, calificación y cita para inmobiliarias.",
     cards: [
       ["Leads", "Responde prospectos que llegan por campañas o portales.", "blue"],
       ["Citas", "Reduce el tiempo entre interés y visita.", "violet"],
@@ -910,7 +910,7 @@ const pages = [
     bodySections: [
       {
         title: "Casos de uso inmobiliarios",
-        lead: "No todos los leads llegan igual. Esta sección explica dónde más valor aporta la automatización.",
+        lead: "No todos los leads llegan igual; aquí se ve dónde aporta más la automatización.",
         mode: "cards",
         items: [
           ["Portales", "Respuestas rápidas para leads que llegan desde portales inmobiliarios.", "blue"],
@@ -920,7 +920,7 @@ const pages = [
       },
       {
         title: "Qué busca el usuario",
-        lead: "La página debe responder a la intención real: agendar más rápido, calificar mejor y perder menos interesados.",
+        lead: "La intención real es agendar más rápido, calificar mejor y perder menos interesados.",
         mode: "steps",
         items: [
           ["Respuesta rápida", "El prospecto recibe atención antes de irse con otro asesor."],
@@ -955,7 +955,7 @@ const pages = [
       ["Ordena", "seguimiento por solicitud."],
     ],
     sectionTitle: "En servicios",
-    sectionLead: "Los servicios necesitan rapidez, cotización clara y seguimiento. Esa es la intención de esta página.",
+    sectionLead: "Los servicios necesitan rapidez, cotización clara y seguimiento.",
     cards: [
       ["Cotizaciones", "Respuestas más precisas y sin demora.", "blue"],
       ["Agenda", "Reduce fricción al coordinar citas.", "violet"],
@@ -987,7 +987,7 @@ const pages = [
       ["Orden", "seguimiento simple y claro."],
     ],
     sectionTitle: "En negocios locales",
-    sectionLead: "La intención es dar una página sencilla para comercios que necesitan responder rápido y vender sin estructura pesada.",
+    sectionLead: "La intención es dar una opción clara para comercios que necesitan responder rápido y vender sin estructura pesada.",
     cards: [
       ["WhatsApp", "Atiende el canal más usado por el cliente.", "blue"],
       ["Seguimiento", "No dejes preguntas sin respuesta.", "violet"],
@@ -1019,7 +1019,7 @@ const pages = [
       ["Cierre", "mejor contexto para el equipo."],
     ],
     sectionTitle: "En B2B",
-    sectionLead: "La venta consultiva necesita seguimiento y contexto. Esta página captura esa intención.",
+    sectionLead: "La venta consultiva necesita seguimiento y contexto.",
     cards: [
       ["Prospección", "Busca cuentas y contactos con enfoque comercial.", "blue"],
       ["Pipeline", "Mantén el ciclo de venta visible.", "violet"],
@@ -1051,7 +1051,7 @@ const pages = [
       ["Seguimiento", "menos abandono de consulta."],
     ],
     sectionTitle: "En turismo",
-    sectionLead: "Turismo necesita disponibilidad, rapidez y claridad en la cotización. La página ataca esa búsqueda.",
+    sectionLead: "Turismo necesita disponibilidad, rapidez y claridad en la cotización.",
     cards: [
       ["Reservas", "Responde disponibilidad y proceso.", "blue"],
       ["Cotizaciones", "Agiliza precios y opciones.", "violet"],
@@ -1124,7 +1124,7 @@ function renderPage(page) {
     )
     .join("\n");
   const relatedLinks = page.related
-    .map(([href, label]) => `<a class="link-card" href="${href}"><strong>${escapeHtml(label)}</strong><span>Ir a esta página SEO relacionada.</span></a>`)
+    .map(([href, label]) => `<a class="link-card" href="${href}"><strong>${escapeHtml(label)}</strong><span>Ver esta solución relacionada.</span></a>`)
     .join("\n");
 
   const cards = page.cards
@@ -1283,7 +1283,7 @@ function renderPage(page) {
       <div class="section__head">
         <div>
           <h2>Enlaces relacionados</h2>
-          <p>La navegación interna ayuda a que Google descubra y entienda mejor el sitio, y además guía al usuario a la siguiente página útil.</p>
+          <p>Explora otras soluciones del sitio para ver el flujo completo y elegir el caso de uso que mejor encaja con tu operación.</p>
         </div>
       </div>
       <div class="section__subhead">Más de ${escapeHtml(sectionGroup.label)}</div>
@@ -1302,7 +1302,7 @@ function renderPage(page) {
       <div class="section__head">
         <div>
           <h2>Preguntas frecuentes</h2>
-          <p>Respuestas cortas para reforzar la intención de búsqueda y la claridad comercial.</p>
+          <p>Respuestas breves para aclarar cómo funciona cada solución en la práctica.</p>
         </div>
       </div>
       <div class="panel-grid">
@@ -1313,7 +1313,7 @@ function renderPage(page) {
     <section class="cta-band">
       <div class="eyebrow">Siguiente paso</div>
       <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">${escapeHtml(page.headline)}</h2>
-      <p>Si quieres, ahora convierto esta estructura en las rutas exactas del sitio y dejo el menú conectado a estas páginas SEO.</p>
+      <p>Si esta solución encaja con tu operación, el siguiente paso es revisar demo, precios o la página relacionada que mejor te ayude a avanzar.</p>
       <div class="actions">
         <a class="button primary" href="${page.primaryCta.href}" target="_blank" rel="noopener noreferrer">${escapeHtml(page.primaryCta.label)}</a>
         <a class="button secondary" href="${page.url === '/industrias' ? '/industrias/inmobiliarias' : '/'}">Seguir navegando</a>
@@ -1325,7 +1325,7 @@ function renderPage(page) {
       </div>
     </section>
 
-    <div class="footer">TalIA · Página SEO generada para el refactor comercial.</div>
+    <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
   </main>
 </body>
 </html>`;
