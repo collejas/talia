@@ -56,12 +56,20 @@ a {
 
 .brand {
   display: inline-flex;
-  align-items: baseline;
-  font-size: 38px;
+  align-items: center;
+  gap: 10px;
+  font-size: 34px;
   font-weight: 950;
   letter-spacing: -1.8px;
   line-height: 1;
   text-decoration: none;
+}
+
+.brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .brand span,

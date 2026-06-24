@@ -65,12 +65,19 @@ a {
 
 .brand {
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   font-size: 24px;
   font-weight: 950;
   letter-spacing: -1.4px;
   line-height: 1;
+}
+
+.brand img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .brand span,

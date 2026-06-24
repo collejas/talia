@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const root = resolve(process.cwd(), "..");
-const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624a`;
+const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624b`;
 
 const navGroups = [
   {
@@ -647,7 +647,10 @@ function renderNav(depth = 0) {
   return `
   <header class="site-header">
     <div class="site-header__inner">
-      <a class="brand" href="${homeHref}">Tal<span>IA</span></a>
+      <a class="brand" href="${homeHref}" aria-label="TalIA">
+        <img src="${prefix}assets/logos/Logo8.png" alt="" aria-hidden="true" />
+        <span>Tal-IA</span>
+      </a>
       <nav class="nav" aria-label="Navegación principal">
         <a class="nav__link" href="${homeHref}">Inicio</a>
         ${navGroups
