@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1673,7 +1674,6 @@ export function LeadDrawer({
 
       const contactoPayload: Record<string, unknown> = {
         nombre_completo: nombreRaw.length ? nombreRaw : null,
-        nombre_nombres: nombreRaw.length ? nombreRaw : null,
         correo: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
@@ -1767,7 +1767,6 @@ export function LeadDrawer({
 
     const contactoUpdates: Record<string, unknown> = {
       nombre_completo: nombreRaw.length ? nombreRaw : null,
-      nombre_nombres: nombreRaw.length ? nombreRaw : null,
       correo: correoRaw.length ? correoRaw : null,
       telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       company_name: empresaRaw.length ? empresaRaw : null,
@@ -4012,11 +4011,13 @@ export function LeadDrawer({
                                 <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
                                   {imageUrl ? (
                                     <>
-                                      <img
+                                      <Image
                                         src={imageUrl}
                                         alt=""
+                                        width={40}
+                                        height={40}
+                                        unoptimized
                                         className="h-full w-full object-cover"
-                                        loading="lazy"
                                         onError={(event) => {
                                           const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
                                             "[data-fallback='true']",
@@ -4523,11 +4524,13 @@ export function LeadDrawer({
                         <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
                           {imageUrl ? (
                             <>
-                              <img
+                              <Image
                                 src={imageUrl}
                                 alt=""
+                                width={40}
+                                height={40}
+                                unoptimized
                                 className="h-full w-full object-cover"
-                                loading="lazy"
                                 onError={(event) => {
                                   const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
                                     "[data-fallback='true']",
@@ -4704,11 +4707,13 @@ export function LeadDrawer({
                                 <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
                                   {imageUrl ? (
                                     <>
-                                      <img
+                                      <Image
                                         src={imageUrl}
                                         alt=""
+                                        width={40}
+                                        height={40}
+                                        unoptimized
                                         className="h-full w-full object-cover"
-                                        loading="lazy"
                                         onError={(event) => {
                                           const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
                                             "[data-fallback='true']",
