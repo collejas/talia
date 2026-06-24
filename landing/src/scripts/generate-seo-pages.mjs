@@ -331,7 +331,7 @@ const pages = [
     description: "IA para ventas que ayuda a responder leads, calificar oportunidades y acelerar cierres con seguimiento automatizado.",
     eyebrow: "Solución",
     headline: "IA para ventas que convierte conversaciones en cierres",
-    lede: "TalIA ayuda a equipos comerciales a responder primero, priorizar prospectos y mover cada oportunidad sin perder velocidad.",
+    lede: "TalIA ayuda a equipos comerciales a responder primero, priorizar prospectos y mover cada oportunidad sin perder velocidad. La intención aquí es dejar claro que no se trata de un chatbot, sino de una capa comercial que ordena el trabajo diario.",
     primaryCta: { label: "Quiero ver IA para ventas", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20para%20ventas%20de%20Tal-IA" },
     secondaryCta: { label: "Ver seguimiento", href: "/seguimiento-ventas" },
     stats: [
@@ -340,11 +340,34 @@ const pages = [
       ["Cierre", "más oportunidades llegan a asesor humano."],
     ],
     sectionTitle: "Enfoque",
-    sectionLead: "La IA para ventas no reemplaza al vendedor; le quita tareas repetitivas y le da mejor contexto para cerrar.",
+    sectionLead: "La IA para ventas no reemplaza al vendedor; le quita tareas repetitivas y le da mejor contexto para cerrar. La página debe hablar de productividad, conversión y control del pipeline, no solo de automatización.",
     cards: [
       ["Prioriza", "Detecta qué prospectos merecen atención primero.", "blue"],
       ["Acompaña", "No deja caer leads por falta de seguimiento.", "violet"],
       ["Estandariza", "Hace consistente la operación del equipo comercial.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué mejora en ventas",
+        lead: "La página debe mostrar el impacto práctico en el trabajo comercial diario.",
+        mode: "cards",
+        items: [
+          ["Orden", "Saber qué lead va primero y por qué.", "blue"],
+          ["Velocidad", "Reducir el tiempo entre llegada del lead y primera respuesta.", "violet"],
+          ["Conversión", "Aumentar la probabilidad de cierre con mejor contexto.", "green"],
+        ],
+      },
+      {
+        title: "Flujo comercial recomendado",
+        lead: "Esta secuencia le da sentido al producto y ayuda a que el visitante entienda el uso real.",
+        mode: "steps",
+        items: [
+          ["Entra el lead", "El prospecto llega por WhatsApp, formulario o campaña."],
+          ["Se califica", "La IA pregunta lo necesario y detecta intención."],
+          ["Se prioriza", "El equipo ve qué oportunidades requieren atención inmediata."],
+          ["Se cierra", "El asesor entra con mejor contexto y menos pérdida de tiempo."],
+        ],
+      },
     ],
     related: [
       ["/ia-de-whatsapp", "IA de WhatsApp"],
@@ -395,7 +418,7 @@ const pages = [
     description: "Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa.",
     eyebrow: "Solución",
     headline: "Seguimiento de ventas para no perder oportunidades",
-    lede: "El seguimiento correcto convierte conversaciones en cierres. TalIA mantiene recordatorios, estado y contexto para que nada se enfríe.",
+    lede: "El seguimiento correcto convierte conversaciones en cierres. TalIA mantiene recordatorios, estado y contexto para que nada se enfríe. Esta página debe dejar claro que el valor está en sostener la venta, no solo en iniciar la conversación.",
     primaryCta: { label: "Ver seguimiento", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA" },
     secondaryCta: { label: "Ver automatización", href: "/automatizacion-de-ventas" },
     stats: [
@@ -404,11 +427,34 @@ const pages = [
       ["Conversión", "menos fugas por falta de seguimiento."],
     ],
     sectionTitle: "Por qué importa",
-    sectionLead: "En ventas, la velocidad de seguimiento define buena parte del resultado. Esta página captura esa intención.",
+    sectionLead: "En ventas, la velocidad de seguimiento define buena parte del resultado. Esta página captura esa intención y la traduce a un flujo claro para equipos que no pueden dejar prospectos en pausa.",
     cards: [
       ["Persistencia", "Mantén la conversación sin perseguir manualmente.", "blue"],
       ["Orden", "Sabes qué toca hacer con cada oportunidad.", "violet"],
       ["Visibilidad", "Ve el estado real del pipeline.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué resuelve el seguimiento",
+        lead: "No basta con responder. Hay que sostener el proceso hasta que el lead avance o se descarte con criterio.",
+        mode: "cards",
+        items: [
+          ["Leads fríos", "Recupera prospectos que se quedaron sin respuesta.", "blue"],
+          ["Pendientes", "Evita que tareas y recordatorios se pierdan.", "violet"],
+          ["Pipeline visible", "Permite ver en qué etapa está cada oportunidad.", "green"],
+        ],
+      },
+      {
+        title: "Cómo se trabaja",
+        lead: "La página debe explicar el mecanismo, porque el usuario quiere saber cómo evitar fugas de seguimiento.",
+        mode: "steps",
+        items: [
+          ["Detectar", "Identificar oportunidades que necesitan nuevo contacto."],
+          ["Programar", "Definir cuándo y cómo volver a escribir o llamar."],
+          ["Actualizar", "Registrar avance, respuesta o bloqueo del lead."],
+          ["Cerrar", "Mantener vivo el caso hasta convertirlo o descartarlo."],
+        ],
+      },
     ],
     related: [
       ["/ia-para-ventas", "IA para ventas"],
@@ -459,7 +505,7 @@ const pages = [
     description: "Prospección comercial con IA para encontrar clientes, crear listas accionables y activar campañas útiles.",
     eyebrow: "Prospección",
     headline: "Prospección comercial con IA",
-    lede: "TalIA te ayuda a salir a buscar clientes, no solo a atenderlos. La prospección se vuelve un proceso trazable y más rápido.",
+    lede: "TalIA te ayuda a salir a buscar clientes, no solo a atenderlos. La prospección se vuelve un proceso trazable y más rápido, con bases útiles y un mejor punto de partida para ventas.",
     primaryCta: { label: "Quiero prospectar", href: "https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20prospecci%C3%B3n%20comercial%20de%20Tal-IA" },
     secondaryCta: { label: "Buscar contactos", href: "/buscar-contactos" },
     stats: [
@@ -468,11 +514,33 @@ const pages = [
       ["Menos tiempo", "menos horas de búsqueda manual."],
     ],
     sectionTitle: "Flujo",
-    sectionLead: "La prospección comercial debe terminar en una lista accionable, no en datos sueltos sin uso real.",
+    sectionLead: "La prospección comercial debe terminar en una lista accionable, no en datos sueltos sin uso real. Esta página debe mostrar el paso previo a WhatsApp y a ventas, no solo la idea de 'buscar contactos'.",
     cards: [
       ["Encuentra", "Localiza prospectos con criterio comercial.", "blue"],
       ["Filtra", "Separa lo útil de lo irrelevante.", "violet"],
       ["Activa", "Convierte la lista en campañas y seguimiento.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué hace la prospección",
+        lead: "La página debe explicar que prospectar es construir una base que sí pueda convertirse en venta.",
+        mode: "cards",
+        items: [
+          ["Buscar", "Encontrar empresas o contactos con intención comercial.", "blue"],
+          ["Depurar", "Quitar ruido y quedarte con oportunidades reales.", "violet"],
+          ["Activar", "Pasar la lista a campañas, WhatsApp o seguimiento.", "green"],
+        ],
+      },
+      {
+        title: "Resultado esperado",
+        lead: "No es solo encontrar datos; es dejar al equipo con una base lista para trabajar.",
+        mode: "steps",
+        items: [
+          ["Definir objetivo", "Saber qué tipo de cliente necesitas encontrar."],
+          ["Construir lista", "Crear una base enfocada y accionable."],
+          ["Pasar a ventas", "Entregar contactos listos para el siguiente flujo."],
+        ],
+      },
     ],
     related: [
       ["/buscar-contactos", "Buscar contactos"],
