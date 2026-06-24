@@ -173,6 +173,29 @@ const pages = [
       ["IA para ventas", "Acelera la respuesta y reduce el tiempo perdido en seguimiento manual.", "violet"],
       ["Prospección con IA", "Encuentra clientes potenciales y crea una base accionable.", "green"],
     ],
+    bodySections: [
+      {
+        title: "Qué es TalIA en la práctica",
+        lead: "La página debe explicar el producto como una operación comercial, no como un concepto abstracto.",
+        mode: "cards",
+        items: [
+          ["Responder", "Atiende el primer contacto sin perder velocidad.", "blue"],
+          ["Ordenar", "Conecta chats, pipeline y seguimiento en una sola lógica.", "violet"],
+          ["Convertir", "Lleva el interés hacia demo, cita o cotización.", "green"],
+        ],
+      },
+      {
+        title: "Dónde aporta más",
+        lead: "El visitante debe reconocer rápido si su problema se parece al de TalIA.",
+        mode: "steps",
+        items: [
+          ["Llegan prospectos", "La empresa recibe conversaciones y consultas todos los días."],
+          ["Falta seguimiento", "Los leads se enfrían o se quedan en chats dispersos."],
+          ["Se necesita control", "Dirección o ventas quiere ver el avance real."],
+          ["Se busca convertir", "La operación necesita más cierres con menos fricción."],
+        ],
+      },
+    ],
     related: [
       ["/crm-con-ia-para-whatsapp", "CRM con IA para WhatsApp"],
       ["/ia-de-whatsapp", "IA de WhatsApp"],
@@ -269,6 +292,28 @@ const pages = [
       ["Atiende", "Da respuesta inmediata y mantiene viva la conversación.", "blue"],
       ["Registra", "Guarda datos clave para el equipo comercial.", "violet"],
       ["Deriva", "Pasa el caso al asesor cuando hay intención real.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Qué hace el asistente",
+        lead: "La página debe explicar su rol dentro del flujo, no solo presentarlo como una herramienta genérica.",
+        mode: "cards",
+        items: [
+          ["Recibir", "Responde el mensaje inicial sin demoras.", "blue"],
+          ["Preguntar", "Obtiene datos útiles para calificar mejor.", "violet"],
+          ["Pasar", "Entrega el caso al equipo solo cuando hay valor comercial.", "green"],
+        ],
+      },
+      {
+        title: "Cuándo conviene usarlo",
+        lead: "Aquí se aclara en qué escenarios realmente aporta y por qué no es solo un extra decorativo.",
+        mode: "steps",
+        items: [
+          ["Mucho volumen", "Cuando entran muchas conversaciones y hace falta ordenar."],
+          ["Poca disponibilidad", "Cuando el equipo no puede responder siempre al instante."],
+          ["Proceso comercial", "Cuando hace falta separar curiosos de prospectos reales."],
+        ],
+      },
     ],
     related: [
       ["/crm-con-ia-para-whatsapp", "CRM con IA para WhatsApp"],
@@ -713,6 +758,28 @@ const pages = [
       ["Inmobiliarias", "Leads, citas y seguimiento comercial.", "blue"],
       ["Servicios", "Cotizaciones y atención rápida.", "violet"],
       ["Ventas B2B", "Prospección y seguimiento estructurado.", "green"],
+    ],
+    bodySections: [
+      {
+        title: "Para qué sirve esta sección",
+        lead: "No solo agrupa industrias; también le ayuda al buscador y al usuario a entender cómo se organiza el sitio por vertical.",
+        mode: "cards",
+        items: [
+          ["Descubrir", "Mostrar que cada industria tiene su propia página SEO.", "blue"],
+          ["Navegar", "Llevar al usuario al caso de uso más cercano a su negocio.", "violet"],
+          ["Convertir", "Guiar a demo o a la página de la vertical correcta.", "green"],
+        ],
+      },
+      {
+        title: "Cómo pensar la vertical",
+        lead: "Cada industria tiene un lenguaje distinto, pero el objetivo sigue siendo el mismo: responder mejor y convertir más.",
+        mode: "steps",
+        items: [
+          ["Detectar el caso", "Elegir la vertical que más se parece al negocio."],
+          ["Leer el flujo", "Entender qué problema resuelve TalIA en ese sector."],
+          ["Ir a la página", "Abrir la vista específica de la industria."],
+        ],
+      },
     ],
     related: [
       ["/industrias/inmobiliarias", "IA para inmobiliarias"],
