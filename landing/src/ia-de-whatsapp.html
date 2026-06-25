@@ -22,6 +22,7 @@
   <meta name="theme-color" content="#7f13ec" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="assets/css/seo-pages.css?v=20260625a" />
+  <link rel="stylesheet" href="./assets/css/webchat.css?v=20260625a" />
 </head>
 <body>
   <main class="page">
@@ -350,5 +351,90 @@
 
     <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
   </main>
+<div id="talia-webchat-root" class="webchat-widget" data-open="false">
+  <button class="webchat-widget__toggle" type="button" aria-expanded="false" aria-controls="talia-webchat-panel">
+    <span>Chatea con TalIA</span>
+    <span class="webchat-widget__toggle-subtitle">Respuesta comercial 24/7</span>
+  </button>
+
+  <section id="talia-webchat-panel" class="webchat-widget__panel" aria-label="Chat de TalIA">
+    <header class="webchat-widget__header">
+      <button class="webchat-widget__close" type="button" aria-label="Cerrar chat">×</button>
+    </header>
+
+    <div id="chat-log" class="webchat-widget__messages">
+      <div class="message message--assistant">
+        <div class="message__body">Hola, soy TalIA. Puedo ayudarte con demo, precios o cómo funciona la plataforma.</div>
+      </div>
+    </div>
+
+    <form id="chat-form" class="webchat-widget__form">
+      <div class="webchat-widget__inputs">
+        <button id="chat-attachment-button" class="composer-attach" type="button" aria-label="Adjuntar archivo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 11-7.78-7.78l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.2 9.19a1.5 1.5 0 11-2.12-2.12l8.49-8.49" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <input id="chat-input" type="text" placeholder="Escribe tu mensaje…" autocomplete="off" />
+        <button id="chat-submit" type="submit">Enviar</button>
+      </div>
+      <input id="chat-file-input" type="file" hidden />
+      <div id="chat-attachments" class="composer-attachments"></div>
+    </form>
+  </section>
+</div>
+
+<script type="module">
+  import { initialiseChat } from './assets/js/modules/chat.js?v=20260313c';
+  import { initialiseVisitTracking } from './assets/js/modules/visit-tracking.js?v=20260313c';
+
+  const widget = document.getElementById('talia-webchat-root');
+  const toggle = widget?.querySelector('.webchat-widget__toggle');
+  const closeButton = widget?.querySelector('.webchat-widget__close');
+
+  const setOpen = (open) => {
+    if (!widget || !toggle) return;
+    widget.dataset.open = open ? 'true' : 'false';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  toggle?.addEventListener('click', () => setOpen(widget?.dataset.open !== 'true'));
+  closeButton?.addEventListener('click', () => setOpen(false));
+
+  async function bootstrapWebchat() {
+    const options = {};
+    try {
+      const response = await fetch('/api/webchat/config', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        if (typeof data?.persist_session === 'boolean') {
+          options.persistSession = data.persist_session;
+        }
+        if (typeof data?.tenant_alias === 'string' && data.tenant_alias.trim()) {
+          options.tenantAlias = data.tenant_alias.trim();
+        }
+      }
+    } catch (error) {
+      console.warn('[webchat] No se pudo obtener configuración del webchat.', error);
+    }
+
+    initialiseChat({
+      ...options,
+      chatLog: document.getElementById('chat-log'),
+      chatForm: document.getElementById('chat-form'),
+      chatInput: document.getElementById('chat-input'),
+      chatAttachmentButton: document.getElementById('chat-attachment-button'),
+      chatFileInput: document.getElementById('chat-file-input'),
+      chatAttachments: document.getElementById('chat-attachments'),
+      getScrollContainer: () => document.getElementById('talia-webchat-root'),
+    });
+
+    initialiseVisitTracking({
+      tenantAlias: options.tenantAlias ?? null,
+      linkedSessionStorageKey: options.storageSessionKey ?? 'talia-webchat-session',
+    });
+  }
+
+  void bootstrapWebchat();
+</script>
+
 </body>
 </html>
