@@ -133,7 +133,9 @@ a {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  box-sizing: border-box;
   border-radius: 999px;
   user-select: none;
   white-space: nowrap;
@@ -145,7 +147,7 @@ a {
   content: "▾";
   font-size: 11px;
   line-height: 1;
-  transform: translateY(1px);
+  transform: translateY(2px);
   transition: transform .18s ease;
 }
 
