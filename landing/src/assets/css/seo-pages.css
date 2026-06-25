@@ -144,6 +144,10 @@ a {
   transform: translateY(-1px);
 }
 
+.nav-mobile-menu {
+  display: none;
+}
+
 .dropdown {
   position: absolute;
   right: 0;
@@ -487,21 +491,7 @@ a {
   }
 
   .nav {
-    margin-top: 14px;
-    gap: 10px;
-  }
-
-  .nav__group {
-    width: 100%;
-  }
-
-  .dropdown {
-    position: static;
-    width: 100%;
-    margin-top: 8px;
-    opacity: 1;
-    visibility: visible;
-    transform: none;
+    display: none;
   }
 
   .hero__panel {
@@ -517,6 +507,98 @@ a {
 
   .section__head p {
     margin-top: 10px;
+  }
+
+  .nav-mobile-menu {
+    display: block;
+    margin-left: auto;
+  }
+
+  .nav-mobile-menu > summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: white;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+    font-size: 0;
+  }
+
+  .nav-mobile-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .nav-mobile-menu > summary::before {
+    content: "☰";
+    font-size: 18px;
+    color: var(--blue);
+    line-height: 1;
+  }
+
+  .nav-mobile-menu[open] > summary::before {
+    content: "✕";
+  }
+
+  .nav-mobile-menu__panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 10px);
+    width: min(340px, calc(100vw - 24px));
+    padding: 12px;
+    border-radius: 22px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: var(--shadow);
+    display: grid;
+    gap: 4px;
+    z-index: 60;
+  }
+
+  .nav-mobile-menu__group {
+    display: grid;
+    gap: 2px;
+    padding: 4px 0;
+  }
+
+  .nav-mobile-menu__label {
+    padding: 8px 12px 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .nav-mobile-menu__panel a {
+    display: block;
+    padding: 11px 12px;
+    border-radius: 14px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .nav-mobile-menu__panel a:hover {
+    background: rgba(37, 99, 235, 0.06);
+    color: var(--blue);
+  }
+
+  .nav-mobile-menu__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .nav-mobile-menu__actions .nav__cta {
+    display: inline-flex;
+    justify-content: center;
+    width: 100%;
   }
 }
 
@@ -548,5 +630,9 @@ a {
 
   .nav {
     gap: 8px;
+  }
+
+  .nav-mobile-menu__actions {
+    grid-template-columns: 1fr;
   }
 }

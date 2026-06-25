@@ -108,7 +108,44 @@
 <body class="bg-background-light text-slate-900 selection:bg-primary/30">
   <nav class="header-compact fixed top-0 w-full z-50 border-b border-primary/10 glass">
     <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-      <div class="flex items-center gap-3">
+      <details class="relative md:hidden ml-auto">
+        <summary class="list-none inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm">
+          <span class="sr-only">Abrir menú</span>
+          ☰
+        </summary>
+        <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/">Inicio</a>
+          <div class="my-1 border-t border-slate-100"></div>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/que-es-talia">Qué es TalIA</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/asistente-ia-empresas">Asistente IA para empresas</a>
+          <div class="my-1 border-t border-slate-100"></div>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/ia-de-whatsapp">IA de WhatsApp</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/ia-para-ventas">IA para ventas</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/automatizacion-de-ventas">Automatización de ventas</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/seguimiento-ventas">Seguimiento de ventas</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
+          <div class="my-1 border-t border-slate-100"></div>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/prospeccion-comercial">Prospección comercial</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/buscar-contactos">Buscar contactos</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/prospectos-google-denue">Prospectos Google y DENUE</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/campanas-marketing">Campañas y marketing</a>
+          <div class="my-1 border-t border-slate-100"></div>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias">Ver industrias</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias/inmobiliarias">Inmobiliarias</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias/servicios">Servicios</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias/negocios-locales">Negocios locales</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias/ventas-b2b">Ventas B2B</a>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/industrias/turismo">Turismo</a>
+          <div class="my-1 border-t border-slate-100"></div>
+          <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/precios">Precios</a>
+          <div class="grid grid-cols-1 gap-2 p-3">
+            <a href="/demo.html" class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-slate-700 hover:border-primary hover:text-primary transition-colors">Agendar demo</a>
+            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20las%20caracter%C3%ADsticas%20de%20Tal-IA%20y%20entender%20c%C3%B3mo%20funciona" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-black text-white hover:bg-emerald-600 transition-colors">WhatsApp</a>
+          </div>
+        </div>
+      </details>
+      <div class="hidden md:flex items-center gap-3">
         <a href="/auth/login" class="hidden sm:inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
           Acceder
         </a>

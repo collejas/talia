@@ -2,8 +2,10 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(process.cwd(), "..");
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const root = resolve(scriptDir, "..", "..");
 const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624c`;
 const whatsappPhone = "5214443354450";
 
@@ -1152,6 +1154,26 @@ function renderNav(page, depth = 0) {
         <a class="nav__cta nav__cta--secondary" href="${demoHref}">Agendar demo</a>
         <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
       </nav>
+      <details class="nav-mobile-menu">
+        <summary aria-label="Abrir menú">Menú</summary>
+        <div class="nav-mobile-menu__panel">
+          <a href="${homeHref}">Inicio</a>
+          ${navGroups
+            .map(
+              (group) => `
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">${escapeHtml(group.label)}</div>
+            ${group.links.map((link) => `<a href="${link.href}">${escapeHtml(link.label)}</a>`).join("\n")}
+          </div>`
+            )
+            .join("\n")}
+          <a href="${pricesHref}">Precios</a>
+          <div class="nav-mobile-menu__actions">
+            <a class="nav__cta nav__cta--secondary" href="${demoHref}">Agendar demo</a>
+            <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
+          </div>
+        </div>
+      </details>
     </div>
   </header>`;
 }
