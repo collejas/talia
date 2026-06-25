@@ -57,6 +57,9 @@
     body { font-family: "Inter", sans-serif; }
     .glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(12px); }
     .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+    .header-compact .text-sm {
+      font-size: 0.8125rem !important;
+    }
     .whatsapp-float {
       position: fixed;
       right: 18px;
@@ -103,10 +106,10 @@
   </script>
 </head>
 <body class="bg-background-light text-slate-900 selection:bg-primary/30">
-  <nav class="fixed top-0 w-full z-50 border-b border-primary/10 glass">
+  <nav class="header-compact fixed top-0 w-full z-50 border-b border-primary/10 glass">
     <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <a href="/auth/login" class="hidden sm:inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
+        <a href="/auth/login" class="hidden sm:inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
           Acceder
         </a>
         <a class="flex items-center gap-2" href="/">
@@ -159,7 +162,7 @@
       </div>
       <div class="flex items-center gap-3">
         <details class="relative">
-          <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
+          <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
             Menú
           </summary>
           <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -190,7 +193,7 @@
             <a class="block px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/precios">Precios</a>
           </div>
         </details>
-        <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20las%20caracter%C3%ADsticas%20de%20Tal-IA%20y%20entender%20c%C3%B3mo%20funciona" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-colors">
+        <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20las%20caracter%C3%ADsticas%20de%20Tal-IA%20y%20entender%20c%C3%B3mo%20funciona" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-[13px] font-black text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-colors">
           Ver por WhatsApp
         </a>
       </div>
@@ -215,11 +218,11 @@
           Esta vista resume lo que el sistema puede hacer: IA, marketing, prospección, CRM, atención, agenda, cotización, catálogo, operación, analítica, administración y seguridad.
         </p>
         <div class="flex flex-col sm:flex-row gap-4">
-          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20de%20Tal-IA%20centrada%20en%20caracter%C3%ADsticas" target="_blank" rel="noopener noreferrer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-8 rounded-xl shadow-xl shadow-emerald-500/40 transition-all text-lg flex items-center justify-center gap-2">
+          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20de%20Tal-IA%20centrada%20en%20caracter%C3%ADsticas" target="_blank" rel="noopener noreferrer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-8 rounded-xl shadow-xl shadow-emerald-500/40 transition-all text-base flex items-center justify-center gap-2">
             Ver demo por WhatsApp
             <span class="material-symbols-outlined">bolt</span>
           </a>
-          <a href="#secciones" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
+          <a href="#secciones" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-base flex items-center justify-center gap-2">
             Ver secciones
             <span class="material-symbols-outlined">south</span>
           </a>
@@ -601,10 +604,10 @@
           Una sola plataforma para vender mejor, responder más rápido y tener control comercial, incluyendo la versión para desarrolladores inmobiliarios y bienes raíces.
         </p>
         <div class="flex justify-center relative z-10 gap-4 flex-col sm:flex-row">
-          <a href="/precios" class="bg-white hover:bg-rose-50 text-primary border border-white/70 font-bold py-4 px-8 rounded-2xl transition-all text-lg shadow-lg shadow-black/10">
+          <a href="/precios" class="bg-white hover:bg-rose-50 text-primary border border-white/70 font-bold py-4 px-8 rounded-2xl transition-all text-base shadow-lg shadow-black/10">
             Ver precios
           </a>
-          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20revisar%20Tal-IA%20por%20WhatsApp%20y%20resolver%20dudas" target="_blank" rel="noopener noreferrer" class="bg-white/10 hover:bg-white/15 text-white border border-white/30 font-bold py-4 px-8 rounded-2xl transition-all text-lg">
+          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20revisar%20Tal-IA%20por%20WhatsApp%20y%20resolver%20dudas" target="_blank" rel="noopener noreferrer" class="bg-white/10 hover:bg-white/15 text-white border border-white/30 font-bold py-4 px-8 rounded-2xl transition-all text-base">
             Hablar con un asesor
           </a>
         </div>

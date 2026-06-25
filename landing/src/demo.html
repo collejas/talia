@@ -13,11 +13,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Inter', sans-serif; }
+    .header-compact .text-sm {
+      font-size: 0.8125rem !important;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-100">
   <main class="mx-auto max-w-5xl px-4 py-10 md:py-16">
-    <header class="mb-8 md:mb-10">
+    <header class="header-compact mb-8 md:mb-10">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <a href="/" class="inline-flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 hover:border-cyan-400">
           <img src="/assets/logos/Logo8.png" alt="Tal-IA" class="h-8 w-auto" />
@@ -32,11 +35,11 @@
         <a class="px-3 py-2 rounded-full hover:text-white transition-colors" href="/precios">Precios</a>
       </div>
       <div class="flex items-center gap-3">
-        <a href="/auth/login" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-bold text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
+        <a href="/auth/login" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-[13px] font-bold text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
           Ingresar
         </a>
           <details class="relative">
-            <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-bold text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
+            <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-[13px] font-bold text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
               Menú
             </summary>
             <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
@@ -67,10 +70,10 @@
               <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/precios">Precios</a>
             </div>
           </details>
-          <a href="/" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
+          <a href="/" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-[13px] text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
             ← Volver a talia.mx
           </a>
-          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20agendar%20mi%20demo%20de%20Tal-IA%20por%20WhatsApp" class="inline-flex items-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">
+          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20agendar%20mi%20demo%20de%20Tal-IA%20por%20WhatsApp" class="inline-flex items-center rounded-lg bg-emerald-500 px-3 py-2 text-[13px] font-bold text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">
             Hablar por WhatsApp
           </a>
         </div>

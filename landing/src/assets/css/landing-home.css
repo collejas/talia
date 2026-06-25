@@ -85,7 +85,7 @@ a {
   gap: 26px;
   align-items: center;
   color: #334155;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 760;
   overflow: visible;
 }
@@ -112,7 +112,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-radius: 999px;
   user-select: none;
   white-space: nowrap;
@@ -171,6 +171,7 @@ a {
   padding: 11px 12px;
   border-radius: 14px;
   color: #334155;
+  font-size: 13px;
   font-weight: 720;
   white-space: nowrap;
 }
@@ -187,9 +188,10 @@ a {
 .nav-cta {
   border: 0;
   border-radius: 14px;
-  padding: 13px 20px;
+  padding: 11px 16px;
   color: white;
   background: linear-gradient(135deg, var(--blue), var(--violet));
+  font-size: 13px;
   font-weight: 850;
   box-shadow: 0 14px 34px rgba(79, 70, 229, .26);
   text-decoration: none;
@@ -262,10 +264,10 @@ h1 {
   justify-content: center;
   text-decoration: none;
   border-radius: 12px;
-  padding: 15px 22px;
+  padding: 14px 20px;
   font-weight: 880;
-  font-size: 15px;
-  min-height: 52px;
+  font-size: 13px;
+  min-height: 50px;
 }
 
 .button.primary {
@@ -716,7 +718,7 @@ h1 {
   }
 
   .nav-cta {
-    padding: 11px 14px;
+    padding: 10px 12px;
   }
 
   .nav-mobile-actions {
