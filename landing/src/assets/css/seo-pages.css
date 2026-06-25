@@ -119,11 +119,20 @@ a {
   color: #334155;
 }
 
+.nav__button {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
 .nav__button:hover,
 .nav__link:hover {
   background: rgba(37, 99, 235, 0.05);
   border-color: rgba(37, 99, 235, 0.14);
   color: var(--blue);
+}
+
+.nav__button::after {
+  transform: translateY(1px);
 }
 
 .nav__cta {

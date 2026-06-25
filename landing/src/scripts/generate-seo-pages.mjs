@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..", "..");
-const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624c`;
+const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260625a`;
 const whatsappPhone = "5214443354450";
 
 function whatsappHref(message) {
