@@ -2575,6 +2575,38 @@ async def test_pipeline_board_forwards_email_filter(
     assert call_kwargs["correo"] == "collejas1@gmail.com"
 
 
+def test_pipeline_card_prefers_persona_email_over_metadata_snapshot() -> None:
+    stage_id = uuid.uuid4()
+    row = {
+        "id": str(uuid.uuid4()),
+        "etapa_id": str(stage_id),
+        "titulo": "Oportunidad con correo desfasado",
+        "metadata": {
+            "contacto_correo": "old@example.com",
+        },
+        "contacto": {
+            "id": str(uuid.uuid4()),
+            "nombre_completo": "Alice",
+            "correo_principal": "new@example.com",
+            "correo_institucional": None,
+            "correo": None,
+        },
+        "etapa": {
+            "id": str(stage_id),
+            "nombre": "Prospecto",
+            "codigo": "prospecto",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {},
+        },
+    }
+
+    card = crm_routes._card_from_opportunity(row)
+
+    assert card is not None
+    assert card.correo == "new@example.com"
+
+
 @pytest.mark.asyncio
 async def test_pipeline_scoring_kpis_forwards_email_filter(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch

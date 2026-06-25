@@ -8425,6 +8425,13 @@ class CRMRepository:
             if existing is None:
                 raise CRMRepositoryError("persona_no_encontrada")
             return existing
+        normalized_payload = dict(payload)
+        if "correo_principal" not in normalized_payload and (
+            "correo" in normalized_payload or "email" in normalized_payload
+        ):
+            normalized_payload["correo_principal"] = normalized_payload.get("correo")
+            if normalized_payload.get("correo_principal") is None and "email" in normalized_payload:
+                normalized_payload["correo_principal"] = normalized_payload.get("email")
         existing_contact = await self.get_persona(
             organizacion_id=organizacion_id,
             persona_id=persona_id,
@@ -8432,11 +8439,11 @@ class CRMRepository:
         if existing_contact is None:
             raise CRMRepositoryError("persona_no_encontrada")
         merged_contact = dict(existing_contact)
-        merged_contact.update(payload)
+        merged_contact.update(normalized_payload)
         parts = self._build_contact_write_parts(
             organizacion_id=organizacion_id,
             contact_id=persona_id,
-            payload=merged_contact,
+            payload=normalized_payload,
             existing=existing_contact,
         )
         persona_body = dict(parts["persona_body"])

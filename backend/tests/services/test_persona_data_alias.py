@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from uuid import uuid4
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -194,3 +195,79 @@ async def test_update_persona_expands_full_name_into_parts(monkeypatch: pytest.M
     assert "apellido_materno" not in payload or not payload["apellido_materno"]
     assert payload["nombre_completo"] == "Luis Perez, hoteles catalina"
     assert storage_repo["nombre_completo"] == "Luis Perez, hoteles catalina"
+
+
+@pytest.mark.asyncio
+async def test_update_persona_uses_correo_as_correo_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = CRMRepository()
+    persona_id = uuid4()
+    organizacion_id = uuid4()
+    existing_row = {
+        "id": str(persona_id),
+        "organizacion_id": str(organizacion_id),
+        "nombre_completo": "Ada Lovelace",
+        "correo_principal": "old@example.com",
+        "correo_secundario": None,
+        "correo_institucional": None,
+        "company_name": None,
+        "notas": None,
+        "origen": None,
+        "estado": "lead",
+        "metadata": {},
+        "persona_datos": {},
+        "cuenta_id": None,
+        "creado_en": "2026-01-01T00:00:00Z",
+        "actualizado_en": "2026-01-01T00:00:00Z",
+    }
+    updated_row = {
+        **existing_row,
+        "correo_principal": "new@example.com",
+        "correo": "new@example.com",
+        "actualizado_en": "2026-01-02T00:00:00Z",
+    }
+    calls: list[tuple[str, dict[str, object] | None]] = []
+    get_persona_calls = 0
+
+    async def fake_get_persona(
+        *,
+        organizacion_id: uuid.UUID,
+        persona_id: uuid.UUID,
+    ) -> dict[str, object] | None:
+        nonlocal get_persona_calls
+        assert organizacion_id == UUID(existing_row["organizacion_id"])
+        assert persona_id == UUID(existing_row["id"])
+        get_persona_calls += 1
+        if get_persona_calls == 1:
+            return dict(existing_row)
+        return dict(updated_row)
+
+    async def fake_request(
+        method: str,
+        path: str,
+        *,
+        params: dict[str, object] | None = None,
+        json: dict[str, object] | None = None,
+        prefer: str | None = None,
+    ) -> SimpleNamespace:
+        calls.append((f"{method} {path}", dict(json) if isinstance(json, dict) else None))
+        if method == "PATCH" and path == "/rest/v1/personas":
+            assert params is not None
+            assert params["id"] == f"eq.{persona_id}"
+            assert json is not None
+            assert json["correo_principal"] == "new@example.com"
+            return SimpleNamespace(status_code=200, json=lambda: [dict(updated_row)])
+        if method == "DELETE" and path == "/rest/v1/cuenta_personas":
+            return SimpleNamespace(status_code=200, json=lambda: [])
+        raise AssertionError(f"Unexpected request: {method} {path}")
+
+    monkeypatch.setattr(repo, "get_persona", fake_get_persona)
+    monkeypatch.setattr(repo, "_request", fake_request)
+
+    result = await repo.update_persona(
+        organizacion_id=organizacion_id,
+        persona_id=persona_id,
+        payload={"correo": "new@example.com"},
+    )
+
+    assert any(name == "PATCH /rest/v1/personas" for name, _ in calls)
+    assert result["correo_principal"] == "new@example.com"

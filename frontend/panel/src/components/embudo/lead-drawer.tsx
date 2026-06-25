@@ -1675,6 +1675,7 @@ export function LeadDrawer({
       const contactoPayload: Record<string, unknown> = {
         nombre_completo: nombreRaw.length ? nombreRaw : null,
         correo: correoRaw.length ? correoRaw : null,
+        correo_principal: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
       if (empresaRaw.length) {
@@ -1768,6 +1769,7 @@ export function LeadDrawer({
     const contactoUpdates: Record<string, unknown> = {
       nombre_completo: nombreRaw.length ? nombreRaw : null,
       correo: correoRaw.length ? correoRaw : null,
+      correo_principal: correoRaw.length ? correoRaw : null,
       telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       company_name: empresaRaw.length ? empresaRaw : null,
       notes: notasRaw.length ? notasRaw : null,

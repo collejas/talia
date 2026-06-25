@@ -43476,30 +43476,30 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         or None
     )
     contacto_correo = (
-        _clean_text(metadata.get("contacto_correo"))
+        _clean_text(contacto.get("correo_principal"))
         or _clean_text(contacto.get("correo_institucional"))
-        or _clean_text(contacto.get("correo_principal"))
         or _clean_text(contacto.get("correo"))
+        or _clean_text(metadata.get("contacto_correo"))
         or None
     )
     contacto_telefono = (
-        _clean_text(metadata.get("contacto_telefono"))
-        or _clean_text(contacto.get("telefono_movil_1_e164"))
+        _clean_text(contacto.get("telefono_movil_1_e164"))
         or _clean_text(contacto.get("telefono_principal_e164"))
         or _clean_text(contacto.get("telefono_e164"))
         or _clean_text(contacto.get("telefono"))
+        or _clean_text(metadata.get("contacto_telefono"))
         or None
     )
     contacto_empresa = (
-        _clean_text(metadata.get("contacto_empresa"))
-        or _clean_text(contacto.get("company_name"))
+        _clean_text(contacto.get("company_name"))
         or _clean_text(cuenta.get("nombre"))
+        or _clean_text(metadata.get("contacto_empresa"))
         or None
     )
     necesidad_proposito = (
-        _clean_text(metadata.get("contacto_necesidad"))
-        or _clean_text(contacto.get("necesidad_proposito"))
+        _clean_text(contacto.get("necesidad_proposito"))
         or cuenta.get("necesidad_proposito")
+        or _clean_text(metadata.get("contacto_necesidad"))
         or metadata.get("necesidad_proposito")
     )
     proyecto_nombre = (
