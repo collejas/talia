@@ -196,6 +196,13 @@ a {
   white-space: nowrap;
 }
 
+.nav-cta--secondary {
+  border: 1px solid rgba(59, 130, 246, .18);
+  background: rgba(255, 255, 255, .82);
+  color: #1d4ed8;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .05);
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(560px, 1.05fr);

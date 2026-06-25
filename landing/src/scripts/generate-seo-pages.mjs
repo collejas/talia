@@ -1123,6 +1123,7 @@ function renderNav(page, depth = 0) {
   const prefix = "../".repeat(depth);
   const homeHref = depth ? `${prefix}` : "/";
   const pricesHref = depth ? `${prefix}precios` : "/precios";
+  const demoHref = depth ? `${prefix}demo.html` : "/demo.html";
   const navWhatsAppLabel = page.navWhatsAppLabel || "Agenda una demo";
   const navWhatsAppText = page.navWhatsAppText || "Hola, quiero una demo de TalIA.";
   return `
@@ -1148,6 +1149,7 @@ function renderNav(page, depth = 0) {
           )
           .join("\n")}
         <a class="nav__link" href="${pricesHref}">Precios</a>
+        <a class="nav__cta nav__cta--secondary" href="${demoHref}">Agendar demo</a>
         <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
       </nav>
     </div>
