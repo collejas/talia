@@ -5,6 +5,11 @@ import { dirname, resolve } from "node:path";
 
 const root = resolve(process.cwd(), "..");
 const cssHref = (depth) => `${"../".repeat(depth)}assets/css/seo-pages.css?v=20260624c`;
+const whatsappPhone = "5214443354450";
+
+function whatsappHref(message) {
+  return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+}
 
 const sectionGroups = {
   producto: {
@@ -168,6 +173,8 @@ const pages = [
     ],
     sectionTitle: "Qué resuelve",
     sectionLead: "TalIA convierte la operación comercial en un flujo claro para responder, calificar, organizar y avanzar oportunidades hacia cita o cierre.",
+    navWhatsAppLabel: "Hablar por WhatsApp",
+    navWhatsAppText: "Hola, quiero conocer TalIA y ver una demo.",
     cards: [
       ["CRM con IA", "Centraliza leads y conversaciones con contexto comercial.", "blue"],
       ["IA para ventas", "Acelera la respuesta y reduce el tiempo perdido en seguimiento manual.", "violet"],
@@ -223,6 +230,8 @@ const pages = [
     ],
     sectionTitle: "Por qué importa",
     sectionLead: "Aquí se concentra la intención más comercial: CRM, IA, WhatsApp, ventas y seguimiento en una sola URL. El valor está en ordenar todo el proceso comercial.",
+    navWhatsAppLabel: "Ver por WhatsApp",
+    navWhatsAppText: "Hola, quiero ver el CRM con IA para WhatsApp de TalIA.",
     cards: [
       ["Centraliza leads", "No pierdas prospectos entre chats o notas sueltas.", "blue"],
       ["Ordena el pipeline", "Ver etapas, responsables y próximos pasos es clave para convertir.", "violet"],
@@ -288,6 +297,8 @@ const pages = [
     ],
     sectionTitle: "Qué hace",
     sectionLead: "El asistente reduce trabajo repetitivo y mejora la velocidad de atención sin quitar control al equipo.",
+    navWhatsAppLabel: "Pedir demo",
+    navWhatsAppText: "Hola, quiero ver el asistente IA para empresas de TalIA.",
     cards: [
       ["Atiende", "Da respuesta inmediata y mantiene viva la conversación.", "blue"],
       ["Registra", "Guarda datos clave para el equipo comercial.", "violet"],
@@ -342,6 +353,8 @@ const pages = [
     ],
     sectionTitle: "Cómo se usa",
     sectionLead: "La IA de WhatsApp resuelve el inicio del flujo comercial: responder rápido, entender intención y llevar cada caso al siguiente paso.",
+    navWhatsAppLabel: "Ver en WhatsApp",
+    navWhatsAppText: "Hola, quiero ver la IA de WhatsApp de TalIA.",
     cards: [
       ["Responde", "Contesta preguntas frecuentes y da contexto comercial.", "blue"],
       ["Califica", "Pregunta lo necesario para saber si el lead vale tiempo humano.", "violet"],
@@ -407,6 +420,8 @@ const pages = [
     ],
     sectionTitle: "Enfoque",
     sectionLead: "La IA para ventas quita tareas repetitivas y da mejor contexto para cerrar con más productividad y control del pipeline.",
+    navWhatsAppLabel: "Quiero verlo",
+    navWhatsAppText: "Hola, quiero ver la IA para ventas de TalIA.",
     cards: [
       ["Prioriza", "Detecta qué prospectos merecen atención primero.", "blue"],
       ["Acompaña", "No deja caer leads por falta de seguimiento.", "violet"],
@@ -462,6 +477,8 @@ const pages = [
     ],
     sectionTitle: "Qué automatiza",
     sectionLead: "Se automatiza lo que consume tiempo y no aporta valor directo a la venta.",
+    navWhatsAppLabel: "Solicitar demo",
+    navWhatsAppText: "Hola, quiero ver la automatización de ventas de TalIA.",
     cards: [
       ["Captura", "Toma el lead y lo registra sin fricción.", "blue"],
       ["Movimiento", "Asigna etapas y responsables.", "violet"],
@@ -516,6 +533,8 @@ const pages = [
     ],
     sectionTitle: "Por qué importa",
     sectionLead: "En ventas, la velocidad de seguimiento define buena parte del resultado. Este flujo ayuda a sostener oportunidades con claridad.",
+    navWhatsAppLabel: "Ver seguimiento",
+    navWhatsAppText: "Hola, quiero ver el seguimiento de ventas de TalIA.",
     cards: [
       ["Persistencia", "Mantén la conversación sin perseguir manualmente.", "blue"],
       ["Orden", "Sabes qué toca hacer con cada oportunidad.", "violet"],
@@ -571,6 +590,8 @@ const pages = [
     ],
     sectionTitle: "Objetivo",
     sectionLead: "El objetivo es convertir intención en acción con menos ida y vuelta y más citas o propuestas claras.",
+    navWhatsAppLabel: "Ver agenda",
+    navWhatsAppText: "Hola, quiero ver agenda y cotizaciones de TalIA.",
     cards: [
       ["Agenda", "Reduce fricción para coordinar citas.", "blue"],
       ["Cotiza", "Envía propuestas con contexto comercial.", "violet"],
@@ -626,6 +647,8 @@ const pages = [
     ],
     sectionTitle: "Flujo",
     sectionLead: "La prospección comercial termina en una lista accionable, no en datos sueltos. Aquí se muestra el paso previo a WhatsApp y a ventas.",
+    navWhatsAppLabel: "Quiero prospectar",
+    navWhatsAppText: "Hola, quiero ver la prospección comercial de TalIA.",
     cards: [
       ["Encuentra", "Localiza prospectos con criterio comercial.", "blue"],
       ["Filtra", "Separa lo útil de lo irrelevante.", "violet"],
@@ -680,6 +703,8 @@ const pages = [
     ],
     sectionTitle: "Cómo ayuda",
     sectionLead: "La búsqueda de contactos debe terminar en una base que ventas pueda usar sin fricción.",
+    navWhatsAppLabel: "Buscar contactos",
+    navWhatsAppText: "Hola, quiero buscar contactos para ventas con TalIA.",
     cards: [
       ["Localiza", "Encuentra empresas y personas de interés.", "blue"],
       ["Depura", "Evita bases infladas y poco útiles.", "violet"],
@@ -735,6 +760,8 @@ const pages = [
     ],
     sectionTitle: "Enfoque",
     sectionLead: "La intención aquí es convertir búsquedas de prospectos por fuente en oportunidad real.",
+    navWhatsAppLabel: "Ver prospectos",
+    navWhatsAppText: "Hola, quiero ver prospectos en Google y DENUE con TalIA.",
     cards: [
       ["Google", "Extrae oportunidades de búsquedas y directorios.", "blue"],
       ["DENUE", "Aprovecha datos empresariales públicos.", "violet"],
@@ -789,6 +816,8 @@ const pages = [
     ],
     sectionTitle: "Qué aporta",
     sectionLead: "Marketing comercial es saber a quién activar, cuándo hacerlo y cómo medir la respuesta.",
+    navWhatsAppLabel: "Ver campañas",
+    navWhatsAppText: "Hola, quiero ver campañas y marketing con TalIA.",
     cards: [
       ["Campañas", "Diseña activaciones con propósito.", "blue"],
       ["Medición", "Mide aperturas, respuestas y avance.", "violet"],
@@ -844,6 +873,8 @@ const pages = [
     ],
     sectionTitle: "Casos de uso",
     sectionLead: "La sección industrias agrupa los sectores donde TalIA aporta más valor comercial.",
+    navWhatsAppLabel: "Ver industria",
+    navWhatsAppText: "Hola, quiero ver las industrias de TalIA.",
     cards: [
       ["Inmobiliarias", "Leads, citas y seguimiento comercial.", "blue"],
       ["Servicios", "Cotizaciones y atención rápida.", "violet"],
@@ -902,6 +933,8 @@ const pages = [
     ],
     sectionTitle: "En inmobiliarias",
     sectionLead: "La intención es mostrar un flujo claro de respuesta, calificación y cita para inmobiliarias.",
+    navWhatsAppLabel: "Ver inmobiliaria",
+    navWhatsAppText: "Hola, quiero ver la IA para inmobiliarias de TalIA.",
     cards: [
       ["Leads", "Responde prospectos que llegan por campañas o portales.", "blue"],
       ["Citas", "Reduce el tiempo entre interés y visita.", "violet"],
@@ -956,6 +989,8 @@ const pages = [
     ],
     sectionTitle: "En servicios",
     sectionLead: "Los servicios necesitan rapidez, cotización clara y seguimiento.",
+    navWhatsAppLabel: "Ver servicios",
+    navWhatsAppText: "Hola, quiero ver IA para servicios con TalIA.",
     cards: [
       ["Cotizaciones", "Respuestas más precisas y sin demora.", "blue"],
       ["Agenda", "Reduce fricción al coordinar citas.", "violet"],
@@ -988,6 +1023,8 @@ const pages = [
     ],
     sectionTitle: "En negocios locales",
     sectionLead: "La intención es dar una opción clara para comercios que necesitan responder rápido y vender sin estructura pesada.",
+    navWhatsAppLabel: "Ver local",
+    navWhatsAppText: "Hola, quiero ver IA para negocios locales con TalIA.",
     cards: [
       ["WhatsApp", "Atiende el canal más usado por el cliente.", "blue"],
       ["Seguimiento", "No dejes preguntas sin respuesta.", "violet"],
@@ -1020,6 +1057,8 @@ const pages = [
     ],
     sectionTitle: "En B2B",
     sectionLead: "La venta consultiva necesita seguimiento y contexto.",
+    navWhatsAppLabel: "Ver B2B",
+    navWhatsAppText: "Hola, quiero ver IA para ventas B2B con TalIA.",
     cards: [
       ["Prospección", "Busca cuentas y contactos con enfoque comercial.", "blue"],
       ["Pipeline", "Mantén el ciclo de venta visible.", "violet"],
@@ -1052,6 +1091,8 @@ const pages = [
     ],
     sectionTitle: "En turismo",
     sectionLead: "Turismo necesita disponibilidad, rapidez y claridad en la cotización.",
+    navWhatsAppLabel: "Ver turismo",
+    navWhatsAppText: "Hola, quiero ver IA para turismo con TalIA.",
     cards: [
       ["Reservas", "Responde disponibilidad y proceso.", "blue"],
       ["Cotizaciones", "Agiliza precios y opciones.", "violet"],
@@ -1078,10 +1119,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function renderNav(depth = 0) {
+function renderNav(page, depth = 0) {
   const prefix = "../".repeat(depth);
   const homeHref = depth ? `${prefix}` : "/";
   const pricesHref = depth ? `${prefix}precios` : "/precios";
+  const navWhatsAppLabel = page.navWhatsAppLabel || "Agenda una demo";
+  const navWhatsAppText = page.navWhatsAppText || "Hola, quiero una demo de TalIA.";
   return `
   <header class="site-header">
     <div class="site-header__inner">
@@ -1105,7 +1148,7 @@ function renderNav(depth = 0) {
           )
           .join("\n")}
         <a class="nav__link" href="${pricesHref}">Precios</a>
-        <a class="nav__cta" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Agenda una demo</a>
+        <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
       </nav>
     </div>
   </header>`;
@@ -1242,7 +1285,7 @@ function renderPage(page) {
 </head>
 <body>
   <main class="page">
-    ${renderNav(depth)}
+    ${renderNav(page, depth)}
 
     <section class="hero">
       <div class="hero__copy">
