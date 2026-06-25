@@ -1394,6 +1394,7 @@ function renderPage(page) {
 
     <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
   </main>
+  <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
 </body>
 </html>`;
 }
