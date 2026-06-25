@@ -203,6 +203,10 @@ a {
   box-shadow: 0 14px 34px rgba(15, 23, 42, .05);
 }
 
+.nav-mobile-actions {
+  display: none;
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(560px, 1.05fr);
@@ -713,6 +717,18 @@ h1 {
 
   .nav-cta {
     padding: 11px 14px;
+  }
+
+  .nav-mobile-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0 0 18px;
+  }
+
+  .nav-mobile-actions .button {
+    width: 100%;
+    justify-content: center;
   }
 
   .proof-row,
