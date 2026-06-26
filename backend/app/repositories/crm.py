@@ -9312,6 +9312,10 @@ class CRMRepository:
             for row in target_addresses
             if str(row.get("direccion_id") or "").strip()
         }
+        target_has_active_fiscal = any(
+            bool(row.get("activo", True)) and _normalize_account_direction_relation_type(row.get("tipo_relacion")) == "fiscal"
+            for row in target_addresses
+        )
         addresses_moved = 0
         addresses_updated = 0
         for link in source_addresses:
@@ -9356,6 +9360,7 @@ class CRMRepository:
                     },
                     json={
                         "cuenta_id": str(target_account_id),
+                        "activo": False if tipo_relacion == "fiscal" and target_has_active_fiscal else bool(link.get("activo", True)),
                         "metadata": link_metadata,
                     },
                     prefer="return=representation",
