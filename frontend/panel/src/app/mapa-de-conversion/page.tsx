@@ -25,7 +25,6 @@ import {
 } from "@/lib/mapa-conversion/stages";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
-import { loadVisitsData } from "@/lib/visitas/data";
 
 export const dynamic = "force-dynamic";
 
@@ -309,7 +308,6 @@ export default async function Page({
   const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
-  let visitsResponse: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
   const errores: string[] = [];
 
   const demografiaTask = loadDemografiaData(nivel, {
@@ -339,45 +337,13 @@ export default async function Page({
           : "No se pudo obtener la información demográfica.",
     }));
 
-  const visitsTask = loadVisitsData({
-    canales: canalesFilter,
-    estado: nivel === "municipio" ? normalizedEstado : null,
-    sourceClass,
-    utmSource,
-    utmMedium,
-    utmCampaign,
-    campanaId,
-    campanaTipo,
-    templateId,
-    waCanalPublicitario,
-    waCampanaPublicitaria,
-    waReglaId,
-    rango,
-    desde,
-    hasta,
-  })
-    .then((value) => ({ ok: true as const, value }))
-    .catch((error: unknown) => ({
-      ok: false as const,
-      error:
-        error instanceof Error
-          ? error.message
-          : "No se pudieron obtener las visitas del mapa.",
-    }));
-
-  const [demografiaResult, visitsResult] = await Promise.all([demografiaTask, visitsTask]);
+  const [demografiaResult] = await Promise.all([demografiaTask]);
 
   if (demografiaResult.ok) {
     demografiaResponse = demografiaResult.value;
   } else {
     errores.push(demografiaResult.error);
   }
-  if (visitsResult.ok) {
-    visitsResponse = visitsResult.value;
-  } else {
-    errores.push(visitsResult.error);
-  }
-
   const datasetForTables =
     demografiaResponse && waAttributionFilterActive
       ? demografiaResponse.map.dataset.filter((entry) => {
@@ -762,7 +728,6 @@ export default async function Page({
               <div className="px-4 lg:px-6">
                 <AcquisitionSummary
                   summary={demografiaResponse?.summary ?? null}
-                  visitsPayload={visitsResponse}
                 />
               </div>
               {tableData.length && demografiaResponse ? (
