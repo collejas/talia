@@ -237,6 +237,10 @@ class DummyCRMRepository(CRMRepository):
         body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
         return body
 
+    async def list_account_address_relations(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_account_address_relations", kwargs))
+        return []
+
     async def create_persona(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_persona", kwargs))
         body = kwargs["payload"].copy()
@@ -1231,6 +1235,115 @@ async def test_create_account(client: AsyncClient) -> None:
     assert data["nombre"] == "Nueva Cuenta"
     assert data["tipo"] == "cliente"
 
+
+
+@pytest.mark.asyncio
+async def test_create_account_rejects_duplicate_contact_data(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    org_id = uuid.uuid4()
+    duplicate_email = "dupe@example.com"
+    fake_repo.list_accounts = AsyncMock(
+        return_value=[
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(org_id),
+                "nombre": "Cuenta duplicada",
+                "alias": None,
+                "tipo": "empresa",
+                "estado": "activo",
+                "correo_principal": duplicate_email.upper(),
+                "correo_secundario": None,
+                "telefono_principal_e164": None,
+                "telefono_secundario_e164": None,
+                "telefono": None,
+                "rfc": None,
+                "archived_at": None,
+                "merged_into_cuenta_id": None,
+                "propietario_usuario_id": None,
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+    )
+
+    resp = await client.post(
+        "/crm/cuentas",
+        headers={**_headers(), "X-Organizacion-Id": str(org_id)},
+        json={
+            "nombre": "Nueva Cuenta",
+            "tipo": "cliente",
+            "correo_principal": duplicate_email,
+        },
+    )
+
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "duplicate_account_detected"
+    assert detail["candidatos_cuenta"]
+    assert detail["message"]
+
+
+@pytest.mark.asyncio
+async def test_create_persona_alta_rejects_duplicate_contact_data(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    org_id = uuid.uuid4()
+    duplicate_email = "contacto-dupe@example.com"
+    duplicate_phone = "+5215550000001"
+    existing_persona = {
+        "id": str(uuid.uuid4()),
+        "organizacion_id": str(org_id),
+        "codigo_contacto": "Con999",
+        "nombre_completo": "Contacto Duplicado",
+        "correo_principal": duplicate_email.upper(),
+        "correo_secundario": None,
+        "correo_institucional": None,
+        "correo_personal_3": None,
+        "telefono_principal_e164": duplicate_phone,
+        "telefono_principal_tipo_linea": "movil",
+        "telefono_principal_extension": None,
+        "telefono_movil_1_e164": duplicate_phone,
+        "telefono_movil_2_e164": None,
+        "telefono_secundario_e164": None,
+        "telefono_empresa_1_e164": None,
+        "telefono_empresa_2_e164": None,
+        "company_name": None,
+        "propietario_usuario_id": None,
+        "archived_at": None,
+        "merged_into_persona_id": None,
+        "estado": "activo",
+        "creado_en": "2024-01-01T00:00:00Z",
+        "actualizado_en": "2024-01-01T00:00:00Z",
+    }
+    fake_repo.get_persona_by_email = AsyncMock(return_value=existing_persona)
+    fake_repo.get_persona_by_phone_e164 = AsyncMock(return_value=None)
+
+    resp = await client.post(
+        "/crm/personas/alta",
+        headers={**_headers(), "X-Organizacion-Id": str(org_id)},
+        json={
+            "persona": {
+                "nombre": "Ana",
+                "apellido_paterno": "Pérez",
+                "apellido_materno": "López",
+                "correo_principal": duplicate_email,
+                "telefono_principal_e164": duplicate_phone,
+            },
+            "contexto_comercial": {
+                "modo": "solo_persona",
+                "usar_cuenta_existente": False,
+                "crear_cuenta_nueva": False,
+                "es_persona_fisica_actividad_empresarial": False,
+            },
+        },
+    )
+
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "dedupe_confirmation_required"
+    assert detail["candidatos_persona"]
+    assert detail["message"]
 
 
 @pytest.mark.asyncio

@@ -11727,6 +11727,116 @@ def _merge_dedupe_candidates(
     return current
 
 
+def _is_active_dedupe_row(row: Mapping[str, Any]) -> bool:
+    archived_at = row.get("archived_at")
+    merged_persona = row.get("merged_into_persona_id")
+    merged_cuenta = row.get("merged_into_cuenta_id")
+    estado = str(row.get("estado") or "").strip().lower()
+    return archived_at is None and merged_persona is None and merged_cuenta is None and estado != "fusionado"
+
+
+def _account_duplicate_match_payload(account: Mapping[str, Any]) -> tuple[set[str], set[str], str | None]:
+    email_keys = {
+        _persona_alta_normalize_email(account.get("correo_principal")),
+        _persona_alta_normalize_email(account.get("correo_secundario")),
+        _persona_alta_normalize_email(account.get("correo")),
+        _persona_alta_normalize_email(account.get("email")),
+    }
+    phone_keys = {
+        _persona_alta_normalize_phone(account.get("telefono_principal_e164")),
+        _persona_alta_normalize_phone(account.get("telefono_secundario_e164")),
+        _persona_alta_normalize_phone(account.get("telefono")),
+    }
+    email_keys = {value for value in email_keys if value}
+    phone_keys = {value for value in phone_keys if value}
+    rfc_key = _normalize_rfc_text(account.get("rfc"))
+    return email_keys, phone_keys, rfc_key
+
+
+def _account_duplicate_candidate_row(
+    row: Mapping[str, Any],
+    *,
+    reason: str,
+    match_field: str,
+) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id") or ""),
+        "codigo_cuenta": row.get("codigo_cuenta"),
+        "nombre": row.get("nombre"),
+        "alias": row.get("alias"),
+        "rfc": row.get("rfc"),
+        "correo": row.get("correo_principal") or row.get("correo"),
+        "telefono": row.get("telefono_principal_e164") or row.get("telefono"),
+        "tipo_registro": "empresa_propia" if str(row.get("tipo") or "") == "persona_fisica_actividad_empresarial" else "empresa",
+        "coincidencia_en": match_field or reason,
+        "propietario_usuario_id": row.get("propietario_usuario_id"),
+        "nivel": "fuerte",
+        "motivo": reason,
+    }
+
+
+async def _find_account_duplicate_candidates(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    account_like: Mapping[str, Any],
+    exclude_account_id: UUID | None = None,
+) -> tuple[list[dict[str, Any]], UUID | None]:
+    email_keys, phone_keys, rfc_key = _account_duplicate_match_payload(account_like)
+    if not email_keys and not phone_keys and not rfc_key:
+        return [], None
+
+    candidates: list[dict[str, Any]] = []
+    selected: UUID | None = None
+    offset = 0
+    page_size = 200
+    while True:
+        try:
+            rows = await repo.list_accounts(organizacion_id=organizacion_id, limit=page_size, offset=offset)
+        except CRMRepositoryError:
+            return [], None
+        if not rows:
+            break
+        for row in rows:
+            if not isinstance(row, dict) or not _is_active_dedupe_row(row):
+                continue
+            row_id = _safe_uuid(row.get("id"))
+            if exclude_account_id and row_id == exclude_account_id:
+                continue
+            row_rfc = _normalize_rfc_text(row.get("rfc"))
+            row_email_keys, row_phone_keys, _ = _account_duplicate_match_payload(row)
+            reason = ""
+            match_field = ""
+            if rfc_key and row_rfc and row_rfc == rfc_key:
+                reason = "rfc"
+                match_field = "rfc"
+            elif email_keys and row_email_keys.intersection(email_keys):
+                reason = "correo"
+                match_field = "correo"
+            elif phone_keys and row_phone_keys.intersection(phone_keys):
+                reason = "telefono"
+                match_field = "telefono"
+            if not reason or not row_id:
+                continue
+            candidates = _merge_dedupe_candidates(
+                candidates,
+                _account_duplicate_candidate_row(row, reason=reason, match_field=match_field),
+            )
+            if selected is None:
+                selected = row_id
+        if len(rows) < page_size or offset >= 2000:
+            break
+        offset += page_size
+
+    candidates.sort(key=lambda item: _dedupe_level_rank(str(item.get("nivel") or "debil")), reverse=True)
+    candidates = await _attach_dedupe_owner_names(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        candidates=candidates[:10],
+    )
+    return candidates, selected
+
+
 async def _persona_alta_find_existing_account(
     *,
     repo: CRMRepository,
@@ -11736,24 +11846,8 @@ async def _persona_alta_find_existing_account(
 ) -> tuple[CRMAccount | None, list[dict[str, Any]]]:
     if not cuenta:
         return None, []
-    rfc_key = _persona_alta_match_rfc(cuenta.rfc)
-    razon_key = _persona_alta_match_key(cuenta.razon_social)
-    nombre_key = _persona_alta_match_key(cuenta.nombre_comercial)
-    email_keys = {
-        _persona_alta_normalize_email(cuenta.correo_principal),
-        _persona_alta_normalize_email(cuenta.correo_secundario),
-        _persona_alta_normalize_email(cuenta.correo),
-        _persona_alta_normalize_email(getattr(cuenta, "email", None)),
-    }
-    phone_keys = {
-        _persona_alta_normalize_phone(cuenta.telefono_principal_e164),
-        _persona_alta_normalize_phone(cuenta.telefono_principal),
-        _persona_alta_normalize_phone(cuenta.telefono_secundario_e164),
-        _persona_alta_normalize_phone(cuenta.telefono),
-    }
-    email_keys = {value for value in email_keys if value}
-    phone_keys = {value for value in phone_keys if value}
-    if not rfc_key and not razon_key and not nombre_key and not email_keys and not phone_keys:
+    email_keys, phone_keys, rfc_key = _account_duplicate_match_payload(cuenta.model_dump(mode="python", exclude_none=True))
+    if not rfc_key and not email_keys and not phone_keys:
         return None, []
     accounts: list[CRMAccount] = []
     offset = 0
@@ -11774,46 +11868,36 @@ async def _persona_alta_find_existing_account(
     for account in accounts:
         if exclude_account_id and account.id == exclude_account_id:
             continue
+        if not _is_active_dedupe_row(account.model_dump(mode="python", exclude_none=True)):
+            continue
         level = ""
         reason = ""
         match_field = ""
+        account_email_keys = {
+            _persona_alta_normalize_email(account.correo_principal),
+            _persona_alta_normalize_email(account.correo_secundario),
+            _persona_alta_normalize_email(account.correo),
+            _persona_alta_normalize_email(account.email),
+        }
+        account_phone_keys = {
+            _persona_alta_normalize_phone(account.telefono_principal_e164),
+            _persona_alta_normalize_phone(account.telefono),
+            _persona_alta_normalize_phone(account.telefono_secundario_e164),
+        }
+        account_email_keys = {value for value in account_email_keys if value}
+        account_phone_keys = {value for value in account_phone_keys if value}
         if rfc_key and _persona_alta_match_rfc(account.rfc) == rfc_key:
             level = "fuerte"
             reason = "rfc"
             match_field = "rfc"
-        elif razon_key and _persona_alta_match_key(account.razon_social) == razon_key:
-            level = "medio"
-            reason = "razon_social"
-            match_field = "razon_social"
-        elif nombre_key and (
-            _persona_alta_match_key(account.nombre) == nombre_key
-            or _persona_alta_match_key(account.alias) == nombre_key
-        ):
-            level = "debil"
-            reason = "nombre_comercial"
-            match_field = "nombre_comercial"
-        else:
-            account_email_keys = {
-                _persona_alta_normalize_email(account.correo_principal),
-                _persona_alta_normalize_email(account.correo_secundario),
-                _persona_alta_normalize_email(account.correo),
-                _persona_alta_normalize_email(account.email),
-            }
-            account_phone_keys = {
-                _persona_alta_normalize_phone(account.telefono_principal_e164),
-                _persona_alta_normalize_phone(account.telefono),
-                _persona_alta_normalize_phone(account.telefono_secundario_e164),
-            }
-            account_email_keys = {value for value in account_email_keys if value}
-            account_phone_keys = {value for value in account_phone_keys if value}
-            if email_keys and account_email_keys.intersection(email_keys):
-                level = "fuerte"
-                reason = "correo"
-                match_field = "correo"
-            elif phone_keys and account_phone_keys.intersection(phone_keys):
-                level = "fuerte"
-                reason = "telefono"
-                match_field = "telefono"
+        elif email_keys and account_email_keys.intersection(email_keys):
+            level = "fuerte"
+            reason = "correo"
+            match_field = "correo"
+        elif phone_keys and account_phone_keys.intersection(phone_keys):
+            level = "fuerte"
+            reason = "telefono"
+            match_field = "telefono"
         if not level:
             continue
         candidates = _merge_dedupe_candidates(
@@ -11877,12 +11961,6 @@ async def _persona_alta_find_persona_candidates(
     }
     telefono_keys = {value for value in telefono_keys if value}
     correo_keys = {value for value in correo_keys if value}
-    nombre_key = _persona_alta_match_name(_persona_alta_full_name(persona))
-    apellido_key = _persona_alta_match_name(persona.apellido_paterno)
-    empresa_key = _persona_alta_match_name(
-        _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
-        or _persona_alta_clean_text(cuenta.razon_social if cuenta else None)
-    )
 
     for telefono_key in telefono_keys:
         try:
@@ -11943,53 +12021,6 @@ async def _persona_alta_find_persona_candidates(
                 },
             )
 
-    full_name = _persona_alta_full_name(persona)
-    if full_name:
-        try:
-            by_name = await repo.search_personas(
-                organizacion_id=organizacion_id,
-                query=full_name,
-                limit=20,
-                offset=0,
-            )
-        except CRMRepositoryError:
-            by_name = []
-        for row in by_name:
-            if not isinstance(row, dict):
-                continue
-            if exclude_contacto_id and _safe_uuid(row.get("id")) == exclude_contacto_id:
-                continue
-            row_name_key = _persona_alta_match_name(row.get("nombre_completo"))
-            row_apellido_key = _persona_alta_match_name(row.get("apellido_paterno"))
-            if not row_name_key or (row_name_key != nombre_key and row_apellido_key != apellido_key):
-                continue
-            row_company_key = _persona_alta_match_name(row.get("company_name"))
-            level = "debil"
-            reason = "nombre_completo" if row_name_key == nombre_key else "apellido_paterno"
-            match_field = reason
-            if empresa_key and row_company_key and empresa_key == row_company_key:
-                level = "medio"
-                reason = "nombre_completo_y_empresa"
-                match_field = "nombre_completo_y_empresa"
-            candidates = _merge_dedupe_candidates(
-                candidates,
-                {
-                    "id": str(row.get("id")),
-                    "codigo_contacto": row.get("codigo_contacto") or row.get("legacy_contacto_codigo"),
-                    "nombre": row.get("nombre_completo"),
-                    "correo": row.get("correo"),
-                    "telefono": row.get("telefono_e164"),
-                    "empresa": row.get("company_name"),
-                    "propietario_usuario_id": row.get("propietario_usuario_id"),
-                    "tipo_registro": "contacto",
-                    "coincidencia_en": match_field,
-                    "correo_institucional": row.get("correo_secundario") or row.get("correo_institucional"),
-                    "telefono_movil_1_e164": row.get("telefono_movil_1_e164"),
-                    "nivel": level,
-                    "motivo": reason,
-                },
-            )
-
     candidates.sort(key=lambda item: _dedupe_level_rank(str(item.get("nivel") or "debil")), reverse=True)
     candidates = await _attach_dedupe_owner_names(
         repo=repo,
@@ -12047,9 +12078,6 @@ async def _persona_alta_build_dedupe_preview(
     persona_pending = [item for item in persona_candidates if isinstance(item, dict)]
     cuenta_pending = [item for item in account_candidates if isinstance(item, dict)]
     requires_confirmation = bool(persona_pending or cuenta_pending)
-
-    if dedupe and dedupe.confirmar_creacion:
-        requires_confirmation = False
     if dedupe and (dedupe.persona_reutilizar_id or dedupe.cuenta_reutilizar_id):
         requires_confirmation = False
 
@@ -15746,6 +15774,21 @@ async def create_account(
                 detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
             )
     body = payload.model_dump(mode="json", exclude_unset=True)
+    duplicate_candidates, _ = await _find_account_duplicate_candidates(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        account_like=body,
+    )
+    if duplicate_candidates:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "duplicate_account_detected",
+                "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                "candidatos_cuenta": duplicate_candidates,
+                "sugerencia_cuenta_reutilizar_id": duplicate_candidates[0].get("id"),
+            },
+        )
     direccion_fiscal, direccion_principal = _extract_account_direction_blocks(body)
     try:
         row = await repo.create_account(
@@ -15753,6 +15796,31 @@ async def create_account(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "duplicate_rfc" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo RFC.",
+                },
+            ) from exc
+        if "duplicate_contact_method" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_contact_detected",
+                    "message": "Ya existe un registro con el mismo correo o teléfono.",
+                },
+            ) from exc
+        if "duplicate_account_detected" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     cuenta_id = _safe_uuid(row.get("id"))
     if cuenta_id:
@@ -15877,6 +15945,24 @@ async def update_account(
                 detail="El RFC debe tener 12 o 13 caracteres alfanuméricos.",
             )
     body = payload.model_dump(mode="json", exclude_unset=True)
+    duplicate_probe = dict(existing_row)
+    duplicate_probe.update(body)
+    duplicate_candidates, _ = await _find_account_duplicate_candidates(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        account_like=duplicate_probe,
+        exclude_account_id=cuenta_id,
+    )
+    if duplicate_candidates:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "duplicate_account_detected",
+                "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                "candidatos_cuenta": duplicate_candidates,
+                "sugerencia_cuenta_reutilizar_id": duplicate_candidates[0].get("id"),
+            },
+        )
     direccion_fiscal, direccion_principal = _extract_account_direction_blocks(body)
     try:
         row = await repo.update_account(
@@ -15885,6 +15971,31 @@ async def update_account(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "duplicate_rfc" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo RFC.",
+                },
+            ) from exc
+        if "duplicate_contact_method" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_contact_detected",
+                    "message": "Ya existe un registro con el mismo correo o teléfono.",
+                },
+            ) from exc
+        if "duplicate_account_detected" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     try:
         if direccion_fiscal:
@@ -21102,12 +21213,6 @@ async def create_persona_alta(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    force_create_new = bool(dedupe and dedupe.confirmar_creacion)
-    if force_create_new:
-        suggested_persona_id = None
-        suggested_account_id = None
-        dedupe_contacto_id = None
-
     if requires_confirmation:
         raise HTTPException(
             status_code=409,
@@ -21121,7 +21226,7 @@ async def create_persona_alta(
             },
         )
 
-    if not dedupe_contacto_id and not force_create_new:
+    if not dedupe_contacto_id:
         dedupe_contacto_id = suggested_persona_id
 
     if contexto.modo == "empresa_existente":
@@ -21143,7 +21248,7 @@ async def create_persona_alta(
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
         reused_account_id = existing_account.id
-    elif suggested_account_id and cuenta and not force_create_new:
+    elif suggested_account_id and cuenta:
         cuenta = cuenta.model_copy(update={"cuenta_id": suggested_account_id})
         reused_account_id = suggested_account_id
         try:
@@ -21185,6 +21290,43 @@ async def create_persona_alta(
                 payload={key: value for key, value in contact_payload.items() if value is not None},
             )
     except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "dedupe_confirmation_required" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "dedupe_confirmation_required",
+                    "message": "Se detectaron posibles duplicados. Reutiliza uno existente antes de continuar.",
+                    "candidatos_persona": persona_candidates,
+                    "candidatos_cuenta": account_candidates,
+                    "sugerencia_persona_reutilizar_id": str(suggested_persona_id) if suggested_persona_id else None,
+                    "sugerencia_cuenta_reutilizar_id": str(suggested_account_id) if suggested_account_id else None,
+                },
+            ) from exc
+        if "duplicate_rfc" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo RFC.",
+                },
+            ) from exc
+        if "duplicate_contact_method" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_contact_detected",
+                    "message": "Ya existe un registro con el mismo correo o teléfono.",
+                },
+            ) from exc
+        if "duplicate_account_detected" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     persona_out = _safe_model_from_row(
@@ -21354,12 +21496,6 @@ async def update_persona(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    force_create_new = bool(dedupe and dedupe.confirmar_creacion)
-    if force_create_new:
-        suggested_persona_id = None
-        suggested_account_id = None
-        dedupe_contacto_id = None
-
     if requires_confirmation:
         raise HTTPException(
             status_code=409,
@@ -21373,7 +21509,7 @@ async def update_persona(
             },
         )
 
-    if not dedupe_contacto_id and not force_create_new:
+    if not dedupe_contacto_id:
         dedupe_contacto_id = suggested_persona_id
 
     if contexto.modo == "empresa_existente":
@@ -21395,7 +21531,7 @@ async def update_persona(
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
         reused_account_id = existing_account.id
-    elif suggested_account_id and cuenta and not force_create_new:
+    elif suggested_account_id and cuenta:
         cuenta = cuenta.model_copy(update={"cuenta_id": suggested_account_id})
         reused_account_id = suggested_account_id
         try:
@@ -21434,8 +21570,33 @@ async def update_persona(
             payload=contact_payload,
         )
     except CRMRepositoryError as exc:
+        detail = str(exc).lower()
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
+        if "dedupe_confirmation_required" in detail:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "dedupe_confirmation_required",
+                    "message": "Se detectaron posibles duplicados. Reutiliza uno existente antes de continuar.",
+                    "candidatos_persona": persona_candidates,
+                    "candidatos_cuenta": account_candidates,
+                    "sugerencia_persona_reutilizar_id": str(suggested_persona_id) if suggested_persona_id else None,
+                    "sugerencia_cuenta_reutilizar_id": str(suggested_account_id) if suggested_account_id else None,
+                },
+            ) from exc
+        if (
+            "duplicate_account_detected" in detail
+            or "duplicate_contact_method" in detail
+            or "duplicate_rfc" in detail
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_account_detected",
+                    "message": "La empresa ya existe con el mismo correo, teléfono o RFC.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     persona_out = _safe_model_from_row(

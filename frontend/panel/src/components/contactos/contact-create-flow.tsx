@@ -1855,14 +1855,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              disabled={state.saving}
-              onClick={() => void submit({ confirmar_creacion: true })}
-            >
-              Crear nuevos de todos modos
-            </Button>
-            <Button
-              type="button"
               variant="ghost"
               disabled={state.saving}
               onClick={() => {

@@ -97,6 +97,14 @@ def _is_account_code_duplicate_error(exc: Exception) -> bool:
         or ("duplicate key value violates unique constraint" in message and "codigo_cuenta" in message)
     )
 
+
+def _is_active_crm_row(row: Mapping[str, Any]) -> bool:
+    archived_at = row.get("archived_at")
+    merged_persona = row.get("merged_into_persona_id")
+    merged_cuenta = row.get("merged_into_cuenta_id")
+    estado = str(row.get("estado") or "").strip().lower()
+    return archived_at is None and merged_persona is None and merged_cuenta is None and estado != "fusionado"
+
 PERSONA_SELECT_FIELDS = (
     "id,organizacion_id,codigo_contacto,nombre,apellido_paterno,apellido_materno,nombre_completo,"
     "correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
@@ -9623,7 +9631,7 @@ class CRMRepository:
                     row = data
                 else:
                     row = None
-                if isinstance(row, dict):
+                if isinstance(row, dict) and _is_active_crm_row(row):
                     org_value = row.get("organizacion_id")
                     if not org_value:
                         return row
@@ -9670,7 +9678,7 @@ class CRMRepository:
                 row = data
             else:
                 row = None
-            if not isinstance(row, dict):
+            if not isinstance(row, dict) or not _is_active_crm_row(row):
                 continue
             org_value = row.get("organizacion_id")
             if not org_value:

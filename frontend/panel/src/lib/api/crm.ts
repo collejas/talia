@@ -352,6 +352,14 @@ async function mapResponseError(response: Response): Promise<string> {
       const json = JSON.parse(text);
       if (typeof json === "string") return json;
       if (json && typeof json === "object") {
+        const detailObject = typeof json.detail === "object" && json.detail ? (json.detail as Record<string, unknown>) : null;
+        const detailMessage =
+          detailObject && typeof detailObject.message === "string" && detailObject.message.trim()
+            ? detailObject.message.trim()
+            : null;
+        if (detailMessage) {
+          return detailMessage;
+        }
         const formatErrorValue = (value: unknown): string | null => {
           if (typeof value === "string") return value;
           if (typeof value === "number" || typeof value === "boolean") return value.toString();

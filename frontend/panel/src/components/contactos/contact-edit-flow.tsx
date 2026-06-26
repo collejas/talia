@@ -2441,14 +2441,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              disabled={state.saving}
-              onClick={() => void submit({ confirmar_creacion: true })}
-            >
-              Crear nuevos de todos modos
-            </Button>
-            <Button
-              type="button"
               variant="ghost"
               disabled={state.saving}
               onClick={() => {
