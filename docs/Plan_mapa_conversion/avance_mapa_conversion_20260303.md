@@ -218,6 +218,40 @@ Cambios de nombres aplicados:
 - `supabase/migrations/20260303_120000_web_sessions_base.sql`
 - `supabase/migrations/20260303_123000_panel_visitantes_geo_resumen_v2.sql`
 - `supabase/migrations/20260303_131500_panel_visitantes_geo_resumen_v3_webchat_fallback.sql`
+
+## 2026-06-27 · Corrección de tooltip y estabilización de mapa
+
+### Problema observado
+
+El tooltip del mapa de conversión dejó de mostrar buckets completos de WhatsApp por país después del refactor de `contactos/personas`. El listado de conversaciones volvió a mostrarse, pero el mapa seguía incompleto.
+
+### Diagnóstico
+
+- `conversaciones.contacto_id` estaba apuntando a `personas`, no a `contactos`.
+- El enriquecimiento geográfico del mapa pedía conversaciones sin detalles de persona.
+- El endpoint del mapa reutilizaba caché de una versión anterior, por lo que el payload corregido podía seguir oculto por unos minutos.
+
+### Ajuste aplicado
+
+- Se corrigió la ruta de enriquecimiento para pedir `include_persona_details=True`.
+- Se mantuvo la lógica de agregación por bucket, evitando duplicar buckets ya resueltos.
+- Se cambió la clave de caché del endpoint de mapa para forzar regeneración del payload.
+
+### Resultado
+
+- El tooltip ya vuelve a mostrar los países correctos de WhatsApp.
+- El dashboard afectado por el mismo cambio de datos también dejó de mostrar la información incorrecta.
+
+### Archivos tocados en esta corrección
+
+- `backend/app/api/routes/crm.py`
+- `backend/app/repositories/crm.py`
+- `backend/app/services/leads_geo.py`
+- `frontend/panel/src/lib/visitas/data.ts`
+- `frontend/panel/src/lib/inbox/threads.ts`
+- `frontend/panel/src/components/inbox/split-view.tsx`
+- `frontend/panel/src/components/mapa-conversion/location-comparison-chart.tsx`
+- `frontend/panel/src/lib/inbox/types.ts`
 - `frontend/panel/src/app/api/crm/web/visit/route.ts`
 - `frontend/panel/src/lib/mapa-conversion/source-class.ts`
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
