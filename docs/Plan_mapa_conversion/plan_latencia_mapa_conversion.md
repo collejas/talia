@@ -3,6 +3,11 @@
 Fecha: 2026-06-27
 Ruta: `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`
 
+Documentos relacionados:
+
+- `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
+- `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
+
 ## 1) Objetivo
 
 Reducir la latencia percibida al entrar a `mapa-de-conversion` y al cargar los listados `Visitas web` y `Conversaciones`, sin romper:

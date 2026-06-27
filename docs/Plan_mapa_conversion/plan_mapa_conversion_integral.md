@@ -3,6 +3,18 @@
 Fecha: 2026-03-03
 Ruta: `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
 
+Índice de la carpeta:
+
+- `docs/Plan_mapa_conversion/README.md`
+- `docs/Plan_mapa_conversion/changelog.md`
+- `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`
+- `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
+
+Documentos relacionados:
+
+- `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`
+- `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
+
 ## 1) Objetivo de negocio
 
 Construir una vista de `Mapa de Conversión` que permita responder de forma confiable:
@@ -40,6 +52,11 @@ Además:
 - Unión con webchat/whatsapp/voz/prospección para embudo multicanal.
 - Nuevo backend de métricas para `mapa-de-conversion`.
 - Actualización de frontend para mostrar métricas separadas y comparables.
+
+### Nota de interpretación
+
+La lectura operativa y de UX de la vista queda detallada en `plan_mapa_conversion_multicanal.md`.
+Este documento mantiene la visión arquitectónica y de datos.
 
 ### No incluye (fase posterior)
 

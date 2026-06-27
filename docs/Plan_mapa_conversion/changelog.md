@@ -1,0 +1,24 @@
+# Changelog Mapa de Conversión
+
+## 2026-06-27
+
+- Se corrigió la sección `WhatsApp por canal`, que estaba vacía porque no se persistían eventos de atribución.
+- Se ajustó el servicio de WhatsApp para permitir la persistencia de coincidencias válidas sin bloquearlas por historial de mensajes.
+- Se hizo backfill histórico para el tenant `00000000-0000-0000-0000-000000000001`.
+- Se crearon contactos mínimos válidos para resolver la FK requerida por `prospeccion_whatsapp_atribucion_eventos`.
+- Se limpió la caché `demografia_v2` para forzar reconstrucción del resumen.
+- Se confirmó que el tooltip del mapa ya muestra datos correctos de WhatsApp tras el refactor de contactos/personas.
+- Se corrigió la tabla de conversaciones, que ya vuelve a mostrar registros.
+- Se documentó el plan de latencia en `plan_latencia_mapa_conversion.md`.
+- Se documentó la lectura multicanal del mapa en `plan_mapa_conversion_multicanal.md`.
+- Se alinearon los documentos de mapa para separar:
+  - arquitectura y datos,
+  - performance,
+  - experiencia multicanal.
+
+## 2026-03-03
+
+- Se inició el plan maestro para el `Mapa de Conversión` integral.
+- Se definió el objetivo de unir tráfico web, webchat, WhatsApp, voz y prospección en una sola vista de análisis.
+- Se documentó la base técnica para `web_sessions` y el agregado geográfico v2.
+- Se dejó el camino para evolucionar la vista hacia un modelo de atribución más claro y escalable.
