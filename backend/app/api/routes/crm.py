@@ -453,6 +453,12 @@ DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES = 256
 _DEMOGRAFIA_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _DEMOGRAFIA_RESPONSE_CACHE_LOCK = asyncio.Lock()
 DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE = "demografia_v2"
+WHATSAPP_LOCATION_CACHE_TTL_SECONDS = 900.0
+WHATSAPP_LOCATION_CACHE_MAX_ENTRIES = 256
+_WHATSAPP_LOCATION_CACHE: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {}
+_WHATSAPP_LOCATION_CACHE_LOCK = asyncio.Lock()
+_WHATSAPP_LOCATION_INFLIGHT_LOCK = asyncio.Lock()
+_WHATSAPP_LOCATION_INFLIGHT: dict[str, asyncio.Future[dict[str, dict[str, Any]]]] = {}
 
 
 def _demografia_response_cache_ttl_seconds(
@@ -712,45 +718,17 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
         return
 
     try:
-        whatsapp_rows = await repo.visitas_persona_whatsapp_conversaciones(
+        aggregates = await _resolve_whatsapp_location_aggregates(
+            repo=repo,
             organizacion_id=organizacion_id,
-            limit=2000,
+            nivel=nivel,
             date_from=date_from,
             date_to=date_to,
-            include_persona_details=True,
         )
-    except CRMRepositoryError:
+    except Exception:
         logger.exception("crm.demografia.whatsapp_location_resolution_failed")
         return
-
-    aggregates: dict[str, dict[str, Any]] = {}
-    total_resolved = 0
-    for row in whatsapp_rows:
-        if not isinstance(row, dict):
-            continue
-        phone_value = _extract_whatsapp_phone_value(row)
-        if not phone_value:
-            continue
-        phone_location = leads_geo.phone_location_from_number(phone_value)
-        key, name = _resolve_whatsapp_geo_bucket(phone_location, nivel=nivel)
-        if not key:
-            continue
-        bucket = aggregates.setdefault(
-            key,
-            {
-                "count": 0,
-                "name": name,
-            },
-        )
-        bucket["count"] += 1
-        if name and (
-            not bucket.get("name")
-            or str(bucket.get("name") or "").strip() in {"Desconocido", "Estado desconocido", "Municipio desconocido", "País desconocido"}
-        ):
-            bucket["name"] = name
-        total_resolved += 1
-
-    if not aggregates or total_resolved <= 0:
+    if not aggregates:
         return
 
     item_by_key: dict[str, dict[str, Any]] = {}
@@ -851,6 +829,134 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
     if isinstance(totals, dict):
         totals["whatsapp_total"] = _to_number(totals.get("whatsapp_total"))
         totals["conversaciones_whatsapp"] = _to_number(totals.get("conversaciones_whatsapp"))
+
+
+def _build_whatsapp_location_cache_key(
+    *,
+    organizacion_id: UUID,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> str:
+    return json.dumps(
+        {
+            "organizacion_id": str(organizacion_id),
+            "nivel": (nivel or "").strip().lower() or "estado",
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+        },
+        sort_keys=True,
+    )
+
+
+async def _read_whatsapp_location_cache(cache_key: str) -> dict[str, dict[str, Any]] | None:
+    now = time.monotonic()
+    async with _WHATSAPP_LOCATION_CACHE_LOCK:
+        entry = _WHATSAPP_LOCATION_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _WHATSAPP_LOCATION_CACHE.pop(cache_key, None)
+            return None
+        return json.loads(json.dumps(cached_value, default=str))
+
+
+async def _write_whatsapp_location_cache(
+    cache_key: str,
+    payload: dict[str, dict[str, Any]],
+) -> None:
+    now = time.monotonic()
+    expires_at = now + WHATSAPP_LOCATION_CACHE_TTL_SECONDS
+    safe_payload = json.loads(json.dumps(payload, default=str))
+    async with _WHATSAPP_LOCATION_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _WHATSAPP_LOCATION_CACHE.items() if ttl <= now]
+        for key in expired:
+            _WHATSAPP_LOCATION_CACHE.pop(key, None)
+        _WHATSAPP_LOCATION_CACHE[cache_key] = (expires_at, safe_payload)
+        while len(_WHATSAPP_LOCATION_CACHE) > WHATSAPP_LOCATION_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_WHATSAPP_LOCATION_CACHE), None)
+            if not oldest_key:
+                break
+            _WHATSAPP_LOCATION_CACHE.pop(oldest_key, None)
+
+
+async def _resolve_whatsapp_location_aggregates(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> dict[str, dict[str, Any]]:
+    cache_key = _build_whatsapp_location_cache_key(
+        organizacion_id=organizacion_id,
+        nivel=nivel,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    cached_value = await _read_whatsapp_location_cache(cache_key)
+    if cached_value is not None:
+        return cached_value
+
+    async with _WHATSAPP_LOCATION_INFLIGHT_LOCK:
+        inflight_future = _WHATSAPP_LOCATION_INFLIGHT.get(cache_key)
+        if inflight_future is None:
+            loop = asyncio.get_running_loop()
+            inflight_future = loop.create_future()
+            _WHATSAPP_LOCATION_INFLIGHT[cache_key] = inflight_future
+            is_leader = True
+        else:
+            is_leader = False
+
+    if not is_leader:
+        return await inflight_future
+
+    try:
+        whatsapp_rows = await repo.visitas_persona_whatsapp_conversaciones(
+            organizacion_id=organizacion_id,
+            limit=2000,
+            date_from=date_from,
+            date_to=date_to,
+            include_persona_details=True,
+        )
+
+        aggregates: dict[str, dict[str, Any]] = {}
+        total_resolved = 0
+        for row in whatsapp_rows:
+            if not isinstance(row, dict):
+                continue
+            phone_value = _extract_whatsapp_phone_value(row)
+            if not phone_value:
+                continue
+            phone_location = leads_geo.phone_location_from_number(phone_value)
+            key, name = _resolve_whatsapp_geo_bucket(phone_location, nivel=nivel)
+            if not key:
+                continue
+            bucket = aggregates.setdefault(key, {"count": 0, "name": name})
+            bucket["count"] += 1
+            if name and (
+                not bucket.get("name")
+                or str(bucket.get("name") or "").strip()
+                in {"Desconocido", "Estado desconocido", "Municipio desconocido", "País desconocido"}
+            ):
+                bucket["name"] = name
+            total_resolved += 1
+
+        if total_resolved > 0:
+            await _write_whatsapp_location_cache(cache_key, aggregates)
+
+        if not inflight_future.done():
+            inflight_future.set_result(json.loads(json.dumps(aggregates, default=str)))
+        return aggregates
+    except Exception as exc:
+        if not inflight_future.done():
+            inflight_future.set_exception(exc)
+            _ = inflight_future.exception()
+        raise
+    finally:
+        async with _WHATSAPP_LOCATION_INFLIGHT_LOCK:
+            _WHATSAPP_LOCATION_INFLIGHT.pop(cache_key, None)
 
 
 async def _read_demografia_response_cache(

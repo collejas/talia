@@ -139,3 +139,65 @@ Se considera resuelta la latencia cuando:
 - `Visitas web` y `Conversaciones` cargan de forma predecible,
 - el tooltip mantiene los datos correctos ya corregidos,
 - no aparecen regresiones en otras vistas que consumen los mismos endpoints.
+
+## 9) Avance aplicado
+
+Fecha: 2026-06-27
+
+Se descartó el refactor de `Suspense` en la página porque empeoró la percepción general de carga.
+
+Se identificó un cuello real:
+
+- `resumen-v2` y `mapa-v2` estaban resolviendo la misma geolocalización de WhatsApp por ubicación de forma independiente.
+- En una apertura nueva, el frontend dispara ambos requests en paralelo.
+- Eso duplicaba una consulta costosa a `visitas_persona_whatsapp_conversaciones` y su geocodificación en Python.
+
+Corrección aplicada:
+
+- Se agregó una cache compartida para la agregación de ubicaciones de WhatsApp en `backend/app/api/routes/crm.py`.
+- La resolución ahora usa una sola agregación por combinación de organización, nivel y rango de fechas.
+- Se deduplican ejecuciones concurrentes con un `inflight` compartido.
+
+Siguiente verificación:
+
+- medir de nuevo el tiempo de `/demografia/resumen-v2` y `/demografia/mapa-v2`,
+- confirmar que `Visitas web` y `Conversaciones` empiezan a renderear antes,
+- revisar si hace falta otra optimización en `/api/crm/mapa-conversion/tables`.
+
+## 10) Idea de mejora visible para el usuario
+
+Objetivo:
+
+- evitar que la vista se perciba en blanco durante la carga inicial,
+- mostrar desde el inicio una estructura comprensible,
+- dar feedback visual aunque todavía no estén listos los datos pesados.
+
+Propuesta:
+
+1. Pintar inmediatamente el marco de la vista:
+- `SiteHeader`
+- filtros
+- títulos de secciones
+- contenedores de `Mapa`, `Resumen general`, `Visitas web` y `Conversaciones`
+
+2. Usar skeletons o placeholders por sección:
+- el mapa puede mostrar un contenedor con carga progresiva,
+- el resumen puede mostrar bloques vacíos con labels visibles,
+- las tablas pueden mostrar estado de carga antes de traer filas reales.
+
+3. Desacoplar la carga por bloques:
+- el mapa y el resumen deben cargar sin bloquear las tablas,
+- `Visitas web` y `Conversaciones` deben empezar a pedir datos lo antes posible,
+- si una sección tarda, que afecte solo a esa sección.
+
+4. Medir la latencia por etapa:
+- tiempo de render del shell,
+- tiempo de `resumen-v2`,
+- tiempo de `mapa-v2`,
+- tiempo de `/api/crm/mapa-conversion/tables`.
+
+Decisión recomendada:
+
+- primero hacer visible la estructura de la pantalla,
+- después optimizar la carga de datos para que cada bloque llegue de forma independiente,
+- solo si hace falta, aplicar carga diferida o progressive rendering en tablas secundarias.
