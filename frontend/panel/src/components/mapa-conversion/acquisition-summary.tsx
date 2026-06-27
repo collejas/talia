@@ -23,9 +23,28 @@ import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
 import type { VisitsPayload } from "@/lib/visitas/data";
 import { cn } from "@/lib/utils";
 
+type AcquisitionFilters = {
+  canales: string[];
+  estado: string | null;
+  sourceClass: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  campanaId: string | null;
+  campanaTipo: string | null;
+  templateId: string | null;
+  waCanalPublicitario: string | null;
+  waCampanaPublicitaria: string | null;
+  waReglaId: string | null;
+  rango: string | null;
+  desde: string | null;
+  hasta: string | null;
+};
+
 type Props = {
   summary: DemografiaSummaryResponse | null;
   visitsPayload?: VisitsPayload | null;
+  filters?: AcquisitionFilters | null;
   className?: string;
 };
 
@@ -144,7 +163,82 @@ function renderBarValueLabel(props: {
   );
 }
 
-export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
+export function AcquisitionSummary({ summary, visitsPayload = null, filters = null, className }: Props) {
+  const [loadedVisitsPayload, setLoadedVisitsPayload] = React.useState<VisitsPayload | null>(
+    visitsPayload,
+  );
+  const [loadingVisitsPayload, setLoadingVisitsPayload] = React.useState(false);
+
+  React.useEffect(() => {
+    if (visitsPayload) {
+      setLoadedVisitsPayload(visitsPayload);
+      setLoadingVisitsPayload(false);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+
+    if (!filters) {
+      setLoadedVisitsPayload(null);
+      setLoadingVisitsPayload(false);
+      return () => controller.abort();
+    }
+
+    const params = new URLSearchParams();
+    params.set("table", "visits");
+    if (filters.canales.length) params.set("canales", filters.canales.join(","));
+    if (filters.estado) params.set("estado", filters.estado);
+    if (filters.sourceClass) params.set("source_class", filters.sourceClass);
+    if (filters.utmSource) params.set("utm_source", filters.utmSource);
+    if (filters.utmMedium) params.set("utm_medium", filters.utmMedium);
+    if (filters.utmCampaign) params.set("utm_campaign", filters.utmCampaign);
+    if (filters.campanaId) params.set("campana_id", filters.campanaId);
+    if (filters.campanaTipo) params.set("campana_tipo", filters.campanaTipo);
+    if (filters.templateId) params.set("template_id", filters.templateId);
+    if (filters.waCanalPublicitario) params.set("wa_canal_publicitario", filters.waCanalPublicitario);
+    if (filters.waCampanaPublicitaria) params.set("wa_campana_publicitaria", filters.waCampanaPublicitaria);
+    if (filters.waReglaId) params.set("wa_regla_id", filters.waReglaId);
+    if (filters.rango) params.set("rango", filters.rango);
+    if (filters.desde) params.set("desde", filters.desde);
+    if (filters.hasta) params.set("hasta", filters.hasta);
+
+    setLoadingVisitsPayload(true);
+    void fetch(`/api/crm/mapa-conversion/tables?${params.toString()}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          ok: boolean;
+          visitsTable?: VisitsPayload["table"];
+          errors?: string[];
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.errors?.[0] || "No se pudieron cargar los datos de visitas.");
+        }
+        if (cancelled) return;
+        setLoadedVisitsPayload({
+          cards: { totalVisits: 0, sinChat: 0, conChat: 0, contactos: 0, whatsapp: 0 },
+          chart: [],
+          table: payload.visitsTable ?? [],
+          errors: [],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadedVisitsPayload(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingVisitsPayload(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [visitsPayload, filters]);
+
   const campaignLabels = React.useMemo(() => {
     const labels = new Map<string, string>();
     const fromCatalog = summary?.attribution_catalog?.utm_campaign_labels ?? {};
@@ -175,9 +269,17 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
     topUtmRows,
     whatsappChannelRows,
   } =
-    React.useMemo(() => buildAcquisitionMetrics(summary, visitsPayload), [summary, visitsPayload]);
+    React.useMemo(
+      () => buildAcquisitionMetrics(summary, loadedVisitsPayload),
+      [summary, loadedVisitsPayload],
+    );
   return (
     <section className={cn("grid gap-4", className)}>
+      {loadingVisitsPayload ? (
+        <div className="text-xs text-muted-foreground">
+          Cargando detalle de visitas para refinar la adquisición...
+        </div>
+      ) : null}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
