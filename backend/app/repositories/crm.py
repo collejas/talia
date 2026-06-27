@@ -69,6 +69,10 @@ SUPABASE_TRANSIENT_MARKERS = (
     "connection reset",
     "temporarily unavailable",
 )
+LATEST_ENVIOS_BY_PHONES_CACHE_TTL_SECONDS = 60.0
+LATEST_ENVIOS_BY_PHONES_CACHE_MAX_ENTRIES = 64
+_LATEST_ENVIOS_BY_PHONES_CACHE: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {}
+_LATEST_ENVIOS_BY_PHONES_CACHE_LOCK = asyncio.Lock()
 
 
 def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: int = 3) -> str:
@@ -20142,6 +20146,23 @@ class CRMRepository:
         if not normalized_phones:
             return {}
 
+        cache_key = json.dumps(
+            {
+                "phones": normalized_phones,
+                "canal": (canal or "").strip().lower() or None,
+                "organizacion_id": str(organizacion_id) if organizacion_id is not None else None,
+            },
+            sort_keys=True,
+        )
+        now = time.monotonic()
+        async with _LATEST_ENVIOS_BY_PHONES_CACHE_LOCK:
+            cached_entry = _LATEST_ENVIOS_BY_PHONES_CACHE.get(cache_key)
+            if cached_entry is not None:
+                expires_at, cached_value = cached_entry
+                if expires_at > now:
+                    return json.loads(json.dumps(cached_value, default=str))
+                _LATEST_ENVIOS_BY_PHONES_CACHE.pop(cache_key, None)
+
         # Ruta principal: resolver en SQL (1 RPC por chunk) y evitar escaneo paginado
         # de PostgREST para cada bloque de telefonos.
         resolved: dict[str, dict[str, Any]] = {}
@@ -20177,17 +20198,40 @@ class CRMRepository:
                     if not phone:
                         continue
                     resolved[phone] = row
+            safe_value = json.loads(json.dumps(resolved, default=str))
+            async with _LATEST_ENVIOS_BY_PHONES_CACHE_LOCK:
+                _LATEST_ENVIOS_BY_PHONES_CACHE[cache_key] = (
+                    now + LATEST_ENVIOS_BY_PHONES_CACHE_TTL_SECONDS,
+                    safe_value,
+                )
+                while len(_LATEST_ENVIOS_BY_PHONES_CACHE) > LATEST_ENVIOS_BY_PHONES_CACHE_MAX_ENTRIES:
+                    oldest_key = next(iter(_LATEST_ENVIOS_BY_PHONES_CACHE), None)
+                    if not oldest_key:
+                        break
+                    _LATEST_ENVIOS_BY_PHONES_CACHE.pop(oldest_key, None)
             return resolved
         except CRMRepositoryError:
             # Fallback defensivo legacy para mantener compatibilidad si la RPC no existe
             # o falla temporalmente.
             pass
 
-        return await self._worker_get_latest_envios_by_phones_legacy(
+        legacy_resolved = await self._worker_get_latest_envios_by_phones_legacy(
             normalized_phones=normalized_phones,
             canal=canal,
             organizacion_id=organizacion_id,
         )
+        safe_value = json.loads(json.dumps(legacy_resolved, default=str))
+        async with _LATEST_ENVIOS_BY_PHONES_CACHE_LOCK:
+            _LATEST_ENVIOS_BY_PHONES_CACHE[cache_key] = (
+                now + LATEST_ENVIOS_BY_PHONES_CACHE_TTL_SECONDS,
+                safe_value,
+            )
+            while len(_LATEST_ENVIOS_BY_PHONES_CACHE) > LATEST_ENVIOS_BY_PHONES_CACHE_MAX_ENTRIES:
+                oldest_key = next(iter(_LATEST_ENVIOS_BY_PHONES_CACHE), None)
+                if not oldest_key:
+                    break
+                _LATEST_ENVIOS_BY_PHONES_CACHE.pop(oldest_key, None)
+        return legacy_resolved
 
     async def _worker_get_latest_envios_by_phones_legacy(
         self,
