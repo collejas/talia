@@ -44700,11 +44700,37 @@ def _build_mapa_conversion_export_html(
         ]
         for row in visitas_web_rows[:100]
     ]
+    def _conversation_whatsapp_location(row: Mapping[str, Any]) -> str | None:
+        phone_location = row.get("phone_location") if isinstance(row.get("phone_location"), dict) else {}
+        country_code = _clean_text(row.get("country_code") or phone_location.get("country_code"))
+        country_name = _clean_text(row.get("country_name") or phone_location.get("country_name"))
+        if country_code and country_code.upper() != "MX":
+            return f"{country_name or country_code} ({country_code.upper()})" if country_name else country_code.upper()
+        state_name = _clean_text(row.get("state_name") or phone_location.get("state_name"))
+        municipality_name = _clean_text(row.get("city_name") or row.get("nom_mun") or phone_location.get("municipality_name"))
+        if municipality_name and state_name:
+            return f"{municipality_name}, {state_name}"
+        if state_name:
+            return state_name
+        if municipality_name:
+            return municipality_name
+        return country_name or None
+
+    def _conversation_whatsapp_country(row: Mapping[str, Any]) -> str | None:
+        phone_location = row.get("phone_location") if isinstance(row.get("phone_location"), dict) else {}
+        country_code = _clean_text(row.get("country_code") or phone_location.get("country_code"))
+        country_name = _clean_text(row.get("country_name") or phone_location.get("country_name"))
+        if country_code and country_code.upper() != "MX":
+            return country_name or country_code.upper()
+        return country_name or country_code or None
+
     conversations_headers = [
         "Creado",
         "Tipo de promoción",
         "Promoción de prospección",
         "Plantilla detectada",
+        "País",
+        "Ubicación WhatsApp",
         "Canal de WhatsApp",
         "Promoción de WhatsApp",
         "Regla de origen",
@@ -44721,6 +44747,8 @@ def _build_mapa_conversion_export_html(
             row.get("prospeccion_campana_tipo"),
             row.get("prospeccion_campana_nombre"),
             row.get("template_nombre"),
+            _conversation_whatsapp_country(row),
+            _conversation_whatsapp_location(row),
             row.get("wa_canal_publicitario"),
             row.get("wa_campana_publicitaria"),
             row.get("wa_regla_nombre"),

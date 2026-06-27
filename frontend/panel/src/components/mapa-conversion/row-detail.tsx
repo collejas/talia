@@ -36,6 +36,31 @@ type Segment = {
   total: number;
 };
 
+function formatWhatsappOriginLabel(entry: Record<string, unknown>): string | null {
+  const phoneLocation = entry.phone_location as
+    | {
+        country_code?: string | null;
+        country_name?: string | null;
+        state_name?: string | null;
+        municipality_name?: string | null;
+      }
+    | null
+    | undefined;
+
+  const countryCode = String(entry.country_code || phoneLocation?.country_code || "").trim().toUpperCase();
+  const countryName = String(entry.country_name || phoneLocation?.country_name || "").trim();
+  if (countryCode && countryCode !== "MX") {
+    return countryName ? `${countryName} (${countryCode})` : countryCode;
+  }
+
+  const municipalityName = String(entry.city_name || entry.nom_mun || phoneLocation?.municipality_name || "").trim();
+  const stateName = String(entry.state_name || entry.nom_ent || phoneLocation?.state_name || "").trim();
+  if (municipalityName && stateName) return `${municipalityName}, ${stateName}`;
+  if (stateName) return stateName;
+  if (municipalityName) return municipalityName;
+  return countryName || null;
+}
+
 const CHANNEL_CONFIG: ChartConfig = {
   webchat: { label: "Chat del sitio", color: "var(--chart-1)" },
   whatsapp: { label: "WhatsApp", color: "var(--chart-2)" },
@@ -89,6 +114,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
   const canalMeta = (entry.canal_meta as Record<string, unknown>) ?? {};
   const trafficWeb = (entry.traffic_web as Record<string, unknown>) ?? {};
   const whatsappAttribution = (entry.whatsapp_atribucion as Record<string, unknown>) ?? {};
+  const whatsappOriginLabel = row.raw ? formatWhatsappOriginLabel(entry) : null;
 
   const totalVisitas = sanitizeNumber(metrics.visitantes_total ?? entry.total_visitas);
   const leadsTotal = sanitizeNumber(metrics.leads_total ?? entry.leads_total);
@@ -144,6 +170,11 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">{detailLevel}</Badge>
           <Badge>{formatLabel(principalChannel)}</Badge>
+          {row.raw && row.raw.canal === "whatsapp" && whatsappOriginLabel ? (
+            <Badge variant="outline" className="border-dashed">
+              {whatsappOriginLabel}
+            </Badge>
+          ) : null}
         </div>
         <h3 className="text-foreground text-lg font-semibold leading-tight">
           {name}

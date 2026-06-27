@@ -1232,6 +1232,7 @@ function resolveWhatsappLocationLabel(row: VisitDetailRaw): string | null {
         state_name?: string | null;
         municipality_name?: string | null;
         country_name?: string | null;
+        country_code?: string | null;
         lada?: string | null;
         ok?: boolean | null;
       }
@@ -1240,9 +1241,13 @@ function resolveWhatsappLocationLabel(row: VisitDetailRaw): string | null {
 
   const municipalityName = row.city_name || row.nom_mun || phoneLocation?.municipality_name || null;
   const stateName = row.state_name || row.nom_ent || phoneLocation?.state_name || null;
+  const countryCode = (row.country_code || phoneLocation?.country_code || "").trim().toUpperCase();
   const countryName = row.country_name || phoneLocation?.country_name || null;
   const lada = row.contacto_telefono || phoneLocation?.lada || null;
 
+  if (countryCode && countryCode !== "MX") {
+    return countryName ? `${countryName} (${countryCode})` : countryCode;
+  }
   if (municipalityName && stateName) {
     return `${municipalityName}, ${stateName}`;
   }

@@ -53,17 +53,15 @@ function formatWhatsappLocation(raw: VisitDetailRaw) {
     | null
     | undefined;
 
+  const countryCode = (raw.country_code || phoneLocation?.country_code || "").trim().toUpperCase();
+  const countryName = (raw.country_name || phoneLocation?.country_name || "").trim();
+
+  if (countryCode && countryCode !== "MX") {
+    return countryName ? `${countryName} (${countryCode})` : countryCode;
+  }
+
   if (!phoneLocation) return null;
   if (phoneLocation.ok === false) return "Ubicación no resuelta";
-
-  const countryCode = (phoneLocation.country_code || "").trim().toUpperCase();
-  const countryName = (phoneLocation.country_name || "").trim();
-  if (countryCode && countryCode !== "MX") {
-    if (countryName) {
-      return countryCode ? `${countryName} (${countryCode})` : countryName;
-    }
-    return countryCode;
-  }
 
   const derivedLocation =
     (raw.city_name || raw.nom_mun || phoneLocation.municipality_name || null) ||
