@@ -1,3 +1,5 @@
+import { performance } from "node:perf_hooks";
+
 import { NextResponse } from "next/server";
 
 import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt";
@@ -13,6 +15,7 @@ function parseList(value: string | null): string[] {
 }
 
 export async function GET(request: Request) {
+  const started = performance.now();
   const { searchParams } = new URL(request.url);
   const table = searchParams.get("table")?.trim().toLowerCase();
   const section = table === "visits" || table === "conversations" ? table : "both";
@@ -41,8 +44,23 @@ export async function GET(request: Request) {
   ].join(":");
 
   const response = await loadConversionMapTablesForConversionMap(filters, { cacheScope, section });
-  return NextResponse.json({
+  const durationMs = performance.now() - started;
+  const payload = {
     ok: true,
     ...response,
+  };
+  const visitsRows = response.visitsTable?.length ?? 0;
+  const conversationsRows = response.conversationsTable?.length ?? 0;
+  console.info("crm.mapa_conversion.tables.request", {
+    section,
+    duration_ms: Math.round(durationMs * 100) / 100,
+    visits_rows: visitsRows,
+    conversations_rows: conversationsRows,
+  });
+  return NextResponse.json(payload, {
+    headers: {
+      "Server-Timing": `total;dur=${Math.round(durationMs * 100) / 100}`,
+      "X-Response-Time-Ms": String(Math.round(durationMs * 100) / 100),
+    },
   });
 }

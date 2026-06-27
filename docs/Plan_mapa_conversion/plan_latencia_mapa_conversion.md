@@ -192,6 +192,19 @@ Impacto esperado:
 - el usuario ve avance incremental en vez de esperar un payload combinado,
 - el bloqueo de una sección afecta menos a la otra.
 
+## 13) Instrumentación aplicada
+
+Fecha: 2026-06-27
+
+Se agregó medición real del endpoint de tablas:
+
+- la ruta ahora registra duración total por request,
+- distingue `section=visits`, `section=conversations` y `section=both`,
+- expone `Server-Timing` y `X-Response-Time-Ms`,
+- deja trazas para comparar cuántas filas devuelve cada sección.
+
+Esto permite validar si la separación por secciones está reduciendo de verdad la latencia percibida y cuál de las dos tablas sigue siendo el cuello.
+
 ## 10) Idea de mejora visible para el usuario
 
 Objetivo:
