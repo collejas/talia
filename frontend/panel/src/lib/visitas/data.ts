@@ -559,9 +559,57 @@ export type ConversionMapTablesResult = {
   errors: string[];
 };
 
+type ConversionMapTablesCacheEntry = {
+  expiresAt: number;
+  value: ConversionMapTablesResult;
+};
+
+const CONVERSION_MAP_TABLES_CACHE_TTL_MS = 45_000;
+const CONVERSION_MAP_TABLES_CACHE_MAX_ENTRIES = 64;
+const _CONVERSION_MAP_TABLES_CACHE = new Map<string, ConversionMapTablesCacheEntry>();
+
+function buildConversionMapTablesCacheKey(
+  filters: VisitsFilters,
+  cacheScope: string | null | undefined,
+): string {
+  return JSON.stringify({
+    scope: (cacheScope || "global").trim() || "global",
+    canales: (filters.canales || [])
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .sort(),
+    estado: (filters.estado || "").trim().toLowerCase() || null,
+    sourceClass: (filters.sourceClass || "").trim().toLowerCase() || null,
+    utmSource: (filters.utmSource || "").trim().toLowerCase() || null,
+    utmMedium: (filters.utmMedium || "").trim().toLowerCase() || null,
+    utmCampaign: (filters.utmCampaign || "").trim().toLowerCase() || null,
+    campanaId: (filters.campanaId || "").trim() || null,
+    campanaTipo: (filters.campanaTipo || "").trim().toLowerCase() || null,
+    templateId: (filters.templateId || "").trim() || null,
+    waCanalPublicitario: (filters.waCanalPublicitario || "").trim() || null,
+    waCampanaPublicitaria: (filters.waCampanaPublicitaria || "").trim() || null,
+    waReglaId: (filters.waReglaId || "").trim() || null,
+    rango: (filters.rango || "").trim().toLowerCase() || null,
+    desde: (filters.desde || "").trim() || null,
+    hasta: (filters.hasta || "").trim() || null,
+  });
+}
+
+function cloneConversionMapTablesResult(result: ConversionMapTablesResult): ConversionMapTablesResult {
+  return structuredClone(result);
+}
+
 export async function loadConversionMapTablesForConversionMap(
   filters: VisitsFilters = {},
+  options: { cacheScope?: string | null } = {},
 ): Promise<ConversionMapTablesResult> {
+  const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope)
+  const now = Date.now()
+  const cached = _CONVERSION_MAP_TABLES_CACHE.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cloneConversionMapTablesResult(cached.value)
+  }
+
   const templatesPromise = hasAttributionFilters(filters)
     ? callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", {
         withUserToken: true,
@@ -621,11 +669,22 @@ export async function loadConversionMapTablesForConversionMap(
       )
     : [];
 
-  return {
+  const payload = {
     visitsTable,
     conversationsTable,
     errors: Array.from(new Set(errors)),
   };
+  _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
+    expiresAt: now + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
+    value: cloneConversionMapTablesResult(payload),
+  });
+  if (_CONVERSION_MAP_TABLES_CACHE.size > CONVERSION_MAP_TABLES_CACHE_MAX_ENTRIES) {
+    const oldestKey = _CONVERSION_MAP_TABLES_CACHE.keys().next().value as string | undefined;
+    if (oldestKey) {
+      _CONVERSION_MAP_TABLES_CACHE.delete(oldestKey);
+    }
+  }
+  return payload;
 }
 
 export async function loadVisitsData(filters: VisitsFilters = {}): Promise<VisitsPayload> {
