@@ -176,6 +176,22 @@ Se implementó una mejora de percepción de carga en la vista:
 
 Esto no sustituye la optimización de backend, pero sí mejora la comprensión de la vista mientras llegan los datos.
 
+## 12) Separación de tablas por sección
+
+Fecha: 2026-06-27
+
+Se implementó una optimización adicional en el endpoint de tablas:
+
+- `Visitas web` y `Conversaciones` ahora pueden resolverse como requests separados.
+- `Visitas web` ya no espera a que termine la consulta de WhatsApp cuando no es necesaria.
+- `Conversaciones` mantiene su propia carga de WhatsApp y sigue independientemente.
+
+Impacto esperado:
+
+- la primera tabla útil aparece antes,
+- el usuario ve avance incremental en vez de esperar un payload combinado,
+- el bloqueo de una sección afecta menos a la otra.
+
 ## 10) Idea de mejora visible para el usuario
 
 Objetivo:

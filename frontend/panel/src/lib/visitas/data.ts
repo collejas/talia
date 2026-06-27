@@ -559,6 +559,8 @@ export type ConversionMapTablesResult = {
   errors: string[];
 };
 
+export type ConversionMapTableSection = "visits" | "conversations" | "both";
+
 type ConversionMapTablesCacheEntry = {
   expiresAt: number;
   value: ConversionMapTablesResult;
@@ -571,9 +573,11 @@ const _CONVERSION_MAP_TABLES_CACHE = new Map<string, ConversionMapTablesCacheEnt
 function buildConversionMapTablesCacheKey(
   filters: VisitsFilters,
   cacheScope: string | null | undefined,
+  section: ConversionMapTableSection,
 ): string {
   return JSON.stringify({
     scope: (cacheScope || "global").trim() || "global",
+    section,
     canales: (filters.canales || [])
       .map((value) => value.trim())
       .filter(Boolean)
@@ -601,9 +605,10 @@ function cloneConversionMapTablesResult(result: ConversionMapTablesResult): Conv
 
 export async function loadConversionMapTablesForConversionMap(
   filters: VisitsFilters = {},
-  options: { cacheScope?: string | null } = {},
+  options: { cacheScope?: string | null; section?: ConversionMapTableSection } = {},
 ): Promise<ConversionMapTablesResult> {
-  const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope)
+  const section = options.section || "both";
+  const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope, section)
   const now = Date.now()
   const cached = _CONVERSION_MAP_TABLES_CACHE.get(cacheKey)
   if (cached && cached.expiresAt > now) {
@@ -616,35 +621,35 @@ export async function loadConversionMapTablesForConversionMap(
       })
     : Promise.resolve(null);
   const webchatPromise = loadWebchatVisitRows(filters);
-  const whatsappPromise = callCrmApi<WhatsappConversationRow[]>(
-    "/crm/visitas/whatsapp/conversaciones",
-    {
-      withUserToken: true,
-      searchParams: {
-        rango: filters.rango || undefined,
-        desde: filters.desde || undefined,
-        hasta: filters.hasta || undefined,
-        wa_canal_publicitario: filters.waCanalPublicitario || undefined,
-        wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
-        wa_regla_id: filters.waReglaId || undefined,
-        campana_id: filters.campanaId || undefined,
-        campana_tipo: filters.campanaTipo || undefined,
-        template_id: filters.templateId || undefined,
-        limit: 500,
-      },
-    },
-  );
+  const whatsappPromise =
+    section === "visits"
+      ? null
+      : callCrmApi<WhatsappConversationRow[]>(
+          "/crm/visitas/whatsapp/conversaciones",
+          {
+            withUserToken: true,
+            searchParams: {
+              rango: filters.rango || undefined,
+              desde: filters.desde || undefined,
+              hasta: filters.hasta || undefined,
+              wa_canal_publicitario: filters.waCanalPublicitario || undefined,
+              wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
+              wa_regla_id: filters.waReglaId || undefined,
+              campana_id: filters.campanaId || undefined,
+              campana_tipo: filters.campanaTipo || undefined,
+              template_id: filters.templateId || undefined,
+              limit: 500,
+            },
+          },
+        );
 
-  const [templatesResult, webchat, whatsappResult] = await Promise.all([
-    templatesPromise,
-    webchatPromise,
-    whatsappPromise,
-  ]);
+  const [templatesResult, webchat] = await Promise.all([templatesPromise, webchatPromise]);
+  const whatsappResult = whatsappPromise ? await whatsappPromise : null;
 
   const errors: string[] = [];
   if (templatesResult && !templatesResult.ok) errors.push(templatesResult.error);
   if (webchat.errors.length) errors.push(...webchat.errors);
-  if (!whatsappResult.ok) errors.push(whatsappResult.error);
+  if (whatsappResult && !whatsappResult.ok) errors.push(whatsappResult.error);
 
   const lookup = templatesResult?.ok ? buildTemplateLookup(templatesResult.data) : undefined;
   const visitsTable = webchat.errors.length
@@ -656,11 +661,11 @@ export async function loadConversionMapTablesForConversionMap(
         lookup,
       );
 
-  const whatsappRows = whatsappResult.ok ? mapWhatsappRows(whatsappResult.data) : [];
+  const whatsappRows = whatsappResult && whatsappResult.ok ? mapWhatsappRows(whatsappResult.data) : [];
   const webchatChats = webchat.rows.filter((row) => row.tuvo_chat);
   const waFilterActive = hasWaAttributionFilters(filters);
   const baseRows = waFilterActive ? whatsappRows : [...webchatChats, ...whatsappRows];
-  const conversationsTable = whatsappResult.ok
+  const conversationsTable = whatsappResult && whatsappResult.ok
     ? mapTable(
         enrichVisitRows(applyChannelFilter(baseRows, filters), filters, lookup).filter((row) =>
           matchesVisitsFilters(row, filters),
@@ -668,10 +673,12 @@ export async function loadConversionMapTablesForConversionMap(
         lookup,
       )
     : [];
+  const finalVisitsTable = section === "conversations" ? [] : visitsTable;
+  const finalConversationsTable = section === "visits" ? [] : conversationsTable;
 
   const payload = {
-    visitsTable,
-    conversationsTable,
+    visitsTable: finalVisitsTable,
+    conversationsTable: finalConversationsTable,
     errors: Array.from(new Set(errors)),
   };
   _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {

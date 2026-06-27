@@ -14,6 +14,8 @@ function parseList(value: string | null): string[] {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const table = searchParams.get("table")?.trim().toLowerCase();
+  const section = table === "visits" || table === "conversations" ? table : "both";
   const filters = {
     canales: parseList(searchParams.get("canales")),
     estado: searchParams.get("estado")?.trim() || null,
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
     decodeJwtUserId(accessToken) || "unknown-user",
   ].join(":");
 
-  const response = await loadConversionMapTablesForConversionMap(filters, { cacheScope });
+  const response = await loadConversionMapTablesForConversionMap(filters, { cacheScope, section });
   return NextResponse.json({
     ok: true,
     ...response,

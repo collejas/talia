@@ -35,6 +35,12 @@ type ResponsePayload = {
   errors?: string[];
 };
 
+type SectionState = {
+  data: VisitTableRow[] | null;
+  error: string | null;
+  loading: boolean;
+};
+
 function buildParams(filters: DeferredTablesFilters) {
   const params = new URLSearchParams();
   if (filters.canales.length) params.set("canales", filters.canales.join(","));
@@ -56,36 +62,58 @@ function buildParams(filters: DeferredTablesFilters) {
 }
 
 export function DeferredConversionTables({ filters, enabled = true }: Props) {
-  const [data, setData] = React.useState<ResponsePayload | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [visits, setVisits] = React.useState<SectionState>({
+    data: null,
+    error: null,
+    loading: false,
+  });
+  const [conversations, setConversations] = React.useState<SectionState>({
+    data: null,
+    error: null,
+    loading: false,
+  });
 
   React.useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    setData(null);
-
     const params = buildParams(filters);
-    fetch(`/api/crm/mapa-conversion/tables?${params.toString()}`, {
-      signal: controller.signal,
-      cache: "no-store",
-    })
-      .then(async (response) => {
+    const baseQuery = params.toString();
+
+    setVisits({ data: null, error: null, loading: true });
+    setConversations({ data: null, error: null, loading: true });
+
+    const fetchSection = async (table: "visits" | "conversations") => {
+      const query = new URLSearchParams(baseQuery);
+      query.set("table", table);
+      try {
+        const response = await fetch(`/api/crm/mapa-conversion/tables?${query.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         const payload = (await response.json()) as ResponsePayload;
         if (!response.ok || !payload.ok) {
           throw new Error(payload.errors?.[0] || "No se pudieron cargar las tablas.");
         }
-        setData(payload);
-      })
-      .catch((fetchError: unknown) => {
+        const rows = table === "visits" ? payload.visitsTable ?? [] : payload.conversationsTable ?? [];
+        if (table === "visits") {
+          setVisits({ data: rows, error: null, loading: false });
+        } else {
+          setConversations({ data: rows, error: null, loading: false });
+        }
+      } catch (fetchError: unknown) {
         if (controller.signal.aborted) return;
-        setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las tablas.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+        const message =
+          fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las tablas.";
+        if (table === "visits") {
+          setVisits({ data: null, error: message, loading: false });
+        } else {
+          setConversations({ data: null, error: message, loading: false });
+        }
+      }
+    };
+
+    void fetchSection("visits");
+    void fetchSection("conversations");
 
     return () => controller.abort();
   }, [enabled, filters]);
@@ -98,16 +126,16 @@ export function DeferredConversionTables({ filters, enabled = true }: Props) {
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Visitas web
         </div>
-        {error ? (
+        {visits.error ? (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            {error}
+            {visits.error}
           </div>
-        ) : loading ? (
+        ) : visits.loading ? (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             Cargando visitas...
           </div>
-        ) : data?.visitsTable?.length ? (
-          <VisitsDataTable data={data.visitsTable} />
+        ) : visits.data?.length ? (
+          <VisitsDataTable data={visits.data} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay visitas para mostrar.
@@ -118,16 +146,16 @@ export function DeferredConversionTables({ filters, enabled = true }: Props) {
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Conversaciones
         </div>
-        {error ? (
+        {conversations.error ? (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            {error}
+            {conversations.error}
           </div>
-        ) : loading ? (
+        ) : conversations.loading ? (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             Cargando conversaciones...
           </div>
-        ) : data?.conversationsTable?.length ? (
-          <VisitsDataTable data={data.conversationsTable} />
+        ) : conversations.data?.length ? (
+          <VisitsDataTable data={conversations.data} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay conversaciones para mostrar.
