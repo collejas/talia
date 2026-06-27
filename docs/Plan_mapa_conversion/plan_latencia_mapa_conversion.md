@@ -205,7 +205,7 @@ Se agregó medición real del endpoint de tablas:
 
 Esto permite validar si la separación por secciones está reduciendo de verdad la latencia percibida y cuál de las dos tablas sigue siendo el cuello.
 
-## 10) Idea de mejora visible para el usuario
+## 14) Idea de mejora visible para el usuario
 
 Objetivo:
 
@@ -242,3 +242,57 @@ Decisión recomendada:
 - primero hacer visible la estructura de la pantalla,
 - después optimizar la carga de datos para que cada bloque llegue de forma independiente,
 - solo si hace falta, aplicar carga diferida o progressive rendering en tablas secundarias.
+
+## 15) Lo que ya quedó mejorado
+
+Fecha: 2026-06-27
+
+Ya se aplicaron y verificaron estas mejoras en la vista `mapa-de-conversion`:
+
+1. La pantalla ya no depende de esperar todo el payload para mostrar avance visual.
+- La vista ahora puede entrar más rápido y mostrar estructura útil mientras llegan los datos.
+- Los títulos y secciones quedan visibles antes que los datos pesados.
+
+2. Se corrigió la regresión del tooltip del mapa.
+- El tooltip volvió a mostrar datos correctos de WhatsApp después del refactor de `contactos/personas`.
+- Se validó con tráfico real que el mapa vuelve a reflejar ubicaciones como México, Colombia, China y Pakistán.
+
+3. Se corrigió la lista de conversaciones de WhatsApp.
+- La tabla volvió a mostrar registros.
+- Se eliminó el attach pesado de datos de contacto/persona y se sustituyó por una versión ligera.
+
+4. Se redujo de forma fuerte la latencia del lookup de teléfonos.
+- Se agregó cache corto para la búsqueda por teléfono en WhatsApp.
+- En logs recientes se observó el siguiente comportamiento:
+  - primera ejecución con `phone_lookup_ms` alto,
+  - ejecuciones posteriores con `phone_lookup_ms` cercano a `1 ms`.
+
+5. Se redujo el costo del enriquecimiento de conversaciones.
+- `crm_repo.visitas_whatsapp_conversaciones.done` bajó de más de 20 s a rangos cercanos a sub-segundo o pocos segundos.
+- El attach de contacto quedó tipado y ligero.
+
+6. Se instrumentó la vista para medir cuellos reales.
+- `resumen-v2`, `mapa-v2` y conversaciones ahora reportan tiempos por etapa.
+- Eso permitió ubicar el costo real en `catalogs`, `geojson` y algunos accesos a datos, no en el tooltip.
+
+## 16) Resultado medido reciente
+
+Fecha: 2026-06-27
+
+En logs recientes se observó:
+
+- `crm.visitas.whatsapp.conversaciones.done`
+  - `phone_lookup_ms` pasó de alrededor de `1649 ms` en la primera ejecución a `1.24 ms` en una posterior.
+  - `total_ms` bajó a alrededor de `1332 ms` en la ejecución más favorable observada.
+- `crm_repo.visitas_whatsapp_conversaciones.done`
+  - `total_ms` quedó en rangos de aproximadamente `454 ms` a `1267 ms`.
+- `crm.demografia.mapa_v2.cache_miss`
+  - `total_ms` quedó en aproximadamente `1.4 s` a `2.4 s`.
+- `crm.demografia.resumen_v2.cache_miss`
+  - `total_ms` quedó en aproximadamente `2.6 s` a `3.3 s`.
+
+Lectura técnica:
+
+- El cuello de WhatsApp quedó atendido.
+- El peso restante está más concentrado en `resumen-v2` y `mapa-v2`, sobre todo en `catalogs`, `geojson` y parte del trabajo de agregación.
+- La siguiente mejora útil ya no es el tooltip, sino la carga progresiva y la separación de bloques en frontend, o una nueva optimización puntual de los agregados.
