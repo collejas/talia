@@ -348,11 +348,10 @@ function resolveWhatsappConversationTotal(
   if (allowedChannels && allowedChannels.size && !allowedChannels.has("whatsapp")) {
     return 0;
   }
-  const candidates = [
-    entry.conversation_channels?.conversaciones_whatsapp,
-    entry.visitantes_totales_por_canal?.whatsapp,
-    entry.totales_por_canal?.whatsapp,
-  ];
+  const candidates = [entry.conversation_channels?.conversaciones_whatsapp];
+  if (typeof entry.visitantes_totales_por_canal?.whatsapp === "number") {
+    candidates.push(entry.visitantes_totales_por_canal.whatsapp);
+  }
   for (const candidate of candidates) {
     if (typeof candidate === "number" && Number.isFinite(candidate)) {
       return candidate;
@@ -380,17 +379,24 @@ function resolveEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
   allowLeadFallback: boolean = true,
 ): number {
-  const webVisits = entry.total_visitas ?? 0;
+  const webVisits = typeof entry.total_visitas === "number" && Number.isFinite(entry.total_visitas)
+    ? entry.total_visitas
+    : 0;
+  if (webVisits > 0) {
+    return webVisits;
+  }
   const channelTotals = entry.visitantes_totales_por_canal || {};
   let channelSum = 0;
   for (const channel of CHANNEL_KEYS) {
+    if (channel === "webchat") {
+      continue;
+    }
     const value = channelTotals[channel];
     if (typeof value === "number" && Number.isFinite(value)) {
       channelSum += value;
     }
   }
-  const combined = webVisits + channelSum;
-  if (combined > 0) return combined;
+  if (channelSum > 0) return channelSum;
   if (!allowLeadFallback) return 0;
   return entry.leads_total ?? 0;
 }

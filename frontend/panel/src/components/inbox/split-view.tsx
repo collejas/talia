@@ -2507,10 +2507,15 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
       preferIncomingString(thread.contactoId, existing.contactoId) ??
       existing.personaId ??
       existing.contactoId;
+    const resolvedContactoId =
+      preferIncomingString(thread.contactoId, existing.contactoId) ??
+      preferIncomingString(thread.personaId, existing.contactoId) ??
+      existing.contactoId ??
+      existing.personaId;
     return {
       ...thread,
       personaId: resolvedPersonaId,
-      contactoId: resolvedPersonaId,
+      contactoId: resolvedContactoId,
       contactoNombre: preferIncomingContactName(thread.contactoNombre, existing.contactoNombre) ?? "",
       contactoProfileName: preferIncomingString(thread.contactoProfileName, existing.contactoProfileName),
       contactoCorreo: preferIncomingString(thread.contactoCorreo, existing.contactoCorreo),

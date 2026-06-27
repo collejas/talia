@@ -111,7 +111,7 @@ PERSONA_SELECT_FIELDS = (
     "telefono_principal_e164,telefono_principal_tipo_linea,telefono_principal_extension,telefono_movil_1_e164,telefono_movil_1_tipo_linea,telefono_movil_2_e164,telefono_movil_2_tipo_linea,telefono_movil_2_extension,telefono_secundario_e164,telefono_secundario_tipo_linea,telefono_secundario_extension,"
     "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
     "puesto,area,rol_decision,estado,"
-    "codigo_postal,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,pais,latitud,longitud,"
+    "clave_entidad,entidad,clave_municipio,municipio,pais,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
 )

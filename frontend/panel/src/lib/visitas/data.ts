@@ -21,6 +21,17 @@ type WhatsappConversationRow = {
   canal: string | null;
   iniciada_en: string | null;
   ultimo_mensaje_en: string | null;
+  persona_id?: string | null;
+  contacto_id?: string | null;
+  contacto_nombre?: string | null;
+  contacto_correo?: string | null;
+  contacto_telefono?: string | null;
+  contacto?: {
+    persona_id?: string | null;
+    nombre_completo?: string | null;
+    correo?: string | null;
+    telefono_e164?: string | null;
+  } | null;
   phone_location?: {
     country_code?: string | null;
     country_name?: string | null;
@@ -54,12 +65,6 @@ type WhatsappConversationRow = {
     template_id?: string | null;
     template_slug?: string | null;
     template_nombre?: string | null;
-  } | null;
-  contacto: {
-    persona_id?: string | null;
-    nombre_completo?: string | null;
-    correo?: string | null;
-    telefono_e164?: string | null;
   } | null;
 };
 
@@ -1089,6 +1094,7 @@ function extractTotal(
 function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRaw[] {
   if (!rows || !rows.length) return [];
   return rows.map((row) => {
+    const contact = row.contacto && typeof row.contacto === "object" ? row.contacto : null;
     const apiLocation = row.phone_location ?? null;
     const prospeccion = row.whatsapp_prospeccion ?? {};
     const location = apiLocation
@@ -1131,6 +1137,23 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
         : (prospeccion.campana_id || prospeccion.batch_id || prospeccion.template_id || prospeccion.template_slug)
           ? "prospeccion_whatsapp"
           : null;
+    const personaId =
+      row.persona_id ??
+      contact?.persona_id ??
+      row.contacto_id ??
+      null;
+    const contactoNombre =
+      row.contacto_nombre ??
+      contact?.nombre_completo ??
+      null;
+    const contactoCorreo =
+      row.contacto_correo ??
+      contact?.correo ??
+      null;
+    const contactoTelefono =
+      row.contacto_telefono ??
+      contact?.telefono_e164 ??
+      null;
     return {
       session_id: `whatsapp-${row.id}`,
       oportunidad_id: null,
@@ -1174,15 +1197,11 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       mensajes_salientes: null,
       primer_mensaje_en: row.iniciada_en,
       ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
-      persona_id: row.contacto?.persona_id || row.contacto?.telefono_e164 || row.contacto?.correo || null,
-      contacto_id:
-        row.contacto?.persona_id ||
-        row.contacto?.telefono_e164 ||
-        row.contacto?.correo ||
-        null,
-      contacto_nombre: row.contacto?.nombre_completo || null,
-      contacto_correo: row.contacto?.correo || null,
-      contacto_telefono: row.contacto?.telefono_e164 || null,
+      persona_id: personaId,
+      contacto_id: row.contacto_id ?? null,
+      contacto_nombre: contactoNombre,
+      contacto_correo: contactoCorreo,
+      contacto_telefono: contactoTelefono,
       contacto_empresa: null,
       contacto_estado: "whatsapp",
       contacto_captura: null,

@@ -7,11 +7,12 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
     const contactoNombre = row.contacto_nombre?.trim() || "";
     const contactoProfileName = row.contacto_profile_name?.trim() || "";
     const messages = mapMessagesFromRaw(row.messages);
-    const personaId = row.persona_id?.trim() || row.contacto_id;
+    const personaId = row.persona_id?.trim() || row.contacto_id?.trim() || row.conversacion_id;
+    const contactoId = row.contacto_id?.trim() || undefined;
     return {
       id: row.conversacion_id,
       personaId,
-      contactoId: personaId,
+      contactoId,
       contactoNombre: contactoNombre || contactoProfileName || "Contacto sin nombre",
       contactoProfileName: contactoProfileName || null,
       contactoCorreo: row.contacto_correo,
