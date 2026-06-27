@@ -1273,17 +1273,10 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
     message_id: str | None,
     message: schemas.WhatsAppIncomingMessage,
 ) -> dict[str, Any] | None:
-    """Evalúa reglas de atribución publicitaria y persiste evento en primer inbound."""
+    """Evalúa reglas de atribución publicitaria y persiste el primer match útil."""
 
     phrase_original = _trim_text(message.body)
     if not phrase_original:
-        return None
-
-    try:
-        recent_messages = await storage.fetch_recent_messages(conversation_id=conversation_id, limit=2)
-    except StorageError:
-        recent_messages = []
-    if len(recent_messages) > 1:
         return None
 
     try:

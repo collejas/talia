@@ -296,3 +296,38 @@ Lectura técnica:
 - El cuello de WhatsApp quedó atendido.
 - El peso restante está más concentrado en `resumen-v2` y `mapa-v2`, sobre todo en `catalogs`, `geojson` y parte del trabajo de agregación.
 - La siguiente mejora útil ya no es el tooltip, sino la carga progresiva y la separación de bloques en frontend, o una nueva optimización puntual de los agregados.
+
+## 17) Incidente resuelto: `WhatsApp por canal` sin datos
+
+Fecha: 2026-06-27
+
+Síntoma:
+
+- La tarjeta `WhatsApp por canal` mostraba `No hay atribución de WhatsApp en este filtro`.
+- El panel ya leía bien el mapa y las tablas, pero esa sección seguía vacía.
+
+Causa raíz:
+
+- La sección depende de eventos persistidos en `prospeccion_whatsapp_atribucion_eventos`.
+- En el tenant `00000000-0000-0000-0000-000000000001` la tabla estaba vacía, aunque sí existían conversaciones que matcheaban reglas activas.
+- El flujo de persistencia en `backend/app/channels/whatsapp/service.py` estaba bloqueado por un guard que abortaba la atribución cuando detectaba más de un mensaje reciente en la conversación.
+- Además, había caché de demografía ya construida con el payload vacío.
+
+Fix aplicado:
+
+1. Se eliminó el guard que impedía persistir la atribución histórica cuando la conversación ya tenía más de un mensaje.
+2. Se hizo backfill histórico de eventos WhatsApp para el tenant usando el matcher real de frases.
+3. Se crearon contactos mínimos válidos para poder resolver el `contacto_id` requerido por la FK de `prospeccion_whatsapp_atribucion_eventos`.
+4. Se limpió la caché `demografia_v2` para forzar reconstrucción del resumen.
+
+Resultado:
+
+- `prospeccion_whatsapp_atribucion_eventos` ya contiene eventos para `Landing WhatsApp`.
+- La sección `WhatsApp por canal` volvió a mostrar datos.
+- El mapa y el tooltip quedaron intactos durante la corrección.
+
+Validación recomendada:
+
+- Verificar que nuevos inbound de WhatsApp sigan generando eventos.
+- Confirmar que una recarga fría de `mapa-de-conversion` sigue mostrando la tarjeta con datos.
+- Revisar que futuros cambios en personas/contactos no vuelvan a bloquear la persistencia de atribución.
