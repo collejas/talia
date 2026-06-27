@@ -404,10 +404,31 @@ function extractNameCandidate(value: unknown): string | null {
   return null;
 }
 
-function formatCountryLabel(code: string | null | undefined, name: string | null | undefined) {
+function formatCountryLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+  city?: string | null,
+  state?: string | null,
+  lada?: string | null,
+) {
   const normalizedCode = (code || "").trim().toUpperCase();
   const normalizedName = (name || "").trim();
+  const normalizedCity = (city || "").trim();
+  const normalizedState = (state || "").trim();
+  const normalizedLada = (lada || "").trim();
   if (normalizedCode === "MX" || normalizedName.toLowerCase() === "méxico" || normalizedName.toLowerCase() === "mexico") {
+    if (normalizedCity && normalizedState) {
+      return `${normalizedCity}, ${normalizedState}`;
+    }
+    if (normalizedCity) {
+      return normalizedCity;
+    }
+    if (normalizedState) {
+      return normalizedState;
+    }
+    if (normalizedLada) {
+      return `LADA ${normalizedLada}`;
+    }
     return null;
   }
   if (normalizedName && normalizedCode) {
@@ -1801,9 +1822,21 @@ export function InboxSplitView({
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                           {thread.canal}
                         </Badge>
-                        {formatCountryLabel(thread.contactoCountryCode, thread.contactoCountryName) ? (
-                          <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
-                            {formatCountryLabel(thread.contactoCountryCode, thread.contactoCountryName)}
+                        {formatCountryLabel(
+                          thread.contactoCountryCode,
+                          thread.contactoCountryName,
+                          thread.contactoCityName,
+                          thread.contactoStateName,
+                          thread.contactoLada,
+                        ) ? (
+                          <Badge variant="outline" className={compactKpiTagClass}>
+                            {formatCountryLabel(
+                              thread.contactoCountryCode,
+                              thread.contactoCountryName,
+                              thread.contactoCityName,
+                              thread.contactoStateName,
+                              thread.contactoLada,
+                            )}
                           </Badge>
                         ) : null}
                         {sourceBadge ? (
@@ -1967,9 +2000,21 @@ export function InboxSplitView({
                       "Lote"}
                   </Badge>
                 ) : null}
-                {formatCountryLabel(selectedThread.contactoCountryCode, selectedThread.contactoCountryName) ? (
-                  <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
-                    {formatCountryLabel(selectedThread.contactoCountryCode, selectedThread.contactoCountryName)}
+                {formatCountryLabel(
+                  selectedThread.contactoCountryCode,
+                  selectedThread.contactoCountryName,
+                  selectedThread.contactoCityName,
+                  selectedThread.contactoStateName,
+                  selectedThread.contactoLada,
+                ) ? (
+                  <Badge variant="outline" className={compactKpiTagClass}>
+                    {formatCountryLabel(
+                      selectedThread.contactoCountryCode,
+                      selectedThread.contactoCountryName,
+                      selectedThread.contactoCityName,
+                      selectedThread.contactoStateName,
+                      selectedThread.contactoLada,
+                    )}
                   </Badge>
                 ) : null}
                 {selectedThread.contactoTelefono ? (
@@ -2472,6 +2517,9 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
       contactoTelefono: preferIncomingString(thread.contactoTelefono, existing.contactoTelefono),
       contactoCountryCode: preferIncomingString(thread.contactoCountryCode, existing.contactoCountryCode),
       contactoCountryName: preferIncomingString(thread.contactoCountryName, existing.contactoCountryName),
+      contactoStateName: preferIncomingString(thread.contactoStateName, existing.contactoStateName),
+      contactoCityName: preferIncomingString(thread.contactoCityName, existing.contactoCityName),
+      contactoLada: preferIncomingString(thread.contactoLada, existing.contactoLada),
       canal: preferIncomingString(thread.canal, existing.canal) ?? existing.canal,
       source: preferIncomingSource(thread.source, existing.source),
       sourceDetail: resolvedSourceDetail,

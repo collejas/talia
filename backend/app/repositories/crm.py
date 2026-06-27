@@ -111,6 +111,7 @@ PERSONA_SELECT_FIELDS = (
     "telefono_principal_e164,telefono_principal_tipo_linea,telefono_principal_extension,telefono_movil_1_e164,telefono_movil_1_tipo_linea,telefono_movil_2_e164,telefono_movil_2_tipo_linea,telefono_movil_2_extension,telefono_secundario_e164,telefono_secundario_tipo_linea,telefono_secundario_extension,"
     "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
     "puesto,area,rol_decision,estado,"
+    "codigo_postal,clave_entidad,entidad,clave_municipio,municipio,clave_localidad,localidad,pais,latitud,longitud,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
 )
@@ -7838,6 +7839,16 @@ class CRMRepository:
             "telefono_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
             "telefono": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
             "phone_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
+            "codigo_postal": persona.get("codigo_postal"),
+            "clave_entidad": persona.get("clave_entidad"),
+            "entidad": persona.get("entidad"),
+            "clave_municipio": persona.get("clave_municipio"),
+            "municipio": persona.get("municipio"),
+            "clave_localidad": persona.get("clave_localidad"),
+            "localidad": persona.get("localidad"),
+            "pais": persona.get("pais"),
+            "latitud": persona.get("latitud"),
+            "longitud": persona.get("longitud"),
             "company_name": persona_company_name or account_name,
             "notes": persona.get("notas"),
             "necesidad_proposito": persona_need
@@ -7878,10 +7889,26 @@ class CRMRepository:
             "relacion_activa": relation.get("activo") if isinstance(relation, dict) else None,
             "area": persona.get("area"),
             "rol_decision": persona.get("rol_decision"),
-            "codigo_postal": account.get("codigo_postal") if isinstance(account, dict) else None,
-            "entidad": account.get("entidad") if isinstance(account, dict) else None,
-            "municipio": account.get("municipio") if isinstance(account, dict) else None,
-            "pais": account.get("pais") if isinstance(account, dict) else None,
+            "codigo_postal": (
+                account.get("codigo_postal")
+                if isinstance(account, dict) and account.get("codigo_postal")
+                else persona.get("codigo_postal")
+            ),
+            "entidad": (
+                account.get("entidad")
+                if isinstance(account, dict) and account.get("entidad")
+                else persona.get("entidad")
+            ),
+            "municipio": (
+                account.get("municipio")
+                if isinstance(account, dict) and account.get("municipio")
+                else persona.get("municipio")
+            ),
+            "pais": (
+                account.get("pais")
+                if isinstance(account, dict) and account.get("pais")
+                else persona.get("pais")
+            ),
             "website": (account.get("website") if isinstance(account, dict) else None) or (account.get("sitio_web") if isinstance(account, dict) else None),
             "tipo_establecimiento": account.get("tipo_establecimiento") if isinstance(account, dict) else None,
             "tipo_vialidad": account.get("tipo_vialidad") if isinstance(account, dict) else None,

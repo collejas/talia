@@ -241,35 +241,45 @@ def _load_json(relative_path: str) -> Any:
 def _lada_states() -> dict[str, dict[str, str]]:
     """Retorna mapping de LADA → {cve_ent: nombre}."""
     mapping: dict[str, dict[str, str]] = {}
+    source_rows: list[Any] = []
     try:
-        rows = _load_ladas_from_db()
-        for row in rows:
-            lada_key = str(row.get("lada") or "").strip()
-            cve_ent = str(row.get("clave_entidad") or "").zfill(2)
-            nom_ent = str(row.get("entidad") or "").strip()
-            if not lada_key or not cve_ent or not nom_ent:
-                continue
-            mapping.setdefault(lada_key, {})[cve_ent] = nom_ent
-        if mapping:
-            return mapping
+        source_rows.extend(_load_ladas_from_db())
     except Exception as exc:
         logger.warning("leads_geo.ladas_states_db_fallback_file", extra={"error": str(exc)})
 
     catalog = _load_json("ladas/ladas_by_lada.json")
     if isinstance(catalog, dict):
         for lada, rows in catalog.items():
-            lada_key = str(lada)
-            states: dict[str, str] = {}
-            if isinstance(rows, Iterable):
-                for row in rows:
-                    if not isinstance(row, dict):
-                        continue
-                    cve_ent = str(row.get("cve_ent") or "").zfill(2)
-                    nom_ent = row.get("nom_ent")
-                    if cve_ent and nom_ent:
-                        states[cve_ent] = str(nom_ent)
-            if states:
-                mapping[lada_key] = states
+            if isinstance(rows, list):
+                source_rows.extend(
+                    [
+                        {
+                            "lada": lada,
+                            "clave_entidad": row.get("cve_ent"),
+                            "entidad": row.get("nom_ent"),
+                        }
+                        for row in rows
+                        if isinstance(row, dict)
+                    ]
+                )
+            elif isinstance(rows, dict):
+                source_rows.append(
+                    {
+                        "lada": lada,
+                        "clave_entidad": rows.get("cve_ent"),
+                        "entidad": rows.get("nom_ent"),
+                    }
+                )
+
+    for row in source_rows:
+        if not isinstance(row, dict):
+            continue
+        lada_key = str(row.get("lada") or "").strip()
+        cve_ent = str(row.get("clave_entidad") or "").zfill(2)
+        nom_ent = str(row.get("entidad") or "").strip()
+        if not lada_key or not cve_ent or not nom_ent:
+            continue
+        mapping.setdefault(lada_key, {})[cve_ent] = nom_ent
     return mapping
 
 
@@ -549,8 +559,6 @@ def _lada_localities() -> dict[str, list[dict[str, Any]]]:
                 "localidad": str(row.get("localidad") or "").strip(),
             }
             mapping.setdefault(lada, []).append(mapped_row)
-        if mapping:
-            return mapping
     except Exception as exc:
         logger.warning("leads_geo.ladas_localities_db_fallback_file", extra={"error": str(exc)})
 

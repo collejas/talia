@@ -159,7 +159,17 @@ async def run(*, apply: bool, organizacion_id: str, limit: int, batch_size: int)
                 continue
 
             context = _as_dict(conversation.get("inbox_context"))
-            if context.get("contacto_country_code") or context.get("contacto_country_name"):
+            context_country = str(
+                context.get("contacto_country_code") or context.get("contacto_country_name") or ""
+            ).strip().upper()
+            if context_country and context_country != "MX":
+                skipped += 1
+                continue
+            if context_country == "MX" and (
+                context.get("contacto_state_name")
+                and context.get("contacto_city_name")
+                and context.get("contacto_lada")
+            ):
                 skipped += 1
                 continue
 
@@ -173,6 +183,9 @@ async def run(*, apply: bool, organizacion_id: str, limit: int, batch_size: int)
                 "contacto_telefono": phone,
                 "contacto_country_code": location.country_code,
                 "contacto_country_name": location.country_name,
+                "contacto_state_name": location.estado_nombre,
+                "contacto_city_name": location.municipio_nombre,
+                "contacto_lada": location.lada,
             }
 
             if apply:

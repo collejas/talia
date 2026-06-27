@@ -14566,6 +14566,9 @@ class CRMInboxThread(BaseModel):
     contacto_telefono: str | None = None
     contacto_country_code: str | None = None
     contacto_country_name: str | None = None
+    contacto_state_name: str | None = None
+    contacto_city_name: str | None = None
+    contacto_lada: str | None = None
     canal: str | None = None
     source: str | None = None
     source_detail: dict[str, Any] | None = None
@@ -14735,12 +14738,32 @@ def _apply_persisted_inbox_context(row: dict[str, Any]) -> None:
         "contacto_telefono",
         "contacto_country_code",
         "contacto_country_name",
+        "contacto_state_name",
+        "contacto_city_name",
+        "contacto_lada",
     ):
         value = context.get(field)
         text_value = _clean_text(value)
         if not text_value:
             continue
         row[field] = text_value.lower() if field == "template_slug" else text_value
+
+
+def _apply_inbox_phone_location(row: dict[str, Any]) -> None:
+    phone_value = _clean_text(row.get("contacto_telefono"))
+    if not phone_value:
+        return
+    phone_location = leads_geo.phone_location_from_number(phone_value)
+    if phone_location.country_code:
+        row["contacto_country_code"] = phone_location.country_code
+    if phone_location.country_name:
+        row["contacto_country_name"] = phone_location.country_name
+    if phone_location.estado_nombre:
+        row["contacto_state_name"] = phone_location.estado_nombre
+    if phone_location.municipio_nombre:
+        row["contacto_city_name"] = phone_location.municipio_nombre
+    if phone_location.lada:
+        row["contacto_lada"] = phone_location.lada
 
 
 def _extract_thread_prospeccion_hints(
@@ -23749,6 +23772,7 @@ async def get_inbox_threads(
     )
     cache_key = _build_inbox_threads_cache_key(
         {
+            "version": "geo_v3",
             "org": str(organizacion_id),
             "user": user_token,
             "estado": estado or "",
@@ -23818,6 +23842,7 @@ async def get_inbox_threads(
     for row in rows:
         if isinstance(row, dict):
             _apply_persisted_inbox_context(row)
+            _apply_inbox_phone_location(row)
     duration_ms = (time.perf_counter() - start) * 1000
     stage_timings["rpc_threads_ms"] = round(duration_ms, 2)
     log_payload = {
@@ -23847,6 +23872,17 @@ async def get_inbox_threads(
             status_code=400,
             detail="inbox_threads_enrich_required_for_publicidad_whatsapp",
         )
+
+    contact_profile_name_map: dict[str, str] = {}
+    contact_phone_map: dict[str, str] = {}
+    contact_state_name_map: dict[str, str] = {}
+    contact_city_name_map: dict[str, str] = {}
+    contact_country_code_map: dict[str, str] = {}
+    contact_country_name_map: dict[str, str] = {}
+    contact_lada_map: dict[str, str] = {}
+    missing_contact_name_ids: set[UUID] = set()
+    missing_contact_data_ids: set[UUID] = set()
+    missing_contact_location_ids: set[UUID] = set()
 
     if not effective_enrich:
         conversation_ids = [
@@ -23895,6 +23931,27 @@ async def get_inbox_threads(
                         "regla_id": _clean_text(conversation_attribution.get("regla_id")),
                         "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
                     }
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            contact_id_value = _clean_text(row.get("contacto_id"))
+            if not contact_id_value:
+                continue
+            if contact_profile_name_map.get(contact_id_value) and not _clean_text(row.get("contacto_profile_name")):
+                row["contacto_profile_name"] = contact_profile_name_map[contact_id_value]
+            if contact_phone_map.get(contact_id_value) and not _clean_text(row.get("contacto_telefono")):
+                row["contacto_telefono"] = contact_phone_map[contact_id_value]
+            if contact_state_name_map.get(contact_id_value) and not _clean_text(row.get("contacto_state_name")):
+                row["contacto_state_name"] = contact_state_name_map[contact_id_value]
+            if contact_city_name_map.get(contact_id_value) and not _clean_text(row.get("contacto_city_name")):
+                row["contacto_city_name"] = contact_city_name_map[contact_id_value]
+            if contact_country_code_map.get(contact_id_value) and not _clean_text(row.get("contacto_country_code")):
+                row["contacto_country_code"] = contact_country_code_map[contact_id_value]
+            if contact_country_name_map.get(contact_id_value) and not _clean_text(row.get("contacto_country_name")):
+                row["contacto_country_name"] = contact_country_name_map[contact_id_value]
+            if contact_lada_map.get(contact_id_value) and not _clean_text(row.get("contacto_lada")):
+                row["contacto_lada"] = contact_lada_map[contact_id_value]
+            _apply_inbox_phone_location(row)
         validate_start = time.perf_counter()
         result_threads = [CRMInboxThread.model_validate(row) for row in rows]
         stage_timings["model_validate_ms"] = round((time.perf_counter() - validate_start) * 1000, 2)
@@ -23937,8 +23994,6 @@ async def get_inbox_threads(
     thread_channel_map: dict[str, str] = {}
     thread_phone_map: dict[str, str | None] = {}
     thread_contact_map: dict[str, str | None] = {}
-    missing_contact_name_ids: set[UUID] = set()
-    missing_contact_data_ids: set[UUID] = set()
 
     thread_scan_start = time.perf_counter()
     for row in rows:
@@ -23957,6 +24012,18 @@ async def get_inbox_threads(
             contacto_uuid = _safe_uuid(row.get("contacto_id"))
             if contacto_uuid:
                 missing_contact_data_ids.add(contacto_uuid)
+        if not (
+            _clean_text(row.get("contacto_state_name"))
+            and _clean_text(row.get("contacto_city_name"))
+            and _clean_text(row.get("contacto_country_code"))
+            and _clean_text(row.get("contacto_country_name"))
+            and _clean_text(row.get("contacto_lada"))
+        ):
+            contacto_uuid = _safe_uuid(row.get("contacto_id"))
+        else:
+            contacto_uuid = None
+        if contacto_uuid:
+            missing_contact_location_ids.add(contacto_uuid)
         batch_value = _clean_text(row.get("batch_id"))
         campana_value = _clean_text(row.get("campana_id"))
         (
@@ -23985,16 +24052,13 @@ async def get_inbox_threads(
             template_ids.add(template_id_hint)
         if template_slug_hint:
             template_slugs.add(template_slug_hint)
-    stage_timings["thread_scan_ms"] = round((time.perf_counter() - thread_scan_start) * 1000, 2)
-
-    contact_profile_name_map: dict[str, str] = {}
-    contact_phone_map: dict[str, str] = {}
     contact_fallback_start = time.perf_counter()
-    if missing_contact_data_ids:
+    if missing_contact_data_ids or missing_contact_location_ids:
+        lookup_ids = sorted(missing_contact_data_ids | missing_contact_location_ids, key=str)
         try:
             contacts_rows = await repo.get_contacts_by_ids(
                 organizacion_id=organizacion_id,
-                contacto_ids=sorted(missing_contact_data_ids, key=str),
+                contacto_ids=lookup_ids,
             )
         except CRMRepositoryError:
             contacts_rows = []
@@ -24012,9 +24076,27 @@ async def get_inbox_threads(
             phone_value = _clean_text(contact_row.get("telefono_e164"))
             if phone_value:
                 contact_phone_map[contact_id_value] = phone_value
+            state_name = _clean_text(contact_row.get("entidad"))
+            city_name = _clean_text(contact_row.get("municipio") or contact_row.get("localidad"))
+            country_code = _clean_text(contact_row.get("pais"))
+            if state_name:
+                contact_state_name_map[contact_id_value] = state_name
+            if city_name:
+                contact_city_name_map[contact_id_value] = city_name
+            if country_code:
+                contact_country_code_map[contact_id_value] = country_code.upper()
+                if country_code.upper() == "MX":
+                    contact_country_name_map[contact_id_value] = "Mexico"
+                else:
+                    contact_country_name_map[contact_id_value] = country_code.upper()
+            if phone_value:
+                location = leads_geo.phone_location_from_number(phone_value)
+                if location.lada:
+                    contact_lada_map[contact_id_value] = location.lada
     stage_timings["contact_fallback_ms"] = round(
         (time.perf_counter() - contact_fallback_start) * 1000, 2
     )
+    stage_timings["thread_scan_ms"] = round((time.perf_counter() - thread_scan_start) * 1000, 2)
 
     # Fallback costoso: solo se resuelve en detalle de hilo o vistas enfocadas en
     # prospección/publicidad. En el listado general priorizamos latencia y
@@ -24555,12 +24637,20 @@ async def get_inbox_threads(
                 fallback_phone = contact_phone_map.get(contact_id_value)
                 if fallback_phone:
                     row_payload["contacto_telefono"] = fallback_phone
+            if contact_state_name_map.get(contact_id_value) and not _clean_text(row_payload.get("contacto_state_name")):
+                row_payload["contacto_state_name"] = contact_state_name_map[contact_id_value]
+            if contact_city_name_map.get(contact_id_value) and not _clean_text(row_payload.get("contacto_city_name")):
+                row_payload["contacto_city_name"] = contact_city_name_map[contact_id_value]
+            if contact_country_code_map.get(contact_id_value) and not _clean_text(row_payload.get("contacto_country_code")):
+                row_payload["contacto_country_code"] = contact_country_code_map[contact_id_value]
+            if contact_country_name_map.get(contact_id_value) and not _clean_text(row_payload.get("contacto_country_name")):
+                row_payload["contacto_country_name"] = contact_country_name_map[contact_id_value]
+            if contact_lada_map.get(contact_id_value) and not _clean_text(row_payload.get("contacto_lada")):
+                row_payload["contacto_lada"] = contact_lada_map[contact_id_value]
 
         phone_value = _clean_text(row_payload.get("contacto_telefono"))
         if phone_value:
-            phone_location = leads_geo.phone_location_from_number(phone_value)
-            row_payload["contacto_country_code"] = phone_location.country_code
-            row_payload["contacto_country_name"] = phone_location.country_name
+            _apply_inbox_phone_location(row_payload)
 
         enriched_rows.append(row_payload)
     stage_timings["row_enrichment_ms"] = round((time.perf_counter() - row_enrichment_start) * 1000, 2)
