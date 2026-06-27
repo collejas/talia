@@ -711,25 +711,13 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
     if not isinstance(items, list):
         return
 
-    already_resolved = any(
-        isinstance(item, dict)
-        and str(item.get("key") or "UNK") != "UNK"
-        and (
-            _to_number(item.get("whatsapp_total")) > 0
-            or _to_number(item.get("conversaciones_whatsapp")) > 0
-        )
-        for item in items
-    )
-    if already_resolved:
-        return
-
     try:
         whatsapp_rows = await repo.visitas_persona_whatsapp_conversaciones(
             organizacion_id=organizacion_id,
             limit=2000,
             date_from=date_from,
             date_to=date_to,
-            include_persona_details=False,
+            include_persona_details=True,
         )
     except CRMRepositoryError:
         logger.exception("crm.demografia.whatsapp_location_resolution_failed")
@@ -805,6 +793,9 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
             }
             items.append(item)
             item_by_key[key] = item
+        elif _to_number(item.get("whatsapp_total")) > 0 or _to_number(item.get("conversaciones_whatsapp")) > 0:
+            # Si el bucket ya trae WhatsApp poblado, lo consideramos resuelto y no lo duplicamos.
+            continue
         _apply_whatsapp_bucket_counts(
             item=item,
             count=count,
@@ -39398,7 +39389,7 @@ async def demografia_mapa_v2(
     )
 
     mapa_cache_key = _build_demografia_response_cache_key(
-        "mapa-v2",
+        "mapa-v2-whatsapp-personas",
         {
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
