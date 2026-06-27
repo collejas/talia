@@ -14564,6 +14564,8 @@ class CRMInboxThread(BaseModel):
     contacto_profile_name: str | None = None
     contacto_correo: str | None = None
     contacto_telefono: str | None = None
+    contacto_country_code: str | None = None
+    contacto_country_name: str | None = None
     canal: str | None = None
     source: str | None = None
     source_detail: dict[str, Any] | None = None
@@ -24550,6 +24552,12 @@ async def get_inbox_threads(
                 fallback_phone = contact_phone_map.get(contact_id_value)
                 if fallback_phone:
                     row_payload["contacto_telefono"] = fallback_phone
+
+        phone_value = _clean_text(row_payload.get("contacto_telefono"))
+        if phone_value:
+            phone_location = leads_geo.phone_location_from_number(phone_value)
+            row_payload["contacto_country_code"] = phone_location.country_code
+            row_payload["contacto_country_name"] = phone_location.country_name
 
         enriched_rows.append(row_payload)
     stage_timings["row_enrichment_ms"] = round((time.perf_counter() - row_enrichment_start) * 1000, 2)

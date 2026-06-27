@@ -404,6 +404,21 @@ function extractNameCandidate(value: unknown): string | null {
   return null;
 }
 
+function formatCountryLabel(code: string | null | undefined, name: string | null | undefined) {
+  const normalizedCode = (code || "").trim().toUpperCase();
+  const normalizedName = (name || "").trim();
+  if (normalizedName && normalizedCode) {
+    return `${normalizedName} (${normalizedCode})`;
+  }
+  if (normalizedName) {
+    return normalizedName;
+  }
+  if (normalizedCode) {
+    return normalizedCode;
+  }
+  return null;
+}
+
 function buildPromoteFormState(thread: InboxThread): InboxPromoteFormState {
   const baseName = thread.contactoNombre?.trim();
   return {
@@ -1783,6 +1798,11 @@ export function InboxSplitView({
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                           {thread.canal}
                         </Badge>
+                        {formatCountryLabel(thread.contactoCountryCode, thread.contactoCountryName) ? (
+                          <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
+                            {formatCountryLabel(thread.contactoCountryCode, thread.contactoCountryName)}
+                          </Badge>
+                        ) : null}
                         {sourceBadge ? (
                           <Badge
                             variant={sourceBadge.variant}
@@ -1942,6 +1962,11 @@ export function InboxSplitView({
                     {selectedThread.batchLabel ??
                       batchLabelMap.get(selectedThread.batchId) ??
                       "Lote"}
+                  </Badge>
+                ) : null}
+                {formatCountryLabel(selectedThread.contactoCountryCode, selectedThread.contactoCountryName) ? (
+                  <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
+                    {formatCountryLabel(selectedThread.contactoCountryCode, selectedThread.contactoCountryName)}
                   </Badge>
                 ) : null}
                 {selectedThread.contactoTelefono ? (
@@ -2442,6 +2467,8 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
       contactoProfileName: preferIncomingString(thread.contactoProfileName, existing.contactoProfileName),
       contactoCorreo: preferIncomingString(thread.contactoCorreo, existing.contactoCorreo),
       contactoTelefono: preferIncomingString(thread.contactoTelefono, existing.contactoTelefono),
+      contactoCountryCode: preferIncomingString(thread.contactoCountryCode, existing.contactoCountryCode),
+      contactoCountryName: preferIncomingString(thread.contactoCountryName, existing.contactoCountryName),
       canal: preferIncomingString(thread.canal, existing.canal) ?? existing.canal,
       source: preferIncomingSource(thread.source, existing.source),
       sourceDetail: resolvedSourceDetail,

@@ -41,27 +41,43 @@ function formatContactOrigin(value: unknown) {
     .join(" ");
 }
 
+function formatWhatsappLocation(raw: VisitDetailRaw) {
+  const phoneLocation = raw.phone_location as
+    | {
+        ok?: boolean | null;
+        country_code?: string | null;
+        country_name?: string | null;
+        municipality_name?: string | null;
+        state_name?: string | null;
+      }
+    | null
+    | undefined;
+
+  if (!phoneLocation) return null;
+  if (phoneLocation.ok === false) return "Ubicación no resuelta";
+
+  const countryCode = (phoneLocation.country_code || "").trim().toUpperCase();
+  const countryName = (phoneLocation.country_name || "").trim();
+  if (countryCode && countryCode !== "MX") {
+    if (countryName) {
+      return countryCode ? `${countryName} (${countryCode})` : countryName;
+    }
+    return countryCode;
+  }
+
+  const derivedLocation =
+    (raw.city_name || raw.nom_mun || phoneLocation.municipality_name || null) ||
+    (raw.state_name || raw.nom_ent || phoneLocation.state_name || null);
+
+  if (derivedLocation) return derivedLocation;
+  return null;
+}
+
 function getRawValue(row: TableRow, key: keyof VisitDetailRaw) {
   const raw = row.raw as VisitDetailRaw | undefined;
   if (!raw) return null;
   if (key === "state_name" && raw.canal === "whatsapp") {
-    const phoneLocation = raw.phone_location as
-      | {
-          ok?: boolean | null;
-          municipality_name?: string | null;
-          state_name?: string | null;
-        }
-      | null
-      | undefined;
-    const derivedLocation =
-      (raw.city_name || raw.nom_mun || phoneLocation?.municipality_name || null) ||
-      (raw.state_name || raw.nom_ent || phoneLocation?.state_name || null);
-    if (phoneLocation && phoneLocation.ok === false) {
-      return "Ubicación no resuelta";
-    }
-    if (derivedLocation && derivedLocation !== raw.country_name) {
-      return derivedLocation;
-    }
+    return formatWhatsappLocation(raw);
   }
   return raw[key] ?? null;
 }
@@ -183,7 +199,7 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "contacto_creado_en", key: "contacto_creado_en", label: "Contacto creado en", type: "datetime" },
   { id: "country_code", key: "country_code", label: "País código", type: "code" },
   { id: "country_name", key: "country_name", label: "País", type: "string" },
-  { id: "state_name", key: "state_name", label: "Estado", type: "string" },
+  { id: "state_name", key: "state_name", label: "Estado / país", type: "string", defaultVisible: true },
   { id: "state_code", key: "state_code", label: "Estado código", type: "code" },
   { id: "city_name", key: "city_name", label: "Ciudad", type: "string" },
   { id: "cve_ent", key: "cve_ent", label: "CVE Ent", type: "code" },

@@ -16,6 +16,8 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       contactoProfileName: contactoProfileName || null,
       contactoCorreo: row.contacto_correo,
       contactoTelefono: row.contacto_telefono,
+      contactoCountryCode: row.contacto_country_code ?? null,
+      contactoCountryName: row.contacto_country_name ?? null,
       canal: row.canal ?? "webchat",
       source: row.source ?? null,
       sourceDetail:

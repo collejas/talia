@@ -19,6 +19,8 @@ export type InboxThreadRow = {
   contacto_profile_name?: string | null;
   contacto_correo: string | null;
   contacto_telefono: string | null;
+  contacto_country_code?: string | null;
+  contacto_country_name?: string | null;
   canal: string | null;
   source?: string | null;
   source_detail?: Record<string, unknown> | null;
@@ -90,6 +92,8 @@ export type InboxThread = {
   contactoProfileName: string | null;
   contactoCorreo: string | null;
   contactoTelefono: string | null;
+  contactoCountryCode: string | null;
+  contactoCountryName: string | null;
   canal: string;
   source: string | null;
   sourceDetail: Record<string, unknown> | null;
