@@ -164,6 +164,18 @@ Siguiente verificación:
 - confirmar que `Visitas web` y `Conversaciones` empiezan a renderear antes,
 - revisar si hace falta otra optimización en `/api/crm/mapa-conversion/tables`.
 
+## 11) Implementación visible aplicada
+
+Fecha: 2026-06-27
+
+Se implementó una mejora de percepción de carga en la vista:
+
+- el loading de `mapa-de-conversion` ahora muestra títulos de sección desde el inicio,
+- se distinguen bloques para `Filtros`, `Mapa`, `Resumen general`, `Mapa de KPIs`, `Acquisition summary`, `Tabla principal`, `Visitas web` y `Conversaciones`,
+- cada bloque muestra estado de carga explícito en lugar de dejar la pantalla en blanco.
+
+Esto no sustituye la optimización de backend, pero sí mejora la comprensión de la vista mientras llegan los datos.
+
 ## 10) Idea de mejora visible para el usuario
 
 Objetivo:
