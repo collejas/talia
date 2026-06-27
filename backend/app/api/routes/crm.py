@@ -14732,6 +14732,9 @@ def _apply_persisted_inbox_context(row: dict[str, Any]) -> None:
         "template_id",
         "template_slug",
         "template_label",
+        "contacto_telefono",
+        "contacto_country_code",
+        "contacto_country_name",
     ):
         value = context.get(field)
         text_value = _clean_text(value)

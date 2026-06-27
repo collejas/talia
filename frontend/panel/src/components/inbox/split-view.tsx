@@ -407,6 +407,9 @@ function extractNameCandidate(value: unknown): string | null {
 function formatCountryLabel(code: string | null | undefined, name: string | null | undefined) {
   const normalizedCode = (code || "").trim().toUpperCase();
   const normalizedName = (name || "").trim();
+  if (normalizedCode === "MX" || normalizedName.toLowerCase() === "méxico" || normalizedName.toLowerCase() === "mexico") {
+    return null;
+  }
   if (normalizedName && normalizedCode) {
     return `${normalizedName} (${normalizedCode})`;
   }
