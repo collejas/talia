@@ -6,6 +6,7 @@ import asyncio
 from difflib import SequenceMatcher
 import json
 import re
+import time
 import unicodedata
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
@@ -114,6 +115,15 @@ PERSONA_SELECT_FIELDS = (
     "clave_entidad,entidad,clave_municipio,municipio,pais,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
+)
+PERSONA_WHATSAPP_SELECT_FIELDS = (
+    "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
+    "correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,"
+    "telefono_movil_1_e164,telefono_movil_2_e164,telefono_secundario_e164,"
+    "telefono_empresa_1_e164,telefono_empresa_2_e164,telefono_principal_tipo_linea,"
+    "telefono_movil_1_tipo_linea,telefono_movil_2_tipo_linea,telefono_secundario_tipo_linea,"
+    "telefono_empresa_1_extension,telefono_empresa_2_extension,estado,origen,creado_en,"
+    "actualizado_en,clave_entidad,entidad,clave_municipio,municipio,pais,notas,metadata,persona_datos"
 )
 PERSONA_ESTADO_VALIDOS = {"lead", "activo", "inactivo", "bloqueado", "fusionado"}
 PERSONA_ESTADO_ALIAS = {
@@ -8434,6 +8444,36 @@ class CRMRepository:
                 continue
         return rows
 
+    async def get_personas_by_ids_light(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_ids: list[UUID],
+    ) -> list[dict[str, Any]]:
+        if not persona_ids:
+            return []
+        unique_ids: list[str] = []
+        seen: set[str] = set()
+        for persona_id in persona_ids:
+            key = str(persona_id).strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique_ids.append(key)
+        if not unique_ids:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"in.({','.join(unique_ids)})",
+            "select": PERSONA_WHATSAPP_SELECT_FIELDS,
+            "limit": str(min(1000, len(unique_ids))),
+        }
+        resp = await self._request("GET", "/rest/v1/personas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al consultar contactos ligeros por ids: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_contacts_by_ids(
         self,
         *,
@@ -14109,6 +14149,8 @@ class CRMRepository:
         date_to: datetime | None = None,
         include_contact_details: bool = True,
     ) -> list[dict[str, Any]]:
+        request_started = time.perf_counter()
+        stage_timings: dict[str, float] = {}
         params = {
             "select": "id,canal,iniciada_en,ultimo_mensaje_en,contacto_id",
             "canal": "eq.whatsapp",
@@ -14128,25 +14170,141 @@ class CRMRepository:
             params["iniciada_en"] = f"lte.{date_to.isoformat()}"
         # Usamos service role y filtramos por organizacion para evitar diferencias de RLS
         # entre ambientes, manteniendo aislamiento por tenant.
+        query_started = time.perf_counter()
         resp = await self._request(
             "GET",
             "/rest/v1/conversaciones",
             params=params,
         )
+        stage_timings["conversations_query_ms"] = round((time.perf_counter() - query_started) * 1000, 2)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
         rows = [row for row in data if isinstance(row, dict)]
+        stage_timings["rows_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
         if not organizacion_id:
+            logger.info(
+                "crm_repo.visitas_whatsapp_conversaciones.done",
+                extra={
+                    "rows": len(rows),
+                    "include_contact_details": include_contact_details,
+                    "stage_timings": stage_timings,
+                },
+            )
             return rows
         if not include_contact_details:
+            logger.info(
+                "crm_repo.visitas_whatsapp_conversaciones.done",
+                extra={
+                    "rows": len(rows),
+                    "include_contact_details": include_contact_details,
+                    "stage_timings": stage_timings,
+                },
+            )
             return rows
-        return await self._attach_contact_rows(
+        attach_started = time.perf_counter()
+        contact_ids: list[UUID] = []
+        seen_contact_ids: set[str] = set()
+        for row in rows:
+            raw_contact_id = row.get("contacto_id")
+            if raw_contact_id is None:
+                continue
+            try:
+                contact_uuid = _coerce_uuid(str(raw_contact_id), field="contacto_id")
+            except Exception:
+                continue
+            contact_key = str(contact_uuid)
+            if contact_key in seen_contact_ids:
+                continue
+            seen_contact_ids.add(contact_key)
+            contact_ids.append(contact_uuid)
+
+        contact_rows = await self.get_personas_by_ids_light(
             organizacion_id=organizacion_id,
-            rows=rows,
-            source_fields=("contacto_id",),
-            target_field="contacto",
+            persona_ids=contact_ids,
         )
+        contact_map: dict[str, dict[str, Any]] = {}
+        for contact in contact_rows:
+            contact_id = str(contact.get("id") or "").strip()
+            if contact_id:
+                contact_map[contact_id] = contact
+
+        def _compose_contact_row(persona: dict[str, Any]) -> dict[str, Any]:
+            name_parts = [
+                _clean_text(persona.get("nombre")),
+                _clean_text(persona.get("apellido_paterno")),
+                _clean_text(persona.get("apellido_materno")),
+            ]
+            nombre_completo = _clean_text(persona.get("nombre_completo")) or " ".join(
+                part for part in name_parts if part
+            ).strip()
+            email = (
+                _clean_text(persona.get("correo_principal"))
+                or _clean_text(persona.get("correo_secundario"))
+                or _clean_text(persona.get("correo_institucional"))
+            )
+            telefono = (
+                _clean_text(persona.get("telefono_movil_1_e164"))
+                or _clean_text(persona.get("telefono_principal_e164"))
+                or _clean_text(persona.get("telefono_movil_2_e164"))
+                or _clean_text(persona.get("telefono_secundario_e164"))
+                or _clean_text(persona.get("telefono_empresa_1_e164"))
+                or _clean_text(persona.get("telefono_empresa_2_e164"))
+            )
+            return {
+                "id": persona.get("id"),
+                "organizacion_id": persona.get("organizacion_id"),
+                "nombre_completo": nombre_completo or None,
+                "nombre": nombre_completo or None,
+                "correo_principal": persona.get("correo_principal"),
+                "correo_secundario": persona.get("correo_secundario"),
+                "correo_institucional": persona.get("correo_institucional"),
+                "correo": email,
+                "email": email,
+                "telefono_principal_e164": persona.get("telefono_principal_e164"),
+                "telefono_movil_1_e164": persona.get("telefono_movil_1_e164"),
+                "telefono_movil_2_e164": persona.get("telefono_movil_2_e164"),
+                "telefono_secundario_e164": persona.get("telefono_secundario_e164"),
+                "telefono_empresa_1_e164": persona.get("telefono_empresa_1_e164"),
+                "telefono_empresa_2_e164": persona.get("telefono_empresa_2_e164"),
+                "telefono_e164": telefono or None,
+                "telefono": telefono or None,
+                "phone_e164": telefono or None,
+                "estado": persona.get("estado"),
+                "origen": persona.get("origen"),
+                "creado_en": persona.get("creado_en"),
+                "actualizado_en": persona.get("actualizado_en"),
+                "clave_entidad": persona.get("clave_entidad"),
+                "entidad": persona.get("entidad"),
+                "clave_municipio": persona.get("clave_municipio"),
+                "municipio": persona.get("municipio"),
+                "pais": persona.get("pais"),
+                "notas": persona.get("notas"),
+                "metadata": persona.get("metadata") if isinstance(persona.get("metadata"), dict) else {},
+                "persona_datos": persona.get("persona_datos") if isinstance(persona.get("persona_datos"), dict) else {},
+                "contacto_datos": {},
+            }
+
+        rows = [
+            {
+                **row,
+                "contacto": _compose_contact_row(contact_map[str(row.get("contacto_id"))])
+                if str(row.get("contacto_id") or "").strip() in contact_map
+                else None,
+            }
+            for row in rows
+        ]
+        stage_timings["attach_contact_ms"] = round((time.perf_counter() - attach_started) * 1000, 2)
+        stage_timings["total_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
+        logger.info(
+            "crm_repo.visitas_whatsapp_conversaciones.done",
+            extra={
+                "rows": len(rows),
+                "include_contact_details": include_contact_details,
+                "stage_timings": stage_timings,
+            },
+        )
+        return rows
 
     async def visitas_persona_whatsapp_conversaciones(
         self,

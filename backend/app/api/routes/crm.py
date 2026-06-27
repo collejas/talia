@@ -35041,6 +35041,8 @@ async def get_visits_whatsapp_conversations(
     campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
+    request_started = time.perf_counter()
+    stage_timings: dict[str, float] = {}
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
@@ -35070,6 +35072,7 @@ async def get_visits_whatsapp_conversations(
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
 
     try:
+        fetch_rows_started = time.perf_counter()
         rows = await repo.visitas_persona_whatsapp_conversaciones(
             usuario_token=_normalize_reports_user_token(user_token),
             organizacion_id=organizacion_id,
@@ -35077,6 +35080,8 @@ async def get_visits_whatsapp_conversations(
             date_from=date_from,
             date_to=date_to,
         )
+        stage_timings["fetch_rows_ms"] = round((time.perf_counter() - fetch_rows_started) * 1000, 2)
+        events_started = time.perf_counter()
         conversation_ids = [
             str(row.get("id") or "").strip()
             for row in rows
@@ -35086,6 +35091,8 @@ async def get_visits_whatsapp_conversations(
             organizacion_id=organizacion_id,
             conversation_ids=conversation_ids,
         )
+        stage_timings["wa_events_ms"] = round((time.perf_counter() - events_started) * 1000, 2)
+        rules_started = time.perf_counter()
         wa_by_conversation: dict[str, dict[str, Any]] = {}
         for event_row in wa_events:
             conv_id = str(event_row.get("conversacion_id") or "").strip()
@@ -35101,6 +35108,8 @@ async def get_visits_whatsapp_conversations(
             organizacion_id=organizacion_id,
             regla_ids=regla_ids,
         )
+        stage_timings["wa_rules_ms"] = round((time.perf_counter() - rules_started) * 1000, 2)
+        phone_lookup_started = time.perf_counter()
         regla_by_id = {
             str(rule_row.get("id") or "").strip(): rule_row
             for rule_row in reglas_rows
@@ -35130,7 +35139,9 @@ async def get_visits_whatsapp_conversations(
                 phone_values=all_lookup_candidates,
                 canal="whatsapp",
             )
+        stage_timings["phone_lookup_ms"] = round((time.perf_counter() - phone_lookup_started) * 1000, 2)
 
+        catalog_started = time.perf_counter()
         hints_by_conversation: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
         batch_ids: set[str] = set()
         campana_ids: set[str] = set()
@@ -35217,7 +35228,9 @@ async def get_visits_whatsapp_conversations(
                     template_label_by_id[template_id_row] = template_name
                 if template_slug_row and template_name:
                     template_label_by_slug[template_slug_row.lower()] = template_name
+        stage_timings["catalogs_ms"] = round((time.perf_counter() - catalog_started) * 1000, 2)
 
+        enrich_started = time.perf_counter()
         enriched_rows: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, dict):
@@ -35310,8 +35323,18 @@ async def get_visits_whatsapp_conversations(
                     continue
             enriched_rows.append(row)
         rows = enriched_rows
+        stage_timings["enrichment_ms"] = round((time.perf_counter() - enrich_started) * 1000, 2)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    stage_timings["total_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
+    logger.info(
+        "crm.visitas.whatsapp.conversaciones.done",
+        extra={
+            "limit": limit,
+            "rows": len(rows),
+            "stage_timings": stage_timings,
+        },
+    )
     return rows
 
 
@@ -39001,6 +39024,7 @@ async def demografia_resumen_v2(
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
+    stage_timings: dict[str, float] = {}
     effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
@@ -39051,6 +39075,7 @@ async def demografia_resumen_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+    stage_timings["preprocess_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
     cache_ttl_seconds = _demografia_response_cache_ttl_seconds(
         rango=rango,
         desde=desde,
@@ -39086,8 +39111,10 @@ async def demografia_resumen_v2(
         cache_key=resumen_cache_key,
         ttl_seconds=cache_ttl_seconds,
     )
+    stage_timings["cache_lookup_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
     if cached_resumen is not None:
         duration_ms = (time.perf_counter() - request_started) * 1000
+        stage_timings["total_ms"] = round(duration_ms, 2)
         await _record_prospectos_process_metrics(
             endpoint="demografia.resumen_v2",
             duration_ms=duration_ms,
@@ -39095,11 +39122,17 @@ async def demografia_resumen_v2(
         )
         logger.info(
             "crm.demografia.resumen_v2.cache_hit",
-            extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+            extra={
+                "duration_ms": round(duration_ms, 2),
+                "nivel": nivel_normalizado,
+                "estado": state_code,
+                "stage_timings": stage_timings,
+            },
         )
         return cached_resumen
 
     try:
+        parallel_started = time.perf_counter()
         leads_payload, visitantes_payload = await asyncio.gather(
             demografia_service.fetch_leads_resumen(
                 nivel=nivel_normalizado,
@@ -39127,6 +39160,8 @@ async def demografia_resumen_v2(
                 jwt=effective_user_token,
             ),
         )
+        stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
+        whatsapp_locations_started = time.perf_counter()
         await _enrich_visitantes_payload_with_whatsapp_locations(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -39135,7 +39170,9 @@ async def demografia_resumen_v2(
             date_to=date_to,
             visitantes_payload=visitantes_payload,
         )
+        stage_timings["whatsapp_locations_ms"] = round((time.perf_counter() - whatsapp_locations_started) * 1000, 2)
 
+        catalog_started = time.perf_counter()
         utm_campaign_values: list[str] = []
         campaign_seen: set[str] = set()
         visitantes_items = (
@@ -39351,6 +39388,7 @@ async def demografia_resumen_v2(
         wa_canal_options.sort()
         wa_campana_options.sort()
         wa_regla_options.sort(key=lambda item: str(item.get("label") or ""))
+        stage_timings["catalogs_ms"] = round((time.perf_counter() - catalog_started) * 1000, 2)
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.resumen_v2_failed")
         raise HTTPException(
@@ -39398,6 +39436,7 @@ async def demografia_resumen_v2(
         ttl_seconds=cache_ttl_seconds,
     )
     duration_ms = (time.perf_counter() - request_started) * 1000
+    stage_timings["total_ms"] = round(duration_ms, 2)
     await _record_prospectos_process_metrics(
         endpoint="demografia.resumen_v2",
         duration_ms=duration_ms,
@@ -39405,7 +39444,12 @@ async def demografia_resumen_v2(
     )
     logger.info(
         "crm.demografia.resumen_v2.cache_miss",
-        extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+        extra={
+            "duration_ms": round(duration_ms, 2),
+            "nivel": nivel_normalizado,
+            "estado": state_code,
+            "stage_timings": stage_timings,
+        },
     )
     return response_payload
 
@@ -39438,6 +39482,7 @@ async def demografia_mapa_v2(
     skip_visitantes: bool = Query(default=False),
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
+    stage_timings: dict[str, float] = {}
     effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
@@ -39488,6 +39533,7 @@ async def demografia_mapa_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+    stage_timings["preprocess_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
     cache_ttl_seconds = _demografia_response_cache_ttl_seconds(
         rango=rango,
         desde=desde,
@@ -39524,7 +39570,9 @@ async def demografia_mapa_v2(
         cache_key=mapa_cache_key,
         ttl_seconds=cache_ttl_seconds,
     )
+    stage_timings["cache_lookup_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
     if cached_mapa is not None:
+        geojson_started = time.perf_counter()
         try:
             if nivel_normalizado == "pais":
                 geojson = await leads_geo.load_world_countries_geojson_db_first()
@@ -39537,7 +39585,9 @@ async def demografia_mapa_v2(
             raise HTTPException(status_code=500, detail="geojson_missing") from exc
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="estado_not_found") from exc
+        stage_timings["geojson_ms"] = round((time.perf_counter() - geojson_started) * 1000, 2)
         duration_ms = (time.perf_counter() - request_started) * 1000
+        stage_timings["total_ms"] = round(duration_ms, 2)
         await _record_prospectos_process_metrics(
             endpoint="demografia.mapa_v2",
             duration_ms=duration_ms,
@@ -39545,11 +39595,17 @@ async def demografia_mapa_v2(
         )
         logger.info(
             "crm.demografia.mapa_v2.cache_hit",
-            extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+            extra={
+                "duration_ms": round(duration_ms, 2),
+                "nivel": nivel_normalizado,
+                "estado": state_code,
+                "stage_timings": stage_timings,
+            },
         )
         return {**cached_mapa, "geojson": geojson}
 
     try:
+        parallel_started = time.perf_counter()
         fallback_leads_task = (
             demografia_service.fetch_leads_resumen(
                 nivel="estado",
@@ -39595,6 +39651,8 @@ async def demografia_mapa_v2(
             fallback_leads_task if fallback_leads_task is not None else asyncio.sleep(0, result=None),
             visitantes_task if visitantes_task is not None else asyncio.sleep(0, result={"items": [], "totals": {}}),
         )
+        stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
+        whatsapp_locations_started = time.perf_counter()
         await _enrich_visitantes_payload_with_whatsapp_locations(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -39603,6 +39661,8 @@ async def demografia_mapa_v2(
             date_to=date_to,
             visitantes_payload=visitantes_payload,
         )
+        stage_timings["whatsapp_locations_ms"] = round((time.perf_counter() - whatsapp_locations_started) * 1000, 2)
+        dataset_started = time.perf_counter()
         dataset = demografia_service.build_map_dataset(
             nivel=nivel_normalizado,
             leads_payload=leads_payload,
@@ -39610,6 +39670,7 @@ async def demografia_mapa_v2(
             state_filter=state_code,
             fallback_leads_payload=fallback_leads_payload,
         )
+        stage_timings["dataset_ms"] = round((time.perf_counter() - dataset_started) * 1000, 2)
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.mapa_v2_failed")
         raise HTTPException(
@@ -39655,6 +39716,7 @@ async def demografia_mapa_v2(
             "conversaciones_correo": int(visitor_row.get("conversaciones_correo") or 0),
         }
 
+    geojson_started = time.perf_counter()
     try:
         if nivel_normalizado == "pais":
             geojson = await leads_geo.load_world_countries_geojson_db_first()
@@ -39667,6 +39729,7 @@ async def demografia_mapa_v2(
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="estado_not_found") from exc
+    stage_timings["geojson_ms"] = round((time.perf_counter() - geojson_started) * 1000, 2)
 
     response_payload = {
         "ok": True,
@@ -39705,6 +39768,7 @@ async def demografia_mapa_v2(
         ttl_seconds=cache_ttl_seconds,
     )
     duration_ms = (time.perf_counter() - request_started) * 1000
+    stage_timings["total_ms"] = round(duration_ms, 2)
     await _record_prospectos_process_metrics(
         endpoint="demografia.mapa_v2",
         duration_ms=duration_ms,
@@ -39712,7 +39776,12 @@ async def demografia_mapa_v2(
     )
     logger.info(
         "crm.demografia.mapa_v2.cache_miss",
-        extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+        extra={
+            "duration_ms": round(duration_ms, 2),
+            "nivel": nivel_normalizado,
+            "estado": state_code,
+            "stage_timings": stage_timings,
+        },
     )
     return response_payload
 

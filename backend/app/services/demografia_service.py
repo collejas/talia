@@ -250,12 +250,13 @@ async def fetch_leads_resumen(
     if date_to:
         payload["p_to"] = date_to.isoformat()
 
+    rpc_started = time.perf_counter()
     rows = await _call_rpc("panel_leads_geo_resumen_ext", payload, jwt=jwt)
     logger.info(
             "demografia.fetch_leads_resumen.rpc",
             extra={
                 "nivel": nivel,
-                "rpc_ms": round((time.perf_counter() - request_started) * 1000, 2),
+                "rpc_ms": round((time.perf_counter() - rpc_started) * 1000, 2),
                 "has_from": bool(date_from),
                 "has_to": bool(date_to),
             },
@@ -287,6 +288,7 @@ async def fetch_leads_resumen(
             return "post_captado"
         return None
 
+    normalize_started = time.perf_counter()
     for raw in rows:
         if not isinstance(raw, dict):
             continue
@@ -365,6 +367,22 @@ async def fetch_leads_resumen(
                 if key_name in totals_global:
                     totals_global[key_name] += total
 
+    logger.info(
+        "demografia.fetch_leads_resumen.normalize",
+        extra={
+            "nivel": nivel,
+            "normalize_ms": round((time.perf_counter() - normalize_started) * 1000, 2),
+            "rows": len(normalized_rows),
+        },
+    )
+    logger.info(
+        "demografia.fetch_leads_resumen.total",
+        extra={
+            "nivel": nivel,
+            "total_ms": round((time.perf_counter() - request_started) * 1000, 2),
+            "rows": len(normalized_rows),
+        },
+    )
     return {
         "rows": normalized_rows,
         "captado_orden": captado_order or 1,
@@ -484,12 +502,13 @@ async def fetch_visitantes_resumen_v2(
 
     # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
     # mantenemos separacion estricta entre landing (web_sessions) y webchat.
+    rpc_started = time.perf_counter()
     rows = await _call_rpc("panel_visitantes_geo_resumen_v2", payload, jwt=jwt)
     logger.info(
             "demografia.fetch_visitantes_resumen_v2.rpc",
             extra={
                 "nivel": nivel,
-                "rpc_ms": round((time.perf_counter() - request_started) * 1000, 2),
+                "rpc_ms": round((time.perf_counter() - rpc_started) * 1000, 2),
                 "has_from": bool(date_from),
                 "has_to": bool(date_to),
                 "state_code": state_code,
@@ -518,6 +537,7 @@ async def fetch_visitantes_resumen_v2(
         "conversaciones_correo": 0,
     }
 
+    normalize_started = time.perf_counter()
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -632,6 +652,22 @@ async def fetch_visitantes_resumen_v2(
             items.append(grouped)
         items.sort(key=lambda row: (_to_number(row.get("total")), str(row.get("name") or "")), reverse=True)
 
+    logger.info(
+        "demografia.fetch_visitantes_resumen_v2.normalize",
+        extra={
+            "nivel": nivel,
+            "normalize_ms": round((time.perf_counter() - normalize_started) * 1000, 2),
+            "items": len(items),
+        },
+    )
+    logger.info(
+        "demografia.fetch_visitantes_resumen_v2.total",
+        extra={
+            "nivel": nivel,
+            "total_ms": round((time.perf_counter() - request_started) * 1000, 2),
+            "items": len(items),
+        },
+    )
     return {
         "items": items,
         "totals": totals,

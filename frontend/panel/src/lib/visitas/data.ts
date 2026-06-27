@@ -31,6 +31,9 @@ type WhatsappConversationRow = {
     nombre_completo?: string | null;
     correo?: string | null;
     telefono_e164?: string | null;
+    estado?: string | null;
+    origen?: string | null;
+    creado_en?: string | null;
   } | null;
   phone_location?: {
     country_code?: string | null;
@@ -1269,9 +1272,9 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       contacto_correo: contactoCorreo,
       contacto_telefono: contactoTelefono,
       contacto_empresa: null,
-      contacto_estado: "whatsapp",
-      contacto_captura: null,
-      contacto_creado_en: null,
+      contacto_estado: contact?.estado ?? null,
+      contacto_captura: contact?.origen ?? null,
+      contacto_creado_en: contact?.creado_en ?? null,
       country_code: location.countryCode,
       country_name: location.countryName,
       state_name: location.stateName,
