@@ -383,10 +383,7 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
-  const acquisitionMetrics = buildAcquisitionMetrics(
-    demografiaResponse?.summary ?? null,
-    visitsResponse ?? null,
-  );
+  const acquisitionMetrics = buildAcquisitionMetrics(demografiaResponse?.summary ?? null);
   const sesionesWebchatTotales =
     demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
   const conversacionesWhatsapp =
