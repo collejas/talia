@@ -63,6 +63,30 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizaciones_invalid_response")
         return data
 
+    async def list_tenant_billing_accounts(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "order": "updated_at.desc",
+        }
+        data = await self._rest("GET", "/rest/v1/tenant_billing_accounts", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("tenant_billing_accounts_invalid_response")
+        return data
+
+    async def get_tenant_billing_account(self, *, tenant_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "tenant_id": f"eq.{tenant_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/tenant_billing_accounts", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("tenant_billing_account_invalid_response")
+        return row
+
     async def list_commercial_plans(self) -> list[dict[str, Any]]:
         params = {
             "select": "id,code,name,description,active,sort_order,created_at,updated_at",

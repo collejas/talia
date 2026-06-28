@@ -243,6 +243,12 @@ class TenantSummary(BaseModel):
     dominio_principal: str | None = None
     estado_onboarding: str | None = None
     activo: bool | None = None
+    commercial_plan_id: UUID | None = None
+    commercial_plan_code: str | None = None
+    commercial_plan_name: str | None = None
+    billing_provider: str | None = None
+    billing_status: str | None = None
+    commercial_access_status: str | None = None
     config: dict[str, Any] | None = None
 
 
@@ -709,6 +715,12 @@ class TenantBasicInfo(BaseModel):
     telefono: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
+    commercial_plan_id: UUID | None = None
+    commercial_plan_code: str | None = None
+    commercial_plan_name: str | None = None
+    billing_provider: str | None = None
+    billing_status: str | None = None
+    commercial_access_status: str | None = None
 
 
 class TenantSeedPermission(BaseModel):
@@ -1058,10 +1070,62 @@ async def _create_internal_billing_account_for_tenant(
             "tenant_id": str(tenant_id),
             "plan_id": str(plan_id),
             "billing_provider": "internal",
+            "stripe_customer_id": f"internal:{tenant_id}",
             "billing_status": "active",
             "access_status": access_status,
         }
     )
+
+
+def _build_tenant_commercial_lookup(
+    billing_accounts: Sequence[dict[str, Any]],
+    plans: Sequence[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    plans_by_id = {str(plan.get("id")): plan for plan in plans if isinstance(plan, dict) and plan.get("id")}
+    lookup: dict[str, dict[str, Any]] = {}
+    for account in billing_accounts:
+        if not isinstance(account, dict):
+            continue
+        tenant_id = str(account.get("tenant_id") or "").strip()
+        if not tenant_id:
+            continue
+        plan_id = str(account.get("plan_id") or "").strip()
+        plan = plans_by_id.get(plan_id, {})
+        lookup[tenant_id] = {
+            "commercial_plan_id": account.get("plan_id"),
+            "commercial_plan_code": plan.get("code") if isinstance(plan, dict) else None,
+            "commercial_plan_name": plan.get("name") if isinstance(plan, dict) else None,
+            "billing_provider": account.get("billing_provider"),
+            "billing_status": account.get("billing_status"),
+            "commercial_access_status": account.get("access_status"),
+        }
+    return lookup
+
+
+def _enrich_tenant_row_with_commercial_state(
+    tenant_row: dict[str, Any],
+    commercial_state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not commercial_state:
+        return tenant_row
+    return {**tenant_row, **commercial_state}
+
+
+def _build_single_tenant_commercial_state(
+    *,
+    billing_account: dict[str, Any] | None,
+    commercial_plan: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(billing_account, dict):
+        return None
+    return {
+        "commercial_plan_id": billing_account.get("plan_id"),
+        "commercial_plan_code": commercial_plan.get("code") if isinstance(commercial_plan, dict) else None,
+        "commercial_plan_name": commercial_plan.get("name") if isinstance(commercial_plan, dict) else None,
+        "billing_provider": billing_account.get("billing_provider"),
+        "billing_status": billing_account.get("billing_status"),
+        "commercial_access_status": billing_account.get("access_status"),
+    }
 
 
 CRITICAL_OWNER_PERMISSION_CODES = (
@@ -1633,10 +1697,25 @@ async def list_tenants(
     actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantsResponse:
-    items = await repo.list_organizaciones()
+    try:
+        items = await repo.list_organizaciones()
+        billing_accounts = await repo.list_tenant_billing_accounts()
+        plans = await repo.list_commercial_plans()
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     if actor.is_owner:
         items = [row for row in items if str(row.get("id")) == str(actor.organizacion_id)]
-    return TenantsResponse(items=[TenantSummary.model_validate(row) for row in items])
+
+    commercial_lookup = _build_tenant_commercial_lookup(billing_accounts, plans)
+    return TenantsResponse(
+        items=[
+            TenantSummary.model_validate(
+                _enrich_tenant_row_with_commercial_state(row, commercial_lookup.get(str(row.get("id"))))
+            )
+            for row in items
+        ]
+    )
 
 
 @router.get("/commercial-plans", response_model=CommercialPlansResponse)
@@ -1985,7 +2064,19 @@ async def create_tenant(
         organizacion_id=tenant_id,
     )
 
-    return CreateTenantResponse(tenant=TenantSummary.model_validate(tenant))
+    billing_account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
+    commercial_plan = None
+    if billing_account and billing_account.get("plan_id"):
+        commercial_plan = await repo.get_commercial_plan(plan_id=UUID(str(billing_account["plan_id"])))
+    commercial_state = _build_single_tenant_commercial_state(
+        billing_account=billing_account,
+        commercial_plan=commercial_plan,
+    )
+    return CreateTenantResponse(
+        tenant=TenantSummary.model_validate(
+            _enrich_tenant_row_with_commercial_state(tenant, commercial_state)
+        )
+    )
 
 
 @router.post("/tenants/con_usuario", response_model=CreateTenantWithAdminResponse)
@@ -2231,10 +2322,25 @@ async def get_tenant_info(
 ) -> TenantDetailResponse:
     if actor.is_owner and actor.organizacion_id != organizacion_id:
         raise HTTPException(status_code=403, detail="owner_scope_violation")
-    row = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+    try:
+        row = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+        billing_account = await repo.get_tenant_billing_account(tenant_id=organizacion_id)
+        commercial_plan = None
+        if billing_account and billing_account.get("plan_id"):
+            commercial_plan = await repo.get_commercial_plan(plan_id=UUID(str(billing_account["plan_id"])))
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
         raise HTTPException(status_code=404, detail="tenant_not_found")
-    return TenantDetailResponse(tenant=TenantBasicInfo.model_validate(row))
+    commercial_state = _build_single_tenant_commercial_state(
+        billing_account=billing_account,
+        commercial_plan=commercial_plan,
+    )
+    return TenantDetailResponse(
+        tenant=TenantBasicInfo.model_validate(
+            _enrich_tenant_row_with_commercial_state(row, commercial_state)
+        )
+    )
 
 
 @router.patch("/tenants/{organizacion_id}", response_model=TenantDetailResponse)

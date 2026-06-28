@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -25,6 +26,11 @@ type TenantSummary = {
   dominio_principal?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
+  commercial_plan_code?: string | null
+  commercial_plan_name?: string | null
+  billing_provider?: string | null
+  billing_status?: string | null
+  commercial_access_status?: string | null
 }
 
 type CommercialPlanSummary = {
@@ -33,6 +39,39 @@ type CommercialPlanSummary = {
   name: string
   active: boolean
   sort_order: number
+}
+
+function getAccessBadgeVariant(status?: string | null) {
+  switch (status) {
+    case "active":
+    case "internal_free":
+      return "secondary" as const
+    case "grace":
+      return "outline" as const
+    case "manual_review":
+      return "default" as const
+    case "blocked":
+      return "destructive" as const
+    default:
+      return "outline" as const
+  }
+}
+
+function getAccessStatusLabel(status?: string | null) {
+  switch (status) {
+    case "active":
+      return "Activo"
+    case "grace":
+      return "Gracia"
+    case "blocked":
+      return "Bloqueado"
+    case "manual_review":
+      return "Revisión"
+    case "internal_free":
+      return "Interno"
+    default:
+      return status ?? "—"
+  }
 }
 
 export default async function TenantsSettingsPage() {
@@ -96,6 +135,8 @@ export default async function TenantsSettingsPage() {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead className="hidden md:table-cell">Dominio</TableHead>
+                      <TableHead className="hidden lg:table-cell">Plan</TableHead>
+                      <TableHead className="hidden xl:table-cell">Acceso</TableHead>
                       <TableHead className="hidden lg:table-cell">Onboarding</TableHead>
                       <TableHead className="hidden lg:table-cell">Activo</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -105,7 +146,7 @@ export default async function TenantsSettingsPage() {
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                           No hay tenants registrados (o no tienes permiso de platform admin).
                         </TableCell>
                       </TableRow>
@@ -114,6 +155,22 @@ export default async function TenantsSettingsPage() {
                         <TableRow key={tenant.id}>
                           <TableCell className="font-medium">{tenant.nombre}</TableCell>
                           <TableCell className="hidden md:table-cell">{tenant.dominio_principal ?? "—"}</TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <div className="space-y-1">
+                              <div>{tenant.commercial_plan_name ?? tenant.commercial_plan_code ?? "—"}</div>
+                              {tenant.billing_provider ? (
+                                <div className="text-xs text-muted-foreground">{tenant.billing_provider}</div>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell">
+                            <Badge variant={getAccessBadgeVariant(tenant.commercial_access_status)}>
+                              {getAccessStatusLabel(tenant.commercial_access_status)}
+                            </Badge>
+                            {tenant.billing_status ? (
+                              <div className="mt-1 text-xs text-muted-foreground">{tenant.billing_status}</div>
+                            ) : null}
+                          </TableCell>
                           <TableCell className="hidden lg:table-cell">
                             {tenant.estado_onboarding ?? "—"}
                           </TableCell>

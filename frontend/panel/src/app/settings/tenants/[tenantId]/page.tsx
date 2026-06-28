@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -74,6 +75,39 @@ function getNestedStringArray(root: Record<string, unknown>, key: string): strin
     .map((item) => (typeof item === "string" ? item.trim() : ""))
     .filter(Boolean)
   return items.length ? items : undefined
+}
+
+function getAccessBadgeVariant(status?: string | null) {
+  switch (status) {
+    case "active":
+    case "internal_free":
+      return "secondary" as const
+    case "grace":
+      return "outline" as const
+    case "manual_review":
+      return "default" as const
+    case "blocked":
+      return "destructive" as const
+    default:
+      return "outline" as const
+  }
+}
+
+function getAccessStatusLabel(status?: string | null) {
+  switch (status) {
+    case "active":
+      return "Activo"
+    case "grace":
+      return "Gracia"
+    case "blocked":
+      return "Bloqueado"
+    case "manual_review":
+      return "Revisión"
+    case "internal_free":
+      return "Interno"
+    default:
+      return status ?? "—"
+  }
 }
 
 export default async function TenantDetailSettingsPage({ params }: { params: Promise<{ tenantId: string }> }) {
@@ -281,6 +315,48 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle>Estado comercial</CardTitle>
+            <CardDescription>Plan, estado de cobro y acceso que controla qué puede usar este tenant.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Plan</p>
+              <p className="text-sm font-semibold">
+                {tenantInfo?.commercial_plan_name ?? tenantInfo?.commercial_plan_code ?? "Sin plan"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {tenantInfo?.commercial_plan_id ? `ID ${tenantInfo.commercial_plan_id}` : "No asignado"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Acceso</p>
+              <Badge variant={getAccessBadgeVariant(tenantInfo?.commercial_access_status)}>
+                {getAccessStatusLabel(tenantInfo?.commercial_access_status)}
+              </Badge>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Billing</p>
+              <p className="text-sm font-semibold">{tenantInfo?.billing_status ?? "Sin estado"}</p>
+              <p className="text-xs text-muted-foreground">
+                {tenantInfo?.billing_provider ? `Proveedor: ${tenantInfo.billing_provider}` : "Proveedor no asignado"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Tenant comercial</p>
+              <p className="text-sm font-semibold">
+                {tenantInfo?.commercial_access_status ? "Configurado" : "Pendiente"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {tenantInfo?.commercial_access_status === "internal_free"
+                  ? "Alta interna sin Stripe."
+                  : "Usa la misma capa que Stripe para control de acceso."}
+              </p>
+            </div>
           </CardContent>
         </Card>
 

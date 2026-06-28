@@ -155,3 +155,25 @@ Formato recomendado por entrada:
 Cuando cierres un cambio real, agrega una entrada nueva con la fecha exacta y llena solo la fase que corresponda.
 
 Si un cambio toca varias capas, registra cada una por separado en la misma fecha.
+
+---
+
+## v0.2 - Visibilidad comercial en tenants
+
+### Base de datos / backend
+- Se expuso la capa comercial asociada al tenant para lectura operativa:
+  - `commercial_plan_id`
+  - `commercial_plan_code`
+  - `commercial_plan_name`
+  - `billing_provider`
+  - `billing_status`
+  - `commercial_access_status`
+- Se corrigió el alta interna de tenants para que la cuenta comercial use un `stripe_customer_id` explícito y válido.
+- Se añadió el cruce de `tenant_billing_accounts` con `commercial_plans` para listar el plan y el estado de acceso.
+
+### Frontend
+- Se agregó la visualización de `plan` y `access` en `settings/tenants`.
+- Se agregó un bloque de estado comercial en el detalle del tenant.
+
+### Resultado
+- La consola interna ya puede ver qué plan tiene cada tenant y si su acceso está activo, en gracia, bloqueado o en revisión.

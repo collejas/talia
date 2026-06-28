@@ -574,6 +574,12 @@ export type TenantOrganizationInfo = {
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
+  commercial_plan_id?: string | null
+  commercial_plan_code?: string | null
+  commercial_plan_name?: string | null
+  billing_provider?: string | null
+  billing_status?: string | null
+  commercial_access_status?: string | null
 }
 
 export function TenantOrganizationInfoForm({
