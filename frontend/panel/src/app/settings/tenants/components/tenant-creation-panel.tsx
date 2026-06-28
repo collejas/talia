@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label"
 
 import { createTenantWithAdmin, TenantCreationResponse, TenantWithAdminPayload } from "../actions"
 
+type CommercialPlanOption = {
+  id: string
+  code: string
+  name: string
+}
+
 type FormState = {
   name: string
   alias: string
@@ -27,9 +33,16 @@ type FormState = {
   adminName: string
   adminPhone: string
   adminStatus: "activo" | "bloqueado"
+  commercialPlanId: string
+  commercialAccessStatus: "internal_free" | "active" | "manual_review"
 }
 
-export function TenantCreationPanel() {
+type Props = {
+  commercialPlans: CommercialPlanOption[]
+  commercialPlansError: string | null
+}
+
+export function TenantCreationPanel({ commercialPlans, commercialPlansError }: Props) {
   const [form, setForm] = useState<FormState>({
     name: "",
     alias: "",
@@ -48,6 +61,8 @@ export function TenantCreationPanel() {
     adminName: "",
     adminPhone: "",
     adminStatus: "activo",
+    commercialPlanId: commercialPlans[0]?.id ?? "",
+    commercialAccessStatus: "internal_free",
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +88,10 @@ export function TenantCreationPanel() {
       setError("El correo del administrador es obligatorio.")
       return
     }
+    if (!form.commercialPlanId.trim()) {
+      setError("Debes seleccionar un plan comercial.")
+      return
+    }
 
     const payload: TenantWithAdminPayload = {
       tenant: {
@@ -93,6 +112,8 @@ export function TenantCreationPanel() {
         dominio_principal: form.dominio || undefined,
         rfc: form.rfc || undefined,
         telefono: form.phone || undefined,
+        commercial_plan_id: form.commercialPlanId,
+        commercial_access_status: form.commercialAccessStatus,
       },
       admin: {
         correo: form.adminEmail,
@@ -126,6 +147,8 @@ export function TenantCreationPanel() {
         adminEmail: "",
         adminName: "",
         adminPhone: "",
+        commercialPlanId: commercialPlans[0]?.id ?? "",
+        commercialAccessStatus: "internal_free",
       }))
     } catch (err) {
       setError((err as Error).message || "No se pudo crear el tenant.")
@@ -140,9 +163,15 @@ export function TenantCreationPanel() {
         <CardTitle>Crear tenant + admin</CardTitle>
         <CardDescription>
           Ingresa los datos del tenant y del usuario admin; los seeds mínimos se generan automáticamente en el backend.
+          Si seleccionas un plan comercial, el tenant nace con billing interno sin pasar por Stripe.
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {commercialPlansError ? (
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            No se pudieron cargar los planes comerciales: {commercialPlansError}
+          </div>
+        ) : null}
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
@@ -267,6 +296,45 @@ export function TenantCreationPanel() {
                 <option value="completado">Completado</option>
                 <option value="pausado">Pausado</option>
                 <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant-commercial-plan">Plan comercial</Label>
+              <select
+                id="tenant-commercial-plan"
+                value={form.commercialPlanId}
+                onChange={(event) => handleChange("commercialPlanId", event.target.value)}
+                className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                required
+                disabled={commercialPlans.length === 0}
+              >
+                <option value="">Selecciona un plan</option>
+                {commercialPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} ({plan.code})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                El tenant se crea con una cuenta interna de billing, lista para migrarse a Stripe después.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant-commercial-access">Acceso inicial</Label>
+              <select
+                id="tenant-commercial-access"
+                value={form.commercialAccessStatus}
+                onChange={(event) =>
+                  handleChange(
+                    "commercialAccessStatus",
+                    event.target.value as "internal_free" | "active" | "manual_review",
+                  )
+                }
+                className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="internal_free">Gratis interno</option>
+                <option value="active">Activo</option>
+                <option value="manual_review">Revisión manual</option>
               </select>
             </div>
             <div className="space-y-2 flex flex-col justify-between">

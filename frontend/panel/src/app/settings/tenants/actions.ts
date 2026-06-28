@@ -18,6 +18,8 @@ type TenantPayload = {
   activo?: boolean
   estado_onboarding?: string
   config?: Record<string, unknown>
+  commercial_plan_id?: string
+  commercial_access_status?: "active" | "grace" | "blocked" | "manual_review" | "internal_free"
 }
 
 type AdminPayload = {
@@ -95,6 +97,8 @@ export async function createTenantWithAdmin(
     estado_onboarding: payload.tenant.estado_onboarding?.trim() || undefined,
     rfc: payload.tenant.rfc?.trim() || undefined,
     config: payload.tenant.config,
+    commercial_plan_id: payload.tenant.commercial_plan_id?.trim() || undefined,
+    commercial_access_status: payload.tenant.commercial_access_status,
   }
 
   const response = await callCrmApi<TenantCreationResponse>("/admin/tenants/con_usuario", {

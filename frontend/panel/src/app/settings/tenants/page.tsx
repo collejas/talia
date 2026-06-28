@@ -27,6 +27,14 @@ type TenantSummary = {
   activo?: boolean | null
 }
 
+type CommercialPlanSummary = {
+  id: string
+  code: string
+  name: string
+  active: boolean
+  sort_order: number
+}
+
 export default async function TenantsSettingsPage() {
   const access = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
     withUserToken: true,
@@ -39,9 +47,17 @@ export default async function TenantsSettingsPage() {
     organizacionId: null,
     withUserToken: true,
   })
+  const plansResponse = await callCrmApi<{ ok: boolean; items: CommercialPlanSummary[] }>("/admin/commercial-plans", {
+    organizacionId: null,
+    withUserToken: true,
+  })
 
   const items = response.ok ? response.data.items : []
   const errors = response.ok ? [] : [response.error]
+  const commercialPlans = plansResponse.ok
+    ? plansResponse.data.items.filter((plan) => plan.active)
+    : []
+  const commercialPlansError = plansResponse.ok ? null : plansResponse.error
 
   return (
     <AppViewLayout title="Settings · Tenants" withThemeToggle={false} contentClassName="px-0">
@@ -64,7 +80,7 @@ export default async function TenantsSettingsPage() {
           </div>
         </header>
 
-        <TenantCreationPanel />
+        <TenantCreationPanel commercialPlans={commercialPlans} commercialPlansError={commercialPlansError} />
 
         <Card>
           <CardHeader className="space-y-1">

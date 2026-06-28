@@ -107,11 +107,13 @@ Formato recomendado por entrada:
 - Se definió que `settings/tenants` sigue siendo consola de administración interna, no fuente única de alta comercial.
 - Se recomendó mostrar datos generales, plan, billing status y access status en la ficha de tenant.
 - Se agregó el módulo de `Planes comerciales` en `settings/commercial-plans` para administrar planes, precios, entitlements y defaults comerciales desde el panel.
+- Se extendió el alta manual de tenants para seleccionar plan comercial y acceso inicial sin pasar por Stripe.
 
 ### Operación/Notas
 - El plan queda listo para pasar de documentación a migraciones reales y endpoints de provisioning.
 - El siguiente paso natural es implementar primero el esquema de BD y después el webhook de Stripe.
 - El CRUD de planes, precios, entitlements y defaults ya quedó disponible para `platform admin` con alta, edición y desactivación lógica.
+- El alta de tenant manual ya puede crear el tenant con plan comercial interno, dejando Stripe como ruta comercial opcional.
 
 ---
 

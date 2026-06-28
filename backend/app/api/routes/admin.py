@@ -682,6 +682,8 @@ class CreateTenantRequest(BaseModel):
     activo: bool | None = None
     estado_onboarding: str | None = None
     config: dict[str, Any] | None = None
+    commercial_plan_id: UUID | None = None
+    commercial_access_status: Literal["active", "grace", "blocked", "manual_review", "internal_free"] = "internal_free"
     webchat_alias: str | None = Field(
         default=None,
         description="Alias público para enrutar el webchat (se guarda como canal=webchat, clave=alias).",
@@ -1034,6 +1036,32 @@ async def _delete_created_tenant_best_effort(*, repo: PlatformRepository, tenant
             "tenant_create_cleanup_failed",
             extra={"tenant_id": str(tenant_id), "error": str(exc)},
         )
+
+
+async def _create_internal_billing_account_for_tenant(
+    *,
+    repo: PlatformRepository,
+    tenant_id: UUID,
+    plan_id: UUID | None,
+    access_status: Literal["active", "grace", "blocked", "manual_review", "internal_free"],
+) -> None:
+    if plan_id is None:
+        return
+    plan = await repo.get_commercial_plan(plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="commercial_plan_not_found")
+    if not bool(plan.get("active", False)):
+        raise HTTPException(status_code=409, detail="commercial_plan_inactive")
+
+    await repo.create_tenant_billing_account(
+        payload={
+            "tenant_id": str(tenant_id),
+            "plan_id": str(plan_id),
+            "billing_provider": "internal",
+            "billing_status": "active",
+            "access_status": access_status,
+        }
+    )
 
 
 CRITICAL_OWNER_PERMISSION_CODES = (
@@ -1924,8 +1952,17 @@ async def create_tenant(
         )
         await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
         await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
+        await _create_internal_billing_account_for_tenant(
+            repo=repo,
+            tenant_id=tenant_id,
+            plan_id=payload.commercial_plan_id,
+            access_status=payload.commercial_access_status,
+        )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException:
+        await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
+        raise
 
     if alias:
         try:
@@ -2000,6 +2037,12 @@ async def create_tenant_with_admin(
             )
             await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
             await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
+            await _create_internal_billing_account_for_tenant(
+                repo=repo,
+                tenant_id=tenant_id,
+                plan_id=payload.tenant.commercial_plan_id,
+                access_status=payload.tenant.commercial_access_status,
+            )
 
             if alias:
                 try:
@@ -2174,8 +2217,6 @@ async def create_tenant_with_admin(
         except Exception as exc:
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except PlatformRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SupabaseAdminError as exc:
         if str(exc) == "user_email_already_registered":
             raise HTTPException(status_code=409, detail="email_already_registered") from exc

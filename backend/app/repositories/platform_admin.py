@@ -73,6 +73,20 @@ class PlatformRepository:
             raise PlatformRepositoryError("commercial_plans_invalid_response")
         return data
 
+    async def get_commercial_plan(self, *, plan_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,code,name,description,active,sort_order,created_at,updated_at",
+            "id": f"eq.{plan_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_plans", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("commercial_plan_invalid_response")
+        return row
+
     async def create_commercial_plan(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
             "POST",
@@ -257,6 +271,17 @@ class PlatformRepository:
             "/rest/v1/commercial_plan_defaults",
             params={"id": f"eq.{default_id}"},
         )
+
+    async def create_tenant_billing_account(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/tenant_billing_accounts",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_billing_account_create_failed")
+        return data[0]
 
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
