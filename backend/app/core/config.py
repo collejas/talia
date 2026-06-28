@@ -188,6 +188,19 @@ class Settings(BaseSettings):
     )
     supabase_url: str | None = None
     supabase_service_role: str | None = None
+    stripe_webhook_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "TALIA_STRIPE_WEBHOOK_SECRET"),
+    )
+    stripe_webhook_tolerance_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=900,
+        validation_alias=AliasChoices(
+            "STRIPE_WEBHOOK_TOLERANCE_SECONDS",
+            "TALIA_STRIPE_WEBHOOK_TOLERANCE_SECONDS",
+        ),
+    )
     # Acepta varias variantes comunes del anon key para robustez
     supabase_anon: str | None = Field(
         default=None,

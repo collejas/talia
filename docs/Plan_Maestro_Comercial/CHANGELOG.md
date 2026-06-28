@@ -196,3 +196,25 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Resultado
 - Un `platform_admin` ya puede crear, ver y ajustar el estado comercial de un tenant desde la consola interna sin tocar Stripe para la operación manual.
+
+---
+
+## v0.4 - Webhook Stripe de sincronización comercial
+
+### Backend
+- Se agregó `POST /webhooks/stripe` como webhook público firmado.
+- Se valida `Stripe-Signature` con HMAC y ventana de tolerancia.
+- Se persisten eventos en `tenant_billing_events` para auditoría e idempotencia.
+- Se resuelve el tenant por:
+  - cuenta Stripe existente,
+  - suscripción existente,
+  - referencia comercial del evento cuando aplica.
+- Se actualiza `tenant_billing_accounts` con estado de cobro, acceso, customer, subscription y price.
+
+### Seguridad / operación
+- Los eventos duplicados se ignoran si ya fueron procesados.
+- Los eventos fallidos se registran con error para reintento controlado.
+- Si el webhook no tiene secreto configurado, responde `503`.
+
+### Resultado
+- Stripe ya puede empujar el estado comercial a la base y al backend sin depender del frontend.
