@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -248,6 +249,98 @@ class TenantSummary(BaseModel):
 class TenantsResponse(BaseModel):
     ok: bool = True
     items: list[TenantSummary] = Field(default_factory=list)
+
+
+class CommercialPlanSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    code: str
+    name: str
+    description: str | None = None
+    active: bool
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommercialPlanPriceSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    plan_id: UUID
+    billing_provider: str
+    provider_product_id: str
+    provider_price_id: str
+    currency: str
+    billing_interval: str
+    amount_cents: int
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommercialPlansResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialPlanSummary] = Field(default_factory=list)
+    prices: list[CommercialPlanPriceSummary] = Field(default_factory=list)
+
+
+class CommercialPlanResponse(BaseModel):
+    ok: bool = True
+    plan: CommercialPlanSummary
+
+
+class CommercialPlanCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=2, max_length=64)
+    name: str = Field(..., min_length=2, max_length=120)
+    description: str | None = None
+    active: bool = True
+    sort_order: int = Field(default=0, ge=0, le=9999)
+
+    @field_validator("code")
+    @classmethod
+    def _normalize_code(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned:
+            raise ValueError("code_required")
+        if not all(ch.isalnum() or ch in {"_", "-"} for ch in cleaned):
+            raise ValueError("code_invalid")
+        return cleaned
+
+    @field_validator("name")
+    @classmethod
+    def _normalize_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("name_required")
+        return cleaned
+
+
+class CommercialPlanUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = None
+    active: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=9999)
+
+    @field_validator("name")
+    @classmethod
+    def _normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("name_required")
+        return cleaned
+
+
+class CommercialPlanArchiveResponse(BaseModel):
+    ok: bool = True
+    plan: CommercialPlanSummary
 
 
 class RolePermissionsSyncRequest(BaseModel):
@@ -1275,6 +1368,70 @@ async def list_tenants(
     if actor.is_owner:
         items = [row for row in items if str(row.get("id")) == str(actor.organizacion_id)]
     return TenantsResponse(items=[TenantSummary.model_validate(row) for row in items])
+
+
+@router.get("/commercial-plans", response_model=CommercialPlansResponse)
+async def list_commercial_plans(
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlansResponse:
+    plans = await repo.list_commercial_plans()
+    prices = await repo.list_commercial_plan_prices()
+    return CommercialPlansResponse(
+        items=[CommercialPlanSummary.model_validate(row) for row in plans],
+        prices=[CommercialPlanPriceSummary.model_validate(row) for row in prices],
+    )
+
+
+@router.post("/commercial-plans", response_model=CommercialPlanResponse)
+async def create_commercial_plan(
+    payload: CommercialPlanCreateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanResponse:
+    try:
+        row = await repo.create_commercial_plan(
+            payload={
+                "code": payload.code,
+                "name": payload.name,
+                "description": payload.description,
+                "active": bool(payload.active),
+                "sort_order": int(payload.sort_order),
+            }
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanResponse(plan=CommercialPlanSummary.model_validate(row))
+
+
+@router.patch("/commercial-plans/{plan_id}", response_model=CommercialPlanResponse)
+async def update_commercial_plan(
+    plan_id: UUID,
+    payload: CommercialPlanUpdateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanResponse:
+    update_payload = payload.model_dump(exclude_none=True)
+    if not update_payload:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    try:
+        row = await repo.update_commercial_plan(plan_id=plan_id, payload=update_payload)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanResponse(plan=CommercialPlanSummary.model_validate(row))
+
+
+@router.delete("/commercial-plans/{plan_id}", response_model=CommercialPlanArchiveResponse)
+async def archive_commercial_plan(
+    plan_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanArchiveResponse:
+    try:
+        row = await repo.archive_commercial_plan(plan_id=plan_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanArchiveResponse(plan=CommercialPlanSummary.model_validate(row))
 
 
 @router.post("/tenants", response_model=CreateTenantResponse)

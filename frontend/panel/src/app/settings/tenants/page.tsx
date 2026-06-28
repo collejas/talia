@@ -50,11 +50,18 @@ export default async function TenantsSettingsPage() {
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
             Configuración / Plataforma
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight">Tenants</h1>
-          <p className="text-muted-foreground max-w-3xl text-sm">
-            Esta sección es global (cross-tenant): sirve para registrar nuevas organizaciones y sus claves de routing
-            (por ejemplo, alias del widget webchat) sin crecer el archivo <code>.env</code>.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight">Tenants</h1>
+              <p className="text-muted-foreground max-w-3xl text-sm">
+                Esta sección es global (cross-tenant): sirve para registrar nuevas organizaciones y sus claves de
+                routing (por ejemplo, alias del widget webchat) sin crecer el archivo <code>.env</code>.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/commercial-plans">Ver planes comerciales</Link>
+            </Button>
+          </div>
         </header>
 
         <TenantCreationPanel />
