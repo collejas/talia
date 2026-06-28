@@ -66,6 +66,7 @@ Formato recomendado por entrada:
 - Se agregó `MIGRACIONES_ALTA_TENANT_STRIPE.md` con migraciones exactas sugeridas para PostgreSQL/Supabase.
 - Se agregó este `README.md` como índice operativo del plan.
 - Se incorporó al plan maestro la regla de acceso inicial por correo verificado antes de enviar la invitación o activación del usuario `owner`.
+- Se alineó `IMPLEMENTACION_ALTA_TENANT_STRIPE.md` con la secuencia final de acceso: pago, verificación de correo, invitación, usuario `owner` y provisioning.
 
 ### Base de datos
 - Se formalizó la regla de que la lógica comercial principal debe modelarse con tablas y columnas explícitas.

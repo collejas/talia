@@ -20,6 +20,13 @@ El objetivo no es solo "crear un tenant", sino dejarlo listo con:
 - rutas y permisos base;
 - trazabilidad de billing.
 
+Antes de ejecutar esta implementacion, debe quedar cerrada la regla de acceso inicial:
+
+- Stripe confirma la compra, pero no valida por si solo la propiedad del correo.
+- Si el correo se va a usar para acceso, primero debe verificarse.
+- Solo despues de esa verificacion se manda la invitacion o activacion.
+- El usuario inicial debe nacer con rol `owner` dentro del mismo provisioning.
+
 ---
 
 ## 1. Base de datos
@@ -159,13 +166,15 @@ Orden recomendado:
 3. El backend valida `Stripe-Signature`.
 4. El backend verifica idempotencia.
 5. El backend identifica customer, subscription y plan.
-6. El backend crea o actualiza `organizaciones`.
-7. El backend crea o actualiza `tenant_billing_accounts`.
-8. El backend registra `tenant_billing_events`.
-9. El backend aplica defaults del plan.
-10. El backend crea usuario inicial si aplica.
-11. El backend crea roles, permisos y rutas base si aplica.
-12. El backend deja `access_status` resuelto.
+6. El backend verifica el correo que recibira acceso si el alta comercial lo incluye.
+7. El backend crea o actualiza `organizaciones`.
+8. El backend crea o actualiza `tenant_billing_accounts`.
+9. El backend registra `tenant_billing_events`.
+10. El backend aplica defaults del plan.
+11. El backend crea o asocia el usuario inicial solo despues de la verificacion de correo.
+12. El backend crea roles, permisos y rutas base.
+13. El backend asigna o consolida el rol `owner`.
+14. El backend deja `access_status` resuelto.
 
 ### 2.3 Servicios recomendados
 
@@ -210,6 +219,16 @@ El backend debe resolver al menos:
 - `blocked`
 - `manual_review`
 - `internal_free`
+
+### 2.7 Flujo de correo e invitacion
+
+Este flujo debe compartir la misma logica tanto para Stripe como para alta interna, con las diferencias de origen adecuadas:
+
+- **Alta interna administrada por plataforma**: invitacion directa cuando el correo ya esta validado por el operador.
+- **Autoregistro publico**: confirmacion de correo primero, luego invitacion o activacion.
+- **Alta por Stripe o plataforma de cobro**: pago confirmado, correo de acceso verificado, luego invitacion o activacion.
+
+El correo de recuperacion de contrasena solo se usa para cuentas ya existentes.
 
 Y mapearlos desde `billing_status` y reglas de negocio propias.
 
@@ -263,6 +282,8 @@ Si el tenant se crea manualmente desde la vista admin, el formulario debe pedir 
 - estado inicial;
 - contacto administrativo inicial;
 - alias o rutas iniciales si aplica.
+
+Si el alta manual crea el usuario inicial, ese usuario debe quedar asociado al tenant como `owner` desde el provisioning, no como ajuste posterior.
 
 ### 3.4 Vista de detalle del tenant
 
