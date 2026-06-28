@@ -8,6 +8,7 @@ Este documento complementa:
 
 - [Plan Maestro Comercial](./PLAN_MAESTRO_COMERCIAL.md)
 - [Alta de Tenant Desde Stripe](./ALTA_TENANT_DESDE_STRIPE.md)
+- [Migraciones Exactas Para Alta de Tenant por Stripe](./MIGRACIONES_ALTA_TENANT_STRIPE.md)
 
 El objetivo no es solo "crear un tenant", sino dejarlo listo con:
 

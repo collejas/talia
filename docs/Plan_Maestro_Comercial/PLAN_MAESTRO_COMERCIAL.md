@@ -636,6 +636,7 @@ El sistema queda bien cuando:
 
 - [Alta de Tenant Desde Stripe](./ALTA_TENANT_DESDE_STRIPE.md)
 - [Implementacion de Alta de Tenant por Stripe](./IMPLEMENTACION_ALTA_TENANT_STRIPE.md)
+- [Migraciones Exactas Para Alta de Tenant por Stripe](./MIGRACIONES_ALTA_TENANT_STRIPE.md)
 
 ---
 
