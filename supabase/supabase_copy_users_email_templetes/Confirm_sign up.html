@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Confirma tu correo · Talia</title>
+  <style>
+    body, table, td {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top, rgba(12, 74, 110, 0.12), transparent 45%),
+        linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+      color: #0f172a;
+    }
+    .card {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #dbe4ee;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    .hero {
+      padding: 28px 32px 20px;
+      background: linear-gradient(135deg, #0c4a6e 0%, #0f172a 100%);
+      color: #ffffff;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #e0f2fe;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .content {
+      padding: 32px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 22px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0c4a6e 0%, #0f766e 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 12px 24px rgba(12, 74, 110, 0.25);
+    }
+    .muted {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .note {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+    .link {
+      word-break: break-all;
+      color: #0c4a6e;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="hero">
+      <span class="badge">Acceso seguro</span>
+      <h1 style="margin:16px 0 8px;font-size:28px;line-height:1.15;">Confirma tu correo</h1>
+      <p style="margin:0;font-size:16px;line-height:1.6;color:#dbeafe;">
+        Verificamos que este sea el correo correcto antes de completar tu alta y activar el acceso.
+      </p>
+    </div>
+
+    <div class="content">
+      <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#1e293b;">
+        Haz clic en el botón para confirmar tu correo electrónico y continuar con el alta.
+      </p>
+
+      <p style="margin:0 0 20px;text-align:center;">
+        <a class="btn" href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer">
+          Confirmar correo
+        </a>
+      </p>
+
+      <div class="note">
+        <p class="muted" style="margin:0 0 8px;">
+          Si el botón no funciona, copia y pega este enlace en tu navegador:
+        </p>
+        <p style="margin:0;">
+          <a class="link" href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer">{{ .ConfirmationURL }}</a>
+        </p>
+      </div>
+
+      <p class="muted" style="margin:20px 0 0;">
+        Si no solicitaste este acceso, puedes ignorar este correo.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

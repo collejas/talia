@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Confirma el cambio de correo · Talia</title>
+  <style>
+    body, table, td {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top right, rgba(2, 132, 199, 0.14), transparent 36%),
+        linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+      color: #0f172a;
+    }
+    .card {
+      max-width: 620px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #dbe4ee;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    .hero {
+      padding: 28px 32px 20px;
+      background: linear-gradient(135deg, #111827 0%, #0c4a6e 100%);
+      color: #ffffff;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #dbeafe;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .content {
+      padding: 32px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 22px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0c4a6e 0%, #0284c7 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 12px 24px rgba(12, 74, 110, 0.25);
+    }
+    .muted {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .panel {
+      margin: 20px 0 24px;
+      padding: 18px 20px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+    .row {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .cell {
+      display: table-cell;
+      vertical-align: top;
+      width: 50%;
+      padding-right: 12px;
+    }
+    .label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .value {
+      display: block;
+      font-size: 15px;
+      color: #0f172a;
+      word-break: break-word;
+    }
+    .link {
+      word-break: break-all;
+      color: #0c4a6e;
+    }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .hero, .content { padding-left: 20px; padding-right: 20px; }
+      .cell {
+        display: block;
+        width: 100%;
+        padding-right: 0;
+        padding-bottom: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="hero">
+      <span class="badge">Seguridad de cuenta</span>
+      <h1 style="margin:16px 0 8px;font-size:28px;line-height:1.15;">Confirma el cambio de correo</h1>
+      <p style="margin:0;font-size:16px;line-height:1.6;color:#dbeafe;">
+        Estamos verificando que el nuevo correo realmente te pertenezca antes de reemplazar el anterior.
+      </p>
+    </div>
+
+    <div class="content">
+      <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#1e293b;">
+        Vas a cambiar tu correo de <strong>{{ .Email }}</strong> a <strong>{{ .NewEmail }}</strong>.
+        Confirma esta acción para continuar.
+      </p>
+
+      <div class="panel">
+        <div class="row">
+          <div class="cell">
+            <span class="label">Correo actual</span>
+            <span class="value">{{ .Email }}</span>
+          </div>
+          <div class="cell" style="padding-right:0;">
+            <span class="label">Nuevo correo</span>
+            <span class="value">{{ .NewEmail }}</span>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin:0 0 20px;text-align:center;">
+        <a class="btn" href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer">
+          Confirmar cambio de correo
+        </a>
+      </p>
+
+      <div class="panel">
+        <p class="muted" style="margin:0 0 8px;">
+          Si el botón no funciona, usa este enlace:
+        </p>
+        <p style="margin:0;">
+          <a class="link" href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer">{{ .ConfirmationURL }}</a>
+        </p>
+      </div>
+
+      <p class="muted" style="margin:20px 0 0;">
+        Si no pediste este cambio, ignora este mensaje y contacta soporte si ves actividad sospechosa.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
