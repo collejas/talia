@@ -10,6 +10,9 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
+import httpx
+
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 
@@ -39,6 +42,10 @@ class StripeSignatureError(StripeWebhookError):
 
 class StripeProcessingError(StripeWebhookError):
     """Falló la actualización de estado comercial durante el procesamiento."""
+
+
+class StripeApiError(StripeWebhookError):
+    """Stripe respondió con error al crear clientes, checkout o portal."""
 
 
 def _event_object(event: Mapping[str, Any]) -> dict[str, Any]:
@@ -194,6 +201,83 @@ def verify_stripe_signature(
     signatures = parts.get("v1", [])
     if not signatures or not any(hmac.compare_digest(expected, candidate) for candidate in signatures):
         raise StripeSignatureError("stripe_signature_invalid")
+
+
+async def _stripe_request(
+    *,
+    method: str,
+    path: str,
+    data: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    secret_key = settings.stripe_secret_key
+    if not secret_key:
+        raise StripeApiError("stripe_secret_key_missing")
+    url = f"{settings.stripe_api_base_url.rstrip('/')}{path}"
+    headers = {"Authorization": f"Bearer {secret_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.request(method, url, data=data, params=params, headers=headers)
+    except httpx.RequestError as exc:  # pragma: no cover
+        raise StripeApiError(f"stripe_request_error:{exc}") from exc
+    if resp.status_code >= 400:
+        raise StripeApiError(f"stripe_api_error:{resp.status_code}:{resp.text}")
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise StripeApiError("stripe_api_invalid_response")
+    return data
+
+
+async def create_stripe_customer(
+    *,
+    name: str,
+    email: str | None,
+    metadata: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"name": name}
+    if email:
+        payload["email"] = email
+    if metadata:
+        for key, value in metadata.items():
+            payload[f"metadata[{key}]"] = value
+    return await _stripe_request(method="POST", path="/v1/customers", data=payload)
+
+
+async def create_stripe_checkout_session(
+    *,
+    customer_id: str,
+    price_id: str,
+    success_url: str,
+    cancel_url: str,
+    tenant_id: UUID,
+    plan_id: UUID,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "mode": "subscription",
+        "customer": customer_id,
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "client_reference_id": str(tenant_id),
+        "line_items[0][price]": price_id,
+        "line_items[0][quantity]": "1",
+        "metadata[tenant_id]": str(tenant_id),
+        "metadata[plan_id]": str(plan_id),
+        "subscription_data[metadata][tenant_id]": str(tenant_id),
+        "subscription_data[metadata][plan_id]": str(plan_id),
+    }
+    return await _stripe_request(method="POST", path="/v1/checkout/sessions", data=payload)
+
+
+async def create_stripe_portal_session(
+    *,
+    customer_id: str,
+    return_url: str,
+) -> dict[str, Any]:
+    payload = {
+        "customer": customer_id,
+        "return_url": return_url,
+    }
+    return await _stripe_request(method="POST", path="/v1/billing_portal/sessions", data=payload)
 
 
 async def _resolve_tenant_for_event(

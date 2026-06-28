@@ -28,6 +28,8 @@ import {
   updateTenantProfilingToggleAction,
   updateTenantConfigAction,
   updateTenantCommercialStateAction,
+  createTenantBillingCheckoutAction,
+  createTenantBillingPortalAction,
   updateTenantInfoAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -126,10 +128,18 @@ function FormStatusMessage({ state }: { state: CrudActionState }) {
   return null
 }
 
-function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
+function SubmitButton({
+  label,
+  pendingLabel,
+  disabled = false,
+}: {
+  label: string
+  pendingLabel: string
+  disabled?: boolean
+}) {
   const { pending } = useFormStatus()
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" disabled={pending || disabled}>
       {pending ? pendingLabel : label}
     </Button>
   )
@@ -583,6 +593,9 @@ export type TenantOrganizationInfo = {
   billing_provider?: string | null
   billing_status?: string | null
   commercial_access_status?: string | null
+  stripe_customer_id?: string | null
+  stripe_subscription_id?: string | null
+  stripe_price_id?: string | null
 }
 
 export function TenantOrganizationInfoForm({
@@ -774,6 +787,51 @@ export function TenantCommercialStateForm({
         <SubmitButton label="Guardar estado comercial" pendingLabel="Guardando..." />
       </div>
     </form>
+  )
+}
+
+export function TenantBillingActionsCard({
+  tenantId,
+  canCheckout,
+  hasPortal,
+}: {
+  tenantId: string
+  canCheckout: boolean
+  hasPortal: boolean
+}) {
+  const [checkoutState, checkoutAction] = useActionState(createTenantBillingCheckoutAction, INITIAL_CRUD_STATE)
+  const [portalState, portalAction] = useActionState(createTenantBillingPortalAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <form action={checkoutAction} className="space-y-3 rounded-lg border border-border/60 p-4">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">Stripe Checkout</p>
+          <p className="text-xs text-muted-foreground">
+            Genera una sesión de pago para el plan activo del tenant.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={checkoutState} />
+          <SubmitButton label={canCheckout ? "Abrir checkout" : "Checkout no disponible"} pendingLabel="Generando..." disabled={!canCheckout} />
+        </div>
+      </form>
+
+      <form action={portalAction} className="space-y-3 rounded-lg border border-border/60 p-4">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">Portal de cliente</p>
+          <p className="text-xs text-muted-foreground">
+            Abre el portal de Stripe para que el cliente administre su suscripción.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={portalState} />
+          <SubmitButton label={hasPortal ? "Abrir portal" : "Portal no disponible"} pendingLabel="Abriendo..." disabled={!hasPortal} />
+        </div>
+      </form>
+    </div>
   )
 }
 

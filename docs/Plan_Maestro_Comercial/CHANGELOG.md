@@ -218,3 +218,29 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Resultado
 - Stripe ya puede empujar el estado comercial a la base y al backend sin depender del frontend.
+
+---
+
+## v0.5 - Checkout y portal Stripe desde el detalle del tenant
+
+### Backend
+- Se agregaron endpoints administrativos para billing:
+  - `POST /admin/tenants/{organizacion_id}/billing/checkout-session`
+  - `POST /admin/tenants/{organizacion_id}/billing/portal-session`
+- Se añadió la creación automática de cliente Stripe cuando el tenant aún no tiene `stripe_customer_id` real.
+- Se resolvió el precio activo de Stripe desde `commercial_plan_prices` para el plan del tenant antes de generar checkout.
+- Se mantuvo la separación entre:
+  - `billing_status`
+  - `commercial_access_status`
+  - `commercial_plan_id`
+
+### Frontend
+- Se agregó el bloque `Stripe` en el detalle de `settings/tenants/{tenantId}`.
+- Se añadieron acciones para:
+  - abrir checkout,
+  - abrir el portal de cliente.
+- Se deshabilitan las acciones si el tenant no tiene plan comercial o no tiene customer Stripe válido.
+
+### Operación/Notas
+- Esta iteración deja al `platform_admin` con un flujo controlado para generar cobro y administrar billing sin salir del panel.
+- El alta manual de tenants sigue siendo posible sin Stripe, pero ahora también existe la ruta comercial para activar el cobro cuando corresponda.

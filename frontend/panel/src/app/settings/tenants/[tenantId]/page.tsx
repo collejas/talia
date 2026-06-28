@@ -14,6 +14,7 @@ import {
   TenantCalendarSettings,
   TenantMailSettings,
   TenantMessengerSettings,
+  TenantBillingActionsCard,
   TenantCommercialStateForm,
   TenantModuleFlagsForm,
   TenantOrganizationInfoForm,
@@ -386,6 +387,27 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             </div>
           </CardContent>
         </Card>
+
+        {isPlatformAdmin ? (
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle>Stripe</CardTitle>
+              <CardDescription>
+                Genera checkout o abre el portal de cliente para este tenant sin salir del panel.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TenantBillingActionsCard
+                tenantId={tenantId}
+                canCheckout={Boolean(tenantInfo?.commercial_plan_id)}
+                hasPortal={Boolean(
+                  tenantInfo?.stripe_customer_id &&
+                    !String(tenantInfo.stripe_customer_id).startsWith("internal:"),
+                )}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
 
         {isPlatformAdmin ? (
           <Card>

@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
 
 import { callCrmApi } from "@/lib/api/crm"
 import { COOKIE_BASE_OPTIONS, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
@@ -301,6 +301,44 @@ export async function updateTenantCommercialStateAction(
     return success("Estado comercial actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el estado comercial.")
+  }
+}
+
+export async function createTenantBillingCheckoutAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const response = await callCrmApi<{ ok: boolean; url: string }>(
+      `/admin/tenants/${tenantId}/billing/checkout-session`,
+      {
+        method: "POST",
+        organizacionId: null,
+        withUserToken: true,
+        body: {},
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+    redirect(response.data.url)
+  } catch (error) {
+    return failure(error, "No se pudo generar el checkout.")
+  }
+}
+
+export async function createTenantBillingPortalAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const response = await callCrmApi<{ ok: boolean; url: string }>(
+      `/admin/tenants/${tenantId}/billing/portal-session`,
+      {
+        method: "POST",
+        organizacionId: null,
+        withUserToken: true,
+        body: {},
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+    redirect(response.data.url)
+  } catch (error) {
+    return failure(error, "No se pudo abrir el portal de billing.")
   }
 }
 

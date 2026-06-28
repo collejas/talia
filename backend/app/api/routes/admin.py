@@ -18,6 +18,12 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
 from app.services import tenant_runtime
+from app.services.stripe_billing import (
+    StripeApiError,
+    create_stripe_checkout_session,
+    create_stripe_customer,
+    create_stripe_portal_session,
+)
 from app.services.role_permissions_sync import (
     RolePermissionPlan,
     compute_matrix_hash,
@@ -249,6 +255,9 @@ class TenantSummary(BaseModel):
     billing_provider: str | None = None
     billing_status: str | None = None
     commercial_access_status: str | None = None
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    stripe_price_id: str | None = None
     config: dict[str, Any] | None = None
 
 
@@ -721,6 +730,23 @@ class TenantBasicInfo(BaseModel):
     billing_provider: str | None = None
     billing_status: str | None = None
     commercial_access_status: str | None = None
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    stripe_price_id: str | None = None
+
+
+class TenantBillingCheckoutResponse(BaseModel):
+    ok: bool = True
+    url: str
+    session_id: str
+    customer_id: str
+    price_id: str
+
+
+class TenantBillingPortalResponse(BaseModel):
+    ok: bool = True
+    url: str
+    customer_id: str
 
 
 class TenantSeedPermission(BaseModel):
@@ -1106,6 +1132,9 @@ def _build_tenant_commercial_lookup(
             "billing_provider": account.get("billing_provider"),
             "billing_status": account.get("billing_status"),
             "commercial_access_status": account.get("access_status"),
+            "stripe_customer_id": account.get("stripe_customer_id"),
+            "stripe_subscription_id": account.get("stripe_subscription_id"),
+            "stripe_price_id": account.get("stripe_price_id"),
         }
     return lookup
 
@@ -1133,7 +1162,52 @@ def _build_single_tenant_commercial_state(
         "billing_provider": billing_account.get("billing_provider"),
         "billing_status": billing_account.get("billing_status"),
         "commercial_access_status": billing_account.get("access_status"),
+        "stripe_customer_id": billing_account.get("stripe_customer_id"),
+        "stripe_subscription_id": billing_account.get("stripe_subscription_id"),
+        "stripe_price_id": billing_account.get("stripe_price_id"),
     }
+
+
+async def _resolve_active_stripe_price_for_plan(
+    *,
+    repo: PlatformRepository,
+    plan_id: UUID,
+    price_id: UUID | None = None,
+) -> dict[str, Any]:
+    prices = await repo.list_commercial_plan_prices()
+    if price_id is not None:
+        for price in prices:
+            if not isinstance(price, dict):
+                continue
+            if str(price.get("id")) != str(price_id):
+                continue
+            if str(price.get("plan_id")) != str(plan_id):
+                raise HTTPException(status_code=400, detail="price_plan_mismatch")
+            if str(price.get("billing_provider") or "").strip().lower() != "stripe":
+                raise HTTPException(status_code=400, detail="price_provider_invalid")
+            if not bool(price.get("active", False)):
+                raise HTTPException(status_code=409, detail="commercial_plan_price_inactive")
+            return price
+        raise HTTPException(status_code=404, detail="commercial_plan_price_not_found")
+
+    stripe_prices = [
+        price
+        for price in prices
+        if isinstance(price, dict)
+        and str(price.get("plan_id")) == str(plan_id)
+        and str(price.get("billing_provider") or "").strip().lower() == "stripe"
+        and bool(price.get("active", False))
+    ]
+    if not stripe_prices:
+        raise HTTPException(status_code=404, detail="commercial_plan_price_not_found")
+    stripe_prices.sort(
+        key=lambda price: (
+            str(price.get("billing_interval") or ""),
+            int(price.get("amount_cents") or 0),
+            str(price.get("provider_price_id") or ""),
+        )
+    )
+    return stripe_prices[0]
 
 
 CRITICAL_OWNER_PERMISSION_CODES = (
@@ -2427,6 +2501,129 @@ async def update_tenant_commercial_state(
             )
         )
     )
+
+
+@router.post("/tenants/{organizacion_id}/billing/checkout-session", response_model=TenantBillingCheckoutResponse)
+async def create_tenant_billing_checkout_session(
+    organizacion_id: UUID,
+    payload: dict[str, Any] | None = None,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantBillingCheckoutResponse:
+    try:
+        success_url = settings.stripe_checkout_success_url
+        cancel_url = settings.stripe_checkout_cancel_url
+        if not success_url or not cancel_url:
+            raise HTTPException(status_code=503, detail="stripe_checkout_return_urls_missing")
+        tenant = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="tenant_not_found")
+        billing_account = await repo.get_tenant_billing_account(tenant_id=organizacion_id)
+        if not billing_account:
+            raise HTTPException(status_code=404, detail="tenant_billing_account_not_found")
+        plan_id_value = billing_account.get("plan_id")
+        if not plan_id_value:
+            raise HTTPException(status_code=400, detail="commercial_plan_missing")
+        plan_id = UUID(str(plan_id_value))
+        price_hint = None
+        if payload:
+            raw_price_id = payload.get("price_id")
+            if raw_price_id:
+                price_hint = UUID(str(raw_price_id))
+        price_row = await _resolve_active_stripe_price_for_plan(repo=repo, plan_id=plan_id, price_id=price_hint)
+
+        customer_id = str(billing_account.get("stripe_customer_id") or "").strip()
+        if not customer_id or customer_id.startswith("internal:"):
+            customer = await create_stripe_customer(
+                name=str(tenant.get("nombre") or "Tenant").strip(),
+                email=None,
+                metadata={"tenant_id": str(organizacion_id), "plan_id": str(plan_id)},
+            )
+            customer_id = str(customer.get("id") or "").strip()
+            if not customer_id:
+                raise HTTPException(status_code=502, detail="stripe_customer_create_failed")
+            update_payload: dict[str, Any] = {
+                "billing_provider": "stripe",
+                "stripe_customer_id": customer_id,
+                "stripe_price_id": str(price_row.get("provider_price_id")),
+                "plan_id": str(plan_id),
+            }
+            if not billing_account:
+                await repo.create_tenant_billing_account(
+                    payload={
+                        "tenant_id": str(organizacion_id),
+                        "plan_id": str(plan_id),
+                        "billing_provider": "stripe",
+                        "stripe_customer_id": customer_id,
+                        "stripe_price_id": str(price_row.get("provider_price_id")),
+                        "billing_status": "incomplete",
+                        "access_status": "manual_review",
+                    }
+                )
+            else:
+                await repo.update_tenant_billing_account(tenant_id=organizacion_id, payload=update_payload)
+        else:
+            if not billing_account.get("stripe_price_id"):
+                await repo.update_tenant_billing_account(
+                    tenant_id=organizacion_id,
+                    payload={
+                        "billing_provider": "stripe",
+                        "stripe_price_id": str(price_row.get("provider_price_id")),
+                    },
+                )
+
+        session = await create_stripe_checkout_session(
+            customer_id=customer_id,
+            price_id=str(price_row.get("provider_price_id")),
+            success_url=success_url,
+            cancel_url=cancel_url,
+            tenant_id=organizacion_id,
+            plan_id=plan_id,
+        )
+        url = str(session.get("url") or "").strip()
+        if not url:
+            raise HTTPException(status_code=502, detail="stripe_checkout_session_url_missing")
+    except StripeApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return TenantBillingCheckoutResponse(
+        url=url,
+        session_id=str(session.get("id") or ""),
+        customer_id=customer_id,
+        price_id=str(price_row.get("provider_price_id")),
+    )
+
+
+@router.post("/tenants/{organizacion_id}/billing/portal-session", response_model=TenantBillingPortalResponse)
+async def create_tenant_billing_portal_session(
+    organizacion_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantBillingPortalResponse:
+    try:
+        billing_account = await repo.get_tenant_billing_account(tenant_id=organizacion_id)
+        if not billing_account:
+            raise HTTPException(status_code=404, detail="tenant_billing_account_not_found")
+        customer_id = str(billing_account.get("stripe_customer_id") or "").strip()
+        if not customer_id or customer_id.startswith("internal:"):
+            raise HTTPException(status_code=409, detail="stripe_customer_missing")
+        if not settings.stripe_portal_return_url:
+            raise HTTPException(status_code=503, detail="stripe_portal_return_url_missing")
+        session = await create_stripe_portal_session(
+            customer_id=customer_id,
+            return_url=settings.stripe_portal_return_url,
+        )
+        url = str(session.get("url") or "").strip()
+        if not url:
+            raise HTTPException(status_code=502, detail="stripe_portal_session_url_missing")
+    except StripeApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return TenantBillingPortalResponse(url=url, customer_id=customer_id)
 
 
 @router.get("/tenants/{organizacion_id}/routes", response_model=TenantRoutesResponse)

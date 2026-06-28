@@ -192,6 +192,14 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "TALIA_STRIPE_WEBHOOK_SECRET"),
     )
+    stripe_secret_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_SECRET_KEY", "TALIA_STRIPE_SECRET_KEY"),
+    )
+    stripe_api_base_url: str = Field(
+        default="https://api.stripe.com",
+        validation_alias=AliasChoices("STRIPE_API_BASE_URL", "TALIA_STRIPE_API_BASE_URL"),
+    )
     stripe_webhook_tolerance_seconds: int = Field(
         default=300,
         ge=30,
@@ -200,6 +208,18 @@ class Settings(BaseSettings):
             "STRIPE_WEBHOOK_TOLERANCE_SECONDS",
             "TALIA_STRIPE_WEBHOOK_TOLERANCE_SECONDS",
         ),
+    )
+    stripe_checkout_success_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_CHECKOUT_SUCCESS_URL", "TALIA_STRIPE_CHECKOUT_SUCCESS_URL"),
+    )
+    stripe_checkout_cancel_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_CHECKOUT_CANCEL_URL", "TALIA_STRIPE_CHECKOUT_CANCEL_URL"),
+    )
+    stripe_portal_return_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_PORTAL_RETURN_URL", "TALIA_STRIPE_PORTAL_RETURN_URL"),
     )
     # Acepta varias variantes comunes del anon key para robustez
     supabase_anon: str | None = Field(
