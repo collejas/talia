@@ -35,6 +35,13 @@ type CommercialPlanEntitlementPayload = {
   scope?: string
 }
 
+type CommercialPlanDefaultPayload = {
+  plan_id?: string
+  default_key?: string
+  default_value?: string
+  scope?: string
+}
+
 export type CommercialPlanActionState =
   | { ok: true; message: string }
   | { ok: false; error: string }
@@ -89,6 +96,12 @@ function requireEntitlementId(formData: FormData): string {
   return entitlementId
 }
 
+function requireDefaultId(formData: FormData): string {
+  const defaultId = getText(formData, "default_id")
+  if (!defaultId) throw new Error("Falta default_id.")
+  return defaultId
+}
+
 function buildPayload(formData: FormData, includeCode = true): CommercialPlanPayload {
   const payload: CommercialPlanPayload = {
     name: getText(formData, "name"),
@@ -136,6 +149,18 @@ function buildEntitlementPayload(formData: FormData, includePlan = true): Commer
     value_text: getText(formData, "value_text") || undefined,
     value_json: parsedJson,
     limit_unit: getText(formData, "limit_unit") || undefined,
+    scope: getText(formData, "scope") || undefined,
+  }
+  if (includePlan) {
+    payload.plan_id = getText(formData, "plan_id")
+  }
+  return payload
+}
+
+function buildDefaultPayload(formData: FormData, includePlan = true): CommercialPlanDefaultPayload {
+  const payload: CommercialPlanDefaultPayload = {
+    default_key: getText(formData, "default_key"),
+    default_value: getText(formData, "default_value"),
     scope: getText(formData, "scope") || undefined,
   }
   if (includePlan) {
@@ -318,6 +343,79 @@ export async function archiveCommercialPlanEntitlementAction(
     return success("Entitlement desactivado.")
   } catch (error) {
     return failure(error, "No se pudo desactivar el entitlement.")
+  }
+}
+
+export async function createCommercialPlanDefaultAction(
+  _: CommercialPlanActionState,
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const payload = buildDefaultPayload(formData, true)
+    if (!payload.plan_id) throw new Error("El plan es obligatorio.")
+    if (!payload.default_key) throw new Error("La llave es obligatoria.")
+    if (!payload.default_value) throw new Error("El valor es obligatorio.")
+
+    const response = await callCrmApi<{ ok: boolean; default?: { id: string } }>(
+      "/admin/commercial-plan-defaults",
+      {
+        method: "POST",
+        organizacionId: null,
+        withUserToken: true,
+        body: payload,
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath("/settings/commercial-plans")
+    return success("Default creado.")
+  } catch (error) {
+    return failure(error, "No se pudo crear el default.")
+  }
+}
+
+export async function updateCommercialPlanDefaultAction(
+  _: CommercialPlanActionState,
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const defaultId = requireDefaultId(formData)
+    const payload = buildDefaultPayload(formData, true)
+    if (!payload.plan_id) throw new Error("El plan es obligatorio.")
+    if (!payload.default_key) throw new Error("La llave es obligatoria.")
+    if (!payload.default_value) throw new Error("El valor es obligatorio.")
+
+    const response = await callCrmApi<{ ok: boolean }>(`/admin/commercial-plan-defaults/${defaultId}`, {
+      method: "PATCH",
+      organizacionId: null,
+      withUserToken: true,
+      body: payload,
+    })
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath("/settings/commercial-plans")
+    return success("Default actualizado.")
+  } catch (error) {
+    return failure(error, "No se pudo actualizar el default.")
+  }
+}
+
+export async function deleteCommercialPlanDefaultAction(
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const defaultId = requireDefaultId(formData)
+    const response = await callCrmApi<{ ok: boolean }>(`/admin/commercial-plan-defaults/${defaultId}`, {
+      method: "DELETE",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath("/settings/commercial-plans")
+    return success("Default eliminado.")
+  } catch (error) {
+    return failure(error, "No se pudo eliminar el default.")
   }
 }
 

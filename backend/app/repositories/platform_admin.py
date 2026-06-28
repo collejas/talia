@@ -213,6 +213,51 @@ class PlatformRepository:
             raise PlatformRepositoryError("commercial_plan_entitlement_archive_failed")
         return data[0]
 
+    async def list_commercial_plan_defaults(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,plan_id,default_key,default_value,scope,created_at",
+            "order": "plan_id.asc,default_key.asc",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_plan_defaults", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("commercial_plan_defaults_invalid_response")
+        return data
+
+    async def create_commercial_plan_default(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/commercial_plan_defaults",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_default_create_failed")
+        return data[0]
+
+    async def update_commercial_plan_default(
+        self,
+        *,
+        default_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_plan_defaults",
+            params={"id": f"eq.{default_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_default_update_failed")
+        return data[0]
+
+    async def delete_commercial_plan_default(self, *, default_id: UUID) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/commercial_plan_defaults",
+            params={"id": f"eq.{default_id}"},
+        )
+
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,codigo,descripcion",

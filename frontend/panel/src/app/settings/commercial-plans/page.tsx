@@ -54,11 +54,21 @@ type CommercialPlanEntitlement = {
   created_at: string
 }
 
+type CommercialPlanDefault = {
+  id: string
+  plan_id: string
+  default_key: string
+  default_value: string
+  scope?: string | null
+  created_at: string
+}
+
 type CommercialPlansResponse = {
   ok: boolean
   items: CommercialPlan[]
   prices: CommercialPlanPrice[]
   entitlements: CommercialPlanEntitlement[]
+  defaults: CommercialPlanDefault[]
 }
 
 type PlatformAdminStatusResponse = { is_platform_admin?: boolean }
@@ -79,6 +89,7 @@ export default async function CommercialPlansSettingsPage() {
   const items = response.ok ? response.data.items : []
   const prices = response.ok ? response.data.prices : []
   const entitlements = response.ok ? response.data.entitlements : []
+  const defaults = response.ok ? response.data.defaults : []
   const errors = response.ok ? [] : [response.error]
 
   return (
@@ -103,7 +114,7 @@ export default async function CommercialPlansSettingsPage() {
 
         <SettingsErrorCallout title="No se pudo recuperar el catálogo" messages={errors} />
 
-        <CommercialPlansManager plans={items} prices={prices} entitlements={entitlements} />
+        <CommercialPlansManager plans={items} prices={prices} entitlements={entitlements} defaults={defaults} />
 
         <Card>
           <CardHeader className="space-y-1">

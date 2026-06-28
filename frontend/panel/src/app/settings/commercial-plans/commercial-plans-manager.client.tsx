@@ -11,12 +11,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import {
   archiveCommercialPlanAction,
+  deleteCommercialPlanDefaultAction,
   archiveCommercialPlanEntitlementAction,
   archiveCommercialPlanPriceAction,
   createCommercialPlanAction,
+  createCommercialPlanDefaultAction,
   createCommercialPlanEntitlementAction,
   createCommercialPlanPriceAction,
   updateCommercialPlanAction,
+  updateCommercialPlanDefaultAction,
   updateCommercialPlanEntitlementAction,
   updateCommercialPlanPriceAction,
 } from "./actions"
@@ -58,6 +61,15 @@ type CommercialPlanEntitlement = {
   created_at: string
 }
 
+type CommercialPlanDefault = {
+  id: string
+  plan_id: string
+  default_key: string
+  default_value: string
+  scope?: string | null
+  created_at: string
+}
+
 type PriceFormState = {
   planId: string
   billingProvider: string
@@ -81,6 +93,13 @@ type EntitlementFormState = {
   scope: string
 }
 
+type DefaultFormState = {
+  planId: string
+  defaultKey: string
+  defaultValue: string
+  scope: string
+}
+
 type FormState = {
   code: string
   name: string
@@ -93,6 +112,7 @@ type Props = {
   plans: CommercialPlan[]
   prices: CommercialPlanPrice[]
   entitlements: CommercialPlanEntitlement[]
+  defaults: CommercialPlanDefault[]
 }
 
 function formatMoney(amountCents: number, currency: string): string {
@@ -116,7 +136,7 @@ function priceLabel(price: CommercialPlanPrice | undefined): string {
   return `${formatMoney(price.amount_cents, price.currency)} ${intervalLabel}`.trim()
 }
 
-export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
+export function CommercialPlansManager({ plans, prices, entitlements, defaults }: Props) {
   const router = useRouter()
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -130,6 +150,10 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
   const [entitlementError, setEntitlementError] = useState<string | null>(null)
   const [editingEntitlementId, setEditingEntitlementId] = useState<string | null>(null)
   const [loadingEntitlementId, setLoadingEntitlementId] = useState<string | null>(null)
+  const [defaultMessage, setDefaultMessage] = useState<string | null>(null)
+  const [defaultError, setDefaultError] = useState<string | null>(null)
+  const [editingDefaultId, setEditingDefaultId] = useState<string | null>(null)
+  const [loadingDefaultId, setLoadingDefaultId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({
     code: "",
     name: "",
@@ -156,6 +180,12 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
     valueText: "",
     valueJson: "",
     limitUnit: "",
+    scope: "",
+  })
+  const [defaultForm, setDefaultForm] = useState<DefaultFormState>({
+    planId: "",
+    defaultKey: "",
+    defaultValue: "",
     scope: "",
   })
 
@@ -197,6 +227,15 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
     [entitlements],
   )
 
+  const sortedDefaults = useMemo(
+    () =>
+      [...defaults].sort((a, b) => {
+        if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
+        return a.default_key.localeCompare(b.default_key)
+      }),
+    [defaults],
+  )
+
   const resetForm = () => {
     setEditingPlanId(null)
     setForm({
@@ -233,6 +272,16 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
       valueText: "",
       valueJson: "",
       limitUnit: "",
+      scope: "",
+    })
+  }
+
+  const resetDefaultForm = () => {
+    setEditingDefaultId(null)
+    setDefaultForm({
+      planId: plans[0]?.id ?? "",
+      defaultKey: "",
+      defaultValue: "",
       scope: "",
     })
   }
@@ -285,6 +334,19 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
           : JSON.stringify(entitlement.value_json, null, 2),
       limitUnit: entitlement.limit_unit ?? "",
       scope: entitlement.scope ?? "",
+    })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const startEditDefault = (row: CommercialPlanDefault) => {
+    setDefaultMessage(null)
+    setDefaultError(null)
+    setEditingDefaultId(row.id)
+    setDefaultForm({
+      planId: row.plan_id,
+      defaultKey: row.default_key,
+      defaultValue: row.default_value,
+      scope: row.scope ?? "",
     })
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -486,6 +548,67 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
       setEntitlementError(err instanceof Error ? err.message : "No se pudo desactivar el entitlement.")
     } finally {
       setLoadingEntitlementId(null)
+    }
+  }
+
+  const submitDefault = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setDefaultMessage(null)
+    setDefaultError(null)
+    const body = new FormData()
+    body.set("plan_id", defaultForm.planId)
+    body.set("default_key", defaultForm.defaultKey)
+    body.set("default_value", defaultForm.defaultValue)
+    if (defaultForm.scope.trim()) {
+      body.set("scope", defaultForm.scope)
+    }
+    if (editingDefaultId) {
+      body.set("default_id", editingDefaultId)
+    }
+
+    setLoadingDefaultId(editingDefaultId ?? "new")
+    try {
+      const result = editingDefaultId
+        ? await updateCommercialPlanDefaultAction({ ok: true, message: "" }, body)
+        : await createCommercialPlanDefaultAction({ ok: true, message: "" }, body)
+      if (!result.ok) {
+        setDefaultError(result.error)
+        return
+      }
+      setDefaultMessage(result.message)
+      resetDefaultForm()
+      router.refresh()
+    } catch (err) {
+      setDefaultError(err instanceof Error ? err.message : "No se pudo guardar el default.")
+    } finally {
+      setLoadingDefaultId(null)
+    }
+  }
+
+  const handleDeleteDefault = async (defaultId: string) => {
+    setDefaultMessage(null)
+    setDefaultError(null)
+    if (!window.confirm("¿Eliminar este default?")) {
+      return
+    }
+    const body = new FormData()
+    body.set("default_id", defaultId)
+    setLoadingDefaultId(defaultId)
+    try {
+      const result = await deleteCommercialPlanDefaultAction(body)
+      if (!result.ok) {
+        setDefaultError(result.error)
+        return
+      }
+      setDefaultMessage(result.message)
+      if (editingDefaultId === defaultId) {
+        resetDefaultForm()
+      }
+      router.refresh()
+    } catch (err) {
+      setDefaultError(err instanceof Error ? err.message : "No se pudo eliminar el default.")
+    } finally {
+      setLoadingDefaultId(null)
     }
   }
 
@@ -1087,6 +1210,151 @@ export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
                               onClick={() => void handleArchiveEntitlement(entitlement.id)}
                             >
                               {entitlement.enabled ? "Desactivar" : "Inactivo"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>{editingDefaultId ? "Editar default" : "Crear default"}</CardTitle>
+          <CardDescription>
+            Los defaults definen valores iniciales al aprovisionar un tenant desde un plan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {defaultMessage ? (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+              {defaultMessage}
+            </div>
+          ) : null}
+          {defaultError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {defaultError}
+            </div>
+          ) : null}
+          <form className="space-y-4" onSubmit={submitDefault}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-default-plan">Plan</Label>
+                <select
+                  id="commercial-plan-default-plan"
+                  value={defaultForm.planId}
+                  onChange={(event) => setDefaultForm((prev) => ({ ...prev, planId: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Selecciona un plan</option>
+                  {sortedPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} ({plan.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-default-key">Llave</Label>
+                <Input
+                  id="commercial-plan-default-key"
+                  value={defaultForm.defaultKey}
+                  onChange={(event) => setDefaultForm((prev) => ({ ...prev, defaultKey: event.target.value }))}
+                  placeholder="webchat.enabled"
+                  required
+                />
+              </div>
+              <div className="lg:col-span-2 space-y-2">
+                <Label htmlFor="commercial-plan-default-value">Valor</Label>
+                <Input
+                  id="commercial-plan-default-value"
+                  value={defaultForm.defaultValue}
+                  onChange={(event) => setDefaultForm((prev) => ({ ...prev, defaultValue: event.target.value }))}
+                  placeholder="true"
+                  required
+                />
+              </div>
+              <div className="lg:col-span-2 space-y-2">
+                <Label htmlFor="commercial-plan-default-scope">Scope</Label>
+                <Input
+                  id="commercial-plan-default-scope"
+                  value={defaultForm.scope}
+                  onChange={(event) => setDefaultForm((prev) => ({ ...prev, scope: event.target.value }))}
+                  placeholder="tenant"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={loadingDefaultId !== null}>
+                {loadingDefaultId === (editingDefaultId ?? "new")
+                  ? "Guardando..."
+                  : editingDefaultId
+                    ? "Actualizar default"
+                    : "Crear default"}
+              </Button>
+              {editingDefaultId ? (
+                <Button type="button" variant="outline" onClick={resetDefaultForm}>
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>Defaults del catálogo</CardTitle>
+          <CardDescription>Valores iniciales que se aplican al crear o aprovisionar un tenant.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-lg border border-border/60">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Llave</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead className="hidden lg:table-cell">Scope</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedDefaults.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      No hay defaults comerciales todavía.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedDefaults.map((row) => {
+                    const isLoading = loadingDefaultId === row.id
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">
+                          {planNameById.get(row.plan_id) ?? row.plan_id}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{row.default_key}</TableCell>
+                        <TableCell className="text-sm">{row.default_value}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">{row.scope ?? "—"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => startEditDefault(row)}>
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={isLoading}
+                              onClick={() => void handleDeleteDefault(row.id)}
+                            >
+                              Eliminar
                             </Button>
                           </div>
                         </TableCell>

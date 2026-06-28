@@ -285,6 +285,7 @@ class CommercialPlansResponse(BaseModel):
     items: list[CommercialPlanSummary] = Field(default_factory=list)
     prices: list[CommercialPlanPriceSummary] = Field(default_factory=list)
     entitlements: list[CommercialPlanEntitlementSummary] = Field(default_factory=list)
+    defaults: list[CommercialPlanDefaultSummary] = Field(default_factory=list)
 
 
 class CommercialPlanResponse(BaseModel):
@@ -504,6 +505,83 @@ class CommercialPlanEntitlementResponse(BaseModel):
 class CommercialPlanEntitlementsResponse(BaseModel):
     ok: bool = True
     items: list[CommercialPlanEntitlementSummary] = Field(default_factory=list)
+
+
+class CommercialPlanDefaultSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    plan_id: UUID
+    default_key: str
+    default_value: str
+    scope: str | None = None
+    created_at: datetime
+
+
+class CommercialPlanDefaultCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID
+    default_key: str = Field(..., min_length=1, max_length=128)
+    default_value: str = Field(..., min_length=1, max_length=1024)
+    scope: str | None = Field(default=None, max_length=64)
+
+    @field_validator("default_key", "scope")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("default_value")
+    @classmethod
+    def _normalize_value(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+
+class CommercialPlanDefaultUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID | None = None
+    default_key: str | None = Field(default=None, min_length=1, max_length=128)
+    default_value: str | None = Field(default=None, min_length=1, max_length=1024)
+    scope: str | None = Field(default=None, max_length=64)
+
+    @field_validator("default_key", "scope")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("default_value")
+    @classmethod
+    def _normalize_value(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+
+class CommercialPlanDefaultResponse(BaseModel):
+    ok: bool = True
+    default: CommercialPlanDefaultSummary
+
+
+class CommercialPlanDefaultsResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialPlanDefaultSummary] = Field(default_factory=list)
 
 
 class RolePermissionsSyncRequest(BaseModel):
@@ -1541,10 +1619,12 @@ async def list_commercial_plans(
     plans = await repo.list_commercial_plans()
     prices = await repo.list_commercial_plan_prices()
     entitlements = await repo.list_commercial_plan_entitlements()
+    defaults = await repo.list_commercial_plan_defaults()
     return CommercialPlansResponse(
         items=[CommercialPlanSummary.model_validate(row) for row in plans],
         prices=[CommercialPlanPriceSummary.model_validate(row) for row in prices],
         entitlements=[CommercialPlanEntitlementSummary.model_validate(row) for row in entitlements],
+        defaults=[CommercialPlanDefaultSummary.model_validate(row) for row in defaults],
     )
 
 
@@ -1732,6 +1812,69 @@ async def archive_commercial_plan_entitlement(
     return CommercialPlanEntitlementResponse(
         entitlement=CommercialPlanEntitlementSummary.model_validate(row)
     )
+
+
+@router.get("/commercial-plan-defaults", response_model=CommercialPlanDefaultsResponse)
+async def list_commercial_plan_defaults(
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanDefaultsResponse:
+    defaults = await repo.list_commercial_plan_defaults()
+    return CommercialPlanDefaultsResponse(
+        items=[CommercialPlanDefaultSummary.model_validate(row) for row in defaults]
+    )
+
+
+@router.post("/commercial-plan-defaults", response_model=CommercialPlanDefaultResponse)
+async def create_commercial_plan_default(
+    payload: CommercialPlanDefaultCreateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanDefaultResponse:
+    try:
+        row = await repo.create_commercial_plan_default(
+            payload={
+                "plan_id": str(payload.plan_id),
+                "default_key": payload.default_key,
+                "default_value": payload.default_value,
+                "scope": payload.scope,
+            }
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanDefaultResponse(default=CommercialPlanDefaultSummary.model_validate(row))
+
+
+@router.patch("/commercial-plan-defaults/{default_id}", response_model=CommercialPlanDefaultResponse)
+async def update_commercial_plan_default(
+    default_id: UUID,
+    payload: CommercialPlanDefaultUpdateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanDefaultResponse:
+    update_payload = payload.model_dump(exclude_none=True)
+    if not update_payload:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    if "plan_id" in update_payload:
+        update_payload["plan_id"] = str(update_payload["plan_id"])
+    try:
+        row = await repo.update_commercial_plan_default(default_id=default_id, payload=update_payload)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanDefaultResponse(default=CommercialPlanDefaultSummary.model_validate(row))
+
+
+@router.delete("/commercial-plan-defaults/{default_id}", response_model=dict[str, bool])
+async def delete_commercial_plan_default(
+    default_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> dict[str, bool]:
+    try:
+        await repo.delete_commercial_plan_default(default_id=default_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 @router.post("/tenants", response_model=CreateTenantResponse)
