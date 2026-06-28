@@ -93,6 +93,39 @@ Formato recomendado por entrada:
 
 ---
 
+## v0.1 - Base del plan comercial
+
+### Base de datos
+- Se definió que `organizaciones` seguirá siendo la tabla base del tenant.
+- Se acordó extender `organizaciones` con columnas explícitas para datos generales del cliente.
+- Se definieron tablas nuevas para:
+  - `commercial_plans`
+  - `commercial_plan_prices`
+  - `commercial_plan_entitlements`
+  - `commercial_plan_defaults`
+  - `tenant_billing_accounts`
+  - `tenant_billing_events`
+  - `tenant_plan_overrides`
+  - `tenant_provisioning_jobs` opcional
+- Se estableció que la lógica comercial principal no debe depender de `config`, `metadata` ni JSON.
+
+### Backend
+- Se definió el flujo Stripe -> webhook -> backend -> provisioning -> acceso.
+- Se estableció que el backend es la fuente de verdad para activar o bloquear tenants.
+- Se acordó procesar eventos Stripe con validación de firma e idempotencia.
+- Se separó billing de configuración operativa y de permisos de usuario.
+
+### Frontend
+- Se definió que `settings/tenants` funciona como consola de administración interna.
+- Se acordó que la vista del tenant debe mostrar plan, billing status y access status.
+- Se estableció que el frontend no decide el acceso comercial del tenant.
+
+### Operación/Notas
+- Esta versión deja la arquitectura comercial base lista para implementación.
+- El siguiente paso es convertir la documentación en migraciones y endpoints reales.
+
+---
+
 ## Uso recomendado
 
 Cuando cierres un cambio real, agrega una entrada nueva con la fecha exacta y llena solo la fase que corresponda.
