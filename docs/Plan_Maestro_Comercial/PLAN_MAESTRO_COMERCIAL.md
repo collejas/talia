@@ -291,6 +291,48 @@ Esto permite excepciones por cliente sin crear un plan nuevo y con vigencia cont
 
 ---
 
+## CRUD de planes comerciales
+
+El catálogo comercial sí debe poder administrarse desde plataforma, pero con reglas estrictas.
+
+### Alcance
+
+CRUD permitido para:
+
+- `commercial_plans`
+- `commercial_plan_prices`
+- `commercial_plan_entitlements`
+- `commercial_plan_defaults`
+
+CRUD controlado para:
+
+- `tenant_plan_overrides`
+
+No tratar como CRUD libre:
+
+- `tenant_billing_accounts`
+- `tenant_billing_events`
+
+### Reglas
+
+- Solo `platform admin` puede crear, editar o desactivar planes.
+- No borrar físicamente un plan que ya tenga tenants activos.
+- Si un plan cambia de comportamiento comercial, preferir desactivarlo o versionarlo.
+- Los precios deben manejarse por filas nuevas cuando aplique un cambio real de cobro.
+- Los entitlements y defaults deben quedar auditablemente ligados al plan.
+- `tenant_plan_overrides` debe tener vigencia y motivo.
+- `tenant_billing_accounts` debe modificarse solo por backend o webhook, no manualmente desde UI normal.
+
+### Recomendación operativa
+
+- `commercial_plans` se administra como catálogo.
+- `commercial_plan_prices` se administra como catálogo de cobro por plan y moneda.
+- `commercial_plan_entitlements` se administra como catálogo de features y límites.
+- `commercial_plan_defaults` se administra como catálogo de valores iniciales.
+- `tenant_plan_overrides` se usa solo para excepciones puntuales por cliente.
+
+---
+
 ## Reglas de idempotencia y seguridad
 
 Estas reglas son obligatorias antes de activar la implementación.

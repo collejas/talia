@@ -91,6 +91,11 @@ Formato recomendado por entrada:
   - `pro` = $3
   - `business` = $4
   - `enterprise` = $5
+- Se definió que sí habrá CRUD de administración para la capa comercial, pero:
+  - solo para `platform admin`,
+  - sin borrado destructivo de planes en uso,
+  - con edición controlada de precios, entitlements y defaults,
+  - y con `tenant_billing_accounts`/`tenant_billing_events` fuera de CRUD libre.
 
 ### Backend
 - Se definió el flujo Stripe -> webhook -> backend -> provisioning -> acceso.
