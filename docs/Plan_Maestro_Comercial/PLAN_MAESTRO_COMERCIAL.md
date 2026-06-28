@@ -632,6 +632,12 @@ El sistema queda bien cuando:
 
 ---
 
+## Documentos complementarios
+
+- [Alta de Tenant Desde Stripe](./ALTA_TENANT_DESDE_STRIPE.md)
+
+---
+
 ## Decisión final
 
 La plataforma debe operar con tres capas distintas:
