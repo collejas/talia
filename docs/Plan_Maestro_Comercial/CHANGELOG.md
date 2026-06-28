@@ -286,3 +286,22 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Resultado
 - Ya existe el flujo base para que un usuario elija un plan, pague en Stripe y deje al sistema listo para activar el tenant automáticamente cuando el webhook confirme la compra.
+
+---
+
+## v0.8 - Checkout público en la página de precios
+
+### Frontend
+- Se agregó la sección de alta comercial en `/precios` para cargar planes activos desde `GET /public/billing/commercial-plans`.
+- Se agregó el formulario público para capturar datos mínimos del tenant y preparar el checkout de Stripe.
+- Se añadieron tarjetas dinámicas por plan y por precio, con selección directa de la modalidad a contratar.
+- Se agregó manejo visual para retorno de Stripe en la misma página mediante `?checkout=success` y `?checkout=cancel`.
+
+### Backend / contrato
+- El frontend ahora consume `POST /public/billing/checkout` como punto de entrada para crear el tenant y abrir Stripe.
+- El flujo conserva la regla de que el tenant se crea inactivo y solo se activa por webhook confirmado.
+
+### Operación/Notas
+- La página comercial ya no depende solo de WhatsApp o demo para iniciar un alta.
+- Para producción, `STRIPE_CHECKOUT_SUCCESS_URL` y `STRIPE_CHECKOUT_CANCEL_URL` deben apuntar a la página de precios con el query param correspondiente.
+- El checkout queda acoplado a precios activos de Stripe publicados desde la base de datos comercial.

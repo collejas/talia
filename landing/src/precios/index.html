@@ -35,6 +35,136 @@
     .header-compact .text-sm {
       font-size: 0.8125rem !important;
     }
+    .billing-banner,
+    .billing-message {
+      border-radius: 1rem;
+      padding: 1rem 1.1rem;
+      line-height: 1.5;
+      font-size: 0.925rem;
+    }
+    .billing-banner--success {
+      border: 1px solid rgba(52, 211, 153, .35);
+      background: rgba(16, 185, 129, .12);
+      color: #ecfdf5;
+    }
+    .billing-banner--warning {
+      border: 1px solid rgba(251, 191, 36, .32);
+      background: rgba(245, 158, 11, .10);
+      color: #fffbeb;
+    }
+    .billing-message--info {
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: rgba(255, 255, 255, .05);
+      color: #e2e8f0;
+    }
+    .billing-message--success {
+      border: 1px solid rgba(52, 211, 153, .22);
+      background: rgba(16, 185, 129, .10);
+      color: #d1fae5;
+    }
+    .billing-message--error {
+      border: 1px solid rgba(248, 113, 113, .24);
+      background: rgba(239, 68, 68, .10);
+      color: #fee2e2;
+    }
+    .billing-plan-card {
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: rgba(2, 6, 23, .72);
+      border-radius: 1rem;
+      padding: 1.15rem;
+      transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .billing-plan-card--selected {
+      border-color: rgba(52, 211, 153, .42);
+      background: rgba(16, 185, 129, .08);
+      box-shadow: 0 18px 50px rgba(6, 95, 70, .16);
+    }
+    .billing-price-option {
+      width: 100%;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: rgba(15, 23, 42, .68);
+      padding: 1rem;
+      text-align: left;
+      color: inherit;
+      cursor: pointer;
+      transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .billing-price-option:hover {
+      border-color: rgba(52, 211, 153, .30);
+      background: rgba(255, 255, 255, .06);
+    }
+    .billing-price-option--selected {
+      border-color: rgba(52, 211, 153, .60);
+      background: rgba(16, 185, 129, .12);
+      box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .14);
+    }
+    .billing-plan-code {
+      font-size: 0.7rem;
+      font-weight: 900;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #7dd3fc;
+    }
+    .billing-plan-title {
+      margin-top: 0.5rem;
+      font-size: 1.25rem;
+      line-height: 1.2;
+      font-weight: 900;
+      color: #ffffff;
+    }
+    .billing-plan-desc {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    .billing-plan-badge,
+    .billing-price-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, .10);
+      background: rgba(255, 255, 255, .05);
+      padding: 0.3rem 0.65rem;
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+    .billing-price-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .billing-price-amount {
+      font-size: 1rem;
+      font-weight: 850;
+      color: #ffffff;
+    }
+    .billing-price-interval {
+      margin-top: 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .billing-price-hint {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .billing-price-list {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .billing-submit-button--loading {
+      opacity: 0.7;
+    }
   </style>
   <script type="application/ld+json">
   {
@@ -180,10 +310,14 @@
       <div class="mx-auto max-w-6xl px-6 py-20 md:py-24">
         <p class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-emerald-200">Precios</p>
         <h1 class="mt-6 max-w-4xl text-4xl font-black leading-tight md:text-6xl">Planes para un CRM con IA que sí se adapta a tu operación</h1>
-        <p class="mt-5 max-w-3xl text-lg text-slate-300">Desde $700 MXN + IVA por 5 licencias, pagando anual. La edición inmobiliaria se agenda como cita/demo para definir alcance y configuración.</p>
+        <p class="mt-5 max-w-3xl text-lg text-slate-300">Los planes activos y el precio real se cargan desde la configuración comercial. Abajo puedes elegir el plan, crear el tenant y continuar al checkout de Stripe con el precio publicado.</p>
         <div class="mt-8 flex flex-wrap gap-3">
           <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20cotizaci%C3%B3n%20de%20Tal-IA%20seg%C3%BAn%20el%20tama%C3%B1o%20de%20mi%20equipo" class="rounded-xl bg-emerald-500 px-6 py-3 text-[13px] font-black text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">Solicitar cotización</a>
           <a href="/automatizacion-de-ventas" class="rounded-xl border border-white/15 px-6 py-3 font-bold hover:bg-white/10">Ver automatización</a>
+          <a href="#alta-comercial" class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-6 py-3 text-[13px] font-black text-emerald-100 hover:bg-emerald-500/20">Comprar y activar</a>
+        </div>
+        <div class="mt-6 inline-flex max-w-2xl rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+          El alta comercial ya puede iniciar desde esta página: eliges el plan, completas los datos mínimos y Stripe abre el checkout para activar el tenant cuando el pago se confirma.
         </div>
       </div>
     </section>
@@ -210,27 +344,27 @@
       <div class="grid gap-5 md:grid-cols-3">
         <article class="rounded-3xl border border-white/10 bg-white/5 p-6">
           <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Versión general</p>
-          <h2 class="mt-3 text-2xl font-black">$700 MXN + IVA</h2>
-          <p class="mt-2 text-sm text-slate-300">5 licencias incluidas con pago anticipado anual. Si pagas mes a mes, el precio es de $875 MXN + IVA por mes.</p>
+          <h2 class="mt-3 text-2xl font-black">Precio publicado desde la capa comercial</h2>
+          <p class="mt-2 text-sm text-slate-300">Este bloque funciona como contexto comercial. El precio que realmente se cobra se toma del catálogo activo de Stripe en la sección de alta comercial.</p>
           <div class="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
             <p class="text-sm font-bold text-emerald-100">Planes y precios</p>
             <ul class="mt-3 space-y-2 text-sm text-emerald-50/90">
-              <li>• Mensual: $875 MXN + IVA por mes</li>
-              <li>• Trimestral: $2,362.50 MXN + IVA por trimestre</li>
-              <li>• Semestral: $4,462.50 MXN + IVA por semestre</li>
-              <li>• Anual: $8,400 MXN + IVA al año</li>
+              <li>• Precio activo publicado en la base comercial</li>
+              <li>• Modalidad definida por plan y precio de Stripe</li>
+              <li>• Checkout directo con activación por webhook</li>
+              <li>• Sin depender de texto manual en la landing</li>
             </ul>
           </div>
           <div class="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
             <p class="text-sm font-bold text-slate-200">Incluye</p>
             <ul class="mt-3 space-y-2 text-sm text-slate-300">
-              <li>• 5 licencias</li>
-              <li>• Acceso a la versión general</li>
+              <li>• Acceso al plan comercial publicado</li>
               <li>• CRM, seguimiento y automatización comercial</li>
-              <li>• Soporte de arranque</li>
+              <li>• Alta de tenant con datos generales</li>
+              <li>• Activación después del webhook de pago</li>
             </ul>
           </div>
-          <p class="mt-6 text-sm font-bold text-emerald-300">Ahorro de 20% en pago anual</p>
+          <p class="mt-6 text-sm font-bold text-emerald-300">La referencia final siempre es el catálogo activo</p>
         </article>
 
         <article class="rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-6 shadow-2xl shadow-emerald-500/10">
@@ -317,6 +451,129 @@
       </div>
     </section>
 
+    <section id="alta-comercial" class="mx-auto max-w-6xl px-6 py-16" data-commercial-checkout>
+      <div class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-300">Alta comercial</p>
+          <h2 class="mt-3 text-3xl font-black md:text-4xl">Elige un plan y crea el tenant con Stripe</h2>
+          <p class="mt-3 max-w-3xl text-slate-300">La página carga los planes activos desde el backend, guarda los datos generales del tenant y te manda al checkout firmado de Stripe. Si el pago se confirma, el webhook activa la cuenta.</p>
+        </div>
+        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200">
+          <span class="text-slate-400">Estado:</span>
+          <span data-checkout-status>listo para cargar planes</span>
+        </div>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.22em] text-sky-300">Planes disponibles</p>
+              <h3 class="mt-2 text-2xl font-black">Selecciona el plan comercial</h3>
+            </div>
+            <div class="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-xs font-bold text-slate-300">
+              <span data-plan-count>0</span> planes
+            </div>
+          </div>
+          <div class="mt-5 grid gap-4" data-plan-list>
+            <div class="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 p-5 text-sm text-slate-400">
+              Cargando planes...
+            </div>
+          </div>
+          <div class="mt-5 hidden rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-200" data-checkout-banner></div>
+        </div>
+
+        <div class="rounded-3xl border border-emerald-400/20 bg-slate-950/80 p-6 shadow-2xl shadow-emerald-950/20">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Checkout</p>
+              <h3 class="mt-2 text-2xl font-black text-white">Datos del tenant</h3>
+            </div>
+            <div class="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-100">
+              Stripe
+            </div>
+          </div>
+
+          <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Plan seleccionado</p>
+            <p class="mt-1 text-lg font-black text-white" data-selected-plan>Selecciona un plan</p>
+            <p class="mt-1 text-sm text-slate-400" data-selected-price>Elige una modalidad para continuar.</p>
+          </div>
+
+          <form class="mt-5 space-y-4" data-commercial-checkout-form>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="space-y-2 text-sm">
+                <span class="font-semibold text-slate-200">Nombre del tenant *</span>
+                <input name="nombre" required type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="Empresa o tenant" />
+              </label>
+              <label class="space-y-2 text-sm">
+                <span class="font-semibold text-slate-200">Correo de contacto *</span>
+                <input name="correo_contacto_principal" required type="email" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="hola@empresa.com" />
+              </label>
+              <label class="space-y-2 text-sm">
+                <span class="font-semibold text-slate-200">Nombre de contacto</span>
+                <input name="contacto_nombre" type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="Nombre de la persona responsable" />
+              </label>
+              <label class="space-y-2 text-sm">
+                <span class="font-semibold text-slate-200">Teléfono</span>
+                <input name="telefono" type="tel" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="+52..." />
+              </label>
+            </div>
+
+            <label class="space-y-2 text-sm">
+              <span class="font-semibold text-slate-200">Alias webchat opcional</span>
+              <input name="webchat_alias" type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="alias_publico" />
+            </label>
+
+            <details class="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <summary class="cursor-pointer text-sm font-bold text-slate-100">Datos opcionales del tenant</summary>
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Razón social</span>
+                  <input name="razon_social" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">RFC</span>
+                  <input name="rfc" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Nombre comercial</span>
+                  <input name="nombre_comercial" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Dominio principal</span>
+                  <input name="dominio_principal" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="empresa.com" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Correo de facturación</span>
+                  <input name="correo_facturacion" type="email" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Moneda</span>
+                  <input name="moneda" type="text" value="MXN" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">País</span>
+                  <input name="pais" type="text" value="México" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+                <label class="space-y-2 text-sm">
+                  <span class="font-semibold text-slate-200">Zona horaria</span>
+                  <input name="timezone" type="text" value="America/Mexico_City" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
+                </label>
+              </div>
+            </details>
+
+            <div class="hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200" data-form-message aria-live="polite"></div>
+
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-black text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-600">
+              Crear tenant y continuar a Stripe
+            </button>
+            <p class="text-xs leading-5 text-slate-400">El tenant se crea primero en estado inactivo. Stripe confirma el pago y el webhook activa el acceso.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <section class="mx-auto max-w-6xl px-6 py-14">
       <div class="grid gap-6 md:grid-cols-2">
         <article class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
@@ -324,7 +581,7 @@
           <div class="mt-5 space-y-3">
             <details class="rounded-xl border border-white/10 bg-white/5 p-4">
               <summary class="cursor-pointer font-bold">¿Hay un precio fijo publicado?</summary>
-              <p class="mt-2 text-sm text-slate-300">Sí. La versión general tiene un costo mensual de $875 MXN + IVA por 5 licencias. Si pagas de forma anticipada anual, el equivalente baja a $700 MXN + IVA al mes con 20% de descuento. También tienes pago trimestral con 10% y semestral con 15%. La edición inmobiliaria y Enterprise se gestionan con cita/demo para definir alcance.</p>
+              <p class="mt-2 text-sm text-slate-300">El precio fijo lo determina el catálogo comercial activo que se carga en la sección de alta. Esa configuración es la fuente de verdad para Stripe y para la activación del tenant.</p>
             </details>
             <details class="rounded-xl border border-white/10 bg-white/5 p-4">
               <summary class="cursor-pointer font-bold">¿Puedo empezar con algo pequeño?</summary>
@@ -348,5 +605,6 @@
       </div>
     </section>
   </main>
+  <script type="module" src="/assets/js/modules/public-billing.js?v=20260628a"></script>
 </body>
 </html>
