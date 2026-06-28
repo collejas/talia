@@ -434,6 +434,72 @@ class PlatformRepository:
             json={"processing_error": processing_error},
         )
 
+    async def create_tenant_access_invitation(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/tenant_access_invitations",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_access_invitation_create_failed")
+        return data[0]
+
+    async def get_tenant_access_invitation_by_token_hash(
+        self, *, token_hash: str
+    ) -> dict[str, Any] | None:
+        params = {
+            "select": "id,tenant_id,email,flow_kind,status,verification_token_hash,verification_sent_at,verified_at,invited_at,invited_user_id,last_error,created_at,updated_at",
+            "verification_token_hash": f"eq.{token_hash}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/tenant_access_invitations", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("tenant_access_invitation_invalid_response")
+        return row
+
+    async def get_latest_tenant_access_invitation(
+        self,
+        *,
+        tenant_id: UUID,
+        flow_kind: str | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "select": "id,tenant_id,email,flow_kind,status,verification_token_hash,verification_sent_at,expires_at,verified_at,invited_at,invited_user_id,last_error,created_at,updated_at",
+            "tenant_id": f"eq.{tenant_id}",
+            "order": "created_at.desc",
+            "limit": "1",
+        }
+        if flow_kind:
+            params["flow_kind"] = f"eq.{flow_kind}"
+        data = await self._rest("GET", "/rest/v1/tenant_access_invitations", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("tenant_access_invitation_invalid_response")
+        return row
+
+    async def update_tenant_access_invitation(
+        self,
+        *,
+        invitation_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/tenant_access_invitations",
+            params={"id": f"eq.{invitation_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_access_invitation_update_failed")
+        return data[0]
+
     async def create_tenant_provisioning_job(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
             "POST",

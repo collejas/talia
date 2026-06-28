@@ -11,6 +11,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services.tenant_access_onboarding import create_tenant_access_invitation
 
 logger = get_logger("app.services.tenant_provisioning")
 
@@ -551,6 +552,33 @@ async def provision_tenant_from_billing(
             payload={"activo": True},
         )
 
+        existing_invitation = await repo.get_latest_tenant_access_invitation(
+            tenant_id=tenant_id,
+            flow_kind="stripe",
+        )
+        if not existing_invitation or str(existing_invitation.get("status") or "") in {
+            "failed",
+            "expired",
+        }:
+            access_email = str(
+                tenant.get("correo_contacto_principal")
+                or tenant.get("correo_facturacion")
+                or ""
+            ).strip()
+            if access_email:
+                await create_tenant_access_invitation(
+                    repo=repo,
+                    tenant_id=tenant_id,
+                    email=access_email,
+                    flow_kind="stripe",
+                    tenant_name=str(tenant.get("nombre") or "Tenant"),
+                )
+            else:
+                logger.warning(
+                    "tenant_provisioning.access_email_missing",
+                    extra={"tenant_id": str(tenant_id), "source": source},
+                )
+
         if job:
             await repo.update_tenant_provisioning_job(
                 job_id=UUID(str(job["id"])),
@@ -580,4 +608,3 @@ async def provision_tenant_from_billing(
                     extra={"tenant_id": str(tenant_id), "source": source},
                 )
         raise
-

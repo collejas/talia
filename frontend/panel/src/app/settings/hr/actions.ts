@@ -73,13 +73,6 @@ function parseBoolean(value: FormDataEntryValue | null): boolean {
   return Boolean(value)
 }
 
-function generateTemporaryPassword(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID().replace(/-/g, "")
-  }
-  return Math.random().toString(36).slice(2)
-}
-
 async function callAndValidate(
   path: string,
   options: Parameters<typeof callSupabaseRest>[1],
@@ -473,21 +466,19 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     const puestoId = puestoIdInput === null || puestoIdInput === "" ? null : puestoIdInput
 
     let userId = idInput && idInput.length ? idInput : null
-    let recoveryEmailSent = false
+    let inviteEmailSent = false
     if (!userId) {
       if (!correo) {
         throw new Error("Proporciona un correo para crear la cuenta.")
       }
-      const provisionalPassword = generateTemporaryPassword()
       const authUser = await createSupabaseAuthUser({
         email: correo,
-        password: provisionalPassword,
         telefono,
         nombre,
         organizacion_id: orgId,
       })
       userId = authUser.id
-      recoveryEmailSent = authUser.recoveryEmailSent
+      inviteEmailSent = authUser.inviteEmailSent
     }
 
     await callAndValidate("/rest/v1/usuarios", {
@@ -516,9 +507,9 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     }
 
     const message = correo
-      ? recoveryEmailSent
-        ? "Usuario registrado. Enviamos un correo para que establezca su contraseña."
-        : "Usuario registrado, pero no pudimos enviar el correo de activación."
+      ? inviteEmailSent
+        ? "Usuario registrado. Enviamos un correo de invitación para establecer acceso."
+        : "Usuario registrado, pero no pudimos enviar el correo de invitación."
       : "Usuario registrado."
     revalidatePath(PATHS.usuarios)
     return success(message)

@@ -52,7 +52,7 @@ export type TenantCreationResponse = {
     puesto_id: string
     empleado_id: string
   }
-  recovery_email_sent: boolean
+  invite_email_sent: boolean
   activo?: boolean | null
 }
 

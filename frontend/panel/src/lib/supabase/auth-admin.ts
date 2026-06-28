@@ -9,7 +9,6 @@ const SERVICE_KEY_ENV_KEYS = [
 
 export type CreateAuthUserInput = {
   email: string
-  password: string
   telefono?: string | null
   nombre?: string | null
   organizacion_id: string
@@ -17,11 +16,10 @@ export type CreateAuthUserInput = {
 
 export type CreateAuthUserResult = {
   id: string
-  recoveryEmailSent: boolean
+  inviteEmailSent: boolean
 }
 
 const DEFAULT_TELEFONO_E164 = "+00000000000"
-const RESET_REDIRECT_URL = process.env.SUPABASE_RESET_REDIRECT_URL?.trim()
 
 export async function createSupabaseAuthUser(
   input: CreateAuthUserInput,
@@ -38,35 +36,25 @@ export async function createSupabaseAuthUser(
   const telefono = input.telefono?.trim() ?? ""
   const hasTelefono = telefono.length > 0
   const baseUrl = config.url.replace(/\/+$/, "")
-  const metadata: Record<string, unknown> = {
-    organizacion_id: input.organizacion_id,
-  }
-  if (input.nombre) {
-    metadata.nombre = input.nombre
-  }
-  if (hasTelefono) {
-    metadata.telefono_e164 = telefono
-  }
 
-  const createPayload = {
+  const createPayload: { email: string; data: Record<string, unknown> } = {
     email: input.email,
-    password: input.password,
-    email_confirm: true,
-    phone: hasTelefono ? telefono : DEFAULT_TELEFONO_E164,
-    phone_confirm: hasTelefono,
-    user_metadata: metadata,
-    app_metadata: {
+    data: {
       organizacion_id: input.organizacion_id,
+      nombre: input.nombre || undefined,
+      telefono_e164: hasTelefono ? telefono : undefined,
     },
   }
+  createPayload.data = Object.fromEntries(
+    Object.entries(createPayload.data).filter(([, value]) => value != null),
+  )
 
   console.info("[settings/hr] Creando usuario auth", {
     email: input.email,
-    phone: createPayload.phone,
-    redirect_to: RESET_REDIRECT_URL,
+    phone: hasTelefono ? telefono : DEFAULT_TELEFONO_E164,
   })
 
-  const createResponse = await fetch(`${baseUrl}/auth/v1/admin/users`, {
+  const createResponse = await fetch(`${baseUrl}/auth/v1/invite`, {
     method: "POST",
     headers: {
       apikey: serviceKey,
@@ -79,7 +67,7 @@ export async function createSupabaseAuthUser(
 
   if (!createResponse.ok) {
     const errorText = await getErrorMessage(createResponse)
-    throw new Error(errorText || "No se pudo crear el usuario en Supabase Auth.")
+    throw new Error(errorText || "No se pudo invitar el usuario en Supabase Auth.")
   }
 
   const created = (await createResponse.json()) as { id?: string }
@@ -88,34 +76,7 @@ export async function createSupabaseAuthUser(
     throw new Error("Supabase Auth no regresó un identificador de usuario.")
   }
 
-  const updatePayload = {
-    phone: hasTelefono ? telefono : DEFAULT_TELEFONO_E164,
-    phone_confirm: hasTelefono,
-    user_metadata: metadata,
-    app_metadata: {
-      organizacion_id: input.organizacion_id,
-    },
-  }
-
-  const updateResponse = await fetch(`${baseUrl}/auth/v1/admin/users/${invitedUserId}`, {
-    method: "PUT",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(updatePayload),
-    cache: "no-store",
-  })
-
-  if (!updateResponse.ok) {
-    const errorText = await getErrorMessage(updateResponse)
-    throw new Error(errorText || "No se pudo actualizar la información del usuario invitado.")
-  }
-
-  const recoveryEmailSent = await triggerSupabaseRecovery(baseUrl, serviceKey, input.email)
-
-  return { id: invitedUserId, recoveryEmailSent }
+  return { id: invitedUserId, inviteEmailSent: true }
 }
 
 function getServiceRoleKey(): string | null {
@@ -137,37 +98,6 @@ async function getErrorMessage(response: Response): Promise<string> {
   } catch {
     return `Supabase respondió ${response.status}`
   }
-}
-
-async function triggerSupabaseRecovery(
-  baseUrl: string,
-  serviceKey: string,
-  email: string,
-): Promise<boolean> {
-  const response = await fetch(`${baseUrl}/auth/v1/recover`, {
-    method: "POST",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email,
-      options: RESET_REDIRECT_URL ? { redirect_to: RESET_REDIRECT_URL } : undefined,
-    }),
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    const errorText = await getErrorMessage(response)
-    console.warn("[settings/hr] recovery email failed", {
-      email,
-      error: errorText,
-    })
-    return false
-  }
-
-  return true
 }
 
 export async function deleteSupabaseAuthUser(userId: string): Promise<void> {

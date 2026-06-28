@@ -804,7 +804,7 @@ class CreateTenantWithAdminResponse(BaseModel):
     tenant_id: UUID
     usuario_id: UUID
     seed: TenantSeedSummary
-    recovery_email_sent: bool
+    invite_email_sent: bool
     activo: bool | None = None
 
 
@@ -2383,7 +2383,7 @@ async def create_tenant_with_admin(
                     puesto_id=puesto_id,
                     empleado_id=usuario_id,
                 ),
-                recovery_email_sent=True,
+                invite_email_sent=True,
             )
         except HTTPException:
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)

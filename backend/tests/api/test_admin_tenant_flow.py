@@ -206,7 +206,7 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     assert len(data["seed"]["permisos_ids"]) == 2
     assert data["seed"]["departamento_id"] == str(repo.department_id)
     assert data["seed"]["puesto_id"] == str(repo.position_id)
-    assert data["recovery_email_sent"] is True
+    assert data["invite_email_sent"] is True
     assert isinstance(repo.updated_config, dict)
     assert repo.updated_config.get("features", {}).get("webchat", {}).get("enabled") is True
     assert repo.updated_config.get("features", {}).get("catalog_backend", {}).get("enabled") is True
