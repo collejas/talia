@@ -1,4 +1,5 @@
 const API_BASE = '/public/billing';
+const PUBLIC_BILLING_ENABLED = Boolean(window.TALIA_PUBLIC_CONFIG?.showPublicBilling);
 
 const state = {
   selectedPlanId: '',
@@ -13,8 +14,20 @@ const currencyFormatters = new Map();
 
 document.addEventListener('DOMContentLoaded', () => {
   const root = document.querySelector('[data-commercial-checkout]');
+  const trigger = document.querySelector('[data-public-billing-trigger]');
   if (!root) {
     return;
+  }
+
+  if (!PUBLIC_BILLING_ENABLED) {
+    return;
+  }
+
+  root.hidden = false;
+  root.removeAttribute('aria-hidden');
+  if (trigger) {
+    trigger.hidden = false;
+    trigger.removeAttribute('aria-hidden');
   }
 
   const planList = root.querySelector('[data-plan-list]');

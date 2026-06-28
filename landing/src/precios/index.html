@@ -314,7 +314,7 @@
         <div class="mt-8 flex flex-wrap gap-3">
           <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20cotizaci%C3%B3n%20de%20Tal-IA%20seg%C3%BAn%20el%20tama%C3%B1o%20de%20mi%20equipo" class="rounded-xl bg-emerald-500 px-6 py-3 text-[13px] font-black text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">Solicitar cotización</a>
           <a href="/automatizacion-de-ventas" class="rounded-xl border border-white/15 px-6 py-3 font-bold hover:bg-white/10">Ver automatización</a>
-          <a href="#alta-comercial" class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-6 py-3 text-[13px] font-black text-emerald-100 hover:bg-emerald-500/20">Comprar y activar</a>
+          <a href="#alta-comercial" hidden aria-hidden="true" data-public-billing-trigger class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-6 py-3 text-[13px] font-black text-emerald-100 hover:bg-emerald-500/20">Comprar y activar</a>
         </div>
         <div class="mt-6 inline-flex max-w-2xl rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
           El alta comercial ya puede iniciar desde esta página: eliges el plan, completas los datos mínimos y Stripe abre el checkout para activar el tenant cuando el pago se confirma.
@@ -451,7 +451,7 @@
       </div>
     </section>
 
-    <section id="alta-comercial" class="mx-auto max-w-6xl px-6 py-16" data-commercial-checkout>
+    <section id="alta-comercial" hidden aria-hidden="true" class="mx-auto max-w-6xl px-6 py-16" data-commercial-checkout>
       <div class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-300">Alta comercial</p>
@@ -605,6 +605,7 @@
       </div>
     </section>
   </main>
+  <script src="/assets/js/public-config.js?v=20260628a"></script>
   <script type="module" src="/assets/js/modules/public-billing.js?v=20260628a"></script>
 </body>
 </html>

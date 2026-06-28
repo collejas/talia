@@ -620,3 +620,16 @@ poetry run python scripts/recompute_conversation_insights.py --conversation-id 7
 cd /var/www/talia/backend
 poetry run python scripts/recompute_conversation_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001
 poetry run python scripts/recompute_conversation_insights.py --organizacion-id 00000000-0000-0000-0000-000000000001 --apply
+
+
+
+
+# activar vista de precios stripe
+
+* Para activarlo temporalmente:
+
+SHOW_PUBLIC_BILLING=1 node landing/src/scripts/write-public-config.mjs
+
+* Para ocultarlo otra vez:
+
+SHOW_PUBLIC_BILLING=0 node landing/src/scripts/write-public-config.mjs
