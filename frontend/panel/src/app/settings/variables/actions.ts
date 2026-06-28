@@ -176,6 +176,13 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
   }
 }
 
+export async function updateTenantCommercialStateAction(
+  _: CrudActionState,
+  _formData: FormData,
+): Promise<CrudActionState> {
+  return { status: "error", message: "La edición comercial no está disponible desde Variables." }
+}
+
 export async function setTenantSecretAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const clave = getText(formData, "clave")

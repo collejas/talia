@@ -273,6 +273,37 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
   }
 }
 
+export async function updateTenantCommercialStateAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const commercialPlanId = getText(formData, "commercial_plan_id")
+    const commercialAccessStatus = getText(formData, "commercial_access_status") || "internal_free"
+    const billingStatus = getText(formData, "billing_status") || "active"
+
+    const payload: Record<string, unknown> = {
+      commercial_plan_id: commercialPlanId || null,
+      commercial_access_status: commercialAccessStatus,
+      billing_status: billingStatus,
+    }
+
+    const response = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/commercial-state`, {
+      method: "PATCH",
+      organizacionId: null,
+      withUserToken: true,
+      body: payload,
+    })
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Estado comercial actualizado.")
+  } catch (error) {
+    return failure(error, "No se pudo actualizar el estado comercial.")
+  }
+}
+
 export async function setTenantSecretAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

@@ -27,6 +27,7 @@ import {
   updateOpenaiVoiceAction,
   updateTenantProfilingToggleAction,
   updateTenantConfigAction,
+  updateTenantCommercialStateAction,
   updateTenantInfoAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -36,6 +37,7 @@ export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
   updateTenantProfilingToggleAction?: CrudActionHandler
   updateTenantInfoAction: CrudActionHandler
+  updateTenantCommercialStateAction: CrudActionHandler
   setTenantSecretAction: CrudActionHandler
   deleteTenantSecretAction: CrudActionHandler
   updateWebchatSettingsAction: CrudActionHandler
@@ -56,6 +58,7 @@ const defaultTenantSettingsActions: TenantSettingsActions = {
   updateTenantConfigAction,
   updateTenantProfilingToggleAction,
   updateTenantInfoAction,
+  updateTenantCommercialStateAction,
   setTenantSecretAction,
   deleteTenantSecretAction,
   updateWebchatSettingsAction,
@@ -674,6 +677,101 @@ export function TenantOrganizationInfoForm({
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />
         <SubmitButton label="Guardar datos" pendingLabel="Guardando..." />
+      </div>
+    </form>
+  )
+}
+
+type TenantCommercialPlanOption = {
+  id: string
+  code: string
+  name: string
+  active: boolean
+}
+
+export function TenantCommercialStateForm({
+  tenantId,
+  info,
+  plans,
+}: {
+  tenantId: string
+  info: TenantOrganizationInfo | null
+  plans: TenantCommercialPlanOption[]
+}) {
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTenantCommercialStateAction, INITIAL_CRUD_STATE)
+  const defaultPlanValue = info?.commercial_plan_id ?? "none"
+  const defaultAccessValue = info?.commercial_access_status ?? "internal_free"
+  const defaultBillingValue = info?.billing_status ?? "active"
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="commercial_plan_id">Plan comercial</Label>
+          <Select name="commercial_plan_id" defaultValue={defaultPlanValue}>
+            <SelectTrigger id="commercial_plan_id" className="w-full">
+              <SelectValue placeholder="Selecciona un plan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin plan</SelectItem>
+              {plans.length === 0 ? (
+                <SelectItem value="__empty" disabled>
+                  No hay planes disponibles
+                </SelectItem>
+              ) : (
+                plans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name} ({plan.code}){plan.active ? "" : " · inactivo"}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Si quitas el plan, el backend elimina la cuenta comercial asociada al tenant.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="commercial_access_status">Acceso comercial</Label>
+          <Select name="commercial_access_status" defaultValue={defaultAccessValue}>
+            <SelectTrigger id="commercial_access_status" className="w-full">
+              <SelectValue placeholder="Estado de acceso" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internal_free">Interno</SelectItem>
+              <SelectItem value="active">Activo</SelectItem>
+              <SelectItem value="grace">Gracia</SelectItem>
+              <SelectItem value="manual_review">Revisión</SelectItem>
+              <SelectItem value="blocked">Bloqueado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="billing_status">Billing status</Label>
+          <Select name="billing_status" defaultValue={defaultBillingValue}>
+            <SelectTrigger id="billing_status" className="w-full">
+              <SelectValue placeholder="Estado de cobro" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">active</SelectItem>
+              <SelectItem value="trialing">trialing</SelectItem>
+              <SelectItem value="past_due">past_due</SelectItem>
+              <SelectItem value="inactive">inactive</SelectItem>
+              <SelectItem value="canceled">canceled</SelectItem>
+              <SelectItem value="unpaid">unpaid</SelectItem>
+              <SelectItem value="incomplete">incomplete</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar estado comercial" pendingLabel="Guardando..." />
       </div>
     </form>
   )

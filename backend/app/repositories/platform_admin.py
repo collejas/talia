@@ -307,6 +307,31 @@ class PlatformRepository:
             raise PlatformRepositoryError("tenant_billing_account_create_failed")
         return data[0]
 
+    async def update_tenant_billing_account(
+        self,
+        *,
+        tenant_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"tenant_id": str(tenant_id), **payload}
+        data = await self._rest(
+            "POST",
+            "/rest/v1/tenant_billing_accounts",
+            params={"on_conflict": "tenant_id"},
+            json=body,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_billing_account_update_failed")
+        return data[0]
+
+    async def delete_tenant_billing_account(self, *, tenant_id: UUID) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/tenant_billing_accounts",
+            params={"tenant_id": f"eq.{tenant_id}"},
+        )
+
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,codigo,descripcion",

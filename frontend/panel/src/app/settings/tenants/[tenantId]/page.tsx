@@ -14,6 +14,7 @@ import {
   TenantCalendarSettings,
   TenantMailSettings,
   TenantMessengerSettings,
+  TenantCommercialStateForm,
   TenantModuleFlagsForm,
   TenantOrganizationInfoForm,
   TenantProfilingToggleForm,
@@ -41,6 +42,12 @@ type TenantConfigResponse = { ok: boolean; organizacion_id: string; config: Reco
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
 type TenantDetailResponse = { ok: boolean; tenant: TenantOrganizationInfo }
+type CommercialPlanSummary = {
+  id: string
+  code: string
+  name: string
+  active: boolean
+}
 type PlatformAdminStatusResponse = { is_platform_admin?: boolean }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -125,6 +132,10 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     organizacionId: null,
     withUserToken: true,
   })
+  const plansResp = await callCrmApi<{ ok: boolean; items: CommercialPlanSummary[] }>("/admin/commercial-plans", {
+    organizacionId: null,
+    withUserToken: true,
+  })
   const infoResp = await callCrmApi<TenantDetailResponse>(`/admin/tenants/${tenantId}`, {
     organizacionId: null,
     withUserToken: true,
@@ -138,10 +149,12 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   if (!configResp.ok) errors.push(configResp.error)
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
+  if (!plansResp.ok) errors.push(plansResp.error)
   if (!infoResp.ok) errors.push(infoResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
+  const commercialPlans = plansResp.ok ? plansResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
   const tenantInfo: TenantOrganizationInfo | null = infoResp.ok ? infoResp.data.tenant : null
   const isPlatformAdmin = Boolean(platformAdminResp.ok && platformAdminResp.data?.is_platform_admin)
@@ -318,9 +331,23 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardContent>
         </Card>
 
+        {isPlatformAdmin ? (
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle>Estado comercial</CardTitle>
+              <CardDescription>
+                Cambia el plan, el estado de acceso o el estado de cobro sin tocar los datos generales.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TenantCommercialStateForm tenantId={tenantId} info={tenantInfo} plans={commercialPlans} />
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle>Estado comercial</CardTitle>
+            <CardTitle>Resumen comercial</CardTitle>
             <CardDescription>Plan, estado de cobro y acceso que controla qué puede usar este tenant.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

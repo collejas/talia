@@ -177,3 +177,22 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Resultado
 - La consola interna ya puede ver qué plan tiene cada tenant y si su acceso está activo, en gracia, bloqueado o en revisión.
+
+---
+
+## v0.3 - Edición comercial desde el detalle del tenant
+
+### Backend
+- Se agregó el endpoint `PATCH /admin/tenants/{organizacion_id}/commercial-state`.
+- El endpoint permite:
+  - asignar o cambiar `commercial_plan_id`,
+  - modificar `commercial_access_status`,
+  - modificar `billing_status`,
+  - eliminar la cuenta comercial si el tenant se deja sin plan.
+
+### Frontend
+- Se agregó el formulario `Estado comercial` en el detalle de `settings/tenants/{tenantId}`.
+- Se reutiliza la misma capa de control para administrar plan, acceso y estado de cobro.
+
+### Resultado
+- Un `platform_admin` ya puede crear, ver y ajustar el estado comercial de un tenant desde la consola interna sin tocar Stripe para la operación manual.

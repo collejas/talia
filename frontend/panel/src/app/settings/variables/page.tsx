@@ -30,6 +30,7 @@ import * as tenantActionsLib from "./actions"
 const tenantActions: TenantSettingsActions = {
   updateTenantConfigAction: tenantActionsLib.updateTenantConfigAction,
   updateTenantInfoAction: tenantActionsLib.updateTenantInfoAction,
+  updateTenantCommercialStateAction: tenantActionsLib.updateTenantCommercialStateAction,
   setTenantSecretAction: tenantActionsLib.setTenantSecretAction,
   deleteTenantSecretAction: tenantActionsLib.deleteTenantSecretAction,
   updateWebchatSettingsAction: tenantActionsLib.updateWebchatSettingsAction,

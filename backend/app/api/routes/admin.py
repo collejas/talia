@@ -803,6 +803,14 @@ class UpdateTenantRequest(BaseModel):
     estado_onboarding: str | None = None
 
 
+class UpdateTenantCommercialStateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    commercial_plan_id: UUID | None = None
+    commercial_access_status: Literal["active", "grace", "blocked", "manual_review", "internal_free"] = "internal_free"
+    billing_status: Literal["active", "trialing", "past_due", "inactive", "canceled", "unpaid", "incomplete"] = "active"
+
+
 class ChannelRoute(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -2064,10 +2072,14 @@ async def create_tenant(
         organizacion_id=tenant_id,
     )
 
-    billing_account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
-    commercial_plan = None
-    if billing_account and billing_account.get("plan_id"):
-        commercial_plan = await repo.get_commercial_plan(plan_id=UUID(str(billing_account["plan_id"])))
+    try:
+        billing_account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
+        commercial_plan = None
+        if billing_account and billing_account.get("plan_id"):
+            commercial_plan = await repo.get_commercial_plan(plan_id=UUID(str(billing_account["plan_id"])))
+    except PlatformRepositoryError as exc:
+        await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     commercial_state = _build_single_tenant_commercial_state(
         billing_account=billing_account,
         commercial_plan=commercial_plan,
@@ -2363,6 +2375,58 @@ async def update_tenant_info(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return TenantDetailResponse(tenant=TenantBasicInfo.model_validate(row))
+
+
+@router.patch("/tenants/{organizacion_id}/commercial-state", response_model=TenantDetailResponse)
+async def update_tenant_commercial_state(
+    organizacion_id: UUID,
+    payload: UpdateTenantCommercialStateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantDetailResponse:
+    try:
+        if payload.commercial_plan_id is None:
+            await repo.delete_tenant_billing_account(tenant_id=organizacion_id)
+        else:
+            plan = await repo.get_commercial_plan(plan_id=payload.commercial_plan_id)
+            if not plan:
+                raise HTTPException(status_code=404, detail="commercial_plan_not_found")
+            if not bool(plan.get("active", False)):
+                raise HTTPException(status_code=409, detail="commercial_plan_inactive")
+            await repo.update_tenant_billing_account(
+                tenant_id=organizacion_id,
+                payload={
+                    "plan_id": str(payload.commercial_plan_id),
+                    "billing_provider": "internal",
+                    "stripe_customer_id": f"internal:{organizacion_id}",
+                    "billing_status": payload.billing_status,
+                    "access_status": payload.commercial_access_status,
+                },
+            )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        row = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+        billing_account = await repo.get_tenant_billing_account(tenant_id=organizacion_id)
+        commercial_plan = None
+        if billing_account and billing_account.get("plan_id"):
+            commercial_plan = await repo.get_commercial_plan(plan_id=UUID(str(billing_account["plan_id"])))
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+    return TenantDetailResponse(
+        tenant=TenantBasicInfo.model_validate(
+            _enrich_tenant_row_with_commercial_state(
+                row,
+                _build_single_tenant_commercial_state(
+                    billing_account=billing_account,
+                    commercial_plan=commercial_plan,
+                ),
+            )
+        )
+    )
 
 
 @router.get("/tenants/{organizacion_id}/routes", response_model=TenantRoutesResponse)
