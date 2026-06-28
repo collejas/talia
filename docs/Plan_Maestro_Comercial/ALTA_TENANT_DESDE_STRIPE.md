@@ -44,6 +44,8 @@ Cuando un usuario compra un plan, el sistema debe dejar listo el tenant con:
 
 Si esto no se modela bien, el tenant queda "a medias" y luego hay que corregirlo manualmente.
 
+En este flujo, Stripe confirma la compra, pero no confirma por si mismo que el correo capturado sea el correo correcto para recibir acceso. Por eso, el correo de acceso debe verificarse antes de enviar la invitacion.
+
 ---
 
 ## Principio de diseño
@@ -200,7 +202,13 @@ El backend valida:
 - correspondencia del customer/subscription con el tenant o con la intención de alta;
 - plan correcto.
 
-### Paso 4: creación o actualización
+### Paso 4: verificación de correo
+
+Si el alta comercial incluye un correo para crear acceso, ese correo debe verificarse primero.
+
+El correo de verificación sirve para confirmar que la persona que recibirá el acceso es quien controla esa bandeja.
+
+### Paso 5: creación o actualización
 
 El backend:
 
@@ -210,11 +218,15 @@ El backend:
 - asigna `plan_id`;
 - aplica `commercial_plan_defaults`;
 - registra evento en `tenant_billing_events`;
-- crea usuario inicial si el flujo lo requiere;
+- prepara o asocia el usuario inicial solo si el correo ya fue verificado;
 - crea roles, permisos y rutas base;
 - activa `access_status`.
 
-### Paso 5: acceso
+### Paso 6: invitación o activación
+
+Una vez verificado el correo, el sistema envía el correo de invitación o activación para crear el usuario con rol `owner`.
+
+### Paso 7: acceso
 
 La app consulta el estado resuelto por backend y decide:
 
@@ -248,6 +260,7 @@ No debe ser la única puerta de entrada del provisioning comercial.
 - No usar `config` como sustituto del plan.
 - No guardar lógica comercial central en JSON.
 - No procesar un webhook más de una vez.
+- No entregar acceso inicial hasta verificar el correo que recibirá la invitacion.
 - No bloquear rutas de billing ni de soporte básico cuando el tenant esté vencido.
 
 ---
@@ -257,7 +270,8 @@ No debe ser la única puerta de entrada del provisioning comercial.
 Para la implementación, yo lo haría en este orden:
 
 1. Completar columnas explícitas en `organizaciones`.
-2. Crear `tenant_billing_accounts`.
+2. Definir el paso de verificación de correo antes de la invitación.
+3. Crear `tenant_billing_accounts`.
 3. Crear `tenant_billing_events`.
 4. Conectar Stripe webhook al backend.
 5. Crear el flujo de aprovisionamiento de tenant.

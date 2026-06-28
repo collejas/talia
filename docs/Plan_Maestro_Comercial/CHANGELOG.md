@@ -60,10 +60,12 @@ Formato recomendado por entrada:
 ### Documentación
 - Se creó el directorio formal del plan maestro comercial.
 - Se documentó la capa comercial, de billing, tenant config y runtime en `PLAN_MAESTRO_COMERCIAL.md`.
+- Se agregó `ALINEACION_FLUJO_TENANT_USUARIO_CORREO.md` como bloque previo obligatorio para alinear alta de tenant, usuario admin y correo antes de continuar con Stripe.
 - Se agregó el documento funcional `ALTA_TENANT_DESDE_STRIPE.md` para definir el alta comercial desde Stripe.
 - Se agregó `IMPLEMENTACION_ALTA_TENANT_STRIPE.md` para separar la implementación por base de datos, backend y frontend.
 - Se agregó `MIGRACIONES_ALTA_TENANT_STRIPE.md` con migraciones exactas sugeridas para PostgreSQL/Supabase.
 - Se agregó este `README.md` como índice operativo del plan.
+- Se incorporó al plan maestro la regla de acceso inicial por correo verificado antes de enviar la invitación o activación del usuario `owner`.
 
 ### Base de datos
 - Se formalizó la regla de que la lógica comercial principal debe modelarse con tablas y columnas explícitas.

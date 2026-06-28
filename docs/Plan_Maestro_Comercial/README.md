@@ -15,6 +15,7 @@ Este directorio concentra la documentación base para la capa comercial de TalIA
 
 ## Documentos
 
+- [ALINEACION_FLUJO_TENANT_USUARIO_CORREO.md](./ALINEACION_FLUJO_TENANT_USUARIO_CORREO.md): bloque previo que se debe cerrar antes de continuar con el flujo Stripe.
 - [PLAN_MAESTRO_COMERCIAL.md](./PLAN_MAESTRO_COMERCIAL.md): visión general del plan, capas y reglas de negocio.
 - [ALTA_TENANT_DESDE_STRIPE.md](./ALTA_TENANT_DESDE_STRIPE.md): definición funcional del alta de tenant desde Stripe.
 - [IMPLEMENTACION_ALTA_TENANT_STRIPE.md](./IMPLEMENTACION_ALTA_TENANT_STRIPE.md): implementación por capas, separada en base de datos, backend y frontend.
@@ -24,10 +25,11 @@ Este directorio concentra la documentación base para la capa comercial de TalIA
 ## Orden de trabajo recomendado
 
 1. Revisar `PLAN_MAESTRO_COMERCIAL.md` para mantener la visión de negocio.
-2. Revisar `MIGRACIONES_ALTA_TENANT_STRIPE.md` antes de tocar esquema.
-3. Implementar backend de provisioning y webhook Stripe.
-4. Ajustar frontend de administración y alta manual.
-5. Registrar cada cambio relevante en `CHANGELOG.md`.
+2. Revisar `ALINEACION_FLUJO_TENANT_USUARIO_CORREO.md` y cerrar ese bloque antes de seguir con Stripe.
+3. Revisar `MIGRACIONES_ALTA_TENANT_STRIPE.md` antes de tocar esquema.
+4. Implementar backend de provisioning y webhook Stripe.
+5. Ajustar frontend de administración y alta manual.
+6. Registrar cada cambio relevante en `CHANGELOG.md`.
 
 ## Cómo registrar avances
 

@@ -435,6 +435,27 @@ Frontend refleja el estado
 
 ## Flujo de aprovisionamiento
 
+### Acceso inicial y correo
+
+El correo de acceso inicial no debe salir del mismo concepto que el billing.
+
+Regla general:
+
+- Stripe o cualquier plataforma de cobro confirma la compra, no la propiedad del correo.
+- Si ese alta comercial va a otorgar acceso a una persona concreta, primero se debe verificar el correo de acceso.
+- Solo despues de esa verificacion se debe enviar el correo de invitacion o activacion para crear el usuario con rol `owner`.
+- El correo de recuperacion de contrasena solo se usa cuando el usuario ya existe y necesita restablecer acceso.
+
+Secuencia recomendada para alta comercial:
+
+1. El cliente paga.
+2. El sistema confirma el evento comercial.
+3. El sistema envia el correo de confirmacion de correo electronico si ese correo sera usado para acceso.
+4. El usuario confirma el correo.
+5. El sistema envia la invitacion o activacion.
+6. El usuario crea su contrasena.
+7. El sistema le asigna o consolida el rol `owner` y el acceso inicial segun el provisioning.
+
 ### Al pagar
 
 1. Crear tenant si no existe.
