@@ -8,12 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import {
   archiveCommercialPlanAction,
+  archiveCommercialPlanEntitlementAction,
   archiveCommercialPlanPriceAction,
   createCommercialPlanAction,
+  createCommercialPlanEntitlementAction,
   createCommercialPlanPriceAction,
   updateCommercialPlanAction,
+  updateCommercialPlanEntitlementAction,
   updateCommercialPlanPriceAction,
 } from "./actions"
 
@@ -40,6 +44,20 @@ type CommercialPlanPrice = {
   active: boolean
 }
 
+type CommercialPlanEntitlement = {
+  id: string
+  plan_id: string
+  entitlement_key: string
+  value_type: string
+  enabled: boolean
+  limit_value?: number | null
+  value_text?: string | null
+  value_json?: unknown
+  limit_unit?: string | null
+  scope?: string | null
+  created_at: string
+}
+
 type PriceFormState = {
   planId: string
   billingProvider: string
@@ -49,6 +67,18 @@ type PriceFormState = {
   billingInterval: CommercialPlanPrice["billing_interval"]
   amountCents: string
   active: boolean
+}
+
+type EntitlementFormState = {
+  planId: string
+  entitlementKey: string
+  valueType: CommercialPlanEntitlement["value_type"]
+  enabled: boolean
+  limitValue: string
+  valueText: string
+  valueJson: string
+  limitUnit: string
+  scope: string
 }
 
 type FormState = {
@@ -62,6 +92,7 @@ type FormState = {
 type Props = {
   plans: CommercialPlan[]
   prices: CommercialPlanPrice[]
+  entitlements: CommercialPlanEntitlement[]
 }
 
 function formatMoney(amountCents: number, currency: string): string {
@@ -85,7 +116,7 @@ function priceLabel(price: CommercialPlanPrice | undefined): string {
   return `${formatMoney(price.amount_cents, price.currency)} ${intervalLabel}`.trim()
 }
 
-export function CommercialPlansManager({ plans, prices }: Props) {
+export function CommercialPlansManager({ plans, prices, entitlements }: Props) {
   const router = useRouter()
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -95,6 +126,10 @@ export function CommercialPlansManager({ plans, prices }: Props) {
   const [priceError, setPriceError] = useState<string | null>(null)
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null)
+  const [entitlementMessage, setEntitlementMessage] = useState<string | null>(null)
+  const [entitlementError, setEntitlementError] = useState<string | null>(null)
+  const [editingEntitlementId, setEditingEntitlementId] = useState<string | null>(null)
+  const [loadingEntitlementId, setLoadingEntitlementId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({
     code: "",
     name: "",
@@ -111,6 +146,17 @@ export function CommercialPlansManager({ plans, prices }: Props) {
     billingInterval: "month",
     amountCents: "0",
     active: true,
+  })
+  const [entitlementForm, setEntitlementForm] = useState<EntitlementFormState>({
+    planId: "",
+    entitlementKey: "",
+    valueType: "boolean",
+    enabled: true,
+    limitValue: "",
+    valueText: "",
+    valueJson: "",
+    limitUnit: "",
+    scope: "",
   })
 
   const priceByPlanId = useMemo(() => {
@@ -142,6 +188,15 @@ export function CommercialPlansManager({ plans, prices }: Props) {
     return map
   }, [plans])
 
+  const sortedEntitlements = useMemo(
+    () =>
+      [...entitlements].sort((a, b) => {
+        if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
+        return a.entitlement_key.localeCompare(b.entitlement_key)
+      }),
+    [entitlements],
+  )
+
   const resetForm = () => {
     setEditingPlanId(null)
     setForm({
@@ -164,6 +219,21 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       billingInterval: "month",
       amountCents: "0",
       active: true,
+    })
+  }
+
+  const resetEntitlementForm = () => {
+    setEditingEntitlementId(null)
+    setEntitlementForm({
+      planId: plans[0]?.id ?? "",
+      entitlementKey: "",
+      valueType: "boolean",
+      enabled: true,
+      limitValue: "",
+      valueText: "",
+      valueJson: "",
+      limitUnit: "",
+      scope: "",
     })
   }
 
@@ -194,6 +264,27 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       billingInterval: price.billing_interval,
       amountCents: String(price.amount_cents),
       active: price.active,
+    })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const startEditEntitlement = (entitlement: CommercialPlanEntitlement) => {
+    setEntitlementMessage(null)
+    setEntitlementError(null)
+    setEditingEntitlementId(entitlement.id)
+    setEntitlementForm({
+      planId: entitlement.plan_id,
+      entitlementKey: entitlement.entitlement_key,
+      valueType: entitlement.value_type,
+      enabled: entitlement.enabled,
+      limitValue: entitlement.limit_value === null || entitlement.limit_value === undefined ? "" : String(entitlement.limit_value),
+      valueText: entitlement.value_text ?? "",
+      valueJson:
+        entitlement.value_json === null || entitlement.value_json === undefined
+          ? ""
+          : JSON.stringify(entitlement.value_json, null, 2),
+      limitUnit: entitlement.limit_unit ?? "",
+      scope: entitlement.scope ?? "",
     })
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -321,6 +412,80 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       setPriceError(err instanceof Error ? err.message : "No se pudo desactivar el precio.")
     } finally {
       setLoadingPriceId(null)
+    }
+  }
+
+  const submitEntitlement = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setEntitlementMessage(null)
+    setEntitlementError(null)
+    const body = new FormData()
+    body.set("plan_id", entitlementForm.planId)
+    body.set("entitlement_key", entitlementForm.entitlementKey)
+    body.set("value_type", entitlementForm.valueType)
+    body.set("enabled", entitlementForm.enabled ? "true" : "false")
+    if (entitlementForm.limitValue.trim()) {
+      body.set("limit_value", entitlementForm.limitValue)
+    }
+    if (entitlementForm.valueText.trim()) {
+      body.set("value_text", entitlementForm.valueText)
+    }
+    if (entitlementForm.valueJson.trim()) {
+      body.set("value_json", entitlementForm.valueJson)
+    }
+    if (entitlementForm.limitUnit.trim()) {
+      body.set("limit_unit", entitlementForm.limitUnit)
+    }
+    if (entitlementForm.scope.trim()) {
+      body.set("scope", entitlementForm.scope)
+    }
+    if (editingEntitlementId) {
+      body.set("entitlement_id", editingEntitlementId)
+    }
+
+    setLoadingEntitlementId(editingEntitlementId ?? "new")
+    try {
+      const result = editingEntitlementId
+        ? await updateCommercialPlanEntitlementAction({ ok: true, message: "" }, body)
+        : await createCommercialPlanEntitlementAction({ ok: true, message: "" }, body)
+      if (!result.ok) {
+        setEntitlementError(result.error)
+        return
+      }
+      setEntitlementMessage(result.message)
+      resetEntitlementForm()
+      router.refresh()
+    } catch (err) {
+      setEntitlementError(err instanceof Error ? err.message : "No se pudo guardar el entitlement.")
+    } finally {
+      setLoadingEntitlementId(null)
+    }
+  }
+
+  const handleArchiveEntitlement = async (entitlementId: string) => {
+    setEntitlementMessage(null)
+    setEntitlementError(null)
+    if (!window.confirm("¿Desactivar este entitlement?")) {
+      return
+    }
+    const body = new FormData()
+    body.set("entitlement_id", entitlementId)
+    setLoadingEntitlementId(entitlementId)
+    try {
+      const result = await archiveCommercialPlanEntitlementAction(body)
+      if (!result.ok) {
+        setEntitlementError(result.error)
+        return
+      }
+      setEntitlementMessage(result.message)
+      if (editingEntitlementId === entitlementId) {
+        resetEntitlementForm()
+      }
+      router.refresh()
+    } catch (err) {
+      setEntitlementError(err instanceof Error ? err.message : "No se pudo desactivar el entitlement.")
+    } finally {
+      setLoadingEntitlementId(null)
     }
   }
 
@@ -698,6 +863,239 @@ export function CommercialPlansManager({ plans, prices }: Props) {
           </div>
           <div className="mt-4 text-sm text-muted-foreground">
             El catálogo de precios ya se administra aquí sin salir del módulo comercial.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>{editingEntitlementId ? "Editar entitlement" : "Crear entitlement"}</CardTitle>
+          <CardDescription>
+            Los entitlements definen features, límites y reglas del plan con columnas explícitas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {entitlementMessage ? (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+              {entitlementMessage}
+            </div>
+          ) : null}
+          {entitlementError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {entitlementError}
+            </div>
+          ) : null}
+          <form className="space-y-4" onSubmit={submitEntitlement}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-plan">Plan</Label>
+                <select
+                  id="commercial-plan-entitlement-plan"
+                  value={entitlementForm.planId}
+                  onChange={(event) => setEntitlementForm((prev) => ({ ...prev, planId: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Selecciona un plan</option>
+                  {sortedPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} ({plan.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-key">Llave</Label>
+                <Input
+                  id="commercial-plan-entitlement-key"
+                  value={entitlementForm.entitlementKey}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, entitlementKey: event.target.value }))
+                  }
+                  placeholder="feature.whatsapp"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-type">Tipo</Label>
+                <select
+                  id="commercial-plan-entitlement-type"
+                  value={entitlementForm.valueType}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({
+                      ...prev,
+                      valueType: event.target.value as CommercialPlanEntitlement["value_type"],
+                    }))
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="boolean">boolean</option>
+                  <option value="integer">integer</option>
+                  <option value="decimal">decimal</option>
+                  <option value="text">text</option>
+                  <option value="json">json</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-limit">Límite numérico</Label>
+                <Input
+                  id="commercial-plan-entitlement-limit"
+                  type="number"
+                  value={entitlementForm.limitValue}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, limitValue: event.target.value }))
+                  }
+                  placeholder="5"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-limit-unit">Unidad</Label>
+                <Input
+                  id="commercial-plan-entitlement-limit-unit"
+                  value={entitlementForm.limitUnit}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, limitUnit: event.target.value }))
+                  }
+                  placeholder="usuarios"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-scope">Scope</Label>
+                <Input
+                  id="commercial-plan-entitlement-scope"
+                  value={entitlementForm.scope}
+                  onChange={(event) => setEntitlementForm((prev) => ({ ...prev, scope: event.target.value }))}
+                  placeholder="global"
+                />
+              </div>
+              <div className="lg:col-span-2 space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-text">Valor texto</Label>
+                <Input
+                  id="commercial-plan-entitlement-text"
+                  value={entitlementForm.valueText}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, valueText: event.target.value }))
+                  }
+                  placeholder="true / 5 / enterprise"
+                />
+              </div>
+              <div className="lg:col-span-2 space-y-2">
+                <Label htmlFor="commercial-plan-entitlement-json">Valor JSON</Label>
+                <Textarea
+                  id="commercial-plan-entitlement-json"
+                  value={entitlementForm.valueJson}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, valueJson: event.target.value }))
+                  }
+                  placeholder='{"models":["ventas","soporte"]}'
+                />
+              </div>
+              <div className="flex items-end gap-3 rounded-lg border border-border/60 px-3 py-2">
+                <input
+                  id="commercial-plan-entitlement-enabled"
+                  type="checkbox"
+                  checked={entitlementForm.enabled}
+                  onChange={(event) =>
+                    setEntitlementForm((prev) => ({ ...prev, enabled: event.target.checked }))
+                  }
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="commercial-plan-entitlement-enabled" className="cursor-pointer">
+                  Entitlement activo
+                </Label>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={loadingEntitlementId !== null}>
+                {loadingEntitlementId === (editingEntitlementId ?? "new")
+                  ? "Guardando..."
+                  : editingEntitlementId
+                    ? "Actualizar entitlement"
+                    : "Crear entitlement"}
+              </Button>
+              {editingEntitlementId ? (
+                <Button type="button" variant="outline" onClick={resetEntitlementForm}>
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>Entitlements del catálogo</CardTitle>
+          <CardDescription>Control operativo de features y límites por plan.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-lg border border-border/60">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Llave</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="hidden lg:table-cell">Límite</TableHead>
+                  <TableHead className="hidden lg:table-cell">Texto</TableHead>
+                  <TableHead className="hidden xl:table-cell">JSON</TableHead>
+                  <TableHead className="hidden md:table-cell">Estado</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedEntitlements.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                      No hay entitlements comerciales todavía.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedEntitlements.map((entitlement) => {
+                    const isLoading = loadingEntitlementId === entitlement.id
+                    return (
+                      <TableRow key={entitlement.id}>
+                        <TableCell className="font-medium">
+                          {planNameById.get(entitlement.plan_id) ?? entitlement.plan_id}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{entitlement.entitlement_key}</TableCell>
+                        <TableCell>{entitlement.value_type}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">
+                          {entitlement.limit_value ?? "—"} {entitlement.limit_unit ?? ""}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">
+                          {entitlement.value_text ?? "—"}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell text-xs font-mono">
+                          {entitlement.value_json === null || entitlement.value_json === undefined
+                            ? "—"
+                            : JSON.stringify(entitlement.value_json)}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">
+                          {entitlement.enabled ? "Activo" : "Inactivo"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => startEditEntitlement(entitlement)}>
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={entitlement.enabled ? "destructive" : "secondary"}
+                              disabled={isLoading}
+                              onClick={() => void handleArchiveEntitlement(entitlement.id)}
+                            >
+                              {entitlement.enabled ? "Desactivar" : "Inactivo"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

@@ -163,6 +163,56 @@ class PlatformRepository:
             raise PlatformRepositoryError("commercial_plan_price_archive_failed")
         return data[0]
 
+    async def list_commercial_plan_entitlements(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,plan_id,entitlement_key,value_type,enabled,limit_value,value_text,value_json,limit_unit,scope,created_at",
+            "order": "plan_id.asc,entitlement_key.asc",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_plan_entitlements", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("commercial_plan_entitlements_invalid_response")
+        return data
+
+    async def create_commercial_plan_entitlement(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/commercial_plan_entitlements",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_entitlement_create_failed")
+        return data[0]
+
+    async def update_commercial_plan_entitlement(
+        self,
+        *,
+        entitlement_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_plan_entitlements",
+            params={"id": f"eq.{entitlement_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_entitlement_update_failed")
+        return data[0]
+
+    async def archive_commercial_plan_entitlement(self, *, entitlement_id: UUID) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_plan_entitlements",
+            params={"id": f"eq.{entitlement_id}"},
+            json={"enabled": False},
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_entitlement_archive_failed")
+        return data[0]
+
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,codigo,descripcion",

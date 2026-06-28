@@ -284,6 +284,7 @@ class CommercialPlansResponse(BaseModel):
     ok: bool = True
     items: list[CommercialPlanSummary] = Field(default_factory=list)
     prices: list[CommercialPlanPriceSummary] = Field(default_factory=list)
+    entitlements: list[CommercialPlanEntitlementSummary] = Field(default_factory=list)
 
 
 class CommercialPlanResponse(BaseModel):
@@ -413,6 +414,96 @@ class CommercialPlanPriceResponse(BaseModel):
 class CommercialPlanPricesResponse(BaseModel):
     ok: bool = True
     items: list[CommercialPlanPriceSummary] = Field(default_factory=list)
+
+
+class CommercialPlanEntitlementSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    plan_id: UUID
+    entitlement_key: str
+    value_type: str
+    enabled: bool
+    limit_value: float | None = None
+    value_text: str | None = None
+    value_json: Any | None = None
+    limit_unit: str | None = None
+    scope: str | None = None
+    created_at: datetime
+
+
+class CommercialPlanEntitlementCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID
+    entitlement_key: str = Field(..., min_length=1, max_length=128)
+    value_type: Literal["boolean", "integer", "decimal", "text", "json"]
+    enabled: bool = True
+    limit_value: float | None = None
+    value_text: str | None = None
+    value_json: Any | None = None
+    limit_unit: str | None = Field(default=None, max_length=32)
+    scope: str | None = Field(default=None, max_length=64)
+
+    @field_validator("entitlement_key", "limit_unit", "scope")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("value_text")
+    @classmethod
+    def _normalize_value_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class CommercialPlanEntitlementUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID | None = None
+    entitlement_key: str | None = Field(default=None, min_length=1, max_length=128)
+    value_type: Literal["boolean", "integer", "decimal", "text", "json"] | None = None
+    enabled: bool | None = None
+    limit_value: float | None = None
+    value_text: str | None = None
+    value_json: Any | None = None
+    limit_unit: str | None = Field(default=None, max_length=32)
+    scope: str | None = Field(default=None, max_length=64)
+
+    @field_validator("entitlement_key", "limit_unit", "scope")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("value_text")
+    @classmethod
+    def _normalize_value_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class CommercialPlanEntitlementResponse(BaseModel):
+    ok: bool = True
+    entitlement: CommercialPlanEntitlementSummary
+
+
+class CommercialPlanEntitlementsResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialPlanEntitlementSummary] = Field(default_factory=list)
 
 
 class RolePermissionsSyncRequest(BaseModel):
@@ -1449,9 +1540,11 @@ async def list_commercial_plans(
 ) -> CommercialPlansResponse:
     plans = await repo.list_commercial_plans()
     prices = await repo.list_commercial_plan_prices()
+    entitlements = await repo.list_commercial_plan_entitlements()
     return CommercialPlansResponse(
         items=[CommercialPlanSummary.model_validate(row) for row in plans],
         prices=[CommercialPlanPriceSummary.model_validate(row) for row in prices],
+        entitlements=[CommercialPlanEntitlementSummary.model_validate(row) for row in entitlements],
     )
 
 
@@ -1569,6 +1662,76 @@ async def archive_commercial_plan_price(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CommercialPlanPriceResponse(price=CommercialPlanPriceSummary.model_validate(row))
+
+
+@router.get("/commercial-plan-entitlements", response_model=CommercialPlanEntitlementsResponse)
+async def list_commercial_plan_entitlements(
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanEntitlementsResponse:
+    entitlements = await repo.list_commercial_plan_entitlements()
+    return CommercialPlanEntitlementsResponse(
+        items=[CommercialPlanEntitlementSummary.model_validate(row) for row in entitlements]
+    )
+
+
+@router.post("/commercial-plan-entitlements", response_model=CommercialPlanEntitlementResponse)
+async def create_commercial_plan_entitlement(
+    payload: CommercialPlanEntitlementCreateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanEntitlementResponse:
+    try:
+        row = await repo.create_commercial_plan_entitlement(
+            payload={
+                "plan_id": str(payload.plan_id),
+                "entitlement_key": payload.entitlement_key,
+                "value_type": payload.value_type,
+                "enabled": bool(payload.enabled),
+                "limit_value": payload.limit_value,
+                "value_text": payload.value_text,
+                "value_json": payload.value_json,
+                "limit_unit": payload.limit_unit,
+                "scope": payload.scope,
+            }
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanEntitlementResponse(entitlement=CommercialPlanEntitlementSummary.model_validate(row))
+
+
+@router.patch("/commercial-plan-entitlements/{entitlement_id}", response_model=CommercialPlanEntitlementResponse)
+async def update_commercial_plan_entitlement(
+    entitlement_id: UUID,
+    payload: CommercialPlanEntitlementUpdateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanEntitlementResponse:
+    update_payload = payload.model_dump(exclude_none=True)
+    if not update_payload:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    if "plan_id" in update_payload:
+        update_payload["plan_id"] = str(update_payload["plan_id"])
+    try:
+        row = await repo.update_commercial_plan_entitlement(entitlement_id=entitlement_id, payload=update_payload)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanEntitlementResponse(entitlement=CommercialPlanEntitlementSummary.model_validate(row))
+
+
+@router.delete("/commercial-plan-entitlements/{entitlement_id}", response_model=CommercialPlanEntitlementResponse)
+async def archive_commercial_plan_entitlement(
+    entitlement_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanEntitlementResponse:
+    try:
+        row = await repo.archive_commercial_plan_entitlement(entitlement_id=entitlement_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanEntitlementResponse(
+        entitlement=CommercialPlanEntitlementSummary.model_validate(row)
+    )
 
 
 @router.post("/tenants", response_model=CreateTenantResponse)
