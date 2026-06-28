@@ -434,6 +434,34 @@ class PlatformRepository:
             json={"processing_error": processing_error},
         )
 
+    async def create_tenant_provisioning_job(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/tenant_provisioning_jobs",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_provisioning_job_create_failed")
+        return data[0]
+
+    async def update_tenant_provisioning_job(
+        self,
+        *,
+        job_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/tenant_provisioning_jobs",
+            params={"id": f"eq.{job_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_provisioning_job_update_failed")
+        return data[0]
+
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,codigo,descripcion",

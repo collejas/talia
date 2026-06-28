@@ -7,6 +7,7 @@ import json
 import time
 from hashlib import sha256
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -81,6 +82,10 @@ async def test_stripe_webhook_updates_billing_account(monkeypatch: pytest.Monkey
         price_row={"plan_id": "11111111-1111-1111-1111-111111111111"},
     )
     app.dependency_overrides[get_platform_repo] = lambda: repo
+    monkeypatch.setattr(
+        "app.services.stripe_billing.provision_tenant_from_billing",
+        AsyncMock(return_value={"ok": True}),
+    )
 
     payload = {
         "id": "evt_test_1",
@@ -150,6 +155,10 @@ async def test_stripe_webhook_skips_duplicate_events(
         },
     )
     app.dependency_overrides[get_platform_repo] = lambda: repo
+    monkeypatch.setattr(
+        "app.services.stripe_billing.provision_tenant_from_billing",
+        AsyncMock(return_value={"ok": True}),
+    )
 
     payload = {
         "id": "evt_test_2",

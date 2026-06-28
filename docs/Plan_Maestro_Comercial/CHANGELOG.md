@@ -244,3 +244,26 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 ### Operación/Notas
 - Esta iteración deja al `platform_admin` con un flujo controlado para generar cobro y administrar billing sin salir del panel.
 - El alta manual de tenants sigue siendo posible sin Stripe, pero ahora también existe la ruta comercial para activar el cobro cuando corresponda.
+
+---
+
+## v0.6 - Aprovisionamiento automático del tenant desde billing
+
+### Backend
+- Se agregó el servicio `Billing::ProvisioningService` para aprovisionar el tenant de forma idempotente cuando Stripe ya dejó el billing en estado activo o trialing.
+- Se integró la cola de aprovisionamiento con `tenant_provisioning_jobs` para registrar inicio, cierre y errores del proceso.
+- Se aplican defaults comerciales del plan al tenant antes de completar el aprovisionamiento.
+- Se crean o aseguran:
+  - recursos de calendario,
+  - etapas de pipeline,
+  - permisos base,
+  - rol `owner`,
+  - catálogos iniciales de departamentos y puestos.
+
+### Seguridad / operación
+- El aprovisionamiento sigue sin depender del frontend.
+- El proceso sigue siendo idempotente por evento y deja rastro si falla.
+- Si el provisioning falla, el webhook marca el evento como fallido para permitir reintento controlado.
+
+### Resultado
+- Un pago válido ya puede dejar al tenant no solo cobrado, sino también listo a nivel operativo inicial para entrar a la plataforma.

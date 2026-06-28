@@ -15,6 +15,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services.tenant_provisioning import provision_tenant_from_billing
 
 logger = get_logger("app.services.stripe_billing")
 
@@ -461,6 +462,8 @@ async def process_stripe_webhook(
                 commercial_plan_price=plan_price_row,
             )
             await repo.update_tenant_billing_account(tenant_id=tenant_id, payload=billing_payload)
+            if billing_payload.get("billing_status") in {"active", "trialing"}:
+                await provision_tenant_from_billing(repo=repo, tenant_id=tenant_id, source=event_id)
 
         now_iso = datetime.now(tz=UTC).isoformat()
         await repo.mark_tenant_billing_event_processed(stripe_event_id=event_id, processed_at=now_iso)
