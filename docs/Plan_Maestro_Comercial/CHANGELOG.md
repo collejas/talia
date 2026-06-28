@@ -57,6 +57,77 @@ Formato recomendado por entrada:
 
 ## 2026-06-28
 
+### Implementacion de alineacion tenant, usuario y correo
+- Se implemento el flujo que separa verificacion de correo e invitacion de acceso para tenants.
+- Se agrego la tabla `tenant_access_invitations` para auditar el estado de confirmacion, invitacion y expiracion del acceso.
+- Se aplico la migracion `supabase/migrations/20260701_090000_tenant_access_invitations.sql` en la base remota.
+- Se confirmo en la base real que existen 5 organizaciones en total: 1 tenant maestro y 4 tenants adicionales.
+- Se verifico que los 4 tenants distintos del maestro ya tienen `owner`, por lo que no se requirio backfill historico.
+
+### Base de datos
+- Tablas creadas o modificadas:
+  - `tenant_access_invitations`
+- Columnas agregadas:
+  - `tenant_id`
+  - `email`
+  - `flow_kind`
+  - `status`
+  - `verification_token_hash`
+  - `verification_sent_at`
+  - `expires_at`
+  - `verified_at`
+  - `invited_at`
+  - `invited_user_id`
+  - `last_error`
+- Constraints y FKs:
+  - FK a `organizaciones(id)` con `ON DELETE CASCADE`
+  - unique sobre `verification_token_hash`
+  - checks para `flow_kind`, `status`, `email` y `verification_token_hash`
+- Indices:
+  - `(tenant_id, status, created_at desc)`
+  - `(email)`
+- Migracion aplicada:
+  - `supabase/migrations/20260701_090000_tenant_access_invitations.sql`
+- Notas operativas:
+  - La tabla queda como registro intermedio para el flujo Stripe y para altas manuales futuras.
+  - El tenant maestro de referencia sigue siendo `00000000-0000-0000-0000-000000000001`.
+
+### Backend
+- Servicios nuevos:
+  - `backend/app/services/tenant_access_onboarding.py`
+  - `backend/app/api/routes/public_auth.py`
+- Reglas de validacion:
+  - el correo primero se confirma;
+  - despues se envia la invitacion o activacion;
+  - el usuario inicial se consolida con rol `owner`.
+- Reglas de idempotencia:
+  - el token se guarda con hash;
+  - el estado pasa por `pending_verification`, `email_verified`, `completed`, `failed` o `expired`.
+- Integracion Stripe:
+  - el provisioning de Stripe ahora dispara la confirmacion de correo como paso previo a la invitacion.
+- Notas operativas:
+  - la confirmacion de correo usa un endpoint publico y luego el backend ejecuta la invitacion de Supabase.
+
+### Frontend
+- Vistas creadas o modificadas:
+  - `/auth/confirm-email`
+- Formularios ajustados:
+  - componente de confirmacion de correo con autoenvio del token.
+- Estados mostrados:
+  - confirmando, exito y error de verificacion.
+- Acciones de administracion:
+  - el alta manual ahora usa invitacion directa, no flujo de recovery.
+- Cambios UX/UI:
+  - el mensaje de correo quedó alineado a activacion/invitacion, no a cambio de contrasena.
+- Notas operativas:
+  - la pagina de confirmacion reenvia el token al backend sin exponer la logica comercial en el frontend.
+
+### Operacion/Notas
+- Se reviso la base real con Supabase MCP.
+- Existen 5 organizaciones en total y 4 tenants adicionales al maestro.
+- No se detectaron tenants sin `owner`.
+- No se ejecuto backfill porque no era necesario.
+
 ### Documentación
 - Se creó el directorio formal del plan maestro comercial.
 - Se documentó la capa comercial, de billing, tenant config y runtime en `PLAN_MAESTRO_COMERCIAL.md`.

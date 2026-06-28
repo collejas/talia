@@ -354,3 +354,24 @@ La implementacion queda lista cuando:
 - el frontend solo refleja estado;
 - la administracion manual sigue disponible;
 - las excepciones por tenant siguen funcionando.
+
+---
+
+## Estado de implementacion
+
+Este documento ya quedo materializado en parte importante del sistema.
+
+Implementado:
+
+- alta manual de usuarios/tenants con invitacion directa;
+- flujo de confirmacion de correo previo a la invitacion;
+- creacion de `tenant_access_invitations` como registro intermedio;
+- endpoint publico de confirmacion de correo;
+- pantalla de confirmacion en el panel;
+- provisioning Stripe alineado a confirmacion de correo + invitacion + rol `owner`.
+
+Pendiente si se desea ampliar:
+
+- unificar el mismo esquema para autoregistro publico;
+- agregar mas estados visuales en el panel;
+- extender observabilidad del flujo de onboarding comercial.

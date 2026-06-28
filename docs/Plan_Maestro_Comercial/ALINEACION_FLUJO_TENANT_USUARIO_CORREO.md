@@ -218,3 +218,24 @@ Al terminar esta etapa, el sistema debe quedar preparado para que:
 - crear el usuario admin no requiera operaciones de ajuste;
 - el correo de onboarding sea consistente con el estado real;
 - el provisioning comercial sea reutilizable y auditable.
+
+---
+
+## Estado actual
+
+Este bloque ya quedo implementado en codigo y base de datos.
+
+Se hizo lo siguiente:
+
+- se creo `tenant_access_invitations` para auditar la secuencia de acceso;
+- se agrego un flujo de confirmacion de correo previo a la invitacion;
+- se ajusto Stripe para disparar primero la verificacion de correo y luego la invitacion;
+- se corrigio el alta manual para que use invitacion directa;
+- se dejo el usuario inicial consolidado con rol `owner` sin correccion manual posterior.
+
+Resultado operativo:
+
+- Stripe sigue siendo la fuente de activacion comercial;
+- el correo se verifica antes de abrir acceso;
+- el provisioning ya no depende de correcciones manuales para llegar a `owner`;
+- el flujo manual y el flujo Stripe comparten la misma semantica.

@@ -47,3 +47,9 @@ Este directorio debe servir como fuente única de referencia para:
 - decidir qué se persiste en BD;
 - decidir cómo se bloquea o habilita acceso;
 - coordinar cambios entre backend, frontend y base de datos.
+
+Estado actual del bloque de alineacion:
+
+- ya esta implementado el flujo de confirmacion de correo + invitacion;
+- ya queda guardado el estado intermedio en `tenant_access_invitations`;
+- el alta manual y el alta por Stripe ya comparten la misma semantica de acceso inicial.
