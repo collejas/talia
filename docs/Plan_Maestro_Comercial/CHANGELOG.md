@@ -77,6 +77,20 @@ Formato recomendado por entrada:
   - `tenant_plan_overrides`
   - `tenant_provisioning_jobs` opcional
 - Se propuso extender `organizaciones` con columnas explícitas para datos generales del tenant.
+- Se creó la migración real `supabase/migrations/20280630_131500_commercial_billing_stripe.sql` con:
+  - extensión de `organizaciones`,
+  - tablas comerciales,
+  - tablas de billing,
+  - tablas de overrides,
+  - tabla opcional de provisioning,
+  - RLS y grants para `service_role`.
+- La migración quedó aplicada en la base remota.
+- Se sembraron 5 planes base y 5 precios mensuales en MXN:
+  - `starter` = $1
+  - `growth` = $2
+  - `pro` = $3
+  - `business` = $4
+  - `enterprise` = $5
 
 ### Backend
 - Se definió el flujo Stripe -> webhook -> backend -> provisioning -> acceso.
