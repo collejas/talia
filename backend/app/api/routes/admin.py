@@ -343,6 +343,78 @@ class CommercialPlanArchiveResponse(BaseModel):
     plan: CommercialPlanSummary
 
 
+class CommercialPlanPriceCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID
+    billing_provider: str = Field(default="stripe", min_length=1, max_length=32)
+    provider_product_id: str = Field(..., min_length=1, max_length=128)
+    provider_price_id: str = Field(..., min_length=1, max_length=128)
+    currency: str = Field(..., min_length=3, max_length=3)
+    billing_interval: Literal["month", "year", "one_time", "custom"]
+    amount_cents: int = Field(..., ge=0)
+    active: bool = True
+
+    @field_validator("billing_provider", "provider_product_id", "provider_price_id")
+    @classmethod
+    def _normalize_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("currency")
+    @classmethod
+    def _normalize_currency(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if len(cleaned) != 3:
+            raise ValueError("currency_invalid")
+        return cleaned
+
+
+class CommercialPlanPriceUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: UUID | None = None
+    billing_provider: str | None = Field(default=None, min_length=1, max_length=32)
+    provider_product_id: str | None = Field(default=None, min_length=1, max_length=128)
+    provider_price_id: str | None = Field(default=None, min_length=1, max_length=128)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    billing_interval: Literal["month", "year", "one_time", "custom"] | None = None
+    amount_cents: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+    @field_validator("billing_provider", "provider_product_id", "provider_price_id")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value_required")
+        return cleaned
+
+    @field_validator("currency")
+    @classmethod
+    def _normalize_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().upper()
+        if len(cleaned) != 3:
+            raise ValueError("currency_invalid")
+        return cleaned
+
+
+class CommercialPlanPriceResponse(BaseModel):
+    ok: bool = True
+    price: CommercialPlanPriceSummary
+
+
+class CommercialPlanPricesResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialPlanPriceSummary] = Field(default_factory=list)
+
+
 class RolePermissionsSyncRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1432,6 +1504,71 @@ async def archive_commercial_plan(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CommercialPlanArchiveResponse(plan=CommercialPlanSummary.model_validate(row))
+
+
+@router.get("/commercial-plan-prices", response_model=CommercialPlanPricesResponse)
+async def list_commercial_plan_prices(
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanPricesResponse:
+    prices = await repo.list_commercial_plan_prices()
+    return CommercialPlanPricesResponse(items=[CommercialPlanPriceSummary.model_validate(row) for row in prices])
+
+
+@router.post("/commercial-plan-prices", response_model=CommercialPlanPriceResponse)
+async def create_commercial_plan_price(
+    payload: CommercialPlanPriceCreateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanPriceResponse:
+    try:
+        row = await repo.create_commercial_plan_price(
+            payload={
+                "plan_id": str(payload.plan_id),
+                "billing_provider": payload.billing_provider,
+                "provider_product_id": payload.provider_product_id,
+                "provider_price_id": payload.provider_price_id,
+                "currency": payload.currency,
+                "billing_interval": payload.billing_interval,
+                "amount_cents": int(payload.amount_cents),
+                "active": bool(payload.active),
+            }
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanPriceResponse(price=CommercialPlanPriceSummary.model_validate(row))
+
+
+@router.patch("/commercial-plan-prices/{price_id}", response_model=CommercialPlanPriceResponse)
+async def update_commercial_plan_price(
+    price_id: UUID,
+    payload: CommercialPlanPriceUpdateRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanPriceResponse:
+    update_payload = payload.model_dump(exclude_none=True)
+    if not update_payload:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    if "plan_id" in update_payload:
+        update_payload["plan_id"] = str(update_payload["plan_id"])
+    try:
+        row = await repo.update_commercial_plan_price(price_id=price_id, payload=update_payload)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanPriceResponse(price=CommercialPlanPriceSummary.model_validate(row))
+
+
+@router.delete("/commercial-plan-prices/{price_id}", response_model=CommercialPlanPriceResponse)
+async def archive_commercial_plan_price(
+    price_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialPlanPriceResponse:
+    try:
+        row = await repo.archive_commercial_plan_price(price_id=price_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialPlanPriceResponse(price=CommercialPlanPriceSummary.model_validate(row))
 
 
 @router.post("/tenants", response_model=CreateTenantResponse)

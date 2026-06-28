@@ -101,16 +101,17 @@ Formato recomendado por entrada:
 - Se definió el flujo Stripe -> webhook -> backend -> provisioning -> acceso.
 - Se dejó claro que la activación no debe depender del frontend.
 - Se establecieron reglas de idempotencia y validación de firma para webhooks.
+- Se expusieron endpoints administrativos para CRUD de `commercial_plans` y `commercial_plan_prices` con protección de `platform admin`.
 
 ### Frontend
 - Se definió que `settings/tenants` sigue siendo consola de administración interna, no fuente única de alta comercial.
 - Se recomendó mostrar datos generales, plan, billing status y access status en la ficha de tenant.
-- Se agregó el módulo de `Planes comerciales` en `settings/commercial-plans` para administrar el catálogo de plataforma desde el panel.
+- Se agregó el módulo de `Planes comerciales` en `settings/commercial-plans` para administrar planes y precios comerciales desde el panel.
 
 ### Operación/Notas
 - El plan queda listo para pasar de documentación a migraciones reales y endpoints de provisioning.
 - El siguiente paso natural es implementar primero el esquema de BD y después el webhook de Stripe.
-- El CRUD de planes ya quedó disponible para `platform admin` con alta, edición y desactivación lógica.
+- El CRUD de planes y precios ya quedó disponible para `platform admin` con alta, edición y desactivación lógica.
 
 ---
 

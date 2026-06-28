@@ -123,6 +123,46 @@ class PlatformRepository:
             raise PlatformRepositoryError("commercial_plan_prices_invalid_response")
         return data
 
+    async def create_commercial_plan_price(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/commercial_plan_prices",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_price_create_failed")
+        return data[0]
+
+    async def update_commercial_plan_price(
+        self,
+        *,
+        price_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_plan_prices",
+            params={"id": f"eq.{price_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_price_update_failed")
+        return data[0]
+
+    async def archive_commercial_plan_price(self, *, price_id: UUID) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_plan_prices",
+            params={"id": f"eq.{price_id}"},
+            json={"active": False},
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_plan_price_archive_failed")
+        return data[0]
+
     async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,codigo,descripcion",

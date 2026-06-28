@@ -2,14 +2,20 @@
 
 import { FormEvent, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { archiveCommercialPlanAction, createCommercialPlanAction, updateCommercialPlanAction } from "./actions"
+import {
+  archiveCommercialPlanAction,
+  archiveCommercialPlanPriceAction,
+  createCommercialPlanAction,
+  createCommercialPlanPriceAction,
+  updateCommercialPlanAction,
+  updateCommercialPlanPriceAction,
+} from "./actions"
 
 type CommercialPlan = {
   id: string
@@ -31,6 +37,17 @@ type CommercialPlanPrice = {
   currency: string
   billing_interval: string
   amount_cents: number
+  active: boolean
+}
+
+type PriceFormState = {
+  planId: string
+  billingProvider: string
+  providerProductId: string
+  providerPriceId: string
+  currency: string
+  billingInterval: CommercialPlanPrice["billing_interval"]
+  amountCents: string
   active: boolean
 }
 
@@ -74,11 +91,25 @@ export function CommercialPlansManager({ plans, prices }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null)
+  const [priceMessage, setPriceMessage] = useState<string | null>(null)
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
+  const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({
     code: "",
     name: "",
     description: "",
     sortOrder: "0",
+    active: true,
+  })
+  const [priceForm, setPriceForm] = useState<PriceFormState>({
+    planId: "",
+    billingProvider: "stripe",
+    providerProductId: "",
+    providerPriceId: "",
+    currency: "MXN",
+    billingInterval: "month",
+    amountCents: "0",
     active: true,
   })
 
@@ -92,6 +123,24 @@ export function CommercialPlansManager({ plans, prices }: Props) {
   }, [prices])
 
   const sortedPlans = useMemo(() => [...plans].sort((a, b) => a.sort_order - b.sort_order), [plans])
+  const sortedPrices = useMemo(
+    () =>
+      [...prices].sort((a, b) => {
+        if (a.active !== b.active) return a.active ? -1 : 1
+        if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
+        if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents
+        return a.provider_price_id.localeCompare(b.provider_price_id)
+      }),
+    [prices],
+  )
+
+  const planNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const plan of plans) {
+      map.set(plan.id, `${plan.name} (${plan.code})`)
+    }
+    return map
+  }, [plans])
 
   const resetForm = () => {
     setEditingPlanId(null)
@@ -100,6 +149,20 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       name: "",
       description: "",
       sortOrder: "0",
+      active: true,
+    })
+  }
+
+  const resetPriceForm = () => {
+    setEditingPriceId(null)
+    setPriceForm({
+      planId: plans[0]?.id ?? "",
+      billingProvider: "stripe",
+      providerProductId: "",
+      providerPriceId: "",
+      currency: "MXN",
+      billingInterval: "month",
+      amountCents: "0",
       active: true,
     })
   }
@@ -114,6 +177,23 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       description: plan.description ?? "",
       sortOrder: String(plan.sort_order ?? 0),
       active: plan.active,
+    })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const startEditPrice = (price: CommercialPlanPrice) => {
+    setPriceMessage(null)
+    setPriceError(null)
+    setEditingPriceId(price.id)
+    setPriceForm({
+      planId: price.plan_id,
+      billingProvider: price.billing_provider,
+      providerProductId: price.provider_product_id,
+      providerPriceId: price.provider_price_id,
+      currency: price.currency,
+      billingInterval: price.billing_interval,
+      amountCents: String(price.amount_cents),
+      active: price.active,
     })
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -154,6 +234,42 @@ export function CommercialPlansManager({ plans, prices }: Props) {
     }
   }
 
+  const submitPrice = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPriceMessage(null)
+    setPriceError(null)
+    const body = new FormData()
+    body.set("plan_id", priceForm.planId)
+    body.set("billing_provider", priceForm.billingProvider)
+    body.set("provider_product_id", priceForm.providerProductId)
+    body.set("provider_price_id", priceForm.providerPriceId)
+    body.set("currency", priceForm.currency)
+    body.set("billing_interval", priceForm.billingInterval)
+    body.set("amount_cents", priceForm.amountCents)
+    body.set("active", priceForm.active ? "true" : "false")
+    if (editingPriceId) {
+      body.set("price_id", editingPriceId)
+    }
+
+    setLoadingPriceId(editingPriceId ?? "new")
+    try {
+      const result = editingPriceId
+        ? await updateCommercialPlanPriceAction({ ok: true, message: "" }, body)
+        : await createCommercialPlanPriceAction({ ok: true, message: "" }, body)
+      if (!result.ok) {
+        setPriceError(result.error)
+        return
+      }
+      setPriceMessage(result.message)
+      resetPriceForm()
+      router.refresh()
+    } catch (err) {
+      setPriceError(err instanceof Error ? err.message : "No se pudo guardar el precio.")
+    } finally {
+      setLoadingPriceId(null)
+    }
+  }
+
   const handleArchive = async (planId: string) => {
     setMessage(null)
     setError(null)
@@ -178,6 +294,33 @@ export function CommercialPlansManager({ plans, prices }: Props) {
       setError(err instanceof Error ? err.message : "No se pudo desactivar el plan.")
     } finally {
       setLoadingPlanId(null)
+    }
+  }
+
+  const handleArchivePrice = async (priceId: string) => {
+    setPriceMessage(null)
+    setPriceError(null)
+    if (!window.confirm("¿Desactivar este precio comercial?")) {
+      return
+    }
+    const body = new FormData()
+    body.set("price_id", priceId)
+    setLoadingPriceId(priceId)
+    try {
+      const result = await archiveCommercialPlanPriceAction(body)
+      if (!result.ok) {
+        setPriceError(result.error)
+        return
+      }
+      setPriceMessage(result.message)
+      if (editingPriceId === priceId) {
+        resetPriceForm()
+      }
+      router.refresh()
+    } catch (err) {
+      setPriceError(err instanceof Error ? err.message : "No se pudo desactivar el precio.")
+    } finally {
+      setLoadingPriceId(null)
     }
   }
 
@@ -350,8 +493,152 @@ export function CommercialPlansManager({ plans, prices }: Props) {
 
       <Card>
         <CardHeader className="space-y-1">
-          <CardTitle>Precios activos</CardTitle>
-          <CardDescription>Lectura operativa del catálogo de precios sembrado en la base.</CardDescription>
+          <CardTitle>{editingPriceId ? "Editar precio comercial" : "Crear precio comercial"}</CardTitle>
+          <CardDescription>
+            Cada plan puede tener varios precios por moneda o intervalo. Los precios son catálogo de cobro, no
+            configuración por tenant.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {priceMessage ? (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+              {priceMessage}
+            </div>
+          ) : null}
+          {priceError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {priceError}
+            </div>
+          ) : null}
+          <form className="space-y-4" onSubmit={submitPrice}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-plan">Plan</Label>
+                <select
+                  id="commercial-plan-price-plan"
+                  value={priceForm.planId}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, planId: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Selecciona un plan</option>
+                  {sortedPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} ({plan.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-provider">Proveedor</Label>
+                <Input
+                  id="commercial-plan-price-provider"
+                  value={priceForm.billingProvider}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, billingProvider: event.target.value }))}
+                  placeholder="stripe"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-product">Product ID</Label>
+                <Input
+                  id="commercial-plan-price-product"
+                  value={priceForm.providerProductId}
+                  onChange={(event) =>
+                    setPriceForm((prev) => ({ ...prev, providerProductId: event.target.value }))
+                  }
+                  placeholder="prod_xxx"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-price">Price ID</Label>
+                <Input
+                  id="commercial-plan-price-price"
+                  value={priceForm.providerPriceId}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, providerPriceId: event.target.value }))}
+                  placeholder="price_xxx"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-currency">Moneda</Label>
+                <Input
+                  id="commercial-plan-price-currency"
+                  value={priceForm.currency}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, currency: event.target.value }))}
+                  placeholder="MXN"
+                  maxLength={3}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-interval">Intervalo</Label>
+                <select
+                  id="commercial-plan-price-interval"
+                  value={priceForm.billingInterval}
+                  onChange={(event) =>
+                    setPriceForm((prev) => ({
+                      ...prev,
+                      billingInterval: event.target.value as CommercialPlanPrice["billing_interval"],
+                    }))
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="month">month</option>
+                  <option value="year">year</option>
+                  <option value="one_time">one_time</option>
+                  <option value="custom">custom</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-price-amount">Monto en centavos</Label>
+                <Input
+                  id="commercial-plan-price-amount"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={priceForm.amountCents}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, amountCents: event.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex items-end gap-3 rounded-lg border border-border/60 px-3 py-2">
+                <input
+                  id="commercial-plan-price-active"
+                  type="checkbox"
+                  checked={priceForm.active}
+                  onChange={(event) => setPriceForm((prev) => ({ ...prev, active: event.target.checked }))}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="commercial-plan-price-active" className="cursor-pointer">
+                  Precio activo
+                </Label>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={loadingPriceId !== null}>
+                {loadingPriceId === (editingPriceId ?? "new")
+                  ? "Guardando..."
+                  : editingPriceId
+                    ? "Actualizar precio"
+                    : "Crear precio"}
+              </Button>
+              {editingPriceId ? (
+                <Button type="button" variant="outline" onClick={resetPriceForm}>
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>Precios del catálogo</CardTitle>
+          <CardDescription>Se muestran todos los precios con estado activo o inactivo.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-lg border border-border/60">
@@ -359,47 +646,58 @@ export function CommercialPlansManager({ plans, prices }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Plan</TableHead>
+                  <TableHead className="hidden lg:table-cell">Proveedor</TableHead>
                   <TableHead>Price ID</TableHead>
                   <TableHead>Producto</TableHead>
                   <TableHead>Precio</TableHead>
                   <TableHead>Intervalo</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead className="hidden md:table-cell">Estado</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {prices.filter((price) => price.active).length === 0 ? (
+                {sortedPrices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                      No hay precios activos.
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                      No hay precios comerciales todavía.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  prices
-                    .filter((price) => price.active)
-                    .map((price) => {
-                      const plan = plans.find((item) => item.id === price.plan_id)
-                      return (
-                        <TableRow key={price.id}>
-                          <TableCell className="font-medium">{plan?.name ?? price.plan_id}</TableCell>
-                          <TableCell className="font-mono text-xs">{price.provider_price_id}</TableCell>
-                          <TableCell className="font-mono text-xs">{price.provider_product_id}</TableCell>
-                          <TableCell>{formatMoney(price.amount_cents, price.currency)}</TableCell>
-                          <TableCell>{price.billing_interval}</TableCell>
-                          <TableCell>{price.active ? "Activo" : "Inactivo"}</TableCell>
-                        </TableRow>
-                      )
-                    })
+                  sortedPrices.map((price) => {
+                    const isLoading = loadingPriceId === price.id
+                    return (
+                      <TableRow key={price.id}>
+                        <TableCell className="font-medium">{planNameById.get(price.plan_id) ?? price.plan_id}</TableCell>
+                        <TableCell className="hidden lg:table-cell font-mono text-xs">{price.billing_provider}</TableCell>
+                        <TableCell className="font-mono text-xs">{price.provider_price_id}</TableCell>
+                        <TableCell className="font-mono text-xs">{price.provider_product_id}</TableCell>
+                        <TableCell>{formatMoney(price.amount_cents, price.currency)}</TableCell>
+                        <TableCell>{price.billing_interval}</TableCell>
+                        <TableCell className="hidden md:table-cell">{price.active ? "Activo" : "Inactivo"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => startEditPrice(price)}>
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={price.active ? "destructive" : "secondary"}
+                              disabled={isLoading}
+                              onClick={() => void handleArchivePrice(price.id)}
+                            >
+                              {price.active ? "Desactivar" : "Inactivo"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
           <div className="mt-4 text-sm text-muted-foreground">
-            Los precios se muestran solo en lectura por ahora. Si quieres administrar precios por moneda o intervalo,
-            se agrega después como CRUD separado en
-            <Link href="/settings/commercial-plans" className="ml-1 underline underline-offset-4">
-              este mismo módulo
-            </Link>
-            .
+            El catálogo de precios ya se administra aquí sin salir del módulo comercial.
           </div>
         </CardContent>
       </Card>
