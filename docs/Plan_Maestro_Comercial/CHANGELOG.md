@@ -267,3 +267,22 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Resultado
 - Un pago válido ya puede dejar al tenant no solo cobrado, sino también listo a nivel operativo inicial para entrar a la plataforma.
+
+---
+
+## v0.7 - Alta pública de tenant con checkout Stripe
+
+### Backend
+- Se agregó la ruta pública `GET /public/billing/commercial-plans` para listar planes activos y sus precios activos de Stripe.
+- Se agregó la ruta pública `POST /public/billing/checkout` para crear un tenant nuevo, crear su customer Stripe y abrir el checkout.
+- El alta pública usa columnas explícitas de `organizaciones` para datos generales del cliente.
+- El tenant se crea en estado inactivo hasta que el webhook Stripe confirme el cobro.
+- Se deja creada la cuenta de billing con estado `incomplete` para mantener trazabilidad desde el primer paso.
+
+### Seguridad / operación
+- El flujo público no depende del frontend para decidir precios ni estado comercial.
+- El price de Stripe se valida desde la tabla comercial antes de generar checkout.
+- Si falla la creación del checkout, el tenant creado se elimina como rollback best-effort.
+
+### Resultado
+- Ya existe el flujo base para que un usuario elija un plan, pague en Stripe y deje al sistema listo para activar el tenant automáticamente cuando el webhook confirme la compra.
