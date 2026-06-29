@@ -13,6 +13,18 @@ La narrativa central del sitio debe ser esta:
 
 > TalIA te ayuda a conseguir prospectos, atenderlos por WhatsApp con IA y darles seguimiento en un CRM hasta convertirlos en ventas.
 
+## Estado actual del refactor
+
+Ya se aplicaron estas decisiones en la landing:
+
+- La `home` sigue siendo la pieza comercial principal y ya no debe llenarse con texto repetido de soporte interno.
+- La vista `que-es-talia` quedó como página pilar con hero directo, secciones cortas y un bloque de tipos de negocio en formato compacto.
+- La vista `crm-con-ia-para-whatsapp` quedó como página pilar técnica/comercial con textos propios, hero más claro y sin duplicar el contenido de `Qué es TalIA`.
+- Las páginas internas ya no deben depender de una sola estructura larga para todas las vistas.
+- El branding visible ya migró a `Tal-IA` en las vistas y metadatos ajustados manualmente.
+- El `site.webmanifest` y el generador SEO ya quedaron alineados con `Tal-IA` como nombre visible.
+- Los CTA flotantes se mantienen como accesos rápidos a webchat y WhatsApp, con WhatsApp al lado derecho inferior.
+
 ## Problema actual
 
 Hoy el sitio intenta hacer demasiadas tareas al mismo tiempo:

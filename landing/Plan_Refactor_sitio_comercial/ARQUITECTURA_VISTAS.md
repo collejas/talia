@@ -182,3 +182,12 @@ El refactor estará bien hecho si:
 - El sitio deja de depender de una sola plantilla larga.
 - El usuario no necesita leer demasiado para entender qué ofrece TalIA.
 
+## Implementación ya aplicada
+
+Durante el refactor ya se fijaron estas decisiones prácticas:
+
+- `que-es-talia` dejó de depender de bloques largos repetidos y ahora usa un hero más directo con secciones breves.
+- `crm-con-ia-para-whatsapp` tiene una estructura propia y ya no replica la misma narrativa de `Qué es TalIA`.
+- Las páginas internas deben variar en composición visual cuando la intención cambia.
+- El contenido interno de apoyo no debe invadir la jerarquía del hero.
+- La versión visible de la marca en páginas y metadatos se está normalizando a `Tal-IA`.
