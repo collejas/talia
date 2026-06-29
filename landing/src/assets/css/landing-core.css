@@ -691,6 +691,10 @@ a {
     display: block;
   }
 
+  .stat-strip {
+    grid-template-columns: 1fr;
+  }
+
   .hero__aside {
     margin-top: 16px;
   }
