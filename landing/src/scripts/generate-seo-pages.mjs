@@ -66,19 +66,16 @@ const sectionGroups = {
 
 const sectionPages = {
   funciones: [
-    { href: "/que-es-talia", label: "Qué es TalIA" },
     { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
     { href: "/asistente-ia-empresas", label: "Asistente IA para empresas" },
-    { href: "/caracteristicas", label: "Características" },
-    { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
-    { href: "/ia-para-ventas", label: "IA para ventas" },
-    { href: "/automatizacion-de-ventas", label: "Automatización de ventas" },
+    { href: "/automatizacion-de-ventas", label: "Automatización de procesos" },
     { href: "/seguimiento-ventas", label: "Seguimiento de ventas" },
-    { href: "/agenda-y-cotizaciones", label: "Agenda y cotizaciones" },
-    { href: "/prospeccion-comercial", label: "Prospección comercial" },
-    { href: "/buscar-contactos", label: "Buscar contactos" },
-    { href: "/prospectos-google-denue", label: "Prospectos Google y DENUE" },
-    { href: "/campanas-marketing", label: "Campañas y marketing" },
+    { href: "/ia-para-ventas", label: "Ventas e inventarios" },
+    { href: "/agenda-y-cotizaciones", label: "Agendas, cotizaciones, notas, tareas" },
+    { href: "/buscar-contactos", label: "Buscar contactos Web/Google/Gov-MX" },
+    { href: "/campanas-marketing", label: "Campañas de Email - WhatsApp" },
+    { href: "/industrias/inmobiliarias", label: "Gestión Inmobiliaria" },
+    { href: "/caracteristicas", label: "Métricas" },
   ],
   industrias: [
     { href: "/industrias", label: "Ver industrias" },
@@ -117,19 +114,16 @@ const navGroups = [
   {
     label: "Funciones",
     links: [
-      { href: "/que-es-talia", label: "Qué es TalIA" },
       { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
       { href: "/asistente-ia-empresas", label: "Asistente IA para empresas" },
-      { href: "/caracteristicas", label: "Características" },
-      { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
-      { href: "/ia-para-ventas", label: "IA para ventas" },
-      { href: "/automatizacion-de-ventas", label: "Automatización de ventas" },
+      { href: "/automatizacion-de-ventas", label: "Automatización de procesos" },
       { href: "/seguimiento-ventas", label: "Seguimiento de ventas" },
-      { href: "/agenda-y-cotizaciones", label: "Agenda y cotizaciones" },
-      { href: "/prospeccion-comercial", label: "Prospección comercial" },
-      { href: "/buscar-contactos", label: "Buscar contactos" },
-      { href: "/prospectos-google-denue", label: "Prospectos Google y DENUE" },
-      { href: "/campanas-marketing", label: "Campañas y marketing" },
+      { href: "/ia-para-ventas", label: "Ventas e inventarios" },
+      { href: "/agenda-y-cotizaciones", label: "Agendas, cotizaciones, notas, tareas" },
+      { href: "/buscar-contactos", label: "Buscar contactos Web/Google/Gov-MX" },
+      { href: "/campanas-marketing", label: "Campañas de Email - WhatsApp" },
+      { href: "/industrias/inmobiliarias", label: "Gestión Inmobiliaria" },
+      { href: "/caracteristicas", label: "Métricas" },
     ],
   },
   {
@@ -1133,15 +1127,15 @@ function renderNav(page, depth = 0) {
         <summary>Funciones</summary>
         <div class="nav-dropdown">
           <a href="${homeHref}crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="${homeHref}ia-de-whatsapp">IA de WhatsApp</a>
-          <a href="${homeHref}ia-para-ventas">IA para ventas</a>
-          <a href="${homeHref}automatizacion-de-ventas">Automatización de ventas</a>
+          <a href="${homeHref}asistente-ia-empresas">Asistente IA para empresas</a>
+          <a href="${homeHref}automatizacion-de-ventas">Automatización de procesos</a>
           <a href="${homeHref}seguimiento-ventas">Seguimiento de ventas</a>
-          <a href="${homeHref}agenda-y-cotizaciones">Agenda y cotizaciones</a>
-          <a href="${homeHref}prospeccion-comercial">Prospección comercial</a>
-          <a href="${homeHref}buscar-contactos">Buscar contactos</a>
-          <a href="${homeHref}prospectos-google-denue">Prospectos Google y DENUE</a>
-          <a href="${homeHref}campanas-marketing">Campañas y marketing</a>
+          <a href="${homeHref}ia-para-ventas">Ventas e inventarios</a>
+          <a href="${homeHref}agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
+          <a href="${homeHref}buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
+          <a href="${homeHref}campanas-marketing">Campañas de Email - WhatsApp</a>
+          <a href="${homeHref}industrias/inmobiliarias">Gestión Inmobiliaria</a>
+          <a href="${homeHref}caracteristicas">Métricas</a>
         </div>
       </details>
 
@@ -1175,15 +1169,15 @@ function renderNav(page, depth = 0) {
         <div class="nav-mobile-menu__group">
           <div class="nav-mobile-menu__label">Funciones</div>
           <a href="${homeHref}crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="${homeHref}ia-de-whatsapp">IA de WhatsApp</a>
-          <a href="${homeHref}ia-para-ventas">IA para ventas</a>
-          <a href="${homeHref}automatizacion-de-ventas">Automatización de ventas</a>
+          <a href="${homeHref}asistente-ia-empresas">Asistente IA para empresas</a>
+          <a href="${homeHref}automatizacion-de-ventas">Automatización de procesos</a>
           <a href="${homeHref}seguimiento-ventas">Seguimiento de ventas</a>
-          <a href="${homeHref}agenda-y-cotizaciones">Agenda y cotizaciones</a>
-          <a href="${homeHref}prospeccion-comercial">Prospección comercial</a>
-          <a href="${homeHref}buscar-contactos">Buscar contactos</a>
-          <a href="${homeHref}prospectos-google-denue">Prospectos Google y DENUE</a>
-          <a href="${homeHref}campanas-marketing">Campañas y marketing</a>
+          <a href="${homeHref}ia-para-ventas">Ventas e inventarios</a>
+          <a href="${homeHref}agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
+          <a href="${homeHref}buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
+          <a href="${homeHref}campanas-marketing">Campañas de Email - WhatsApp</a>
+          <a href="${homeHref}industrias/inmobiliarias">Gestión Inmobiliaria</a>
+          <a href="${homeHref}caracteristicas">Métricas</a>
         </div>
 
         <div class="nav-mobile-menu__group">
