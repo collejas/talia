@@ -25,6 +25,36 @@ Ya se aplicaron estas decisiones en la landing:
 - El `site.webmanifest` y el generador SEO ya quedaron alineados con `Tal-IA` como nombre visible.
 - Los CTA flotantes se mantienen como accesos rápidos a webchat y WhatsApp, con WhatsApp al lado derecho inferior.
 
+### Avance por vista
+
+#### Ya refactorizadas
+
+- `inicio`
+- `que-es-talia`
+- `crm-con-ia-para-whatsapp`
+- `caracteristicas`
+- `precios`
+
+#### Ya alineadas a nivel base
+
+- `site.webmanifest`
+- `generate-seo-pages.mjs`
+- CTA flotantes de webchat y WhatsApp
+
+#### Pendientes de refactor visual y de copy
+
+- `asistente-ia-empresas`
+- `ia-de-whatsapp`
+- `ia-para-ventas`
+- `automatizacion-de-ventas`
+- `seguimiento-ventas`
+- `agenda-y-cotizaciones`
+- `prospeccion-comercial`
+- `buscar-contactos`
+- `prospectos-google-denue`
+- `campanas-marketing`
+- `industrias/*`
+
 ## Problema actual
 
 Hoy el sitio intenta hacer demasiadas tareas al mismo tiempo:

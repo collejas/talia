@@ -191,3 +191,27 @@ Durante el refactor ya se fijaron estas decisiones prácticas:
 - Las páginas internas deben variar en composición visual cuando la intención cambia.
 - El contenido interno de apoyo no debe invadir la jerarquía del hero.
 - La versión visible de la marca en páginas y metadatos se está normalizando a `Tal-IA`.
+
+## Estado por vista
+
+### Ya adaptadas
+
+- `inicio`
+- `que-es-talia`
+- `crm-con-ia-para-whatsapp`
+- `caracteristicas`
+- `precios`
+
+### Siguientes candidatas
+
+- `asistente-ia-empresas`
+- `ia-de-whatsapp`
+- `ia-para-ventas`
+- `automatizacion-de-ventas`
+- `seguimiento-ventas`
+- `agenda-y-cotizaciones`
+- `prospeccion-comercial`
+- `buscar-contactos`
+- `prospectos-google-denue`
+- `campanas-marketing`
+- `industrias/*`
