@@ -129,6 +129,23 @@ Precios
 - `Características` resume sin volver a contar toda la historia.
 - `Precios` cierra la decisión.
 
+### Mapa de funciones
+
+La nomenclatura comercial del botón `Funciones` manda sobre el nombre técnico del archivo o URL.
+
+| Menú / función | Vista actual o estado |
+|---|---|
+| CRM con IA para WhatsApp | `/crm-con-ia-para-whatsapp` |
+| Asistente IA para empresas | `/asistente-ia-empresas` |
+| Automatización de procesos | Pendiente de ajustar vista y slug |
+| Seguimiento de ventas | `/seguimiento-ventas` |
+| Ventas e inventarios | Pendiente de ajustar vista y slug |
+| Agendas, cotizaciones, notas y tareas | `/agenda-y-cotizaciones` |
+| Buscar contactos Web / Google / Gov-MX | `/buscar-contactos` + `/prospectos-google-denue` |
+| Campañas de Email / WhatsApp | `/campanas-marketing` |
+| Gestión inmobiliaria | `/industrias/inmobiliarias` |
+| Métricas | Pendiente de ajustar vista y slug |
+
 ## Estructura ideal de la home
 
 ### 1. Hero directo
@@ -159,11 +176,16 @@ El flujo debe leerse en pasos, no como lista técnica:
 
 Aquí se explica qué trae TalIA, pero siempre como beneficio:
 
-- IA para WhatsApp.
-- CRM de ventas.
-- Prospección de contactos.
-- Agenda y cotizaciones.
-- Campañas y seguimiento.
+- CRM con IA para WhatsApp.
+- Asistente IA para empresas.
+- Automatización de procesos.
+- Seguimiento de ventas.
+- Ventas e inventarios.
+- Agendas, cotizaciones, notas y tareas.
+- Buscar contactos Web / Google / Gov-MX.
+- Campañas de Email / WhatsApp.
+- Gestión inmobiliaria.
+- Métricas.
 
 ### 5. Casos de uso
 
@@ -259,18 +281,26 @@ Esta es la URL más fuerte para intención comercial porque junta:
 
 ### Funciones
 
-- IA de WhatsApp
-- IA para ventas
-- Automatización de ventas
+- CRM con IA para WhatsApp
+- Asistente IA para empresas
+- Automatización de procesos
 - Seguimiento de ventas
-- Agenda y cotizaciones
+- Ventas e inventarios
+- Agendas, cotizaciones, notas y tareas
+- Buscar contactos Web / Google / Gov-MX
+- Campañas de Email / WhatsApp
+- Gestión inmobiliaria
+- Métricas
 
 ### Casos de uso
 
-- Prospección comercial
-- Buscar contactos
-- Prospectos Google y DENUE
-- Campañas y marketing
+- Conseguir prospectos
+- Responder más rápido
+- Automatizar seguimiento
+- Organizar ventas
+- Agendar citas
+- Cotizar más rápido
+- Recuperar leads fríos
 
 ### Industrias
 

@@ -76,7 +76,7 @@ Función:
 Ejemplos:
 
 - `Seguimiento de ventas`
-- `Automatización de ventas`
+- `Automatización de procesos`
 - `Agendas, cotizaciones, notas y tareas`
 
 Características:
