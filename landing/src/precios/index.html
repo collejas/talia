@@ -25,73 +25,94 @@
 </head>
 <body>
   <main class="page-shell">
-    <header class="site-header">
-      <div class="site-header__inner">
-        <a class="brand" href="/" aria-label="TalIA">
-          <img src="/Logo8.svg" alt="" aria-hidden="true" />
-          <span>Tal-IA</span>
-        </a>
-        <nav class="nav" aria-label="Navegación principal">
-          <a class="nav__link" href="/">Inicio</a>
-          <a class="nav__link" href="/que-es-talia">Qué es TalIA</a>
-          <details class="nav__group">
-            <summary class="nav__button">Funciones</summary>
-            <div class="dropdown">
-              <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-              <a href="/ia-de-whatsapp">IA de WhatsApp</a>
-              <a href="/ia-para-ventas">IA para ventas</a>
-              <a href="/seguimiento-ventas">Seguimiento de ventas</a>
-              <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-            </div>
-          </details>
-          <details class="nav__group">
-            <summary class="nav__button">Industrias</summary>
-            <div class="dropdown">
-              <a href="/industrias">Ver industrias</a>
-              <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-              <a href="/industrias/servicios">Servicios</a>
-              <a href="/industrias/negocios-locales">Negocios locales</a>
-              <a href="/industrias/ventas-b2b">Ventas B2B</a>
-              <a href="/industrias/turismo">Turismo</a>
-            </div>
-          </details>
-          <a class="nav__link" href="/caracteristicas">Características</a>
-          <a class="nav__link" href="/precios">Precios</a>
-          <a class="nav__cta nav__cta--secondary" href="/demo.html">Agendar demo</a>
-          <a class="nav__cta" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20los%20precios%20de%20TalIA." target="_blank" rel="noopener noreferrer">Ver por WhatsApp</a>
-        </nav>
-        <details class="nav-mobile-menu">
-          <summary class="nav__button">Menú</summary>
-          <div class="nav-mobile-menu__panel">
-            <a href="/">Inicio</a>
-            <a href="/que-es-talia">Qué es TalIA</a>
-            <div class="nav-mobile-menu__group">
-              <div class="nav-mobile-menu__label">Funciones</div>
-              <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-              <a href="/ia-de-whatsapp">IA de WhatsApp</a>
-              <a href="/ia-para-ventas">IA para ventas</a>
-              <a href="/seguimiento-ventas">Seguimiento de ventas</a>
-              <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-            </div>
-            <div class="nav-mobile-menu__group">
-              <div class="nav-mobile-menu__label">Industrias</div>
-              <a href="/industrias">Ver industrias</a>
-              <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-              <a href="/industrias/servicios">Servicios</a>
-              <a href="/industrias/negocios-locales">Negocios locales</a>
-              <a href="/industrias/ventas-b2b">Ventas B2B</a>
-              <a href="/industrias/turismo">Turismo</a>
-            </div>
-            <a href="/caracteristicas">Características</a>
-            <a href="/precios">Precios</a>
-            <div class="nav-mobile-menu__actions">
-              <a class="nav__cta nav__cta--secondary" href="/demo.html">Agendar demo</a>
-              <a class="nav__cta" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20los%20precios%20de%20TalIA." target="_blank" rel="noopener noreferrer">WhatsApp</a>
-            </div>
+    <nav class="nav" aria-label="Navegación principal">
+      <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
+      <a class="brand" href="../" aria-label="TalIA">
+        <img src="../Logo8.svg" alt="" aria-hidden="true" />
+        <span>Tal-IA</span>
+      </a>
+
+      <div class="nav-links nav-links--desktop">
+        <a href="../">Inicio</a>
+        <a href="../que-es-talia">Qué es TalIA</a>
+
+        <details class="nav-group">
+          <summary>Funciones</summary>
+          <div class="nav-dropdown">
+            <a href="../crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+            <a href="../ia-de-whatsapp">IA de WhatsApp</a>
+            <a href="../ia-para-ventas">IA para ventas</a>
+            <a href="../automatizacion-de-ventas">Automatización de ventas</a>
+            <a href="../seguimiento-ventas">Seguimiento de ventas</a>
+            <a href="../agenda-y-cotizaciones">Agenda y cotizaciones</a>
+            <a href="../prospeccion-comercial">Prospección comercial</a>
+            <a href="../buscar-contactos">Buscar contactos</a>
+            <a href="../prospectos-google-denue">Prospectos Google y DENUE</a>
+            <a href="../campanas-marketing">Campañas y marketing</a>
           </div>
         </details>
+
+        <details class="nav-group">
+          <summary>Industrias</summary>
+          <div class="nav-dropdown">
+            <a href="../industrias">Ver industrias</a>
+            <a href="../industrias/inmobiliarias">Inmobiliarias</a>
+            <a href="../industrias/servicios">Servicios</a>
+            <a href="../industrias/negocios-locales">Negocios locales</a>
+            <a href="../industrias/ventas-b2b">Ventas B2B</a>
+            <a href="../industrias/turismo">Turismo</a>
+          </div>
+        </details>
+
+        <a href="../caracteristicas">Características</a>
+        <a href="../precios">Precios</a>
+        <a href="../demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
       </div>
-    </header>
+
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Hablar por WhatsApp
+      </a>
+
+      <details class="nav-mobile-menu">
+        <summary aria-label="Abrir menú">Menú</summary>
+        <div class="nav-mobile-menu__panel">
+          <a href="../">Inicio</a>
+          <a href="../que-es-talia">Qué es TalIA</a>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Funciones</div>
+            <a href="../crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+            <a href="../ia-de-whatsapp">IA de WhatsApp</a>
+            <a href="../ia-para-ventas">IA para ventas</a>
+            <a href="../automatizacion-de-ventas">Automatización de ventas</a>
+            <a href="../seguimiento-ventas">Seguimiento de ventas</a>
+            <a href="../agenda-y-cotizaciones">Agenda y cotizaciones</a>
+            <a href="../prospeccion-comercial">Prospección comercial</a>
+            <a href="../buscar-contactos">Buscar contactos</a>
+            <a href="../prospectos-google-denue">Prospectos Google y DENUE</a>
+            <a href="../campanas-marketing">Campañas y marketing</a>
+          </div>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Industrias</div>
+            <a href="../industrias">Ver industrias</a>
+            <a href="../industrias/inmobiliarias">Inmobiliarias</a>
+            <a href="../industrias/servicios">Servicios</a>
+            <a href="../industrias/negocios-locales">Negocios locales</a>
+            <a href="../industrias/ventas-b2b">Ventas B2B</a>
+            <a href="../industrias/turismo">Turismo</a>
+          </div>
+
+          <a href="../caracteristicas">Características</a>
+          <a href="../precios">Precios</a>
+          <div class="nav-mobile-menu__actions">
+            <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
+            <a href="../demo.html" class="button secondary">Agendar demo</a>
+            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+          </div>
+        </div>
+      </details>
+    </nav>
 
     <section class="hero hero--dark">
       <div class="hero__copy">

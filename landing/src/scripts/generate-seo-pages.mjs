@@ -1115,56 +1115,97 @@ function renderNav(page, depth = 0) {
   const homeHref = depth ? `${prefix}` : "/";
   const pricesHref = depth ? `${prefix}precios` : "/precios";
   const demoHref = depth ? `${prefix}demo.html` : "/demo.html";
-  const navWhatsAppLabel = page.navWhatsAppLabel || "Agenda una demo";
-  const navWhatsAppText = page.navWhatsAppText || "Hola, quiero una demo de TalIA.";
+  const navWhatsAppLabel = page.navWhatsAppLabel || "Hablar por WhatsApp";
+  const navWhatsAppText = page.navWhatsAppText || "Hola, quiero hablar por WhatsApp sobre Tal-IA";
   return `
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a class="brand" href="${homeHref}" aria-label="TalIA">
-        <img src="${prefix}Logo8.svg" alt="" aria-hidden="true" />
-        <span>Tal-IA</span>
-      </a>
-      <nav class="nav" aria-label="Navegación principal">
-        <a class="nav__link" href="${homeHref}">Inicio</a>
-        ${navGroups
-          .map(
-            (group) => `
-        <details class="nav__group">
-          <summary class="nav__button">${escapeHtml(group.label)}</summary>
-          <div class="dropdown">
-            ${group.links
-              .map((link) => `<a href="${link.href}">${escapeHtml(link.label)}</a>`)
-              .join("\n")}
-          </div>
-        </details>`
-          )
-          .join("\n")}
-        <a class="nav__link" href="${pricesHref}">Precios</a>
-        <a class="nav__cta nav__cta--secondary" href="${demoHref}">Agendar demo</a>
-        <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
-      </nav>
-      <details class="nav-mobile-menu">
-        <summary aria-label="Abrir menú">Menú</summary>
-        <div class="nav-mobile-menu__panel">
-          <a href="${homeHref}">Inicio</a>
-          ${navGroups
-            .map(
-              (group) => `
-          <div class="nav-mobile-menu__group">
-            <div class="nav-mobile-menu__label">${escapeHtml(group.label)}</div>
-            ${group.links.map((link) => `<a href="${link.href}">${escapeHtml(link.label)}</a>`).join("\n")}
-          </div>`
-            )
-            .join("\n")}
-          <a href="${pricesHref}">Precios</a>
-          <div class="nav-mobile-menu__actions">
-            <a class="nav__cta nav__cta--secondary" href="${demoHref}">Agendar demo</a>
-            <a class="nav__cta" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
-          </div>
+  <nav class="nav" aria-label="Navegación principal">
+    <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
+    <a class="brand" href="${homeHref}" aria-label="TalIA">
+      <img src="${prefix}Logo8.svg" alt="" aria-hidden="true" />
+      <span>Tal-IA</span>
+    </a>
+
+    <div class="nav-links nav-links--desktop">
+      <a href="${homeHref}">Inicio</a>
+      <a href="${homeHref}que-es-talia">Qué es TalIA</a>
+
+      <details class="nav-group">
+        <summary>Funciones</summary>
+        <div class="nav-dropdown">
+          <a href="${homeHref}crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+          <a href="${homeHref}ia-de-whatsapp">IA de WhatsApp</a>
+          <a href="${homeHref}ia-para-ventas">IA para ventas</a>
+          <a href="${homeHref}automatizacion-de-ventas">Automatización de ventas</a>
+          <a href="${homeHref}seguimiento-ventas">Seguimiento de ventas</a>
+          <a href="${homeHref}agenda-y-cotizaciones">Agenda y cotizaciones</a>
+          <a href="${homeHref}prospeccion-comercial">Prospección comercial</a>
+          <a href="${homeHref}buscar-contactos">Buscar contactos</a>
+          <a href="${homeHref}prospectos-google-denue">Prospectos Google y DENUE</a>
+          <a href="${homeHref}campanas-marketing">Campañas y marketing</a>
         </div>
       </details>
+
+      <details class="nav-group">
+        <summary>Industrias</summary>
+        <div class="nav-dropdown">
+          <a href="${homeHref}industrias">Ver industrias</a>
+          <a href="${homeHref}industrias/inmobiliarias">Inmobiliarias</a>
+          <a href="${homeHref}industrias/servicios">Servicios</a>
+          <a href="${homeHref}industrias/negocios-locales">Negocios locales</a>
+          <a href="${homeHref}industrias/ventas-b2b">Ventas B2B</a>
+          <a href="${homeHref}industrias/turismo">Turismo</a>
+        </div>
+      </details>
+
+      <a href="${homeHref}caracteristicas">Características</a>
+      <a href="${pricesHref}">Precios</a>
+      <a href="${demoHref}" class="nav-cta nav-cta--secondary">Agendar demo</a>
     </div>
-  </header>`;
+
+    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="${whatsappHref(navWhatsAppText)}" target="_blank" rel="noopener noreferrer">
+      ${escapeHtml(navWhatsAppLabel)}
+    </a>
+
+    <details class="nav-mobile-menu">
+      <summary aria-label="Abrir menú">Menú</summary>
+      <div class="nav-mobile-menu__panel">
+        <a href="${homeHref}">Inicio</a>
+        <a href="${homeHref}que-es-talia">Qué es TalIA</a>
+
+        <div class="nav-mobile-menu__group">
+          <div class="nav-mobile-menu__label">Funciones</div>
+          <a href="${homeHref}crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+          <a href="${homeHref}ia-de-whatsapp">IA de WhatsApp</a>
+          <a href="${homeHref}ia-para-ventas">IA para ventas</a>
+          <a href="${homeHref}automatizacion-de-ventas">Automatización de ventas</a>
+          <a href="${homeHref}seguimiento-ventas">Seguimiento de ventas</a>
+          <a href="${homeHref}agenda-y-cotizaciones">Agenda y cotizaciones</a>
+          <a href="${homeHref}prospeccion-comercial">Prospección comercial</a>
+          <a href="${homeHref}buscar-contactos">Buscar contactos</a>
+          <a href="${homeHref}prospectos-google-denue">Prospectos Google y DENUE</a>
+          <a href="${homeHref}campanas-marketing">Campañas y marketing</a>
+        </div>
+
+        <div class="nav-mobile-menu__group">
+          <div class="nav-mobile-menu__label">Industrias</div>
+          <a href="${homeHref}industrias">Ver industrias</a>
+          <a href="${homeHref}industrias/inmobiliarias">Inmobiliarias</a>
+          <a href="${homeHref}industrias/servicios">Servicios</a>
+          <a href="${homeHref}industrias/negocios-locales">Negocios locales</a>
+          <a href="${homeHref}industrias/ventas-b2b">Ventas B2B</a>
+          <a href="${homeHref}industrias/turismo">Turismo</a>
+        </div>
+
+        <a href="${homeHref}caracteristicas">Características</a>
+        <a href="${pricesHref}">Precios</a>
+        <div class="nav-mobile-menu__actions">
+          <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
+          <a href="${demoHref}" class="button secondary">Agendar demo</a>
+          <a href="${whatsappHref(navWhatsAppText)}" class="button primary" target="_blank" rel="noopener noreferrer">${escapeHtml(navWhatsAppLabel)}</a>
+        </div>
+      </div>
+    </details>
+  </nav>`;
 }
 
 function renderPage(page) {
