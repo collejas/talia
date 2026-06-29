@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seguimiento de ventas | TalIA</title>
+  <title>Seguimiento de ventas | Tal-IA</title>
   <meta name="description" content="Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa." />
   <link rel="canonical" href="https://talia.mx/seguimiento-ventas" />
   <link rel="alternate" hreflang="es-MX" href="https://talia.mx/seguimiento-ventas" />
@@ -11,31 +11,345 @@
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
   <meta property="og:site_name" content="Tal-IA" />
-  <meta property="og:title" content="Seguimiento de ventas | TalIA" />
+  <meta property="og:title" content="Seguimiento de ventas | Tal-IA" />
   <meta property="og:description" content="Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa." />
   <meta property="og:url" content="https://talia.mx/seguimiento-ventas" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Seguimiento de ventas | TalIA" />
+  <meta name="twitter:title" content="Seguimiento de ventas | Tal-IA" />
   <meta name="twitter:description" content="Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="theme-color" content="#7f13ec" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="assets/css/seo-pages.css?v=20260625a" />
+  <style>
+    .follow-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .follow-hero__copy,
+    .follow-hero__visual,
+    .follow-flow,
+    .follow-cards,
+    .follow-cases {
+      min-width: 0;
+    }
+
+    .follow-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .follow-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .follow-hero__copy p {
+      max-width: 56ch;
+    }
+
+    .follow-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .follow-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .follow-hero__visual {
+      border-radius: 32px;
+      padding: 18px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 14px;
+    }
+
+    .follow-hero__visual-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .follow-hero__badge {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+    }
+
+    .follow-hero__image {
+      width: 100%;
+      aspect-ratio: 1290 / 619;
+      height: auto;
+      object-fit: cover;
+      object-position: center center;
+      border-radius: 22px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.10);
+      display: block;
+      background: white;
+    }
+
+    .follow-hero__meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .follow-hero__meta span {
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      font-size: 12px;
+      font-weight: 800;
+      color: #334155;
+      text-align: center;
+    }
+
+    .follow-section {
+      display: grid;
+      gap: 18px;
+    }
+
+    .follow-section__head {
+      display: grid;
+      gap: 8px;
+      max-width: 760px;
+    }
+
+    .follow-section__head h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1;
+      letter-spacing: -1.2px;
+    }
+
+    .follow-section__head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .follow-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .follow-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .follow-card h3,
+    .follow-step h3,
+    .follow-case h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+
+    .follow-card p,
+    .follow-step p,
+    .follow-case p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .follow-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .follow-steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .follow-step {
+      position: relative;
+      padding: 18px 18px 18px 56px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .follow-step::before {
+      content: attr(data-step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(127, 19, 236, 0.12);
+      color: #6d28d9;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .follow-note {
+      height: 100%;
+      border-radius: 28px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(127, 19, 236, 0.08), rgba(15, 23, 42, 0.04));
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      display: grid;
+      gap: 18px;
+    }
+
+    .follow-note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6d28d9;
+    }
+
+    .follow-note p {
+      margin: 0;
+      color: #334155;
+      line-height: 1.55;
+    }
+
+    .follow-cases {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .follow-case {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .follow-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .follow-tag--blue { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
+    .follow-tag--violet { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
+    .follow-tag--green { background: rgba(16, 185, 129, 0.12); color: #047857; }
+
+    .follow-cta {
+      border-radius: 32px;
+      padding: 28px;
+      background: linear-gradient(135deg, #0f172a, #111827 55%, #4c1d95);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 26px 50px rgba(15, 23, 42, 0.18);
+      display: grid;
+      gap: 16px;
+    }
+
+    .follow-cta p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .follow-cta .button.secondary,
+    .follow-cta .button.ghost {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: white;
+    }
+
+    .follow-cta .button.primary {
+      background: white;
+      color: #0f172a;
+      border-color: white;
+    }
+
+    .follow-cta .button.primary:hover {
+      background: #e2e8f0;
+      border-color: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .page {
+      display: grid;
+      gap: 28px;
+    }
+
+    @media (max-width: 980px) {
+      .page {
+        gap: 22px;
+      }
+
+      .follow-hero,
+      .follow-flow,
+      .follow-cards,
+      .follow-cases {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <main class="page">
     
   <nav class="nav" aria-label="Navegación principal">
     <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-    <a class="brand" href="/" aria-label="TalIA">
+    <a class="brand" href="/" aria-label="Tal-IA">
       <img src="Logo8.svg" alt="" aria-hidden="true" />
       <span>Tal-IA</span>
     </a>
 
     <div class="nav-links nav-links--desktop">
       <a href="/">Inicio</a>
-      <a href="/que-es-talia">Qué es TalIA</a>
+      <a href="/que-es-talia">Qué es Tal-IA</a>
 
       <details class="nav-group">
         <summary>Funciones</summary>
@@ -70,7 +384,7 @@
       <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
     </div>
 
-    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20TalIA." target="_blank" rel="noopener noreferrer">
+    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">
       Ver seguimiento
     </a>
 
@@ -78,7 +392,7 @@
       <summary aria-label="Abrir menú">Menú</summary>
       <div class="nav-mobile-menu__panel">
         <a href="/">Inicio</a>
-        <a href="/que-es-talia">Qué es TalIA</a>
+        <a href="/que-es-talia">Qué es Tal-IA</a>
 
         <div class="nav-mobile-menu__group">
           <div class="nav-mobile-menu__label">Funciones</div>
@@ -109,127 +423,145 @@
         <div class="nav-mobile-menu__actions">
           <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
           <a href="/demo.html" class="button secondary">Agendar demo</a>
-          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20TalIA." class="button primary" target="_blank" rel="noopener noreferrer">Ver seguimiento</a>
+          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA." class="button primary" target="_blank" rel="noopener noreferrer">Ver seguimiento</a>
         </div>
       </div>
     </details>
   </nav>
 
-    <section class="hero">
-      <div class="hero__copy">
-        <div class="eyebrow">Solución</div>
-        <h1>Seguimiento de ventas para no perder oportunidades</h1>
-        <p>El seguimiento correcto convierte conversaciones en cierres. TalIA mantiene recordatorios, estado y contexto para que nada se enfríe.</p>
+    <section class="follow-hero">
+      <div class="follow-hero__copy">
+        <div class="eyebrow">Función</div>
+        <h1>Seguimiento de ventas para no dejar oportunidades atrás</h1>
+        <p>Tal-IA mantiene el hilo comercial visible para que cada lead tenga próximo paso, responsable y contexto sin depender de memoria.</p>
         <div class="actions">
           <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver seguimiento</a>
           <a class="button secondary" href="/automatizacion-de-ventas">Ver automatización</a>
+          <a class="button ghost" href="/crm-con-ia-para-whatsapp">Ver CRM con IA</a>
         </div>
-        <div class="stats">
-          <div class="stat"><strong>Recordatorios</strong><span>mensajes y tareas sin olvidos.</span></div>
-<div class="stat"><strong>Contexto</strong><span>cada lead conserva historial.</span></div>
-<div class="stat"><strong>Conversión</strong><span>menos fugas por falta de seguimiento.</span></div>
+        <div class="follow-pills">
+          <span class="follow-pill">Recordatorios</span>
+          <span class="follow-pill">Contexto</span>
+          <span class="follow-pill">Pipeline</span>
+          <span class="follow-pill">Conversión</span>
         </div>
       </div>
 
-      <aside class="hero__panel">
-        <div class="panel-grid">
-          <div class="panel">
-            <strong>Por qué importa</strong>
-            <p style="margin: 8px 0 0; color: var(--muted); line-height: 1.5;">En ventas, la velocidad de seguimiento define buena parte del resultado. Este flujo ayuda a sostener oportunidades con claridad.</p>
-          </div>
-          
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Persistencia</h3>
-        <p>Mantén la conversación sin perseguir manualmente.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Orden</h3>
-        <p>Sabes qué toca hacer con cada oportunidad.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Visibilidad</h3>
-        <p>Ve el estado real del pipeline.</p>
-      </article>
+      <aside class="follow-hero__visual">
+        <div class="follow-hero__visual-top">
+          <span>Pipeline activo</span>
+          <span class="follow-hero__badge">En seguimiento</span>
+        </div>
+        <img
+          class="follow-hero__image"
+          src="/assets/images/ventas.webp"
+          alt="Vista de pipeline comercial con métricas y oportunidades en seguimiento"
+          loading="lazy"
+        />
+        <div class="follow-hero__meta">
+          <span>Lead entra</span>
+          <span>Se sigue</span>
+          <span>Se cierra</span>
         </div>
       </aside>
     </section>
 
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué puede hacer TalIA</h2>
-          <p>TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento, prospección y conversión.</p>
-        </div>
+    <section class="follow-section">
+      <div class="follow-section__head">
+        <div class="eyebrow">Qué resuelve</div>
+        <h2>Evita la fuga de oportunidades por falta de seguimiento</h2>
+        <p>La página debe dejar claro que el problema no es solo responder, sino sostener la conversación hasta que avance.</p>
       </div>
-      
-      <div class="feature-grid">
-        
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Qué hace</h3>
-          <p>Explica el beneficio principal antes que el módulo.</p>
-        </article>
 
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Componentes</h3>
-          <p>Conecta CRM, WhatsApp, prospección y seguimiento.</p>
+      <div class="follow-cards">
+        <article class="follow-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Olvido</div>
+          <h3>Menos leads fríos</h3>
+          <p>Recupera prospectos que se enfriaron por no tener continuidad.</p>
         </article>
-
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Conversión</h3>
-          <p>Lleva al usuario hacia una demo o una página de precios.</p>
+        <article class="follow-card">
+          <div class="eyebrow" style="border-color: rgba(124,58,237,.16); color: var(--violet); background: rgba(124,58,237,.05);">Orden</div>
+          <h3>Más claridad</h3>
+          <p>Ves qué toca hacer con cada oportunidad y quién debe hacerlo.</p>
+        </article>
+        <article class="follow-card">
+          <div class="eyebrow" style="border-color: rgba(16,185,129,.16); color: var(--green); background: rgba(16,185,129,.05);">Control</div>
+          <h3>Pipeline visible</h3>
+          <p>La dirección y ventas entienden rápido el estado real de la operación.</p>
         </article>
       </div>
     </section>
 
-    
-
-    
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué resuelve el seguimiento</h2>
-          <p>Responder no basta: hay que sostener el proceso hasta que el lead avance o se descarte con criterio.</p>
-        </div>
+    <section class="follow-section">
+      <div class="follow-section__head">
+        <div class="eyebrow">Cómo opera</div>
+        <h2>Un flujo corto que reduce el seguimiento manual</h2>
+        <p>La vista debe explicarse por movimiento, no por catálogo de módulos.</p>
       </div>
-      <div class="feature-grid">
-              
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Leads fríos</h3>
-                <p>Recupera prospectos que se quedaron sin respuesta.</p>
-              </article>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Pendientes</h3>
-                <p>Evita que tareas y recordatorios se pierdan.</p>
-              </article>
+      <div class="follow-flow">
+        <div class="follow-steps">
+          <article class="follow-step" data-step="01">
+            <h3>Detecta pendientes</h3>
+            <p>Identifica prospectos que necesitan respuesta o siguiente paso.</p>
+          </article>
+          <article class="follow-step" data-step="02">
+            <h3>Recuerda y prioriza</h3>
+            <p>Mantiene visible qué oportunidad requiere atención inmediata.</p>
+          </article>
+          <article class="follow-step" data-step="03">
+            <h3>Da trazabilidad</h3>
+            <p>Deja un historial claro para saber cómo avanzó cada conversación.</p>
+          </article>
+        </div>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Pipeline visible</h3>
-                <p>Permite ver en qué etapa está cada oportunidad.</p>
-              </article>
-            </div>
+        <aside class="follow-note">
+          <div>
+            <strong>Qué evita</strong>
+            <p>Mensajes perdidos, respuestas tardías y tareas que dependen de recordar manualmente.</p>
+          </div>
+          <div>
+            <strong>Qué deja listo</strong>
+            <p>Oportunidades con contexto, dueño y próximo paso definido.</p>
+          </div>
+        </aside>
+      </div>
     </section>
 
-    
+    <section class="follow-section">
+      <div class="follow-section__head">
+        <div class="eyebrow">Cuándo sirve</div>
+        <h2>Es especialmente útil cuando hay volumen y poca mano disponible</h2>
+        <p>Si el problema es que se responde, pero no se vuelve a tocar la oportunidad, esta vista tiene sentido.</p>
+      </div>
 
-    <section class="cta-band">
-      <div class="eyebrow">Siguiente paso</div>
-      <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Seguimiento de ventas para no perder oportunidades</h2>
-      <p>Si esta solución encaja con tu operación, el siguiente paso es revisar demo, precios o la página relacionada que mejor te ayude a avanzar.</p>
+      <div class="follow-cases">
+        <article class="follow-case">
+          <span class="follow-tag follow-tag--blue">Volumen</span>
+          <h3>Demasiados leads</h3>
+          <p>El flujo ayuda a que ninguno se quede sin siguiente acción.</p>
+        </article>
+        <article class="follow-case">
+          <span class="follow-tag follow-tag--violet">Tiempo</span>
+          <h3>Equipo ocupado</h3>
+          <p>La operación sigue viva aunque el asesor tarde en regresar.</p>
+        </article>
+        <article class="follow-case">
+          <span class="follow-tag follow-tag--green">Conversión</span>
+          <h3>Más cierres</h3>
+          <p>La constancia del seguimiento mejora la posibilidad de cierre.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="follow-cta">
+      <div class="eyebrow" style="color: rgba(255,255,255,.72); border-color: rgba(255,255,255,.15);">Siguiente paso</div>
+      <h2 style="margin: 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Haz visible cada oportunidad antes de que se enfríe.</h2>
+      <p>Si esta solución encaja con tu operación, revisa la demo y después conecta el flujo con automatización o CRM.</p>
       <div class="actions">
         <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20el%20seguimiento%20de%20ventas%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver seguimiento</a>
-        <a class="button secondary" href="/">Seguir navegando</a>
+        <a class="button secondary" href="/automatizacion-de-ventas">Ver automatización</a>
+        <a class="button ghost" href="/caracteristicas">Ver características</a>
       </div>
       <div class="footer-links">
         <a href="/">Inicio</a>
@@ -238,7 +570,7 @@
       </div>
     </section>
 
-    <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
+    <div class="footer">Tal-IA · seguimiento comercial, pipeline visible y oportunidades activas.</div>
   </main>
   <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
 </body>
