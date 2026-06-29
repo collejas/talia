@@ -3,233 +3,706 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IA para ventas | TalIA</title>
-  <meta name="description" content="IA para ventas que ayuda a responder leads, calificar oportunidades y acelerar cierres con seguimiento automatizado." />
+  <title>Ventas e inventarios | Tal-IA</title>
+  <meta name="description" content="IA para ventas e inventarios que ordena oportunidades, controla stock y conecta operación comercial con seguimiento real." />
   <link rel="canonical" href="https://talia.mx/ia-para-ventas" />
   <link rel="alternate" hreflang="es-MX" href="https://talia.mx/ia-para-ventas" />
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
   <meta property="og:site_name" content="Tal-IA" />
-  <meta property="og:title" content="IA para ventas | TalIA" />
-  <meta property="og:description" content="IA para ventas que ayuda a responder leads, calificar oportunidades y acelerar cierres con seguimiento automatizado." />
+  <meta property="og:title" content="Ventas e inventarios | Tal-IA" />
+  <meta property="og:description" content="IA para ventas e inventarios que ordena oportunidades, controla stock y conecta operación comercial con seguimiento real." />
   <meta property="og:url" content="https://talia.mx/ia-para-ventas" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="IA para ventas | TalIA" />
-  <meta name="twitter:description" content="IA para ventas que ayuda a responder leads, calificar oportunidades y acelerar cierres con seguimiento automatizado." />
+  <meta name="twitter:title" content="Ventas e inventarios | Tal-IA" />
+  <meta name="twitter:description" content="IA para ventas e inventarios que ordena oportunidades, controla stock y conecta operación comercial con seguimiento real." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="theme-color" content="#7f13ec" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="assets/css/seo-pages.css?v=20260625a" />
+  <style>
+    .sales-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .sales-hero__copy,
+    .sales-hero__visual,
+    .sales-flow,
+    .sales-cards,
+    .sales-cases {
+      min-width: 0;
+    }
+
+    .sales-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .sales-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .sales-hero__copy p {
+      max-width: 58ch;
+    }
+
+    .sales-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .sales-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .sales-hero__visual {
+      border-radius: 32px;
+      padding: 18px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 14px;
+    }
+
+    .sales-carousel {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    .sales-carousel__viewport {
+      position: relative;
+      aspect-ratio: 1290 / 619;
+    }
+
+    .sales-carousel__slide {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.32s ease;
+      pointer-events: none;
+    }
+
+    .sales-carousel__slide[data-active="true"] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sales-carousel__image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      background: white;
+    }
+
+    .sales-carousel__overlay {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 14px;
+      background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.48));
+      color: white;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .sales-carousel__overlay strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .sales-carousel__overlay span {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .sales-carousel__controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: inline-flex;
+      gap: 8px;
+      z-index: 2;
+    }
+
+    .sales-carousel__button {
+      width: 38px;
+      height: 38px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.58);
+      color: white;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .sales-carousel__button:hover {
+      transform: translateY(-1px);
+      background: rgba(15, 23, 42, 0.74);
+    }
+
+    .sales-carousel__dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .sales-carousel__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(15, 23, 42, 0.18);
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease, width 0.18s ease;
+    }
+
+    .sales-carousel__dot[data-active="true"] {
+      width: 24px;
+      background: #6d28d9;
+    }
+
+    .sales-hero__card {
+      display: grid;
+      gap: 10px;
+      border-radius: 24px;
+      padding: 14px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    .sales-hero__card--wide {
+      grid-column: 1 / -1;
+    }
+
+    .sales-hero__card--compact {
+      gap: 12px;
+    }
+
+    .sales-hero__card h3 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .sales-hero__card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .sales-hero__image {
+      width: 100%;
+      aspect-ratio: 1290 / 619;
+      height: auto;
+      object-fit: cover;
+      object-position: center center;
+      border-radius: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      display: block;
+      background: white;
+    }
+
+    .sales-hero__meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .sales-hero__meta span {
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      font-size: 12px;
+      font-weight: 800;
+      color: #334155;
+      text-align: center;
+    }
+
+    .sales-section {
+      display: grid;
+      gap: 18px;
+    }
+
+    .sales-section__head {
+      display: grid;
+      gap: 8px;
+      max-width: 760px;
+    }
+
+    .sales-section__head h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1;
+      letter-spacing: -1.2px;
+    }
+
+    .sales-section__head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .sales-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .sales-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .sales-card h3,
+    .sales-step h3,
+    .sales-case h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+
+    .sales-card p,
+    .sales-step p,
+    .sales-case p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .sales-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sales-steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .sales-step {
+      position: relative;
+      padding: 18px 18px 18px 56px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .sales-step::before {
+      content: attr(data-step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(127, 19, 236, 0.12);
+      color: #6d28d9;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .sales-note {
+      height: 100%;
+      border-radius: 28px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(127, 19, 236, 0.08), rgba(15, 23, 42, 0.04));
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      display: grid;
+      gap: 18px;
+    }
+
+    .sales-note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6d28d9;
+    }
+
+    .sales-note p {
+      margin: 0;
+      color: #334155;
+      line-height: 1.55;
+    }
+
+    .sales-cases {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .sales-case {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .sales-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .sales-tag--blue { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
+    .sales-tag--violet { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
+    .sales-tag--green { background: rgba(16, 185, 129, 0.12); color: #047857; }
+
+    .sales-cta {
+      border-radius: 32px;
+      padding: 28px;
+      background: linear-gradient(135deg, #0f172a, #111827 55%, #4c1d95);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 26px 50px rgba(15, 23, 42, 0.18);
+      display: grid;
+      gap: 16px;
+    }
+
+    .sales-cta p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .sales-cta .button.secondary,
+    .sales-cta .button.ghost {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: white;
+    }
+
+    .sales-cta .button.primary {
+      background: white;
+      color: #0f172a;
+      border-color: white;
+    }
+
+    .sales-cta .button.primary:hover {
+      background: #e2e8f0;
+      border-color: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .page {
+      display: grid;
+      gap: 28px;
+    }
+
+    @media (max-width: 980px) {
+      .page {
+        gap: 22px;
+      }
+
+      .sales-hero,
+      .sales-flow,
+      .sales-cards,
+      .sales-cases {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <main class="page">
-    
-  <nav class="nav" aria-label="Navegación principal">
-    <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-    <a class="brand" href="/" aria-label="TalIA">
-      <img src="Logo8.svg" alt="" aria-hidden="true" />
-      <span>Tal-IA</span>
-    </a>
+    <nav class="nav" aria-label="Navegación principal">
+      <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
+      <a class="brand" href="/" aria-label="Tal-IA">
+        <img src="Logo8.svg" alt="" aria-hidden="true" />
+        <span>Tal-IA</span>
+      </a>
 
-    <div class="nav-links nav-links--desktop">
-      <a href="/">Inicio</a>
-      <a href="/que-es-talia">Qué es TalIA</a>
-
-      <details class="nav-group">
-        <summary>Funciones</summary>
-        <div class="nav-dropdown">
-          <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <a href="/automatizacion-de-ventas">Automatización de procesos</a>
-          <a href="/seguimiento-ventas">Seguimiento de ventas</a>
-          <a href="/ia-para-ventas">Ventas e inventarios</a>
-          <a href="/agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
-          <a href="/buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
-          <a href="/campanas-marketing">Campañas de Email - WhatsApp</a>
-          <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
-          <a href="/caracteristicas">Métricas</a>
-        </div>
-      </details>
-
-      <details class="nav-group">
-        <summary>Industrias</summary>
-        <div class="nav-dropdown">
-          <a href="/industrias">Ver industrias</a>
-          <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a href="/industrias/servicios">Servicios</a>
-          <a href="/industrias/negocios-locales">Negocios locales</a>
-          <a href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a href="/industrias/turismo">Turismo</a>
-        </div>
-      </details>
-
-      <a href="/caracteristicas">Características</a>
-      <a href="/precios">Precios</a>
-      <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
-    </div>
-
-    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20de%20TalIA." target="_blank" rel="noopener noreferrer">
-      Quiero verlo
-    </a>
-
-    <details class="nav-mobile-menu">
-      <summary aria-label="Abrir menú">Menú</summary>
-      <div class="nav-mobile-menu__panel">
+      <div class="nav-links nav-links--desktop">
         <a href="/">Inicio</a>
-        <a href="/que-es-talia">Qué es TalIA</a>
+        <a href="/que-es-talia">Qué es Tal-IA</a>
 
-        <div class="nav-mobile-menu__group">
-          <div class="nav-mobile-menu__label">Funciones</div>
-          <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <a href="/automatizacion-de-ventas">Automatización de procesos</a>
-          <a href="/seguimiento-ventas">Seguimiento de ventas</a>
-          <a href="/ia-para-ventas">Ventas e inventarios</a>
-          <a href="/agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
-          <a href="/buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
-          <a href="/campanas-marketing">Campañas de Email - WhatsApp</a>
-          <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
-          <a href="/caracteristicas">Métricas</a>
-        </div>
+        <details class="nav-group">
+          <summary>Funciones</summary>
+          <div class="nav-dropdown">
+            <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+            <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
+            <a href="/automatizacion-de-ventas">Automatización de procesos</a>
+            <a href="/seguimiento-ventas">Seguimiento de ventas</a>
+            <a href="/ia-para-ventas">Ventas e inventarios</a>
+            <a href="/agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
+            <a href="/buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
+            <a href="/campanas-marketing">Campañas de Email - WhatsApp</a>
+            <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
+            <a href="/caracteristicas">Métricas</a>
+          </div>
+        </details>
 
-        <div class="nav-mobile-menu__group">
-          <div class="nav-mobile-menu__label">Industrias</div>
-          <a href="/industrias">Ver industrias</a>
-          <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a href="/industrias/servicios">Servicios</a>
-          <a href="/industrias/negocios-locales">Negocios locales</a>
-          <a href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a href="/industrias/turismo">Turismo</a>
-        </div>
+        <details class="nav-group">
+          <summary>Industrias</summary>
+          <div class="nav-dropdown">
+            <a href="/industrias">Ver industrias</a>
+            <a href="/industrias/inmobiliarias">Inmobiliarias</a>
+            <a href="/industrias/servicios">Servicios</a>
+            <a href="/industrias/negocios-locales">Negocios locales</a>
+            <a href="/industrias/ventas-b2b">Ventas B2B</a>
+            <a href="/industrias/turismo">Turismo</a>
+          </div>
+        </details>
 
         <a href="/caracteristicas">Características</a>
         <a href="/precios">Precios</a>
-        <div class="nav-mobile-menu__actions">
-          <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
-          <a href="/demo.html" class="button secondary">Agendar demo</a>
-          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20de%20TalIA." class="button primary" target="_blank" rel="noopener noreferrer">Quiero verlo</a>
-        </div>
-      </div>
-    </details>
-  </nav>
-
-    <section class="hero">
-      <div class="hero__copy">
-        <div class="eyebrow">Solución</div>
-        <h1>IA para ventas que convierte conversaciones en cierres</h1>
-        <p>TalIA ayuda a equipos comerciales a responder primero, priorizar prospectos y mover cada oportunidad sin perder velocidad. La intención aquí es dejar claro que no se trata de un chatbot, sino de una capa comercial que ordena el trabajo diario.</p>
-        <div class="actions">
-          <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20para%20ventas%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Quiero ver IA para ventas</a>
-          <a class="button secondary" href="/seguimiento-ventas">Ver seguimiento</a>
-        </div>
-        <div class="stats">
-          <div class="stat"><strong>Prioridad</strong><span>ordena leads por intención y urgencia.</span></div>
-<div class="stat"><strong>Rapidez</strong><span>menos tiempo entre mensaje y respuesta.</span></div>
-<div class="stat"><strong>Cierre</strong><span>más oportunidades llegan a asesor humano.</span></div>
-        </div>
+        <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
       </div>
 
-      <aside class="hero__panel">
-        <div class="panel-grid">
-          <div class="panel">
-            <strong>Enfoque</strong>
-            <p style="margin: 8px 0 0; color: var(--muted); line-height: 1.5;">La IA para ventas quita tareas repetitivas y da mejor contexto para cerrar con más productividad y control del pipeline.</p>
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20e%20inventarios%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">
+        Quiero verlo
+      </a>
+
+      <details class="nav-mobile-menu">
+        <summary aria-label="Abrir menú">Menú</summary>
+        <div class="nav-mobile-menu__panel">
+          <a href="/">Inicio</a>
+          <a href="/que-es-talia">Qué es Tal-IA</a>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Funciones</div>
+            <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+            <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
+            <a href="/automatizacion-de-ventas">Automatización de procesos</a>
+            <a href="/seguimiento-ventas">Seguimiento de ventas</a>
+            <a href="/ia-para-ventas">Ventas e inventarios</a>
+            <a href="/agenda-y-cotizaciones">Agendas, cotizaciones, notas, tareas</a>
+            <a href="/buscar-contactos">Buscar contactos Web/Google/Gov-MX</a>
+            <a href="/campanas-marketing">Campañas de Email - WhatsApp</a>
+            <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
+            <a href="/caracteristicas">Métricas</a>
           </div>
-          
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Prioriza</h3>
-        <p>Detecta qué prospectos merecen atención primero.</p>
-      </article>
 
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Acompaña</h3>
-        <p>No deja caer leads por falta de seguimiento.</p>
-      </article>
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Industrias</div>
+            <a href="/industrias">Ver industrias</a>
+            <a href="/industrias/inmobiliarias">Inmobiliarias</a>
+            <a href="/industrias/servicios">Servicios</a>
+            <a href="/industrias/negocios-locales">Negocios locales</a>
+            <a href="/industrias/ventas-b2b">Ventas B2B</a>
+            <a href="/industrias/turismo">Turismo</a>
+          </div>
 
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Solución</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Estandariza</h3>
-        <p>Hace consistente la operación del equipo comercial.</p>
-      </article>
+          <a href="/caracteristicas">Características</a>
+          <a href="/precios">Precios</a>
+          <div class="nav-mobile-menu__actions">
+            <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
+            <a href="/demo.html" class="button secondary">Agendar demo</a>
+            <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20e%20inventarios%20de%20Tal-IA." class="button primary" target="_blank" rel="noopener noreferrer">Quiero verlo</a>
+          </div>
+        </div>
+      </details>
+    </nav>
+
+    <section class="sales-hero">
+      <div class="sales-hero__copy">
+        <div class="eyebrow">Función</div>
+        <h1>Ventas e inventarios en un solo flujo</h1>
+        <p>Tal-IA ayuda a vender con más orden y a no perder el control operativo. Une oportunidad comercial, inventario y seguimiento para que el negocio se mueva con menos fricción.</p>
+        <div class="actions">
+          <a class="button primary" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20e%20inventarios%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">Quiero verlo</a>
+          <a class="button secondary" href="/seguimiento-ventas">Ver seguimiento</a>
+          <a class="button ghost" href="/crm-con-ia-para-whatsapp">Ver CRM con IA</a>
+        </div>
+        <div class="sales-pills">
+          <span class="sales-pill">Ventas</span>
+          <span class="sales-pill">Inventario</span>
+          <span class="sales-pill">Control</span>
+          <span class="sales-pill">Seguimiento</span>
+        </div>
+      </div>
+
+      <aside class="sales-hero__visual">
+        <div class="sales-carousel" data-carousel="sales-hero">
+          <div class="sales-carousel__controls">
+            <button class="sales-carousel__button" type="button" data-carousel-prev aria-label="Ver imagen anterior">‹</button>
+            <button class="sales-carousel__button" type="button" data-carousel-next aria-label="Ver imagen siguiente">›</button>
+          </div>
+          <div class="sales-carousel__viewport">
+            <figure class="sales-carousel__slide" data-carousel-slide data-active="true">
+              <img class="sales-carousel__image" src="/assets/images/ventas_inventario1.png" alt="Panel de ventas con leads, cierres y métricas comerciales" loading="lazy" />
+              <figcaption class="sales-carousel__overlay">
+                <div>
+                  <strong>Ventas activas</strong>
+                  <span>Seguimiento comercial y cierres</span>
+                </div>
+              </figcaption>
+            </figure>
+            <figure class="sales-carousel__slide" data-carousel-slide>
+              <img class="sales-carousel__image" src="/assets/images/ventas_Inventario2.png" alt="Panel de inventario con existencias, alertas y control de stock" loading="lazy" />
+              <figcaption class="sales-carousel__overlay">
+                <div>
+                  <strong>Inventario disponible</strong>
+                  <span>Stock, alertas y disponibilidad</span>
+                </div>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="sales-hero__meta">
+          <span>Leads</span>
+          <span>Cierres</span>
+          <span>Ticket</span>
         </div>
       </aside>
     </section>
 
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué puede hacer TalIA</h2>
-          <p>TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento, prospección y conversión.</p>
-        </div>
+    <section class="sales-section">
+      <div class="sales-section__head">
+        <div class="eyebrow">Qué resuelve</div>
+        <h2>Une operación comercial y control de stock</h2>
+        <p>La idea es que ventas no vaya por un lado e inventario por otro. Cuando ambos se conectan, el equipo trabaja con más claridad y menos errores.</p>
       </div>
-      
-      <div class="feature-grid">
-        
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Qué hace</h3>
-          <p>Explica el beneficio principal antes que el módulo.</p>
-        </article>
 
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Componentes</h3>
-          <p>Conecta CRM, WhatsApp, prospección y seguimiento.</p>
+      <div class="sales-cards">
+        <article class="sales-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Orden</div>
+          <h3>Menos fricción</h3>
+          <p>Unifica datos de venta y disponibilidad para evitar revisar sistemas separados.</p>
         </article>
-
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Conversión</h3>
-          <p>Lleva al usuario hacia una demo o una página de precios.</p>
+        <article class="sales-card">
+          <div class="eyebrow" style="border-color: rgba(124,58,237,.16); color: var(--violet); background: rgba(124,58,237,.05);">Control</div>
+          <h3>Stock visible</h3>
+          <p>Ayuda a saber qué hay disponible antes de prometer o cotizar.</p>
+        </article>
+        <article class="sales-card">
+          <div class="eyebrow" style="border-color: rgba(16,185,129,.16); color: var(--green); background: rgba(16,185,129,.05);">Velocidad</div>
+          <h3>Decisión rápida</h3>
+          <p>Reduce vueltas internas cuando ventas necesita respuesta de operación.</p>
         </article>
       </div>
     </section>
 
-    
-
-    
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué mejora en ventas</h2>
-          <p>El impacto se ve en orden, velocidad de respuesta y más posibilidades de cierre.</p>
-        </div>
+    <section class="sales-section">
+      <div class="sales-section__head">
+        <div class="eyebrow">Cómo opera</div>
+        <h2>Un flujo corto que se entiende sin leer demasiado</h2>
+        <p>La vista debe decir rápido qué entra, qué se revisa y qué sale listo para el equipo.</p>
       </div>
-      <div class="feature-grid">
-              
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Orden</h3>
-                <p>Saber qué lead va primero y por qué.</p>
-              </article>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Velocidad</h3>
-                <p>Reducir el tiempo entre llegada del lead y primera respuesta.</p>
-              </article>
+      <div class="sales-flow">
+        <div class="sales-steps">
+          <article class="sales-step" data-step="01">
+            <h3>Entra la oportunidad</h3>
+            <p>Llega el lead o la solicitud y queda asociada al proceso comercial.</p>
+          </article>
+          <article class="sales-step" data-step="02">
+            <h3>Se valida inventario</h3>
+            <p>La operación confirma disponibilidad antes de seguir con la venta o cotización.</p>
+          </article>
+          <article class="sales-step" data-step="03">
+            <h3>Se sigue el cierre</h3>
+            <p>Queda visible el siguiente paso para no perder la oportunidad ni el control.</p>
+          </article>
+        </div>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Conversión</h3>
-                <p>Aumentar la probabilidad de cierre con mejor contexto.</p>
-              </article>
-            </div>
+        <aside class="sales-note">
+          <div>
+            <strong>Qué evita</strong>
+            <p>Prometer stock inexistente, dejar leads sin atención y trabajar con información dispersa.</p>
+          </div>
+          <div>
+            <strong>Qué deja listo</strong>
+            <p>Una operación más clara para vender, validar y cerrar sin frenar al equipo.</p>
+          </div>
+        </aside>
+      </div>
     </section>
 
-    
+    <section class="sales-section">
+      <div class="sales-section__head">
+        <div class="eyebrow">Cuándo sirve</div>
+        <h2>Es útil cuando la venta depende de lo que sí hay disponible</h2>
+        <p>Especialmente cuando el equipo necesita responder con precisión y no improvisar frente al cliente.</p>
+      </div>
 
-    <section class="cta-band">
-      <div class="eyebrow">Siguiente paso</div>
-      <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">IA para ventas que convierte conversaciones en cierres</h2>
-      <p>Si esta solución encaja con tu operación, el siguiente paso es revisar demo, precios o la página relacionada que mejor te ayude a avanzar.</p>
+      <div class="sales-cases">
+        <article class="sales-case">
+          <span class="sales-tag sales-tag--blue">Ventas</span>
+          <h3>Muchos prospectos</h3>
+          <p>Ayuda a no perder oportunidades por falta de orden.</p>
+        </article>
+        <article class="sales-case">
+          <span class="sales-tag sales-tag--violet">Inventario</span>
+          <h3>Stock sensible</h3>
+          <p>Evita vender sin verificar existencias o disponibilidad real.</p>
+        </article>
+        <article class="sales-case">
+          <span class="sales-tag sales-tag--green">Operación</span>
+          <h3>Seguimiento continuo</h3>
+          <p>Une la parte comercial con la parte operativa del negocio.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="sales-cta">
+      <div class="eyebrow" style="color: rgba(255,255,255,.72); border-color: rgba(255,255,255,.15);">Siguiente paso</div>
+      <h2 style="margin: 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Vende mejor sin perder control de inventario.</h2>
+      <p>Si esta solución encaja con tu operación, revisa la demo y después conecta el resto del flujo comercial.</p>
       <div class="actions">
-        <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20IA%20para%20ventas%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Quiero ver IA para ventas</a>
-        <a class="button secondary" href="/">Seguir navegando</a>
+        <a class="button primary" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20la%20IA%20para%20ventas%20e%20inventarios%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">Quiero verlo</a>
+        <a class="button secondary" href="/seguimiento-ventas">Ver seguimiento</a>
+        <a class="button ghost" href="/caracteristicas">Ver características</a>
       </div>
       <div class="footer-links">
         <a href="/">Inicio</a>
@@ -238,8 +711,49 @@
       </div>
     </section>
 
-    <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
+    <div class="footer">Tal-IA · ventas, inventario y seguimiento comercial en un solo flujo.</div>
   </main>
-  <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
+  <script>
+    (function () {
+      const carousel = document.querySelector('[data-carousel="sales-hero"]');
+      if (!carousel) return;
+
+      const slides = Array.from(carousel.querySelectorAll('[data-carousel-slide]'));
+      const prev = carousel.querySelector('[data-carousel-prev]');
+      const next = carousel.querySelector('[data-carousel-next]');
+      const dots = [];
+      const dotsContainer = document.createElement('div');
+      dotsContainer.className = 'sales-carousel__dots';
+
+      let index = 0;
+
+      function render(nextIndex) {
+        index = (nextIndex + slides.length) % slides.length;
+        slides.forEach((slide, slideIndex) => {
+          const active = slideIndex === index;
+          slide.dataset.active = String(active);
+          if (dots[slideIndex]) {
+            dots[slideIndex].dataset.active = String(active);
+          }
+        });
+      }
+
+      slides.forEach((_, slideIndex) => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'sales-carousel__dot';
+        dot.setAttribute('aria-label', `Ver slide ${slideIndex + 1}`);
+        dot.addEventListener('click', () => render(slideIndex));
+        dots.push(dot);
+        dotsContainer.appendChild(dot);
+      });
+
+      carousel.appendChild(dotsContainer);
+      prev?.addEventListener('click', () => render(index - 1));
+      next?.addEventListener('click', () => render(index + 1));
+
+      render(0);
+    })();
+  </script>
 </body>
 </html>
