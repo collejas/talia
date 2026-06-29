@@ -3,39 +3,358 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Buscar contactos para ventas | TalIA</title>
-  <meta name="description" content="Buscar contactos para ventas con IA, listas útiles y prospectos listos para trabajar." />
+  <title>Buscar contactos Web/Google/Gov-MX | Tal-IA</title>
+  <meta name="description" content="Buscar contactos Web, Google y Gov-MX con IA para generar prospectos listos para trabajar." />
   <link rel="canonical" href="https://talia.mx/buscar-contactos" />
   <link rel="alternate" hreflang="es-MX" href="https://talia.mx/buscar-contactos" />
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
   <meta property="og:site_name" content="Tal-IA" />
-  <meta property="og:title" content="Buscar contactos para ventas | TalIA" />
-  <meta property="og:description" content="Buscar contactos para ventas con IA, listas útiles y prospectos listos para trabajar." />
+  <meta property="og:title" content="Buscar contactos Web/Google/Gov-MX | Tal-IA" />
+  <meta property="og:description" content="Buscar contactos Web, Google y Gov-MX con IA para generar prospectos listos para trabajar." />
   <meta property="og:url" content="https://talia.mx/buscar-contactos" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Buscar contactos para ventas | TalIA" />
-  <meta name="twitter:description" content="Buscar contactos para ventas con IA, listas útiles y prospectos listos para trabajar." />
+  <meta name="twitter:title" content="Buscar contactos Web/Google/Gov-MX | Tal-IA" />
+  <meta name="twitter:description" content="Buscar contactos Web, Google y Gov-MX con IA para generar prospectos listos para trabajar." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="theme-color" content="#7f13ec" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="assets/css/seo-pages.css?v=20260625a" />
+  <style>
+    .search-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .search-hero__copy,
+    .search-hero__visual,
+    .search-flow,
+    .search-cards,
+    .search-cases {
+      min-width: 0;
+    }
+
+    .search-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .search-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .search-hero__copy p {
+      max-width: 58ch;
+    }
+
+    .search-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .search-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .search-hero__visual {
+      border-radius: 32px;
+      padding: 18px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 14px;
+    }
+
+    .search-hero__card {
+      display: grid;
+      gap: 10px;
+      border-radius: 24px;
+      padding: 14px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    .search-hero__card h3 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .search-hero__card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .search-hero__image {
+      width: 100%;
+      aspect-ratio: 1290 / 619;
+      height: auto;
+      object-fit: contain;
+      object-position: center center;
+      border-radius: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      display: block;
+      background: white;
+    }
+
+    .search-hero__meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .search-hero__meta span {
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      font-size: 12px;
+      font-weight: 800;
+      color: #334155;
+      text-align: center;
+    }
+
+    .search-section {
+      display: grid;
+      gap: 18px;
+    }
+
+    .search-section__head {
+      display: grid;
+      gap: 8px;
+      max-width: 760px;
+    }
+
+    .search-section__head h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1;
+      letter-spacing: -1.2px;
+    }
+
+    .search-section__head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .search-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .search-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .search-card h3,
+    .search-step h3,
+    .search-case h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+
+    .search-card p,
+    .search-step p,
+    .search-case p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .search-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .search-steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .search-step {
+      position: relative;
+      padding: 18px 18px 18px 56px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .search-step::before {
+      content: attr(data-step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(127, 19, 236, 0.12);
+      color: #6d28d9;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .search-note {
+      height: 100%;
+      border-radius: 28px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(127, 19, 236, 0.08), rgba(15, 23, 42, 0.04));
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      display: grid;
+      gap: 18px;
+    }
+
+    .search-note strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6d28d9;
+    }
+
+    .search-note p {
+      margin: 0;
+      color: #334155;
+      line-height: 1.55;
+    }
+
+    .search-cases {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .search-case {
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .search-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .search-tag--blue { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
+    .search-tag--violet { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
+    .search-tag--green { background: rgba(16, 185, 129, 0.12); color: #047857; }
+
+    .search-cta {
+      border-radius: 32px;
+      padding: 28px;
+      background: linear-gradient(135deg, #0f172a, #111827 55%, #4c1d95);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 26px 50px rgba(15, 23, 42, 0.18);
+      display: grid;
+      gap: 16px;
+    }
+
+    .search-cta p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .search-cta .button.secondary,
+    .search-cta .button.ghost {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: white;
+    }
+
+    .search-cta .button.primary {
+      background: white;
+      color: #0f172a;
+      border-color: white;
+    }
+
+    .search-cta .button.primary:hover {
+      background: #e2e8f0;
+      border-color: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .page {
+      display: grid;
+      gap: 28px;
+    }
+
+    @media (max-width: 980px) {
+      .page {
+        gap: 22px;
+      }
+
+      .search-hero,
+      .search-flow,
+      .search-cards,
+      .search-cases {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <main class="page">
     
   <nav class="nav" aria-label="Navegación principal">
     <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-    <a class="brand" href="/" aria-label="TalIA">
+    <a class="brand" href="/" aria-label="Tal-IA">
       <img src="Logo8.svg" alt="" aria-hidden="true" />
       <span>Tal-IA</span>
     </a>
 
     <div class="nav-links nav-links--desktop">
       <a href="/">Inicio</a>
-      <a href="/que-es-talia">Qué es TalIA</a>
+      <a href="/que-es-talia">Qué es Tal-IA</a>
 
       <details class="nav-group">
         <summary>Funciones</summary>
@@ -70,7 +389,7 @@
       <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
     </div>
 
-    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20buscar%20contactos%20para%20ventas%20con%20TalIA." target="_blank" rel="noopener noreferrer">
+    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20buscar%20contactos%20Web%2C%20Google%20y%20Gov-MX%20con%20Tal-IA." target="_blank" rel="noopener noreferrer">
       Buscar contactos
     </a>
 
@@ -78,7 +397,7 @@
       <summary aria-label="Abrir menú">Menú</summary>
       <div class="nav-mobile-menu__panel">
         <a href="/">Inicio</a>
-        <a href="/que-es-talia">Qué es TalIA</a>
+        <a href="/que-es-talia">Qué es Tal-IA</a>
 
         <div class="nav-mobile-menu__group">
           <div class="nav-mobile-menu__label">Funciones</div>
@@ -109,127 +428,140 @@
         <div class="nav-mobile-menu__actions">
           <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
           <a href="/demo.html" class="button secondary">Agendar demo</a>
-          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20buscar%20contactos%20para%20ventas%20con%20TalIA." class="button primary" target="_blank" rel="noopener noreferrer">Buscar contactos</a>
+          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20buscar%20contactos%20Web%2C%20Google%20y%20Gov-MX%20con%20Tal-IA." class="button primary" target="_blank" rel="noopener noreferrer">Buscar contactos</a>
         </div>
       </div>
     </details>
   </nav>
 
-    <section class="hero">
-      <div class="hero__copy">
+    <section class="search-hero">
+      <div class="search-hero__copy">
         <div class="eyebrow">Prospección</div>
-        <h1>Buscar contactos para ventas</h1>
-        <p>TalIA convierte búsquedas dispersas en contactos útiles para el equipo comercial. Menos ruido, más prospectos accionables.</p>
+        <h1>Buscar contactos Web, Google y Gov-MX</h1>
+        <p>Tal-IA convierte búsquedas dispersas en prospectos útiles para el equipo comercial. Menos ruido, más contactos accionables desde fuentes claras.</p>
         <div class="actions">
-          <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20para%20ventas%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver búsqueda</a>
+          <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20Web,%20Google%20y%20Gov-MX%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver búsqueda</a>
           <a class="button secondary" href="/automatizacion-de-ventas">Automatización de procesos</a>
+          <a class="button ghost" href="/seguimiento-ventas">Ver seguimiento</a>
         </div>
-        <div class="stats">
-          <div class="stat"><strong>Contactos útiles</strong><span>no solo listas, sino prospectos reales.</span></div>
-<div class="stat"><strong>Rapidez</strong><span>menos tiempo buscando y limpiando datos.</span></div>
-<div class="stat"><strong>Contexto</strong><span>cada contacto nace listo para el flujo.</span></div>
+        <div class="search-pills">
+          <span class="search-pill">Web</span>
+          <span class="search-pill">Google</span>
+          <span class="search-pill">Gov-MX</span>
+          <span class="search-pill">Prospectos</span>
         </div>
       </div>
 
-      <aside class="hero__panel">
-        <div class="panel-grid">
-          <div class="panel">
-            <strong>Cómo ayuda</strong>
-            <p style="margin: 8px 0 0; color: var(--muted); line-height: 1.5;">La búsqueda de contactos debe terminar en una base que ventas pueda usar sin fricción.</p>
-          </div>
-          
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Prospección</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Localiza</h3>
-        <p>Encuentra empresas y personas de interés.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Prospección</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Depura</h3>
-        <p>Evita bases infladas y poco útiles.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Prospección</div>
-        <h3 style="margin: 12px 0 0; font-size: 18px;">Entrega</h3>
-        <p>Pasa contactos listos al flujo de seguimiento.</p>
-      </article>
+      <aside class="search-hero__visual">
+        <article class="search-hero__card">
+          <h3>Listado de prospectos</h3>
+          <img class="search-hero__image" src="/assets/images/Busquedas.webp" alt="Listado de prospectos encontrados para ventas con contactos y datos útiles" loading="lazy" />
+          <p>Una vista rápida para ver qué contactos se encontraron y cómo pasan al flujo comercial.</p>
+        </article>
+        <div class="search-hero__meta">
+          <span>Web</span>
+          <span>Google</span>
+          <span>Gov-MX</span>
         </div>
       </aside>
     </section>
 
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué puede hacer TalIA</h2>
-          <p>TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento, prospección y conversión.</p>
-        </div>
+    <section class="search-section">
+      <div class="search-section__head">
+        <div class="eyebrow">Qué resuelve</div>
+        <h2>Convierte fuentes públicas en prospectos reales</h2>
+        <p>La página debe dejar claro que no se trata de una simple lista de contactos, sino de una prospección con criterio comercial.</p>
       </div>
-      
-      <div class="feature-grid">
-        
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Qué hace</h3>
-          <p>Explica el beneficio principal antes que el módulo.</p>
-        </article>
 
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Componentes</h3>
-          <p>Conecta CRM, WhatsApp, prospección y seguimiento.</p>
+      <div class="search-cards">
+        <article class="search-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Web</div>
+          <h3>Encuentra señales útiles</h3>
+          <p>Busca páginas, referencias y resultados con potencial comercial.</p>
         </article>
-
-        <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Conversión</h3>
-          <p>Lleva al usuario hacia una demo o una página de precios.</p>
+        <article class="search-card">
+          <div class="eyebrow" style="border-color: rgba(124,58,237,.16); color: var(--violet); background: rgba(124,58,237,.05);">Google</div>
+          <h3>Filtra intención</h3>
+          <p>Ayuda a detectar negocios o contactos que ya están visibles en búsquedas.</p>
+        </article>
+        <article class="search-card">
+          <div class="eyebrow" style="border-color: rgba(16,185,129,.16); color: var(--green); background: rgba(16,185,129,.05);">Gov-MX</div>
+          <h3>Fuentes públicas</h3>
+          <p>Apoya la prospección con información de directorios y registros útiles.</p>
         </article>
       </div>
     </section>
 
-    
-
-    
-    <section class="section">
-      <div class="section__head">
-        <div>
-          <h2>Qué aporta buscar contactos</h2>
-          <p>La base resultante debe servir de inmediato para ventas.</p>
-        </div>
+    <section class="search-section">
+      <div class="search-section__head">
+        <div class="eyebrow">Cómo opera</div>
+        <h2>Una búsqueda breve que termina en una base trabajable</h2>
+        <p>La secuencia debe ser simple: buscar, depurar y entregar.</p>
       </div>
-      <div class="feature-grid">
-              
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Foco</h3>
-                <p>Busca solo lo que tenga sentido comercial.</p>
-              </article>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Orden</h3>
-                <p>Evita listas largas que no se pueden trabajar.</p>
-              </article>
+      <div class="search-flow">
+        <div class="search-steps">
+          <article class="search-step" data-step="01">
+            <h3>Busca por fuente</h3>
+            <p>Web, Google o Gov-MX según el tipo de prospecto que necesitas.</p>
+          </article>
+          <article class="search-step" data-step="02">
+            <h3>Depura la base</h3>
+            <p>Reduce ruido y deja solo los contactos útiles para la operación.</p>
+          </article>
+          <article class="search-step" data-step="03">
+            <h3>Entrega al flujo</h3>
+            <p>Los contactos quedan listos para seguimiento, WhatsApp o CRM.</p>
+          </article>
+        </div>
 
-              <article class="feature-card">
-                <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Funciones</div>
-                <h3 style="margin: 12px 0 0; font-size: 18px;">Velocidad</h3>
-                <p>Entrega contactos listos para el siguiente paso.</p>
-              </article>
-            </div>
+        <aside class="search-note">
+          <div>
+            <strong>Qué evita</strong>
+            <p>Bases infladas, contactos irrelevantes y tiempo perdido limpiando información.</p>
+          </div>
+          <div>
+            <strong>Qué deja listo</strong>
+            <p>Prospectos con mejor enfoque comercial y una base lista para usar.</p>
+          </div>
+        </aside>
+      </div>
     </section>
 
-    
+    <section class="search-section">
+      <div class="search-section__head">
+        <div class="eyebrow">Cuándo sirve</div>
+        <h2>Es útil cuando necesitas prospectar con rapidez y con criterio</h2>
+        <p>Especialmente cuando el equipo no puede dedicar horas a buscar y depurar manualmente.</p>
+      </div>
 
-    <section class="cta-band">
-      <div class="eyebrow">Siguiente paso</div>
-      <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Buscar contactos para ventas</h2>
-      <p>Si esta solución encaja con tu operación, el siguiente paso es revisar demo, precios o la página relacionada que mejor te ayude a avanzar.</p>
+      <div class="search-cases">
+        <article class="search-case">
+          <span class="search-tag search-tag--blue">Web</span>
+          <h3>Prospección rápida</h3>
+          <p>Encuentra oportunidades visibles sin salirte del foco comercial.</p>
+        </article>
+        <article class="search-case">
+          <span class="search-tag search-tag--violet">Google</span>
+          <h3>Mercados específicos</h3>
+          <p>Busca negocios o perfiles por intención y relevancia.</p>
+        </article>
+        <article class="search-case">
+          <span class="search-tag search-tag--green">Gov-MX</span>
+          <h3>Fuentes públicas</h3>
+          <p>Apóyate en directorios y registros para enriquecer tu base.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="search-cta">
+      <div class="eyebrow" style="color: rgba(255,255,255,.72); border-color: rgba(255,255,255,.15);">Siguiente paso</div>
+      <h2 style="margin: 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Buscar contactos Web, Google y Gov-MX.</h2>
+      <p>Si esta solución encaja con tu operación, revisa la demo y después conecta el flujo con CRM y seguimiento.</p>
       <div class="actions">
-        <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20para%20ventas%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver búsqueda</a>
-        <a class="button secondary" href="/">Seguir navegando</a>
+        <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20Web,%20Google%20y%20Gov-MX%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver búsqueda</a>
+        <a class="button secondary" href="/seguimiento-ventas">Ver seguimiento</a>
+        <a class="button ghost" href="/crm-con-ia-para-whatsapp">Ver CRM con IA</a>
       </div>
       <div class="footer-links">
         <a href="/">Inicio</a>
@@ -238,7 +570,7 @@
       </div>
     </section>
 
-    <div class="footer">TalIA · CRM con IA, automatización comercial y seguimiento por WhatsApp.</div>
+    <div class="footer">Tal-IA · búsqueda de contactos Web, Google y Gov-MX para ventas.</div>
   </main>
   <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
 </body>
