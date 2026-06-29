@@ -239,6 +239,33 @@ Esta es la URL más fuerte para intención comercial porque junta:
 - Ventas B2B
 - Turismo
 
+## Mapa SEO base
+
+Cada página debe tener una sola intención principal. La siguiente tabla sirve como referencia de implementación para títulos, H1, descripción y CTA.
+
+| Página | `title` | `H1` | `meta description` | CTA principal |
+|---|---|---|---|---|
+| Inicio | `TalIA | CRM con IA para vender por WhatsApp` | `TalIA convierte chats en ventas` | `TalIA encuentra prospectos, responde por WhatsApp con IA, organiza tu CRM y da seguimiento hasta convertir conversaciones en ventas.` | `Hablar por WhatsApp` |
+| Qué es TalIA | `Qué es TalIA | CRM con IA para WhatsApp` | `Qué es TalIA y cómo ayuda a vender por WhatsApp` | `TalIA es un CRM con IA para WhatsApp que ayuda a responder prospectos, organizarlos y darles seguimiento.` | `Quiero una demo` |
+| CRM con IA para WhatsApp | `CRM con IA para WhatsApp | TalIA` | `Cómo vender por WhatsApp con CRM e IA` | `TalIA centraliza chats, organiza leads y automatiza el seguimiento comercial por WhatsApp.` | `Ver demo` |
+| Asistente IA para empresas | `Asistente IA para empresas | TalIA` | `Asistente IA para atender prospectos y calificar oportunidades` | `TalIA ayuda a responder, preguntar, registrar datos y pasar prospectos al equipo comercial.` | `Pedir demo` |
+| Automatización de procesos | `Automatización de procesos | TalIA` | `Automatiza procesos comerciales sin perder control` | `TalIA automatiza tareas repetitivas para acelerar respuesta, orden y seguimiento comercial.` | `Ver cómo funciona` |
+| Seguimiento de ventas | `Seguimiento de ventas | TalIA` | `Cómo no perder prospectos en el seguimiento comercial` | `TalIA ordena el seguimiento de ventas con recordatorios, tareas y control de oportunidades.` | `Ver seguimiento` |
+| Ventas e inventarios | `Ventas e inventarios | TalIA` | `Conecta ventas e inventario en un solo flujo` | `TalIA ayuda a coordinar ventas, disponibilidad y control operativo desde un mismo lugar.` | `Ver gestión` |
+| Agendas, cotizaciones, notas y tareas | `Agendas, cotizaciones y tareas | TalIA` | `Cómo organizar citas, cotizaciones y pendientes` | `TalIA centraliza citas, cotizaciones, notas y tareas para dar mejor seguimiento comercial.` | `Ver agenda` |
+| Buscar contactos Web / Google / Gov-MX | `Buscar contactos para ventas | TalIA` | `Cómo conseguir prospectos desde web, Google y Gov-MX` | `TalIA ayuda a encontrar contactos útiles para ventas y convertir búsquedas en prospectos trabajables.` | `Buscar contactos` |
+| Campañas de Email / WhatsApp | `Campañas de Email y WhatsApp | TalIA` | `Cómo activar y reactivar prospectos con campañas` | `TalIA permite enviar campañas comerciales por email y WhatsApp para mover leads fríos o generar respuesta.` | `Ver campañas` |
+| Gestión inmobiliaria | `Gestión inmobiliaria con IA | TalIA` | `Cómo vender mejor en inmobiliarias con IA` | `TalIA ayuda a inmobiliarias a responder leads, agendar citas y dar seguimiento comercial.` | `Ver inmobiliario` |
+| Métricas | `Métricas comerciales | TalIA` | `Cómo medir ventas, seguimiento y conversión` | `TalIA muestra métricas útiles para entender respuesta, seguimiento y avance comercial.` | `Ver métricas` |
+| Industrias | `Industrias | TalIA` | `TalIA por industria` | `TalIA se adapta a inmobiliarias, servicios, negocios locales, ventas B2B y turismo.` | `Ver industrias` |
+| Inmobiliario | `IA para inmobiliario | TalIA` | `Cómo ayuda TalIA a inmobiliarias` | `TalIA responde leads inmobiliarios, agenda citas y mejora el seguimiento comercial.` | `Ver demo inmobiliaria` |
+| Servicios | `IA para servicios | TalIA` | `Cómo ayuda TalIA a negocios de servicios` | `TalIA ayuda a servicios a responder, cotizar y dar seguimiento sin perder oportunidades.` | `Ver servicios` |
+| Negocios locales | `IA para negocios locales | TalIA` | `Cómo ayuda TalIA a negocios locales` | `TalIA ayuda a negocios locales a contestar rápido, organizar prospectos y vender más.` | `Ver negocio local` |
+| Ventas B2B | `IA para ventas B2B | TalIA` | `Cómo ayuda TalIA a ventas B2B` | `TalIA ordena prospección, seguimiento y priorización de oportunidades en ventas B2B.` | `Ver B2B` |
+| Turismo | `IA para turismo | TalIA` | `Cómo ayuda TalIA a turismo y reservas` | `TalIA ayuda a turismo a responder consultas, cotizar reservas y dar seguimiento comercial.` | `Ver turismo` |
+| Características | `Características CRM con IA | TalIA` | `Qué incluye TalIA y cómo se usa` | `TalIA reúne funciones clave para atender leads, organizar ventas y automatizar seguimiento.` | `Ver características` |
+| Precios | `Precios | CRM con IA para WhatsApp | TalIA` | `Planes de TalIA y qué incluye cada uno` | `Conoce los precios de TalIA y elige el plan que mejor se adapta a tu operación comercial.` | `Ver precios` |
+
 ## Recomendación de implementación
 
 1. Simplificar la `home` primero.
