@@ -15,26 +15,26 @@ function whatsappHref(message) {
 
 const sectionGroups = {
   producto: {
-    label: "Producto",
-    introTitle: "Cómo leer Producto",
+    label: "Funciones",
+    introTitle: "Qué incluye TalIA",
     introLead:
-      "TalIA presenta su propuesta comercial, sus módulos principales y el camino más claro hacia demo o precios.",
+      "TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento y conversión.",
     introMode: "cards",
     introItems: [
-      ["Qué es", "Define la propuesta completa y no solo una función aislada.", "blue"],
-      ["Componentes", "Conecta CRM, WhatsApp, asistente y características.", "violet"],
+      ["Qué hace", "Explica el beneficio principal antes que el módulo.", "blue"],
+      ["Componentes", "Conecta CRM, WhatsApp, prospección y seguimiento.", "violet"],
       ["Conversión", "Lleva al usuario hacia una demo o una página de precios.", "green"],
     ],
   },
   soluciones: {
-    label: "Soluciones",
-    introTitle: "Qué resuelve cada solución",
+    label: "Casos de uso",
+    introTitle: "Qué problema resuelve cada caso de uso",
     introLead:
-      "Aquí se explica el problema operativo que TalIA resuelve, cómo entra en el flujo comercial y qué mejora para ventas o atención.",
+      "Cada página aterriza el beneficio: responder más rápido, automatizar seguimiento, agendar o cerrar más ventas.",
     introMode: "steps",
     introItems: [
       ["Detecta el problema", "Identifica qué parte del flujo se rompe hoy: respuesta lenta, seguimiento débil o falta de orden."],
-      ["Activa la solución", "La IA entra en el punto correcto: WhatsApp, ventas, automatización o agenda."],
+      ["Activa el caso de uso", "La IA entra en el punto correcto: WhatsApp, ventas, automatización o agenda."],
       ["Entrega resultado", "El equipo trabaja con más contexto, menos fricción y mayor velocidad de cierre."],
     ],
   },
@@ -124,7 +124,7 @@ function getSectionKey(url) {
 
 const navGroups = [
   {
-    label: "Producto",
+    label: "Funciones",
     links: [
       { href: "/que-es-talia", label: "Qué es TalIA" },
       { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
@@ -133,7 +133,7 @@ const navGroups = [
     ],
   },
   {
-    label: "Soluciones",
+    label: "Casos de uso",
     links: [
       { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
       { href: "/ia-para-ventas", label: "IA para ventas" },
@@ -1132,7 +1132,7 @@ function renderNav(page, depth = 0) {
   <header class="site-header">
     <div class="site-header__inner">
       <a class="brand" href="${homeHref}" aria-label="TalIA">
-        <img src="${prefix}assets/logos/Logo8.png" alt="" aria-hidden="true" />
+        <img src="${prefix}Logo8.svg" alt="" aria-hidden="true" />
         <span>Tal-IA</span>
       </a>
       <nav class="nav" aria-label="Navegación principal">

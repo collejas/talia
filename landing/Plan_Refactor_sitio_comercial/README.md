@@ -4,62 +4,150 @@ Base de trabajo para la landing y las páginas SEO del sitio comercial de TalIA.
 
 ## Objetivo
 
-Mantener la `landing/home` simple y comercial, y por debajo construir páginas SEO claras, rastreables y bien enlazadas.
+Separar con claridad dos cosas distintas:
 
-La navegación visible debe ser:
+- La `home`, que debe vender en pocos segundos.
+- Las páginas SEO, que deben responder búsquedas concretas sin ensuciar el mensaje principal.
+
+La narrativa central del sitio debe ser esta:
+
+> TalIA te ayuda a conseguir prospectos, atenderlos por WhatsApp con IA y darles seguimiento en un CRM hasta convertirlos en ventas.
+
+## Problema actual
+
+Hoy el sitio intenta hacer demasiadas tareas al mismo tiempo:
+
+- Explicar qué es TalIA.
+- Vender la plataforma.
+- Posicionar palabras SEO.
+- Explicar funciones.
+- Mostrar soluciones.
+- Hablarle a industrias.
+- Justificar IA, CRM, WhatsApp, prospección, seguimiento y cotizaciones.
+
+Eso genera repetición. `Producto` y `Soluciones` se pisan porque ambos hablan de qué hace TalIA, pero con distinto nombre.
+
+## Regla de diseño comercial
+
+La home no debe intentar resolver toda la arquitectura SEO.
+
+La home debe responder en una sola pasada:
+
+1. Qué es TalIA.
+2. Qué hace por el negocio.
+3. Para quién sirve.
+4. Qué resultado promete.
+5. Qué acción debe tomar el usuario.
+
+## Menú visible recomendado
+
+La navegación visible debe ser corta y práctica:
 
 - Inicio
-- Producto
-- Soluciones
-- Prospección
+- Cómo funciona
+- Funciones
+- Casos de uso
 - Industrias
 - Precios
+- Agenda una demo
 
-Cada botón principal puede abrir un dropdown o una vista agrupada, pero el texto del enlace debe ser explícito para usuarios y buscadores.
+Los grupos internos pueden seguir existiendo para SEO, pero no deben dominar la navegación principal.
 
-## Principios
+## Estructura ideal de la home
 
-- La home vende.
-- Las subpáginas posicionan.
-- Cada URL debe tener una intención de búsqueda clara.
-- El texto del enlace debe describir la página destino.
-- Evitar páginas duplicadas con el mismo enfoque.
-- Cada página debe enlazar a 3 o 4 páginas relacionadas al final.
+### 1. Hero directo
 
-## Mapa del sitio
+- Título: `TalIA convierte chats en ventas`
+- Subtítulo: `TalIA encuentra prospectos, responde por WhatsApp con IA, organiza el CRM y da seguimiento hasta cerrar.`
+- CTAs:
+  - `Hablar por WhatsApp`
+  - `Ver cómo funciona`
 
-```txt
-/
-├── que-es-talia
-├── caracteristicas
-├── crm-con-ia-para-whatsapp
-├── asistente-ia-empresas
-├── ia-de-whatsapp
-├── ia-para-ventas
-├── automatizacion-de-ventas
-├── seguimiento-ventas
-├── agenda-y-cotizaciones
-├── prospeccion-comercial
-├── buscar-contactos
-├── prospectos-google-denue
-├── campanas-marketing
-├── precios
-└── industrias/
-    ├── inmobiliarias
-    ├── servicios
-    ├── negocios-locales
-    ├── ventas-b2b
-    └── turismo
-```
+### 2. Problema
 
-## URLs canónicas
+- Los prospectos llegan por WhatsApp, formularios, redes o llamadas.
+- Si no hay respuesta rápida, el lead se enfría.
+- TalIA centraliza y automatiza el seguimiento.
 
-Estas son las rutas públicas que deben quedar visibles y enlazadas en el sitio:
+### 3. Cómo funciona
 
-- `/`
+El flujo debe leerse en pasos, no como lista técnica:
+
+1. Encuentra prospectos.
+2. Inicia conversaciones.
+3. Responde con IA.
+4. Organiza en CRM.
+5. Da seguimiento.
+
+### 4. Funciones
+
+Aquí se explica qué trae TalIA, pero siempre como beneficio:
+
+- IA para WhatsApp.
+- CRM de ventas.
+- Prospección de contactos.
+- Agenda y cotizaciones.
+- Campañas y seguimiento.
+
+### 5. Casos de uso
+
+Aquí se explica qué problema resuelve:
+
+- Responder más rápido.
+- Conseguir prospectos.
+- Automatizar seguimiento.
+- Organizar ventas.
+- Agendar citas.
+- Cotizar más rápido.
+- Recuperar leads fríos.
+
+### 6. Industrias
+
+Aquí se aterriza por tipo de negocio:
+
+- Inmobiliarias.
+- Servicios.
+- Negocios locales.
+- Ventas B2B.
+- Turismo.
+
+### 7. Precio
+
+El precio debe verse con claridad.
+
+Mensaje base:
+
+- `Desde $700 MXN + IVA al mes pagando anual por 5 licencias.`
+
+### 8. Cierre
+
+La home debe cerrar con una idea simple:
+
+> TalIA toma un prospecto desde que entra hasta que está listo para cerrar.
+
+## Arquitectura SEO
+
+Las páginas SEO no deben competir con la home.
+
+La home vende.
+Las páginas SEO posicionan.
+
+### Página pilar
+
+- `/crm-con-ia-para-whatsapp`
+
+Esta es la URL más fuerte para intención comercial porque junta:
+
+- CRM
+- IA
+- WhatsApp
+- ventas
+- seguimiento
+
+### Páginas satélite
+
 - `/que-es-talia`
 - `/caracteristicas`
-- `/crm-con-ia-para-whatsapp`
 - `/asistente-ia-empresas`
 - `/ia-de-whatsapp`
 - `/ia-para-ventas`
@@ -70,113 +158,30 @@ Estas son las rutas públicas que deben quedar visibles y enlazadas en el sitio:
 - `/buscar-contactos`
 - `/prospectos-google-denue`
 - `/campanas-marketing`
-- `/precios`
-- `/industrias`
 - `/industrias/inmobiliarias`
 - `/industrias/servicios`
 - `/industrias/negocios-locales`
 - `/industrias/ventas-b2b`
 - `/industrias/turismo`
 
-### Dominio canónico
+### Criterio de contenido
 
-- Canonical público: `https://talia.mx`
-- Alias que deben redirigir a `https://talia.mx`:
-  - `https://www.talia.mx`
-  - `https://tal-ia.mx`
-  - `https://www.tal-ia.mx`
+- Cada página debe resolver una intención concreta.
+- No repetir la misma explicación de `TalIA` en todas.
+- No usar `Producto` y `Soluciones` como si fueran categorías distintas cuando hablan de lo mismo.
+- Evitar párrafos largos en la parte alta.
+- Cerrar cada página con 3 o 4 enlaces relacionados.
 
-### Variantes que deben redirigir
+## Orden recomendado del menú SEO
 
-- `/caracteristicas.html` -> `/caracteristicas`
-- `/caracteristicas/` -> `/caracteristicas`
-- `/que-es-talia.html` -> `/que-es-talia`
-- `/que-es-talia/` -> `/que-es-talia`
-- `/crm-con-ia-para-whatsapp.html` -> `/crm-con-ia-para-whatsapp`
-- `/crm-con-ia-para-whatsapp/` -> `/crm-con-ia-para-whatsapp`
-- `/asistente-ia-empresas.html` -> `/asistente-ia-empresas`
-- `/asistente-ia-empresas/` -> `/asistente-ia-empresas`
-- `/ia-de-whatsapp.html` -> `/ia-de-whatsapp`
-- `/ia-de-whatsapp/` -> `/ia-de-whatsapp`
-- `/ia-para-ventas.html` -> `/ia-para-ventas`
-- `/ia-para-ventas/` -> `/ia-para-ventas`
-- `/automatizacion-de-ventas.html` -> `/automatizacion-de-ventas`
-- `/automatizacion-de-ventas/` -> `/automatizacion-de-ventas`
-- `/seguimiento-ventas.html` -> `/seguimiento-ventas`
-- `/seguimiento-ventas/` -> `/seguimiento-ventas`
-- `/agenda-y-cotizaciones.html` -> `/agenda-y-cotizaciones`
-- `/agenda-y-cotizaciones/` -> `/agenda-y-cotizaciones`
-- `/prospeccion-comercial.html` -> `/prospeccion-comercial`
-- `/prospeccion-comercial/` -> `/prospeccion-comercial`
-- `/buscar-contactos.html` -> `/buscar-contactos`
-- `/buscar-contactos/` -> `/buscar-contactos`
-- `/prospectos-google-denue.html` -> `/prospectos-google-denue`
-- `/prospectos-google-denue/` -> `/prospectos-google-denue`
-- `/campanas-marketing.html` -> `/campanas-marketing`
-- `/campanas-marketing/` -> `/campanas-marketing`
-- `/precios/` -> `/precios`
-- `/precios/index` -> `/precios`
-- `/precios/index.html` -> `/precios`
-- `/industrias/` -> `/industrias`
-- `/industrias/index` -> `/industrias`
-- `/industrias/index.html` -> `/industrias`
-- `/industrias/inmobiliarias/` -> `/industrias/inmobiliarias`
-- `/industrias/servicios/` -> `/industrias/servicios`
-- `/industrias/negocios-locales/` -> `/industrias/negocios-locales`
-- `/industrias/ventas-b2b/` -> `/industrias/ventas-b2b`
-- `/industrias/turismo/` -> `/industrias/turismo`
-
-## Inicio
-
-- URL: `/`
-- Keyword principal: `TalIA`
-- Keywords secundarias:
-  - `CRM con IA`
-  - `IA de WhatsApp`
-  - `Prospección con IA`
-  - `IA para ventas`
-- Headline:
-  - `TalIA convierte prospectos en ventas`
-- Objetivo:
-  - Explicar rápido qué hace TalIA.
-  - Llevar al usuario a pedir demo.
-  - No intentar posicionar demasiadas keywords en una sola página.
-
-## Producto
-
-### Orden recomendado en menú
+### Producto
 
 - Qué es TalIA
 - CRM con IA para WhatsApp
 - Asistente IA para empresas
 - Características
 
-### Páginas
-
-| Página | URL | Keyword principal | Keywords secundarias |
-| --- | --- | --- | --- |
-| Qué es TalIA | `/que-es-talia` | qué es TalIA | CRM con IA, asistente IA comercial |
-| Características | `/caracteristicas` | características CRM con IA | IA WhatsApp, prospección, marketing, seguimiento |
-| CRM con IA para WhatsApp | `/crm-con-ia-para-whatsapp` | CRM con IA para WhatsApp | CRM WhatsApp, IA de WhatsApp, CRM con IA |
-| Asistente IA para empresas | `/asistente-ia-empresas` | Asistente IA | asistente IA para empresas, asistente virtual con IA |
-
-### Vista más importante
-
-- `/crm-con-ia-para-whatsapp`
-
-Motivo:
-
-- Une la categoría completa.
-- Tiene la combinación más fuerte de intención comercial:
-  - CRM
-  - IA
-  - WhatsApp
-  - ventas
-  - seguimiento
-
-## Soluciones
-
-### Orden recomendado en menú
+### Funciones
 
 - IA de WhatsApp
 - IA para ventas
@@ -184,155 +189,35 @@ Motivo:
 - Seguimiento de ventas
 - Agenda y cotizaciones
 
-### Páginas
-
-| Página | URL | Keyword principal | Keywords secundarias |
-| --- | --- | --- | --- |
-| IA de WhatsApp | `/ia-de-whatsapp` | IA de WhatsApp | IA para WhatsApp, WhatsApp con IA |
-| IA para ventas | `/ia-para-ventas` | IA ventas | IA para ventas, inteligencia artificial ventas |
-| Automatización de ventas | `/automatizacion-de-ventas` | automatización de ventas | automatizar ventas, ventas con IA |
-| Seguimiento de ventas | `/seguimiento-ventas` | seguimiento ventas | seguimiento de prospectos, seguimiento comercial |
-| Agenda y cotizaciones | `/agenda-y-cotizaciones` | agenda y cotizaciones | cotizaciones WhatsApp, agendar citas WhatsApp |
-
-### Vista más importante
-
-- `/ia-de-whatsapp`
-
-### Criterio SEO recomendado
-
-No crear una página separada para `IA para WhatsApp` al inicio.
-
-La keyword debe vivir dentro de `/ia-de-whatsapp`.
-
-Ejemplo de enfoque:
-
-- Title SEO: `IA de WhatsApp para empresas | TalIA`
-- H1: `IA de WhatsApp para responder, calificar y dar seguimiento`
-- Texto clave:
-  - TalIA funciona como una IA para WhatsApp que atiende conversaciones, pide datos, responde dudas y conecta al prospecto con tu CRM.
-
-Así se cubren:
-
-- `IA de WhatsApp`
-- `IA para WhatsApp`
-- `WhatsApp con IA`
-
-sin duplicar contenido.
-
-## Prospección
-
-### Orden recomendado en menú
+### Casos de uso
 
 - Prospección comercial
 - Buscar contactos
-- Prospectos en Google y DENUE
+- Prospectos Google y DENUE
 - Campañas y marketing
 
-### Páginas
+### Industrias
 
-| Página | URL | Keyword principal | Keywords secundarias |
-| --- | --- | --- | --- |
-| Prospección comercial | `/prospeccion-comercial` | prospección | prospección comercial, prospección con IA |
-| Buscar contactos | `/buscar-contactos` | buscar contactos | buscar contactos para ventas, encontrar prospectos |
-| Prospectos en Google y DENUE | `/prospectos-google-denue` | buscar prospectos en Google | DENUE, contactos de empresas, directorio comercial |
-| Campañas y marketing | `/campanas-marketing` | marketing con IA | campañas por WhatsApp, campañas email, tracking |
-| Reactivación de prospectos | `/reactivacion-prospectos` | reactivar prospectos | leads fríos, seguimiento automático |
-
-### Vistas más importantes
-
-- `/prospeccion-comercial`
-- `/buscar-contactos`
-
-## Industrias
-
-### Orden recomendado en menú
-
+- Ver industrias
 - Inmobiliarias
 - Servicios
 - Negocios locales
 - Ventas B2B
 - Turismo
 
-### Páginas
+## Recomendación de implementación
 
-| Página | URL | Keyword principal | Keywords secundarias |
-| --- | --- | --- | --- |
-| Inmobiliarias | `/industrias/inmobiliarias` | IA para inmobiliarias | CRM inmobiliario, WhatsApp inmobiliarias |
-| Servicios | `/industrias/servicios` | IA para servicios | cotizaciones, agenda, atención WhatsApp |
-| Negocios locales | `/industrias/negocios-locales` | IA para negocios locales | WhatsApp negocios, atención automática |
-| Ventas B2B | `/industrias/ventas-b2b` | IA para ventas B2B | prospección B2B, seguimiento comercial |
-| Turismo | `/industrias/turismo` | IA para turismo | reservas WhatsApp, cotización viajes |
+1. Simplificar la `home` primero.
+2. Ajustar la jerarquía de navegación.
+3. Mantener las páginas SEO como biblioteca de apoyo.
+4. Reducir repetición en títulos, subtítulos y bloques introductorios.
+5. Hacer que cada URL tenga una sola intención principal.
 
-### Vista más importante
+## Criterio de terminado
 
-- `/industrias/inmobiliarias`
+La refactorización queda bien cuando:
 
-## Precios
-
-- URL: `/precios`
-- Keyword principal: `precios TalIA`
-- Keywords secundarias:
-  - `CRM con IA precio`
-  - `IA WhatsApp precio`
-  - `automatización WhatsApp precio`
-- Objetivo:
-  - Conversión.
-  - No sobrecargar esta página con demasiada densidad SEO.
-  - Debe ser clara, comercial y orientada a decisión.
-
-## Prioridad de implementación
-
-### Fase 1
-
-1. `/`
-2. `/ia-de-whatsapp`
-3. `/prospeccion-comercial`
-4. `/buscar-contactos`
-5. `/ia-para-ventas`
-6. `/seguimiento-ventas`
-7. `/crm-con-ia-para-whatsapp`
-8. `/industrias/inmobiliarias`
-9. `/caracteristicas`
-10. `/precios`
-
-### Fase 2
-
-- `/asistente-ia-empresas`
-- `/automatizacion-de-ventas`
-- `/agenda-y-cotizaciones`
-- `/prospectos-google-denue`
-- `/campanas-marketing`
-- `/industrias/servicios`
-- `/industrias/negocios-locales`
-- `/industrias/ventas-b2b`
-- `/industrias/turismo`
-
-## Regla de enlaces internos
-
-Cada página debe incluir al final una sección como:
-
-```txt
-También te puede interesar:
-- CRM con IA para WhatsApp
-- IA para ventas
-- Seguimiento de ventas
-```
-
-Esto ayuda a:
-
-- Guiar al usuario.
-- Aumentar rastreabilidad.
-- Fortalecer la relación semántica entre páginas.
-
-## Menú visible
-
-La navegación principal debe mantenerse simple:
-
-`Inicio | Producto | Soluciones | Prospección | Industrias | Precios`
-
-## Nota operativa
-
-La `landing/home` no debe intentar posicionar todo.
-Debe vender claro, con una sola promesa principal.
-
-Las páginas internas son las que deben capturar búsquedas específicas y distribuir la intención SEO por tema.
+- La home se entiende en menos de 5 segundos.
+- El usuario puede decir qué hace TalIA sin leer demasiado.
+- `Producto` y `Soluciones` dejan de pisarse.
+- SEO sigue cubierto sin convertir la home en un catálogo largo.

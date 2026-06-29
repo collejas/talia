@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TalIA | Prospección, IA de WhatsApp y CRM</title>
-  <meta name="description" content="TalIA convierte prospectos en ventas con prospección, IA de WhatsApp, CRM y automatización comercial." />
+  <title>TalIA | CRM con IA para vender por WhatsApp</title>
+  <meta name="description" content="TalIA encuentra prospectos, responde por WhatsApp con IA, organiza tu CRM y da seguimiento hasta convertir conversaciones en ventas." />
   <link rel="canonical" href="https://talia.mx/" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,27 +14,21 @@
 </head>
 <body>
   <main class="page">
-    <nav class="nav">
+    <nav class="nav" aria-label="Navegación principal">
       <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-      <a class="brand" href="#producto" aria-label="TalIA">
-        <img src="/assets/logos/Logo8.png" alt="" aria-hidden="true" />
+      <a class="brand" href="/" aria-label="TalIA">
+        <img src="/Logo8.svg" alt="" aria-hidden="true" />
         <span>Tal-IA</span>
       </a>
 
       <div class="nav-links nav-links--desktop">
         <a href="/">Inicio</a>
+        <a href="#como-funciona">Cómo funciona</a>
+
         <details class="nav-group">
-          <summary>Producto</summary>
+          <summary>Funciones</summary>
           <div class="nav-dropdown">
-            <a href="/que-es-talia">Qué es TalIA</a>
             <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-            <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-            <a href="/caracteristicas">Características</a>
-          </div>
-        </details>
-        <details class="nav-group">
-          <summary>Soluciones</summary>
-          <div class="nav-dropdown">
             <a href="/ia-de-whatsapp">IA de WhatsApp</a>
             <a href="/ia-para-ventas">IA para ventas</a>
             <a href="/automatizacion-de-ventas">Automatización de ventas</a>
@@ -42,8 +36,9 @@
             <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
           </div>
         </details>
+
         <details class="nav-group">
-          <summary>Prospección</summary>
+          <summary>Casos de uso</summary>
           <div class="nav-dropdown">
             <a href="/prospeccion-comercial">Prospección comercial</a>
             <a href="/buscar-contactos">Buscar contactos</a>
@@ -51,6 +46,7 @@
             <a href="/campanas-marketing">Campañas y marketing</a>
           </div>
         </details>
+
         <details class="nav-group">
           <summary>Industrias</summary>
           <div class="nav-dropdown">
@@ -62,6 +58,7 @@
             <a href="/industrias/turismo">Turismo</a>
           </div>
         </details>
+
         <a href="/precios">Precios</a>
         <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
       </div>
@@ -71,28 +68,39 @@
       </a>
 
       <details class="nav-mobile-menu">
-      <summary aria-label="Abrir menú">Menú</summary>
+        <summary aria-label="Abrir menú">Menú</summary>
         <div class="nav-mobile-menu__panel">
           <a href="/">Inicio</a>
-          <a href="/que-es-talia">Qué es TalIA</a>
-          <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <a href="/caracteristicas">Características</a>
-          <a href="/ia-de-whatsapp">IA de WhatsApp</a>
-          <a href="/ia-para-ventas">IA para ventas</a>
-          <a href="/automatizacion-de-ventas">Automatización de ventas</a>
-          <a href="/seguimiento-ventas">Seguimiento de ventas</a>
-          <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-          <a href="/prospeccion-comercial">Prospección comercial</a>
-          <a href="/buscar-contactos">Buscar contactos</a>
-          <a href="/prospectos-google-denue">Prospectos Google y DENUE</a>
-          <a href="/campanas-marketing">Campañas y marketing</a>
-          <a href="/industrias">Ver industrias</a>
-          <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a href="/industrias/servicios">Servicios</a>
-          <a href="/industrias/negocios-locales">Negocios locales</a>
-          <a href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a href="/industrias/turismo">Turismo</a>
+          <a href="#como-funciona">Cómo funciona</a>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Funciones</div>
+            <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+            <a href="/ia-de-whatsapp">IA de WhatsApp</a>
+            <a href="/ia-para-ventas">IA para ventas</a>
+            <a href="/automatizacion-de-ventas">Automatización de ventas</a>
+            <a href="/seguimiento-ventas">Seguimiento de ventas</a>
+            <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
+          </div>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Casos de uso</div>
+            <a href="/prospeccion-comercial">Prospección comercial</a>
+            <a href="/buscar-contactos">Buscar contactos</a>
+            <a href="/prospectos-google-denue">Prospectos Google y DENUE</a>
+            <a href="/campanas-marketing">Campañas y marketing</a>
+          </div>
+
+          <div class="nav-mobile-menu__group">
+            <div class="nav-mobile-menu__label">Industrias</div>
+            <a href="/industrias">Ver industrias</a>
+            <a href="/industrias/inmobiliarias">Inmobiliarias</a>
+            <a href="/industrias/servicios">Servicios</a>
+            <a href="/industrias/negocios-locales">Negocios locales</a>
+            <a href="/industrias/ventas-b2b">Ventas B2B</a>
+            <a href="/industrias/turismo">Turismo</a>
+          </div>
+
           <a href="/precios">Precios</a>
           <div class="nav-mobile-menu__actions">
             <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
@@ -103,44 +111,43 @@
       </details>
     </nav>
 
-    <section class="hero-grid" id="producto">
+    <section class="hero-grid" id="inicio">
       <div class="hero-copy">
-        <div class="eyebrow">Prospección · IA de WhatsApp · CRM · Marketing</div>
-        <h1><span class="gradient-text">TalIA</span> convierte prospectos en ventas</h1>
+        <div class="eyebrow">CRM con IA para WhatsApp</div>
+        <h1><span class="gradient-text">TalIA</span> convierte chats en ventas</h1>
         <p>
-          Busca clientes, los contacta, responde por ti, los organiza en tu CRM
-          y da seguimiento hasta que estén listos para comprar.
+          TalIA encuentra prospectos, responde por WhatsApp con IA, organiza tu CRM y da seguimiento hasta convertir conversaciones en ventas.
         </p>
 
         <div class="hero-actions">
           <a class="button primary" data-cta-id="CTA_HERO_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20una%20demo%20comercial%20de%20Tal-IA%20para%20mi%20equipo" target="_blank" rel="noopener noreferrer">
-            Quiero ver una demo
+            Hablar por WhatsApp
           </a>
-          <a class="button secondary" href="/demo.html">Agendar demo</a>
+          <a class="button secondary" href="#como-funciona">Ver cómo funciona</a>
         </div>
 
         <div class="proof-row">
           <div class="proof">
-            <strong>Encuentra clientes</strong>
-            <span>Prospección desde Google, DENUE y sitios web.</span>
+            <strong>Consigue prospectos</strong>
+            <span>Busca contactos útiles desde Google, DENUE y bases propias.</span>
           </div>
           <div class="proof">
-            <strong>Atiende 24/7</strong>
-            <span>Respuestas con IA por WhatsApp.</span>
+            <strong>Responde rápido</strong>
+            <span>Atiende por WhatsApp con IA y no deja enfriar la conversación.</span>
           </div>
           <div class="proof">
             <strong>Da seguimiento</strong>
-            <span>Citas, cotizaciones, asesor humano y métricas.</span>
+            <span>Ordena etapas, citas, cotizaciones y responsables en un CRM.</span>
           </div>
         </div>
       </div>
 
-      <section class="map-shell" aria-label="Mapa circular comercial de TalIA" id="como-funciona">
+      <section class="map-shell" aria-label="Flujo comercial de TalIA" id="como-funciona">
         <div class="orbit">
           <div class="core">
             <div>
               <strong>Tal<span>IA</span></strong>
-              <p>Tu asistente comercial para conseguir, atender y convertir clientes.</p>
+              <p>Tu asistente comercial para encontrar, atender y convertir clientes.</p>
             </div>
           </div>
 
@@ -148,15 +155,15 @@
             <div class="badge">1</div>
             <div>
               <h3>Encuentra prospectos</h3>
-              <p>Busca negocios en Google, DENUE y sitios web. Crea listas útiles para vender.</p>
+              <p>Busca negocios y contactos que sí pueden convertirse en oportunidad.</p>
             </div>
           </article>
 
           <article class="step s2">
             <div class="badge">2</div>
             <div>
-              <h3>Activa campañas</h3>
-              <p>Contacta por email, WhatsApp o voz con mensajes automáticos.</p>
+              <h3>Inicia conversaciones</h3>
+              <p>Activa WhatsApp, email o campañas para abrir la venta.</p>
             </div>
           </article>
 
@@ -164,88 +171,130 @@
             <div class="badge">3</div>
             <div>
               <h3>Responde con IA</h3>
-              <p>Atiende 24/7, resuelve dudas, pide datos y mantiene viva la conversación.</p>
+              <p>Atiende dudas, captura datos y mantiene viva la conversación.</p>
             </div>
           </article>
 
           <article class="step s4">
             <div class="badge">4</div>
             <div>
-              <h3>Califica y organiza</h3>
-              <p>Guarda el contacto, mide interés y acomoda cada oportunidad en el CRM.</p>
+              <h3>Organiza en CRM</h3>
+              <p>Guarda historial, etapa y responsable en un solo lugar.</p>
             </div>
           </article>
 
           <article class="step s5">
             <div class="badge">5</div>
             <div>
-              <h3>Cotiza o agenda</h3>
-              <p>Envía precios, propuestas o agenda citas y visitas automáticamente.</p>
-            </div>
-          </article>
-
-          <article class="step s6">
-            <div class="badge">6</div>
-            <div>
-              <h3>Avisa al asesor</h3>
-              <p>Cuando el prospecto está listo, notifica al asesor con todo el contexto.</p>
-            </div>
-          </article>
-
-          <article class="step s7">
-            <div class="badge">7</div>
-            <div>
               <h3>Da seguimiento</h3>
-              <p>Envía recordatorios y mensajes automáticos para no dejar enfriar al cliente.</p>
-            </div>
-          </article>
-
-          <article class="step s8">
-            <div class="badge">8</div>
-            <div>
-              <h3>Mide resultados</h3>
-              <p>Ve aperturas, clicks, respuestas, conversaciones y oportunidades reales.</p>
+              <p>Agrega recordatorios, citas, cotizaciones y reactivación automática.</p>
             </div>
           </article>
         </div>
       </section>
     </section>
 
-    <section class="section" id="soluciones">
+    <section class="section" id="funciones">
       <div class="section-head">
-        <h2>Todo el flujo comercial en un solo lugar</h2>
-        <p>TalIA no es solo un chat. Une prospección, campañas, atención, CRM y seguimiento para que cada prospecto tenga un camino claro hacia la venta.</p>
+        <h2>Funciones que empujan la venta</h2>
+        <p>TalIA no se presenta como un catálogo de herramientas. Cada función existe para responder mejor, ordenar más rápido y cerrar más oportunidades.</p>
       </div>
 
       <div class="feature-grid five">
         <article class="feature">
           <div class="feature-icon" style="background: var(--green)">☏</div>
-          <h3>IA de WhatsApp</h3>
-          <p>Atiende conversaciones, responde dudas, pide datos y mantiene activo al prospecto.</p>
+          <h3>CRM con IA para WhatsApp</h3>
+          <p>Centraliza conversaciones, etapas y seguimiento sin perder contexto.</p>
         </article>
 
         <article class="feature">
           <div class="feature-icon" style="background: var(--blue)">●</div>
-          <h3>CRM</h3>
-          <p>Ordena leads, clientes, historial, etapas, asesores y próximas acciones.</p>
+          <h3>IA de WhatsApp</h3>
+          <p>Responde dudas, pide datos y califica al prospecto de forma automática.</p>
         </article>
 
         <article class="feature">
           <div class="feature-icon" style="background: var(--violet)">✦</div>
-          <h3>IA</h3>
-          <p>Califica prospectos, automatiza respuestas y ayuda a decidir el siguiente paso.</p>
+          <h3>Prospección</h3>
+          <p>Encuentra contactos útiles y convierte búsquedas en bases accionables.</p>
         </article>
 
         <article class="feature">
           <div class="feature-icon" style="background: var(--orange)">↗</div>
-          <h3>Prospección / Marketing</h3>
-          <p>Busca prospectos, activa campañas y mide aperturas, clicks y respuestas.</p>
+          <h3>Seguimiento</h3>
+          <p>Evita leads fríos con tareas, recordatorios y secuencias simples.</p>
         </article>
 
         <article class="feature">
           <div class="feature-icon" style="background: var(--teal)">✓</div>
-          <h3>Ventas</h3>
-          <p>Convierte conversaciones en oportunidades con agenda, cotización y seguimiento.</p>
+          <h3>Agenda y cotizaciones</h3>
+          <p>Convierte interés en citas, propuestas y próximos pasos claros.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="casos-de-uso">
+      <div class="section-head">
+        <h2>Casos de uso que sí entiende el cliente</h2>
+        <p>La solución se explica mejor por el problema que resuelve que por el módulo que usa por dentro.</p>
+      </div>
+
+      <div class="feature-grid five">
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--blue)">1</div>
+          <h3>Responder más rápido</h3>
+          <p>No perder leads por tardar demasiado en contestar.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--green)">2</div>
+          <h3>Conseguir prospectos</h3>
+          <p>Construir una lista útil para vender en vez de acumular datos sueltos.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--violet)">3</div>
+          <h3>Automatizar seguimiento</h3>
+          <p>Hacer que los recordatorios y reintentos salgan a tiempo.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--orange)">4</div>
+          <h3>Organizar ventas</h3>
+          <p>Ver cada oportunidad por etapa, responsable y siguiente acción.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--teal)">5</div>
+          <h3>Recuperar leads fríos</h3>
+          <p>Reactivar contactos que todavía tienen potencial de compra.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="precios">
+      <div class="section-head">
+        <h2>Precio claro desde el inicio</h2>
+        <p>La propuesta comercial debe verse rápido. Si el usuario sigue leyendo, es porque ya entendió el valor.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--blue)">$</div>
+          <h3>Desde $700 MXN + IVA</h3>
+          <p>Precio base al mes pagando anual por 5 licencias.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--violet)">5</div>
+          <h3>5 licencias incluidas</h3>
+          <p>Ideal para equipos pequeños que necesitan orden y seguimiento.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-icon" style="background: var(--green)">↘</div>
+          <h3>Menos fricción comercial</h3>
+          <p>Un solo flujo para prospectar, responder, organizar y cerrar.</p>
         </article>
       </div>
     </section>
@@ -253,7 +302,7 @@
     <section class="section" id="industrias">
       <div class="section-head">
         <h2>Hecho para empresas que venden por conversación</h2>
-        <p>Funciona para negocios que reciben prospectos, atienden por WhatsApp, cotizan, agendan o necesitan seguimiento constante.</p>
+        <p>TalIA funciona mejor donde el negocio depende de responder rápido, cotizar, agendar o dar seguimiento constante.</p>
       </div>
 
       <div class="audience-grid">
@@ -266,8 +315,8 @@
     </section>
 
     <section class="final-cta" id="demo">
-      <h2>Deja que TalIA ordene tu operación comercial</h2>
-      <p>Consigue prospectos, atiéndelos con IA, organiza cada oportunidad y da seguimiento sin perder el control.</p>
+      <h2>Empieza con un flujo comercial más claro</h2>
+      <p>TalIA encuentra prospectos, atiende conversaciones, organiza tu CRM y da seguimiento hasta convertir oportunidades en ventas.</p>
       <a class="button" data-cta-id="CTA_FINAL_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20agendar%20una%20demo%20de%20Tal-IA%20y%20revisar%20casos%20de%20uso" target="_blank" rel="noopener noreferrer">
         Agenda una demo
       </a>
@@ -375,6 +424,5 @@
     void bootstrapWebchat();
   </script>
   <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
-
 </body>
 </html>
