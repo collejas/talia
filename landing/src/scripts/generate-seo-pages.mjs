@@ -40,7 +40,7 @@ const sectionGroups = {
   },
   prospeccion: {
     label: "Prospección",
-    introTitle: "Cómo se entiende la prospección",
+    introTitle: "Qué aporta la prospección",
     introLead:
       "Estas soluciones cubren el trabajo previo a la venta: encontrar contactos, construir bases útiles y activar campañas que sí generan oportunidades.",
     introMode: "cards",
@@ -884,23 +884,23 @@ const pages = [
     ],
     bodySections: [
       {
-        title: "Para qué sirve esta sección",
-        lead: "Agrupa las verticales y ayuda al usuario a elegir el caso que mejor encaja con su negocio.",
+        title: "Qué aporta esta sección",
+        lead: "Agrupa las verticales y muestra dónde TalIA encaja mejor según el negocio.",
         mode: "cards",
         items: [
-          ["Descubrir", "Mostrar que cada industria tiene su propia página SEO.", "blue"],
-          ["Navegar", "Llevar al usuario al caso de uso más cercano a su negocio.", "violet"],
-          ["Convertir", "Guiar a demo o a la página de la vertical correcta.", "green"],
+          ["Descubrir", "Ver qué industrias tienen una propuesta específica.", "blue"],
+          ["Elegir", "Ir al caso de uso más cercano a tu operación.", "violet"],
+          ["Avanzar", "Pasar a demo o a la página que mejor encaja.", "green"],
         ],
       },
       {
-        title: "Cómo pensar la vertical",
-        lead: "Cada industria tiene un lenguaje distinto, pero el objetivo sigue siendo responder mejor y convertir más.",
+        title: "Qué cambia por industria",
+        lead: "Cada sector usa lenguaje y flujo distintos, pero el objetivo sigue siendo responder mejor y convertir más.",
         mode: "steps",
         items: [
           ["Detectar el caso", "Elegir la vertical que más se parece al negocio."],
-          ["Leer el flujo", "Entender qué problema resuelve TalIA en ese sector."],
-          ["Ir a la página", "Abrir la vista específica de la industria."],
+          ["Ver el flujo", "Entender qué problema resuelve TalIA en ese sector."],
+          ["Abrir la página", "Ir a la vista específica de la industria."],
         ],
       },
     ],
@@ -1349,15 +1349,15 @@ function renderPage(page) {
     <section class="section">
       <div class="section__head">
         <div>
-          <h2>Enlaces relacionados</h2>
-          <p>Explora otras soluciones del sitio para ver el flujo completo y elegir el caso de uso que mejor encaja con tu operación.</p>
+          <h2>Sigue explorando</h2>
+          <p>Encuentra otras páginas relacionadas que completan el mismo flujo comercial desde distintos ángulos.</p>
         </div>
       </div>
-      <div class="section__subhead">Más de ${escapeHtml(sectionGroup.label)}</div>
+      <div class="section__subhead">Más páginas de ${escapeHtml(sectionGroup.label)}</div>
       <div class="links-grid">
         ${siblingLinks}
       </div>
-      <div class="section__subhead" style="margin-top: 18px;">Otras páginas útiles</div>
+      <div class="section__subhead" style="margin-top: 18px;">Relacionadas con esta ruta</div>
       <div class="links-grid">
         ${relatedLinks}
       </div>
