@@ -14,11 +14,11 @@ function whatsappHref(message) {
 }
 
 const sectionGroups = {
-  producto: {
+  funciones: {
     label: "Funciones",
-    introTitle: "Qué incluye TalIA",
+    introTitle: "Qué puede hacer TalIA",
     introLead:
-      "TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento y conversión.",
+      "TalIA se entiende mejor por lo que aporta al flujo comercial: atención, CRM, seguimiento, prospección y conversión.",
     introMode: "cards",
     introItems: [
       ["Qué hace", "Explica el beneficio principal antes que el módulo.", "blue"],
@@ -65,20 +65,16 @@ const sectionGroups = {
 };
 
 const sectionPages = {
-  producto: [
+  funciones: [
     { href: "/que-es-talia", label: "Qué es TalIA" },
     { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
     { href: "/asistente-ia-empresas", label: "Asistente IA para empresas" },
     { href: "/caracteristicas", label: "Características" },
-  ],
-  soluciones: [
     { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
     { href: "/ia-para-ventas", label: "IA para ventas" },
     { href: "/automatizacion-de-ventas", label: "Automatización de ventas" },
     { href: "/seguimiento-ventas", label: "Seguimiento de ventas" },
     { href: "/agenda-y-cotizaciones", label: "Agenda y cotizaciones" },
-  ],
-  prospeccion: [
     { href: "/prospeccion-comercial", label: "Prospección comercial" },
     { href: "/buscar-contactos", label: "Buscar contactos" },
     { href: "/prospectos-google-denue", label: "Prospectos Google y DENUE" },
@@ -98,28 +94,23 @@ function getSectionKey(url) {
   if (url.startsWith("/industrias")) {
     return "industrias";
   }
-  if (
-    [
-      "/ia-de-whatsapp",
-      "/ia-para-ventas",
-      "/automatizacion-de-ventas",
-      "/seguimiento-ventas",
-      "/agenda-y-cotizaciones",
-    ].includes(url)
-  ) {
-    return "soluciones";
+  return "funciones";
+}
+
+function getPageLayout(url) {
+  if (url === "/") {
+    return "home";
   }
-  if (
-    [
-      "/prospeccion-comercial",
-      "/buscar-contactos",
-      "/prospectos-google-denue",
-      "/campanas-marketing",
-    ].includes(url)
-  ) {
-    return "prospeccion";
+  if (url.startsWith("/industrias")) {
+    return "industry";
   }
-  return "producto";
+  if (url === "/crm-con-ia-para-whatsapp" || url === "/que-es-talia" || url === "/asistente-ia-empresas") {
+    return "pillar";
+  }
+  if (url === "/caracteristicas" || url === "/precios") {
+    return "summary";
+  }
+  return "solution";
 }
 
 const navGroups = [
@@ -130,21 +121,11 @@ const navGroups = [
       { href: "/crm-con-ia-para-whatsapp", label: "CRM con IA para WhatsApp" },
       { href: "/asistente-ia-empresas", label: "Asistente IA para empresas" },
       { href: "/caracteristicas", label: "Características" },
-    ],
-  },
-  {
-    label: "Casos de uso",
-    links: [
       { href: "/ia-de-whatsapp", label: "IA de WhatsApp" },
       { href: "/ia-para-ventas", label: "IA para ventas" },
       { href: "/automatizacion-de-ventas", label: "Automatización de ventas" },
       { href: "/seguimiento-ventas", label: "Seguimiento de ventas" },
       { href: "/agenda-y-cotizaciones", label: "Agenda y cotizaciones" },
-    ],
-  },
-  {
-    label: "Prospección",
-    links: [
       { href: "/prospeccion-comercial", label: "Prospección comercial" },
       { href: "/buscar-contactos", label: "Buscar contactos" },
       { href: "/prospectos-google-denue", label: "Prospectos Google y DENUE" },
@@ -1181,6 +1162,7 @@ function renderNav(page, depth = 0) {
 function renderPage(page) {
   const depth = page.url.split("/").filter(Boolean).length - 1;
   const prefix = "../".repeat(depth);
+  const layout = getPageLayout(page.url);
   const sectionKey = getSectionKey(page.url);
   const sectionGroup = sectionGroups[sectionKey];
   const siblingLinks = sectionPages[sectionKey]
@@ -1195,6 +1177,7 @@ function renderPage(page) {
     .join("\n");
 
   const cards = page.cards
+    .slice(0, layout === "industry" ? 2 : 3)
     .map(([title, copy, color]) => `
       <article class="feature-card">
         <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--${color}); background: rgba(37,99,235,.05);">${escapeHtml(page.eyebrow)}</div>
@@ -1208,10 +1191,13 @@ function renderPage(page) {
     .join("\n");
 
   const faq = page.faq
+    .slice(0, layout === "industry" || layout === "solution" ? 2 : 3)
     .map(([q, a]) => `<details class="feature-card"><summary style="cursor:pointer;font-weight:850;">${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`)
     .join("\n");
 
+  const maxBodySections = layout === "industry" ? 1 : layout === "solution" ? 1 : layout === "pillar" ? 2 : layout === "summary" ? 0 : 1;
   const extraSections = (page.bodySections || [])
+    .slice(0, maxBodySections)
     .map((block) => {
       const blockContent =
         block.mode === "steps"
@@ -1346,11 +1332,14 @@ function renderPage(page) {
       ${groupIntro}
     </section>
 
+    ${
+      layout === "summary"
+        ? `
     <section class="section">
       <div class="section__head">
         <div>
           <h2>Sigue explorando</h2>
-          <p>Encuentra otras páginas relacionadas que completan el mismo flujo comercial desde distintos ángulos.</p>
+          <p>Encuentra otras páginas relacionadas que completan el mismo flujo comercial sin repetir el mismo mensaje.</p>
         </div>
       </div>
       <div class="section__subhead">Más páginas de ${escapeHtml(sectionGroup.label)}</div>
@@ -1361,10 +1350,15 @@ function renderPage(page) {
       <div class="links-grid">
         ${relatedLinks}
       </div>
-    </section>
+    </section>`
+        : ""
+    }
 
     ${extraSections}
 
+    ${
+      layout === "pillar" || layout === "summary"
+        ? `
     <section class="section">
       <div class="section__head">
         <div>
@@ -1375,7 +1369,9 @@ function renderPage(page) {
       <div class="panel-grid">
         ${faq}
       </div>
-    </section>
+    </section>`
+        : ""
+    }
 
     <section class="cta-band">
       <div class="eyebrow">Siguiente paso</div>

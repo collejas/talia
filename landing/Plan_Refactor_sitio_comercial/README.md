@@ -276,6 +276,8 @@ Cada página debe tener una sola intención principal. La siguiente tabla sirve 
 
 ## Idea de arquitectura de vistas
 
+Documento base: [Arquitectura de vistas](./ARQUITECTURA_VISTAS.md)
+
 El sitio no debe depender de una sola plantilla larga para todas las páginas internas.
 
 Si todas las vistas nacen del mismo bloque de `hero + stats + panel + enlaces + FAQ + CTA + secciones extra`, el resultado es repetición visual y exceso de texto.
