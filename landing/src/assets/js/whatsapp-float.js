@@ -116,7 +116,7 @@ function ensureStyles() {
   style.textContent = `
     .talia-whatsapp-float {
       position: fixed;
-      left: 18px;
+      right: 18px;
       bottom: 18px;
       z-index: 999;
       display: inline-flex;
@@ -148,7 +148,7 @@ function ensureStyles() {
     }
     @media (max-width: 640px) {
       .talia-whatsapp-float {
-        left: 12px;
+        right: 12px;
         bottom: 12px;
         padding: 11px 13px;
         font-size: 12px;
