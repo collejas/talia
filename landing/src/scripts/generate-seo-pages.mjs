@@ -1329,7 +1329,7 @@ function renderPage(page) {
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
-  <meta property="og:site_name" content="Talia" />
+  <meta property="og:site_name" content="Tal-IA" />
   <meta property="og:title" content="${escapeHtml(page.title)}" />
   <meta property="og:description" content="${escapeHtml(page.description)}" />
   <meta property="og:url" content="https://talia.mx${page.url}" />
