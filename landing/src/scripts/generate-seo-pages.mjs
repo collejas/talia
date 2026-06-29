@@ -1093,6 +1093,14 @@ const pages = [
   },
 ];
 
+const manualOutputs = new Set([
+  "que-es-talia.html",
+  "crm-con-ia-para-whatsapp.html",
+  "caracteristicas.html",
+  "precios/index.html",
+  "industrias/index.html",
+]);
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1395,10 +1403,13 @@ function renderPage(page) {
 </html>`;
 }
 
-for (const page of pages) {
+const generatedPages = pages.filter((page) => !manualOutputs.has(page.output));
+
+for (const page of generatedPages) {
   const outputPath = resolve(root, "src", page.output);
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, renderPage(page), "utf8");
 }
 
-console.log(`Generated ${pages.length} SEO pages.`);
+console.log(`Generated ${generatedPages.length} SEO pages.`);
+console.log(`Skipped ${pages.length - generatedPages.length} manual pages.`);

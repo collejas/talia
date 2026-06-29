@@ -1,607 +1,184 @@
-<!DOCTYPE html>
-<html lang="es" class="scroll-smooth">
+<!doctype html>
+<html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Precios | CRM con IA para WhatsApp | Talia + Tal-IA</title>
-  <meta name="description" content="Conoce el modelo de precios de Talia: planes de CRM con IA para WhatsApp pensados para equipos que necesitan control, automatización y seguimiento comercial." />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Precios | TalIA</title>
+  <meta name="description" content="Conoce el precio de TalIA y qué incluye el plan comercial para CRM con IA para WhatsApp y seguimiento de ventas." />
   <link rel="canonical" href="https://talia.mx/precios" />
   <link rel="alternate" hreflang="es-MX" href="https://talia.mx/precios" />
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
-  <meta property="og:site_name" content="Talia" />
-  <meta property="og:title" content="Precios | CRM con IA para WhatsApp | Talia + Tal-IA" />
-  <meta property="og:description" content="Planes de CRM con IA para WhatsApp para operar leads, seguimiento, agenda y automatización comercial." />
+  <meta property="og:site_name" content="TalIA" />
+  <meta property="og:title" content="Precios | TalIA" />
+  <meta property="og:description" content="Conoce el precio de TalIA y qué incluye el plan comercial para CRM con IA para WhatsApp y seguimiento de ventas." />
   <meta property="og:url" content="https://talia.mx/precios" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Precios | CRM con IA para WhatsApp | Talia + Tal-IA" />
-  <meta name="twitter:description" content="Revisa los planes de Talia para CRM con IA, automatización comercial y seguimiento de leads." />
+  <meta name="twitter:title" content="Precios | TalIA" />
+  <meta name="twitter:description" content="Conoce el precio de TalIA y qué incluye el plan comercial para CRM con IA para WhatsApp y seguimiento de ventas." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
-  <meta name="theme-color" content="#7f13ec" />
+  <meta name="theme-color" content="#0f172a" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-  <style>
-    body { font-family: Inter, sans-serif; }
-    .mesh-bg {
-      background:
-        radial-gradient(circle at 15% 20%, rgba(34,197,94,.16), transparent 30%),
-        radial-gradient(circle at 85% 10%, rgba(127,19,236,.22), transparent 25%),
-        radial-gradient(circle at 50% 90%, rgba(14,165,233,.12), transparent 32%),
-        linear-gradient(180deg, #0f172a 0%, #111827 100%);
-    }
-    .header-compact .text-sm {
-      font-size: 0.8125rem !important;
-    }
-    .billing-banner,
-    .billing-message {
-      border-radius: 1rem;
-      padding: 1rem 1.1rem;
-      line-height: 1.5;
-      font-size: 0.925rem;
-    }
-    .billing-banner--success {
-      border: 1px solid rgba(52, 211, 153, .35);
-      background: rgba(16, 185, 129, .12);
-      color: #ecfdf5;
-    }
-    .billing-banner--warning {
-      border: 1px solid rgba(251, 191, 36, .32);
-      background: rgba(245, 158, 11, .10);
-      color: #fffbeb;
-    }
-    .billing-message--info {
-      border: 1px solid rgba(255, 255, 255, .10);
-      background: rgba(255, 255, 255, .05);
-      color: #e2e8f0;
-    }
-    .billing-message--success {
-      border: 1px solid rgba(52, 211, 153, .22);
-      background: rgba(16, 185, 129, .10);
-      color: #d1fae5;
-    }
-    .billing-message--error {
-      border: 1px solid rgba(248, 113, 113, .24);
-      background: rgba(239, 68, 68, .10);
-      color: #fee2e2;
-    }
-    .billing-plan-card {
-      border: 1px solid rgba(255, 255, 255, .10);
-      background: rgba(2, 6, 23, .72);
-      border-radius: 1rem;
-      padding: 1.15rem;
-      transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
-    }
-    .billing-plan-card--selected {
-      border-color: rgba(52, 211, 153, .42);
-      background: rgba(16, 185, 129, .08);
-      box-shadow: 0 18px 50px rgba(6, 95, 70, .16);
-    }
-    .billing-price-option {
-      width: 100%;
-      border-radius: 1rem;
-      border: 1px solid rgba(255, 255, 255, .10);
-      background: rgba(15, 23, 42, .68);
-      padding: 1rem;
-      text-align: left;
-      color: inherit;
-      cursor: pointer;
-      transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
-    }
-    .billing-price-option:hover {
-      border-color: rgba(52, 211, 153, .30);
-      background: rgba(255, 255, 255, .06);
-    }
-    .billing-price-option--selected {
-      border-color: rgba(52, 211, 153, .60);
-      background: rgba(16, 185, 129, .12);
-      box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .14);
-    }
-    .billing-plan-code {
-      font-size: 0.7rem;
-      font-weight: 900;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: #7dd3fc;
-    }
-    .billing-plan-title {
-      margin-top: 0.5rem;
-      font-size: 1.25rem;
-      line-height: 1.2;
-      font-weight: 900;
-      color: #ffffff;
-    }
-    .billing-plan-desc {
-      margin-top: 0.5rem;
-      font-size: 0.9rem;
-      line-height: 1.55;
-      color: #cbd5e1;
-    }
-    .billing-plan-badge,
-    .billing-price-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, .10);
-      background: rgba(255, 255, 255, .05);
-      padding: 0.3rem 0.65rem;
-      font-size: 0.74rem;
-      font-weight: 800;
-      color: #cbd5e1;
-      white-space: nowrap;
-    }
-    .billing-price-row {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-    }
-    .billing-price-amount {
-      font-size: 1rem;
-      font-weight: 850;
-      color: #ffffff;
-    }
-    .billing-price-interval {
-      margin-top: 0.25rem;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #94a3b8;
-    }
-    .billing-price-hint {
-      margin-top: 0.5rem;
-      font-size: 0.75rem;
-      color: #94a3b8;
-    }
-    .billing-price-list {
-      display: grid;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-    .billing-submit-button--loading {
-      opacity: 0.7;
-    }
-  </style>
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebPage",
-    "name": "Precios de Talia",
-    "url": "https://talia.mx/precios",
-    "description": "Planes de CRM con IA para WhatsApp para operar leads, seguimiento, agenda y automatización comercial.",
-    "inLanguage": "es-MX"
-  }
-  </script>
+  <link rel="stylesheet" href="/assets/css/landing-core.css?v=20260629a" />
 </head>
-<body class="bg-slate-950 text-slate-100">
-  <header class="header-compact sticky top-0 z-50 border-b border-white/10 bg-slate-950/85 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-      <div class="flex items-center gap-3">
-        <a href="/auth/login" class="hidden sm:inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[13px] font-bold text-white hover:border-white/20 hover:bg-white/10 transition-colors">Acceder</a>
-        <a href="/" class="flex items-center gap-3">
-        <img src="/Logo8.svg" alt="Talia | Tal-IA" class="size-9 object-contain" />
-        <span class="text-xl font-black tracking-tight">Talia | Tal-IA</span>
+<body>
+  <main class="page-shell">
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="brand" href="/" aria-label="TalIA">
+          <img src="/Logo8.svg" alt="" aria-hidden="true" />
+          <span>Tal-IA</span>
         </a>
+        <nav class="nav" aria-label="Navegación principal">
+          <a class="nav__link" href="/">Inicio</a>
+          <a class="nav__link" href="/que-es-talia">Qué es TalIA</a>
+          <details class="nav__group">
+            <summary class="nav__button">Funciones</summary>
+            <div class="dropdown">
+              <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+              <a href="/ia-de-whatsapp">IA de WhatsApp</a>
+              <a href="/ia-para-ventas">IA para ventas</a>
+              <a href="/seguimiento-ventas">Seguimiento de ventas</a>
+              <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
+            </div>
+          </details>
+          <details class="nav__group">
+            <summary class="nav__button">Industrias</summary>
+            <div class="dropdown">
+              <a href="/industrias">Ver industrias</a>
+              <a href="/industrias/inmobiliarias">Inmobiliarias</a>
+              <a href="/industrias/servicios">Servicios</a>
+              <a href="/industrias/negocios-locales">Negocios locales</a>
+              <a href="/industrias/ventas-b2b">Ventas B2B</a>
+              <a href="/industrias/turismo">Turismo</a>
+            </div>
+          </details>
+          <a class="nav__link" href="/caracteristicas">Características</a>
+          <a class="nav__link" href="/precios">Precios</a>
+          <a class="nav__cta nav__cta--secondary" href="/demo.html">Agendar demo</a>
+          <a class="nav__cta" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20los%20precios%20de%20TalIA." target="_blank" rel="noopener noreferrer">Ver por WhatsApp</a>
+        </nav>
+        <details class="nav-mobile-menu">
+          <summary class="nav__button">Menú</summary>
+          <div class="nav-mobile-menu__panel">
+            <a href="/">Inicio</a>
+            <a href="/que-es-talia">Qué es TalIA</a>
+            <div class="nav-mobile-menu__group">
+              <div class="nav-mobile-menu__label">Funciones</div>
+              <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
+              <a href="/ia-de-whatsapp">IA de WhatsApp</a>
+              <a href="/ia-para-ventas">IA para ventas</a>
+              <a href="/seguimiento-ventas">Seguimiento de ventas</a>
+              <a href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
+            </div>
+            <div class="nav-mobile-menu__group">
+              <div class="nav-mobile-menu__label">Industrias</div>
+              <a href="/industrias">Ver industrias</a>
+              <a href="/industrias/inmobiliarias">Inmobiliarias</a>
+              <a href="/industrias/servicios">Servicios</a>
+              <a href="/industrias/negocios-locales">Negocios locales</a>
+              <a href="/industrias/ventas-b2b">Ventas B2B</a>
+              <a href="/industrias/turismo">Turismo</a>
+            </div>
+            <a href="/caracteristicas">Características</a>
+            <a href="/precios">Precios</a>
+            <div class="nav-mobile-menu__actions">
+              <a class="nav__cta nav__cta--secondary" href="/demo.html">Agendar demo</a>
+              <a class="nav__cta" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20los%20precios%20de%20TalIA." target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            </div>
+          </div>
+        </details>
       </div>
-      <div class="hidden xl:flex items-center gap-3 text-sm font-semibold text-slate-200">
-        <a class="px-3 py-2 rounded-full hover:text-white transition-colors" href="/">Inicio</a>
-        <details class="relative group">
-          <summary class="list-none cursor-pointer px-3 py-2 rounded-full hover:text-white transition-colors">Producto</summary>
-          <div class="absolute left-0 top-full mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl z-50">
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/que-es-talia">Qué es TalIA</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/asistente-ia-empresas">Asistente IA para empresas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/caracteristicas">Características</a>
-          </div>
-        </details>
-        <details class="relative group">
-          <summary class="list-none cursor-pointer px-3 py-2 rounded-full hover:text-white transition-colors">Soluciones</summary>
-          <div class="absolute left-0 top-full mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl z-50">
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-de-whatsapp">IA de WhatsApp</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-para-ventas">IA para ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/automatizacion-de-ventas">Automatización de ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/seguimiento-ventas">Seguimiento de ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-          </div>
-        </details>
-        <details class="relative group">
-          <summary class="list-none cursor-pointer px-3 py-2 rounded-full hover:text-white transition-colors">Prospección</summary>
-          <div class="absolute left-0 top-full mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl z-50">
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospeccion-comercial">Prospección comercial</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/buscar-contactos">Buscar contactos</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospectos-google-denue">Prospectos Google y DENUE</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/campanas-marketing">Campañas y marketing</a>
-          </div>
-        </details>
-        <details class="relative group">
-          <summary class="list-none cursor-pointer px-3 py-2 rounded-full hover:text-white transition-colors">Industrias</summary>
-          <div class="absolute left-0 top-full mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl z-50">
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias">Ver industrias</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/inmobiliarias">Inmobiliarias</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/servicios">Servicios</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/negocios-locales">Negocios locales</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/ventas-b2b">Ventas B2B</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/turismo">Turismo</a>
-          </div>
-        </details>
-        <a class="px-3 py-2 rounded-full hover:text-white transition-colors" href="/precios">Precios</a>
-      </div>
-      <details class="relative md:hidden ml-auto">
-        <summary class="list-none inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white shadow-sm">
-          <span class="sr-only">Abrir menú</span>
-          ☰
-        </summary>
-        <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl">
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/">Inicio</a>
-          <div class="my-1 border-t border-white/10"></div>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/que-es-talia">Qué es TalIA</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <div class="my-1 border-t border-white/10"></div>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-de-whatsapp">IA de WhatsApp</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-para-ventas">IA para ventas</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/automatizacion-de-ventas">Automatización de ventas</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/seguimiento-ventas">Seguimiento de ventas</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-          <div class="my-1 border-t border-white/10"></div>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospeccion-comercial">Prospección comercial</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/buscar-contactos">Buscar contactos</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospectos-google-denue">Prospectos Google y DENUE</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/campanas-marketing">Campañas y marketing</a>
-          <div class="my-1 border-t border-white/10"></div>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias">Ver industrias</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/servicios">Servicios</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/negocios-locales">Negocios locales</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/turismo">Turismo</a>
-          <div class="my-1 border-t border-white/10"></div>
-          <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/precios">Precios</a>
-          <div class="grid grid-cols-1 gap-2 p-3">
-            <a href="/demo.html" class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-center text-sm font-bold text-white hover:bg-white/10">Agendar demo</a>
-            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20los%20precios%20de%20Tal-IA" class="rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-bold text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-          </div>
+    </header>
+
+    <section class="hero hero--dark">
+      <div class="hero__copy">
+        <div class="eyebrow">Precio</div>
+        <h1>Precios de TalIA</h1>
+        <p>Un plan claro para equipos que quieren vender por WhatsApp con más orden, menos fugas y mejor seguimiento comercial.</p>
+        <div class="actions">
+          <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20conocer%20los%20precios%20de%20TalIA." target="_blank" rel="noopener noreferrer">Pedir cotización</a>
+          <a class="button secondary" href="/crm-con-ia-para-whatsapp">Ver CRM con IA</a>
+          <a class="button ghost" href="/demo.html">Agendar demo</a>
         </div>
-      </details>
-      <div class="hidden md:flex items-center gap-3">
-        <details class="relative">
-          <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[13px] font-bold text-white hover:border-white/20 hover:bg-white/10 transition-colors">
-            Menú
-          </summary>
-          <div class="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl">
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/">Inicio</a>
-            <div class="my-1 border-t border-white/10"></div>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/que-es-talia">Qué es TalIA</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/asistente-ia-empresas">Asistente IA para empresas</a>
-            <div class="my-1 border-t border-white/10"></div>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-de-whatsapp">IA de WhatsApp</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/ia-para-ventas">IA para ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/automatizacion-de-ventas">Automatización de ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/seguimiento-ventas">Seguimiento de ventas</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/agenda-y-cotizaciones">Agenda y cotizaciones</a>
-            <div class="my-1 border-t border-white/10"></div>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospeccion-comercial">Prospección comercial</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/buscar-contactos">Buscar contactos</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/prospectos-google-denue">Prospectos Google y DENUE</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/campanas-marketing">Campañas y marketing</a>
-            <div class="my-1 border-t border-white/10"></div>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias">Ver industrias</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/inmobiliarias">Inmobiliarias</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/servicios">Servicios</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/negocios-locales">Negocios locales</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/ventas-b2b">Ventas B2B</a>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/industrias/turismo">Turismo</a>
-            <div class="my-1 border-t border-white/10"></div>
-            <a class="block px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5" href="/precios">Precios</a>
+        <div class="stat-strip">
+          <div class="stat">
+            <strong>Desde $700</strong>
+            <span>MXN + IVA al mes pagando anual por 5 licencias.</span>
           </div>
-        </details>
-        <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20los%20precios%20de%20Tal-IA" class="rounded-xl bg-emerald-500 px-4 py-2 text-[13px] font-bold text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">Ver por WhatsApp</a>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <section class="mesh-bg border-b border-white/10">
-      <div class="mx-auto max-w-6xl px-6 py-20 md:py-24">
-        <p class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-emerald-200">Precios</p>
-        <h1 class="mt-6 max-w-4xl text-4xl font-black leading-tight md:text-6xl">Planes para un CRM con IA que sí se adapta a tu operación</h1>
-        <p class="mt-5 max-w-3xl text-lg text-slate-300">Desde $700 MXN + IVA por 5 licencias, pagando anual. La edición inmobiliaria se agenda como cita/demo para definir alcance y configuración.</p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20cotizaci%C3%B3n%20de%20Tal-IA%20seg%C3%BAn%20el%20tama%C3%B1o%20de%20mi%20equipo" class="rounded-xl bg-emerald-500 px-6 py-3 text-[13px] font-black text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">Solicitar cotización</a>
-          <a href="/automatizacion-de-ventas" class="rounded-xl border border-white/15 px-6 py-3 font-bold hover:bg-white/10">Ver automatización</a>
-        </div>
-      </div>
-    </section>
-
-    <section class="mx-auto max-w-6xl px-6 py-14">
-      <div class="grid gap-6 md:grid-cols-3 mb-6">
-        <article class="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Qué incluye</p>
-          <h2 class="mt-3 text-xl font-black">5 licencias y CRM operativo</h2>
-          <p class="mt-2 text-sm text-slate-300">La versión general arranca con lo necesario para centralizar conversaciones, pipeline, agenda y seguimiento comercial.</p>
-        </article>
-        <article class="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-sky-300">Cuándo elegirlo</p>
-          <h2 class="mt-3 text-xl font-black">Cuando ya tienes prospectos entrando</h2>
-          <p class="mt-2 text-sm text-slate-300">Si tu equipo ya responde leads y necesita orden, la versión general es el punto de partida lógico.</p>
-        </article>
-        <article class="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-300">Cómo escalar</p>
-          <h2 class="mt-3 text-xl font-black">A medida que crece la operación</h2>
-          <p class="mt-2 text-sm text-slate-300">Puedes pasar a implementación inmobiliaria o Enterprise cuando el flujo requiera más configuración, integración o volumen.</p>
-        </article>
-      </div>
-
-      <div class="grid gap-5 md:grid-cols-3">
-        <article class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Versión general</p>
-          <h2 class="mt-3 text-2xl font-black">$700 MXN + IVA</h2>
-          <p class="mt-2 text-sm text-slate-300">5 licencias incluidas con pago anticipado anual. Si pagas mes a mes, el precio es de $875 MXN + IVA por mes.</p>
-          <div class="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-            <p class="text-sm font-bold text-emerald-100">Planes y precios</p>
-            <ul class="mt-3 space-y-2 text-sm text-emerald-50/90">
-              <li>• Mensual: $875 MXN + IVA por mes</li>
-              <li>• Trimestral: $2,362.50 MXN + IVA por trimestre</li>
-              <li>• Semestral: $4,462.50 MXN + IVA por semestre</li>
-              <li>• Anual: $8,400 MXN + IVA al año</li>
-            </ul>
+          <div class="stat">
+            <strong>5 licencias</strong>
+            <span>Base pensada para equipos que ya operan ventas.</span>
           </div>
-          <div class="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-            <p class="text-sm font-bold text-slate-200">Incluye</p>
-            <ul class="mt-3 space-y-2 text-sm text-slate-300">
-              <li>• 5 licencias</li>
-              <li>• Acceso a la versión general</li>
-              <li>• CRM, seguimiento y automatización comercial</li>
-              <li>• Soporte de arranque</li>
-            </ul>
-          </div>
-          <p class="mt-6 text-sm font-bold text-emerald-300">Ahorro de 20% en pago anual</p>
-        </article>
-
-        <article class="rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-6 shadow-2xl shadow-emerald-500/10">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">Edición inmobiliaria</p>
-          <h2 class="mt-3 text-2xl font-black">Desarrolladores inmobiliarios y bienes raíces</h2>
-          <p class="mt-2 text-sm text-emerald-50/80">Para la edición especializada con gestión comercial inmobiliaria, mapas, inventario y seguimiento 3D.</p>
-          <div class="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-            <p class="text-sm font-bold text-white">Siguiente paso</p>
-            <ul class="mt-3 space-y-2 text-sm text-slate-100/90">
-              <li>• Agenda una cita o demo</li>
-              <li>• Revisa la edición inmobiliaria en detalle</li>
-              <li>• Define alcance y configuración</li>
-            </ul>
-          </div>
-          <a href="/demo.html" class="mt-6 inline-flex rounded-xl bg-white px-5 py-3 text-[13px] font-black text-slate-950 hover:bg-slate-100">Agendar cita / demo</a>
-        </article>
-
-        <article class="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-sky-300">Enterprise</p>
-          <h2 class="mt-3 text-2xl font-black">A medida</h2>
-          <p class="mt-2 text-sm text-slate-300">Para operación compleja, integraciones y equipos con reglas comerciales específicas.</p>
-          <div class="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-            <p class="text-sm font-bold text-slate-200">Incluye</p>
-            <ul class="mt-3 space-y-2 text-sm text-slate-300">
-              <li>• Integraciones con sistemas existentes</li>
-              <li>• Flujos personalizados por industria</li>
-              <li>• Soporte de despliegue y adopción</li>
-              <li>• Escalabilidad multi-equipo</li>
-            </ul>
-          </div>
-          <p class="mt-6 text-sm font-bold text-sky-300">Cotización por alcance y volumen</p>
-          <a href="/demo.html" class="mt-6 inline-flex rounded-xl bg-white px-5 py-3 text-[13px] font-black text-slate-950 hover:bg-slate-100">Agendar cita / demo</a>
-        </article>
-      </div>
-    </section>
-
-    <section class="mx-auto max-w-6xl px-6 py-2">
-      <div class="grid gap-6 md:grid-cols-2">
-        <article class="rounded-2xl border border-white/10 bg-slate-900/80 p-6">
-          <h2 class="text-2xl font-black">Cómo elegir tu plan</h2>
-          <div class="mt-5 space-y-3">
-            <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p class="text-sm font-bold text-emerald-300">1. Empieza por la versión general</p>
-              <p class="mt-2 text-sm text-slate-300">Si tu operación ya necesita CRM, seguimiento y automatización, este es el arranque natural.</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p class="text-sm font-bold text-sky-300">2. Pasa a una edición especializada</p>
-              <p class="mt-2 text-sm text-slate-300">Si trabajas inmobiliario o una operación con reglas propias, conviene ajustar alcance y flujo.</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p class="text-sm font-bold text-violet-300">3. Sube a Enterprise si integras varios equipos</p>
-              <p class="mt-2 text-sm text-slate-300">Cuando necesitas integraciones, volumen o personalización fuerte, la cotización se define por alcance.</p>
-            </div>
-          </div>
-        </article>
-        <article class="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">Más contexto</p>
-          <h2 class="mt-3 text-3xl font-black">¿Qué se paga realmente?</h2>
-          <p class="mt-3 text-slate-100/85">No pagas solo software. Pagas orden comercial: menos leads perdidos, menos seguimiento manual y más visibilidad del pipeline.</p>
-          <div class="mt-6 flex flex-wrap gap-3">
-            <a href="/caracteristicas" class="rounded-xl border border-white/20 bg-white/10 px-5 py-3 font-bold text-white hover:bg-white/15">Ver características</a>
-            <a href="/crm-con-ia-para-whatsapp" class="rounded-xl border border-white/20 bg-white/10 px-5 py-3 font-bold text-white hover:bg-white/15">Ver CRM con IA</a>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="border-y border-white/10 bg-slate-900/70">
-      <div class="mx-auto max-w-6xl px-6 py-14">
-        <div class="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-          <div>
-            <h2 class="text-3xl font-black md:text-4xl">Qué mueve el precio</h2>
-            <p class="mt-3 max-w-2xl text-slate-300">La cotización cambia según la complejidad del flujo y la profundidad de la implementación. No pagas por adornos, pagas por control comercial real.</p>
-          </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <ul class="space-y-2 text-sm text-slate-200">
-              <li>• Número de usuarios y equipos</li>
-              <li>• Canales habilitados</li>
-              <li>• Integraciones con CRM / ERP / APIs</li>
-              <li>• Acompañamiento de implementación</li>
-            </ul>
+          <div class="stat">
+            <strong>Sin ruido</strong>
+            <span>La página va directo al dato que importa.</span>
           </div>
         </div>
       </div>
+
+      <aside class="hero__aside">
+        <div class="price-card price-card--featured">
+          <span class="feature-tag">Plan base</span>
+          <h3>TalIA comercial</h3>
+          <div class="price-amount">$700 <small>MXN + IVA / mes</small></div>
+          <p>Pensado para equipos que quieren CRM con IA, seguimiento y control comercial desde WhatsApp.</p>
+          <ul class="checklist">
+            <li>5 licencias incluidas en anualidad.</li>
+            <li>CRM con IA para WhatsApp.</li>
+            <li>Seguimiento comercial y agenda.</li>
+            <li>Prospección y organización de oportunidades.</li>
+          </ul>
+        </div>
+      </aside>
     </section>
 
-    <section id="alta-comercial" hidden aria-hidden="true" class="mx-auto max-w-6xl px-6 py-16" data-commercial-checkout>
-      <div class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <section class="section">
+      <div class="section__head">
         <div>
-          <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-300">Alta comercial</p>
-          <h2 class="mt-3 text-3xl font-black md:text-4xl">Elige un plan y crea el tenant con Stripe</h2>
-          <p class="mt-3 max-w-3xl text-slate-300">La página carga los planes activos desde el backend, guarda los datos generales del tenant y te manda al checkout firmado de Stripe. Si el pago se confirma, el webhook activa la cuenta.</p>
-        </div>
-        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200">
-          <span class="text-slate-400">Estado:</span>
-          <span data-checkout-status>listo para cargar planes</span>
+          <h2>Qué resuelve el plan</h2>
+          <p class="section__lead">La lógica es simple: pagar por una herramienta que ayuda a responder, ordenar y hacer seguimiento con menos fricción.</p>
         </div>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-black uppercase tracking-[0.22em] text-sky-300">Planes disponibles</p>
-              <h3 class="mt-2 text-2xl font-black">Selecciona el plan comercial</h3>
-            </div>
-            <div class="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-xs font-bold text-slate-300">
-              <span data-plan-count>0</span> planes
-            </div>
-          </div>
-          <div class="mt-5 grid gap-4" data-plan-list>
-            <div class="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 p-5 text-sm text-slate-400">
-              Cargando planes...
-            </div>
-          </div>
-          <div class="mt-5 hidden rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-200" data-checkout-banner></div>
-        </div>
-
-        <div class="rounded-3xl border border-emerald-400/20 bg-slate-950/80 p-6 shadow-2xl shadow-emerald-950/20">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Checkout</p>
-              <h3 class="mt-2 text-2xl font-black text-white">Datos del tenant</h3>
-            </div>
-            <div class="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-100">
-              Stripe
-            </div>
-          </div>
-
-          <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Plan seleccionado</p>
-            <p class="mt-1 text-lg font-black text-white" data-selected-plan>Selecciona un plan</p>
-            <p class="mt-1 text-sm text-slate-400" data-selected-price>Elige una modalidad para continuar.</p>
-          </div>
-
-          <form class="mt-5 space-y-4" data-commercial-checkout-form>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="space-y-2 text-sm">
-                <span class="font-semibold text-slate-200">Nombre del tenant *</span>
-                <input name="nombre" required type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="Empresa o tenant" />
-              </label>
-              <label class="space-y-2 text-sm">
-                <span class="font-semibold text-slate-200">Correo de contacto *</span>
-                <input name="correo_contacto_principal" required type="email" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="hola@empresa.com" />
-              </label>
-              <label class="space-y-2 text-sm">
-                <span class="font-semibold text-slate-200">Nombre de contacto</span>
-                <input name="contacto_nombre" type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="Nombre de la persona responsable" />
-              </label>
-              <label class="space-y-2 text-sm">
-                <span class="font-semibold text-slate-200">Teléfono</span>
-                <input name="telefono" type="tel" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="+52..." />
-              </label>
-            </div>
-
-            <label class="space-y-2 text-sm">
-              <span class="font-semibold text-slate-200">Alias webchat opcional</span>
-              <input name="webchat_alias" type="text" class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="alias_publico" />
-            </label>
-
-            <details class="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <summary class="cursor-pointer text-sm font-bold text-slate-100">Datos opcionales del tenant</summary>
-              <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Razón social</span>
-                  <input name="razon_social" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">RFC</span>
-                  <input name="rfc" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Nombre comercial</span>
-                  <input name="nombre_comercial" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Dominio principal</span>
-                  <input name="dominio_principal" type="text" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" placeholder="empresa.com" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Correo de facturación</span>
-                  <input name="correo_facturacion" type="email" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Moneda</span>
-                  <input name="moneda" type="text" value="MXN" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">País</span>
-                  <input name="pais" type="text" value="México" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-                <label class="space-y-2 text-sm">
-                  <span class="font-semibold text-slate-200">Zona horaria</span>
-                  <input name="timezone" type="text" value="America/Mexico_City" class="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-emerald-400/60" />
-                </label>
-              </div>
-            </details>
-
-            <div class="hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200" data-form-message aria-live="polite"></div>
-
-            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-black text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-600">
-              Crear tenant y continuar a Stripe
-            </button>
-            <p class="text-xs leading-5 text-slate-400">El tenant se crea primero en estado inactivo. Stripe confirma el pago y el webhook activa el acceso.</p>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <section class="mx-auto max-w-6xl px-6 py-14">
-      <div class="grid gap-6 md:grid-cols-2">
-        <article class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-          <h2 class="text-2xl font-black">Preguntas frecuentes</h2>
-          <div class="mt-5 space-y-3">
-            <details class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <summary class="cursor-pointer font-bold">¿Hay un precio fijo publicado?</summary>
-              <p class="mt-2 text-sm text-slate-300">Sí. La versión general tiene un costo mensual de $875 MXN + IVA por 5 licencias. Si pagas de forma anticipada anual, el equivalente baja a $700 MXN + IVA al mes con 20% de descuento. También tienes pago trimestral con 10% y semestral con 15%. La edición inmobiliaria y Enterprise se gestionan con cita/demo para definir alcance.</p>
-            </details>
-            <details class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <summary class="cursor-pointer font-bold">¿Puedo empezar con algo pequeño?</summary>
-              <p class="mt-2 text-sm text-slate-300">Sí. Puedes empezar con la versión general y luego escalar a la edición inmobiliaria o Enterprise según tu operación.</p>
-            </details>
-            <details class="rounded-xl border border-white/10 bg-white/5 p-4">
-              <summary class="cursor-pointer font-bold">¿Incluye CRM y WhatsApp?</summary>
-              <p class="mt-2 text-sm text-slate-300">Sí. El foco es centralizar conversaciones, pipeline, seguimiento y agenda en un solo sistema, con automatización comercial.</p>
-            </details>
-          </div>
+      <div class="grid grid--3">
+        <article class="feature-card">
+          <span class="feature-tag">1</span>
+          <h3>Menos leads perdidos</h3>
+          <p>La operación deja de depender de chats sueltos y memoria del equipo.</p>
         </article>
-        <article class="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-6">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">Siguiente paso</p>
-          <h2 class="mt-3 text-3xl font-black">Cotiza tu CRM con IA</h2>
-          <p class="mt-3 text-slate-100/85">Te decimos qué plan conviene según tu equipo, canales y nivel de automatización.</p>
-          <div class="mt-6 flex flex-wrap gap-3">
-            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20cotizar%20Tal-IA%20para%20mi%20operaci%C3%B3n%20comercial" class="rounded-xl bg-emerald-500 px-6 py-3 text-[13px] font-black text-white hover:bg-emerald-600" target="_blank" rel="noopener noreferrer">Pedir cotización</a>
-            <a href="/" class="rounded-xl border border-white/15 px-6 py-3 font-bold text-white hover:bg-white/10">Volver al inicio</a>
-          </div>
+        <article class="feature-card">
+          <span class="feature-tag">2</span>
+          <h3>Más velocidad</h3>
+          <p>Respondes antes, calificas mejor y llegas más rápido a la oportunidad real.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-tag">3</span>
+          <h3>Más control</h3>
+          <p>Ventas ve el avance, el responsable y el siguiente paso en una sola vista.</p>
         </article>
       </div>
     </section>
+
+    <section class="callout">
+      <div class="eyebrow">Cierre</div>
+      <h2 style="margin-top: 14px;">Si el precio encaja, el siguiente paso es ver la demo.</h2>
+      <p>No hace falta extender la página. Aquí basta con dejar claro el costo, lo que incluye y cómo avanzar.</p>
+      <div class="actions">
+        <a class="button primary" href="/demo.html">Agendar demo</a>
+        <a class="button secondary" href="/que-es-talia">Qué es TalIA</a>
+        <a class="button ghost" href="/industrias">Ver industrias</a>
+      </div>
+      <div class="footer-links">
+        <a href="/">Inicio</a>
+        <a href="/caracteristicas">Características</a>
+        <a href="/crm-con-ia-para-whatsapp">CRM con IA</a>
+      </div>
+    </section>
+
+    <div class="footer-note">TalIA · precio base comercial claro y directo.</div>
   </main>
-  <script src="/assets/js/public-config.js?v=20260628a"></script>
-  <script type="module" src="/assets/js/modules/public-billing.js?v=20260628a"></script>
 </body>
 </html>
