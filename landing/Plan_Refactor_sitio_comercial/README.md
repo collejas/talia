@@ -44,14 +44,48 @@ La home debe responder en una sola pasada:
 La navegación visible debe ser corta y práctica:
 
 - Inicio
-- Cómo funciona
+- Qué es TalIA
 - Funciones
-- Casos de uso
 - Industrias
+- Características
 - Precios
 - Agenda una demo
 
 Los grupos internos pueden seguir existiendo para SEO, pero no deben dominar la navegación principal.
+
+### Arquitectura visible propuesta
+
+```txt
+Inicio
+Qué es TalIA
+Funciones
+  - CRM con IA para WhatsApp
+  - Asistente IA para empresas
+  - Automatización de procesos
+  - Seguimiento de ventas
+  - Ventas e inventarios
+  - Agendas, cotizaciones, notas y tareas
+  - Buscar contactos Web / Google / Gov-MX
+  - Campañas de Email / WhatsApp
+  - Gestión inmobiliaria
+  - Métricas
+Industrias
+  - Inmobiliario
+  - Servicios
+  - Negocios locales
+  - Ventas B2B
+  - Turismo
+Características
+Precios
+```
+
+### Criterio de uso de esa arquitectura
+
+- `Qué es TalIA` explica la propuesta de valor.
+- `Funciones` agrupa capacidades concretas y cortas.
+- `Industrias` aterriza el producto por sector.
+- `Características` resume sin volver a contar toda la historia.
+- `Precios` cierra la decisión.
 
 ## Estructura ideal de la home
 
@@ -213,6 +247,96 @@ Esta es la URL más fuerte para intención comercial porque junta:
 4. Reducir repetición en títulos, subtítulos y bloques introductorios.
 5. Hacer que cada URL tenga una sola intención principal.
 
+## Idea de arquitectura de vistas
+
+El sitio no debe depender de una sola plantilla larga para todas las páginas internas.
+
+Si todas las vistas nacen del mismo bloque de `hero + stats + panel + enlaces + FAQ + CTA + secciones extra`, el resultado es repetición visual y exceso de texto.
+
+### Principio
+
+Cada tipo de página debe tener una estructura propia según su intención:
+
+- `Home`
+- `Pilar`
+- `Solución`
+- `Industria`
+- `Precio`
+
+### Qué cambia
+
+- La estructura ya no se define solo por contenido.
+- La estructura se define por función comercial.
+- El contenido debe adaptarse al formato, no al revés.
+
+### Reglas de longitud
+
+- Máximo 3 a 5 secciones por página interna.
+- Una sola idea principal por página.
+- Un CTA dominante.
+- Texto corto arriba, detalle solo si aporta decisión.
+- Si una página necesita demasiada explicación, debe dividirse en dos.
+
+### Estructura sugerida por tipo
+
+#### Home
+
+- Hero corto.
+- Qué es TalIA en una línea.
+- Flujo comercial en pocos pasos.
+- Funciones principales.
+- Industrias.
+- Precio.
+- Cierre con demo.
+
+#### Página pilar
+
+- Hero directo.
+- Qué resuelve.
+- Cómo funciona.
+- 3 beneficios.
+- CTA final.
+
+#### Página de solución
+
+- Hero corto.
+- Problema.
+- Solución.
+- Resultado.
+- 3 usos o beneficios.
+- CTA final.
+
+#### Página de industria
+
+- Hero por sector.
+- Caso real.
+- Qué cambia en esa industria.
+- 3 beneficios concretos.
+- CTA final.
+
+#### Página de precio
+
+- Hero simple.
+- Planes o referencia de precio.
+- Qué incluye.
+- Qué problema resuelve.
+- CTA de conversión.
+
+### Qué evitar
+
+- Plantillas idénticas con títulos cambiados.
+- Secciones editoriales que explican cómo leer la página.
+- Bloques largos para cubrir SEO sin intención real.
+- Repetir el mismo mensaje en todas las vistas.
+- Hacer que la página parezca un documento interno.
+
+### Recomendación práctica
+
+- Mantener el generador JS solo como ayuda para páginas repetitivas o satélite.
+- Las páginas más importantes deben poder variar en estructura.
+- El contenido SEO debe ser corto, claro y distinto por intención.
+- La home y las páginas clave deben sentirse diseñadas una por una, no clonadas.
+
 ## Criterio de terminado
 
 La refactorización queda bien cuando:
@@ -221,3 +345,4 @@ La refactorización queda bien cuando:
 - El usuario puede decir qué hace TalIA sin leer demasiado.
 - `Producto` y `Soluciones` dejan de pisarse.
 - SEO sigue cubierto sin convertir la home en un catálogo largo.
+- Las páginas internas ya no parecen copias con títulos distintos.
