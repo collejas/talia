@@ -183,7 +183,7 @@ a {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  grid-template-columns: minmax(0, 1.33fr) minmax(0, 0.67fr);
   gap: 22px;
   align-items: stretch;
 }
@@ -284,6 +284,112 @@ a {
 .hero--dark .section__lead,
 .hero--dark .stat span {
   color: rgba(226, 232, 240, 0.82);
+}
+
+.hero--dark .stat-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hero--dark .stat {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.07), transparent 36%);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  min-height: 108px;
+  padding: 14px 14px 13px;
+}
+
+.hero--dark .stat strong {
+  color: #0f172a;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.hero--dark .stat::before {
+  color: #64748b;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.hero--dark .stat span {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hero--dark .stat:nth-child(1) {
+  border-top-color: rgba(37, 99, 235, 0.85);
+}
+
+.hero--dark .stat:nth-child(2) {
+  border-top-color: rgba(22, 163, 74, 0.85);
+}
+
+.hero--dark .stat:nth-child(3) {
+  border-top-color: rgba(109, 40, 217, 0.85);
+}
+
+.hero--dark .mini-panel {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  padding: 14px 15px 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)),
+    radial-gradient(circle at top right, rgba(109, 40, 217, 0.07), transparent 34%);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.hero--dark .mini-panel strong {
+  color: #0f172a;
+}
+
+.hero--dark .mini-panel p {
+  color: var(--core-muted);
+}
+
+.hero--dark .aside-stack {
+  height: 100%;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hero--dark .aside-stack .mini-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+.hero--dark .aside-stack .mini-panel strong {
+  font-size: 15px;
+}
+
+.hero--dark .aside-stack .mini-panel p {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.hero--dark .mini-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--core-blue), var(--core-violet));
+}
+
+.hero--dark .aside-stack .mini-panel:nth-child(2)::before {
+  background: linear-gradient(90deg, var(--core-green), var(--core-blue));
+}
+
+.hero--dark .aside-stack .mini-panel:nth-child(3)::before {
+  background: linear-gradient(90deg, var(--core-amber), var(--core-violet));
 }
 
 .actions {
