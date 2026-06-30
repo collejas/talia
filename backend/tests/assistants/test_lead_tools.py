@@ -6,22 +6,22 @@ from app.assistants.tools import lead as lead_tools
 
 @pytest.mark.asyncio
 async def test_mark_contact_ready_success(monkeypatch):
-    async def fake_ensure(*, conversation_id, contact_id):
+    async def fake_ensure(*, conversation_id, persona_id):
         assert conversation_id == "conv-1"
-        assert contact_id == "contact-1"
+        assert persona_id == "contact-1"
         return True
 
-    async def fake_capture(*, conversation_id, contact_id, channel):
+    async def fake_capture(*, conversation_id, persona_id, channel):
         return True, "opp-123"
 
     monkeypatch.setattr(
         lead_tools.webchat_followups,
-        "ensure_contact_ready_for_assignment",
+        "ensure_persona_ready_for_assignment",
         fake_ensure,
     )
     monkeypatch.setattr(
         lead_tools.storage,
-        "capture_opportunity_if_ready",
+        "capture_persona_lead_if_ready",
         fake_capture,
     )
     async def fake_noop(*_, **__):
@@ -53,7 +53,7 @@ async def test_mark_contact_ready_requires_contact(monkeypatch):
 
     monkeypatch.setattr(
         lead_tools.webchat_followups,
-        "ensure_contact_ready_for_assignment",
+        "ensure_persona_ready_for_assignment",
         fake_ensure,
     )
     async def fake_noop(*_, **__):
@@ -80,7 +80,7 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
     async def fake_ensure_contact_ready_for_assignment(**__):
         return True
 
-    async def fake_ensure_conversation_opportunity(**__):
+    async def fake_ensure_persona_conversation_opportunity(**__):
         return "opp-123"
 
     async def fake_noop(*_, **__):
@@ -107,23 +107,29 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
 
     monkeypatch.setattr(
         lead_tools.webchat_followups,
-        "ensure_contact_ready_for_assignment",
+        "ensure_persona_ready_for_assignment",
         fake_ensure_contact_ready_for_assignment,
     )
     monkeypatch.setattr(
         lead_tools.storage,
-        "ensure_conversation_opportunity",
-        fake_ensure_conversation_opportunity,
+        "fetch_latest_conversation_summary",
+        fake_noop,
+    )
+    monkeypatch.setattr(
+        lead_tools.storage,
+        "ensure_persona_conversation_opportunity",
+        fake_ensure_persona_conversation_opportunity,
     )
     monkeypatch.setattr(lead_tools.storage, "update_persona", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "update_conversation", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "fetch_persona", fake_fetch_persona)
-    monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
-    monkeypatch.setattr(lead_tools.storage, "apply_lead_scoring", fake_apply_scoring)
+    monkeypatch.setattr(lead_tools.storage, "sync_persona_opportunity_context", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_persona_opportunity", fake_auto_name)
+    monkeypatch.setattr(lead_tools.storage, "apply_persona_lead_scoring", fake_apply_scoring)
     monkeypatch.setattr(
         lead_tools.storage,
-        "maybe_promote_prequalified_from_scoring",
+        "maybe_promote_prequalified_from_persona",
         fake_prequalified,
     )
     monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
@@ -156,7 +162,7 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
     async def fake_ensure_contact_ready_for_assignment(**__):
         return True
 
-    async def fake_ensure_conversation_opportunity(**__):
+    async def fake_ensure_persona_conversation_opportunity(**__):
         return "opp-999"
 
     async def fake_noop(*_, **__):
@@ -178,23 +184,29 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
 
     monkeypatch.setattr(
         lead_tools.webchat_followups,
-        "ensure_contact_ready_for_assignment",
+        "ensure_persona_ready_for_assignment",
         fake_ensure_contact_ready_for_assignment,
     )
     monkeypatch.setattr(
         lead_tools.storage,
-        "ensure_conversation_opportunity",
-        fake_ensure_conversation_opportunity,
+        "fetch_latest_conversation_summary",
+        fake_noop,
+    )
+    monkeypatch.setattr(
+        lead_tools.storage,
+        "ensure_persona_conversation_opportunity",
+        fake_ensure_persona_conversation_opportunity,
     )
     monkeypatch.setattr(lead_tools.storage, "update_persona", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "update_conversation", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "fetch_persona", fake_fetch_persona)
-    monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_noop)
-    monkeypatch.setattr(lead_tools.storage, "apply_lead_scoring", fake_apply_scoring)
+    monkeypatch.setattr(lead_tools.storage, "sync_persona_opportunity_context", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_persona_opportunity", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "apply_persona_lead_scoring", fake_apply_scoring)
     monkeypatch.setattr(
         lead_tools.storage,
-        "maybe_promote_prequalified_from_scoring",
+        "maybe_promote_prequalified_from_persona",
         fake_prequalified,
     )
     monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)

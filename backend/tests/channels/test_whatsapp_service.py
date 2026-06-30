@@ -286,6 +286,25 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
     monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
     monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(
+        service.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        _async_return(
+            SimpleNamespace(
+                provider="twilio",
+                prompt_version="1",
+                welcome_document_prompt_version="1",
+                prospeccion_prompt_version=None,
+                inactivity_minutes=None,
+                reengage_minutes=None,
+                escalate_minutes=None,
+                assistant_id=None,
+                prompt_id=None,
+                project_id=None,
+                voice_api_key=None,
+            )
+        ),
+    )
 
     register_calls: list[dict] = []
     send_calls: list[dict] = []
@@ -374,8 +393,10 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
     assert send_calls[1]["body"] is None
     assert send_calls[1]["attachments"] and send_calls[1]["attachments"][0]["mime"] == "application/pdf"
     assert merge_calls
-    assert merge_calls[0]["patch"]["welcome_document_sent"] is True
-    assert merge_calls[0]["patch"]["welcome_document_channel"] == "whatsapp"
+    welcome_patches = [call["patch"] for call in merge_calls if "welcome_document_sent" in call["patch"]]
+    assert welcome_patches
+    assert welcome_patches[0]["welcome_document_sent"] is True
+    assert welcome_patches[0]["welcome_document_channel"] == "whatsapp"
     assert len(register_calls) == 2
 
 
@@ -944,7 +965,7 @@ async def test_resolve_prospeccion_prospecto_id_is_org_scoped(monkeypatch) -> No
 
     result = await service._resolve_prospeccion_prospecto_id(
         repo=RepoStub(),
-        contact_id="c8677050-f253-4448-944f-05f4d2fda7ac",
+        persona_id="c8677050-f253-4448-944f-05f4d2fda7ac",
         organizacion_id=org_gran,
         message=message,
     )
