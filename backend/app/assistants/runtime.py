@@ -10,12 +10,21 @@ from openai import AsyncOpenAI
 from .manager import AssistantConfig
 
 
-CATALOG_BACKEND_TOOL_NAMES = frozenset(
+CATALOG_INMOBILIARIO_TOOL_NAMES = frozenset(
     {
         "list_catalog_fraccionamientos",
         "list_catalog_modelos",
+    }
+)
+
+CATALOG_NO_INMOBILIARIO_TOOL_NAMES = frozenset(
+    {
         "fetch_catalog_item_details",
     }
+)
+
+CATALOG_BACKEND_TOOL_NAMES = frozenset(
+    CATALOG_INMOBILIARIO_TOOL_NAMES | CATALOG_NO_INMOBILIARIO_TOOL_NAMES
 )
 
 
@@ -50,17 +59,18 @@ def _extract_function_tool_name(tool: dict[str, Any]) -> str | None:
 def filter_assistant_tools(
     tools: list[dict[str, Any]],
     *,
-    enabled: bool,
-    excluded_names: frozenset[str] = CATALOG_BACKEND_TOOL_NAMES,
+    catalog_inmobiliario_enabled: bool,
+    catalog_no_inmobiliario_enabled: bool,
 ) -> list[dict[str, Any]]:
-    """Quita tools concretas cuando una capacidad del tenant está desactivada."""
-    if enabled:
-        return tools
+    """Quita tools de catálogo cuando una capacidad del tenant está desactivada."""
     filtered: list[dict[str, Any]] = []
     for tool in tools:
         tool_name = _extract_function_tool_name(tool)
-        if tool_name and tool_name in excluded_names:
-            continue
+        if tool_name:
+            if tool_name in CATALOG_INMOBILIARIO_TOOL_NAMES and not catalog_inmobiliario_enabled:
+                continue
+            if tool_name in CATALOG_NO_INMOBILIARIO_TOOL_NAMES and not catalog_no_inmobiliario_enabled:
+                continue
         filtered.append(tool)
     return filtered
 

@@ -2096,20 +2096,25 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
-    catalog_backend_enabled = True
+    catalog_inmobiliario_enabled = True
+    catalog_no_inmobiliario_enabled = True
     if org_uuid:
         try:
-            catalog_backend_started = time.perf_counter()
-            catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+            catalog_toggle_started = time.perf_counter()
+            catalog_inmobiliario_enabled = await tenant_runtime.is_catalog_inmobiliario_enabled(
                 organizacion_id=org_uuid,
                 channel="whatsapp",
             )
-            stage_timings["catalog_backend_toggle_ms"] = round(
-                (time.perf_counter() - catalog_backend_started) * 1000, 2
+            catalog_no_inmobiliario_enabled = await tenant_runtime.is_catalog_no_inmobiliario_enabled(
+                organizacion_id=org_uuid,
+                channel="whatsapp",
+            )
+            stage_timings["catalog_toggle_ms"] = round(
+                (time.perf_counter() - catalog_toggle_started) * 1000, 2
             )
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "whatsapp.catalog_backend_toggle_lookup_failed",
+                "whatsapp.catalog_toggle_lookup_failed",
                 extra={
                     "conversation_id": conversation_id,
                     "organizacion_id": str(org_uuid),
@@ -2118,7 +2123,7 @@ async def handle_incoming_message(
             )
     inventory_context_text = None
     location_request = is_location_request(message.body or "")
-    if catalog_backend_enabled and not location_request and should_autoload_inventory_context(message.body or ""):
+    if catalog_inmobiliario_enabled and not location_request and should_autoload_inventory_context(message.body or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -2130,13 +2135,19 @@ async def handle_incoming_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context = None
-    if catalog_backend_enabled and settings.catalog_context_autoload and not location_request:
+    if (catalog_inmobiliario_enabled or catalog_no_inmobiliario_enabled) and settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
+        catalog_domain = "any"
+        if catalog_inmobiliario_enabled and not catalog_no_inmobiliario_enabled:
+            catalog_domain = "inmobiliario"
+        elif catalog_no_inmobiliario_enabled and not catalog_inmobiliario_enabled:
+            catalog_domain = "no_inmobiliario"
         catalog_context = await build_catalog_context(
             organizacion_hint,
             message.body or "",
             user_id=message.wa_id or message.from_number,
             channel="whatsapp",
+            domain=catalog_domain,
         )
         _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
     catalog_context_text = None
@@ -2202,7 +2213,8 @@ async def handle_incoming_message(
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
             organizacion_id=org_uuid,
-            catalog_backend_enabled=catalog_backend_enabled,
+            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
             prospeccion_mode=is_prospeccion_mode,
             origin_type=origin_type,
             inbound_message_id=inbound_message_id,
@@ -2996,7 +3008,8 @@ async def _generate_assistant_reply(
     booking_context: str | None,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
     organizacion_id: UUID | None,
-    catalog_backend_enabled: bool = True,
+    catalog_inmobiliario_enabled: bool = True,
+    catalog_no_inmobiliario_enabled: bool = True,
     prospeccion_mode: bool = False,
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
@@ -3035,7 +3048,11 @@ async def _generate_assistant_reply(
         assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
         debug_timings["assistant_spec_ms"] = round((time.perf_counter() - assistant_spec_started) * 1000, 2)
     filtered_assistant_tools = (
-        filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        filter_assistant_tools(
+            assistant_spec.tools,
+            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+        )
         if assistant_spec
         else []
     )
@@ -3187,11 +3204,18 @@ async def _generate_assistant_reply(
         "Si el prospecto menciona una zona/fraccionamiento sin coincidencias claras, "
         "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
         "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
-        if catalog_backend_enabled
-        else "Catálogo/backend desactivado para este tenant/canal. "
-        "No uses recursos de catálogo/backend ni infieras inventario desde ellos. "
+        if catalog_inmobiliario_enabled
+        else "Catálogo inmobiliario desactivado para este tenant/canal. "
+        "No uses recursos de catálogo inmobiliario ni infieras inventario desde ellos. "
         "Si falta contexto, haz una sola pregunta de aclaración usando solo la información "
         "permitida por el tenant."
+    )
+    product_catalog_prompt = (
+        "Si el prospecto pregunta por productos, servicios o paquetes, usa fetch_catalog_item_details "
+        "para buscar el catálogo comercial general antes de responder."
+        if catalog_no_inmobiliario_enabled
+        else "Catálogo de productos y servicios desactivado para este tenant/canal. "
+        "No uses recursos del catálogo comercial general."
     )
     initial_input.insert(
         3,
@@ -3202,6 +3226,13 @@ async def _generate_assistant_reply(
     )
     initial_input.insert(
         4,
+        {
+            "role": "developer",
+            "content": [{"type": "input_text", "text": product_catalog_prompt}],
+        },
+    )
+    initial_input.insert(
+        5,
         {
             "role": "developer",
             "content": [
@@ -3219,7 +3250,7 @@ async def _generate_assistant_reply(
     location_href = getattr(whatsapp_settings, "location_href", None)
     if location_href:
         initial_input.insert(
-            5,
+            6,
             {
                 "role": "developer",
                 "content": [
@@ -3358,7 +3389,8 @@ async def _generate_assistant_reply(
         channel="whatsapp",
         organizacion_id=str(organizacion_id) if organizacion_id else None,
         feature="sales_chat",
-        catalog_backend_enabled=catalog_backend_enabled,
+        catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+        catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
     )
 
     async def _run_assistant_generation(current_previous_response_id: str | None) -> tuple[Any, float]:

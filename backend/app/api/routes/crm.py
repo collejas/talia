@@ -9762,6 +9762,7 @@ async def fetch_catalog_item_details(
             organizacion_id=organizacion_uuid,
             query=payload.query,
             limit=payload.limit,
+            domain="no_inmobiliario",
         )
     except CRMRepositoryError as exc:
         logger.warning(
@@ -9834,6 +9835,7 @@ async def fetch_catalog_item_details(
             organizacion_uuid,
             query=payload.query,
             limit=payload.limit,
+            domain="no_inmobiliario",
             reason="fetch_catalog_item_details_fallback",
         )
     except CRMRepositoryError as exc:

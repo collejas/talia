@@ -1471,31 +1471,63 @@ async def is_profiling_enabled(
     return _coerce_bool(by_channel.get(channel), global_enabled)
 
 
-async def is_catalog_backend_enabled(
+def _read_catalog_feature_enabled(config: dict[str, Any], *, key: str, fallback: bool = True) -> bool:
+    features_cfg = _as_dict(config.get("features")) or {}
+    feature_cfg = _as_dict(features_cfg.get(key)) or {}
+    if feature_cfg:
+        return _coerce_bool(feature_cfg.get("enabled"), fallback)
+    legacy_cfg = _as_dict(features_cfg.get("catalog_backend")) or {}
+    return _coerce_bool(legacy_cfg.get("enabled"), fallback)
+
+
+async def is_catalog_inmobiliario_enabled(
     *,
     organizacion_id: UUID,
     channel: Literal["whatsapp", "webchat", "voice"] | None = None,
 ) -> bool:
-    """Resuelve si el catálogo/backend de asistentes está habilitado para un tenant.
-
-    Fuente:
-    - `organizaciones.config.features.catalog_backend.enabled`
-
-    Default ON para no romper tenants existentes sin config explícita.
-    """
+    """Resuelve si el catálogo inmobiliario está habilitado para un tenant."""
 
     try:
         config = await get_org_config(organizacion_id=organizacion_id)
     except Exception as exc:
         logger.warning(
-            "tenant_runtime.catalog_backend_enabled_fallback_true",
+            "tenant_runtime.catalog_inmobiliario_enabled_fallback_true",
             extra={"organizacion_id": str(organizacion_id), "channel": channel, "error": str(exc)},
         )
         return True
 
-    features_cfg = _as_dict(config.get("features")) or {}
-    catalog_backend_cfg = _as_dict(features_cfg.get("catalog_backend")) or {}
-    return _coerce_bool(catalog_backend_cfg.get("enabled"), True)
+    return _read_catalog_feature_enabled(config, key="catalog_inmobiliario", fallback=True)
+
+
+async def is_catalog_no_inmobiliario_enabled(
+    *,
+    organizacion_id: UUID,
+    channel: Literal["whatsapp", "webchat", "voice"] | None = None,
+) -> bool:
+    """Resuelve si el catálogo no inmobiliario está habilitado para un tenant."""
+
+    try:
+        config = await get_org_config(organizacion_id=organizacion_id)
+    except Exception as exc:
+        logger.warning(
+            "tenant_runtime.catalog_no_inmobiliario_enabled_fallback_true",
+            extra={"organizacion_id": str(organizacion_id), "channel": channel, "error": str(exc)},
+        )
+        return True
+
+    return _read_catalog_feature_enabled(config, key="catalog_no_inmobiliario", fallback=True)
+
+
+async def is_catalog_backend_enabled(
+    *,
+    organizacion_id: UUID,
+    channel: Literal["whatsapp", "webchat", "voice"] | None = None,
+) -> bool:
+    """Compatibilidad interna: activa si cualquiera de los dos catálogos está habilitado."""
+
+    inmobiliario = await is_catalog_inmobiliario_enabled(organizacion_id=organizacion_id, channel=channel)
+    no_inmobiliario = await is_catalog_no_inmobiliario_enabled(organizacion_id=organizacion_id, channel=channel)
+    return inmobiliario or no_inmobiliario
 
 
 @dataclass(slots=True)

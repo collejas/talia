@@ -190,7 +190,8 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
     config: dict[str, Any] = {
         "features": {
             "webchat": {"enabled": True},
-            "catalog_backend": {"enabled": True},
+            "catalog_inmobiliario": {"enabled": True},
+            "catalog_no_inmobiliario": {"enabled": True},
         },
         "webchat": webchat_cfg,
         "whatsapp": {"provider": "meta", "templates": {}},

@@ -460,12 +460,28 @@ async def _handle_message(
         "page_id": payload.recipient_id,
     }
 
-    catalog_context = await build_catalog_context(
-        org_id,
-        payload.text or "",
-        user_id=payload.sender_id,
-        channel="messenger",
+    catalog_inmobiliario_enabled = await tenant_runtime.is_catalog_inmobiliario_enabled(
+        organizacion_id=org_uuid,
+        channel=None,
     )
+    catalog_no_inmobiliario_enabled = await tenant_runtime.is_catalog_no_inmobiliario_enabled(
+        organizacion_id=org_uuid,
+        channel=None,
+    )
+    catalog_domain = "any"
+    if catalog_inmobiliario_enabled and not catalog_no_inmobiliario_enabled:
+        catalog_domain = "inmobiliario"
+    elif catalog_no_inmobiliario_enabled and not catalog_inmobiliario_enabled:
+        catalog_domain = "no_inmobiliario"
+    catalog_context = None
+    if catalog_inmobiliario_enabled or catalog_no_inmobiliario_enabled:
+        catalog_context = await build_catalog_context(
+            org_id,
+            payload.text or "",
+            user_id=payload.sender_id,
+            channel="messenger",
+            domain=catalog_domain,
+        )
     booking_context_text = None
     try:
         booking_context_text = await build_booking_context_message(

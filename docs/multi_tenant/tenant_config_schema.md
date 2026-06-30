@@ -65,7 +65,8 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `features.voice.enabled` (bool)
 - `features.productos.enabled` (bool)
 - `features.propiedades.enabled` (bool)
-- `features.catalog_backend.enabled` (bool)
+- `features.catalog_inmobiliario.enabled` (bool)
+- `features.catalog_no_inmobiliario.enabled` (bool)
 
 > Nota: `features.productos.enabled` controla la visibilidad del catálogo comercial general
 > (`/settings/productos`) y `features.propiedades.enabled` controla la visibilidad del módulo
@@ -73,10 +74,11 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 > (`lineas`, `familias`, `modelos`), pero no comparten inventario operativo ni permisos de
 > exposición por defecto.
 
-> Nota operativa: `features.catalog_backend.enabled` controla si los asistentes del tenant pueden
-> usar o exponer las tools `list_catalog_fraccionamientos`, `list_catalog_modelos` y
-> `fetch_catalog_item_details` en WhatsApp, Webchat y Voz. Cuando está desactivado, el asistente
-> debe trabajar sin catálogo/backend para ese tenant.
+> Nota operativa: `features.catalog_inmobiliario.enabled` controla si los asistentes del tenant
+> pueden usar o exponer las tools `list_catalog_fraccionamientos` y `list_catalog_modelos` en
+> WhatsApp, Webchat y Voz. `features.catalog_no_inmobiliario.enabled` controla
+> `fetch_catalog_item_details` para productos y servicios. Cada switch puede activarse por
+> separado.
 
 ### `webchat.*`
 - `webchat.assistant_id` (string)  ← de `TALIA_OPENAI_WEBCHAT_ASSISTANT_ID`

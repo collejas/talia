@@ -35,7 +35,8 @@ class ToolRuntimeContext:
     channel: str | None = None
     organizacion_id: str | None = None
     feature: str | None = None
-    catalog_backend_enabled: bool = True
+    catalog_inmobiliario_enabled: bool = True
+    catalog_no_inmobiliario_enabled: bool = True
 
 
 @dataclass(slots=True)

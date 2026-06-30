@@ -173,7 +173,8 @@ function buildModuleConfigJson(
   config: Record<string, unknown> | null | undefined,
   productosEnabled: boolean,
   propiedadesEnabled: boolean,
-  catalogBackendEnabled: boolean,
+  catalogInmobiliarioEnabled: boolean,
+  catalogNoInmobiliarioEnabled: boolean,
 ): string {
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
   const features = isRecord(nextConfig.features) ? { ...nextConfig.features } : {}
@@ -185,9 +186,13 @@ function buildModuleConfigJson(
     ...(isRecord(features.propiedades) ? features.propiedades : {}),
     enabled: propiedadesEnabled,
   }
-  features.catalog_backend = {
-    ...(isRecord(features.catalog_backend) ? features.catalog_backend : {}),
-    enabled: catalogBackendEnabled,
+  features.catalog_inmobiliario = {
+    ...(isRecord(features.catalog_inmobiliario) ? features.catalog_inmobiliario : {}),
+    enabled: catalogInmobiliarioEnabled,
+  }
+  features.catalog_no_inmobiliario = {
+    ...(isRecord(features.catalog_no_inmobiliario) ? features.catalog_no_inmobiliario : {}),
+    enabled: catalogNoInmobiliarioEnabled,
   }
   nextConfig.features = features
   return JSON.stringify(nextConfig, null, 2)
@@ -238,18 +243,29 @@ export function TenantModuleFlagsForm({
   const features = isRecord(config?.features) ? (config?.features as Record<string, unknown>) : null
   const [productosEnabled, setProductosEnabled] = useState(() => readFeatureEnabled(features, "productos"))
   const [propiedadesEnabled, setPropiedadesEnabled] = useState(() => readFeatureEnabled(features, "propiedades"))
-  const [catalogBackendEnabled, setCatalogBackendEnabled] = useState(() =>
-    readFeatureEnabled(features, "catalog_backend", true),
+  const [catalogInmobiliarioEnabled, setCatalogInmobiliarioEnabled] = useState(() =>
+    readFeatureEnabled(features, "catalog_inmobiliario", true),
+  )
+  const [catalogNoInmobiliarioEnabled, setCatalogNoInmobiliarioEnabled] = useState(() =>
+    readFeatureEnabled(features, "catalog_no_inmobiliario", true),
   )
   const configJson = useMemo(
-    () => buildModuleConfigJson(config, productosEnabled, propiedadesEnabled, catalogBackendEnabled),
-    [config, productosEnabled, propiedadesEnabled, catalogBackendEnabled],
+    () =>
+      buildModuleConfigJson(
+        config,
+        productosEnabled,
+        propiedadesEnabled,
+        catalogInmobiliarioEnabled,
+        catalogNoInmobiliarioEnabled,
+      ),
+    [config, productosEnabled, propiedadesEnabled, catalogInmobiliarioEnabled, catalogNoInmobiliarioEnabled],
   )
 
   useEffect(() => {
     setProductosEnabled(readFeatureEnabled(features, "productos"))
     setPropiedadesEnabled(readFeatureEnabled(features, "propiedades"))
-    setCatalogBackendEnabled(readFeatureEnabled(features, "catalog_backend", true))
+    setCatalogInmobiliarioEnabled(readFeatureEnabled(features, "catalog_inmobiliario", true))
+    setCatalogNoInmobiliarioEnabled(readFeatureEnabled(features, "catalog_no_inmobiliario", true))
   }, [features])
 
   return (
@@ -284,28 +300,41 @@ export function TenantModuleFlagsForm({
         <div className="space-y-2 md:col-span-2">
           <div className="flex items-center gap-3">
             <input
-              id="module_catalog_backend_enabled"
+              id="module_catalog_inmobiliario_enabled"
               type="checkbox"
-              checked={catalogBackendEnabled}
-              onChange={(event) => setCatalogBackendEnabled(event.target.checked)}
+              checked={catalogInmobiliarioEnabled}
+              onChange={(event) => setCatalogInmobiliarioEnabled(event.target.checked)}
               className="size-4"
             />
-            <Label htmlFor="module_catalog_backend_enabled">Catálogo/backend en asistentes</Label>
+            <Label htmlFor="module_catalog_inmobiliario_enabled">Activar inmobiliario</Label>
+          </div>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="module_catalog_no_inmobiliario_enabled"
+              type="checkbox"
+              checked={catalogNoInmobiliarioEnabled}
+              onChange={(event) => setCatalogNoInmobiliarioEnabled(event.target.checked)}
+              className="size-4"
+            />
+            <Label htmlFor="module_catalog_no_inmobiliario_enabled">Activar productos y servicios</Label>
           </div>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
         Esto actualiza <code>organizaciones.config.features.productos.enabled</code>,{" "}
-        <code>organizaciones.config.features.propiedades.enabled</code> y{" "}
-        <code>organizaciones.config.features.catalog_backend.enabled</code>.
+        <code>organizaciones.config.features.propiedades.enabled</code>,{" "}
+        <code>organizaciones.config.features.catalog_inmobiliario.enabled</code> y{" "}
+        <code>organizaciones.config.features.catalog_no_inmobiliario.enabled</code>.
       </p>
       <p className="text-xs text-muted-foreground">
-        El switch de catálogo/backend aplica a WhatsApp, Webchat y Voz. Cuando se apaga, los asistentes no ven ni
-        usan <code>list_catalog_fraccionamientos</code>, <code>list_catalog_modelos</code> ni{" "}
+        El switch de inmobiliario controla <code>list_catalog_fraccionamientos</code> y{" "}
+        <code>list_catalog_modelos</code>. El switch de productos y servicios controla{" "}
         <code>fetch_catalog_item_details</code>.
       </p>
       <p className="text-xs text-muted-foreground">
-        La taxonomía puede seguir compartida, pero el acceso operativo al módulo queda separado.
+        Si se desactivan ambos, el asistente no carga catálogo. Si se activan ambos, puede usar los dos dominios.
       </p>
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />

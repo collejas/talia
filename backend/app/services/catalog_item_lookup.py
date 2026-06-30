@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 import json
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from app.repositories.crm import CRMRepository
@@ -57,6 +57,15 @@ def _parse_metadata_dict(row: dict[str, Any]) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def _catalog_item_domain(row: dict[str, Any]) -> Literal["inmobiliario", "no_inmobiliario"]:
+    if row.get("propiedad_id") or row.get("unidad_id"):
+        return "inmobiliario"
+    metadata = _parse_metadata_dict(row)
+    if metadata.get("propiedad_id") or metadata.get("unidad_id"):
+        return "inmobiliario"
+    return "no_inmobiliario"
 
 
 def _extract_row_area(row: dict[str, Any]) -> float | None:
@@ -243,6 +252,7 @@ async def lookup_catalog_items_sql_first(
     organizacion_id: UUID,
     query: str,
     limit: int = 1,
+    domain: Literal["inmobiliario", "no_inmobiliario", "any"] = "no_inmobiliario",
 ) -> list[dict[str, Any]]:
     query_text = query.strip()
     if not query_text:
@@ -258,7 +268,7 @@ async def lookup_catalog_items_sql_first(
             organizacion_id=organizacion_id,
             slug=slug_candidate,
         )
-        if by_slug:
+        if by_slug and (domain == "any" or _catalog_item_domain(by_slug) == domain):
             item_id = str(by_slug.get("id") or "")
             if item_id:
                 seen_ids.add(item_id)
@@ -280,6 +290,8 @@ async def lookup_catalog_items_sql_first(
         item_id = str(row.get("id") or "")
         if item_id and item_id in seen_ids:
             continue
+        if domain != "any" and _catalog_item_domain(row) != domain:
+            continue
         score = _score_catalog_item(query_normalized=query_normalized, row=row)
         if score <= 0:
             continue
@@ -294,6 +306,8 @@ async def lookup_catalog_items_sql_first(
         for row in fallback_rows:
             item_id = str(row.get("id") or "")
             if item_id and item_id in seen_ids:
+                continue
+            if domain != "any" and _catalog_item_domain(row) != domain:
                 continue
             score = _score_catalog_item(query_normalized=query_normalized, row=row)
             if score <= 0:
@@ -334,6 +348,8 @@ async def lookup_catalog_items_sql_first(
         for row in relation_candidates:
             item_id = str(row.get("id") or "")
             if item_id and item_id in seen_ids:
+                continue
+            if domain != "any" and _catalog_item_domain(row) != domain:
                 continue
             score = _score_catalog_item(query_normalized=query_normalized, row=row)
             if score <= 0:

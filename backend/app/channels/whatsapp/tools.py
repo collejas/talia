@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from app.assistants.runtime import CATALOG_BACKEND_TOOL_NAMES
+from app.assistants.runtime import CATALOG_INMOBILIARIO_TOOL_NAMES, CATALOG_NO_INMOBILIARIO_TOOL_NAMES
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.assistants.tools import lead as lead_tools
 from app.channels.webchat import service as webchat_service
@@ -1253,7 +1253,9 @@ async def execute_tool(
         raise ValueError(f"Tipo de argumentos no soportado: {type(arguments)!r}")
 
     func = name.strip()
-    if func in CATALOG_BACKEND_TOOL_NAMES and not context.catalog_backend_enabled:
+    if func in CATALOG_INMOBILIARIO_TOOL_NAMES and not context.catalog_inmobiliario_enabled:
+        raise ValueError(f"{func} no está disponible para este tenant/canal")
+    if func in CATALOG_NO_INMOBILIARIO_TOOL_NAMES and not context.catalog_no_inmobiliario_enabled:
         raise ValueError(f"{func} no está disponible para este tenant/canal")
     if func == "set_full_name":
         full_name = await lead_tools._resolve_full_name_from_context(
@@ -1555,6 +1557,7 @@ async def execute_tool(
                 organizacion_id=org_uuid,
                 query=query,
                 limit=limit,
+                domain="no_inmobiliario",
             )
         except CRMRepositoryError as exc:
             logger.warning(
@@ -1621,6 +1624,7 @@ async def execute_tool(
                 org_uuid,
                 query=query,
                 limit=limit,
+                domain="no_inmobiliario",
                 reason="fetch_catalog_item_details_fallback",
             )
         except CRMRepositoryError as exc:

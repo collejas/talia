@@ -40,6 +40,12 @@ const SECTIONS: SectionConfig[] = [
       { label: "Voz habilitada", path: "features.voice.enabled", control: "checkbox" },
       { label: "Productos habilitado", path: "features.productos.enabled", control: "checkbox" },
       { label: "Propiedades habilitado", path: "features.propiedades.enabled", control: "checkbox" },
+      { label: "Activar inmobiliario", path: "features.catalog_inmobiliario.enabled", control: "checkbox" },
+      {
+        label: "Activar productos y servicios",
+        path: "features.catalog_no_inmobiliario.enabled",
+        control: "checkbox",
+      },
     ],
     notes: [
       "Estos flags controlan la visibilidad del menú y el acceso a las rutas de cada módulo.",

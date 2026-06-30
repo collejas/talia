@@ -27,7 +27,11 @@ from app.assistants.runtime import AssistantSpec, resolve_assistant_spec
 from app.assistants.runtime import (
     build_prompt_payload as build_assistant_prompt_payload,
 )
-from app.assistants.runtime import CATALOG_BACKEND_TOOL_NAMES, filter_assistant_tools
+from app.assistants.runtime import (
+    CATALOG_INMOBILIARIO_TOOL_NAMES,
+    CATALOG_NO_INMOBILIARIO_TOOL_NAMES,
+    filter_assistant_tools,
+)
 from app.assistants.tool_runtime import (
     ToolRuntimeContext,
     classify_runtime_error,
@@ -1566,7 +1570,8 @@ class WebchatContext:
     conversation_id: str
     persona_id: str
     session_id: str
-    catalog_backend_enabled: bool = True
+    catalog_inmobiliario_enabled: bool = True
+    catalog_no_inmobiliario_enabled: bool = True
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -3200,22 +3205,27 @@ async def handle_message(
             raise HTTPException(
                 status_code=500, detail="No se pudo cargar la configuración del asistente"
             ) from exc
-    catalog_backend_enabled = True
+    catalog_inmobiliario_enabled = True
+    catalog_no_inmobiliario_enabled = True
     if organizacion_id:
         resolved_org = _resolve_org_uuid(organizacion_id)
         if resolved_org:
             try:
-                catalog_backend_started = time.perf_counter()
-                catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+                catalog_toggle_started = time.perf_counter()
+                catalog_inmobiliario_enabled = await tenant_runtime.is_catalog_inmobiliario_enabled(
                     organizacion_id=UUID(resolved_org),
                     channel="webchat",
                 )
-                debug_timings["catalog_backend_toggle_ms"] = round(
-                    (time.perf_counter() - catalog_backend_started) * 1000, 2
+                catalog_no_inmobiliario_enabled = await tenant_runtime.is_catalog_no_inmobiliario_enabled(
+                    organizacion_id=UUID(resolved_org),
+                    channel="webchat",
+                )
+                debug_timings["catalog_toggle_ms"] = round(
+                    (time.perf_counter() - catalog_toggle_started) * 1000, 2
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning(
-                    "webchat.catalog_backend_toggle_lookup_failed",
+                    "webchat.catalog_toggle_lookup_failed",
                     extra={
                         "conversation_id": str(conversation_id),
                         "organizacion_id": organizacion_id,
@@ -3226,11 +3236,12 @@ async def handle_message(
         conversation_id=str(conversation_id),
         persona_id=str(persona_id),
         session_id=payload.session_id,
-        catalog_backend_enabled=catalog_backend_enabled,
+        catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+        catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
     )
     inventory_context_text = None
     location_request = is_location_request(payload.content or "")
-    if catalog_backend_enabled and not location_request and should_autoload_inventory_context(payload.content or ""):
+    if catalog_inmobiliario_enabled and not location_request and should_autoload_inventory_context(payload.content or ""):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -3242,13 +3253,19 @@ async def handle_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context: CatalogContext | None = None
-    if catalog_backend_enabled and settings.catalog_context_autoload and not location_request:
+    if (catalog_inmobiliario_enabled or catalog_no_inmobiliario_enabled) and settings.catalog_context_autoload and not location_request:
         catalog_context_started = time.perf_counter()
+        catalog_domain = "any"
+        if catalog_inmobiliario_enabled and not catalog_no_inmobiliario_enabled:
+            catalog_domain = "inmobiliario"
+        elif catalog_no_inmobiliario_enabled and not catalog_inmobiliario_enabled:
+            catalog_domain = "no_inmobiliario"
         catalog_context = await build_catalog_context(
             organizacion_hint,
             payload.content or "",
             user_id=context.persona_id,
             channel="webchat",
+            domain=catalog_domain,
         )
         _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
     booking_context_text = None
@@ -3299,7 +3316,8 @@ async def handle_message(
             openai_conversation_id=openai_conversation_id,
             previous_response_id=conversation_meta.get("last_response_id"),
             organizacion_id=resolved_organizacion_id,
-            catalog_backend_enabled=catalog_backend_enabled,
+            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
             catalog_context=catalog_context,
             booking_context=booking_context_text,
             inbound_message_id=inbound_message_id,
@@ -3499,24 +3517,30 @@ async def append_manual_agent_context(
             logger.exception("webchat.manual_context.resolve_failed", extra={"error": str(exc)})
             return
 
-    catalog_backend_enabled = True
+    catalog_inmobiliario_enabled = True
+    catalog_no_inmobiliario_enabled = True
     org_uuid_value = _resolve_org_uuid(conversation_meta.get("organizacion_id"))
     if org_uuid_value:
         try:
-            catalog_backend_enabled = await tenant_runtime.is_catalog_backend_enabled(
+            catalog_inmobiliario_enabled = await tenant_runtime.is_catalog_inmobiliario_enabled(
+                organizacion_id=UUID(org_uuid_value),
+                channel="webchat",
+            )
+            catalog_no_inmobiliario_enabled = await tenant_runtime.is_catalog_no_inmobiliario_enabled(
                 organizacion_id=UUID(org_uuid_value),
                 channel="webchat",
             )
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "webchat.manual_context.catalog_backend_lookup_failed",
+                "webchat.manual_context.catalog_toggle_lookup_failed",
                 extra={"conversation_id": str(conversation_id), "error": str(exc)},
             )
     context = WebchatContext(
         conversation_id=str(conversation_id),
         persona_id=str(persona_id),
         session_id=session_id,
-        catalog_backend_enabled=catalog_backend_enabled,
+        catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+        catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
     )
 
     manual_text_parts = [
@@ -3572,7 +3596,11 @@ async def append_manual_agent_context(
             "no generes una respuesta para el visitante; únicamente incorpora el contenido al contexto."
         )
         request_kwargs["instructions"] = f"{instructions}\n\n{note}".strip()
-        filtered_tools = filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        filtered_tools = filter_assistant_tools(
+            assistant_spec.tools,
+            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+        )
         if filtered_tools:
             request_kwargs["tools"] = filtered_tools
 
@@ -3774,7 +3802,8 @@ async def _run_assistant_turn(
     openai_conversation_id: str | None,
     previous_response_id: str | None,
     organizacion_id: str | None = None,
-    catalog_backend_enabled: bool = True,
+    catalog_inmobiliario_enabled: bool = True,
+    catalog_no_inmobiliario_enabled: bool = True,
     catalog_context: CatalogContext | None = None,
     booking_context: str | None = None,
     inbound_message_id: str | None = None,
@@ -3827,14 +3856,14 @@ async def _run_assistant_turn(
             ],
         }
     )
-    catalog_backend_note = (
+    catalog_inmobiliario_note = (
         "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
         "es solo referencia técnica y no define la zona de búsqueda del visitante. "
         "Nunca preguntes si busca en la zona inferida por su teléfono. "
     )
-    catalog_backend_disabled_note = (
-        "Catálogo/backend desactivado para este tenant/canal. "
-        "No uses recursos de catálogo/backend ni infieras inventario desde ellos. "
+    catalog_disabled_note = (
+        "Catálogo desactivado para este tenant/canal. "
+        "No uses recursos de catálogo ni infieras inventario desde ellos. "
         "Trabaja solo con las fuentes y flujos permitidos para el tenant."
     )
     profiling_enabled_for_channel = True
@@ -3899,17 +3928,34 @@ async def _run_assistant_turn(
         {
             "role": "developer",
             "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            catalog_inmobiliario_note
+                            + (
+                                "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
+                                "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
+                                "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                            if catalog_inmobiliario_enabled
+                            else catalog_disabled_note
+                        )
+                    ),
+                }
+            ],
+        }
+    )
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [
                 {
                     "type": "input_text",
                     "text": (
-                        catalog_backend_note
-                        + (
-                            "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
-                            "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
-                            "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
-                            if catalog_backend_enabled
-                            else catalog_backend_disabled_note
-                        )
+                        "Si el visitante pregunta por productos, servicios o paquetes, usa "
+                        "fetch_catalog_item_details para buscar el catálogo comercial general antes de responder."
+                        if catalog_no_inmobiliario_enabled
+                        else "Catálogo de productos y servicios desactivado para este tenant/canal. "
+                        "No uses recursos del catálogo comercial general."
                     ),
                 }
             ],
@@ -3986,8 +4032,8 @@ async def _run_assistant_turn(
             f"con organizacion_id '{org_label}', usa la lista de propiedad_tipos "
             "para identificar si es un lote, terreno, local, oficina, departamento, etc., "
             "y describe los modelos coincidentes con su tipo explícito."
-            if catalog_backend_enabled
-            else "Catálogo/backend desactivado: no uses datos de catálogo/backend. "
+            if catalog_inmobiliario_enabled
+            else "Catálogo inmobiliario desactivado: no uses datos de inventario inmobiliario. "
             "Si el visitante pide información de propiedades, responde solo con las fuentes permitidas "
             "y pide una aclaración breve si hace falta."
         )
@@ -4047,7 +4093,11 @@ async def _run_assistant_turn(
         payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
             payload["instructions"] = assistant_spec.instructions
-        filtered_tools = filter_assistant_tools(assistant_spec.tools, enabled=catalog_backend_enabled)
+        filtered_tools = filter_assistant_tools(
+            assistant_spec.tools,
+            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+        )
         if include_tools and filtered_tools:
             payload["tools"] = filtered_tools
         return payload
@@ -4068,7 +4118,8 @@ async def _run_assistant_turn(
         channel="webchat",
         organizacion_id=organizacion_id,
         feature="sales_chat",
-        catalog_backend_enabled=catalog_backend_enabled,
+        catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+        catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
     )
 
     tool_loop_started = time.perf_counter()
@@ -4380,13 +4431,18 @@ async def _execute_function_call(
         )
 
     func = name.strip()
-    if func in CATALOG_BACKEND_TOOL_NAMES and not context.catalog_backend_enabled:
+    if func in CATALOG_INMOBILIARIO_TOOL_NAMES and not context.catalog_inmobiliario_enabled:
+        raise ValueError(f"{func} no está disponible para este tenant/canal")
+    if func in CATALOG_NO_INMOBILIARIO_TOOL_NAMES and not context.catalog_no_inmobiliario_enabled:
         raise ValueError(f"{func} no está disponible para este tenant/canal")
 
     lead_context = ToolRuntimeContext(
         conversation_id=context.conversation_id,
         persona_id=context.persona_id,
         session_id=context.session_id,
+        channel="webchat",
+        catalog_inmobiliario_enabled=context.catalog_inmobiliario_enabled,
+        catalog_no_inmobiliario_enabled=context.catalog_no_inmobiliario_enabled,
     )
     lead_result = await lead_tools.try_execute_lead_tool(name, arguments, lead_context)
     if lead_result is not None:
@@ -5315,6 +5371,7 @@ async def _execute_function_call(
                 organizacion_id=org_uuid,
                 query=query,
                 limit=limit,
+                domain="no_inmobiliario",
             )
         except CRMRepositoryError as exc:
             logger.warning(
@@ -5392,6 +5449,7 @@ async def _execute_function_call(
                 org_uuid,
                 query=query,
                 limit=limit,
+                domain="no_inmobiliario",
                 reason="fetch_catalog_item_details_fallback",
             )
         except CRMRepositoryError as exc:

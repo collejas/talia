@@ -199,10 +199,12 @@ Flags de módulo:
 - `features.voice.enabled`
 - `features.productos.enabled`
 - `features.propiedades.enabled`
-- `features.catalog_backend.enabled`
+- `features.catalog_inmobiliario.enabled`
+- `features.catalog_no_inmobiliario.enabled`
 
-> `features.catalog_backend.enabled` controla si el tenant puede usar o exponer las tools de
-> catálogo/backend en asistentes. Aplica a WhatsApp, Webchat y Voz.
+> `features.catalog_inmobiliario.enabled` controla las tools `list_catalog_fraccionamientos` y
+> `list_catalog_modelos`. `features.catalog_no_inmobiliario.enabled` controla
+> `fetch_catalog_item_details`. Ambos switches aplican a WhatsApp, Webchat y Voz.
 
 Webchat (ejemplos):
 - `TALIA_OPENAI_WEBCHAT_ASSISTANT_ID`

@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 from urllib.parse import quote_plus
 from uuid import UUID
 
@@ -714,6 +714,7 @@ async def build_catalog_context(
     query: str,
     *,
     limit: int = 3,
+    domain: Literal["inmobiliario", "no_inmobiliario", "any"] = "any",
     user_id: str | None = None,
     channel: str | None = None,
 ) -> CatalogContext | None:
@@ -740,6 +741,7 @@ async def build_catalog_context(
             org_uuid,
             query=prompt,
             limit=limit,
+            domain=domain,
             user_id=user_id,
             channel=channel,
             reason="catalog_context_autoload",

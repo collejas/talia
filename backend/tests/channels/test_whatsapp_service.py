@@ -861,7 +861,8 @@ async def test_generate_assistant_reply_filters_catalog_tools_when_disabled(monk
     monkeypatch.setattr(service.storage, "fetch_persona_context", _async_none)
     monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
     monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
-    monkeypatch.setattr(service.tenant_runtime, "is_catalog_backend_enabled", _async_false)
+    monkeypatch.setattr(service.tenant_runtime, "is_catalog_inmobiliario_enabled", _async_false)
+    monkeypatch.setattr(service.tenant_runtime, "is_catalog_no_inmobiliario_enabled", _async_false)
     monkeypatch.setattr(service, "_extract_text_from_response", lambda _response: "Respuesta final")
     monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
 
@@ -889,7 +890,8 @@ async def test_generate_assistant_reply_filters_catalog_tools_when_disabled(monk
         booking_context=None,
         whatsapp_settings=SimpleNamespace(voice_api_key="api-key", project_id="proj-test"),
         organizacion_id=UUID("00000000-0000-0000-0000-0000000000bb"),
-        catalog_backend_enabled=False,
+        catalog_inmobiliario_enabled=False,
+        catalog_no_inmobiliario_enabled=False,
         prospeccion_mode=False,
         origin_type="general_whatsapp",
         inbound_message_id="inbound-1",

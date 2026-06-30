@@ -118,6 +118,33 @@ def _coerce_similarity(value: Any) -> float | None:
         return None
 
 
+def _document_matches_domain(
+    row: Mapping[str, Any],
+    *,
+    domain: Literal["inmobiliario", "no_inmobiliario", "any"],
+) -> bool:
+    if domain == "any":
+        return True
+    metadata = row.get("metadata")
+    metadata_dict: Mapping[str, Any]
+    if isinstance(metadata, Mapping):
+        metadata_dict = metadata
+    elif isinstance(metadata, str):
+        try:
+            parsed = json.loads(metadata)
+        except Exception:
+            parsed = {}
+        metadata_dict = parsed if isinstance(parsed, Mapping) else {}
+    else:
+        metadata_dict = {}
+    has_inmobiliario_markers = any(
+        metadata_dict.get(key) for key in ("propiedad_id", "unidad_id")
+    )
+    if domain == "inmobiliario":
+        return has_inmobiliario_markers
+    return not has_inmobiliario_markers
+
+
 class CatalogEmbeddingService:
     """Orquesta la creación de embeddings y el upsert en Supabase."""
 
@@ -405,6 +432,8 @@ class CatalogEmbeddingService:
             "source": "catalog_items",
             "slug": _serialize_metadata_value(row.get("slug")),
             "tipo": _serialize_metadata_value(row.get("tipo")),
+            "propiedad_id": _serialize_metadata_value(row.get("propiedad_id")),
+            "unidad_id": _serialize_metadata_value(row.get("unidad_id")),
             "linea_id": _serialize_metadata_value(row.get("linea_id")),
             "familia_id": _serialize_metadata_value(row.get("familia_id")),
             "modelo_id": _serialize_metadata_value(row.get("modelo_id")),
@@ -482,6 +511,7 @@ class CatalogEmbeddingService:
         *,
         query: str,
         limit: int = 5,
+        domain: Literal["inmobiliario", "no_inmobiliario", "any"] = "any",
         user_id: str | None = None,
         channel: str | None = None,
         reason: str | None = None,
@@ -497,6 +527,8 @@ class CatalogEmbeddingService:
         )
         matches: list[CatalogDocumentMatch] = []
         for row in rows:
+            if not _document_matches_domain(row, domain=domain):
+                continue
             matches.append(
                 CatalogDocumentMatch(
                     entity_type=str(row.get("entity_type") or ""),
@@ -517,6 +549,7 @@ class CatalogEmbeddingService:
                 "query": prompt,
                 "matches": len(matches),
                 "embedding_cache_eligible": self._is_query_cache_eligible(prompt),
+                "domain": domain,
                 "reason": reason,
             },
         )
