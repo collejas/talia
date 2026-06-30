@@ -13,6 +13,23 @@ El comportamiento esperado es:
 - si se activan ambos, el asistente ve ambos;
 - si se desactivan ambos, el asistente no usa catálogo.
 
+## Estado de implementación
+
+Este plan ya quedó implementado en la rama de trabajo actual.
+
+Lo que quedó aplicado:
+
+- el panel reemplazó el switch único por dos checks de negocio;
+- el backend separó la lectura de flags y el filtrado de tools por dominio;
+- la búsqueda de catálogo ya distingue entre inmobiliario y no inmobiliario;
+- la configuración por tenant y por variables expone los dos checks;
+- los tests de runtime y canales quedaron actualizados.
+
+En términos de contrato visible, los nombres acordados quedaron como:
+
+- `Activar inmobiliario`
+- `Activar productos y servicios`
+
 ## Decisión de producto
 
 Este cambio amplía lo que ya existe, pero reemplaza el significado del switch anterior.
@@ -73,6 +90,12 @@ Definir dos flags nuevos:
 
 El flag viejo deja de ser el contrato funcional principal.
 
+Estado real:
+
+- el backend ya lee ambos flags;
+- `catalog_backend` quedó solo como compatibilidad histórica de lectura donde todavía exista configuración vieja;
+- la UI ya escribe ambos flags desde `settings/tenants` y `settings/variables`.
+
 ### 2. Runtime de asistentes
 
 Separar el acceso en dos grupos:
@@ -85,6 +108,12 @@ Separar el acceso en dos grupos:
 
 Cada tool debe revisarse contra el flag correcto antes de ejecutarse.
 
+Estado real:
+
+- `filter_assistant_tools()` ya filtra por los dos flags;
+- WhatsApp y Webchat ya usan el dominio correcto al consultar catálogo;
+- `fetch_catalog_item_details` ya consulta el catálogo no inmobiliario.
+
 ### 3. Búsqueda y fallback
 
 Alinear la búsqueda de catálogo con el dominio:
@@ -92,6 +121,12 @@ Alinear la búsqueda de catálogo con el dominio:
 - cuando el asistente busque inventario inmobiliario, solo debe consultar el subconjunto inmobiliario;
 - cuando busque productos/servicios no inmobiliarios, solo debe consultar ese subconjunto;
 - si ambos flags están apagados, no debe ejecutarse recuperación de catálogo.
+
+Estado real:
+
+- la búsqueda por embeddings ya recibe `domain`;
+- la búsqueda SQL-first ya separa por dominio;
+- el metadata de indexación ya guarda las claves necesarias para diferenciar inventario inmobiliario y no inmobiliario.
 
 ### 4. UI
 
@@ -101,6 +136,12 @@ Mostrar los dos checks en:
 - vista de `settings/variables`.
 
 Los textos deben dejar claro qué activa cada uno y que ambos pueden convivir.
+
+Estado real:
+
+- `settings/tenants` ya muestra los dos checks con copy funcional;
+- `settings/variables` también expone los dos flags;
+- los nombres visibles acordados son los que se usan en la interfaz.
 
 ## Nombres propuestos para los checks
 
@@ -130,31 +171,43 @@ La recomendación principal es mantener:
 
 ### 1. Base de datos
 
-- [ ] Confirmar cómo se distinguen hoy los ítems inmobiliarios y no inmobiliarios en `catalog_items`.
-- [ ] Validar si el inventario inmobiliario ya está marcado por `propiedad_id` y `unidad_id`.
-- [ ] Definir si hace falta un campo explícito de dominio en BD o si la separación se resuelve por relaciones existentes.
-- [ ] Revisar qué tablas, vistas o consultas consumen el catálogo sin distinguir dominio.
-- [ ] Documentar el criterio final para clasificar cada ítem del catálogo.
+- [x] Confirmar cómo se distinguen hoy los ítems inmobiliarios y no inmobiliarios en `catalog_items`.
+- [x] Validar si el inventario inmobiliario ya está marcado por `propiedad_id` y `unidad_id`.
+- [x] Definir si hace falta un campo explícito de dominio en BD o si la separación se resuelve por relaciones existentes.
+- [x] Revisar qué tablas, vistas o consultas consumen el catálogo sin distinguir dominio.
+- [x] Documentar el criterio final para clasificar cada ítem del catálogo.
+- Resultado:
+  - el dominio inmobiliario se clasifica por relación explícita a `propiedad_id` y/o `unidad_id`;
+  - el dominio no inmobiliario se resuelve sobre `catalog_items`;
+  - la lógica de consulta y embeddings ya respeta ese dominio.
 
 ### 2. Backend
 
-- [ ] Sustituir la lectura funcional del flag único por dos flags de negocio.
-- [ ] Implementar `Activar inmobiliario` para las tools de inventario inmobiliario.
-- [ ] Implementar `Activar productos y servicios` para la consulta de catálogo general.
-- [ ] Ajustar el filtrado de tools en WhatsApp y Webchat.
-- [ ] Ajustar la búsqueda de catálogo para que no mezcle dominios.
-- [ ] Revisar defaults de creación de tenant y de bootstrap de configuración.
-- [ ] Actualizar tests de runtime, tools y endpoints relacionados.
+- [x] Sustituir la lectura funcional del flag único por dos flags de negocio.
+- [x] Implementar `Activar inmobiliario` para las tools de inventario inmobiliario.
+- [x] Implementar `Activar productos y servicios` para la consulta de catálogo general.
+- [x] Ajustar el filtrado de tools en WhatsApp y Webchat.
+- [x] Ajustar la búsqueda de catálogo para que no mezcle dominios.
+- [x] Revisar defaults de creación de tenant y de bootstrap de configuración.
+- [x] Actualizar tests de runtime, tools y endpoints relacionados.
+- Resultado:
+  - el backend ya filtra `list_catalog_fraccionamientos`, `list_catalog_modelos` y `fetch_catalog_item_details` por el flag correcto;
+  - WhatsApp, Webchat y Messenger ya pasan dominio explícito;
+  - la compatibilidad con el switch viejo quedó solo como fallback histórico.
 
 ### 3. Frontend
 
-- [ ] Reemplazar el switch único por dos checks con nombre de negocio.
-- [ ] Mostrar `Activar inmobiliario` en `settings/tenants`.
-- [ ] Mostrar `Activar productos y servicios` en `settings/tenants`.
-- [ ] Mostrar los mismos dos checks en `settings/variables`.
-- [ ] Actualizar textos de ayuda para explicar claramente el efecto de cada check.
-- [ ] Verificar que ambos formularios escriban los mismos keys en `organizaciones.config.features`.
-- [ ] Ajustar los estados iniciales para respetar configuraciones ya guardadas.
+- [x] Reemplazar el switch único por dos checks con nombre de negocio.
+- [x] Mostrar `Activar inmobiliario` en `settings/tenants`.
+- [x] Mostrar `Activar productos y servicios` en `settings/tenants`.
+- [x] Mostrar los mismos dos checks en `settings/variables`.
+- [x] Actualizar textos de ayuda para explicar claramente el efecto de cada check.
+- [x] Verificar que ambos formularios escriban los mismos keys en `organizaciones.config.features`.
+- [x] Ajustar los estados iniciales para respetar configuraciones ya guardadas.
+- Resultado:
+  - ambos formularios escriben `features.catalog_inmobiliario.enabled` y `features.catalog_no_inmobiliario.enabled`;
+  - el copy visible quedó alineado a los nombres acordados;
+  - la configuración vieja no se usa como contrato primario.
 
 ### Fase 2. Frontend
 
@@ -182,6 +235,12 @@ La recomendación principal es mantener:
 - pruebas para búsqueda por dominio;
 - pruebas para UI o contratos si el repo ya tiene cobertura en esas capas.
 
+Estado real:
+
+- la suite focalizada quedó verde después del refactor;
+- los tests de asistentes, webchat y workflow de tenants fueron actualizados;
+- el comportamiento final ya quedó validado con `pytest`.
+
 ## Criterios de aceptación
 
 - El usuario puede activar solo `Activar inmobiliario`.
@@ -192,11 +251,19 @@ La recomendación principal es mantener:
 - El backend no filtra tools equivocadas.
 - La búsqueda no devuelve ítems del dominio incorrecto.
 
+Estado de cierre:
+
+- estos criterios ya quedaron cumplidos en el código actual.
+
 ## Riesgos
 
 - Si el catálogo no inmobiliario y el inmobiliario siguen compartiendo la misma tabla sin marca de dominio, la separación puede quedarse solo en runtime y no en datos.
 - Si algún flujo usa `catalog_backend` directo, puede quedar inconsistencia hasta que se migre todo el código.
 - Si el fallback de embeddings sigue sin distinguir dominio, puede haber mezcla de resultados aunque la UI ya esté separada.
+
+Estado real:
+
+- esos riesgos quedaron mitigados con el refactor ya aplicado, aunque la compatibilidad histórica del flag viejo sigue existiendo como fallback.
 
 ## Cierre esperado
 
@@ -207,3 +274,14 @@ Este cambio debe terminar con una separación clara de alcance:
 - sin depender de un único switch ambiguo.
 
 Cuando este plan se ejecute, el resultado debe ser coherente en frontend, backend y datos.
+
+## Cierre ejecutado
+
+La separación ya quedó aplicada en el código base actual.
+
+Referencia rápida de lo que quedó hecho:
+
+- frontend: `settings/tenants` y `settings/variables` muestran los dos checks;
+- backend: la lógica de runtime usa `catalog_inmobiliario` y `catalog_no_inmobiliario`;
+- catálogo: la recuperación y el filtrado ya respetan el dominio;
+- validación: los tests focalizados pasaron en verde.

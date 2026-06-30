@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-30 - Cierre del refactor de catálogo
+
+- Se cerró la separación funcional entre catálogo inmobiliario y catálogo de productos y servicios.
+- La vista `settings/tenants` ya expone dos checks de negocio:
+  - `Activar inmobiliario`
+  - `Activar productos y servicios`
+- La vista `settings/variables` quedó alineada con los mismos flags.
+- El backend ya filtra tools y búsquedas por dominio:
+  - inmobiliario;
+  - no inmobiliario.
+- La búsqueda SQL-first y el fallback por embeddings ya respetan el dominio.
+- Se validó el resultado con tests focalizados y la suite quedó en verde.
+- El contrato viejo de `catalog_backend` quedó solo como compatibilidad histórica donde todavía exista configuración previa.
+
 ## 2026-06-30
 
 - Se definió la separación funcional del catálogo en dos checks de negocio:
