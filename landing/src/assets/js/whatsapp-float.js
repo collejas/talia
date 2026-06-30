@@ -57,10 +57,6 @@ const pageCtas = {
     label: 'Ver por WhatsApp',
     message: 'Hola, quiero hablar por WhatsApp sobre los precios de Tal-IA',
   },
-  '/industrias': {
-    label: 'Ver industria',
-    message: 'Hola, quiero ver las industrias de TalIA.',
-  },
   '/industrias/inmobiliarias': {
     label: 'Ver inmobiliaria',
     message: 'Hola, quiero ver la IA para inmobiliarias de TalIA.',
