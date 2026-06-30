@@ -1,4 +1,5 @@
 const whatsappPhone = '5214443354450';
+const webchatExcludedPaths = new Set(['/demo.html', '/nota.html', '/presentacion.html']);
 
 const pageCtas = {
   '/': {
@@ -194,10 +195,84 @@ function mountFloat() {
   });
 }
 
+function ensureWebchatStyles() {
+  if (document.getElementById('talia-webchat-styles')) return;
+  const link = document.createElement('link');
+  link.id = 'talia-webchat-styles';
+  link.rel = 'stylesheet';
+  link.href = '/assets/css/webchat.css?v=20260625a';
+  document.head.appendChild(link);
+}
+
+function mountWebchatMarkup() {
+  if (document.getElementById('talia-webchat-root')) return;
+  const widget = document.createElement('div');
+  widget.id = 'talia-webchat-root';
+  widget.className = 'webchat-widget';
+  widget.dataset.open = 'false';
+  widget.innerHTML = `
+    <button class="webchat-widget__toggle" type="button" aria-expanded="false" aria-controls="talia-webchat-panel">
+      <span>Chatea con Tal-IA</span>
+      <span class="webchat-widget__toggle-subtitle">Respuesta comercial 24/7</span>
+    </button>
+
+    <section id="talia-webchat-panel" class="webchat-widget__panel" aria-label="Chat de Tal-IA">
+      <header class="webchat-widget__header">
+        <button class="webchat-widget__close" type="button" aria-label="Cerrar chat">×</button>
+      </header>
+
+      <div id="chat-log" class="webchat-widget__messages">
+        <div class="message message--assistant">
+          <div class="message__body">Hola, soy Tal-IA. Puedo ayudarte con demo, precios o cómo funciona la plataforma.</div>
+        </div>
+      </div>
+
+      <form id="chat-form" class="webchat-widget__form">
+        <div class="webchat-widget__inputs">
+          <button id="chat-attachment-button" class="composer-attach" type="button" aria-label="Adjuntar archivo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 11-7.78-7.78l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.2 9.19a1.5 1.5 0 11-2.12-2.12l8.49-8.49" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <input id="chat-input" type="text" placeholder="Escribe tu mensaje…" autocomplete="off" />
+          <button id="chat-submit" type="submit">Enviar</button>
+        </div>
+        <input id="chat-file-input" type="file" hidden />
+        <div id="chat-attachments" class="composer-attachments"></div>
+      </form>
+    </section>
+  `;
+  document.body.appendChild(widget);
+}
+
+async function mountWebchat() {
+  const path = getPathKey();
+  if (webchatExcludedPaths.has(path)) return;
+  if (document.getElementById('talia-webchat-root')) return;
+
+  ensureWebchatStyles();
+  mountWebchatMarkup();
+
+  try {
+    const { initialiseChat } = await import('/assets/js/modules/chat.js?v=20260313c');
+    initialiseChat({
+      chatLog: document.getElementById('chat-log'),
+      chatForm: document.getElementById('chat-form'),
+      chatInput: document.getElementById('chat-input'),
+      chatAttachmentButton: document.getElementById('chat-attachment-button'),
+      chatFileInput: document.getElementById('chat-file-input'),
+      chatAttachments: document.getElementById('chat-attachments'),
+      getScrollContainer: () => document.getElementById('talia-webchat-root'),
+      linkedSessionStorageKey: 'talia-webchat-session',
+    });
+  } catch (_error) {
+    // El flotante de WhatsApp sigue funcionando aunque el webchat falle.
+  }
+}
+
 function bootstrap() {
   if (typeof document === 'undefined') return;
   ensureStyles();
   mountFloat();
+  void mountWebchat();
 }
 
 if (document.readyState === 'loading') {
