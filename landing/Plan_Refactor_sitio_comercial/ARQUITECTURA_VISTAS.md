@@ -30,6 +30,10 @@ La nueva regla es esta:
 
 > La estructura se define por la intención comercial de la página, no por el mismo template base.
 
+Las URLs públicas ya publicadas son la referencia canónica.
+
+Esta guía no propone renombrar vistas; propone que el resto del sitio, la documentación y los enlaces se alineen a las vistas existentes.
+
 ## Tipos de vista
 
 ### 1. Home
@@ -195,10 +199,11 @@ Durante el refactor ya se fijaron estas decisiones prácticas:
 - Las páginas internas deben variar en composición visual cuando la intención cambia.
 - El contenido interno de apoyo no debe invadir la jerarquía del hero.
 - La versión visible de la marca en páginas y metadatos se está normalizando a `Tal-IA`.
+- Las vistas publicadas no deben renombrarse; el ajuste ocurre en navegación, documentación y contenidos de apoyo.
 
 ## Estado por vista
 
-### Ya adaptadas
+### Ya publicadas y alineadas
 
 - `inicio`
 - `que-es-talia`
@@ -206,7 +211,7 @@ Durante el refactor ya se fijaron estas decisiones prácticas:
 - `caracteristicas`
 - `precios`
 
-### Siguientes candidatas
+### Vistas ya publicadas que siguen siendo referencia de alineación
 
 - `asistente-ia-empresas`
 - `ia-de-whatsapp`

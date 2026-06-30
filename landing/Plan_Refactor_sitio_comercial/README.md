@@ -13,6 +13,23 @@ La narrativa central del sitio debe ser esta:
 
 > TalIA te ayuda a conseguir prospectos, atenderlos por WhatsApp con IA y darles seguimiento en un CRM hasta convertirlos en ventas.
 
+## Regla de cierre
+
+Las vistas públicas y sus `slugs` canónicos ya quedaron definidos.
+
+A partir de este punto no se renombrarán URLs ni se reescribirá el SEO de las páginas ya publicadas.
+
+Lo que sigue debe alinearse a esas vistas ya cerradas:
+
+- documentación
+- navegación
+- sitemap
+- enlaces internos
+- CTAs
+- textos auxiliares
+- páginas de apoyo
+- video pages
+
 ## Estado actual del refactor
 
 Ya se aplicaron estas decisiones en la landing:
@@ -42,7 +59,7 @@ Ya se aplicaron estas decisiones en la landing:
 - `generate-seo-pages.mjs`
 - CTA flotantes de webchat y WhatsApp
 
-#### Pendientes de refactor visual y de copy
+#### Referencias canónicas publicadas
 
 - `asistente-ia-empresas`
 - `ia-de-whatsapp`
@@ -55,6 +72,12 @@ Ya se aplicaron estas decisiones en la landing:
 - `prospectos-google-denue`
 - `campanas-marketing`
 - `industrias/*`
+
+Lo que sí sigue pendiente fuera de las vistas es:
+
+- Documentación de navegación y arquitectura.
+- Sitemap y enlaces internos que todavía mencionan nombres viejos o aliases.
+- Textos auxiliares, CTAs y páginas de apoyo que deben referirse a los slugs ya cerrados.
 
 ## Problema actual
 
@@ -131,20 +154,22 @@ Precios
 
 ### Mapa de funciones
 
-La nomenclatura comercial del botón `Funciones` manda sobre el nombre técnico del archivo o URL.
+La nomenclatura comercial del botón `Funciones` manda sobre el copy visible.
+
+Los `slugs` de las vistas ya están cerrados y no deben cambiarse.
 
 | Menú / función | Vista actual o estado |
 |---|---|
 | CRM con IA para WhatsApp | `/crm-con-ia-para-whatsapp` |
 | Asistente IA para empresas | `/asistente-ia-empresas` |
-| Automatización de procesos | Pendiente de ajustar vista y slug |
+| Automatización de procesos | `/automatizacion-de-ventas` |
 | Seguimiento de ventas | `/seguimiento-ventas` |
-| Ventas e inventarios | Pendiente de ajustar vista y slug |
+| Ventas e inventarios | `/ia-para-ventas` |
 | Agendas, cotizaciones, notas y tareas | `/agenda-y-cotizaciones` |
 | Buscar contactos Web / Google / Gov-MX | `/buscar-contactos` + `/prospectos-google-denue` |
 | Campañas de Email / WhatsApp | `/campanas-marketing` |
 | Gestión inmobiliaria | `/industrias/inmobiliarias` |
-| Métricas | Pendiente de ajustar vista y slug |
+| Métricas | `/caracteristicas` |
 
 ## Estructura ideal de la home
 
@@ -229,6 +254,9 @@ Las páginas SEO no deben competir con la home.
 
 La home vende.
 Las páginas SEO posicionan.
+
+Las URLs ya existentes son la base canónica del sitio.
+No se propone renombrar las vistas publicadas, solo alinear el resto del sistema a ellas.
 
 ### Página pilar
 
