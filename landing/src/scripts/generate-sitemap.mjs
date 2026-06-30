@@ -20,6 +20,7 @@ const urls = [
   { loc: "/buscar-contactos", priority: "0.94" },
   { loc: "/prospectos-google-denue", priority: "0.9" },
   { loc: "/campanas-marketing", priority: "0.9" },
+  { loc: "/video-demostracion-inmobiliarias", priority: "0.88" },
   { loc: "/industrias/inmobiliarias", priority: "0.94" },
   { loc: "/industrias/servicios", priority: "0.9" },
   { loc: "/industrias/negocios-locales", priority: "0.9" },

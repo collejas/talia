@@ -86,6 +86,10 @@ const pageCtas = {
     label: 'Ver por WhatsApp',
     message: 'Hola, quiero ver las características de Tal-IA y entender cómo funciona',
   },
+  '/video-demostracion-inmobiliarias': {
+    label: 'Ver video inmobiliario',
+    message: 'Hola, quiero ver el video demo inmobiliario de Tal-IA.',
+  },
 };
 
 function getPathKey() {
