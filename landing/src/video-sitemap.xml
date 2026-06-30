@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+  <url>
+    <loc>https://talia.mx/video-demostracion-inmobiliarias</loc>
+    <video:video>
+      <video:thumbnail_loc>https://talia.mx/assets/images/video-demo-inmobiliarias-poster.jpg</video:thumbnail_loc>
+      <video:title>Video demo inmobiliaria de Tal-IA</video:title>
+      <video:description>Video demo inmobiliaria de Tal-IA para ver cómo se organiza el inventario, el seguimiento y la operación comercial de propiedades.</video:description>
+      <video:content_loc>https://talia.mx/assets/videos/landing-demo.webm</video:content_loc>
+      <video:player_loc>https://talia.mx/video-demostracion-inmobiliarias</video:player_loc>
+      <video:publication_date>2026-02-10T00:00:00+00:00</video:publication_date>
+      <video:family_friendly>yes</video:family_friendly>
+    </video:video>
+  </url>
+</urlset>

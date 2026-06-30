@@ -7,3 +7,4 @@ Disallow: /demo
 Disallow: /presentacion
 Disallow: /nota
 Sitemap: https://talia.mx/sitemap.xml
+Sitemap: https://talia.mx/video-sitemap.xml
