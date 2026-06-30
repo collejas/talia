@@ -18,7 +18,6 @@ const urls = [
   { loc: "/agenda-y-cotizaciones", priority: "0.92" },
   { loc: "/prospeccion-comercial", priority: "0.96" },
   { loc: "/buscar-contactos", priority: "0.94" },
-  { loc: "/prospectos-google-denue", priority: "0.9" },
   { loc: "/campanas-marketing", priority: "0.9" },
   { loc: "/video-demostracion-inmobiliarias", priority: "0.88" },
   { loc: "/industrias/inmobiliarias", priority: "0.94" },

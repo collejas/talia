@@ -221,6 +221,5 @@ Durante el refactor ya se fijaron estas decisiones prácticas:
 - `agenda-y-cotizaciones`
 - `prospeccion-comercial`
 - `buscar-contactos`
-- `prospectos-google-denue`
 - `campanas-marketing`
 - `industrias/*`

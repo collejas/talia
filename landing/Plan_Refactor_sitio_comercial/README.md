@@ -69,7 +69,6 @@ Ya se aplicaron estas decisiones en la landing:
 - `agenda-y-cotizaciones`
 - `prospeccion-comercial`
 - `buscar-contactos`
-- `prospectos-google-denue`
 - `campanas-marketing`
 - `industrias/*`
 
@@ -166,7 +165,7 @@ Los `slugs` de las vistas ya están cerrados y no deben cambiarse.
 | Seguimiento de ventas | `/seguimiento-ventas` |
 | Ventas e inventarios | `/ia-para-ventas` |
 | Agendas, cotizaciones, notas y tareas | `/agenda-y-cotizaciones` |
-| Buscar contactos Web / Google / Gov-MX | `/buscar-contactos` + `/prospectos-google-denue` |
+| Buscar contactos Web / Google / Gov-MX | `/buscar-contactos` |
 | Campañas de Email / WhatsApp | `/campanas-marketing` |
 | Gestión inmobiliaria | `/industrias/inmobiliarias` |
 | Métricas | `/caracteristicas` |
@@ -282,7 +281,6 @@ Esta es la URL más fuerte para intención comercial porque junta:
 - `/agenda-y-cotizaciones`
 - `/prospeccion-comercial`
 - `/buscar-contactos`
-- `/prospectos-google-denue`
 - `/campanas-marketing`
 - `/industrias/inmobiliarias`
 - `/industrias/servicios`

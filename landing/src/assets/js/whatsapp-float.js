@@ -46,10 +46,6 @@ const pageCtas = {
     label: 'Buscar contactos',
     message: 'Hola, quiero buscar contactos para ventas con Tal-IA.',
   },
-  '/prospectos-google-denue': {
-    label: 'Ver prospectos',
-    message: 'Hola, quiero ver prospectos en Google y DENUE con Tal-IA.',
-  },
   '/campanas-marketing': {
     label: 'Ver campañas',
     message: 'Hola, quiero ver campañas y marketing con Tal-IA.',
