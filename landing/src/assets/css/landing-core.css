@@ -352,6 +352,43 @@ a {
   color: var(--core-muted);
 }
 
+.hero--dark .price-card {
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.98));
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.34);
+}
+
+.hero--dark .price-card--featured {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(109, 40, 217, 0.18), transparent 28%),
+    linear-gradient(180deg, #0f172a, #111827);
+}
+
+.hero--dark .price-card .feature-tag {
+  background: rgba(96, 165, 250, 0.14);
+  color: #bfdbfe;
+}
+
+.hero--dark .price-card h3,
+.hero--dark .price-card .price-amount,
+.hero--dark .price-card .price-amount small,
+.hero--dark .price-card p,
+.hero--dark .price-card .checklist li {
+  color: #e2e8f0;
+}
+
+.hero--dark .price-card .price-amount small {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.hero--dark .price-card .checklist li::before {
+  color: #4ade80;
+}
+
 .hero--dark .aside-stack {
   height: 100%;
   display: grid;
