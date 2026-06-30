@@ -8,51 +8,51 @@ const pageCtas = {
   },
   '/que-es-talia': {
     label: 'Hablar por WhatsApp',
-    message: 'Hola, quiero conocer TalIA y ver una demo.',
+    message: 'Hola, quiero conocer Tal-IA y ver una demo.',
   },
   '/crm-con-ia-para-whatsapp': {
     label: 'Ver por WhatsApp',
-    message: 'Hola, quiero ver el CRM con IA para WhatsApp de TalIA.',
+    message: 'Hola, quiero ver el CRM con IA para WhatsApp de Tal-IA.',
   },
   '/asistente-ia-empresas': {
     label: 'Pedir demo',
-    message: 'Hola, quiero ver el asistente IA para empresas de TalIA.',
+    message: 'Hola, quiero ver el asistente IA para empresas de Tal-IA.',
   },
   '/ia-de-whatsapp': {
     label: 'Ver en WhatsApp',
-    message: 'Hola, quiero ver la IA de WhatsApp de TalIA.',
+    message: 'Hola, quiero ver la IA de WhatsApp de Tal-IA.',
   },
   '/ia-para-ventas': {
     label: 'Quiero verlo',
-    message: 'Hola, quiero ver la IA para ventas de TalIA.',
+    message: 'Hola, quiero ver la IA para ventas de Tal-IA.',
   },
   '/automatizacion-de-ventas': {
     label: 'Solicitar demo',
-    message: 'Hola, quiero ver la automatización de ventas de TalIA.',
+    message: 'Hola, quiero ver la automatización de ventas de Tal-IA.',
   },
   '/seguimiento-ventas': {
     label: 'Ver seguimiento',
-    message: 'Hola, quiero ver el seguimiento de ventas de TalIA.',
+    message: 'Hola, quiero ver el seguimiento de ventas de Tal-IA.',
   },
   '/agenda-y-cotizaciones': {
     label: 'Ver agenda',
-    message: 'Hola, quiero ver agenda y cotizaciones de TalIA.',
+    message: 'Hola, quiero ver agenda y cotizaciones de Tal-IA.',
   },
   '/prospeccion-comercial': {
     label: 'Quiero prospectar',
-    message: 'Hola, quiero ver la prospección comercial de TalIA.',
+    message: 'Hola, quiero ver la prospección comercial de Tal-IA.',
   },
   '/buscar-contactos': {
     label: 'Buscar contactos',
-    message: 'Hola, quiero buscar contactos para ventas con TalIA.',
+    message: 'Hola, quiero buscar contactos para ventas con Tal-IA.',
   },
   '/prospectos-google-denue': {
     label: 'Ver prospectos',
-    message: 'Hola, quiero ver prospectos en Google y DENUE con TalIA.',
+    message: 'Hola, quiero ver prospectos en Google y DENUE con Tal-IA.',
   },
   '/campanas-marketing': {
     label: 'Ver campañas',
-    message: 'Hola, quiero ver campañas y marketing con TalIA.',
+    message: 'Hola, quiero ver campañas y marketing con Tal-IA.',
   },
   '/precios': {
     label: 'Ver por WhatsApp',
@@ -60,23 +60,23 @@ const pageCtas = {
   },
   '/industrias/inmobiliarias': {
     label: 'Ver inmobiliaria',
-    message: 'Hola, quiero ver la IA para inmobiliarias de TalIA.',
+    message: 'Hola, quiero ver la IA para inmobiliarias de Tal-IA.',
   },
   '/industrias/servicios': {
     label: 'Ver servicios',
-    message: 'Hola, quiero ver IA para servicios con TalIA.',
+    message: 'Hola, quiero ver IA para servicios con Tal-IA.',
   },
   '/industrias/negocios-locales': {
     label: 'Ver local',
-    message: 'Hola, quiero ver IA para negocios locales con TalIA.',
+    message: 'Hola, quiero ver IA para negocios locales con Tal-IA.',
   },
   '/industrias/ventas-b2b': {
     label: 'Ver B2B',
-    message: 'Hola, quiero ver IA para ventas B2B con TalIA.',
+    message: 'Hola, quiero ver IA para ventas B2B con Tal-IA.',
   },
   '/industrias/turismo': {
     label: 'Ver turismo',
-    message: 'Hola, quiero ver IA para turismo con TalIA.',
+    message: 'Hola, quiero ver IA para turismo con Tal-IA.',
   },
   '/demo.html': {
     label: 'Agendar demo',
@@ -104,6 +104,23 @@ function getCtaConfig() {
 
 function buildHref(message) {
   return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+}
+
+function applyPageWhatsAppLinks() {
+  const { message } = getCtaConfig();
+  const links = document.querySelectorAll('a[href*="wa.me/"], a[href*="api.whatsapp.com/"]');
+  links.forEach((link) => {
+    if (link.id === 'talia-whatsapp-float') return;
+    const currentHref = link.getAttribute('href') || '';
+    if (!currentHref) return;
+    const nextHref = buildHref(message);
+    if (currentHref !== nextHref) {
+      link.setAttribute('href', nextHref);
+    }
+    if (!link.dataset.ctaId && link.classList.contains('button')) {
+      link.dataset.ctaId = 'CTA_PAGE_WHATSAPP';
+    }
+  });
 }
 
 function ensureStyles() {
@@ -272,6 +289,7 @@ function bootstrap() {
   if (typeof document === 'undefined') return;
   ensureStyles();
   mountFloat();
+  applyPageWhatsAppLinks();
   void mountWebchat();
 }
 
