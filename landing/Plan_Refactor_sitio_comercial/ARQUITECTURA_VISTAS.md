@@ -109,6 +109,10 @@ Características:
 - Beneficios concretos.
 - CTA final.
 
+Nota:
+
+- No existe una vista hub `/industrias`; cada sector se entra directo por su propia URL.
+
 ### 5. Página de precio
 
 Función:

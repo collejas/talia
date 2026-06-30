@@ -24,6 +24,7 @@ Ya se aplicaron estas decisiones en la landing:
 - El branding visible ya migró a `Tal-IA` en las vistas y metadatos ajustados manualmente.
 - El `site.webmanifest` y el generador SEO ya quedaron alineados con `Tal-IA` como nombre visible.
 - Los CTA flotantes se mantienen como accesos rápidos a webchat y WhatsApp, con WhatsApp al lado derecho inferior.
+- La vista hub `/industrias` fue eliminada; cada sector se abre directo desde su propia URL.
 
 ### Avance por vista
 
@@ -88,7 +89,6 @@ La navegación visible debe ser corta y práctica:
 - Inicio
 - Qué es TalIA
 - Funciones
-- Industrias
 - Características
 - Precios
 - Agenda una demo
@@ -125,7 +125,7 @@ Precios
 
 - `Qué es TalIA` explica la propuesta de valor.
 - `Funciones` agrupa capacidades concretas y cortas.
-- `Industrias` aterriza el producto por sector.
+- `Industrias` aterriza el producto por sector con páginas directas.
 - `Características` resume sin volver a contar toda la historia.
 - `Precios` cierra la decisión.
 
@@ -304,7 +304,6 @@ Esta es la URL más fuerte para intención comercial porque junta:
 
 ### Industrias
 
-- Ver industrias
 - Inmobiliarias
 - Servicios
 - Negocios locales
@@ -329,7 +328,7 @@ Cada página debe tener una sola intención principal. La siguiente tabla sirve 
 | Campañas de Email / WhatsApp | `Campañas de Email y WhatsApp | TalIA` | `Cómo activar y reactivar prospectos con campañas` | `TalIA permite enviar campañas comerciales por email y WhatsApp para mover leads fríos o generar respuesta.` | `Ver campañas` |
 | Gestión inmobiliaria | `Gestión inmobiliaria con IA | TalIA` | `Cómo vender mejor en inmobiliarias con IA` | `TalIA ayuda a inmobiliarias a responder leads, agendar citas y dar seguimiento comercial.` | `Ver inmobiliario` |
 | Métricas | `Métricas comerciales | TalIA` | `Cómo medir ventas, seguimiento y conversión` | `TalIA muestra métricas útiles para entender respuesta, seguimiento y avance comercial.` | `Ver métricas` |
-| Industrias | `Industrias | TalIA` | `TalIA por industria` | `TalIA se adapta a inmobiliarias, servicios, negocios locales, ventas B2B y turismo.` | `Ver industrias` |
+| Industrias | `Industrias | TalIA` | `TalIA por industria` | `TalIA se adapta a inmobiliarias, servicios, negocios locales, ventas B2B y turismo.` | `Elegir sector` |
 | Inmobiliario | `IA para inmobiliario | TalIA` | `Cómo ayuda TalIA a inmobiliarias` | `TalIA responde leads inmobiliarios, agenda citas y mejora el seguimiento comercial.` | `Ver demo inmobiliaria` |
 | Servicios | `IA para servicios | TalIA` | `Cómo ayuda TalIA a negocios de servicios` | `TalIA ayuda a servicios a responder, cotizar y dar seguimiento sin perder oportunidades.` | `Ver servicios` |
 | Negocios locales | `IA para negocios locales | TalIA` | `Cómo ayuda TalIA a negocios locales` | `TalIA ayuda a negocios locales a contestar rápido, organizar prospectos y vender más.` | `Ver negocio local` |
