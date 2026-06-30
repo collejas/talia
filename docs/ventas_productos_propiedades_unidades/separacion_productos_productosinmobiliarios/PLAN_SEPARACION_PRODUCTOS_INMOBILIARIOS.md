@@ -126,6 +126,36 @@ La recomendación principal es mantener:
 - remover el uso funcional del flag único anterior;
 - dejar el JSON final explícito y legible.
 
+## Checklist de ejecución
+
+### 1. Base de datos
+
+- [ ] Confirmar cómo se distinguen hoy los ítems inmobiliarios y no inmobiliarios en `catalog_items`.
+- [ ] Validar si el inventario inmobiliario ya está marcado por `propiedad_id` y `unidad_id`.
+- [ ] Definir si hace falta un campo explícito de dominio en BD o si la separación se resuelve por relaciones existentes.
+- [ ] Revisar qué tablas, vistas o consultas consumen el catálogo sin distinguir dominio.
+- [ ] Documentar el criterio final para clasificar cada ítem del catálogo.
+
+### 2. Backend
+
+- [ ] Sustituir la lectura funcional del flag único por dos flags de negocio.
+- [ ] Implementar `Activar inmobiliario` para las tools de inventario inmobiliario.
+- [ ] Implementar `Activar productos y servicios` para la consulta de catálogo general.
+- [ ] Ajustar el filtrado de tools en WhatsApp y Webchat.
+- [ ] Ajustar la búsqueda de catálogo para que no mezcle dominios.
+- [ ] Revisar defaults de creación de tenant y de bootstrap de configuración.
+- [ ] Actualizar tests de runtime, tools y endpoints relacionados.
+
+### 3. Frontend
+
+- [ ] Reemplazar el switch único por dos checks con nombre de negocio.
+- [ ] Mostrar `Activar inmobiliario` en `settings/tenants`.
+- [ ] Mostrar `Activar productos y servicios` en `settings/tenants`.
+- [ ] Mostrar los mismos dos checks en `settings/variables`.
+- [ ] Actualizar textos de ayuda para explicar claramente el efecto de cada check.
+- [ ] Verificar que ambos formularios escriban los mismos keys en `organizaciones.config.features`.
+- [ ] Ajustar los estados iniciales para respetar configuraciones ya guardadas.
+
 ### Fase 2. Frontend
 
 - reemplazar el switch único por dos checks;
