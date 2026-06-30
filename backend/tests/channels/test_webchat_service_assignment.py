@@ -88,7 +88,7 @@ async def test_schedule_demo_requires_contact(monkeypatch):
 
     context = service.WebchatContext(
         conversation_id="conv-1",
-        contact_id="contact-1",
+        persona_id="contact-1",
         session_id="session-1",
     )
     start_at = datetime.now(timezone.utc).isoformat()

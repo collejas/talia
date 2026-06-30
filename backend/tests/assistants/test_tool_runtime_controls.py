@@ -64,7 +64,7 @@ async def test_run_tool_loop_preserves_controls_between_iterations():
     )
 
     assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
-    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact", channel="webchat")
+    context = ToolRuntimeContext(conversation_id="crm_conv", persona_id="crm_contact", channel="webchat")
 
     initial_request = {
         "input": [{"role": "user", "content": [{"type": "input_text", "text": "hola"}]}],
@@ -125,7 +125,7 @@ async def test_run_tool_loop_retries_retryable_response_errors():
         ]
     )
     assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
-    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact")
+    context = ToolRuntimeContext(conversation_id="crm_conv", persona_id="crm_contact")
 
     await run_tool_loop(
         client=client,
@@ -167,7 +167,7 @@ async def test_run_tool_loop_returns_structured_tool_error_payload():
     )
 
     assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
-    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact")
+    context = ToolRuntimeContext(conversation_id="crm_conv", persona_id="crm_contact")
 
     async def execute_tool(_name, _args, _ctx):
         raise ValueError("payload invalido")

@@ -31,19 +31,12 @@ class ToolRuntimeContext:
 
     conversation_id: str
     persona_id: str | None = None
-    contact_id: str | None = None
     session_id: str | None = None
     channel: str | None = None
     organizacion_id: str | None = None
     feature: str | None = None
     catalog_inmobiliario_enabled: bool = True
     catalog_no_inmobiliario_enabled: bool = True
-
-    def __post_init__(self) -> None:
-        if self.persona_id and not self.contact_id:
-            self.contact_id = self.persona_id
-        elif self.contact_id and not self.persona_id:
-            self.persona_id = self.contact_id
 
 
 @dataclass(slots=True)

@@ -31,7 +31,7 @@ async def test_mark_contact_ready_success(monkeypatch):
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
-        contact_id="contact-1",
+        persona_id="contact-1",
         channel="webchat",
     )
 
@@ -63,7 +63,7 @@ async def test_mark_contact_ready_requires_contact(monkeypatch):
 
     context = ToolRuntimeContext(
         conversation_id="conv-2",
-        contact_id="contact-2",
+        persona_id="contact-2",
         channel="webchat",
     )
 
@@ -136,7 +136,7 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
 
     context = ToolRuntimeContext(
         conversation_id="conv-3",
-        contact_id="contact-3",
+        persona_id="contact-3",
         channel="webchat",
     )
 
@@ -213,7 +213,7 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
 
     context = ToolRuntimeContext(
         conversation_id="conv-9",
-        contact_id="contact-9",
+        persona_id="contact-9",
         channel="webchat",
     )
 
