@@ -41,6 +41,7 @@ import {
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useTenantContext } from "@/hooks/use-tenant-context"
+import { isMasterTenantId } from "@/lib/auth/master-tenant"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
@@ -64,6 +65,7 @@ type NavItem = {
   icon?: Icon
   permission?: NavPermission
   ownerAdminOnly?: boolean
+  masterTenantOnly?: boolean
   children?: NavItem[]
 }
 
@@ -77,6 +79,7 @@ type NavSecondaryItem = {
   title: string
   url: string
   icon: Icon
+  masterTenantOnly?: boolean
   children?: { title: string; url: string; icon?: Icon }[]
 }
 
@@ -120,6 +123,7 @@ const NAVIGATION: {
           url: "/prospeccion/google-trends",
           permission: "__owner_admin_only__",
           ownerAdminOnly: true,
+          masterTenantOnly: true,
         },
         { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda", permission: "busquedas.view" },
         { title: "Buscador web", url: "/prospeccion/buscador", permission: "busquedas.run" },
@@ -129,7 +133,12 @@ const NAVIGATION: {
         { title: "Métricas", url: "/prospeccion/metricas", permission: "reports.view" },
         { title: "Landing A/B/C", url: "/prospeccion/landing-ab", permission: "reports.view" },
         { title: "Atribución WhatsApp", url: "/prospeccion/whatsapp-atribucion", permission: "busquedas.run" },
-        { title: "Mensajes automatizados", url: "/prospeccion/mensajes", permission: "messages.read" },
+        {
+          title: "Mensajes automatizados",
+          url: "/prospeccion/mensajes",
+          permission: "messages.read",
+          masterTenantOnly: true,
+        },
       ],
     },
     {
@@ -200,11 +209,35 @@ const NAVIGATION: {
         { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },
       ],
     },
-    { title: "Proyectos", url: "#", icon: IconFolder },
-    { title: "Propuesta", url: "/propuesta", icon: IconLayoutGrid, permission: "propuesta.view" },
-    { title: "Propuesta Ejecutiva", url: "/propuesta-ejecutiva", icon: IconLayoutGrid, permission: "propuesta.view" },
-    { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban, permission: "reports.view" },
-    { title: "Visitas", url: "/visitas", icon: IconMessageCircle, permission: "reports.view" },
+    { title: "Proyectos", url: "#", icon: IconFolder, masterTenantOnly: true },
+    {
+      title: "Propuesta",
+      url: "/propuesta",
+      icon: IconLayoutGrid,
+      permission: "propuesta.view",
+      masterTenantOnly: true,
+    },
+    {
+      title: "Propuesta Ejecutiva",
+      url: "/propuesta-ejecutiva",
+      icon: IconLayoutGrid,
+      permission: "propuesta.view",
+      masterTenantOnly: true,
+    },
+    {
+      title: "Visita 2",
+      url: "/vista-2",
+      icon: IconLayoutKanban,
+      permission: "reports.view",
+      masterTenantOnly: true,
+    },
+    {
+      title: "Visitas",
+      url: "/visitas",
+      icon: IconMessageCircle,
+      permission: "reports.view",
+      masterTenantOnly: true,
+    },
   ],
   documents: [
     { name: "Data Library", url: "#", icon: IconDatabase },
@@ -212,8 +245,8 @@ const NAVIGATION: {
     { name: "Templates", url: "#", icon: IconFileWord },
   ],
   navSecondary: [
-    { title: "Get Help", url: "#", icon: IconHelp },
-    { title: "Search", url: "#", icon: IconSearch },
+    { title: "Get Help", url: "#", icon: IconHelp, masterTenantOnly: true },
+    { title: "Search", url: "#", icon: IconSearch, masterTenantOnly: true },
   ],
 }
 
@@ -248,6 +281,7 @@ export function AppSidebar({
     }),
     [featureFlags?.productosEnabled, featureFlags?.propiedadesEnabled],
   )
+  const isMasterTenant = isMasterTenantId(permissionContext.organizacion_id)
   const settingsChildren = useMemo(() => {
     const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
       child.url === "/settings/scoring" ? profilingEnabled : true,
@@ -279,6 +313,9 @@ export function AppSidebar({
       if (item.url === "/propiedades" && !moduleFlags.propiedadesEnabled) {
         return false
       }
+      if (item.masterTenantOnly && !isMasterTenant) {
+        return false
+      }
       return true
     })
 
@@ -300,14 +337,15 @@ export function AppSidebar({
       list.reduce<NavItem[]>((acc, item) => {
         const children = item.children ? filterItems(item.children) : undefined
         const allowedByRole = item.ownerAdminOnly ? isAdmin : hasPermission(item.permission)
-        const allowed = allowedByRole || (children && children.length > 0)
+        const allowedByTenant = item.masterTenantOnly ? isMasterTenant : true
+        const allowed = (allowedByRole && allowedByTenant) || (children && children.length > 0)
         if (!allowed) return acc
         acc.push({ ...item, children })
         return acc
       }, [])
 
     return filterItems(items)
-  }, [moduleFlags.propiedadesEnabled, settingsChildren, permissionsLoading, permissionContext])
+  }, [isMasterTenant, moduleFlags.propiedadesEnabled, settingsChildren, permissionsLoading, permissionContext])
   const dashboardRoutePrefetchedRef = useRef(false)
   const mapaRoutePrefetchedRef = useRef(false)
 
@@ -451,8 +489,8 @@ export function AppSidebar({
           </div>
         ) : null}
         <NavMain items={navItems} />
-        <NavDocuments items={NAVIGATION.documents} />
-        <NavSecondary items={NAVIGATION.navSecondary} className="mt-auto" />
+        {isMasterTenant ? <NavDocuments items={NAVIGATION.documents} /> : null}
+        {isMasterTenant ? <NavSecondary items={NAVIGATION.navSecondary} className="mt-auto" /> : null}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={sidebarUser} loading={loading} onLogout={handleLogout} />

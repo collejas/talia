@@ -6,6 +6,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, XAxis, YAxis } fro
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { MASTER_TENANT_ID } from "@/lib/auth/master-tenant";
 import {
   fetchGoogleTrendCountries,
   fetchGoogleTrends,
@@ -21,8 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-const ALLOWED_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 
 const DEFAULT_KEYWORDS = [
   "IA de WhatsApp",
@@ -148,7 +147,7 @@ export function GoogleTrendsView() {
   const [result, setResult] = useState<GoogleTrendsResponse | null>(null);
 
   const isOwnerOrAdmin = context.es_owner || context.es_admin;
-  const isAllowedTenant = context.organizacion_id === ALLOWED_TENANT_ID;
+  const isAllowedTenant = context.organizacion_id === MASTER_TENANT_ID;
   const canUseModule = isOwnerOrAdmin && isAllowedTenant;
   const chartHeight = isMobile ? 240 : 320;
   const storageKey = useMemo(() => {
