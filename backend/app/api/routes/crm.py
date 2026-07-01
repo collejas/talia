@@ -31875,22 +31875,22 @@ async def prospeccion_metricas_dashboard(
                 "monto_estimado_total": 0.0,
             }
         )
-    for event in frase_events:
-        event_ts = _parse_datetime(event.get("creado_en"))
-        if event_ts is None:
-            continue
-        day_key = event_ts.astimezone(report_zone).date().isoformat()
-        bucket = frases_timeseries_raw[day_key]
-        bucket["conversaciones_atribuidas"] += 1
-        conversation_id_value = _clean_text(event.get("conversacion_id"))
-        if conversation_id_value and conversation_id_value in opp_by_conversation:
-            bucket["oportunidades_creadas"] += 1
-            try:
-                bucket["monto_estimado_total"] += float(
-                    opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
-                )
-            except (TypeError, ValueError):
-                pass
+        for event in frase_events:
+            event_ts = _parse_datetime(event.get("creado_en"))
+            if event_ts is None:
+                continue
+            day_key = event_ts.astimezone(report_zone).date().isoformat()
+            bucket = frases_timeseries_raw[day_key]
+            bucket["conversaciones_atribuidas"] += 1
+            conversation_id_value = _clean_text(event.get("conversacion_id"))
+            if conversation_id_value and conversation_id_value in opp_by_conversation:
+                bucket["oportunidades_creadas"] += 1
+                try:
+                    bucket["monto_estimado_total"] += float(
+                        opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
+                    )
+                except (TypeError, ValueError):
+                    pass
         frases_timeseries = [
             {
                 "fecha": day,
