@@ -2,6 +2,14 @@
 
 Fecha: 2026-05-01
 
+Este documento alimenta el backlog maestro:
+
+- `backlog_maestro_mapa_conversion.md`
+
+Y se registra en el changelog maestro:
+
+- `changelog_maestro_mapa_conversion.md`
+
 ## 1. Objetivo
 
 Extender la vista `mapa-de-conversion` para que muestre de forma clara el origen del trafico del sitio web, sin mezclar esa lectura con el analisis de campañas de mercadotecnia.

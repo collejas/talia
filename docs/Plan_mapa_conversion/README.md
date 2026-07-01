@@ -7,8 +7,11 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
 1. `plan_mapa_conversion_integral.md`
 2. `plan_latencia_mapa_conversion.md`
 3. `plan_mapa_conversion_multicanal.md`
-4. `changelog.md`
-5. `avance_mapa_conversion_20260303.md`
+4. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
+5. `plan_integracion_maestra_mapa_conversion.md`
+6. `backlog_maestro_mapa_conversion.md`
+7. `changelog_maestro_mapa_conversion.md`
+8. `avance_mapa_conversion_20260303.md`
 
 ## Qué cubre cada archivo
 
@@ -27,9 +30,24 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
   - mapa como vista multicanal
   - separación semántica entre tráfico, WhatsApp y campañas
 
-- `changelog.md`
-  - cambios recientes aplicados
-  - fixes, backfill, documentación y alineación de planes
+- `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
+  - diagnóstico de la separación entre correo, WhatsApp y conversión
+  - propuesta de contrato y fuentes por bloque
+  - estrategia para no romper el mapa ni el refactor de personas/contactos
+
+- `plan_integracion_maestra_mapa_conversion.md`
+  - ruta maestra de ejecución del refactor
+  - orden recomendado de implementación
+  - relación entre arquitectura, performance, producto y compatibilidad
+
+- `backlog_maestro_mapa_conversion.md`
+  - único backlog operativo de la carpeta
+  - orden de ejecución BD -> backend -> frontend
+  - checklist de implementación y compatibilidad
+
+- `changelog_maestro_mapa_conversion.md`
+  - único changelog operativo de la carpeta
+  - historial consolidado de cambios y decisiones
 
 - `avance_mapa_conversion_20260303.md`
   - avance técnico histórico
@@ -42,4 +60,5 @@ El mapa de conversión combina varias fuentes de datos, pero esta documentación
 - arquitectura,
 - performance,
 - lectura de negocio,
+- backlog operativo,
 - historial de cambios.

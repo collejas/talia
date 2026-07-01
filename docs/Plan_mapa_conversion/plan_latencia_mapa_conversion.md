@@ -3,6 +3,14 @@
 Fecha: 2026-06-27
 Ruta: `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`
 
+Este documento alimenta el backlog maestro:
+
+- `backlog_maestro_mapa_conversion.md`
+
+Y se registra en el changelog maestro:
+
+- `changelog_maestro_mapa_conversion.md`
+
 Documentos relacionados:
 
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`

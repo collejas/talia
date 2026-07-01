@@ -3,6 +3,14 @@
 Fecha: 2026-06-27
 Ruta: `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
 
+Este documento alimenta el backlog maestro:
+
+- `backlog_maestro_mapa_conversion.md`
+
+Y se registra en el changelog maestro:
+
+- `changelog_maestro_mapa_conversion.md`
+
 ## 1) Objetivo
 
 Convertir `mapa-de-conversion` en una vista multicanal entendible para usuario operativo, sin mezclar fuentes distintas de adquisición y conversación.

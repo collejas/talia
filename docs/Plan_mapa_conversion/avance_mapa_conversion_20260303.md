@@ -1,5 +1,12 @@
 # Avance Mapa de Conversion · 2026-03-03
 
+Documento historico.
+
+La ruta activa consolidada vive en:
+
+- `backlog_maestro_mapa_conversion.md`
+- `changelog_maestro_mapa_conversion.md`
+
 ## Resumen
 Se inició la implementacion por base de datos para soportar el `Mapa de Conversion` integral (trafico web + webchat + whatsapp + voz), manteniendo compatibilidad con la vista actual.
 

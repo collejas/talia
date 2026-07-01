@@ -3,6 +3,11 @@
 Fecha: 2026-03-03
 Ruta: `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
 
+Ruta operativa única:
+
+- `docs/Plan_mapa_conversion/backlog_maestro_mapa_conversion.md`
+- `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md`
+
 Índice de la carpeta:
 
 - `docs/Plan_mapa_conversion/README.md`
