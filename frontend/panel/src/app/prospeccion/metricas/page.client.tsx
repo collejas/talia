@@ -114,6 +114,8 @@ export default function ProspeccionMetricasPageClient() {
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
   const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas"]["timeseries"]>([])
   const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
+  const [whatsappTimeseries, setWhatsappTimeseries] = useState<ProspeccionMetricasResponse["frases_whatsapp"]["timeseries"]>([])
+  const [whatsappTimeseriesLoading, setWhatsappTimeseriesLoading] = useState(false)
   const [brevoQuota, setBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
   const [brevoQuotaLoading, setBrevoQuotaLoading] = useState(false)
 
@@ -251,6 +253,36 @@ export default function ProspeccionMetricasPageClient() {
     void loadCampaignTimeseries()
   }, [loadCampaignTimeseries])
 
+  const loadWhatsappTimeseries = useCallback(async () => {
+    setWhatsappTimeseriesLoading(true)
+    try {
+      const response = await getProspeccionMetricas({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        canal,
+        campana_id: campanaId !== "todos" ? campanaId : undefined,
+        campana_publicitaria: campanaPublicitaria.trim() || undefined,
+        regla_id: reglaId !== "todos" ? reglaId : undefined,
+        limit: 500,
+        include_campaign_timeseries: false,
+        include_whatsapp_timeseries: true,
+        include_whatsapp_channels: false,
+        lite: false,
+      })
+      setWhatsappTimeseries(response.frases_whatsapp.timeseries ?? [])
+    } catch {
+      setWhatsappTimeseries([])
+    } finally {
+      setWhatsappTimeseriesLoading(false)
+    }
+  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+
+  useEffect(() => {
+    setWhatsappTimeseries([])
+    if (activeTab !== "frases") return
+    void loadWhatsappTimeseries()
+  }, [activeTab, loadWhatsappTimeseries])
+
   const loadBrevoQuota = useCallback(async () => {
     setBrevoQuotaLoading(true)
     try {
@@ -279,11 +311,11 @@ export default function ProspeccionMetricasPageClient() {
   )
   const phrasesChartData = useMemo(
     () =>
-      (data?.frases_whatsapp.timeseries ?? []).map((item) => ({
+      (whatsappTimeseries ?? []).map((item) => ({
         ...item,
         fecha_label: shortDate.format(new Date(`${item.fecha}T00:00:00`)),
       })),
-    [data?.frases_whatsapp.timeseries],
+    [whatsappTimeseries],
   )
 
   const topCards = useMemo(() => {
@@ -1372,12 +1404,17 @@ export default function ProspeccionMetricasPageClient() {
         </div>
       ) : (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tendencia diaria de frases WhatsApp</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72 w-full">
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Tendencia diaria de frases WhatsApp
+                    {whatsappTimeseriesLoading ? (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">cargando...</span>
+                    ) : null}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={phrasesChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
