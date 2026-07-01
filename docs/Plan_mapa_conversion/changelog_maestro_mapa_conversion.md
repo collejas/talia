@@ -23,6 +23,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se documentó la ruta maestra de integración en `plan_integracion_maestra_mapa_conversion.md`.
 - Se definio un backlog unico para ejecutar BD -> backend -> frontend.
 - Se establecio este changelog como fuente unica de seguimiento.
+- Se aterrizo el backlog maestro con tareas concretas por capa y archivos objetivo.
 
 ## 2026-06-27
 

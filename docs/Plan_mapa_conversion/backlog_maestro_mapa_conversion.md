@@ -38,10 +38,12 @@ Objetivo:
 
 Tareas:
 
-- definir el agregado canónico para campañas WhatsApp,
-- revisar si hace falta vista o tabla de resumen por batch/campaña,
-- asegurar que la atribucion WhatsApp siga usando `persona_id` como llave principal,
-- conservar `contacto_id` solo como compatibilidad temporal.
+- [ ] Definir el agregado canónico para campañas WhatsApp.
+- [ ] Revisar si hace falta una vista o tabla de resumen por batch/campaña.
+- [ ] Asegurar que la atribucion WhatsApp siga usando `persona_id` como llave principal.
+- [ ] Conservar `contacto_id` solo como compatibilidad temporal.
+- [ ] Decidir si el agregado vive como tabla materializada, vista o RPC.
+- [ ] Registrar la decision en el changelog maestro.
 
 ### A.2 Normalizar contrato de conversion
 
@@ -51,9 +53,11 @@ Objetivo:
 
 Tareas:
 
-- revisar relaciones entre conversaciones, oportunidades y atribucion,
-- validar campos que ya existen para trazabilidad,
-- evitar depender de JSON para campos estructurales nuevos.
+- [ ] Revisar relaciones entre conversaciones, oportunidades y atribucion.
+- [ ] Validar campos que ya existen para trazabilidad.
+- [ ] Evitar depender de JSON para campos estructurales nuevos.
+- [ ] Verificar indices y llaves para joins frecuentes.
+- [ ] Confirmar compatibilidad de `persona_id` en los eventos de atribucion.
 
 ### A.3 Alinear catalogos de campaña
 
@@ -63,10 +67,17 @@ Objetivo:
 
 Tareas:
 
-- revisar catalogo `campanas`,
-- revisar lotes `prospeccion_contacto_batch`,
-- revisar eventos `prospeccion_whatsapp_atribucion_eventos`,
-- definir si hace falta un campo explicito de tipo de bloque en un agregado nuevo.
+- [ ] Revisar catalogo `campanas`.
+- [ ] Revisar lotes `prospeccion_contacto_batch`.
+- [ ] Revisar eventos `prospeccion_whatsapp_atribucion_eventos`.
+- [ ] Definir si hace falta un campo explicito de tipo de bloque en un agregado nuevo.
+- [ ] Validar que el catalogo soporte separar correo, WhatsApp y conversion.
+
+### A.4 Archivos objetivo
+
+- [ ] `supabase/migrations/*` para el nuevo agregado o vista.
+- [ ] `supabase/migrations/*` para indices y constraints si faltan.
+- [ ] `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md` para registrar la decision.
 
 ## 4) Epic B · Backend
 
@@ -78,11 +89,19 @@ Objetivo:
 
 Tareas:
 
-- refactorizar `prospeccion/metricas` para entregar bloques separados,
-- mantener bloque de correo,
-- agregar bloque de WhatsApp,
-- mantener bloque de frases WhatsApp,
-- agregar bloque de conversiones/opportunities si aplica.
+- [ ] Refactorizar `prospeccion/metricas` para entregar bloques separados.
+- [ ] Mantener bloque de correo.
+- [ ] Agregar bloque de WhatsApp.
+- [ ] Mantener bloque de frases WhatsApp.
+- [ ] Agregar bloque de conversiones/opportunities si aplica.
+- [ ] Definir nombres de response keys definitivos.
+
+### B.1 Archivos objetivo
+
+- [ ] `backend/app/api/routes/crm.py`
+- [ ] `backend/app/repositories/crm.py`
+- [ ] `backend/app/services/*` si se extrae logica
+- [ ] `backend/tests/api/test_crm_routes.py`
 
 ### B.2 Ajustar agregacion de WhatsApp
 
@@ -92,10 +111,12 @@ Objetivo:
 
 Tareas:
 
-- agregar agregacion por batch,
-- agregar respuesta y oportunidad por conversacion,
-- usar `prospeccion_whatsapp_atribucion_eventos`,
-- respetar `persona_id` como llave operativa.
+- [ ] Agregar agregacion por batch.
+- [ ] Agregar respuesta y oportunidad por conversacion.
+- [ ] Usar `prospeccion_whatsapp_atribucion_eventos`.
+- [ ] Respetar `persona_id` como llave operativa.
+- [ ] Confirmar si la serie diaria sale de mensajes, batches o ambos.
+- [ ] Validar con datos reales del tenant activo.
 
 ### B.3 Mantener compatibilidad
 
@@ -105,9 +126,10 @@ Objetivo:
 
 Tareas:
 
-- conservar la forma actual del bloque de correo mientras se migra,
-- conservar `contacto_id` donde el contrato viejo lo siga requiriendo,
-- no cambiar contratos de front hasta que el backend nuevo exista.
+- [ ] Conservar la forma actual del bloque de correo mientras se migra.
+- [ ] Conservar `contacto_id` donde el contrato viejo lo siga requiriendo.
+- [ ] No cambiar contratos de front hasta que el backend nuevo exista.
+- [ ] Mantener compatibilidad en exportaciones.
 
 ### B.4 Alinear mapa de conversion
 
@@ -117,10 +139,18 @@ Objetivo:
 
 Tareas:
 
-- conservar `traffic_web`,
-- conservar `conversation_channels`,
-- conservar `whatsapp_atribucion`,
-- revisar si hace falta exponer una pequeña capa de resumen adicional para campañas ejecutadas.
+- [ ] Conservar `traffic_web`.
+- [ ] Conservar `conversation_channels`.
+- [ ] Conservar `whatsapp_atribucion`.
+- [ ] Revisar si hace falta exponer una pequeña capa de resumen adicional para campañas ejecutadas.
+- [ ] Mantener filtros y cache keys estables.
+
+### B.4 Archivos objetivo
+
+- [ ] `backend/app/api/routes/crm.py`
+- [ ] `backend/app/services/demografia_service.py`
+- [ ] `backend/app/repositories/crm.py`
+- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts` solo cuando exista contrato nuevo
 
 ## 5) Epic C · Frontend
 
@@ -132,9 +162,16 @@ Objetivo:
 
 Tareas:
 
-- dividir cards y tablas por bloque,
-- evitar que `campanas` signifique dos cosas distintas,
-- mostrar estados vacios y de carga por bloque.
+- [ ] Dividir cards y tablas por bloque.
+- [ ] Evitar que `campanas` signifique dos cosas distintas.
+- [ ] Mostrar estados vacios y de carga por bloque.
+- [ ] Ajustar copy para que correo y WhatsApp no se confundan.
+
+### C.1 Archivos objetivo
+
+- [ ] `frontend/panel/src/app/prospeccion/metricas/page.client.tsx`
+- [ ] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- [ ] `frontend/panel/src/components/dashboard/*` si comparte componentes
 
 ### C.2 Mantener `mapa-de-conversion`
 
@@ -144,10 +181,18 @@ Objetivo:
 
 Tareas:
 
-- seguir mostrando trafico web,
-- seguir mostrando conversaciones,
-- seguir mostrando atribucion WhatsApp,
-- reforzar etiquetas y explicaciones de lectura.
+- [ ] Seguir mostrando trafico web.
+- [ ] Seguir mostrando conversaciones.
+- [ ] Seguir mostrando atribucion WhatsApp.
+- [ ] Reforzar etiquetas y explicaciones de lectura.
+- [ ] Mantener la semantica de `traffic_web`, `conversation_channels` y `whatsapp_atribucion`.
+
+### C.2 Archivos objetivo
+
+- [ ] `frontend/panel/src/app/mapa-de-conversion/page.tsx`
+- [ ] `frontend/panel/src/components/mapa-conversion/acquisition-summary.tsx`
+- [ ] `frontend/panel/src/components/mapa-conversion/row-detail.tsx`
+- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts`
 
 ### C.3 Validar exportaciones
 
@@ -157,9 +202,16 @@ Objetivo:
 
 Tareas:
 
-- revisar export de metricas,
-- revisar export del mapa,
-- asegurar consistencia con los nuevos bloques.
+- [ ] Revisar export de metricas.
+- [ ] Revisar export del mapa.
+- [ ] Asegurar consistencia con los nuevos bloques.
+- [ ] Verificar que los nombres de hojas y columnas sigan siendo entendibles.
+
+### C.3 Archivos objetivo
+
+- [ ] `backend/app/api/routes/crm.py`
+- [ ] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts`
 
 ## 6) Prioridad de entrega
 
@@ -170,7 +222,17 @@ Orden de trabajo sugerido:
 3. Frontend
 4. Validacion
 
-## 7) Definition of done
+## 7) Checklist maestro de ejecucion
+
+- [ ] Cerrado el contrato de BD.
+- [ ] Cerrado el agregado WhatsApp.
+- [ ] Cerrado el contrato backend.
+- [ ] Verificados datos reales de campañas WhatsApp.
+- [ ] Ajustada la vista de `prospeccion/metricas`.
+- [ ] Ajustada la vista de `mapa-de-conversion`.
+- [ ] Ejecutada validacion final de compatibilidad.
+
+## 8) Definition of done
 
 Se considera terminado cuando:
 
