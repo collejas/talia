@@ -1003,7 +1003,7 @@ export default function ProspeccionMetricasPageClient() {
 
         <Card className="xl:col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Resumen por canal</CardTitle>
+            <CardTitle className="text-sm">Resumen por canal de campañas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="h-64 w-full">
@@ -1144,12 +1144,7 @@ export default function ProspeccionMetricasPageClient() {
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {channelSummary.find((row) => row.canal === "correo") ? (
-                <span>
-                  Correo: Open {channelSummary.find((row) => row.canal === "correo")?.open_rate ?? 0}% ·
-                  Click {channelSummary.find((row) => row.canal === "correo")?.click_rate ?? 0}%
-                </span>
-              ) : null}
+              WhatsApp operativo se desglosa en la pestaña <span className="font-medium text-foreground">WhatsApp campañas</span>.
             </div>
           </CardContent>
         </Card>
@@ -1461,9 +1456,9 @@ export default function ProspeccionMetricasPageClient() {
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { title: "Lotes", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Total de batches ejecutados" },
-              { title: "Mensajes salientes", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Salidas del canal WhatsApp" },
-              { title: "Conversaciones respondidas", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Replies detectados por conversación" },
+              { title: "Lotes ejecutados", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Batches vinculados a mensajes de campaña" },
+              { title: "Mensajes salientes", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Envios reales del canal WhatsApp" },
+              { title: "Conversaciones respondidas", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Conversaciones con al menos una respuesta" },
               { title: "Oportunidades", value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0), hint: "Oportunidades ligadas a conversaciones" },
             ].map((card) => (
               <Card key={card.title}>
@@ -1483,7 +1478,7 @@ export default function ProspeccionMetricasPageClient() {
               { title: "Batches completados", value: summaryWhatsappCampaigns?.batches_completados ?? 0 },
               { title: "Batches error", value: summaryWhatsappCampaigns?.batches_error ?? 0 },
               { title: "Prospectos", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
-              { title: "Entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
+              { title: "Respuestas entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
               { title: "% Respuesta", value: (summaryWhatsappCampaigns?.tasa_respuesta_pct ?? 0).toFixed(2), suffix: "%" },
               { title: "% Oportunidad", value: (summaryWhatsappCampaigns?.tasa_oportunidad_pct ?? 0).toFixed(2), suffix: "%" },
             ].map((card) => (
