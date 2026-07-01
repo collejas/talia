@@ -14,6 +14,26 @@ export type ProspeccionMetricasSummary = {
     tasa_entrega_pct: number;
     tasa_respuesta_pct: number;
   };
+  campanas_whatsapp: {
+    batches_total: number;
+    batches_completados: number;
+    batches_en_proceso: number;
+    batches_error: number;
+    prospectos_total: number;
+    mensajes_salientes: number;
+    mensajes_entrantes: number;
+    conversaciones_total: number;
+    conversaciones_respondidas: number;
+    conversaciones_sin_respuesta: number;
+    oportunidades_total: number;
+    oportunidades_abiertas: number;
+    oportunidades_ganadas: number;
+    oportunidades_perdidas: number;
+    monto_estimado_total: number;
+    tasa_respuesta_pct: number;
+    tasa_oportunidad_pct: number;
+    tasa_cierre_pct: number;
+  };
   frases_whatsapp: {
     conversaciones_atribuidas: number;
     contactos_unicos: number;
@@ -45,6 +65,12 @@ export type ProspeccionCampanaItem = {
   click_to_session_pct: number;
 };
 
+export type ProspeccionCampanaWhatsAppItem = ProspeccionMetricasSummary["campanas_whatsapp"] & {
+  campana_id?: string | null;
+  campana_nombre?: string | null;
+  canal?: string | null;
+};
+
 type ProspeccionMetricasResponse = {
   ok?: boolean;
   campanas?: {
@@ -57,6 +83,10 @@ type ProspeccionMetricasResponse = {
       envios_entregados: number;
       envios_respondidos: number;
     }>;
+  };
+  campanas_whatsapp?: {
+    summary?: ProspeccionMetricasSummary["campanas_whatsapp"];
+    items?: ProspeccionCampanaWhatsAppItem[];
   };
   frases_whatsapp?: {
     summary?: ProspeccionMetricasSummary["frases_whatsapp"];
@@ -114,6 +144,7 @@ export async function fetchProspeccionMetricas(
   summary: ProspeccionMetricasSummary;
   timeseries: ProspeccionTimeseries;
   items: ProspeccionCampanaItem[];
+  whatsappItems: ProspeccionCampanaWhatsAppItem[];
   byRule: ProspeccionFraseByRule[];
 }> {
   const response = await callCrmApi<ProspeccionMetricasResponse>("/crm/prospeccion/metricas", {
@@ -136,6 +167,7 @@ export async function fetchProspeccionMetricas(
   return {
     summary: {
       campanas: response.data?.campanas?.summary ?? emptyCampanasSummary(),
+      campanas_whatsapp: response.data?.campanas_whatsapp?.summary ?? emptyWhatsAppCampanasSummary(),
       frases_whatsapp: response.data?.frases_whatsapp?.summary ?? emptyFrasesSummary(),
     },
     timeseries: {
@@ -143,6 +175,9 @@ export async function fetchProspeccionMetricas(
       frases_whatsapp: response.data?.frases_whatsapp?.timeseries ?? [],
     },
     items: Array.isArray(response.data?.campanas?.items) ? response.data?.campanas?.items ?? [] : [],
+    whatsappItems: Array.isArray(response.data?.campanas_whatsapp?.items)
+      ? response.data?.campanas_whatsapp?.items ?? []
+      : [],
     byRule: Array.isArray(response.data?.frases_whatsapp?.by_rule) ? response.data?.frases_whatsapp?.by_rule ?? [] : [],
   };
 }
@@ -168,5 +203,28 @@ function emptyFrasesSummary(): ProspeccionMetricasSummary["frases_whatsapp"] {
     oportunidades_creadas: 0,
     tasa_conversacion_oportunidad_pct: 0,
     monto_estimado_total: 0,
+  };
+}
+
+function emptyWhatsAppCampanasSummary(): ProspeccionMetricasSummary["campanas_whatsapp"] {
+  return {
+    batches_total: 0,
+    batches_completados: 0,
+    batches_en_proceso: 0,
+    batches_error: 0,
+    prospectos_total: 0,
+    mensajes_salientes: 0,
+    mensajes_entrantes: 0,
+    conversaciones_total: 0,
+    conversaciones_respondidas: 0,
+    conversaciones_sin_respuesta: 0,
+    oportunidades_total: 0,
+    oportunidades_abiertas: 0,
+    oportunidades_ganadas: 0,
+    oportunidades_perdidas: 0,
+    monto_estimado_total: 0,
+    tasa_respuesta_pct: 0,
+    tasa_oportunidad_pct: 0,
+    tasa_cierre_pct: 0,
   };
 }

@@ -24,6 +24,11 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se definio un backlog unico para ejecutar BD -> backend -> frontend.
 - Se establecio este changelog como fuente unica de seguimiento.
 - Se aterrizo el backlog maestro con tareas concretas por capa y archivos objetivo.
+- Se creó y aplicó la RPC `public.prospeccion_campana_whatsapp_metricas_rango` para resumir campañas WhatsApp por organización.
+- La RPC separa mensajes salientes, mensajes entrantes, conversaciones respondidas, oportunidades y lotes.
+- La RPC usa `mensajes` + `prospeccion_contacto_batch` + `campanas` como fuente operativa, y deja `prospeccion_contacto_envio` fuera del cálculo de WhatsApp.
+- La atribución de respuestas entrantes se corrigió por conversación, para no perder replies sin `batch_id`.
+- En el tenant validado la RPC devuelve 24 lotes, 61 prospectos, 194 mensajes salientes, 10 entrantes, 61 conversaciones, 10 respondidas y 60 oportunidades.
 
 ## 2026-06-27
 

@@ -1598,6 +1598,33 @@ export type ProspeccionMetricasCampanaSummary = {
   tasa_respuesta_pct: number
 }
 
+export type ProspeccionMetricasWhatsAppCampanaSummary = {
+  batches_total: number
+  batches_completados: number
+  batches_en_proceso: number
+  batches_error: number
+  prospectos_total: number
+  mensajes_salientes: number
+  mensajes_entrantes: number
+  conversaciones_total: number
+  conversaciones_respondidas: number
+  conversaciones_sin_respuesta: number
+  oportunidades_total: number
+  oportunidades_abiertas: number
+  oportunidades_ganadas: number
+  oportunidades_perdidas: number
+  monto_estimado_total: number
+  tasa_respuesta_pct: number
+  tasa_oportunidad_pct: number
+  tasa_cierre_pct: number
+}
+
+export type ProspeccionMetricasWhatsAppCampanaItem = ProspeccionMetricasWhatsAppCampanaSummary & {
+  campana_id?: string | null
+  campana_nombre?: string | null
+  canal?: string | null
+}
+
 export type ProspeccionMetricasFrasesSummary = {
   conversaciones_atribuidas: number
   contactos_unicos: number
@@ -1658,6 +1685,10 @@ export type ProspeccionMetricasResponse = {
     summary: ProspeccionMetricasCampanaSummary
     items: ProspeccionCampanaAtribucionItem[]
     timeseries: ProspeccionMetricasCampanaTimeseriesItem[]
+  }
+  campanas_whatsapp: {
+    summary: ProspeccionMetricasWhatsAppCampanaSummary
+    items: ProspeccionMetricasWhatsAppCampanaItem[]
   }
   frases_whatsapp: {
     summary: ProspeccionMetricasFrasesSummary

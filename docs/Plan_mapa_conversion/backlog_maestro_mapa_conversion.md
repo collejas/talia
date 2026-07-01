@@ -38,12 +38,19 @@ Objetivo:
 
 Tareas:
 
-- [ ] Definir el agregado canónico para campañas WhatsApp.
+- [x] Definir el agregado canónico para campañas WhatsApp.
 - [ ] Revisar si hace falta una vista o tabla de resumen por batch/campaña.
 - [ ] Asegurar que la atribucion WhatsApp siga usando `persona_id` como llave principal.
 - [ ] Conservar `contacto_id` solo como compatibilidad temporal.
-- [ ] Decidir si el agregado vive como tabla materializada, vista o RPC.
-- [ ] Registrar la decision en el changelog maestro.
+- [x] Decidir si el agregado vive como tabla materializada, vista o RPC.
+- [x] Registrar la decision en el changelog maestro.
+
+Decisión tomada:
+
+- Se implementó una RPC explícita: `public.prospeccion_campana_whatsapp_metricas_rango`.
+- La salida queda separada por campaña y expone mensajes, conversaciones, oportunidades y lotes.
+- La fuente de verdad operacional sigue siendo `mensajes` + `prospeccion_contacto_batch` + `campanas`, no `prospeccion_contacto_envio`.
+- Las respuestas entrantes se atribuyen por conversación, para no perder replies que no traen `batch_id` o `campana_id`.
 
 ### A.2 Normalizar contrato de conversion
 

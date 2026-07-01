@@ -107,7 +107,7 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 export default function ProspeccionMetricasPageClient() {
-  const [activeTab, setActiveTab] = useState<"campanas" | "frases">("campanas")
+  const [activeTab, setActiveTab] = useState<"campanas" | "campanas_whatsapp" | "frases">("campanas")
   const [hydrated, setHydrated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -300,6 +300,7 @@ export default function ProspeccionMetricasPageClient() {
   }, [loadBrevoQuota])
 
   const summaryCampaign = data?.campanas.summary
+  const summaryWhatsappCampaigns = data?.campanas_whatsapp?.summary
   const summaryPhrases = data?.frases_whatsapp.summary
   const campaignChartData = useMemo(
     () =>
@@ -694,6 +695,59 @@ export default function ProspeccionMetricasPageClient() {
         ]),
       )
       downloadCsv(`prospeccion_metricas_campanas_${timestamp}.csv`, csv)
+      return
+    }
+    if (activeTab === "campanas_whatsapp") {
+      const rows = (data.campanas_whatsapp?.items ?? []).map((item) => [
+        item.campana_id,
+        item.campana_nombre,
+        item.canal,
+        item.batches_total,
+        item.batches_completados,
+        item.batches_en_proceso,
+        item.batches_error,
+        item.prospectos_total,
+        item.mensajes_salientes,
+        item.mensajes_entrantes,
+        item.conversaciones_total,
+        item.conversaciones_respondidas,
+        item.conversaciones_sin_respuesta,
+        item.oportunidades_total,
+        item.oportunidades_abiertas,
+        item.oportunidades_ganadas,
+        item.oportunidades_perdidas,
+        item.monto_estimado_total,
+        item.tasa_respuesta_pct,
+        item.tasa_oportunidad_pct,
+        item.tasa_cierre_pct,
+      ])
+      const csv = buildCsv(
+        [
+          "campana_id",
+          "campana_nombre",
+          "canal",
+          "batches_total",
+          "batches_completados",
+          "batches_en_proceso",
+          "batches_error",
+          "prospectos_total",
+          "mensajes_salientes",
+          "mensajes_entrantes",
+          "conversaciones_total",
+          "conversaciones_respondidas",
+          "conversaciones_sin_respuesta",
+          "oportunidades_total",
+          "oportunidades_abiertas",
+          "oportunidades_ganadas",
+          "oportunidades_perdidas",
+          "monto_estimado_total",
+          "tasa_respuesta_pct",
+          "tasa_oportunidad_pct",
+          "tasa_cierre_pct",
+        ],
+        rows,
+      )
+      downloadCsv(`prospeccion_metricas_campanas_whatsapp_${timestamp}.csv`, csv)
       return
     }
     const byChannelRows = (data.frases_whatsapp.by_channel ?? []).map((item) => [
@@ -1177,6 +1231,7 @@ export default function ProspeccionMetricasPageClient() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant={activeTab === "campanas" ? "default" : "outline"} onClick={() => setActiveTab("campanas")}>Campañas</Button>
+        <Button variant={activeTab === "campanas_whatsapp" ? "default" : "outline"} onClick={() => setActiveTab("campanas_whatsapp")}>WhatsApp campañas</Button>
         <Button variant={activeTab === "frases" ? "default" : "outline"} onClick={() => setActiveTab("frases")}>Frases WhatsApp</Button>
         <Button
           variant="outline"
@@ -1185,7 +1240,7 @@ export default function ProspeccionMetricasPageClient() {
           className="ml-auto"
         >
           <IconDownload className="mr-2 h-4 w-4" />
-          Exportar CSV ({activeTab === "campanas" ? "campañas" : "frases"})
+          Exportar CSV ({activeTab === "campanas" ? "campañas" : activeTab === "campanas_whatsapp" ? "campañas whatsapp" : "frases"})
         </Button>
         <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
           <IconFileSpreadsheet className="mr-2 h-4 w-4" />
@@ -1396,6 +1451,102 @@ export default function ProspeccionMetricasPageClient() {
                       </td>
                       <td className="px-2 py-2">{number.format(campaignTotals.sesiones_utm)}</td>
                     </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : activeTab === "campanas_whatsapp" ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              { title: "Lotes", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Total de batches ejecutados" },
+              { title: "Mensajes salientes", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Salidas del canal WhatsApp" },
+              { title: "Conversaciones respondidas", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Replies detectados por conversación" },
+              { title: "Oportunidades", value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0), hint: "Oportunidades ligadas a conversaciones" },
+            ].map((card) => (
+              <Card key={card.title}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">{card.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold">{card.value}</p>
+                  <p className="text-xs text-muted-foreground">{card.hint}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              { title: "Batches completados", value: summaryWhatsappCampaigns?.batches_completados ?? 0 },
+              { title: "Batches error", value: summaryWhatsappCampaigns?.batches_error ?? 0 },
+              { title: "Prospectos", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
+              { title: "Entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
+              { title: "% Respuesta", value: (summaryWhatsappCampaigns?.tasa_respuesta_pct ?? 0).toFixed(2), suffix: "%" },
+              { title: "% Oportunidad", value: (summaryWhatsappCampaigns?.tasa_oportunidad_pct ?? 0).toFixed(2), suffix: "%" },
+            ].map((card) => (
+              <Card key={card.title}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">{card.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xl font-semibold">
+                    {typeof card.value === "number" ? number.format(card.value) : card.value}
+                    {card.suffix ?? ""}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalle de campañas WhatsApp</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1280px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-2 py-2">Campaña</th>
+                      <th className="px-2 py-2">Batches</th>
+                      <th className="px-2 py-2">Salientes</th>
+                      <th className="px-2 py-2">Entrantes</th>
+                      <th className="px-2 py-2">Conversaciones</th>
+                      <th className="px-2 py-2">Respondidas</th>
+                      <th className="px-2 py-2">Sin respuesta</th>
+                      <th className="px-2 py-2">Oportunidades</th>
+                      <th className="px-2 py-2">Abiertas</th>
+                      <th className="px-2 py-2">Ganadas</th>
+                      <th className="px-2 py-2">Perdidas</th>
+                      <th className="px-2 py-2">Monto</th>
+                      <th className="px-2 py-2">% Resp.</th>
+                      <th className="px-2 py-2">% Oport.</th>
+                      <th className="px-2 py-2">% Cierre</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.campanas_whatsapp?.items ?? []).map((item, idx) => (
+                      <tr key={`${item.campana_id ?? "wa"}-${idx}`} className="border-b">
+                        <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
+                        <td className="px-2 py-2">{number.format(item.batches_total)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_entrantes)}</td>
+                        <td className="px-2 py-2">{number.format(item.conversaciones_total)}</td>
+                        <td className="px-2 py-2">{number.format(item.conversaciones_respondidas)}</td>
+                        <td className="px-2 py-2">{number.format(item.conversaciones_sin_respuesta)}</td>
+                        <td className="px-2 py-2">{number.format(item.oportunidades_total)}</td>
+                        <td className="px-2 py-2">{number.format(item.oportunidades_abiertas)}</td>
+                        <td className="px-2 py-2">{number.format(item.oportunidades_ganadas)}</td>
+                        <td className="px-2 py-2">{number.format(item.oportunidades_perdidas)}</td>
+                        <td className="px-2 py-2">{money.format(item.monto_estimado_total)}</td>
+                        <td className="px-2 py-2">{item.tasa_respuesta_pct.toFixed(2)}%</td>
+                        <td className="px-2 py-2">{item.tasa_oportunidad_pct.toFixed(2)}%</td>
+                        <td className="px-2 py-2">{item.tasa_cierre_pct.toFixed(2)}%</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

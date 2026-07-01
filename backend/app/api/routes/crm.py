@@ -31493,6 +31493,125 @@ async def prospeccion_metricas_dashboard(
             continue
         campaign_items.append(item)
 
+    whatsapp_campaign_rows: list[dict[str, Any]] = []
+    whatsapp_campaign_items: list[dict[str, Any]] = []
+    whatsapp_campaign_summary = {
+        "batches_total": 0,
+        "batches_completados": 0,
+        "batches_en_proceso": 0,
+        "batches_error": 0,
+        "prospectos_total": 0,
+        "mensajes_salientes": 0,
+        "mensajes_entrantes": 0,
+        "conversaciones_total": 0,
+        "conversaciones_respondidas": 0,
+        "conversaciones_sin_respuesta": 0,
+        "oportunidades_total": 0,
+        "oportunidades_abiertas": 0,
+        "oportunidades_ganadas": 0,
+        "oportunidades_perdidas": 0,
+        "monto_estimado_total": 0.0,
+        "tasa_respuesta_pct": 0.0,
+        "tasa_oportunidad_pct": 0.0,
+        "tasa_cierre_pct": 0.0,
+    }
+    if params.include_whatsapp_channels:
+        try:
+            whatsapp_page_size = max(1, min(params.limit, 1000))
+            whatsapp_offset = 0
+            while True:
+                page_rows = await repo.get_prospeccion_campana_whatsapp_metricas_rango(
+                    usuario_token=user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=params.campana_id,
+                    date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                    date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+                    limit=whatsapp_page_size,
+                    offset=whatsapp_offset,
+                )
+                if not page_rows:
+                    break
+                whatsapp_campaign_rows.extend(page_rows)
+                if params.lite:
+                    break
+                if len(page_rows) < whatsapp_page_size:
+                    break
+                whatsapp_offset += len(page_rows)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        for row in whatsapp_campaign_rows:
+            campana_id_raw = row.get("campana_id")
+            campana_id_value = str(campana_id_raw) if campana_id_raw else None
+            item = {
+                "campana_id": campana_id_value,
+                "campana_nombre": _clean_text(row.get("campana_nombre")),
+                "canal": row.get("canal"),
+                "batches_total": int(row.get("batches_total") or 0),
+                "batches_completados": int(row.get("batches_completados") or 0),
+                "batches_en_proceso": int(row.get("batches_en_proceso") or 0),
+                "batches_error": int(row.get("batches_error") or 0),
+                "prospectos_total": int(row.get("prospectos_total") or 0),
+                "mensajes_salientes": int(row.get("mensajes_salientes") or 0),
+                "mensajes_entrantes": int(row.get("mensajes_entrantes") or 0),
+                "conversaciones_total": int(row.get("conversaciones_total") or 0),
+                "conversaciones_respondidas": int(row.get("conversaciones_respondidas") or 0),
+                "conversaciones_sin_respuesta": int(row.get("conversaciones_sin_respuesta") or 0),
+                "oportunidades_total": int(row.get("oportunidades_total") or 0),
+                "oportunidades_abiertas": int(row.get("oportunidades_abiertas") or 0),
+                "oportunidades_ganadas": int(row.get("oportunidades_ganadas") or 0),
+                "oportunidades_perdidas": int(row.get("oportunidades_perdidas") or 0),
+                "monto_estimado_total": float(row.get("monto_estimado_total") or 0),
+                "tasa_respuesta_pct": float(row.get("tasa_respuesta_pct") or 0),
+                "tasa_oportunidad_pct": float(row.get("tasa_oportunidad_pct") or 0),
+                "tasa_cierre_pct": float(row.get("tasa_cierre_pct") or 0),
+            }
+            if params.canal != "todos" and _clean_text(item.get("canal")) != params.canal:
+                continue
+            whatsapp_campaign_items.append(item)
+
+        whatsapp_campaign_summary = {
+            "batches_total": sum(int(item["batches_total"]) for item in whatsapp_campaign_items),
+            "batches_completados": sum(int(item["batches_completados"]) for item in whatsapp_campaign_items),
+            "batches_en_proceso": sum(int(item["batches_en_proceso"]) for item in whatsapp_campaign_items),
+            "batches_error": sum(int(item["batches_error"]) for item in whatsapp_campaign_items),
+            "prospectos_total": sum(int(item["prospectos_total"]) for item in whatsapp_campaign_items),
+            "mensajes_salientes": sum(int(item["mensajes_salientes"]) for item in whatsapp_campaign_items),
+            "mensajes_entrantes": sum(int(item["mensajes_entrantes"]) for item in whatsapp_campaign_items),
+            "conversaciones_total": sum(int(item["conversaciones_total"]) for item in whatsapp_campaign_items),
+            "conversaciones_respondidas": sum(int(item["conversaciones_respondidas"]) for item in whatsapp_campaign_items),
+            "oportunidades_total": sum(int(item["oportunidades_total"]) for item in whatsapp_campaign_items),
+            "oportunidades_abiertas": sum(int(item["oportunidades_abiertas"]) for item in whatsapp_campaign_items),
+            "oportunidades_ganadas": sum(int(item["oportunidades_ganadas"]) for item in whatsapp_campaign_items),
+            "oportunidades_perdidas": sum(int(item["oportunidades_perdidas"]) for item in whatsapp_campaign_items),
+            "monto_estimado_total": round(
+                sum(float(item["monto_estimado_total"]) for item in whatsapp_campaign_items),
+                2,
+            ),
+        }
+        whatsapp_campaign_summary["conversaciones_sin_respuesta"] = max(
+            0,
+            whatsapp_campaign_summary["conversaciones_total"] - whatsapp_campaign_summary["conversaciones_respondidas"],
+        )
+        whatsapp_campaign_summary["tasa_respuesta_pct"] = round(
+            (whatsapp_campaign_summary["conversaciones_respondidas"] / whatsapp_campaign_summary["conversaciones_total"] * 100)
+            if whatsapp_campaign_summary["conversaciones_total"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_oportunidad_pct"] = round(
+            (whatsapp_campaign_summary["oportunidades_total"] / whatsapp_campaign_summary["conversaciones_total"] * 100)
+            if whatsapp_campaign_summary["conversaciones_total"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_cierre_pct"] = round(
+            (whatsapp_campaign_summary["oportunidades_ganadas"] / whatsapp_campaign_summary["oportunidades_total"] * 100)
+            if whatsapp_campaign_summary["oportunidades_total"] > 0
+            else 0.0,
+            2,
+        )
+
     campaign_summary = {
         "envios_totales": sum(int(item["envios_totales"]) for item in campaign_items),
         "envios_enviados": sum(int(item["envios_enviados"]) for item in campaign_items),
@@ -31918,6 +32037,10 @@ async def prospeccion_metricas_dashboard(
             "items": campaign_items,
             "timeseries": campaign_timeseries,
         },
+        "campanas_whatsapp": {
+            "summary": whatsapp_campaign_summary,
+            "items": whatsapp_campaign_items,
+        },
         "frases_whatsapp": {
             "summary": {
                 "conversaciones_atribuidas": total_conversations,
@@ -31962,6 +32085,10 @@ async def prospeccion_metricas_export_xlsx(
     summary_sheet.append(["Seccion", "Metrica", "Valor"])
 
     camp_summary = _ensure_dict(_ensure_dict(payload.get("campanas"), default={}).get("summary"), default={})
+    whatsapp_camp_summary = _ensure_dict(
+        _ensure_dict(payload.get("campanas_whatsapp"), default={}).get("summary"),
+        default={},
+    )
     frases_summary = _ensure_dict(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("summary"), default={})
     filters_summary = _ensure_dict(payload.get("filters"), default={})
     website_status_counts: dict[str, int] = {}
@@ -31996,6 +32123,28 @@ async def prospeccion_metricas_export_xlsx(
         "tasa_respuesta_pct",
     ):
         summary_sheet.append(["campanas", key, camp_summary.get(key)])
+
+    for key in (
+        "batches_total",
+        "batches_completados",
+        "batches_en_proceso",
+        "batches_error",
+        "prospectos_total",
+        "mensajes_salientes",
+        "mensajes_entrantes",
+        "conversaciones_total",
+        "conversaciones_respondidas",
+        "conversaciones_sin_respuesta",
+        "oportunidades_total",
+        "oportunidades_abiertas",
+        "oportunidades_ganadas",
+        "oportunidades_perdidas",
+        "monto_estimado_total",
+        "tasa_respuesta_pct",
+        "tasa_oportunidad_pct",
+        "tasa_cierre_pct",
+    ):
+        summary_sheet.append(["campanas_whatsapp", key, whatsapp_camp_summary.get(key)])
 
     for key in (
         "conversaciones_atribuidas",
@@ -32076,6 +32225,63 @@ async def prospeccion_metricas_export_xlsx(
                 row.get("envios_enviados"),
                 row.get("envios_entregados"),
                 row.get("envios_respondidos"),
+            ]
+        )
+
+    campanas_whatsapp_sheet = workbook.create_sheet("CampanasWhatsApp")
+    campanas_whatsapp_sheet.append(
+        [
+            "campana_id",
+            "campana_nombre",
+            "canal",
+            "batches_total",
+            "batches_completados",
+            "batches_en_proceso",
+            "batches_error",
+            "prospectos_total",
+            "mensajes_salientes",
+            "mensajes_entrantes",
+            "conversaciones_total",
+            "conversaciones_respondidas",
+            "conversaciones_sin_respuesta",
+            "oportunidades_total",
+            "oportunidades_abiertas",
+            "oportunidades_ganadas",
+            "oportunidades_perdidas",
+            "monto_estimado_total",
+            "tasa_respuesta_pct",
+            "tasa_oportunidad_pct",
+            "tasa_cierre_pct",
+        ]
+    )
+    campanas_whatsapp_items = _ensure_dict(payload.get("campanas_whatsapp"), default={}).get("items")
+    if not isinstance(campanas_whatsapp_items, list):
+        campanas_whatsapp_items = []
+    for item in campanas_whatsapp_items:
+        row = _ensure_dict(item, default={})
+        campanas_whatsapp_sheet.append(
+            [
+                row.get("campana_id"),
+                row.get("campana_nombre"),
+                row.get("canal"),
+                row.get("batches_total"),
+                row.get("batches_completados"),
+                row.get("batches_en_proceso"),
+                row.get("batches_error"),
+                row.get("prospectos_total"),
+                row.get("mensajes_salientes"),
+                row.get("mensajes_entrantes"),
+                row.get("conversaciones_total"),
+                row.get("conversaciones_respondidas"),
+                row.get("conversaciones_sin_respuesta"),
+                row.get("oportunidades_total"),
+                row.get("oportunidades_abiertas"),
+                row.get("oportunidades_ganadas"),
+                row.get("oportunidades_perdidas"),
+                row.get("monto_estimado_total"),
+                row.get("tasa_respuesta_pct"),
+                row.get("tasa_oportunidad_pct"),
+                row.get("tasa_cierre_pct"),
             ]
         )
 
