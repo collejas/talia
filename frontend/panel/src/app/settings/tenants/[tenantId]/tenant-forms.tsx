@@ -272,70 +272,76 @@ export function TenantModuleFlagsForm({
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="tenant_id" value={tenantId} />
       <input type="hidden" name="config_json" value={configJson} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2 md:col-span-2">
-          <div className="flex items-center gap-3">
-            <input
-              id="module_productos_enabled"
-              type="checkbox"
-              checked={productosEnabled}
-              onChange={(event) => setProductosEnabled(event.target.checked)}
-              className="size-4"
-            />
-            <Label htmlFor="module_productos_enabled">Productos habilitado</Label>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Módulos del tenant</p>
+            <p className="text-xs text-muted-foreground">
+              Controla qué áreas ve y usa el usuario en el panel.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-3">
+                <input
+                  id="module_productos_enabled"
+                  type="checkbox"
+                  checked={productosEnabled}
+                  onChange={(event) => setProductosEnabled(event.target.checked)}
+                  className="size-4"
+                />
+                <Label htmlFor="module_productos_enabled">Productos habilitado</Label>
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-3">
+                <input
+                  id="module_propiedades_enabled"
+                  type="checkbox"
+                  checked={propiedadesEnabled}
+                  onChange={(event) => setPropiedadesEnabled(event.target.checked)}
+                  className="size-4"
+                />
+                <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="space-y-2 md:col-span-2">
-          <div className="flex items-center gap-3">
-            <input
-              id="module_propiedades_enabled"
-              type="checkbox"
-              checked={propiedadesEnabled}
-              onChange={(event) => setPropiedadesEnabled(event.target.checked)}
-              className="size-4"
-            />
-            <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Asistentes</p>
+            <p className="text-xs text-muted-foreground">
+              Controla qué catálogo puede consultar y mostrar el asistente automático.
+            </p>
           </div>
-        </div>
-        <div className="space-y-2 md:col-span-2">
-          <div className="flex items-center gap-3">
-            <input
-              id="module_catalog_inmobiliario_enabled"
-              type="checkbox"
-              checked={catalogInmobiliarioEnabled}
-              onChange={(event) => setCatalogInmobiliarioEnabled(event.target.checked)}
-              className="size-4"
-            />
-            <Label htmlFor="module_catalog_inmobiliario_enabled">Activar inmobiliario</Label>
-          </div>
-        </div>
-        <div className="space-y-2 md:col-span-2">
-          <div className="flex items-center gap-3">
-            <input
-              id="module_catalog_no_inmobiliario_enabled"
-              type="checkbox"
-              checked={catalogNoInmobiliarioEnabled}
-              onChange={(event) => setCatalogNoInmobiliarioEnabled(event.target.checked)}
-              className="size-4"
-            />
-            <Label htmlFor="module_catalog_no_inmobiliario_enabled">Activar productos y servicios</Label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-3">
+                <input
+                  id="module_catalog_inmobiliario_enabled"
+                  type="checkbox"
+                  checked={catalogInmobiliarioEnabled}
+                  onChange={(event) => setCatalogInmobiliarioEnabled(event.target.checked)}
+                  className="size-4"
+                />
+                <Label htmlFor="module_catalog_inmobiliario_enabled">Activar inmobiliario</Label>
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-3">
+                <input
+                  id="module_catalog_no_inmobiliario_enabled"
+                  type="checkbox"
+                  checked={catalogNoInmobiliarioEnabled}
+                  onChange={(event) => setCatalogNoInmobiliarioEnabled(event.target.checked)}
+                  className="size-4"
+                />
+                <Label htmlFor="module_catalog_no_inmobiliario_enabled">Activar productos y servicios</Label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Esto actualiza <code>organizaciones.config.features.productos.enabled</code>,{" "}
-        <code>organizaciones.config.features.propiedades.enabled</code>,{" "}
-        <code>organizaciones.config.features.catalog_inmobiliario.enabled</code> y{" "}
-        <code>organizaciones.config.features.catalog_no_inmobiliario.enabled</code>.
-      </p>
-      <p className="text-xs text-muted-foreground">
-        El switch de inmobiliario controla <code>list_catalog_fraccionamientos</code> y{" "}
-        <code>list_catalog_modelos</code>. El switch de productos y servicios controla{" "}
-        <code>fetch_catalog_item_details</code>.
-      </p>
-      <p className="text-xs text-muted-foreground">
-        Si se desactivan ambos, el asistente no carga catálogo. Si se activan ambos, puede usar los dos dominios.
-      </p>
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />
         <SubmitButton label="Guardar módulos" pendingLabel="Guardando..." />

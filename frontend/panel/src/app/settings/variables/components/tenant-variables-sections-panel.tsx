@@ -7,6 +7,11 @@ import { TenantValidationPanel } from "./tenant-validation-panel"
 type SectionConfig = {
   title: string
   description?: string
+  groups?: Array<{
+    title: string
+    description?: string
+    fieldPaths: string[]
+  }>
   fields: Array<{
     label: string
     path: string
@@ -33,6 +38,25 @@ const SECTIONS: SectionConfig[] = [
   {
     title: "Módulos",
     description: "Activa o desactiva las áreas funcionales visibles para este tenant.",
+    groups: [
+      {
+        title: "Módulos del tenant",
+        description: "Controlan qué áreas ve y usa el usuario en el panel.",
+        fieldPaths: [
+          "features.webchat.enabled",
+          "features.whatsapp.enabled",
+          "features.messenger.enabled",
+          "features.voice.enabled",
+          "features.productos.enabled",
+          "features.propiedades.enabled",
+        ],
+      },
+      {
+        title: "Asistentes",
+        description: "Controla qué catálogo puede consultar el asistente automático.",
+        fieldPaths: ["features.catalog_inmobiliario.enabled", "features.catalog_no_inmobiliario.enabled"],
+      },
+    ],
     fields: [
       { label: "Webchat habilitado", path: "features.webchat.enabled", control: "checkbox" },
       { label: "WhatsApp habilitado", path: "features.whatsapp.enabled", control: "checkbox" },

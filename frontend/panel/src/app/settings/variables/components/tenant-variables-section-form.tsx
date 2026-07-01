@@ -30,6 +30,11 @@ type SecretField = {
 type SectionConfig = {
   title: string
   description?: string
+  groups?: Array<{
+    title: string
+    description?: string
+    fieldPaths: string[]
+  }>
   fields: FieldSpec[]
   secrets?: SecretField[]
   notes?: string[]
@@ -101,6 +106,73 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [secretValues, setSecretValues] = useState(initialSecretValues)
+
+  const renderField = (field: FieldSpec) => {
+    if (field.control === "checkbox") {
+      return (
+        <div key={field.path} className="space-y-1 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <input
+              id={field.path}
+              type="checkbox"
+              className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              checked={Boolean(values[field.path])}
+              onChange={(event) => handleChange(field.path, event.target.checked)}
+            />
+            <Label htmlFor={field.path} className="mb-0 text-sm">
+              {field.label}
+            </Label>
+          </div>
+        </div>
+      )
+    }
+
+    const fieldValue: string = typeof values[field.path] === "string" ? (values[field.path] as string) : ""
+
+    if (field.multiline || field.type === "list") {
+      return (
+        <div key={field.path} className="space-y-1 md:col-span-2">
+          <Label htmlFor={field.path}>{field.label}</Label>
+          <Textarea
+            id={field.path}
+            value={fieldValue}
+            onChange={(event) => handleChange(field.path, event.target.value)}
+            placeholder={field.placeholder}
+            rows={field.type === "list" ? 5 : 4}
+          />
+          {field.type === "list" ? (
+            <p className="text-xs text-muted-foreground">Un valor por línea. El catálogo se mostrará como select en contactos.</p>
+          ) : null}
+        </div>
+      )
+    }
+
+    return (
+      <div key={field.path} className="space-y-1">
+        <Label htmlFor={field.path}>{field.label}</Label>
+        <Input
+          id={field.path}
+          value={fieldValue}
+          onChange={(event) => handleChange(field.path, event.target.value)}
+          placeholder={field.placeholder}
+          type={field.type === "number" ? "number" : "text"}
+        />
+      </div>
+    )
+  }
+
+  const renderFieldGroup = (group: NonNullable<SectionConfig["groups"]>[number]) => {
+    const groupFields = section.fields.filter((field) => group.fieldPaths.includes(field.path))
+    return (
+      <div key={group.title} className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{group.title}</p>
+          {group.description ? <p className="text-xs text-muted-foreground">{group.description}</p> : null}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">{groupFields.map(renderField)}</div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     setValues(initialValues)
@@ -223,62 +295,13 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            {section.fields.map((field) => {
-              if (field.control === "checkbox") {
-                return (
-                  <div key={field.path} className="space-y-1 md:col-span-2">
-                    <div className="flex items-center gap-3">
-                      <input
-                        id={field.path}
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        checked={Boolean(values[field.path])}
-                        onChange={(event) => handleChange(field.path, event.target.checked)}
-                      />
-                      <Label htmlFor={field.path} className="mb-0 text-sm">
-                        {field.label}
-                      </Label>
-                    </div>
-                  </div>
-                )
-              }
-
-              const fieldValue: string =
-                typeof values[field.path] === "string" ? (values[field.path] as string) : ""
-
-              if (field.multiline || field.type === "list") {
-                return (
-                  <div key={field.path} className="space-y-1 md:col-span-2">
-                    <Label htmlFor={field.path}>{field.label}</Label>
-                    <Textarea
-                      id={field.path}
-                      value={fieldValue}
-                      onChange={(event) => handleChange(field.path, event.target.value)}
-                      placeholder={field.placeholder}
-                      rows={field.type === "list" ? 5 : 4}
-                    />
-                    {field.type === "list" ? (
-                      <p className="text-xs text-muted-foreground">Un valor por línea. El catálogo se mostrará como select en contactos.</p>
-                    ) : null}
-                  </div>
-                )
-              }
-
-              return (
-                <div key={field.path} className="space-y-1">
-                  <Label htmlFor={field.path}>{field.label}</Label>
-                  <Input
-                    id={field.path}
-                    value={fieldValue}
-                    onChange={(event) => handleChange(field.path, event.target.value)}
-                    placeholder={field.placeholder}
-                    type={field.type === "number" ? "number" : "text"}
-                  />
-                </div>
-              )
-            })}
-          </div>
+          {section.groups?.length ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {section.groups.map(renderFieldGroup)}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">{section.fields.map(renderField)}</div>
+          )}
           {section.notes?.length ? (
             <div className="space-y-2 border-t border-border/60 pt-4">
               <div className="space-y-1 text-xs text-muted-foreground">
