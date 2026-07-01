@@ -234,9 +234,13 @@ export function TenantConfigEditor({
 export function TenantModuleFlagsForm({
   tenantId,
   config,
+  showCommercialModules = true,
+  showAssistantModules = true,
 }: {
   tenantId: string
   config: Record<string, unknown> | null
+  showCommercialModules?: boolean
+  showAssistantModules?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
@@ -268,79 +272,94 @@ export function TenantModuleFlagsForm({
     setCatalogNoInmobiliarioEnabled(readFeatureEnabled(features, "catalog_no_inmobiliario", true))
   }, [features])
 
+  const assistantControls = [
+    {
+      id: "module_catalog_inmobiliario_enabled",
+      label: "Activar inmobiliario",
+      checked: catalogInmobiliarioEnabled,
+      visible: showAssistantModules && propiedadesEnabled,
+      onChange: setCatalogInmobiliarioEnabled,
+    },
+    {
+      id: "module_catalog_no_inmobiliario_enabled",
+      label: "Activar productos y servicios",
+      checked: catalogNoInmobiliarioEnabled,
+      visible: showAssistantModules && productosEnabled,
+      onChange: setCatalogNoInmobiliarioEnabled,
+    },
+  ].filter((control) => control.visible)
+
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="tenant_id" value={tenantId} />
       <input type="hidden" name="config_json" value={configJson} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Módulos del tenant</p>
-            <p className="text-xs text-muted-foreground">
-              Controla qué áreas ve y usa el usuario en el panel.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <div className="flex items-center gap-3">
-                <input
-                  id="module_productos_enabled"
-                  type="checkbox"
-                  checked={productosEnabled}
-                  onChange={(event) => setProductosEnabled(event.target.checked)}
-                  className="size-4"
-                />
-                <Label htmlFor="module_productos_enabled">Productos habilitado</Label>
-              </div>
+      <div className={showCommercialModules && showAssistantModules ? "grid gap-4 lg:grid-cols-2" : "space-y-4"}>
+        {showCommercialModules ? (
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Módulos del tenant</p>
+              <p className="text-xs text-muted-foreground">Controla qué áreas ve y usa el usuario en el panel.</p>
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <div className="flex items-center gap-3">
-                <input
-                  id="module_propiedades_enabled"
-                  type="checkbox"
-                  checked={propiedadesEnabled}
-                  onChange={(event) => setPropiedadesEnabled(event.target.checked)}
-                  className="size-4"
-                />
-                <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <input
+                    id="module_productos_enabled"
+                    type="checkbox"
+                    checked={productosEnabled}
+                    onChange={(event) => setProductosEnabled(event.target.checked)}
+                    className="size-4"
+                  />
+                  <Label htmlFor="module_productos_enabled">Productos habilitado</Label>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Asistentes</p>
-            <p className="text-xs text-muted-foreground">
-              Controla qué catálogo puede consultar y mostrar el asistente automático.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <div className="flex items-center gap-3">
-                <input
-                  id="module_catalog_inmobiliario_enabled"
-                  type="checkbox"
-                  checked={catalogInmobiliarioEnabled}
-                  onChange={(event) => setCatalogInmobiliarioEnabled(event.target.checked)}
-                  className="size-4"
-                />
-                <Label htmlFor="module_catalog_inmobiliario_enabled">Activar inmobiliario</Label>
-              </div>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <div className="flex items-center gap-3">
-                <input
-                  id="module_catalog_no_inmobiliario_enabled"
-                  type="checkbox"
-                  checked={catalogNoInmobiliarioEnabled}
-                  onChange={(event) => setCatalogNoInmobiliarioEnabled(event.target.checked)}
-                  className="size-4"
-                />
-                <Label htmlFor="module_catalog_no_inmobiliario_enabled">Activar productos y servicios</Label>
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <input
+                    id="module_propiedades_enabled"
+                    type="checkbox"
+                    checked={propiedadesEnabled}
+                    onChange={(event) => setPropiedadesEnabled(event.target.checked)}
+                    className="size-4"
+                  />
+                  <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : null}
+        {showAssistantModules ? (
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Asistentes</p>
+              <p className="text-xs text-muted-foreground">
+                Controla qué catálogo puede consultar y mostrar el asistente automático.
+              </p>
+            </div>
+            {assistantControls.length ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {assistantControls.map((control) => (
+                  <div key={control.id} className="space-y-2 md:col-span-2">
+                    <div className="flex items-center gap-3">
+                      <input
+                        id={control.id}
+                        type="checkbox"
+                        checked={control.checked}
+                        onChange={(event) => control.onChange(event.target.checked)}
+                        className="size-4"
+                      />
+                      <Label htmlFor={control.id}>{control.label}</Label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No hay asistentes disponibles hasta que se active al menos un módulo comercial.
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />

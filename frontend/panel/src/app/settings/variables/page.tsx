@@ -286,17 +286,20 @@ export default async function SettingsVariablesPage() {
             </CardContent>
           </Card>
 
-          {tenantId === MASTER_TENANT_ID ? (
-            <Card>
-              <CardHeader className="space-y-1">
-                <CardTitle>Módulos</CardTitle>
-                <CardDescription>Activa o desactiva las áreas funcionales visibles para este tenant.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TenantModuleFlagsForm tenantId={tenantId} config={config} />
-              </CardContent>
-            </Card>
-          ) : null}
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle>Módulos</CardTitle>
+              <CardDescription>Activa o desactiva las áreas funcionales visibles para este tenant.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TenantModuleFlagsForm
+                tenantId={tenantId}
+                config={config}
+                showCommercialModules={tenantId === MASTER_TENANT_ID}
+                showAssistantModules
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="space-y-1">
