@@ -141,6 +141,7 @@ export type DemografiaSummaryResponse = {
       conversaciones_voz?: number;
       conversaciones_correo?: number;
       wa_atribucion_total?: number;
+      whatsapp_atribucion_total?: number;
       correo_total?: number;
       fuentes_top?: Array<{ source: string; total: number }>;
       utm_top?: Array<{
@@ -168,6 +169,7 @@ export type DemografiaSummaryResponse = {
       conversaciones_voz?: number;
       conversaciones_correo?: number;
       wa_atribucion_total?: number;
+      whatsapp_atribucion_total?: number;
       correo_total?: number;
     };
   };

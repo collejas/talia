@@ -584,6 +584,7 @@ async def fetch_visitantes_resumen_v2(
             "utm_top": utm_top,
             "wa_atribucion_top": wa_atribucion_top,
             "wa_atribucion_total": wa_atribucion_total,
+            "whatsapp_atribucion_total": wa_atribucion_total,
             "has_data": bool(row.get("has_data")),
         }
 
@@ -620,6 +621,7 @@ async def fetch_visitantes_resumen_v2(
                     "conversaciones_voz",
                     "conversaciones_correo",
                     "wa_atribucion_total",
+                    "whatsapp_atribucion_total",
                 ):
                     existing[field] = _to_number(existing.get(field)) + _to_number(item.get(field))
                 existing["has_data"] = bool(existing.get("has_data") or item.get("has_data"))
@@ -643,6 +645,7 @@ async def fetch_visitantes_resumen_v2(
         totals["conversaciones_voz"] += conversaciones_voz
         totals["conversaciones_correo"] += conversaciones_correo
         totals["wa_atribucion_total"] = totals.get("wa_atribucion_total", 0) + wa_atribucion_total
+        totals["whatsapp_atribucion_total"] = totals.get("whatsapp_atribucion_total", 0) + wa_atribucion_total
 
     if grouped_by_key:
         for grouped in grouped_by_key.values():
