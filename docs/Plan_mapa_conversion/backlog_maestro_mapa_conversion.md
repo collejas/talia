@@ -100,7 +100,7 @@ Tareas:
 
 - [x] Confirmar que las migraciones de personas/contactos se conservan.
 - [x] Confirmar que las migraciones de metricas WhatsApp de julio 2026 se reemplazan por una v2.
-- [ ] Crear la nueva migracion o RPC v2 con seed en `conversaciones.inbox_context`.
+- [x] Crear la nueva migracion o RPC v2 con seed en `conversaciones.inbox_context`.
 - [ ] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
 - [ ] Registrar cualquier backfill necesario para no perder historia.
 

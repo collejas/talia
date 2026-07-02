@@ -38,6 +38,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se alineo la carpeta para que `prospeccion/metricas`, `mapa-de-conversion` y `prospeccion/campanas` se documenten contra la misma verdad operativa.
 - Se documento que las migraciones de personas/contactos se conservan y que las migraciones WhatsApp de julio 2026 deben ser sustituidas por una v2.
 - Se dejo anotado que la nueva version debe leer desde `conversaciones.inbox_context` y no depender solo de `mensajes.datos`.
+- Se creó la migración v2 `20260702_090000_prospeccion_campana_whatsapp_metricas_rango_inbox_context_v2.sql` para reemplazar la lectura basada solo en mensajes.
 
 ## 2026-06-27
 
