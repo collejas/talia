@@ -261,6 +261,25 @@ Recomendacion:
 - mantener `mensajes`, `eventos_entrega`, `conversaciones` y `oportunidades` como fuentes operativas
 - construir un agregado explicito para WhatsApp de prospeccion
 
+### 8.1 Correcciones aplicadas durante el analisis
+
+Durante el analisis se corrigieron dos puntos operativos que afectaban el seguimiento del flujo:
+
+1. Webhook de estado WhatsApp
+   - El callback de Twilio hacia `/api/whatsapp/status` estaba fallando con `500` y `twilio_token_missing`.
+   - La causa era que la verificacion de firma resolvia el tenant usando el numero equivocado para callbacks de estado.
+   - Se ajusto la resolucion para que los callbacks de estado usen el numero emisor (`From`) y asi obtengan el `twilio.auth_token` correcto del tenant.
+   - Con eso el webhook vuelve a registrar estados de entrega sin romper el seguimiento operativo.
+
+2. Vista de metricas
+   - Se dejo alineado que `prospeccion/metricas` no debe depender de un solo ledger para WhatsApp.
+   - El tablero debe conservar bloques separados para:
+     - correo,
+     - WhatsApp de prospeccion,
+     - frases WhatsApp,
+     - conversiones / oportunidades.
+   - El bloque de WhatsApp debe mostrar el universo de campañas reales y no solo el ledger historico de correo.
+
 ### 8.2 Backend
 
 Ajustar el contrato para que entregue bloques separados:
@@ -272,7 +291,18 @@ Ajustar el contrato para que entregue bloques separados:
 
 La respuesta de WhatsApp debe usar una logica que no dependa de `prospeccion_contacto_envio` como unica fuente.
 
-### 8.3 Frontend
+### 8.3 Criterio operativo resultante
+
+El flujo correcto queda asi:
+
+- `prospeccion/campanas` define la plantilla y el canal.
+- `prospeccion/prospectos` dispara el envio por lote o prospecto.
+- `prospeccion_contacto_batch` y `mensajes` conservan el rastro operativo real.
+- `eventos_entrega` confirma el estado final del mensaje.
+- `prospeccion/metricas` y `mapa-de-conversion` consumen agregados separados por dominio.
+- `prospeccion/whatsapp/status` ya no debe bloquear el registro de estados por una resolucion incorrecta del tenant.
+
+### 8.4 Frontend
 
 Actualizar las tres vistas:
 
@@ -298,4 +328,3 @@ Consideramos resuelto cuando:
 - las plantillas se pueden atribuir correctamente
 - las oportunidades se contabilizan por conversacion real
 - y `mapa-de-conversion` sigue siendo mapa, no dashboard de envios
-
