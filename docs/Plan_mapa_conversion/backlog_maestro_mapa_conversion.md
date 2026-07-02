@@ -102,11 +102,17 @@ Objetivo:
 
 Tareas:
 
-- [ ] Revisar catalogo `campanas`.
-- [ ] Revisar lotes `prospeccion_contacto_batch`.
-- [ ] Revisar eventos `prospeccion_whatsapp_atribucion_eventos`.
-- [ ] Definir si hace falta un campo explicito de tipo de bloque en un agregado nuevo.
-- [ ] Validar que el catalogo soporte separar correo, WhatsApp y conversion.
+- [x] Revisar catalogo `campanas`.
+- [x] Revisar lotes `prospeccion_contacto_batch`.
+- [x] Revisar eventos `prospeccion_whatsapp_atribucion_eventos`.
+- [x] Definir si hace falta un campo explicito de tipo de bloque en un agregado nuevo.
+- [x] Validar que el catalogo soporte separar correo, WhatsApp y conversion.
+
+Hallazgo:
+
+- `campanas` ya separa por `canal` y `tipo`; en el tenant validado existen campañas `correo/prospeccion` y `whatsapp/prospeccion`.
+- `prospeccion_contacto_batch` no necesita un campo nuevo de canal por lote para este plan; el detalle multicanal vive en `canales` como arreglo y el resumen operativo ya se resuelve desde la RPC.
+- `prospeccion_contacto_templates` conserva `twilio_content_sid` como ancla principal de compatibilidad; no expone hoy `template_id`/`template_slug` como columnas explícitas.
 
 ### A.4 Archivos objetivo
 
