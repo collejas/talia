@@ -66,6 +66,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se agregó temporalmente un selector de dimensión en `mapa-de-conversion` para alternar entre `Todo`, `Tráfico web`, `WhatsApp`, `Campañas` y `Conversiones`, y luego se revirtió para volver al layout fijo del plan original.
 - Se ajustó la lectura lateral del mapa para volver a mostrar siempre los bloques fijos de lectura: tráfico, conversaciones, atribución y etapas.
 - Se expuso en el backend de `prospeccion/metricas` la referencia dominante de plantilla por campaña WhatsApp usando `twilio_content_sid` y los fallbacks disponibles en la atribución por campaña.
+- Se alineó también la exportación XLSX de `CampanasWhatsApp` para incluir `template_id`, `template_slug` y `template_nombre` junto con los metadatos operativos de la campaña.
 
 ## 2026-06-27
 
