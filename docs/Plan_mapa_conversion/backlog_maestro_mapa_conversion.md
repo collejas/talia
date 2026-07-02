@@ -28,6 +28,17 @@ Dejar alineados:
 
 sin romper compatibilidad ni duplicar semantica.
 
+## 2.1 Regla de semantica
+
+Antes de tocar datos o frontend, la carpeta debe respetar esta frontera:
+
+- `prospeccion/metricas` mide ejecucion de campañas.
+- `mapa-de-conversion` mide adquisicion, atribucion y conversion.
+- `prospeccion/campanas` define plantillas y reglas.
+- `prospeccion/prospectos` ejecuta envios y seguimiento operativo.
+
+No se debe usar una vista para sustituir la semantica de la otra.
+
 ## 3) Epic A · Base de datos
 
 ### A.1 Separar la fuente de verdad de WhatsApp
@@ -44,6 +55,8 @@ Tareas:
 - [ ] Conservar `contacto_id` solo como compatibilidad temporal.
 - [x] Decidir si el agregado vive como tabla materializada, vista o RPC.
 - [x] Registrar la decision en el changelog maestro.
+- [x] Definir que `prospectos_total` no es lo mismo que `mensajes_salientes`.
+- [x] Definir que `batches_total` no es lo mismo que `envios_totales`.
 - [ ] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
 - [ ] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
 - [ ] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
@@ -121,6 +134,7 @@ Tareas:
 - [ ] Agregar bloque de conversiones/opportunities si aplica.
 - [ ] Definir nombres de response keys definitivos.
 - [ ] Hacer que `prospeccion/metricas` use `campanas_whatsapp` solo para WhatsApp de prospeccion y no para chats iniciados por clientes.
+- [x] Documentar que `mapa-de-conversion` no debe contar envios de campañas como conversaciones.
 
 ### B.1 Archivos objetivo
 
@@ -172,6 +186,7 @@ Tareas:
 - [ ] Mantener filtros y cache keys estables.
 - [ ] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
 - [ ] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
+- [x] Confirmar que el mapa de conversion sigue siendo lectura de trafico/atribucion/conversion y no de ejecucion de campañas.
 
 ### B.4 Archivos objetivo
 

@@ -154,6 +154,67 @@ Cada bloque debe responder una pregunta distinta:
 - `frases_whatsapp` = que frases o CTAs dispararon atribucion y conversion.
 - `conversiones_oportunidades` = que termino en oportunidad y con que canal o atribucion.
 
+### 5.3 Matriz de verdad por vista
+
+Esta es la frontera operativa que debe respetarse en toda la carpeta:
+
+#### `prospeccion/metricas`
+
+Vista de ejecucion y rendimiento de campañas.
+
+- `campanas_correo`
+  - envios totales
+  - enviados
+  - entregados
+  - respondidos
+  - aperturas y clicks cuando existan
+- `campanas_whatsapp`
+  - lotes/batches ejecutados
+  - mensajes salientes
+  - mensajes entrantes
+  - conversaciones respondidas / sin respuesta
+  - oportunidades generadas por esas conversaciones
+- `frases_whatsapp`
+  - atribucion por frase, regla o CTA
+  - conversion por canal publicitario
+  - oportunidades derivadas de atribucion
+
+No debe usar `mapa-de-conversion` como reemplazo de estos bloques, porque el mapa no mide ejecucion de campañas.
+
+#### `mapa-de-conversion`
+
+Vista de adquisicion, atribucion y conversion.
+
+- trafico web
+- conversaciones por canal
+- atribucion WhatsApp
+- conversion a oportunidad
+- mapa geografico de visitantes/leads
+
+No debe inferir campañas enviadas como si fueran conversaciones o conversiones.
+
+#### `prospeccion/campanas`
+
+Vista de definicion y configuracion.
+
+- plantillas
+- canales
+- reglas
+- canal operativo
+
+No debe convertirse en tablero de resultados.
+
+#### `prospeccion/prospectos`
+
+Vista de ejecucion del envio y seguimiento puntual.
+
+- lotes
+- envios individuales
+- estados operativos
+- errores y reintentos
+
+No debe convertirse en la fuente principal del resumen global de metricas.
+
 ## 6) Fuentes de datos por bloque
 
 ### 6.1 Correo
@@ -238,6 +299,20 @@ Mientras el refactor de personas siga vivo:
 - usar `persona_id` como llave principal,
 - conservar `contacto_id` como fallback donde existan contratos viejos,
 - no eliminar campos legacy hasta validar que no rompen joins ni filtros.
+
+### 7.5 Definicion de campos operativos
+
+Para evitar futuros cruces incorrectos, esta carpeta debe usar estas reglas:
+
+- `batches_total` = numero de lotes ejecutados.
+- `prospectos_total` = numero de destinatarios incluidos en esos lotes, no numero de mensajes.
+- `mensajes_salientes` = mensajes reales enviados por WhatsApp.
+- `mensajes_entrantes` = respuestas detectadas.
+- `conversaciones_total` = conversaciones atribuidas al flujo de prospeccion.
+- `oportunidades_total` = oportunidades ligadas a esas conversaciones.
+- `envios_totales` en correo = numero de envios reales de correo, no conversaciones ni prospectos.
+
+Estas definiciones son obligatorias para `prospeccion/metricas`, `mapa-de-conversion` y cualquier exportacion derivada.
 
 ## 8) Propuesta para `mapa-de-conversion`
 

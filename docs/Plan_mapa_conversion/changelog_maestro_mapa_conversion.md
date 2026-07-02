@@ -45,6 +45,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se ajustó la vista `prospeccion/metricas` para que los 5 KPIs superiores queden en una sola fila en desktop.
 - Se restauró el gráfico `Resumen por canal de campañas` para que vuelva a incluir WhatsApp en la vista global `todos`.
 - Se alineó el gráfico global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el resumen principal de campañas.
+- Se formalizo la frontera operativa entre vistas:
+  - `prospeccion/metricas` mide ejecucion de campañas.
+  - `mapa-de-conversion` mide adquisicion, atribucion y conversion.
+  - `prospeccion/campanas` define plantillas y reglas.
+  - `prospeccion/prospectos` ejecuta envios y seguimiento.
+- Se documentó que `prospectos_total` es destinatarios incluidos en lotes, no mensajes enviados.
+- Se documentó que `batches_total` es numero de lotes ejecutados y no equivale a envios totales.
 
 ## 2026-06-27
 
