@@ -42,6 +42,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigio el callback de estado de Twilio para WhatsApp: ahora el tenant se resuelve usando el numero emisor en callbacks de estado y no el numero destinatario, evitando el error `twilio_token_missing`.
 - Se validó que el registro de estado de WhatsApp ya persiste eventos `enviado`, `fallido`, `entregado` o `leido` sin romper el webhook de `/api/whatsapp/status`.
 - Se dejo documentado que la vista `prospeccion/metricas` debe mostrar bloques separados para correo, WhatsApp de prospeccion, frases WhatsApp y conversion/opportunities, en lugar de mezclar o vaciar el bloque de WhatsApp.
+- Se ajustó la vista `prospeccion/metricas` para que los 5 KPIs superiores queden en una sola fila en desktop.
+- Se restauró el gráfico `Resumen por canal de campañas` para que vuelva a incluir WhatsApp en la vista global `todos`.
+- Se alineó el gráfico global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el resumen principal de campañas.
 
 ## 2026-06-27
 

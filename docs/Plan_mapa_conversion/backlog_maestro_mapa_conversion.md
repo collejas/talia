@@ -195,6 +195,12 @@ Tareas:
 - [ ] Mostrar estados vacios y de carga por bloque.
 - [ ] Ajustar copy para que correo y WhatsApp no se confundan.
 
+Avance aplicado:
+
+- [x] Se ajustó el bloque superior de KPIs para que los 5 indicadores queden en una sola fila en desktop.
+- [x] Se restauró el gráfico global de `Resumen por canal de campañas` para incluir WhatsApp en la vista `todos`.
+- [x] Se alineó el bloque global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el ledger principal de campañas.
+
 ### C.1 Archivos objetivo
 
 - [ ] `frontend/panel/src/app/prospeccion/metricas/page.client.tsx`
@@ -259,6 +265,11 @@ Orden de trabajo sugerido:
 - [ ] Ajustada la vista de `prospeccion/metricas`.
 - [ ] Ajustada la vista de `mapa-de-conversion`.
 - [ ] Ejecutada validacion final de compatibilidad.
+
+Avance de frontend aplicado:
+
+- [x] KPIs superiores en una sola fila.
+- [x] Gráfico global de campañas con WhatsApp visible.
 
 ## 8) Definition of done
 
