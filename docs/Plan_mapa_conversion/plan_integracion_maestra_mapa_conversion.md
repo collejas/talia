@@ -21,6 +21,22 @@ La meta es que el refactor del ecosistema de mapa de conversion avance de forma 
 - compatibilidad con personas/contactos,
 - ni cambios de frontend antes de cerrar el contrato de datos.
 
+### Ruta corta recomendada
+
+Si vamos a ejecutar el plan sin dispersarnos, el orden debe ser este:
+
+1. Cerrar el contrato v2 de `mapa-de-conversion`.
+2. Crear la base de datos del mapa v2.
+3. Publicar el backend v2 del mapa.
+4. Ajustar la UI del mapa.
+5. Validar con datos reales y dejar compatibilidad temporal.
+
+Regla práctica:
+
+- `prospeccion/metricas` y `prospeccion/prospectos` solo apoyan la validación.
+- `mapa-de-conversion` es la entrega principal.
+- `persona/contacto` no se toca salvo que bloquee el contrato del mapa.
+
 ## 2) Principio rector
 
 No hay una sola vista ni una sola fuente de verdad para todo.
