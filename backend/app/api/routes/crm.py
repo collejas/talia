@@ -17605,7 +17605,7 @@ async def pipeline_revert_opportunity_stage(
 async def list_catalog_items(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("settings.view")),
+    _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     include_inactive: bool = Query(default=False),
     tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
@@ -23029,7 +23029,7 @@ async def update_email_template(
 async def get_quote_template(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
-    _: str = Depends(require_permission("settings.view")),
+    _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
 ) -> CRMQuoteTemplate:
     try:

@@ -20,6 +20,10 @@ const PATHS = {
   permisos: "/settings/usuarios/permisos",
 } as const
 
+const SALES_QUOTE_POSITION_NAME = "ejecutivo de ventas"
+const SALES_QUOTE_ROLE_NAME = "agente"
+const QUOTE_PERMISSION_CODE = "propuesta.view"
+
 export type CrudActionHandler = (
   prevState: CrudActionState,
   formData: FormData,
@@ -130,6 +134,11 @@ export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
         forceServiceToken: true,
       })
     }
+    await ensureSalesQuoteRoleAssignment({
+      orgId,
+      userId: usuarioId,
+      puestoId: puestoId === "" ? null : puestoId,
+    })
     revalidatePath(PATHS.empleados)
     return success("Empleado registrado.")
   } catch (error) {
@@ -139,11 +148,11 @@ export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
 
 export const updateEmployeeAction: CrudActionHandler = async (_, formData) => {
   try {
+    const orgId = await requireOrgId()
     const usuarioId = getText(formData, "usuario_id")
     const departamentoId = getOptionalText(formData, "departamento_id")
     const puestoId = getOptionalText(formData, "puesto_id")
     const supervisorId = getOptionalText(formData, "supervisor_id")
-    const orgId = supervisorId !== null ? await requireOrgId() : null
     const body: Record<string, unknown> = {
       es_gestor: parseBoolean(formData.get("es_gestor")),
       es_vendedor: parseBoolean(formData.get("es_vendedor")),
@@ -189,6 +198,11 @@ export const updateEmployeeAction: CrudActionHandler = async (_, formData) => {
         })
       }
     }
+    await ensureSalesQuoteRoleAssignment({
+      orgId,
+      userId: usuarioId,
+      puestoId: puestoId === "" ? null : puestoId,
+    })
     revalidatePath(PATHS.empleados)
     return success("Empleado actualizado.")
   } catch (error) {
@@ -391,6 +405,10 @@ function parseUserTimezone(raw: string | null): string | null {
   return trimmed
 }
 
+function normalizeLookupText(raw: string | null | undefined): string {
+  return typeof raw === "string" ? raw.trim().toLowerCase() : ""
+}
+
 async function syncUserEmployeeAssignment(params: {
   orgId: string
   userId: string
@@ -447,6 +465,137 @@ async function syncUserEmployeeAssignment(params: {
     prefer: "return=representation",
     forceServiceToken: true,
   })
+
+  await ensureSalesQuoteRoleAssignment({
+    orgId,
+    userId,
+    puestoId,
+  })
+}
+
+async function ensureSalesQuoteRoleAssignment(params: {
+  orgId: string
+  userId: string
+  puestoId: string | null
+}): Promise<void> {
+  const { orgId, userId, puestoId } = params
+  if (!puestoId) return
+
+  const puestoRes = await callSupabaseRest<{ nombre: string | null }[]>("/rest/v1/puestos", {
+    searchParams: {
+      select: "nombre",
+      id: `eq.${puestoId}`,
+      limit: "1",
+    },
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+  if (!puestoRes.ok) {
+    throw new Error(puestoRes.error || "No se pudo validar el puesto del usuario.")
+  }
+
+  const puestoNombre = normalizeLookupText(puestoRes.data?.[0]?.nombre)
+  if (puestoNombre !== SALES_QUOTE_POSITION_NAME) {
+    return
+  }
+
+  const [currentRolesRes, rolesRes, rolesPermisosRes, permisosRes] = await Promise.all([
+    callSupabaseRest<{ rol_id: string }[]>("/rest/v1/usuarios_roles", {
+      searchParams: {
+        select: "rol_id",
+        usuario_id: `eq.${userId}`,
+        limit: "50",
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<{ id: string; nombre: string | null; codigo: string | null }[]>("/rest/v1/roles", {
+      searchParams: {
+        select: "id,nombre,codigo",
+        limit: "1000",
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<{ rol_id: string; permiso_id: string }[]>("/rest/v1/roles_permisos", {
+      searchParams: {
+        select: "rol_id,permiso_id",
+        limit: "1000",
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<{ id: string; codigo: string | null }[]>("/rest/v1/permisos", {
+      searchParams: {
+        select: "id,codigo",
+        limit: "1000",
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+  ])
+
+  if (!currentRolesRes.ok) {
+    throw new Error(currentRolesRes.error || "No se pudieron leer los roles del usuario.")
+  }
+  if (!rolesRes.ok) {
+    throw new Error(rolesRes.error || "No se pudo recuperar el catálogo de roles.")
+  }
+  if (!rolesPermisosRes.ok) {
+    throw new Error(rolesPermisosRes.error || "No se pudo recuperar la matriz de permisos.")
+  }
+  if (!permisosRes.ok) {
+    throw new Error(permisosRes.error || "No se pudo recuperar el catálogo de permisos.")
+  }
+
+  const currentRoleIds = new Set(
+    (Array.isArray(currentRolesRes.data) ? currentRolesRes.data : [])
+      .map((row) => row?.rol_id)
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  )
+  if (currentRoleIds.size === 0) {
+    // No tiene roles: le damos el rol comercial base para que pueda crear cotizaciones.
+  } else {
+    const proposalPermissionIds = new Set(
+      (Array.isArray(permisosRes.data) ? permisosRes.data : [])
+        .filter((permiso) => normalizeLookupText(permiso?.codigo) === QUOTE_PERMISSION_CODE)
+        .map((permiso) => permiso.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    )
+    const hasQuotePermission = (Array.isArray(rolesPermisosRes.data) ? rolesPermisosRes.data : []).some(
+      (entry) =>
+        currentRoleIds.has(entry.rol_id) &&
+        proposalPermissionIds.has(entry.permiso_id),
+    )
+    if (hasQuotePermission) {
+      return
+    }
+  }
+
+  const agentRole = (Array.isArray(rolesRes.data) ? rolesRes.data : []).find((role) => {
+    const nombre = normalizeLookupText(role?.nombre)
+    const codigo = normalizeLookupText(role?.codigo)
+    return nombre === SALES_QUOTE_ROLE_NAME || codigo === SALES_QUOTE_ROLE_NAME || codigo === "0004"
+  })
+
+  if (!agentRole?.id) {
+    console.warn("[settings/hr] No se encontró el rol base de ventas para autoasignación.")
+    return
+  }
+
+  const assignRes = await callSupabaseRest("/rest/v1/usuarios_roles", {
+    method: "POST",
+    body: {
+      usuario_id: userId,
+      rol_id: agentRole.id,
+      organizacion_id: orgId,
+    },
+    prefer: "resolution=merge-duplicates,return=representation",
+    forceServiceToken: true,
+  })
+  if (!assignRes.ok) {
+    throw new Error(assignRes.error || "No se pudo asignar el rol comercial al usuario.")
+  }
 }
 
 export const createUserAction: CrudActionHandler = async (_, formData) => {

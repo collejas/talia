@@ -64,6 +64,8 @@ export default function SettingsRhPage() {
           <h1 className="text-2xl font-semibold">Recursos Humanos</h1>
           <p className="text-sm text-muted-foreground">
             Centraliza la configuración de tu equipo, roles y estructura organizacional.
+            Las cotizaciones se habilitan por rol: para ventas usamos <span className="font-medium text-foreground">Agente</span>,
+            que incluye <span className="font-medium text-foreground">propuesta.view</span>.
           </p>
         </header>
         <div className="space-y-6">

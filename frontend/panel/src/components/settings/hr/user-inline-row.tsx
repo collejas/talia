@@ -121,6 +121,12 @@ export function UserCreateSection({
             </select>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          El acceso a cotizaciones depende del rol, no solo del puesto. Si eliges
+          <span className="font-medium text-foreground"> Ejecutivo de Ventas</span>, el sistema intenta
+          asignar el rol <span className="font-medium text-foreground">Agente</span> para habilitar
+          <span className="font-medium text-foreground"> propuesta.view</span>.
+        </p>
         <InlineStateMessage state={state} />
         <div className="flex justify-end">
           <InlineSubmitButton label="Crear usuario" pendingLabel="Guardando..." />
@@ -355,6 +361,11 @@ export function UserInlineRow({ user, rolesCatalog, departments, positions }: Us
                 <input type="hidden" name="usuario_id" value={user.id} />
                 <div className="space-y-1">
                   <Label>Roles asignados</Label>
+                  <p className="text-xs text-muted-foreground">
+                    La creación de cotizaciones se controla por rol. El rol
+                    <span className="font-medium text-foreground">Agente</span> incluye
+                    <span className="font-medium text-foreground"> propuesta.view</span>.
+                  </p>
                   <div className="flex flex-wrap gap-3 rounded-md border border-border/60 bg-background px-3 py-3">
                     {rolesCatalog.length === 0 ? (
                       <span className="text-sm text-muted-foreground">No hay roles disponibles.</span>
