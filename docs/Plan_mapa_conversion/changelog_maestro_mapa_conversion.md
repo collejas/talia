@@ -73,6 +73,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se validó que `campanas` ya separa `correo/prospeccion` y `whatsapp/prospeccion`, y que `prospeccion_contacto_batch.canales` conserva el detalle multicanal sin requerir una columna nueva para este plan.
 - Se cerró la subfase `A.4` sin crear una migracion nueva: los archivos objetivo vigentes ya son la RPC v2, el ajuste de desglose de entrega, el backend y los consumidores frontend/documentales del contrato.
 - Se cerró `A.5` confirmando que no habrá rollback del refactor de personas/contactos y que no hace falta un backfill nuevo para esta fase porque la compatibilidad temporal y el snapshot existente ya sostienen la historia.
+- Se cerró `B.1` dejando la respuesta de `prospeccion/metricas` separada en `campanas`, `campanas_whatsapp` y `frases_whatsapp`; las oportunidades quedan dentro del bloque de atribución de frases y no como ledger independiente.
 
 ## 2026-06-27
 

@@ -158,21 +158,32 @@ Objetivo:
 
 Tareas:
 
-- [ ] Refactorizar `prospeccion/metricas` para entregar bloques separados.
-- [ ] Mantener bloque de correo.
-- [ ] Agregar bloque de WhatsApp.
-- [ ] Mantener bloque de frases WhatsApp.
-- [ ] Agregar bloque de conversiones/opportunities si aplica.
-- [ ] Definir nombres de response keys definitivos.
-- [ ] Hacer que `prospeccion/metricas` use `campanas_whatsapp` solo para WhatsApp de prospeccion y no para chats iniciados por clientes.
+- [x] Refactorizar `prospeccion/metricas` para entregar bloques separados.
+- [x] Mantener bloque de correo.
+- [x] Agregar bloque de WhatsApp.
+- [x] Mantener bloque de frases WhatsApp.
+- [x] Agregar bloque de conversiones/opportunities si aplica.
+- [x] Definir nombres de response keys definitivos.
+- [x] Hacer que `prospeccion/metricas` use `campanas_whatsapp` solo para WhatsApp de prospeccion y no para chats iniciados por clientes.
 - [x] Documentar que `mapa-de-conversion` no debe contar envios de campañas como conversaciones.
+
+Hallazgo:
+
+- La respuesta ya quedó separada en `campanas`, `campanas_whatsapp` y `frases_whatsapp`.
+- Las oportunidades no necesitan un bloque independiente en esta fase porque son la parte final del agregado de frases/atribucion, no otro ledger de ejecucion.
+- Los nombres canónicos del contrato ya están consumidos por el panel y por la exportación.
 
 ### B.1 Archivos objetivo
 
-- [ ] `backend/app/api/routes/crm.py`
+- [x] `backend/app/api/routes/crm.py`
 - [ ] `backend/app/repositories/crm.py`
 - [ ] `backend/app/services/*` si se extrae logica
 - [ ] `backend/tests/api/test_crm_routes.py`
+
+Nota:
+
+- No se necesitó cambiar `backend/app/repositories/crm.py` en esta subfase porque el repositorio ya exponía las lecturas requeridas para el agregado.
+- Si más adelante se extrae lógica repetida, el siguiente lugar natural será `backend/app/services/*`.
 
 ### B.2 Ajustar agregacion de WhatsApp
 
