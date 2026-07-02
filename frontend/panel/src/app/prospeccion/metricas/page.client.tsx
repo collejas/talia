@@ -549,7 +549,8 @@ export default function ProspeccionMetricasPageClient() {
       whatsapp: "WhatsApp",
       llamada: "Voz",
     }
-    return channels.map((ch) => {
+    const rows = channels
+      .map((ch) => {
       const rows = items.filter((item) => normalize(item.canal) === ch)
       const envios_totales = rows.reduce((sum, r) => sum + (r.envios_totales || 0), 0)
       const envios_entregados = rows.reduce((sum, r) => sum + (r.envios_entregados || 0), 0)
@@ -588,41 +589,35 @@ export default function ProspeccionMetricasPageClient() {
         open_rate,
         click_rate,
       }
-    })
-  }, [data?.campanas.items])
+      })
+      .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
 
-  const combinedChannelSummary = useMemo(() => {
-    if (canal !== "todos") return []
-    const correoItems = data?.campanas.items ?? []
-    const correo = correoItems.reduce(
-      (acc, item) => {
-        const channel = (item.canal || "").trim().toLowerCase()
-        if (channel === "correo") {
-          acc.total_envios += item.envios_totales || 0
-          acc.respuestas += item.envios_respondidos || 0
-          acc.oportunidades += 0
-        }
-        return acc
-      },
-      { total_envios: 0, respuestas: 0, oportunidades: 0 },
-    )
-    return [
-      {
-        canal: "correo",
-        canal_label: "Correo",
-        total_envios: correo.total_envios,
-        respuestas: correo.respuestas,
-        oportunidades: correo.oportunidades,
-      },
-      {
+    const hasWhatsappRow = rows.some((row) => row.canal === "whatsapp")
+    if (!hasWhatsappRow && summaryWhatsappCampaigns) {
+      const whatsappTotal = summaryWhatsappCampaigns.mensajes_salientes ?? 0
+      rows.push({
         canal: "whatsapp",
         canal_label: "WhatsApp",
-        total_envios: summaryWhatsappCampaigns?.mensajes_salientes ?? 0,
-        respuestas: summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0,
-        oportunidades: summaryWhatsappCampaigns?.oportunidades_total ?? 0,
-      },
-    ]
-  }, [canal, data?.campanas.items, summaryWhatsappCampaigns])
+        envios_totales: whatsappTotal,
+        envios_totales_stack: whatsappTotal,
+        envios_enviados: whatsappTotal,
+        envios_entregados: whatsappTotal,
+        envios_respondidos: summaryWhatsappCampaigns.conversaciones_respondidas ?? 0,
+        envios_fallidos: summaryWhatsappCampaigns.batches_error ?? 0,
+        envios_omitidos: 0,
+        envios_sin_respuesta: Math.max(
+          0,
+          whatsappTotal - (summaryWhatsappCampaigns.conversaciones_respondidas ?? 0),
+        ),
+        envios_otros_estados: 0,
+        entrega_pct: 100,
+        respuesta_pct: whatsappTotal > 0 ? Math.round(((summaryWhatsappCampaigns.conversaciones_respondidas ?? 0) / whatsappTotal) * 100) : 0,
+        open_rate: 0,
+        click_rate: 0,
+      })
+    }
+    return rows
+  }, [data?.campanas.items, summaryWhatsappCampaigns])
 
   const whatsappChannelSummary = useMemo(() => {
     if (canal !== "whatsapp") return []
@@ -1119,56 +1114,7 @@ export default function ProspeccionMetricasPageClient() {
           <CardContent className="space-y-3 text-sm">
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {canal === "todos" ? (
-                  <BarChart data={combinedChannelSummary} barGap={28} barCategoryGap="30%">
-                    <XAxis dataKey="canal_label" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip
-                      shared={false}
-                      cursor={false}
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload || payload.length === 0) return null
-                        const row = payload[0]?.payload as (typeof combinedChannelSummary)[number]
-                        if (!row) return null
-                        return (
-                          <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                            <div className="mb-1 font-semibold">{label}</div>
-                            <div className="space-y-1">
-                              <div className="flex justify-between gap-3">
-                                <span>Envíos / mensajes</span>
-                                <span>{number.format(row.total_envios)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span>Respuestas</span>
-                                <span>{number.format(row.respuestas)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span>Oportunidades</span>
-                                <span>{number.format(row.oportunidades)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend
-                      content={() => (
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
-                            Total
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                            Respuestas
-                          </span>
-                        </div>
-                      )}
-                    />
-                    <Bar dataKey="total_envios" fill="#0f172a" name="Envíos / mensajes" />
-                    <Bar dataKey="respuestas" fill="#22c55e" name="Respuestas" />
-                  </BarChart>
-                ) : canal === "whatsapp" ? (
+                {canal === "whatsapp" ? (
                   <BarChart data={whatsappChannelSummary} barGap={12} barCategoryGap="20%">
                     <XAxis dataKey="canal_label" tickLine={false} axisLine={false} />
                     <YAxis allowDecimals={false} />
@@ -1301,7 +1247,7 @@ export default function ProspeccionMetricasPageClient() {
                                 <span>{number.format(total)} (100.00%)</span>
                               </div>
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#f59e0b")}Enviados</span>
+                                <span className="flex items-center">{swatch("#fbbf24")}Enviados</span>
                                 <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
                               </div>
                               <div className="flex justify-between gap-3">
@@ -1416,10 +1362,7 @@ export default function ProspeccionMetricasPageClient() {
               {canal === "whatsapp" ? (
                 "La lectura operativa de WhatsApp se desglosa en los lotes, mensajes y oportunidades del bloque superior."
               ) : (
-                <>
-                  WhatsApp operativo se desglosa en la pestaña{" "}
-                  <span className="font-medium text-foreground">WhatsApp campañas</span>.
-                </>
+                null
               )}
             </div>
           </CardContent>
