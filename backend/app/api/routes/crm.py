@@ -38388,6 +38388,29 @@ def _dashboard_overview_empty_marketing() -> dict[str, Any]:
             "campanas": [],
             "frases_whatsapp": [],
         },
+        "campanas_whatsapp": {
+            "summary": {
+                "batches_total": 0,
+                "batches_completados": 0,
+                "batches_en_proceso": 0,
+                "batches_error": 0,
+                "prospectos_total": 0,
+                "mensajes_salientes": 0,
+                "mensajes_entrantes": 0,
+                "conversaciones_total": 0,
+                "conversaciones_respondidas": 0,
+                "conversaciones_sin_respuesta": 0,
+                "oportunidades_total": 0,
+                "oportunidades_abiertas": 0,
+                "oportunidades_ganadas": 0,
+                "oportunidades_perdidas": 0,
+                "monto_estimado_total": 0,
+                "tasa_respuesta_pct": 0,
+                "tasa_oportunidad_pct": 0,
+                "tasa_cierre_pct": 0,
+            },
+            "items": [],
+        },
         "items": [],
         "byRule": [],
     }
@@ -38947,11 +38970,22 @@ async def dashboard_overview(
             return {
                 "summary": {
                     "campanas": _ensure_dict(_ensure_dict(payload.get("campanas"), default={}).get("summary"), default={}),
+                    "campanas_whatsapp": _ensure_dict(
+                        _ensure_dict(payload.get("campanas_whatsapp"), default={}).get("summary"),
+                        default={},
+                    ),
                     "frases_whatsapp": _ensure_dict(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("summary"), default={}),
                 },
                 "timeseries": {
                     "campanas": _ensure_list(_ensure_dict(payload.get("campanas"), default={}).get("timeseries"), default=[]),
                     "frases_whatsapp": _ensure_list(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("timeseries"), default=[]),
+                },
+                "campanas_whatsapp": {
+                    "summary": _ensure_dict(
+                        _ensure_dict(payload.get("campanas_whatsapp"), default={}).get("summary"),
+                        default={},
+                    ),
+                    "items": _ensure_list(_ensure_dict(payload.get("campanas_whatsapp"), default={}).get("items"), default=[]),
                 },
                 "items": _ensure_list(_ensure_dict(payload.get("campanas"), default={}).get("items"), default=[]),
                 "byRule": _ensure_list(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("by_rule"), default=[]),

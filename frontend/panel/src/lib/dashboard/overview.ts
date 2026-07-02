@@ -5,6 +5,7 @@ import type { AgendaMetrics } from "@/lib/agenda/data";
 import type { DashboardKpis } from "@/lib/dashboard/kpis";
 import type {
   ProspeccionCampanaItem,
+  ProspeccionCampanaWhatsAppItem,
   ProspeccionFraseByRule,
   ProspeccionMetricasSummary,
   ProspeccionTimeseries,
@@ -36,6 +37,10 @@ export type DashboardOverview = {
     summary: ProspeccionMetricasSummary;
     timeseries: ProspeccionTimeseries;
     items: ProspeccionCampanaItem[];
+    campanas_whatsapp: {
+      summary: ProspeccionMetricasSummary["campanas_whatsapp"];
+      items: ProspeccionCampanaWhatsAppItem[];
+    };
     byRule: ProspeccionFraseByRule[];
   };
   opportunity: OpportunityKpis;
@@ -57,7 +62,7 @@ export async function fetchDashboardOverview(
       rango: filters.rango || undefined,
       desde: filters.desde || undefined,
       hasta: filters.hasta || undefined,
-      include_marketing: 'false',
+      include_marketing: 'true',
     },
   });
 
