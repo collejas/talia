@@ -31459,6 +31459,7 @@ async def prospeccion_metricas_dashboard(
                     campana_name_map[campana_id] = campana_name
 
     campaign_items: list[dict[str, Any]] = []
+    template_reference_by_campaign: dict[str, dict[str, Any]] = {}
     for row in campaign_rows:
         campana_id_raw = row.get("campana_id")
         campana_id_value = str(campana_id_raw) if campana_id_raw else None
@@ -31492,6 +31493,18 @@ async def prospeccion_metricas_dashboard(
         if params.canal != "todos" and _clean_text(item.get("canal")) != params.canal:
             continue
         campaign_items.append(item)
+        if campana_id_value:
+            template_candidate = {
+                "template_id": _clean_text(row.get("template_id")) or None,
+                "template_slug": _clean_text(row.get("template_slug")) or None,
+                "template_nombre": _clean_text(row.get("template_nombre")) or None,
+                "twilio_content_sid": _clean_text(row.get("twilio_content_sid")) or None,
+                "_rank": int(row.get("envios_totales") or 0),
+            }
+            if any(template_candidate[key] for key in ("template_id", "template_slug", "template_nombre", "twilio_content_sid")):
+                current_template = template_reference_by_campaign.get(campana_id_value)
+                if current_template is None or template_candidate["_rank"] > int(current_template.get("_rank") or 0):
+                    template_reference_by_campaign[campana_id_value] = template_candidate
 
     whatsapp_campaign_rows: list[dict[str, Any]] = []
     whatsapp_campaign_items: list[dict[str, Any]] = []
@@ -31548,10 +31561,15 @@ async def prospeccion_metricas_dashboard(
         for row in whatsapp_campaign_rows:
             campana_id_raw = row.get("campana_id")
             campana_id_value = str(campana_id_raw) if campana_id_raw else None
+            template_reference = template_reference_by_campaign.get(campana_id_value or "") or {}
             item = {
                 "campana_id": campana_id_value,
                 "campana_nombre": _clean_text(row.get("campana_nombre")),
                 "canal": row.get("canal"),
+                "template_id": template_reference.get("template_id"),
+                "template_slug": template_reference.get("template_slug"),
+                "template_nombre": template_reference.get("template_nombre"),
+                "twilio_content_sid": template_reference.get("twilio_content_sid"),
                 "batches_total": int(row.get("batches_total") or 0),
                 "batches_completados": int(row.get("batches_completados") or 0),
                 "batches_en_proceso": int(row.get("batches_en_proceso") or 0),

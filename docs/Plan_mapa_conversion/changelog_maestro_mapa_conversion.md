@@ -63,8 +63,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se normalizó el contrato frontend del mapa para que `whatsapp_atribucion_total` sea el nombre canónico y `whatsapp_atribucion.top` quede tipado en el adaptador de datos.
 - Se cerró el contrato backend del mapa v2 para exponer también `whatsapp_atribucion_top` como forma canónica de la atribución WhatsApp en `mapa-v2`.
 - Se extrajo el ensamblado del agregado v2 del mapa a `build_map_v2_dataset` para reutilizar la misma estructura en la respuesta principal y en exportaciones.
-- Se agregó un selector de dimensión en `mapa-de-conversion` para alternar entre `Todo`, `Tráfico web`, `WhatsApp`, `Campañas` y `Conversiones`.
-- Se ajustó la lectura lateral del mapa para ocultar o enfatizar bloques según la dimensión seleccionada.
+- Se agregó temporalmente un selector de dimensión en `mapa-de-conversion` para alternar entre `Todo`, `Tráfico web`, `WhatsApp`, `Campañas` y `Conversiones`, y luego se revirtió para volver al layout fijo del plan original.
+- Se ajustó la lectura lateral del mapa para volver a mostrar siempre los bloques fijos de lectura: tráfico, conversaciones, atribución y etapas.
+- Se expuso en el backend de `prospeccion/metricas` la referencia dominante de plantilla por campaña WhatsApp usando `twilio_content_sid` y los fallbacks disponibles en la atribución por campaña.
 
 ## 2026-06-27
 
