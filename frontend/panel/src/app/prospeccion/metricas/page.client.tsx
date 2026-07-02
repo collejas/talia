@@ -321,80 +321,106 @@ export default function ProspeccionMetricasPageClient() {
 
   const topCards = useMemo(() => {
     const cards: Array<{ title: string; value: string; hint: string }> = []
-    const entregaPct = summaryCampaign?.tasa_entrega_pct ?? 0
-    const respuestaPct = summaryCampaign?.tasa_respuesta_pct ?? 0
     const convOppPct = summaryPhrases?.tasa_conversacion_oportunidad_pct ?? 0
-    const items = data?.campanas.items ?? []
-    const byChannel = items.reduce(
-      (acc, item) => {
-        const channel = (item.canal || "").trim().toLowerCase()
-        if (channel === "whatsapp") acc.whatsapp += item.envios_totales || 0
-        else if (channel === "correo") acc.correo += item.envios_totales || 0
-        else if (channel === "llamada") acc.llamada += item.envios_totales || 0
-        return acc
-      },
-      { whatsapp: 0, correo: 0, llamada: 0 },
-    )
-    const totalHint =
-      canal === "todos"
-        ? `WA ${number.format(byChannel.whatsapp)} · Correo ${number.format(byChannel.correo)} · Voz ${number.format(byChannel.llamada)}`
-        : "Bloque campañas"
-    const deliveredByChannel = items.reduce(
-      (acc, item) => {
-        const channel = (item.canal || "").trim().toLowerCase()
-        if (channel === "whatsapp") acc.whatsapp += item.envios_entregados || 0
-        else if (channel === "correo") acc.correo += item.envios_entregados || 0
-        else if (channel === "llamada") acc.llamada += item.envios_entregados || 0
-        return acc
-      },
-      { whatsapp: 0, correo: 0, llamada: 0 },
-    )
-    const responsesByChannel = items.reduce(
-      (acc, item) => {
-        const channel = (item.canal || "").trim().toLowerCase()
-        if (channel === "whatsapp") acc.whatsapp += item.envios_respondidos || 0
-        else if (channel === "correo") acc.correo += item.envios_respondidos || 0
-        else if (channel === "llamada") acc.llamada += item.envios_respondidos || 0
-        return acc
-      },
-      { whatsapp: 0, correo: 0, llamada: 0 },
-    )
-    const deliveredHint =
-      canal === "todos"
-        ? `WA ${number.format(deliveredByChannel.whatsapp)} · Correo ${number.format(deliveredByChannel.correo)} · Voz ${number.format(deliveredByChannel.llamada)}`
-        : `${entregaPct}% entrega`
-    const responsesHint =
-      canal === "todos"
-        ? `WA ${number.format(responsesByChannel.whatsapp)} · Correo ${number.format(responsesByChannel.correo)} · Voz ${number.format(responsesByChannel.llamada)}`
-        : `${respuestaPct}% respuesta`
+    const isWhatsappFilter = canal === "whatsapp"
+    if (isWhatsappFilter) {
+      cards.push(
+        {
+          title: "Lotes ejecutados",
+          value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0),
+          hint: "Batches vinculados a mensajes de campaña",
+        },
+        {
+          title: "Mensajes salientes",
+          value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0),
+          hint: "Envios reales del canal WhatsApp",
+        },
+        {
+          title: "Conversaciones respondidas",
+          value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0),
+          hint: "Conversaciones con al menos una respuesta",
+        },
+        {
+          title: "Oportunidades",
+          value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0),
+          hint: "Oportunidades ligadas a conversaciones",
+        },
+      )
+    } else {
+      const items = data?.campanas.items ?? []
+      const byChannel = items.reduce(
+        (acc, item) => {
+          const channel = (item.canal || "").trim().toLowerCase()
+          if (channel === "whatsapp") acc.whatsapp += item.envios_totales || 0
+          else if (channel === "correo") acc.correo += item.envios_totales || 0
+          else if (channel === "llamada") acc.llamada += item.envios_totales || 0
+          return acc
+        },
+        { whatsapp: 0, correo: 0, llamada: 0 },
+      )
+      const totalHint =
+        canal === "todos"
+          ? `WA ${number.format(byChannel.whatsapp)} · Correo ${number.format(byChannel.correo)} · Voz ${number.format(byChannel.llamada)}`
+          : "Bloque campañas"
+      const deliveredByChannel = items.reduce(
+        (acc, item) => {
+          const channel = (item.canal || "").trim().toLowerCase()
+          if (channel === "whatsapp") acc.whatsapp += item.envios_entregados || 0
+          else if (channel === "correo") acc.correo += item.envios_entregados || 0
+          else if (channel === "llamada") acc.llamada += item.envios_entregados || 0
+          return acc
+        },
+        { whatsapp: 0, correo: 0, llamada: 0 },
+      )
+      const responsesByChannel = items.reduce(
+        (acc, item) => {
+          const channel = (item.canal || "").trim().toLowerCase()
+          if (channel === "whatsapp") acc.whatsapp += item.envios_respondidos || 0
+          else if (channel === "correo") acc.correo += item.envios_respondidos || 0
+          else if (channel === "llamada") acc.llamada += item.envios_respondidos || 0
+          return acc
+        },
+        { whatsapp: 0, correo: 0, llamada: 0 },
+      )
+      const entregaPct = summaryCampaign?.tasa_entrega_pct ?? 0
+      const respuestaPct = summaryCampaign?.tasa_respuesta_pct ?? 0
+      const deliveredHint =
+        canal === "todos"
+          ? `WA ${number.format(deliveredByChannel.whatsapp)} · Correo ${number.format(deliveredByChannel.correo)} · Voz ${number.format(deliveredByChannel.llamada)}`
+          : `${entregaPct}% entrega`
+      const responsesHint =
+        canal === "todos"
+          ? `WA ${number.format(responsesByChannel.whatsapp)} · Correo ${number.format(responsesByChannel.correo)} · Voz ${number.format(responsesByChannel.llamada)}`
+          : `${respuestaPct}% respuesta`
 
-    cards.push({
-      title: "Envíos totales",
-      value: number.format(summaryCampaign?.envios_totales ?? 0),
-      hint: totalHint,
-    })
-    cards.push({
-      title: "Entregados",
-      value: number.format(summaryCampaign?.envios_entregados ?? 0),
-      hint: deliveredHint,
-    })
-    cards.push({
-      title: "Respuestas de campaña",
-      value: number.format(summaryCampaign?.envios_respondidos ?? 0),
-      hint: responsesHint,
-    })
-    cards.push({
-      title: "Conversaciones atribuidas",
-      value: number.format(summaryPhrases?.conversaciones_atribuidas ?? 0),
-      hint: "Bloque frases WhatsApp",
-    })
-    cards.push({
-      title: "Oportunidades atribuidas",
-      value: number.format(summaryPhrases?.oportunidades_creadas ?? 0),
-      hint: `${convOppPct}% conv→opp`,
-    })
+      cards.push({
+        title: "Envíos totales",
+        value: number.format(summaryCampaign?.envios_totales ?? 0),
+        hint: totalHint,
+      })
+      cards.push({
+        title: "Entregados",
+        value: number.format(summaryCampaign?.envios_entregados ?? 0),
+        hint: deliveredHint,
+      })
+      cards.push({
+        title: "Respuestas de campaña",
+        value: number.format(summaryCampaign?.envios_respondidos ?? 0),
+        hint: responsesHint,
+      })
+      cards.push({
+        title: "Conversaciones atribuidas",
+        value: number.format(summaryPhrases?.conversaciones_atribuidas ?? 0),
+        hint: "Bloque frases WhatsApp",
+      })
+      cards.push({
+        title: "Oportunidades atribuidas",
+        value: number.format(summaryPhrases?.oportunidades_creadas ?? 0),
+        hint: `${convOppPct}% conv→opp`,
+      })
+    }
     return cards
-  }, [summaryCampaign, summaryPhrases, data?.campanas.items, canal])
+  }, [summaryCampaign, summaryWhatsappCampaigns, summaryPhrases, data?.campanas.items, canal])
 
   const topCampaigns = useMemo(() => {
     const items = data?.campanas.items ?? []
@@ -535,6 +561,27 @@ export default function ProspeccionMetricasPageClient() {
       }
     })
   }, [data?.campanas.items])
+
+  const whatsappChannelSummary = useMemo(() => {
+    if (canal !== "whatsapp") return []
+    const summary = summaryWhatsappCampaigns
+    if (!summary) return []
+    return [
+      {
+        canal: "whatsapp",
+        canal_label: "WhatsApp",
+        lotes_total: summary.batches_total ?? 0,
+        lotes_completados: summary.batches_completados ?? 0,
+        lotes_error: summary.batches_error ?? 0,
+        prospectos_total: summary.prospectos_total ?? 0,
+        mensajes_salientes: summary.mensajes_salientes ?? 0,
+        mensajes_entrantes: summary.mensajes_entrantes ?? 0,
+        conversaciones_total: summary.conversaciones_total ?? 0,
+        conversaciones_respondidas: summary.conversaciones_respondidas ?? 0,
+        oportunidades_total: summary.oportunidades_total ?? 0,
+      },
+    ]
+  }, [canal, summaryWhatsappCampaigns])
 
 
   const topWhatsappRules = useMemo(() => {
@@ -1003,148 +1050,266 @@ export default function ProspeccionMetricasPageClient() {
 
         <Card className="xl:col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Resumen por canal de campañas</CardTitle>
+            <CardTitle className="text-sm">
+              {canal === "whatsapp" ? "Resumen operativo de WhatsApp" : "Resumen por canal de campañas"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
-                  <XAxis
-                    dataKey="canal_label"
-                    tickLine={false}
-                    tick={({ x, y, payload }) => {
-                      const row = channelSummary.find((item) => item.canal_label === payload.value)
-                      const style = getChannelTotalStyle(row?.canal)
-                      const ChannelIcon = getChannelIcon(row?.canal)
-                      return (
-                        <g transform={`translate(${x},${y})`}>
-                          <foreignObject x={-54} y={8} width={120} height={24}>
-                            <div className="flex items-center gap-1 text-[11px] text-foreground">
-                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: style.fill }} />
-                              <ChannelIcon size={12} />
-                              <span>{payload.value}</span>
-                            </div>
-                          </foreignObject>
-                        </g>
-                      )
-                    }}
-                  />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    shared={false}
-                    cursor={false}
-                    content={({ active, payload, label }) => {
-                      if (!active || !payload || payload.length === 0) return null
-                      const row = payload[0]?.payload as typeof channelSummary[number]
-                      if (!row) return null
-                      const total = row.envios_totales_stack || 0
-                      const entregados = row.envios_entregados || 0
-                      const pctTotal = (count: number) => (total > 0 ? ((count / total) * 100).toFixed(2) : "0.00")
-                      const pctEnt = (count: number) => (entregados > 0 ? ((count / entregados) * 100).toFixed(2) : "0.00")
-                      const swatch = (color: string) => (
-                        <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
-                      )
-                      return (
-                        <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                          <div className="mb-1 font-semibold">{label}</div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">
-                                {swatch(getChannelTotalStyle(row.canal).fill)}
-                                Envíos totales
-                              </span>
-                              <span>{number.format(total)} (100.00%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#f59e0b")}Enviados</span>
-                              <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center pl-3">{swatch("#60a5fa")}Sin respuesta</span>
-                              <span>{number.format(row.envios_sin_respuesta || 0)} ({pctEnt(row.envios_sin_respuesta || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center pl-3">{swatch("#22c55e")}Respondidos</span>
-                              <span>{number.format(row.envios_respondidos || 0)} ({pctEnt(row.envios_respondidos || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#ef4444")}Fallidos</span>
-                              <span>{number.format(row.envios_fallidos || 0)} ({pctTotal(row.envios_fallidos || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#9ca3af")}Omitidos</span>
-                              <span>{number.format(row.envios_omitidos || 0)} ({pctTotal(row.envios_omitidos || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#a78bfa")}Otros estados</span>
-                              <span>{number.format(row.envios_otros_estados || 0)} ({pctTotal(row.envios_otros_estados || 0)}%)</span>
+                {canal === "whatsapp" ? (
+                  <BarChart data={whatsappChannelSummary} barGap={12} barCategoryGap="20%">
+                    <XAxis dataKey="canal_label" tickLine={false} axisLine={false} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip
+                      shared={false}
+                      cursor={false}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || payload.length === 0) return null
+                        const row = payload[0]?.payload as (typeof whatsappChannelSummary)[number]
+                        if (!row) return null
+                        const swatch = (color: string) => (
+                          <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
+                        )
+                        return (
+                          <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
+                            <div className="mb-1 font-semibold">{label}</div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#0f172a")}Lotes ejecutados</span>
+                                <span>{number.format(row.lotes_total)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#2563eb")}Mensajes salientes</span>
+                                <span>{number.format(row.mensajes_salientes)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#22c55e")}Conversaciones respondidas</span>
+                                <span>{number.format(row.conversaciones_respondidas)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#f59e0b")}Oportunidades</span>
+                                <span>{number.format(row.oportunidades_total)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#ef4444")}Batches error</span>
+                                <span>{number.format(row.lotes_error)}</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#6b7280")}Prospectos</span>
+                                <span>{number.format(row.prospectos_total)}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-                    }}
-                  />
-                  <Legend
-                    content={() => (
-                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        {legendItems.map((item) => (
-                          <span
-                            key={item.label}
-                            className="inline-flex items-center gap-2"
-                            style={{ order: item.order }}
-                          >
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: item.color }} />
-                            {item.label}
+                        )
+                      }}
+                    />
+                    <Legend
+                      content={() => (
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
+                            Lotes
                           </span>
-                        ))}
-                      </div>
-                    )}
-                  />
-                  <Bar
-                    dataKey="envios_totales_stack"
-                    fill="#0f172a"
-                    fillOpacity={0.18}
-                    stroke="#0f172a"
-                    strokeWidth={4}
-                    barSize={30}
-                    name="Envíos totales"
-                    legendType="none"
-                  >
-                    {channelSummary.map((row, idx) => {
-                      const style = getChannelTotalStyle(row.canal)
-                      return (
-                        <Cell
-                          key={`totales-${row.canal}-${idx}`}
-                          fill={style.fill}
-                          stroke={style.stroke}
-                          fillOpacity={0.18}
-                        />
-                      )
-                    })}
-                  </Bar>
-                  <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
-                  <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
-                  <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
-                  <Bar dataKey="envios_otros_estados" stackId="breakdown" fill="#a78bfa" name="Otros estados" barSize={22} />
-                </BarChart>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
+                            Mensajes
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
+                            Respondidas
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
+                            Oportunidades
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#ef4444" }} />
+                            Error
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#6b7280" }} />
+                            Prospectos
+                          </span>
+                        </div>
+                      )}
+                    />
+                    <Bar dataKey="lotes_total" fill="#0f172a" name="Lotes ejecutados" />
+                    <Bar dataKey="mensajes_salientes" fill="#2563eb" name="Mensajes salientes" />
+                    <Bar dataKey="conversaciones_respondidas" fill="#22c55e" name="Conversaciones respondidas" />
+                    <Bar dataKey="oportunidades_total" fill="#f59e0b" name="Oportunidades" />
+                    <Bar dataKey="lotes_error" fill="#ef4444" name="Batches error" />
+                    <Bar dataKey="prospectos_total" fill="#6b7280" name="Prospectos" />
+                  </BarChart>
+                ) : (
+                  <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
+                    <XAxis
+                      dataKey="canal_label"
+                      tickLine={false}
+                      tick={({ x, y, payload }) => {
+                        const row = channelSummary.find((item) => item.canal_label === payload.value)
+                        const style = getChannelTotalStyle(row?.canal)
+                        const ChannelIcon = getChannelIcon(row?.canal)
+                        return (
+                          <g transform={`translate(${x},${y})`}>
+                            <foreignObject x={-54} y={8} width={120} height={24}>
+                              <div className="flex items-center gap-1 text-[11px] text-foreground">
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: style.fill }} />
+                                <ChannelIcon size={12} />
+                                <span>{payload.value}</span>
+                              </div>
+                            </foreignObject>
+                          </g>
+                        )
+                      }}
+                    />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip
+                      shared={false}
+                      cursor={false}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || payload.length === 0) return null
+                        const row = payload[0]?.payload as typeof channelSummary[number]
+                        if (!row) return null
+                        const total = row.envios_totales_stack || 0
+                        const entregados = row.envios_entregados || 0
+                        const pctTotal = (count: number) => (total > 0 ? ((count / total) * 100).toFixed(2) : "0.00")
+                        const pctEnt = (count: number) => (entregados > 0 ? ((count / entregados) * 100).toFixed(2) : "0.00")
+                        const swatch = (color: string) => (
+                          <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
+                        )
+                        return (
+                          <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
+                            <div className="mb-1 font-semibold">{label}</div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">
+                                  {swatch(getChannelTotalStyle(row.canal).fill)}
+                                  Envíos totales
+                                </span>
+                                <span>{number.format(total)} (100.00%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#f59e0b")}Enviados</span>
+                                <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center pl-3">{swatch("#60a5fa")}Sin respuesta</span>
+                                <span>{number.format(row.envios_sin_respuesta || 0)} ({pctEnt(row.envios_sin_respuesta || 0)}%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center pl-3">{swatch("#22c55e")}Respondidos</span>
+                                <span>{number.format(row.envios_respondidos || 0)} ({pctEnt(row.envios_respondidos || 0)}%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#ef4444")}Fallidos</span>
+                                <span>{number.format(row.envios_fallidos || 0)} ({pctTotal(row.envios_fallidos || 0)}%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#9ca3af")}Omitidos</span>
+                                <span>{number.format(row.envios_omitidos || 0)} ({pctTotal(row.envios_omitidos || 0)}%)</span>
+                              </div>
+                              <div className="flex justify-between gap-3">
+                                <span className="flex items-center">{swatch("#a78bfa")}Otros estados</span>
+                                <span>{number.format(row.envios_otros_estados || 0)} ({pctTotal(row.envios_otros_estados || 0)}%)</span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Legend
+                      content={() => (
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          {legendItems.map((item) => (
+                            <span
+                              key={item.label}
+                              className="inline-flex items-center gap-2"
+                              style={{ order: item.order }}
+                            >
+                              <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: item.color }} />
+                              {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    />
+                    <Bar
+                      dataKey="envios_totales_stack"
+                      fill="#0f172a"
+                      fillOpacity={0.18}
+                      stroke="#0f172a"
+                      strokeWidth={4}
+                      barSize={30}
+                      name="Envíos totales"
+                      legendType="none"
+                    >
+                      {channelSummary.map((row, idx) => {
+                        const style = getChannelTotalStyle(row.canal)
+                        return (
+                          <Cell
+                            key={`totales-${row.canal}-${idx}`}
+                            fill={style.fill}
+                            stroke={style.stroke}
+                            fillOpacity={0.18}
+                          />
+                        )
+                      })}
+                    </Bar>
+                    <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
+                    <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
+                    <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
+                    <Bar dataKey="envios_otros_estados" stackId="breakdown" fill="#a78bfa" name="Otros estados" barSize={22} />
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-4 rounded-sm border-[3px] border-slate-900 bg-slate-900/20" />
-                Envíos totales = Enviados + Fallidos + Omitidos + Otros estados
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#fbbf24" }} />
-                Enviados = 
-                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#60a5fa" }} />
-                Sin respuesta + 
-                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                Respondidos
-              </span>
+              {canal === "whatsapp" ? (
+                <>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
+                    Lotes ejecutados
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
+                    Mensajes salientes
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
+                    Conversaciones respondidas
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
+                    Oportunidades
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm border-[3px] border-slate-900 bg-slate-900/20" />
+                    Envíos totales = Enviados + Fallidos + Omitidos + Otros estados
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#fbbf24" }} />
+                    Enviados =
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#60a5fa" }} />
+                    Sin respuesta +
+                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
+                    Respondidos
+                  </span>
+                </>
+              )}
             </div>
             <div className="text-xs text-muted-foreground">
-              WhatsApp operativo se desglosa en la pestaña <span className="font-medium text-foreground">WhatsApp campañas</span>.
+              {canal === "whatsapp" ? (
+                "La lectura operativa de WhatsApp se desglosa en los lotes, mensajes y oportunidades del bloque superior."
+              ) : (
+                <>
+                  WhatsApp operativo se desglosa en la pestaña{" "}
+                  <span className="font-medium text-foreground">WhatsApp campañas</span>.
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
