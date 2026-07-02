@@ -325,22 +325,22 @@ export default function ProspeccionMetricasPageClient() {
     if (isWhatsappFilter) {
       cards.push(
         {
-          title: "Lotes ejecutados",
+          title: "Lotes WhatsApp",
           value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0),
-          hint: "Batches vinculados a mensajes de campaña",
+          hint: "Ejecuciones vinculadas a mensajes de campaña",
         },
         {
-          title: "Mensajes salientes",
+          title: "Mensajes WhatsApp",
           value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0),
-          hint: "Envios reales del canal WhatsApp",
+          hint: "Mensajes salientes reales del canal",
         },
         {
-          title: "Conversaciones respondidas",
+          title: "Conversaciones con respuesta",
           value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0),
           hint: "Conversaciones con al menos una respuesta",
         },
         {
-          title: "Oportunidades",
+          title: "Oportunidades atribuidas",
           value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0),
           hint: "Oportunidades ligadas a conversaciones",
         },
@@ -367,7 +367,7 @@ export default function ProspeccionMetricasPageClient() {
         {
           title: "Conversaciones atribuidas",
           value: number.format(summaryWhatsappCampaigns?.conversaciones_total ?? 0),
-          hint: "Bloque WhatsApp campañas",
+          hint: "Bloque WhatsApp",
         },
         {
           title: "Oportunidades atribuidas",
@@ -1133,19 +1133,19 @@ export default function ProspeccionMetricasPageClient() {
                             <div className="mb-1 font-semibold">{label}</div>
                             <div className="space-y-1">
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#0f172a")}Lotes ejecutados</span>
+                                <span className="flex items-center">{swatch("#0f172a")}Lotes WhatsApp</span>
                                 <span>{number.format(row.lotes_total)}</span>
                               </div>
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#2563eb")}Mensajes salientes</span>
+                                <span className="flex items-center">{swatch("#2563eb")}Mensajes WhatsApp</span>
                                 <span>{number.format(row.mensajes_salientes)}</span>
                               </div>
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#22c55e")}Conversaciones respondidas</span>
+                                <span className="flex items-center">{swatch("#22c55e")}Conversaciones con respuesta</span>
                                 <span>{number.format(row.conversaciones_respondidas)}</span>
                               </div>
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#f59e0b")}Oportunidades</span>
+                                <span className="flex items-center">{swatch("#f59e0b")}Oportunidades atribuidas</span>
                                 <span>{number.format(row.oportunidades_total)}</span>
                               </div>
                               <div className="flex justify-between gap-3">
@@ -1153,7 +1153,7 @@ export default function ProspeccionMetricasPageClient() {
                                 <span>{number.format(row.lotes_error)}</span>
                               </div>
                               <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#6b7280")}Prospectos</span>
+                                <span className="flex items-center">{swatch("#6b7280")}Destinatarios</span>
                                 <span>{number.format(row.prospectos_total)}</span>
                               </div>
                             </div>
@@ -1166,19 +1166,19 @@ export default function ProspeccionMetricasPageClient() {
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
-                            Lotes
+                            Lotes WhatsApp
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
-                            Mensajes
+                            Mensajes WhatsApp
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                            Respondidas
+                            Conversaciones con respuesta
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
-                            Oportunidades
+                            Oportunidades atribuidas
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#ef4444" }} />
@@ -1186,17 +1186,17 @@ export default function ProspeccionMetricasPageClient() {
                           </span>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#6b7280" }} />
-                            Prospectos
+                            Destinatarios
                           </span>
                         </div>
                       )}
                     />
-                    <Bar dataKey="lotes_total" fill="#0f172a" name="Lotes ejecutados" />
-                    <Bar dataKey="mensajes_salientes" fill="#2563eb" name="Mensajes salientes" />
-                    <Bar dataKey="conversaciones_respondidas" fill="#22c55e" name="Conversaciones respondidas" />
-                    <Bar dataKey="oportunidades_total" fill="#f59e0b" name="Oportunidades" />
+                    <Bar dataKey="lotes_total" fill="#0f172a" name="Lotes WhatsApp" />
+                    <Bar dataKey="mensajes_salientes" fill="#2563eb" name="Mensajes WhatsApp" />
+                    <Bar dataKey="conversaciones_respondidas" fill="#22c55e" name="Conversaciones con respuesta" />
+                    <Bar dataKey="oportunidades_total" fill="#f59e0b" name="Oportunidades atribuidas" />
                     <Bar dataKey="lotes_error" fill="#ef4444" name="Batches error" />
-                    <Bar dataKey="prospectos_total" fill="#6b7280" name="Prospectos" />
+                    <Bar dataKey="prospectos_total" fill="#6b7280" name="Destinatarios" />
                   </BarChart>
                 ) : (
                   <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
@@ -1326,19 +1326,19 @@ export default function ProspeccionMetricasPageClient() {
                 <>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
-                    Lotes ejecutados
+                    Lotes WhatsApp
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
-                    Mensajes salientes
+                    Mensajes WhatsApp
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                    Conversaciones respondidas
+                    Conversaciones con respuesta
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
-                    Oportunidades
+                    Oportunidades atribuidas
                   </span>
                 </>
               ) : (
@@ -1356,13 +1356,6 @@ export default function ProspeccionMetricasPageClient() {
                     Respondidos
                   </span>
                 </>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {canal === "whatsapp" ? (
-                "La lectura operativa de WhatsApp se desglosa en los lotes, mensajes y oportunidades del bloque superior."
-              ) : (
-                null
               )}
             </div>
           </CardContent>
@@ -1445,7 +1438,7 @@ export default function ProspeccionMetricasPageClient() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant={activeTab === "campanas" ? "default" : "outline"} onClick={() => setActiveTab("campanas")}>Campañas</Button>
-        <Button variant={activeTab === "campanas_whatsapp" ? "default" : "outline"} onClick={() => setActiveTab("campanas_whatsapp")}>WhatsApp campañas</Button>
+        <Button variant={activeTab === "campanas_whatsapp" ? "default" : "outline"} onClick={() => setActiveTab("campanas_whatsapp")}>Campañas WhatsApp</Button>
         <Button variant={activeTab === "frases" ? "default" : "outline"} onClick={() => setActiveTab("frases")}>Frases WhatsApp</Button>
         <Button
           variant="outline"
@@ -1454,7 +1447,7 @@ export default function ProspeccionMetricasPageClient() {
           className="ml-auto"
         >
           <IconDownload className="mr-2 h-4 w-4" />
-          Exportar CSV ({activeTab === "campanas" ? "campañas" : activeTab === "campanas_whatsapp" ? "campañas whatsapp" : "frases"})
+          Exportar CSV ({activeTab === "campanas" ? "campañas" : activeTab === "campanas_whatsapp" ? "campañas WhatsApp" : "frases"})
         </Button>
         <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
           <IconFileSpreadsheet className="mr-2 h-4 w-4" />
@@ -1675,10 +1668,10 @@ export default function ProspeccionMetricasPageClient() {
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { title: "Lotes ejecutados", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Batches vinculados a mensajes de campaña" },
-              { title: "Mensajes salientes", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Envios reales del canal WhatsApp" },
-              { title: "Conversaciones respondidas", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Conversaciones con al menos una respuesta" },
-              { title: "Oportunidades", value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0), hint: "Oportunidades ligadas a conversaciones" },
+              { title: "Lotes WhatsApp", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Ejecuciones ligadas a mensajes de campaña" },
+              { title: "Mensajes WhatsApp", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Mensajes salientes reales del canal" },
+              { title: "Conversaciones con respuesta", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Conversaciones con al menos una respuesta" },
+              { title: "Oportunidades atribuidas", value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0), hint: "Oportunidades ligadas a conversaciones" },
             ].map((card) => (
               <Card key={card.title}>
                 <CardHeader className="pb-2">
@@ -1696,7 +1689,7 @@ export default function ProspeccionMetricasPageClient() {
             {[
               { title: "Batches completados", value: summaryWhatsappCampaigns?.batches_completados ?? 0 },
               { title: "Batches error", value: summaryWhatsappCampaigns?.batches_error ?? 0 },
-              { title: "Prospectos", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
+              { title: "Destinatarios", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
               { title: "Respuestas entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
               { title: "% Respuesta", value: (summaryWhatsappCampaigns?.tasa_respuesta_pct ?? 0).toFixed(2), suffix: "%" },
               { title: "% Oportunidad", value: (summaryWhatsappCampaigns?.tasa_oportunidad_pct ?? 0).toFixed(2), suffix: "%" },
