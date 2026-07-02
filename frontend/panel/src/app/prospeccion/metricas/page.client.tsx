@@ -819,6 +819,7 @@ export default function ProspeccionMetricasPageClient() {
         item.campana_id,
         item.campana_nombre,
         item.canal,
+        item.template_nombre,
         item.batches_total,
         item.batches_completados,
         item.batches_en_proceso,
@@ -848,6 +849,7 @@ export default function ProspeccionMetricasPageClient() {
           "campana_id",
           "campana_nombre",
           "canal",
+          "template_nombre",
           "batches_total",
           "batches_completados",
           "batches_en_proceso",
@@ -1741,10 +1743,11 @@ export default function ProspeccionMetricasPageClient() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1520px] text-sm">
+                <table className="w-full min-w-[1720px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-2">Campaña</th>
+                      <th className="px-2 py-2">Plantilla</th>
                       <th className="px-2 py-2">Batches</th>
                       <th className="px-2 py-2">Salientes</th>
                       <th className="px-2 py-2">Con evento</th>
@@ -1770,6 +1773,7 @@ export default function ProspeccionMetricasPageClient() {
                     {(data?.campanas_whatsapp?.items ?? []).map((item, idx) => (
                       <tr key={`${item.campana_id ?? "wa"}-${idx}`} className="border-b">
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
+                        <td className="px-2 py-2">{item.template_nombre ?? "Sin plantilla"}</td>
                         <td className="px-2 py-2">{number.format(item.batches_total)}</td>
                         <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
                         <td className="px-2 py-2">{number.format(item.mensajes_con_evento_entrega)}</td>

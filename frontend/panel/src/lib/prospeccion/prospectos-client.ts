@@ -1632,6 +1632,10 @@ export type ProspeccionMetricasWhatsAppCampanaItem = ProspeccionMetricasWhatsApp
   campana_id?: string | null
   campana_nombre?: string | null
   canal?: string | null
+  template_id?: string | null
+  template_slug?: string | null
+  template_nombre?: string | null
+  twilio_content_sid?: string | null
 }
 
 export type ProspeccionMetricasFrasesSummary = {
