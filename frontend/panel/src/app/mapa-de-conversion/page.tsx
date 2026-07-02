@@ -645,7 +645,7 @@ export default async function Page({
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">WhatsApp por canal</span>
+                              <span className="text-xs text-muted-foreground">WhatsApp atribuido</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.whatsappCampaignsTotal)}
                               </span>
