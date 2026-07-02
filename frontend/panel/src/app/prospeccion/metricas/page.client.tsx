@@ -990,7 +990,7 @@ export default function ProspeccionMetricasPageClient() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {topCards.map((card) => (
           <Card key={card.title}>
             <CardHeader className="pb-2">
