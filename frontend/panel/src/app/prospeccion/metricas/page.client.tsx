@@ -357,7 +357,7 @@ export default function ProspeccionMetricasPageClient() {
         {
           title: "Entregados",
           value: number.format(summaryCampaign?.envios_entregados ?? 0),
-          hint: `Correo ${number.format(summaryCampaign?.envios_entregados ?? 0)} · WhatsApp operativo ${number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0)}`,
+          hint: `Correo ${number.format(summaryCampaign?.envios_entregados ?? 0)} · WhatsApp enviados ${number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0)}`,
         },
         {
           title: "Respuestas de campaña",
