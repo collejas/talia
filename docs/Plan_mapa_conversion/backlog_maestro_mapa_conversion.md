@@ -139,9 +139,14 @@ Tareas:
 - [x] Confirmar que las migraciones de personas/contactos se conservan.
 - [x] Confirmar que las migraciones de metricas WhatsApp de julio 2026 se reemplazan por una v2.
 - [x] Crear la nueva migracion o RPC v2 con seed en `conversaciones.inbox_context`.
-- [ ] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
 - [x] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
-- [ ] Registrar cualquier backfill necesario para no perder historia.
+- [x] Registrar cualquier backfill necesario para no perder historia.
+
+Decision:
+
+- No se hace rollback del refactor de personas/contactos.
+- La capa de metricas WhatsApp se sustituye por la v2 y sus ajustes posteriores.
+- No hace falta un backfill nuevo para esta fase; la historia queda cubierta por la compatibilidad temporal, el snapshot ya existente y la lectura actual de la RPC.
 
 ## 4) Epic B · Backend
 
