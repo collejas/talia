@@ -550,73 +550,86 @@ export default function ProspeccionMetricasPageClient() {
       llamada: "Voz",
     }
     const rows = channels
+      .filter((ch) => ch !== "whatsapp")
       .map((ch) => {
-      const rows = items.filter((item) => normalize(item.canal) === ch)
-      const envios_totales = rows.reduce((sum, r) => sum + (r.envios_totales || 0), 0)
-      const envios_entregados = rows.reduce((sum, r) => sum + (r.envios_entregados || 0), 0)
-      const envios_respondidos = rows.reduce((sum, r) => sum + (r.envios_respondidos || 0), 0)
-      const envios_fallidos = rows.reduce((sum, r) => sum + (r.envios_fallidos || 0), 0)
-      const envios_omitidos = rows.reduce((sum, r) => sum + (r.envios_omitidos || 0), 0)
-      const envios_sin_respuesta = Math.max(0, envios_entregados - envios_respondidos)
-      // En esta vista "Enviados" debe corresponder a entregados
-      // (Sin respuesta + Respondidos) para concordar con la tabla de detalle.
-      const envios_enviados = envios_entregados
-      const envios_otros_estados = Math.max(
-        0,
-        envios_totales - (envios_enviados + envios_fallidos + envios_omitidos),
-      )
-      const envios_totales_stack = envios_totales
-      const brevo_aperturas = rows.reduce((sum, r) => sum + (r.brevo_aperturas || 0), 0)
-      const brevo_clicks = rows.reduce((sum, r) => sum + (r.brevo_clicks || 0), 0)
-      const entrega_pct = envios_totales_stack > 0 ? Math.round((envios_entregados / envios_totales_stack) * 100) : 0
-      const respuesta_pct = envios_totales_stack > 0 ? Math.round((envios_respondidos / envios_totales_stack) * 100) : 0
-      const click_rate = envios_entregados > 0 ? Math.round((brevo_clicks / envios_entregados) * 100) : 0
-      const open_rate = envios_entregados > 0 ? Math.round((brevo_aperturas / envios_entregados) * 100) : 0
-      return {
-        canal: ch,
-        canal_label: labelMap[ch],
-        envios_totales,
-        envios_totales_stack,
-        envios_enviados,
-        envios_entregados,
-        envios_respondidos,
-        envios_fallidos,
-        envios_omitidos,
-        envios_sin_respuesta,
-        envios_otros_estados,
-        entrega_pct,
-        respuesta_pct,
-        open_rate,
-        click_rate,
-      }
+        const channelRows = items.filter((item) => normalize(item.canal) === ch)
+        const envios_totales = channelRows.reduce((sum, r) => sum + (r.envios_totales || 0), 0)
+        const envios_entregados = channelRows.reduce((sum, r) => sum + (r.envios_entregados || 0), 0)
+        const envios_respondidos = channelRows.reduce((sum, r) => sum + (r.envios_respondidos || 0), 0)
+        const envios_fallidos = channelRows.reduce((sum, r) => sum + (r.envios_fallidos || 0), 0)
+        const envios_omitidos = channelRows.reduce((sum, r) => sum + (r.envios_omitidos || 0), 0)
+        const envios_sin_respuesta = Math.max(0, envios_entregados - envios_respondidos)
+        const envios_enviados = envios_entregados
+        const envios_otros_estados = Math.max(
+          0,
+          envios_totales - (envios_enviados + envios_fallidos + envios_omitidos),
+        )
+        const envios_totales_stack = envios_totales
+        const brevo_aperturas = channelRows.reduce((sum, r) => sum + (r.brevo_aperturas || 0), 0)
+        const brevo_clicks = channelRows.reduce((sum, r) => sum + (r.brevo_clicks || 0), 0)
+        const entrega_pct = envios_totales_stack > 0 ? Math.round((envios_entregados / envios_totales_stack) * 100) : 0
+        const respuesta_pct = envios_totales_stack > 0 ? Math.round((envios_respondidos / envios_totales_stack) * 100) : 0
+        const click_rate = envios_entregados > 0 ? Math.round((brevo_clicks / envios_entregados) * 100) : 0
+        const open_rate = envios_entregados > 0 ? Math.round((brevo_aperturas / envios_entregados) * 100) : 0
+        return {
+          canal: ch,
+          canal_label: labelMap[ch],
+          envios_totales,
+          envios_totales_stack,
+          envios_enviados,
+          envios_entregados,
+          envios_respondidos,
+          envios_fallidos,
+          envios_omitidos,
+          envios_sin_respuesta,
+          envios_otros_estados,
+          entrega_pct,
+          respuesta_pct,
+          open_rate,
+          click_rate,
+        }
       })
-      .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
 
-    const hasWhatsappRow = rows.some((row) => row.canal === "whatsapp")
-    if (!hasWhatsappRow && summaryWhatsappCampaigns) {
+    if (summaryWhatsappCampaigns) {
       const whatsappTotal = summaryWhatsappCampaigns.mensajes_salientes ?? 0
-      rows.push({
+      const whatsappRespondidos = summaryWhatsappCampaigns.conversaciones_respondidas ?? 0
+      const whatsappFallidos = summaryWhatsappCampaigns.batches_error ?? 0
+      const whatsappSinRespuesta = Math.max(0, whatsappTotal - whatsappRespondidos)
+      const whatsappEntregados = summaryWhatsappCampaigns.conversaciones_total ?? whatsappTotal
+      const whatsappEnviados = whatsappTotal
+      const whatsappOtrosEstados = Math.max(
+        0,
+        whatsappTotal - (whatsappEnviados + whatsappFallidos),
+      )
+      const existingIndex = rows.findIndex((row) => row.canal === "whatsapp")
+      const whatsappRow = {
         canal: "whatsapp",
         canal_label: "WhatsApp",
         envios_totales: whatsappTotal,
         envios_totales_stack: whatsappTotal,
-        envios_enviados: whatsappTotal,
-        envios_entregados: whatsappTotal,
-        envios_respondidos: summaryWhatsappCampaigns.conversaciones_respondidas ?? 0,
-        envios_fallidos: summaryWhatsappCampaigns.batches_error ?? 0,
+        envios_enviados: whatsappEnviados,
+        envios_entregados: whatsappEntregados,
+        envios_respondidos: whatsappRespondidos,
+        envios_fallidos: whatsappFallidos,
         envios_omitidos: 0,
-        envios_sin_respuesta: Math.max(
-          0,
-          whatsappTotal - (summaryWhatsappCampaigns.conversaciones_respondidas ?? 0),
-        ),
-        envios_otros_estados: 0,
-        entrega_pct: 100,
-        respuesta_pct: whatsappTotal > 0 ? Math.round(((summaryWhatsappCampaigns.conversaciones_respondidas ?? 0) / whatsappTotal) * 100) : 0,
+        envios_sin_respuesta: whatsappSinRespuesta,
+        envios_otros_estados: whatsappOtrosEstados,
+        entrega_pct: whatsappTotal > 0 ? Math.round((whatsappEntregados / whatsappTotal) * 100) : 0,
+        respuesta_pct: whatsappTotal > 0 ? Math.round((whatsappRespondidos / whatsappTotal) * 100) : 0,
         open_rate: 0,
         click_rate: 0,
-      })
+      }
+      if (existingIndex >= 0) {
+        rows[existingIndex] = whatsappRow
+      } else {
+        rows.push(whatsappRow)
+      }
     }
+
+    const channelOrder: Record<string, number> = { correo: 0, whatsapp: 1, llamada: 2 }
     return rows
+      .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
+      .sort((a, b) => (channelOrder[a.canal] ?? 99) - (channelOrder[b.canal] ?? 99))
   }, [data?.campanas.items, summaryWhatsappCampaigns])
 
   const whatsappChannelSummary = useMemo(() => {
