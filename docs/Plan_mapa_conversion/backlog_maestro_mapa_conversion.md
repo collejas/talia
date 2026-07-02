@@ -191,6 +191,7 @@ Tareas:
 - [ ] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
 - [ ] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
 - [x] Confirmar que el mapa de conversion sigue siendo lectura de trafico/atribucion/conversion y no de ejecucion de campañas.
+- [x] Normalizar el contrato frontend para usar `whatsapp_atribucion_total` como nombre canónico y exponer `whatsapp_atribucion.top`.
 - [ ] Definir el contrato final de `mapa-de-conversion v2` como entrega principal del plan.
 - [ ] Implementar el agregado v2 de mapa con sus bloques y exportación.
 - [ ] Implementar la UI final del mapa con los nuevos filtros y dimensiones.

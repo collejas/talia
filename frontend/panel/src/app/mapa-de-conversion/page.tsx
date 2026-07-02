@@ -392,9 +392,7 @@ export default async function Page({
   const conversacionesCorreo =
     demografiaResponse?.summary.visitantes.totals.conversaciones_correo ?? 0;
   const whatsappCampaignsTotal =
-    demografiaResponse?.summary.visitantes.totals.whatsapp_atribucion_total ??
-    demografiaResponse?.summary.visitantes.totals.wa_atribucion_total ??
-    0;
+    demografiaResponse?.summary.visitantes.totals.whatsapp_atribucion_total ?? 0;
   const topLocation = demografiaResponse ? selectTopLocation(demografiaResponse.map.dataset) : null;
   const topLocationName = topLocation?.name ?? "Sin datos";
   const topLocationLeads = topLocation?.leads_total ?? 0;

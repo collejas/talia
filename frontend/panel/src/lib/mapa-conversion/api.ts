@@ -15,6 +15,12 @@ export type DemografiaLeadsRow = {
   webchat_bucket: string | null;
 };
 
+export type DemografiaWhatsappAtribucionRow = {
+  canal_publicitario: string;
+  campana_publicitaria: string;
+  total: number;
+};
+
 type DemografiaLeadsTotals = {
   total: number;
   abiertas: number;
@@ -75,6 +81,9 @@ export type DemografiaMapDataset = {
       utm_campaign: string;
       total: number;
     }>;
+  };
+  whatsapp_atribucion?: {
+    top: DemografiaWhatsappAtribucionRow[];
   };
   conversation_channels?: {
     sesiones_webchat_total: number;
@@ -349,6 +358,65 @@ function mergeMapWithSummaryVisitors(
   };
 }
 
+function normalizeDemografiaSummaryResponse(
+  summary: DemografiaSummaryResponse,
+): DemografiaSummaryResponse {
+  const visitantes = summary.visitantes ?? {
+    items: [],
+    totals: {
+      total: 0,
+      con_chat: 0,
+      sin_chat: 0,
+      webchat_con_chat: 0,
+      webchat_sin_chat: 0,
+    },
+  };
+
+  const normalizedItems = Array.isArray(visitantes.items)
+    ? visitantes.items.map((item) => ({
+        ...item,
+        wa_atribucion_total: item.wa_atribucion_total ?? item.whatsapp_atribucion_total ?? 0,
+        whatsapp_atribucion_total: item.whatsapp_atribucion_total ?? item.wa_atribucion_total ?? 0,
+        wa_atribucion_top: Array.isArray(item.wa_atribucion_top) ? item.wa_atribucion_top : [],
+      }))
+    : [];
+
+  const normalizedTotals = visitantes.totals ?? {
+    total: 0,
+    con_chat: 0,
+    sin_chat: 0,
+    webchat_con_chat: 0,
+    webchat_sin_chat: 0,
+  };
+
+  return {
+    ...summary,
+    visitantes: {
+      ...visitantes,
+      items: normalizedItems,
+      totals: {
+        ...normalizedTotals,
+        wa_atribucion_total:
+          normalizedTotals.wa_atribucion_total ?? normalizedTotals.whatsapp_atribucion_total ?? 0,
+        whatsapp_atribucion_total:
+          normalizedTotals.whatsapp_atribucion_total ?? normalizedTotals.wa_atribucion_total ?? 0,
+      },
+    },
+  };
+}
+
+function normalizeDemografiaMapResponse(map: DemografiaMapResponse): DemografiaMapResponse {
+  return {
+    ...map,
+    dataset: (Array.isArray(map.dataset) ? map.dataset : []).map((entry) => ({
+      ...entry,
+      whatsapp_atribucion: {
+        top: Array.isArray(entry.whatsapp_atribucion?.top) ? entry.whatsapp_atribucion.top : [],
+      },
+    })),
+  };
+}
+
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
   options: {
@@ -445,5 +513,10 @@ export async function loadDemografiaData(
     callDemografiaEndpoint<DemografiaSummaryResponse>("resumen-v2", resumenParams),
     callDemografiaEndpoint<DemografiaMapResponse>("mapa-v2", mapaParams),
   ]);
-  return { summary, map: mergeMapWithSummaryVisitors(map, summary) };
+  const normalizedSummary = normalizeDemografiaSummaryResponse(summary);
+  const normalizedMap = normalizeDemografiaMapResponse(map);
+  return {
+    summary: normalizedSummary,
+    map: mergeMapWithSummaryVisitors(normalizedMap, normalizedSummary),
+  };
 }
