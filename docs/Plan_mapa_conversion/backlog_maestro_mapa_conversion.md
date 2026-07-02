@@ -57,7 +57,7 @@ Tareas:
 - [x] Registrar la decision en el changelog maestro.
 - [x] Definir que `prospectos_total` no es lo mismo que `mensajes_salientes`.
 - [x] Definir que `batches_total` no es lo mismo que `envios_totales`.
-- [ ] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
+- [x] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
 - [ ] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
 - [ ] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
 
@@ -67,6 +67,7 @@ Decisión tomada:
 - La salida queda separada por campaña y expone mensajes, conversaciones, oportunidades y lotes.
 - La fuente de verdad operacional para salientes quedó como modelo híbrido: `mensajes` + delta persistido en `prospeccion_contacto_envio`, con `prospeccion_contacto_batch` y `campanas` como anclas de campaña.
 - Las respuestas entrantes se atribuyen por conversación, para no perder replies que no traen `batch_id` o `campana_id`.
+- La documentación se alineó para que `mensajes_salientes` en WhatsApp no signifique únicamente el ledger histórico cerrado, sino el histórico más el delta operativo pendiente de reflejo.
 
 ### A.2 Normalizar contrato de conversion
 
