@@ -69,6 +69,7 @@ Decisión tomada:
 - La fuente de verdad operacional para salientes quedó como modelo híbrido: `mensajes` + delta persistido en `prospeccion_contacto_envio`, con `prospeccion_contacto_batch` y `campanas` como anclas de campaña.
 - Las respuestas entrantes se atribuyen por conversación, para no perder replies que no traen `batch_id` o `campana_id`.
 - La documentación se alineó para que `mensajes_salientes` en WhatsApp no signifique únicamente el ledger histórico cerrado, sino el histórico más el delta operativo pendiente de reflejo.
+- El backfill de snapshots de plantilla ya existe en `prospeccion_contacto_envio.payload.metadata`, pero el contrato final todavía debe decidir si ese fallback se expone en el agregado de WhatsApp o solo se conserva para compatibilidad.
 
 ### A.2 Normalizar contrato de conversion
 

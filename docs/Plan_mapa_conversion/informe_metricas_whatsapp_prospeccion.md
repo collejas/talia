@@ -177,6 +177,13 @@ Fallbacks:
 - `template_label`
 - `conversaciones.inbox_context`
 
+Estado real verificado en el tenant analizado:
+
+- `61` mensajes ya traen `twilio_content_sid` en `mensajes.datos`.
+- `10` mensajes traen `template_id`.
+- `71` mensajes traen `campana_id`.
+- Existe un backfill histórico de snapshots de plantilla en `prospeccion_contacto_envio.payload.metadata`, pero eso solo ayuda a compatibilidad y no sustituye la lectura canónica desde `mensajes` y `conversaciones`.
+
 ## 6) Que deben mostrar las vistas
 
 ### 6.1 `prospeccion/metricas`
