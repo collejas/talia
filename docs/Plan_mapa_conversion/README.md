@@ -8,10 +8,11 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
 2. `plan_latencia_mapa_conversion.md`
 3. `plan_mapa_conversion_multicanal.md`
 4. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
-5. `plan_integracion_maestra_mapa_conversion.md`
-6. `backlog_maestro_mapa_conversion.md`
-7. `changelog_maestro_mapa_conversion.md`
-8. `avance_mapa_conversion_20260303.md`
+5. `informe_metricas_whatsapp_prospeccion.md`
+6. `plan_integracion_maestra_mapa_conversion.md`
+7. `backlog_maestro_mapa_conversion.md`
+8. `changelog_maestro_mapa_conversion.md`
+9. `avance_mapa_conversion_20260303.md`
 
 ## Qué cubre cada archivo
 
@@ -34,6 +35,11 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
   - diagnóstico de la separación entre correo, WhatsApp y conversión
   - propuesta de contrato y fuentes por bloque
   - estrategia para no romper el mapa ni el refactor de personas/contactos
+
+- `informe_metricas_whatsapp_prospeccion.md`
+  - hallazgo real en BD sobre campañas WhatsApp de prospección
+  - embudo correcto por lotes, mensajes, conversaciones, entregas y oportunidades
+  - causas del desalineamiento actual y plan de corrección
 
 - `plan_integracion_maestra_mapa_conversion.md`
   - ruta maestra de ejecución del refactor

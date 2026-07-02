@@ -30,6 +30,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La atribución de respuestas entrantes se corrigió por conversación, para no perder replies sin `batch_id`.
 - En el tenant validado la RPC devuelve 24 lotes, 61 prospectos, 194 mensajes salientes, 10 entrantes, 61 conversaciones, 10 respondidas y 60 oportunidades.
 
+## 2026-07-02
+
+- Se documento el hallazgo tecnico completo de WhatsApp de prospeccion en `informe_metricas_whatsapp_prospeccion.md`.
+- Se dejo explicito que `source = 'prospeccion'` no basta para separar WhatsApp de correo.
+- Se formalizo que la llave de entrega correcta es `eventos_entrega.mensaje_id = mensajes.id`.
+- Se alineo la carpeta para que `prospeccion/metricas`, `mapa-de-conversion` y `prospeccion/campanas` se documenten contra la misma verdad operativa.
+
 ## 2026-06-27
 
 - Se corrigió la sección `WhatsApp por canal`, que estaba vacía porque no se persistían eventos de atribución.

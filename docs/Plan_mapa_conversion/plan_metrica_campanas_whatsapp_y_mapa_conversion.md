@@ -28,6 +28,10 @@ Y se registra en el changelog unico:
 
 - `changelog_maestro_mapa_conversion.md`
 
+El detalle forense del caso real de WhatsApp de prospeccion se documenta en:
+
+- `informe_metricas_whatsapp_prospeccion.md`
+
 ## 2) Diagnostico
 
 ### 2.1 Lo que se encontro en datos

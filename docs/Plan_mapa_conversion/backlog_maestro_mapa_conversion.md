@@ -44,6 +44,9 @@ Tareas:
 - [ ] Conservar `contacto_id` solo como compatibilidad temporal.
 - [x] Decidir si el agregado vive como tabla materializada, vista o RPC.
 - [x] Registrar la decision en el changelog maestro.
+- [ ] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
+- [ ] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
+- [ ] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
 
 Decisión tomada:
 
@@ -102,6 +105,7 @@ Tareas:
 - [ ] Mantener bloque de frases WhatsApp.
 - [ ] Agregar bloque de conversiones/opportunities si aplica.
 - [ ] Definir nombres de response keys definitivos.
+- [ ] Hacer que `prospeccion/metricas` use `campanas_whatsapp` solo para WhatsApp de prospeccion y no para chats iniciados por clientes.
 
 ### B.1 Archivos objetivo
 
@@ -151,6 +155,8 @@ Tareas:
 - [ ] Conservar `whatsapp_atribucion`.
 - [ ] Revisar si hace falta exponer una pequeña capa de resumen adicional para campañas ejecutadas.
 - [ ] Mantener filtros y cache keys estables.
+- [ ] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
+- [ ] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
 
 ### B.4 Archivos objetivo
 

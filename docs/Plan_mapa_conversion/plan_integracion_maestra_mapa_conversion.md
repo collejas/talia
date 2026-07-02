@@ -103,6 +103,16 @@ Define:
 - como separar metricas de correo, WhatsApp y conversion,
 - y como no romper `mapa-de-conversion` ni el refactor de personas/contactos.
 
+### 3.7 `informe_metricas_whatsapp_prospeccion.md`
+
+Es el informe tecnico del hallazgo en BD.
+
+Define:
+
+- el universo real de campañas WhatsApp de prospeccion,
+- el embudo correcto por mensajes, conversaciones y oportunidades,
+- y la causa del desalineamiento entre vistas y datos reales.
+
 ## 4) Ruta maestra de refactor
 
 ### Fase 1. Cerrar contrato semantico
@@ -129,6 +139,10 @@ Entregables:
 - WhatsApp obtiene su agregado propio,
 - conversion usa conversaciones y oportunidades,
 - `persona_id` se vuelve llave principal cuando aplique.
+
+Referencia operativa:
+
+- el detalle del hallazgo y las cifras reales estan en `informe_metricas_whatsapp_prospeccion.md`.
 
 ### Fase 3. Ajustar backend
 
