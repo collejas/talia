@@ -21,9 +21,9 @@ No se debe empezar frontend antes de cerrar el contrato de datos.
 
 Dejar alineados:
 
-- `prospeccion/metricas`
 - `mapa-de-conversion`
 - el refactor de `persona/contacto`
+- `prospeccion/metricas` como vista de soporte de campañas
 - y las metricas reales de campañas WhatsApp y correo
 
 sin romper compatibilidad ni duplicar semantica.
@@ -178,7 +178,7 @@ Tareas:
 
 Objetivo:
 
-- mantener el mapa como lectura multicanal, no como reporte de envios.
+- terminar el contrato y la UI principal de `mapa-de-conversion` como objetivo central del plan.
 
 Tareas:
 
@@ -190,6 +190,9 @@ Tareas:
 - [ ] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
 - [ ] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
 - [x] Confirmar que el mapa de conversion sigue siendo lectura de trafico/atribucion/conversion y no de ejecucion de campañas.
+- [ ] Definir el contrato final de `mapa-de-conversion v2` como entrega principal del plan.
+- [ ] Implementar el agregado v2 de mapa con sus bloques y exportación.
+- [ ] Implementar la UI final del mapa con los nuevos filtros y dimensiones.
 
 ### B.4 Archivos objetivo
 

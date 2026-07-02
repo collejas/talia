@@ -119,7 +119,7 @@ Define:
 
 Objetivo:
 
-- dejar formalmente separados los bloques de datos.
+- dejar formalmente separados los bloques de datos, con el mapa como entrega principal.
 
 Entregables:
 
@@ -161,7 +161,7 @@ Entregables:
 
 Objetivo:
 
-- mostrar la separacion de manera evidente.
+- mostrar la separacion de manera evidente, cerrando primero `mapa-de-conversion` y dejando `prospeccion/metricas` como soporte.
 
 Entregables:
 
@@ -220,7 +220,7 @@ La regla es:
 
 Cuando este refactor termine, deberiamos tener:
 
-- `prospeccion/metricas` con correo y WhatsApp separados,
-- `mapa-de-conversion` con trafico, conversaciones y atribucion claros,
+- `mapa-de-conversion` como vista principal cerrada,
+- `prospeccion/metricas` con correo y WhatsApp separados como soporte de lectura,
 - compatibilidad estable con `persona_id` y `contacto_id`,
 - y una lectura de negocio que ya no mezcle cosas distintas bajo un solo KPI.
