@@ -39973,49 +39973,10 @@ async def demografia_mapa_v2(
             status_code=502, detail=str(exc) or "Error consultando demografía mapa v2"
         ) from exc
 
-    visitantes_map: dict[str, dict[str, Any]] = {}
-    visitantes_items = visitantes_payload.get("items")
-    if isinstance(visitantes_items, list):
-        for raw in visitantes_items:
-            if not isinstance(raw, dict):
-                continue
-            key = str(raw.get("key") or "UNK")
-            visitantes_map[key] = raw
-
-    for row in dataset:
-        if not isinstance(row, dict):
-            continue
-        key = str(row.get("key") or "UNK")
-        visitor_row = visitantes_map.get(key, {})
-        fuentes_top = visitor_row.get("fuentes_top")
-        if not isinstance(fuentes_top, list):
-            fuentes_top = []
-        utm_top = visitor_row.get("utm_top")
-        if not isinstance(utm_top, list):
-            utm_top = []
-        row["traffic_web"] = {
-            "sesiones_web_total": int(visitor_row.get("sesiones_web_total") or 0),
-            "fuentes_top": fuentes_top,
-            "utm_top": utm_top,
-        }
-        row["whatsapp_atribucion"] = {
-            "top": visitor_row.get("wa_atribucion_top")
-            if isinstance(visitor_row.get("wa_atribucion_top"), list)
-            else [],
-        }
-        row["whatsapp_atribucion_top"] = (
-            visitor_row.get("wa_atribucion_top")
-            if isinstance(visitor_row.get("wa_atribucion_top"), list)
-            else []
-        )
-        row["conversation_channels"] = {
-            "sesiones_webchat_total": int(visitor_row.get("sesiones_webchat_total") or 0),
-            "sesiones_con_chat_webchat": int(visitor_row.get("sesiones_con_chat_webchat") or 0),
-            "sesiones_sin_chat_webchat": int(visitor_row.get("sesiones_sin_chat_webchat") or 0),
-            "conversaciones_whatsapp": int(visitor_row.get("conversaciones_whatsapp") or 0),
-            "conversaciones_voz": int(visitor_row.get("conversaciones_voz") or 0),
-            "conversaciones_correo": int(visitor_row.get("conversaciones_correo") or 0),
-        }
+    dataset = demografia_service.build_map_v2_dataset(
+        dataset=dataset,
+        visitantes_payload=visitantes_payload if isinstance(visitantes_payload, dict) else {},
+    )
 
     geojson_started = time.perf_counter()
     try:

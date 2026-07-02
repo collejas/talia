@@ -62,6 +62,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se reforzaron las etiquetas y textos de lectura en `mapa-de-conversion` para dejar explicito que WhatsApp ahi representa atribucion y conversacion, no ejecucion de campañas.
 - Se normalizó el contrato frontend del mapa para que `whatsapp_atribucion_total` sea el nombre canónico y `whatsapp_atribucion.top` quede tipado en el adaptador de datos.
 - Se cerró el contrato backend del mapa v2 para exponer también `whatsapp_atribucion_top` como forma canónica de la atribución WhatsApp en `mapa-v2`.
+- Se extrajo el ensamblado del agregado v2 del mapa a `build_map_v2_dataset` para reutilizar la misma estructura en la respuesta principal y en exportaciones.
 
 ## 2026-06-27
 

@@ -1026,3 +1026,59 @@ def build_map_dataset(
 
     result.sort(key=lambda item: item["total_visitas"], reverse=True)
     return result
+
+
+def build_map_v2_dataset(
+    *,
+    dataset: list[dict[str, Any]],
+    visitantes_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    visitantes_map: dict[str, dict[str, Any]] = {}
+    visitantes_items = visitantes_payload.get("items")
+    if isinstance(visitantes_items, list):
+        for raw in visitantes_items:
+            if not isinstance(raw, dict):
+                continue
+            key = str(raw.get("key") or "UNK")
+            visitantes_map[key] = raw
+
+    enriched_dataset: list[dict[str, Any]] = []
+    for row in dataset:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("key") or "UNK")
+        visitor_row = visitantes_map.get(key, {})
+        fuentes_top = visitor_row.get("fuentes_top")
+        if not isinstance(fuentes_top, list):
+            fuentes_top = []
+        utm_top = visitor_row.get("utm_top")
+        if not isinstance(utm_top, list):
+            utm_top = []
+        wa_atribucion_top = visitor_row.get("wa_atribucion_top")
+        if not isinstance(wa_atribucion_top, list):
+            wa_atribucion_top = []
+
+        enriched_dataset.append(
+            {
+                **row,
+                "traffic_web": {
+                    "sesiones_web_total": int(visitor_row.get("sesiones_web_total") or 0),
+                    "fuentes_top": fuentes_top,
+                    "utm_top": utm_top,
+                },
+                "whatsapp_atribucion": {
+                    "top": wa_atribucion_top,
+                },
+                "whatsapp_atribucion_top": wa_atribucion_top,
+                "conversation_channels": {
+                    "sesiones_webchat_total": int(visitor_row.get("sesiones_webchat_total") or 0),
+                    "sesiones_con_chat_webchat": int(visitor_row.get("sesiones_con_chat_webchat") or 0),
+                    "sesiones_sin_chat_webchat": int(visitor_row.get("sesiones_sin_chat_webchat") or 0),
+                    "conversaciones_whatsapp": int(visitor_row.get("conversaciones_whatsapp") or 0),
+                    "conversaciones_voz": int(visitor_row.get("conversaciones_voz") or 0),
+                    "conversaciones_correo": int(visitor_row.get("conversaciones_correo") or 0),
+                },
+            }
+        )
+
+    return enriched_dataset
