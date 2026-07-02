@@ -45,6 +45,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se ajustó la vista `prospeccion/metricas` para que los 5 KPIs superiores queden en una sola fila en desktop.
 - Se restauró el gráfico `Resumen por canal de campañas` para que vuelva a incluir WhatsApp en la vista global `todos`.
 - Se alineó el gráfico global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el resumen principal de campañas.
+- Se corrigió la RPC `public.prospeccion_campana_whatsapp_metricas_rango` para contar salientes de WhatsApp como histórico en `mensajes` + delta persistido en `prospeccion_contacto_envio`, evitando subconteo de campañas ya ejecutadas.
+- Se validó en el tenant `00000000-0000-0000-0000-000000000001` que la campaña WhatsApp principal pasa de `205` a `206` mensajes salientes al considerar el envío nuevo aún no reflejado en `mensajes`.
 - Se formalizo la frontera operativa entre vistas:
   - `prospeccion/metricas` mide ejecucion de campañas.
   - `mapa-de-conversion` mide adquisicion, atribucion y conversion.

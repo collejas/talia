@@ -240,6 +240,11 @@ Fuentes esperadas:
 - `prospeccion_whatsapp_atribucion_eventos`
 - `oportunidades`
 
+Nota operativa:
+
+- el total de `mensajes_salientes` en WhatsApp se calcula como histórico en `mensajes` más el delta persistido en `prospeccion_contacto_envio` que todavía no existe en `mensajes`;
+- esto evita que un envío nuevo quede invisible hasta que se sincronice por completo al ledger histórico.
+
 ### 6.3 Conversion
 
 Debe usar los registros que ya reflejan resultado comercial.

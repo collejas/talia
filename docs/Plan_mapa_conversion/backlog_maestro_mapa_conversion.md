@@ -45,7 +45,7 @@ No se debe usar una vista para sustituir la semantica de la otra.
 
 Objetivo:
 
-- dejar de depender de `prospeccion_contacto_envio` como unico ledger de prospeccion.
+- dejar de depender de una sola tabla para reconstruir el envio historico de WhatsApp.
 
 Tareas:
 
@@ -65,7 +65,7 @@ Decisión tomada:
 
 - Se implementó una RPC explícita: `public.prospeccion_campana_whatsapp_metricas_rango`.
 - La salida queda separada por campaña y expone mensajes, conversaciones, oportunidades y lotes.
-- La fuente de verdad operacional sigue siendo `mensajes` + `prospeccion_contacto_batch` + `campanas`, no `prospeccion_contacto_envio`.
+- La fuente de verdad operacional para salientes quedó como modelo híbrido: `mensajes` + delta persistido en `prospeccion_contacto_envio`, con `prospeccion_contacto_batch` y `campanas` como anclas de campaña.
 - Las respuestas entrantes se atribuyen por conversación, para no perder replies que no traen `batch_id` o `campana_id`.
 
 ### A.2 Normalizar contrato de conversion
@@ -81,6 +81,7 @@ Tareas:
 - [ ] Evitar depender de JSON para campos estructurales nuevos.
 - [ ] Verificar indices y llaves para joins frecuentes.
 - [ ] Confirmar compatibilidad de `persona_id` en los eventos de atribucion.
+- [ ] Validar si los deltas de `prospeccion_contacto_envio` deben materializarse en una vista resumen para futuros reportes.
 
 ### A.3 Alinear catalogos de campaña
 
