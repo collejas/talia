@@ -825,6 +825,11 @@ export default function ProspeccionMetricasPageClient() {
         item.batches_error,
         item.prospectos_total,
         item.mensajes_salientes,
+        item.mensajes_con_evento_entrega,
+        item.mensajes_entregados,
+        item.mensajes_leidos,
+        item.mensajes_fallidos,
+        item.mensajes_sin_evento_entrega,
         item.mensajes_entrantes,
         item.conversaciones_total,
         item.conversaciones_respondidas,
@@ -849,6 +854,11 @@ export default function ProspeccionMetricasPageClient() {
           "batches_error",
           "prospectos_total",
           "mensajes_salientes",
+          "mensajes_con_evento_entrega",
+          "mensajes_entregados",
+          "mensajes_leidos",
+          "mensajes_fallidos",
+          "mensajes_sin_evento_entrega",
           "mensajes_entrantes",
           "conversaciones_total",
           "conversaciones_respondidas",
@@ -1679,12 +1689,13 @@ export default function ProspeccionMetricasPageClient() {
         </div>
       ) : activeTab === "campanas_whatsapp" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {[
               { title: "Lotes WhatsApp", value: number.format(summaryWhatsappCampaigns?.batches_total ?? 0), hint: "Ejecuciones ligadas a mensajes de campaña" },
               { title: "Mensajes WhatsApp", value: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0), hint: "Mensajes salientes reales del canal" },
-              { title: "Conversaciones con respuesta", value: number.format(summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0), hint: "Conversaciones con al menos una respuesta" },
-              { title: "Oportunidades atribuidas", value: number.format(summaryWhatsappCampaigns?.oportunidades_total ?? 0), hint: "Oportunidades ligadas a conversaciones" },
+              { title: "Entregados", value: number.format(summaryWhatsappCampaigns?.mensajes_entregados ?? 0), hint: `${(summaryWhatsappCampaigns?.tasa_entrega_pct ?? 0).toFixed(2)}% de entrega trazable` },
+              { title: "Leídos", value: number.format(summaryWhatsappCampaigns?.mensajes_leidos ?? 0), hint: `${number.format(summaryWhatsappCampaigns?.mensajes_con_evento_entrega ?? 0)} mensajes con evento` },
+              { title: "Fallidos", value: number.format(summaryWhatsappCampaigns?.mensajes_fallidos ?? 0), hint: `${(summaryWhatsappCampaigns?.tasa_fallo_pct ?? 0).toFixed(2)}% del total enviado` },
             ].map((card) => (
               <Card key={card.title}>
                 <CardHeader className="pb-2">
@@ -1700,9 +1711,12 @@ export default function ProspeccionMetricasPageClient() {
 
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {[
+              { title: "Sin traza", value: summaryWhatsappCampaigns?.mensajes_sin_evento_entrega ?? 0 },
               { title: "Batches completados", value: summaryWhatsappCampaigns?.batches_completados ?? 0 },
               { title: "Batches error", value: summaryWhatsappCampaigns?.batches_error ?? 0 },
               { title: "Destinatarios", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
+              { title: "Conversaciones con respuesta", value: summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0 },
+              { title: "Oportunidades atribuidas", value: summaryWhatsappCampaigns?.oportunidades_total ?? 0 },
               { title: "Respuestas entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
               { title: "% Respuesta", value: (summaryWhatsappCampaigns?.tasa_respuesta_pct ?? 0).toFixed(2), suffix: "%" },
               { title: "% Oportunidad", value: (summaryWhatsappCampaigns?.tasa_oportunidad_pct ?? 0).toFixed(2), suffix: "%" },
@@ -1721,18 +1735,23 @@ export default function ProspeccionMetricasPageClient() {
             ))}
           </div>
 
-          <Card>
+              <Card>
             <CardHeader>
               <CardTitle>Detalle de campañas WhatsApp</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1280px] text-sm">
+                <table className="w-full min-w-[1520px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-2">Campaña</th>
                       <th className="px-2 py-2">Batches</th>
                       <th className="px-2 py-2">Salientes</th>
+                      <th className="px-2 py-2">Con evento</th>
+                      <th className="px-2 py-2">Entregados</th>
+                      <th className="px-2 py-2">Leídos</th>
+                      <th className="px-2 py-2">Fallidos</th>
+                      <th className="px-2 py-2">Sin traza</th>
                       <th className="px-2 py-2">Entrantes</th>
                       <th className="px-2 py-2">Conversaciones</th>
                       <th className="px-2 py-2">Respondidas</th>
@@ -1753,6 +1772,11 @@ export default function ProspeccionMetricasPageClient() {
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
                         <td className="px-2 py-2">{number.format(item.batches_total)}</td>
                         <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_con_evento_entrega)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_entregados)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_leidos)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_fallidos)}</td>
+                        <td className="px-2 py-2">{number.format(item.mensajes_sin_evento_entrega)}</td>
                         <td className="px-2 py-2">{number.format(item.mensajes_entrantes)}</td>
                         <td className="px-2 py-2">{number.format(item.conversaciones_total)}</td>
                         <td className="px-2 py-2">{number.format(item.conversaciones_respondidas)}</td>

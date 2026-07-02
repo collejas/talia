@@ -58,8 +58,9 @@ Tareas:
 - [x] Definir que `prospectos_total` no es lo mismo que `mensajes_salientes`.
 - [x] Definir que `batches_total` no es lo mismo que `envios_totales`.
 - [x] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
-- [ ] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
+- [x] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
 - [ ] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
+- [x] Restaurar el delta operativo de WhatsApp para no perder el envío nuevo todavía no reflejado en `mensajes`.
 
 Decisión tomada:
 
@@ -221,6 +222,8 @@ Avance aplicado:
 - [x] Se ajustó el bloque superior de KPIs para que los 5 indicadores queden en una sola fila en desktop.
 - [x] Se restauró el gráfico global de `Resumen por canal de campañas` para incluir WhatsApp en la vista `todos`.
 - [x] Se alineó el bloque global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el ledger principal de campañas.
+- [x] Se agregó el desglose de entrega WhatsApp en `Campañas WhatsApp` con entregados, leídos, fallidos y sin traza.
+- [x] Se amplió el detalle/tablas y export CSV de `Campañas WhatsApp` con el mismo desglose.
 
 ### C.1 Archivos objetivo
 

@@ -1605,6 +1605,11 @@ export type ProspeccionMetricasWhatsAppCampanaSummary = {
   batches_error: number
   prospectos_total: number
   mensajes_salientes: number
+  mensajes_con_evento_entrega: number
+  mensajes_entregados: number
+  mensajes_leidos: number
+  mensajes_fallidos: number
+  mensajes_sin_evento_entrega: number
   mensajes_entrantes: number
   conversaciones_total: number
   conversaciones_respondidas: number
@@ -1614,6 +1619,10 @@ export type ProspeccionMetricasWhatsAppCampanaSummary = {
   oportunidades_ganadas: number
   oportunidades_perdidas: number
   monto_estimado_total: number
+  tasa_entrega_pct: number
+  tasa_lectura_pct: number
+  tasa_fallo_pct: number
+  tasa_trazabilidad_pct: number
   tasa_respuesta_pct: number
   tasa_oportunidad_pct: number
   tasa_cierre_pct: number

@@ -31502,6 +31502,11 @@ async def prospeccion_metricas_dashboard(
         "batches_error": 0,
         "prospectos_total": 0,
         "mensajes_salientes": 0,
+        "mensajes_con_evento_entrega": 0,
+        "mensajes_entregados": 0,
+        "mensajes_leidos": 0,
+        "mensajes_fallidos": 0,
+        "mensajes_sin_evento_entrega": 0,
         "mensajes_entrantes": 0,
         "conversaciones_total": 0,
         "conversaciones_respondidas": 0,
@@ -31553,6 +31558,11 @@ async def prospeccion_metricas_dashboard(
                 "batches_error": int(row.get("batches_error") or 0),
                 "prospectos_total": int(row.get("prospectos_total") or 0),
                 "mensajes_salientes": int(row.get("mensajes_salientes") or 0),
+                "mensajes_con_evento_entrega": int(row.get("mensajes_con_evento_entrega") or 0),
+                "mensajes_entregados": int(row.get("mensajes_entregados") or 0),
+                "mensajes_leidos": int(row.get("mensajes_leidos") or 0),
+                "mensajes_fallidos": int(row.get("mensajes_fallidos") or 0),
+                "mensajes_sin_evento_entrega": int(row.get("mensajes_sin_evento_entrega") or 0),
                 "mensajes_entrantes": int(row.get("mensajes_entrantes") or 0),
                 "conversaciones_total": int(row.get("conversaciones_total") or 0),
                 "conversaciones_respondidas": int(row.get("conversaciones_respondidas") or 0),
@@ -31577,6 +31587,11 @@ async def prospeccion_metricas_dashboard(
             "batches_error": sum(int(item["batches_error"]) for item in whatsapp_campaign_items),
             "prospectos_total": sum(int(item["prospectos_total"]) for item in whatsapp_campaign_items),
             "mensajes_salientes": sum(int(item["mensajes_salientes"]) for item in whatsapp_campaign_items),
+            "mensajes_con_evento_entrega": sum(int(item["mensajes_con_evento_entrega"]) for item in whatsapp_campaign_items),
+            "mensajes_entregados": sum(int(item["mensajes_entregados"]) for item in whatsapp_campaign_items),
+            "mensajes_leidos": sum(int(item["mensajes_leidos"]) for item in whatsapp_campaign_items),
+            "mensajes_fallidos": sum(int(item["mensajes_fallidos"]) for item in whatsapp_campaign_items),
+            "mensajes_sin_evento_entrega": sum(int(item["mensajes_sin_evento_entrega"]) for item in whatsapp_campaign_items),
             "mensajes_entrantes": sum(int(item["mensajes_entrantes"]) for item in whatsapp_campaign_items),
             "conversaciones_total": sum(int(item["conversaciones_total"]) for item in whatsapp_campaign_items),
             "conversaciones_respondidas": sum(int(item["conversaciones_respondidas"]) for item in whatsapp_campaign_items),
@@ -31596,6 +31611,30 @@ async def prospeccion_metricas_dashboard(
         whatsapp_campaign_summary["tasa_respuesta_pct"] = round(
             (whatsapp_campaign_summary["conversaciones_respondidas"] / whatsapp_campaign_summary["conversaciones_total"] * 100)
             if whatsapp_campaign_summary["conversaciones_total"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_entrega_pct"] = round(
+            (whatsapp_campaign_summary["mensajes_entregados"] / whatsapp_campaign_summary["mensajes_salientes"] * 100)
+            if whatsapp_campaign_summary["mensajes_salientes"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_lectura_pct"] = round(
+            (whatsapp_campaign_summary["mensajes_leidos"] / whatsapp_campaign_summary["mensajes_salientes"] * 100)
+            if whatsapp_campaign_summary["mensajes_salientes"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_fallo_pct"] = round(
+            (whatsapp_campaign_summary["mensajes_fallidos"] / whatsapp_campaign_summary["mensajes_salientes"] * 100)
+            if whatsapp_campaign_summary["mensajes_salientes"] > 0
+            else 0.0,
+            2,
+        )
+        whatsapp_campaign_summary["tasa_trazabilidad_pct"] = round(
+            (whatsapp_campaign_summary["mensajes_con_evento_entrega"] / whatsapp_campaign_summary["mensajes_salientes"] * 100)
+            if whatsapp_campaign_summary["mensajes_salientes"] > 0
             else 0.0,
             2,
         )
@@ -32131,6 +32170,11 @@ async def prospeccion_metricas_export_xlsx(
         "batches_error",
         "prospectos_total",
         "mensajes_salientes",
+        "mensajes_con_evento_entrega",
+        "mensajes_entregados",
+        "mensajes_leidos",
+        "mensajes_fallidos",
+        "mensajes_sin_evento_entrega",
         "mensajes_entrantes",
         "conversaciones_total",
         "conversaciones_respondidas",
@@ -32240,6 +32284,11 @@ async def prospeccion_metricas_export_xlsx(
             "batches_error",
             "prospectos_total",
             "mensajes_salientes",
+            "mensajes_con_evento_entrega",
+            "mensajes_entregados",
+            "mensajes_leidos",
+            "mensajes_fallidos",
+            "mensajes_sin_evento_entrega",
             "mensajes_entrantes",
             "conversaciones_total",
             "conversaciones_respondidas",
@@ -32270,6 +32319,11 @@ async def prospeccion_metricas_export_xlsx(
                 row.get("batches_error"),
                 row.get("prospectos_total"),
                 row.get("mensajes_salientes"),
+                row.get("mensajes_con_evento_entrega"),
+                row.get("mensajes_entregados"),
+                row.get("mensajes_leidos"),
+                row.get("mensajes_fallidos"),
+                row.get("mensajes_sin_evento_entrega"),
                 row.get("mensajes_entrantes"),
                 row.get("conversaciones_total"),
                 row.get("conversaciones_respondidas"),

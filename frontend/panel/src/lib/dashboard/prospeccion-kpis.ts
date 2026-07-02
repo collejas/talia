@@ -21,6 +21,11 @@ export type ProspeccionMetricasSummary = {
     batches_error: number;
     prospectos_total: number;
     mensajes_salientes: number;
+    mensajes_con_evento_entrega: number;
+    mensajes_entregados: number;
+    mensajes_leidos: number;
+    mensajes_fallidos: number;
+    mensajes_sin_evento_entrega: number;
     mensajes_entrantes: number;
     conversaciones_total: number;
     conversaciones_respondidas: number;
@@ -30,6 +35,10 @@ export type ProspeccionMetricasSummary = {
     oportunidades_ganadas: number;
     oportunidades_perdidas: number;
     monto_estimado_total: number;
+    tasa_entrega_pct: number;
+    tasa_lectura_pct: number;
+    tasa_fallo_pct: number;
+    tasa_trazabilidad_pct: number;
     tasa_respuesta_pct: number;
     tasa_oportunidad_pct: number;
     tasa_cierre_pct: number;
@@ -214,6 +223,11 @@ function emptyWhatsAppCampanasSummary(): ProspeccionMetricasSummary["campanas_wh
     batches_error: 0,
     prospectos_total: 0,
     mensajes_salientes: 0,
+    mensajes_con_evento_entrega: 0,
+    mensajes_entregados: 0,
+    mensajes_leidos: 0,
+    mensajes_fallidos: 0,
+    mensajes_sin_evento_entrega: 0,
     mensajes_entrantes: 0,
     conversaciones_total: 0,
     conversaciones_respondidas: 0,
@@ -223,6 +237,10 @@ function emptyWhatsAppCampanasSummary(): ProspeccionMetricasSummary["campanas_wh
     oportunidades_ganadas: 0,
     oportunidades_perdidas: 0,
     monto_estimado_total: 0,
+    tasa_entrega_pct: 0,
+    tasa_lectura_pct: 0,
+    tasa_fallo_pct: 0,
+    tasa_trazabilidad_pct: 0,
     tasa_respuesta_pct: 0,
     tasa_oportunidad_pct: 0,
     tasa_cierre_pct: 0,
