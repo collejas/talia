@@ -194,7 +194,7 @@ Tareas:
 - [x] Normalizar el contrato frontend para usar `whatsapp_atribucion_total` como nombre canónico y exponer `whatsapp_atribucion.top`.
 - [x] Definir el contrato final de `mapa-de-conversion v2` como entrega principal del plan.
 - [x] Implementar el agregado v2 de mapa con sus bloques y exportación.
-- [ ] Implementar la UI final del mapa con los nuevos filtros y dimensiones.
+- [x] Implementar la UI final del mapa con los nuevos filtros y dimensiones.
 
 ### B.4 Archivos objetivo
 

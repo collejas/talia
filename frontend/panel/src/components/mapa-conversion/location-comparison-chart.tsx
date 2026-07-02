@@ -32,6 +32,7 @@ export type LocationComparisonChartProps = {
   nivel: DemografiaMapResponse["nivel"];
   shape: GeoJSONType | null;
   colorMode: "sequential" | "channel";
+  focusMode: "todo" | "trafico" | "whatsapp" | "campanas" | "conversiones";
   channelFilter?: ChannelKey[];
   globalStages?: Record<string, number>;
   stageKeys?: string[];
@@ -406,6 +407,7 @@ export function LocationComparisonChart({
   nivel,
   shape,
   colorMode,
+  focusMode,
   channelFilter,
   globalStages,
   stageKeys: stageKeysProp,
@@ -429,6 +431,10 @@ export function LocationComparisonChart({
   const showConversationMetrics = activeChannelSet.has("webchat");
   const showWhatsappConversationMetrics = activeChannelSet.has("whatsapp");
   const allowLeadFallback = !attributionFilterActive;
+  const showTrafficBlocks = focusMode === "todo" || focusMode === "trafico" || focusMode === "campanas";
+  const showConversationBlocks = focusMode === "todo" || focusMode === "whatsapp" || focusMode === "campanas" || focusMode === "conversiones";
+  const showAttributionBlocks = focusMode === "todo" || focusMode === "whatsapp" || focusMode === "campanas";
+  const showStageBlocks = focusMode === "todo" || focusMode === "conversiones";
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
   const themeVersion = useThemeVersion();
   const channelColors = resolveThemeChannelColors();
@@ -977,31 +983,56 @@ export function LocationComparisonChart({
             ) : null}
           </div>
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-            <MetricSection
-      title="Formas de contacto"
-              items={displayedChannelKeys.map((channel) => ({
-                label: `Canal ${CHANNEL_LABELS[channel]}`,
-                value: metrics.channels[channel],
-                indentItems:
-                  showConversationMetrics && channel === "webchat"
-                    ? [
-                        { label: "Con conversación", value: metrics.conversation.con_conversacion },
-                        { label: "Sin conversación", value: metrics.conversation.sin_conversacion },
-                      ]
-                    : showWhatsappConversationMetrics && channel === "whatsapp"
+            {showTrafficBlocks ? (
+              <MetricSection
+                title="Tráfico web"
+                items={[
+                  { label: "Visitas al sitio", value: metrics.totalVisitas },
+                  { label: "Visitas con chat", value: metrics.conversation.con_conversacion },
+                  { label: "Sin chat", value: metrics.conversation.sin_conversacion },
+                ]}
+              />
+            ) : null}
+            {showConversationBlocks ? (
+              <MetricSection
+                title="Conversaciones"
+                items={displayedChannelKeys.map((channel) => ({
+                  label: `Canal ${CHANNEL_LABELS[channel]}`,
+                  value: metrics.channels[channel],
+                  indentItems:
+                    showConversationMetrics && channel === "webchat"
                       ? [
-                          { label: "Conversaciones WhatsApp", value: metrics.whatsappConversations },
+                          { label: "Con conversación", value: metrics.conversation.con_conversacion },
+                          { label: "Sin conversación", value: metrics.conversation.sin_conversacion },
                         ]
-                      : undefined,
-              }))}
-            />
-            <MetricSection
-              title="Etapas"
-              items={stageKeys.map((key) => ({
-                label: MAPA_STAGE_LABELS[key] ?? formatStageLabel(key),
-                value: metrics.stages[key] ?? 0,
-              }))}
-            />
+                      : showWhatsappConversationMetrics && channel === "whatsapp"
+                        ? [
+                            { label: "Conversaciones WhatsApp", value: metrics.whatsappConversations },
+                          ]
+                        : undefined,
+                }))}
+              />
+            ) : null}
+            {showAttributionBlocks ? (
+              <MetricSection
+                title="Atribución WhatsApp"
+                items={[
+                  {
+                    label: "Conversaciones atribuidas",
+                    value: metrics.whatsappConversations,
+                  },
+                ]}
+              />
+            ) : null}
+            {showStageBlocks ? (
+              <MetricSection
+                title="Etapas"
+                items={stageKeys.map((key) => ({
+                  label: MAPA_STAGE_LABELS[key] ?? formatStageLabel(key),
+                  value: metrics.stages[key] ?? 0,
+                }))}
+              />
+            ) : null}
           </div>
         </aside>
       ) : null}
