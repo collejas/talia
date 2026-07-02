@@ -583,6 +583,7 @@ async def fetch_visitantes_resumen_v2(
             "fuentes_top": fuentes_top,
             "utm_top": utm_top,
             "wa_atribucion_top": wa_atribucion_top,
+            "whatsapp_atribucion_top": wa_atribucion_top,
             "wa_atribucion_total": wa_atribucion_total,
             "whatsapp_atribucion_total": wa_atribucion_total,
             "has_data": bool(row.get("has_data")),
@@ -652,6 +653,7 @@ async def fetch_visitantes_resumen_v2(
             grouped["fuentes_top"] = _aggregate_top_sources(grouped.pop("_fuentes_buffer", []))
             grouped["utm_top"] = _aggregate_top_utm(grouped.pop("_utm_buffer", []))
             grouped["wa_atribucion_top"] = _aggregate_top_wa(grouped.pop("_wa_buffer", []))
+            grouped["whatsapp_atribucion_top"] = grouped["wa_atribucion_top"]
             items.append(grouped)
         items.sort(key=lambda row: (_to_number(row.get("total")), str(row.get("name") or "")), reverse=True)
 

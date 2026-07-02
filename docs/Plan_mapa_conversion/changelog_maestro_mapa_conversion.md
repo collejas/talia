@@ -61,6 +61,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se documentó que `batches_total` es numero de lotes ejecutados y no equivale a envios totales.
 - Se reforzaron las etiquetas y textos de lectura en `mapa-de-conversion` para dejar explicito que WhatsApp ahi representa atribucion y conversacion, no ejecucion de campañas.
 - Se normalizó el contrato frontend del mapa para que `whatsapp_atribucion_total` sea el nombre canónico y `whatsapp_atribucion.top` quede tipado en el adaptador de datos.
+- Se cerró el contrato backend del mapa v2 para exponer también `whatsapp_atribucion_top` como forma canónica de la atribución WhatsApp en `mapa-v2`.
 
 ## 2026-06-27
 

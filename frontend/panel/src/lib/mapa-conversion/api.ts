@@ -85,6 +85,7 @@ export type DemografiaMapDataset = {
   whatsapp_atribucion?: {
     top: DemografiaWhatsappAtribucionRow[];
   };
+  whatsapp_atribucion_top?: DemografiaWhatsappAtribucionRow[];
   conversation_channels?: {
     sesiones_webchat_total: number;
     sesiones_con_chat_webchat: number;
@@ -179,6 +180,7 @@ export type DemografiaSummaryResponse = {
       conversaciones_correo?: number;
       wa_atribucion_total?: number;
       whatsapp_atribucion_total?: number;
+      whatsapp_atribucion_top?: DemografiaWhatsappAtribucionRow[];
       correo_total?: number;
     };
   };

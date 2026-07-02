@@ -243,14 +243,22 @@ Consideraciones técnicas:
 
 ## 7.2 Contrato de respuesta v2
 
-Separar payload por bloques:
+El contrato canónico del mapa v2 queda separado en estos bloques:
 
 - `traffic_web`
 - `conversation_channels`
-- `pipeline_leads`
-- `attribution`
+- `whatsapp_atribucion`
+- `totales_leads`
+- `totales_visitantes`
 
-Ejemplo conceptual:
+Regla de semantica:
+
+- `traffic_web` = trafico de sitio.
+- `conversation_channels` = conversaciones por canal.
+- `whatsapp_atribucion` = atribucion de WhatsApp de prospeccion, no campañas de envio.
+- `totales_leads` = etapas y conversiones comerciales.
+
+Estructura base esperada:
 
 ```json
 {
@@ -261,22 +269,33 @@ Ejemplo conceptual:
       "key": "09",
       "name": "Ciudad de México",
       "traffic_web": {
-        "sessions": 1200,
-        "top_sources": [{"source":"google","total":420}]
+        "sesiones_web_total": 1200,
+        "fuentes_top": [{"source":"google","total":420}]
       },
       "conversation_channels": {
-        "webchat_sessions": 300,
-        "whatsapp_conversations": 110,
-        "voz_conversations": 20
+        "sesiones_webchat_total": 300,
+        "conversaciones_whatsapp": 110,
+        "conversaciones_voz": 20,
+        "conversaciones_correo": 14
       },
-      "pipeline_leads": {
-        "leads_total": 180,
-        "etapas": {"captado":90,"negociacion":40,"ganado":15}
+      "whatsapp_atribucion": {
+        "top": [{"canal_publicitario":"meta","campana_publicitaria":"prospeccion","total":42}]
+      },
+      "totales_leads": {
+        "total": 180,
+        "abiertas": 125,
+        "ganadas": 15,
+        "perdidas": 8
       }
     }
   ]
 }
 ```
+
+Compatibilidad temporal:
+
+- el backend puede seguir exponiendo alias legacy mientras el frontend migra;
+- el contrato canónico debe leerse desde `whatsapp_atribucion` y `whatsapp_atribucion_total`.
 
 ## 8) Frontend `mapa-de-conversion` (v2)
 
