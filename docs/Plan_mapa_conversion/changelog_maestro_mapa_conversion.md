@@ -48,6 +48,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigió la RPC `public.prospeccion_campana_whatsapp_metricas_rango` para contar salientes de WhatsApp como histórico en `mensajes` + delta persistido en `prospeccion_contacto_envio`, evitando subconteo de campañas ya ejecutadas.
 - Se validó en el tenant `00000000-0000-0000-0000-000000000001` que la campaña WhatsApp principal pasa de `205` a `206` mensajes salientes al considerar el envío nuevo aún no reflejado en `mensajes`.
 - Se ajustó la documentación del backlog para reflejar el cierre del criterio de conteo híbrido de WhatsApp y dejar abiertos solo los cruces que todavía requieren implementación adicional.
+- Se validó que `prospeccion/prospectos` sigue siendo la vista operativa correcta para lotes, envíos y estados por lote, sin reinterpretar ese flujo como métrica de campañas.
 - Se formalizo la frontera operativa entre vistas:
   - `prospeccion/metricas` mide ejecucion de campañas.
   - `mapa-de-conversion` mide adquisicion, atribucion y conversion.

@@ -172,6 +172,7 @@ Tareas:
 - [ ] Conservar `contacto_id` donde el contrato viejo lo siga requiriendo.
 - [ ] No cambiar contratos de front hasta que el backend nuevo exista.
 - [ ] Mantener compatibilidad en exportaciones.
+- [x] Validar que `prospeccion/prospectos` sigue funcionando como vista operativa de lotes, envíos y estados por lote.
 
 ### B.4 Alinear mapa de conversion
 
