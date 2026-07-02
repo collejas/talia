@@ -1,6 +1,7 @@
 "use server";
 
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 
 import { cookies } from "next/headers";
 import { updateTag } from "next/cache";
@@ -35,6 +36,7 @@ export type CreateLeadInput = {
   personaId?: string | null;
   contactId?: string | null;
   originStageId?: string | null;
+  requestId?: string | null;
 };
 
 export type MoveLeadInput = {
@@ -360,6 +362,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   const rawContact = input.contacto ?? {};
   const contactUpdatePayload: Record<string, unknown> = {};
+  const contactRequestId = randomUUID();
 
   const nombreValue = sanitizeNullableString(rawContact.nombre_completo);
   const correoValue = sanitizeNullableString(
@@ -395,6 +398,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     const contactInsertPayload: Record<string, unknown> = {
       propietario_usuario_id: userId,
       origen: "embudo_manual",
+      request_id: contactRequestId,
     };
     if (nombreValue !== null) contactInsertPayload.nombre_completo = nombreValue;
     if (companyValue !== null) contactInsertPayload.company_name = companyValue;
@@ -465,6 +469,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   const opportunityPayload: Record<string, unknown> = {
     etapa_id: input.stageId,
+    request_id: input.requestId?.trim() || randomUUID(),
     contacto_principal_id: contactId,
     titulo:
       sanitizeNullableString(opportunityInput.titulo) ??

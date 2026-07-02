@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { NextResponse } from "next/server"
 
 import type { NextRequest } from "next/server"
@@ -10,6 +12,7 @@ type ContactCreatePayload = {
   correo?: string
   company_name?: string
   origen?: string
+  request_id?: string
 }
 
 type ContactCreateResponse = {
@@ -38,6 +41,7 @@ export async function POST(request: NextRequest) {
     correo: payload.correo?.trim() || undefined,
     company_name: payload.company_name?.trim() || undefined,
     origen: payload.origen?.trim() || "agenda_manual",
+    request_id: payload.request_id?.trim() || randomUUID(),
   }
 
   const response = await callCrmApi<ContactCreateResponse>("/crm/contacts", {
@@ -55,4 +59,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(response.data, { status: 201 })
 }
-

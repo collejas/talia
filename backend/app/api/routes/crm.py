@@ -10484,6 +10484,7 @@ class CRMOpportunityCreate(BaseModel):
     cuenta_id: UUID | None = None
     contacto_principal_id: UUID | None = None
     etapa_id: UUID
+    request_id: UUID | None = None
     titulo: str = Field(..., max_length=255)
     descripcion: str | None = Field(default=None, max_length=1000)
     monto_estimado: float | None = Field(default=None, ge=0)
@@ -10618,6 +10619,7 @@ class CRMContact(BaseModel):
 
 class CRMContactCreate(BaseModel):
     cuenta_id: UUID | None = None
+    request_id: UUID | None = None
     codigo_contacto: str | None = Field(default=None, max_length=64)
     nombre_nombres: str | None = Field(default=None, max_length=160)
     apellido_paterno: str | None = Field(default=None, max_length=160)
@@ -16973,16 +16975,28 @@ async def create_opportunity(
     payload: CRMOpportunityCreate,
 ) -> CRMOpportunity:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    existing_row = None
+    if payload.request_id:
+        try:
+            existing_row = await repo.get_opportunity_by_request_id(
+                organizacion_id=organizacion_id,
+                request_id=str(payload.request_id),
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    row = existing_row
+    created = row is None
     try:
-        row = await repo.create_opportunity(
-            organizacion_id=organizacion_id,
-            payload=body,
-        )
+        if row is None:
+            row = await repo.create_opportunity(
+                organizacion_id=organizacion_id,
+                payload=body,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     # Registrar historial de etapa inicial (best-effort)
-    if payload.etapa_id:
+    if payload.etapa_id and created:
         history_payload: dict[str, str] = {
             "oportunidad_id": str(row["id"]),
             "etapa_destino_id": str(payload.etapa_id),
@@ -17034,10 +17048,20 @@ async def pipeline_create_opportunity(
     _: str = Depends(require_permission("pipeline.view")),
     payload: CRMOpportunityCreate,
 ) -> CRMPipelineCardResponse:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    existing_row = None
+    if payload.request_id:
+        try:
+            existing_row = await repo.get_opportunity_by_request_id(
+                organizacion_id=organizacion_id,
+                request_id=str(payload.request_id),
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     try:
-        row = await repo.create_opportunity(
+        row = existing_row or await repo.create_opportunity(
             organizacion_id=organizacion_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=body,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

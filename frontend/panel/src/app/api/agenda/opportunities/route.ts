@@ -55,9 +55,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let payload: { persona_id?: string; contacto_id?: string; titulo?: string }
+  let payload: { persona_id?: string; contacto_id?: string; titulo?: string; request_id?: string }
   try {
-    payload = (await request.json()) as { persona_id?: string; contacto_id?: string; titulo?: string }
+    payload = (await request.json()) as {
+      persona_id?: string;
+      contacto_id?: string;
+      titulo?: string;
+      request_id?: string;
+    }
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
@@ -104,6 +109,7 @@ export async function POST(request: NextRequest) {
     body: {
       contacto_principal_id: personaId,
       etapa_id: selectedStage.id,
+      request_id: payload.request_id?.trim() || crypto.randomUUID(),
       titulo,
       estado: "abierta",
       metadata: {

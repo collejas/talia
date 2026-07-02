@@ -103,6 +103,45 @@ def _is_account_code_duplicate_error(exc: Exception) -> bool:
     )
 
 
+def _is_opportunity_code_duplicate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "oportunidades_org_codigo_oportunidad_uidx" in message
+        or 'unique constraint "oportunidades_org_codigo_oportunidad_uidx"' in message
+        or (
+            "duplicate key value violates unique constraint" in message
+            and "codigo_oportunidad" in message
+        )
+    )
+
+
+def _is_opportunity_request_id_duplicate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "oportunidades_request_id_uidx" in message
+        or 'unique constraint "oportunidades_request_id_uidx"' in message
+        or ("duplicate key value violates unique constraint" in message and "request_id" in message)
+    )
+
+
+def _is_persona_request_id_duplicate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "personas_request_id_uidx" in message
+        or 'unique constraint "personas_request_id_uidx"' in message
+        or ("duplicate key value violates unique constraint" in message and "request_id" in message)
+    )
+
+
+def _is_request_id_schema_cache_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "pgrst204" in message
+        and "request_id" in message
+        and ("schema cache" in message or "could not find" in message)
+    )
+
+
 def _is_active_crm_row(row: Mapping[str, Any]) -> bool:
     archived_at = row.get("archived_at")
     merged_persona = row.get("merged_into_persona_id")
@@ -2443,18 +2482,84 @@ class CRMRepository:
             include_metadata=True,
             allow_title_fallback=True,
         )
-        resp = await self._request(
-            "POST",
-            "/rest/v1/oportunidades",
-            json=body,
-            prefer="return=representation",
-        )
+        request_id = str(body.get("request_id") or "").strip()
+        if not request_id:
+            request_id = str(uuid4())
+            body["request_id"] = request_id
+        last_exc: CRMRepositoryError | None = None
+        request_id_disabled = False
+        for attempt in range(3):
+            try:
+                resp = await self._request(
+                    "POST",
+                    "/rest/v1/oportunidades",
+                    json=body,
+                    prefer="return=representation",
+                )
+                data = resp.json()
+                if not isinstance(data, list) or not data:
+                    raise CRMRepositoryError("Supabase no devolvió la oportunidad creada")
+                row = data[0]
+                if not isinstance(row, dict):
+                    raise CRMRepositoryError(f"Respuesta inválida al crear oportunidad: {row!r}")
+                return row
+            except CRMRepositoryError as exc:
+                last_exc = exc
+                if _is_opportunity_request_id_duplicate_error(exc):
+                    existing = await self.get_opportunity_by_request_id(
+                        organizacion_id=organizacion_id,
+                        request_id=request_id,
+                    )
+                    if existing:
+                        return existing
+                    raise
+                if not request_id_disabled and _is_request_id_schema_cache_error(exc):
+                    request_id_disabled = True
+                    body.pop("request_id", None)
+                    logger.warning(
+                        "crm.create_opportunity_request_id_fallback",
+                        extra={
+                            "organizacion_id": str(organizacion_id),
+                            "error": str(exc),
+                        },
+                    )
+                    continue
+                if not _is_opportunity_code_duplicate_error(exc) or attempt >= 2:
+                    raise
+                logger.warning(
+                    "crm.create_opportunity_retry_codigo",
+                    extra={
+                        "attempt": attempt + 1,
+                        "organizacion_id": str(organizacion_id),
+                        "error": str(exc),
+                    },
+                )
+        raise last_exc or CRMRepositoryError("oportunidad_creation_retry_exhausted")
+
+    async def get_opportunity_by_request_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        request_id: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "request_id": f"eq.{request_id}",
+            "limit": "1",
+            "select": "*",
+        }
+        try:
+            resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        except CRMRepositoryError as exc:
+            if _is_request_id_schema_cache_error(exc):
+                return None
+            raise
         data = resp.json()
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió la oportunidad creada")
+            return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear oportunidad: {row!r}")
+            raise CRMRepositoryError(f"Respuesta inválida al buscar oportunidad por request_id: {row!r}")
         return row
 
     async def get_opportunity(
@@ -8128,6 +8233,7 @@ class CRMRepository:
             "id": str(contact_id),
             "organizacion_id": str(organizacion_id),
             "codigo_contacto": self._pick_text(merged, "codigo_contacto"),
+            "request_id": self._pick_text(merged, "request_id"),
             "nombre": given_name,
             "apellido_paterno": apellido_paterno,
             "apellido_materno": apellido_materno,
@@ -9882,6 +9988,10 @@ class CRMRepository:
         )
         persona_body = dict(parts["persona_body"])
         account_body = parts["account_body"]
+        request_id = str(persona_body.get("request_id") or "").strip()
+        if not request_id:
+            request_id = str(uuid4())
+            persona_body["request_id"] = request_id
         account_row: dict[str, Any] | None = None
         if account_body and not payload.get("cuenta_id"):
             try:
@@ -9905,6 +10015,7 @@ class CRMRepository:
         elif payload.get("cuenta_id"):
             payload["cuenta_id"] = str(payload.get("cuenta_id"))
 
+        request_id_disabled = False
         try:
             persona_resp = await self._request(
                 "POST",
@@ -9913,7 +10024,23 @@ class CRMRepository:
                 prefer="return=representation",
             )
         except CRMRepositoryError as exc:
-            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+            if _is_persona_request_id_duplicate_error(exc):
+                existing_persona = await self.get_persona_by_request_id(
+                    organizacion_id=organizacion_id,
+                    request_id=request_id,
+                )
+                if existing_persona:
+                    return existing_persona
+            if not request_id_disabled and _is_request_id_schema_cache_error(exc):
+                request_id_disabled = True
+                persona_body.pop("request_id", None)
+                persona_resp = await self._request(
+                    "POST",
+                    "/rest/v1/personas",
+                    json=persona_body,
+                    prefer="return=representation",
+                )
+            elif "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
                 persona_body.pop("propietario_usuario_id", None)
                 persona_resp = await self._request(
                     "POST",
@@ -9975,6 +10102,45 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         return await self.create_persona(organizacion_id=organizacion_id, payload=payload)
+
+    async def get_persona_by_request_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        request_id: str,
+    ) -> dict[str, Any] | None:
+        request_key = request_id.strip()
+        if not request_key:
+            return None
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "request_id": f"eq.{request_key}",
+            "limit": "1",
+            "select": PERSONA_SELECT_FIELDS,
+        }
+        try:
+            resp = await self._request("GET", "/rest/v1/personas", params=params)
+        except CRMRepositoryError as exc:
+            if _is_request_id_schema_cache_error(exc):
+                return None
+            raise
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        org_value = row.get("organizacion_id")
+        if not org_value:
+            return row
+        try:
+            org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+        except ValueError:
+            return row
+        return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
     async def upsert_persona_account_relation(
         self,

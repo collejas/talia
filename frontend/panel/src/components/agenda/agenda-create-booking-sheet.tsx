@@ -85,6 +85,8 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
   const [opportunityMode, setOpportunityMode] = React.useState<OpportunityMode>("none")
   const [selectedOpportunityId, setSelectedOpportunityId] = React.useState<string>("")
   const [newOpportunityTitle, setNewOpportunityTitle] = React.useState("")
+  const opportunityRequestIdRef = React.useRef<string>(crypto.randomUUID())
+  const contactRequestIdRef = React.useRef<string>(crypto.randomUUID())
 
   React.useEffect(() => {
     if (!open) {
@@ -124,6 +126,18 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       return
     }
   }, [sinContacto])
+
+  React.useEffect(() => {
+    if (open && opportunityMode === "create") {
+      opportunityRequestIdRef.current = crypto.randomUUID()
+    }
+  }, [open, opportunityMode])
+
+  React.useEffect(() => {
+    if (open && createMode) {
+      contactRequestIdRef.current = crypto.randomUUID()
+    }
+  }, [open, createMode])
 
   React.useEffect(() => {
     if (!open || sinContacto) return
@@ -241,6 +255,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
           correo: newContact.correo.trim() || undefined,
           company_name: newContact.company_name.trim() || undefined,
           origen: "agenda_manual",
+          request_id: contactRequestIdRef.current,
         }),
       })
       const data = (await response.json()) as {
@@ -292,6 +307,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
         persona_id: contactId,
         contacto_id: contactId,
         titulo: title,
+        request_id: opportunityRequestIdRef.current,
       }),
     })
     const data = (await response.json()) as { id?: string; error?: string }

@@ -132,6 +132,7 @@ export type LeadDrawerCreatePayload = {
   oportunidad: Record<string, unknown>;
   contactId?: string | null;
   originStageId?: string | null;
+  requestId?: string | null;
 };
 
 type LeadDrawerProps = {
@@ -961,6 +962,7 @@ export function LeadDrawer({
   const [quotePending, startQuoteAction] = useTransition();
   const isBusy = pending || deletePending || revertPending;
   const wasOpenRef = useRef(false);
+  const createRequestIdRef = useRef<string>(crypto.randomUUID());
   const lastDrawerRecordKeyRef = useRef<string | null>(null);
   const latestStageMove = useMemo(
     () =>
@@ -1028,6 +1030,12 @@ export function LeadDrawer({
     const requestId = contactSearchRequestRef.current + 1;
     void runContactSearch(term, requestId);
   }, [contactSearchQuery, runContactSearch]);
+
+  useEffect(() => {
+    if (isCreateMode && open) {
+      createRequestIdRef.current = crypto.randomUUID();
+    }
+  }, [isCreateMode, open]);
 
   const drawerRecordKey = isCreateMode
     ? `create:${currentStage?.id ?? "sin-etapa"}`
@@ -1743,6 +1751,7 @@ export function LeadDrawer({
         oportunidad: oportunidadPayload,
         contactId: selectedContactId,
         originStageId: currentStage.id,
+        requestId: createRequestIdRef.current,
       });
       setPending(false);
 

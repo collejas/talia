@@ -27,6 +27,38 @@ type TimeseriesPayload = {
   timeseries: ProspeccionTimeseries;
 };
 
+function emptyWhatsAppCampanasSummary(): ProspeccionMetricasSummary["campanas_whatsapp"] {
+  return {
+    batches_total: 0,
+    batches_completados: 0,
+    batches_en_proceso: 0,
+    batches_error: 0,
+    prospectos_total: 0,
+    mensajes_salientes: 0,
+    mensajes_con_evento_entrega: 0,
+    mensajes_entregados: 0,
+    mensajes_leidos: 0,
+    mensajes_fallidos: 0,
+    mensajes_sin_evento_entrega: 0,
+    mensajes_entrantes: 0,
+    conversaciones_total: 0,
+    conversaciones_respondidas: 0,
+    conversaciones_sin_respuesta: 0,
+    oportunidades_total: 0,
+    oportunidades_abiertas: 0,
+    oportunidades_ganadas: 0,
+    oportunidades_perdidas: 0,
+    monto_estimado_total: 0,
+    tasa_entrega_pct: 0,
+    tasa_lectura_pct: 0,
+    tasa_fallo_pct: 0,
+    tasa_trazabilidad_pct: 0,
+    tasa_respuesta_pct: 0,
+    tasa_oportunidad_pct: 0,
+    tasa_cierre_pct: 0,
+  };
+}
+
 function SectionTitle({ label }: { label: string }) {
   return (
     <div className="px-4 lg:px-6">
@@ -163,6 +195,7 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
                 tasa_entrega_pct: 0,
                 tasa_respuesta_pct: 0,
               },
+              campanas_whatsapp: json?.campanas_whatsapp?.summary ?? emptyWhatsAppCampanasSummary(),
               frases_whatsapp: json?.frases_whatsapp?.summary ?? {
                 conversaciones_atribuidas: 0,
                 contactos_unicos: 0,
@@ -189,6 +222,7 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
                 tasa_entrega_pct: 0,
                 tasa_respuesta_pct: 0,
               },
+              campanas_whatsapp: emptyWhatsAppCampanasSummary(),
               frases_whatsapp: {
                 conversaciones_atribuidas: 0,
                 contactos_unicos: 0,
