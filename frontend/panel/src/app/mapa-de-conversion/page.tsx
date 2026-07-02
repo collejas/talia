@@ -616,10 +616,15 @@ export default async function Page({
                   </section>
                   <section className="flex h-[560px] flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm">
                     <div className="border-b px-4 py-3">
-                      <p className="text-sm font-medium text-card-foreground/80">Resumen general</p>
+                      <p className="text-sm font-medium text-card-foreground/80">Lectura del mapa</p>
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto p-4">
                       <div className="flex flex-col gap-4 text-sm">
+                        <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          El mapa separa tráfico web, conversaciones y atribución WhatsApp. No usa
+                          campañas de envío como sustituto de conversión.
+                        </div>
+
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                             {mapKpisData.nivelLabel} con más visitas:

@@ -59,6 +59,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   - `prospeccion/prospectos` ejecuta envios y seguimiento.
 - Se documentó que `prospectos_total` es destinatarios incluidos en lotes, no mensajes enviados.
 - Se documentó que `batches_total` es numero de lotes ejecutados y no equivale a envios totales.
+- Se reforzaron las etiquetas y textos de lectura en `mapa-de-conversion` para dejar explicito que WhatsApp ahi representa atribucion y conversacion, no ejecucion de campañas.
 
 ## 2026-06-27
 

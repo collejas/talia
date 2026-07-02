@@ -71,9 +71,9 @@ export function MapKpis({
       icon: IconWorld,
     },
     {
-      title: "Atribución WhatsApp",
+      title: "WhatsApp atribuido",
       value: formatDisplayNumber(whatsappCampaignsTotal),
-      helper: `Conversaciones de WhatsApp vinculadas a atribución`,
+      helper: `Conversaciones de WhatsApp vinculadas a atribución, no campañas de envío`,
       icon: IconRoute,
     },
     {

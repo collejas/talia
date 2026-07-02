@@ -467,8 +467,10 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>WhatsApp por canal</CardTitle>
-            <CardDescription>Distribución de inicios de WhatsApp por canal.</CardDescription>
+            <CardTitle>WhatsApp de atribución por canal</CardTitle>
+            <CardDescription>
+              Distribución de inicios de WhatsApp atribuidos por canal, no de campañas de envío.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-72 flex-col gap-4">
             {whatsappChannelRows.length ? (

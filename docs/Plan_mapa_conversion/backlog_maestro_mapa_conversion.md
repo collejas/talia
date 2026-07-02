@@ -242,7 +242,7 @@ Tareas:
 - [ ] Seguir mostrando trafico web.
 - [ ] Seguir mostrando conversaciones.
 - [ ] Seguir mostrando atribucion WhatsApp.
-- [ ] Reforzar etiquetas y explicaciones de lectura.
+- [x] Reforzar etiquetas y explicaciones de lectura.
 - [ ] Mantener la semantica de `traffic_web`, `conversation_channels` y `whatsapp_atribucion`.
 
 ### C.2 Archivos objetivo

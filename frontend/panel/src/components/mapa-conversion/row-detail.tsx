@@ -337,7 +337,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          WhatsApp por canal
+          WhatsApp de atribución por canal
         </h4>
         <div className="grid gap-2">
           {(Array.isArray(whatsappAttribution.top) ? whatsappAttribution.top : []).length ? (
@@ -356,7 +356,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
             ))
           ) : (
             <p className="text-muted-foreground text-sm">
-              Sin atribución WhatsApp en este filtro.
+              Sin atribución WhatsApp de campañas en este filtro.
             </p>
           )}
         </div>
