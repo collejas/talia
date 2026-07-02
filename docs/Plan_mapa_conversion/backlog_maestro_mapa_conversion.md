@@ -59,7 +59,7 @@ Tareas:
 - [x] Definir que `batches_total` no es lo mismo que `envios_totales`.
 - [x] Alinear el agregado con el flujo real de prospeccion WhatsApp documentado en `informe_metricas_whatsapp_prospeccion.md`.
 - [x] Incluir el cruce por `eventos_entrega.mensaje_id = mensajes.id`.
-- [ ] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
+- [x] Atribuir plantillas desde `mensajes.datos->>'twilio_content_sid'` con fallbacks.
 - [x] Restaurar el delta operativo de WhatsApp para no perder el envío nuevo todavía no reflejado en `mensajes`.
 
 Decisión tomada:
@@ -70,6 +70,7 @@ Decisión tomada:
 - Las respuestas entrantes se atribuyen por conversación, para no perder replies que no traen `batch_id` o `campana_id`.
 - La documentación se alineó para que `mensajes_salientes` en WhatsApp no signifique únicamente el ledger histórico cerrado, sino el histórico más el delta operativo pendiente de reflejo.
 - El backfill de snapshots de plantilla ya existe en `prospeccion_contacto_envio.payload.metadata`, pero el contrato final todavía debe decidir si ese fallback se expone en el agregado de WhatsApp o solo se conserva para compatibilidad.
+- La compatibilidad temporal con contratos que todavía leen `mensajes.datos` se conserva en la capa de lectura, usando `template_id`, `template_slug`, `template_nombre` y `twilio_content_sid` como fallbacks operativos.
 
 ### A.2 Normalizar contrato de conversion
 
@@ -79,12 +80,19 @@ Objetivo:
 
 Tareas:
 
-- [ ] Revisar relaciones entre conversaciones, oportunidades y atribucion.
-- [ ] Validar campos que ya existen para trazabilidad.
+- [x] Revisar relaciones entre conversaciones, oportunidades y atribucion.
+- [x] Validar campos que ya existen para trazabilidad.
 - [ ] Evitar depender de JSON para campos estructurales nuevos.
-- [ ] Verificar indices y llaves para joins frecuentes.
-- [ ] Confirmar compatibilidad de `persona_id` en los eventos de atribucion.
-- [ ] Validar si los deltas de `prospeccion_contacto_envio` deben materializarse en una vista resumen para futuros reportes.
+- [x] Verificar indices y llaves para joins frecuentes.
+- [x] Confirmar compatibilidad de `persona_id` en los eventos de atribucion.
+- [x] Validar si los deltas de `prospeccion_contacto_envio` deben materializarse en una vista resumen para futuros reportes.
+
+Hallazgo:
+
+- `conversaciones` ya resuelve su relación operativa con `personas` por `persona_id` y conserva `contacto_id` para compatibilidad.
+- `oportunidades` ya resuelve la relación principal por `persona_id`, con `contacto_principal_id` y `metadata` solo como soporte de compatibilidad donde todavía existe historial.
+- `prospeccion_whatsapp_atribucion_eventos` ya tiene `persona_id`, `conversacion_id` y `contacto_id`, y cuenta con índices útiles para lectura por organización, conversación y persona.
+- El delta operativo de `prospeccion_contacto_envio` no necesita una vista materializada adicional por ahora; el agregado canónico ya lo integra en la RPC y en las exportaciones para no duplicar la verdad.
 
 ### A.3 Alinear catalogos de campaña
 
@@ -119,6 +127,7 @@ Tareas:
 - [x] Confirmar que las migraciones de metricas WhatsApp de julio 2026 se reemplazan por una v2.
 - [x] Crear la nueva migracion o RPC v2 con seed en `conversaciones.inbox_context`.
 - [ ] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
+- [x] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
 - [ ] Registrar cualquier backfill necesario para no perder historia.
 
 ## 4) Epic B · Backend
