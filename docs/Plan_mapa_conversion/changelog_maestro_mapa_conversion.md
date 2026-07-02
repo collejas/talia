@@ -71,6 +71,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se revisó la capa de BD de conversacion, oportunidad y atribucion, confirmando que `persona_id` ya es la llave operativa y que los joins críticos tienen índices adecuados.
 - Se decidió no materializar una vista extra para el delta de `prospeccion_contacto_envio`; ese ajuste se mantiene absorbido por la RPC y las exportaciones para no duplicar la verdad operativa.
 - Se validó que `campanas` ya separa `correo/prospeccion` y `whatsapp/prospeccion`, y que `prospeccion_contacto_batch.canales` conserva el detalle multicanal sin requerir una columna nueva para este plan.
+- Se cerró la subfase `A.4` sin crear una migracion nueva: los archivos objetivo vigentes ya son la RPC v2, el ajuste de desglose de entrega, el backend y los consumidores frontend/documentales del contrato.
 
 ## 2026-06-27
 

@@ -116,9 +116,16 @@ Hallazgo:
 
 ### A.4 Archivos objetivo
 
-- [ ] `supabase/migrations/*` para el nuevo agregado o vista.
-- [ ] `supabase/migrations/*` para indices y constraints si faltan.
-- [ ] `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md` para registrar la decision.
+- [x] `supabase/migrations/20260702_090000_prospeccion_campana_whatsapp_metricas_rango_inbox_context_v2.sql` como base vigente del agregado v2.
+- [x] `supabase/migrations/20260702_120000_prospeccion_campana_whatsapp_metricas_rango_delivery_breakdown.sql` como ajuste vigente de desglose de entrega.
+- [x] `backend/app/api/routes/crm.py` como capa que expone el agregado y exportaciones alineadas.
+- [x] `frontend/panel/src/app/prospeccion/metricas/page.client.tsx` y `frontend/panel/src/lib/prospeccion/prospectos-client.ts` como consumidores del contrato.
+- [x] `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md` para registrar la decision.
+
+Conclusión:
+
+- No se requiere crear una migracion nueva para esta subfase.
+- Los archivos objetivo ya existen y quedaron alineados con el contrato operativo y documental del plan.
 
 ### A.5 Decision sobre migraciones anteriores
 
