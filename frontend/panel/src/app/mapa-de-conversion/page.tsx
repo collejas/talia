@@ -33,7 +33,6 @@ type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["
 const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz", "correo"] as const;
 type ChannelKey = (typeof DEFAULT_CHANNELS)[number];
 type ColorMode = "sequential" | "channel";
-type ViewMode = "todo" | "trafico" | "whatsapp" | "campanas" | "conversiones";
 
 const STAGE_LABELS: Record<string, string> = {
   captado: "Captado",
@@ -169,14 +168,6 @@ function formatChannelLabel(value: string | null | undefined): string {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1)
 }
 
-function formatViewLabel(value: ViewMode): string {
-  if (value === "trafico") return "Tráfico web"
-  if (value === "whatsapp") return "WhatsApp"
-  if (value === "campanas") return "Campañas"
-  if (value === "conversiones") return "Conversiones"
-  return "Todo"
-}
-
 const METRIC_COLUMNS: Array<{ id: string; label: string; metricKey: string }> = [
   { id: "leads_total", label: "Leads totales", metricKey: "leads_total" },
   { id: "visitantes_total", label: "Visitantes totales", metricKey: "visitantes_total" },
@@ -268,10 +259,6 @@ export default async function Page({
       : [];
   const colorParam = typeof params.color === "string" ? params.color.toLowerCase() : "";
   const colorMode: ColorMode = colorParam === "channel" ? "channel" : "sequential";
-  const viewParam = typeof params.view === "string" ? params.view.toLowerCase() : "";
-  const vista: ViewMode = ["trafico", "whatsapp", "campanas", "conversiones"].includes(viewParam)
-    ? (viewParam as ViewMode)
-    : "todo";
   const sourceClassParam = typeof params.source_class === "string" ? params.source_class.trim().toLowerCase() : "";
   const sourceClass = sourceClassParam.length ? sourceClassParam : null;
   const utmSourceParam = typeof params.utm_source === "string" ? params.utm_source.trim().toLowerCase() : "";
@@ -582,7 +569,6 @@ export default async function Page({
                     nivel={nivel}
                     canales={canalesSelected}
                     etapas={etapas}
-                    vista={vista}
                     color={colorMode}
                     sourceClass={sourceClass}
                     utmSource={utmSource}
@@ -618,7 +604,6 @@ export default async function Page({
                         nivel={nivelChart}
                         shape={mapShape}
                         colorMode={colorMode}
-                        focusMode={vista}
                         globalStages={globalStages}
                         channelFilter={canalesSelected}
                         stageKeys={stageKeys}
@@ -635,7 +620,6 @@ export default async function Page({
                       <div className="flex flex-col gap-4 text-sm">
                         <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                           El mapa separa tráfico web, conversaciones, atribución WhatsApp y conversiones.
-                          Modo activo: <span className="font-medium text-foreground">{formatViewLabel(vista)}</span>.
                         </div>
 
                         <div className="flex flex-col gap-1">
@@ -647,102 +631,92 @@ export default async function Page({
                           </span>
                         </div>
 
-                        {vista !== "conversiones" ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Visitas y contactos
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Visitas y contactos
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Visitas al sitio</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebTotales)}
+                              </span>
                             </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">Visitas al sitio</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.sesionesWebTotales)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">Visitas con chat</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.sesionesWebchatTotales)}
-                                </span>
-                              </div>
-                              {vista !== "trafico" ? (
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-xs text-muted-foreground">Atribución WhatsApp</span>
-                                  <span className="font-medium tabular-nums">
-                                    {formatNumber(mapKpisData.whatsappCampaignsTotal)}
-                                  </span>
-                                </div>
-                              ) : null}
-                              {vista === "todo" || vista === "whatsapp" ? (
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-xs text-muted-foreground">Contactos generados</span>
-                                  <span className="font-medium tabular-nums">
-                                    {formatNumber(
-                                      mapKpisData.sesionesWebchatTotales +
-                                        mapKpisData.conversacionesWhatsapp +
-                                        mapKpisData.conversacionesVoz +
-                                        mapKpisData.conversacionesCorreo,
-                                    )}
-                                  </span>
-                                </div>
-                              ) : null}
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Visitas con chat</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Atribución WhatsApp</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.whatsappCampaignsTotal)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Contactos generados</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(
+                                  mapKpisData.sesionesWebchatTotales +
+                                    mapKpisData.conversacionesWhatsapp +
+                                    mapKpisData.conversacionesVoz +
+                                    mapKpisData.conversacionesCorreo,
+                                )}
+                              </span>
                             </div>
                           </div>
-                        ) : null}
+                        </div>
 
-                        {vista !== "trafico" ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Canales de contacto
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Canales de contacto
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Webchat</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
+                              </span>
                             </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">Webchat</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.sesionesWebchatTotales)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">WhatsApp</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.conversacionesWhatsapp)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">Voz</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.conversacionesVoz)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">Correo</span>
-                                <span className="font-medium tabular-nums">
-                                  {formatNumber(mapKpisData.conversacionesCorreo)}
-                                </span>
-                              </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">WhatsApp</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesWhatsapp)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Voz</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesVoz)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Correo</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesCorreo)}
+                              </span>
                             </div>
                           </div>
-                        ) : null}
+                        </div>
 
-                        {vista !== "trafico" ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Etapas
-                            </div>
-                            <div className="space-y-1">
-                              {stageKeys.map((key) => (
-                                <div key={key} className="flex items-center justify-between gap-3">
-                                  <span className="text-xs text-muted-foreground">
-                                    {STAGE_LABELS[key] ?? key}
-                                  </span>
-                                  <span className="font-medium tabular-nums">
-                                    {formatNumber(globalStages[key] ?? 0)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Etapas
                           </div>
-                        ) : null}
+                          <div className="space-y-1">
+                            {stageKeys.map((key) => (
+                              <div key={key} className="flex items-center justify-between gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                  {STAGE_LABELS[key] ?? key}
+                                </span>
+                                <span className="font-medium tabular-nums">
+                                  {formatNumber(globalStages[key] ?? 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>

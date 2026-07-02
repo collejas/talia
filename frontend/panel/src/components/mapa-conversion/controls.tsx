@@ -50,18 +50,10 @@ const STAGE_OPTIONS = [
 ];
 
 const DEFAULT_STAGES = STAGE_OPTIONS.map((item) => item.value);
-const VIEW_OPTIONS = [
-  { value: "todo", label: "Todo" },
-  { value: "trafico", label: "Tráfico web" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "campanas", label: "Campañas" },
-  { value: "conversiones", label: "Conversiones" },
-];
 type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
   etapas: string[];
-  vista: "todo" | "trafico" | "whatsapp" | "campanas" | "conversiones";
   color: "sequential" | "channel";
   sourceClass: string | null;
   utmSource: string | null;
@@ -97,7 +89,6 @@ export function DemografiaControls({
   nivel,
   canales,
   etapas,
-  vista,
   color,
   sourceClass,
   utmSource,
@@ -211,12 +202,6 @@ export function DemografiaControls({
     updateParams({
       nivel: value,
       estado: value === "municipio" ? searchParams.get("estado") : null,
-    });
-  }
-
-  function handleViewChange(value: string) {
-    updateParams({
-      view: value === "todo" ? null : value,
     });
   }
 
@@ -453,21 +438,6 @@ export function DemografiaControls({
               </div>
 
               <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Dimensión de lectura
-                </p>
-                <Select value={vista} onValueChange={handleViewChange}>
-                  <SelectTrigger className="h-8 w-full">
-                    <SelectValue placeholder="Dimensión" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50">
-                    {VIEW_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Color del mapa
                 </p>
