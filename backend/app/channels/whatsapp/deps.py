@@ -28,10 +28,11 @@ async def verify_twilio_signature(
     if not settings.twilio_validate_signatures:
         return form
 
-    to_number = _normalize_to_number(form.get("To"))
-    tenant_id_value = await resolve_whatsapp_organizacion(to_number=to_number)
+    tenant_id_value = await _resolve_twilio_organizacion_id(form)
     tenant_id = _parse_org_uuid(tenant_id_value)
     runtime_settings = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=tenant_id)
+    if not runtime_settings.validate_signatures:
+        return form
     token = runtime_settings.auth_token or settings.twilio_auth_token
     if not token:
         raise HTTPException(status_code=500, detail="twilio_token_missing")
@@ -41,6 +42,20 @@ async def verify_twilio_signature(
     if not validator.validate(str(request.url), payload, x_twilio_signature or ""):
         raise HTTPException(status_code=403, detail="invalid_twilio_signature")
     return form
+
+
+async def _resolve_twilio_organizacion_id(form: FormData) -> str | None:
+    """Resuelve el tenant Twilio usando primero el campo más informativo del callback."""
+    has_status_fields = bool(_normalize_to_number(form.get("MessageStatus")))
+    lookup_fields = ("From", "To") if has_status_fields else ("To", "From")
+    for field_name in lookup_fields:
+        candidate = _normalize_to_number(form.get(field_name))
+        if not candidate:
+            continue
+        tenant_id_value = await resolve_whatsapp_organizacion(to_number=candidate)
+        if tenant_id_value:
+            return tenant_id_value
+    return None
 
 
 async def verify_meta_signature(
