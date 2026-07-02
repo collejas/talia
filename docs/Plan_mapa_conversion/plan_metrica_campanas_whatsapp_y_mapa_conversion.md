@@ -329,3 +329,55 @@ La regla es:
 - WhatsApp obtiene su propio agregado,
 - conversion queda como capa de resultado,
 - mapa de conversion mantiene su lectura multicanal.
+
+## 13) Evaluacion de migraciones anteriores
+
+Revisando la documentacion y los commits anteriores hasta `3dc8c7297d0178fb0e8fef941b3a2e16ddc877fe`, la conclusion es:
+
+- no se deben deshacer las migraciones del refactor de personas/contactos,
+- si se deben reemplazar o superseder las migraciones de metricas WhatsApp de julio 2026,
+- y la correccion debe ser aditiva, no destructiva.
+
+### 13.1 Migraciones que se conservan
+
+Estas piezas siguen alineadas con el runtime actual y con la semantica de conversacion/persona:
+
+- `supabase/migrations/20280512_140000_whatsapp_personas_runtime.sql`
+- `supabase/migrations/20280512_141000_whatsapp_registrar_mensaje_personas.sql`
+- `supabase/migrations/20280512_160000_inbox_visibility_use_conversation_org.sql`
+- `supabase/migrations/20280512_163000_inbox_threads_personas_only.sql`
+- `supabase/migrations/20280512_174000_inbox_threads_messages_personas.sql`
+- `supabase/migrations/20280604_090000_prospeccion_whatsapp_atribucion_persona_fk.sql`
+
+### 13.2 Migraciones que se deben sustituir
+
+Estas migraciones no deben revertirse a ciegas, pero si deben ser reemplazadas por una version v2 que lea desde la verdad operativa real:
+
+- `supabase/migrations/20260701_200000_prospeccion_campana_whatsapp_metricas_rango.sql`
+- `supabase/migrations/20260701_201000_prospeccion_campana_whatsapp_metricas_rango_respuestas.sql`
+- `supabase/migrations/20260701_202000_prospeccion_campana_whatsapp_metricas_rango_rate_fix.sql`
+- `supabase/migrations/20260701_204000_fix_prospeccion_campana_whatsapp_replies_from_conversations.sql`
+
+### 13.3 Motivo tecnico
+
+La logica actual de esas RPCs depende demasiado de:
+
+- `mensajes.datos->>'source' = 'prospeccion'`
+- `mensajes.datos ? 'batch_id'`
+- `mensajes.datos ? 'campana_id'`
+
+Pero en la data real el contexto canónico de campaña vive de forma mas confiable en:
+
+- `conversaciones.inbox_context.source`
+- `conversaciones.inbox_context.batch_id`
+- `conversaciones.inbox_context.campana_id`
+
+Por eso el agregador actual subcuenta o pierde registros validos.
+
+### 13.4 Regla de correccion
+
+La nueva version debe:
+
+- tomar `conversaciones.inbox_context` como base de atribucion,
+- cruzar `mensajes`, `eventos_entrega` y `oportunidades`,
+- y mantener compatibilidad con lo ya consumido por el panel.

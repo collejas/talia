@@ -36,6 +36,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se dejo explicito que `source = 'prospeccion'` no basta para separar WhatsApp de correo.
 - Se formalizo que la llave de entrega correcta es `eventos_entrega.mensaje_id = mensajes.id`.
 - Se alineo la carpeta para que `prospeccion/metricas`, `mapa-de-conversion` y `prospeccion/campanas` se documenten contra la misma verdad operativa.
+- Se documento que las migraciones de personas/contactos se conservan y que las migraciones WhatsApp de julio 2026 deben ser sustituidas por una v2.
+- Se dejo anotado que la nueva version debe leer desde `conversaciones.inbox_context` y no depender solo de `mensajes.datos`.
 
 ## 2026-06-27
 

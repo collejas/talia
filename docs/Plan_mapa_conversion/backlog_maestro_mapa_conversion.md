@@ -89,6 +89,21 @@ Tareas:
 - [ ] `supabase/migrations/*` para indices y constraints si faltan.
 - [ ] `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md` para registrar la decision.
 
+### A.5 Decision sobre migraciones anteriores
+
+Objetivo:
+
+- evitar rollback innecesario del refactor de personas/contactos,
+- y sustituir solo la capa de metricas WhatsApp que quedo desalineada.
+
+Tareas:
+
+- [x] Confirmar que las migraciones de personas/contactos se conservan.
+- [x] Confirmar que las migraciones de metricas WhatsApp de julio 2026 se reemplazan por una v2.
+- [ ] Crear la nueva migracion o RPC v2 con seed en `conversaciones.inbox_context`.
+- [ ] Mantener compatibilidad temporal con los contratos que todavia leen `mensajes.datos`.
+- [ ] Registrar cualquier backfill necesario para no perder historia.
+
 ## 4) Epic B · Backend
 
 ### B.1 Separar metadatos de metricas
