@@ -141,6 +141,7 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     }
 
     addString("nombre", getText(formData, "tenant_nombre"))
+    addString("nombre_comercial", getText(formData, "tenant_nombre_comercial"))
     addString("razon_social", getText(formData, "tenant_razon_social"))
     addString("rfc", getText(formData, "tenant_rfc"))
     addString("pais", getText(formData, "tenant_pais"))
@@ -148,6 +149,17 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     addString("ciudad", getText(formData, "tenant_ciudad"))
     addString("dominio_principal", getText(formData, "tenant_dominio"))
     addString("telefono", getText(formData, "tenant_telefono"))
+    addString("correo_contacto_principal", getText(formData, "tenant_correo_contacto_principal"))
+    addString("correo_facturacion", getText(formData, "tenant_correo_facturacion"))
+    addString("contacto_nombre", getText(formData, "tenant_contacto_nombre"))
+    addString("contacto_telefono", getText(formData, "tenant_contacto_telefono"))
+    addString("timezone", getText(formData, "tenant_timezone"))
+    addString("idioma", getText(formData, "tenant_idioma"))
+    addString("moneda", getText(formData, "tenant_moneda"))
+    addString("logo_url", getText(formData, "tenant_logo_url"))
+    addString("direccion_fiscal", getText(formData, "tenant_direccion_fiscal"))
+    addString("codigo_postal", getText(formData, "tenant_codigo_postal"))
+    addString("regimen_fiscal", getText(formData, "tenant_regimen_fiscal"))
     addString("sitio_web", getText(formData, "tenant_sitio"))
     const onboarding = getText(formData, "tenant_estado_onboarding")
     if (onboarding) {

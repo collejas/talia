@@ -55,7 +55,7 @@ class PlatformRepository:
 
     async def list_organizaciones(self) -> list[dict[str, Any]]:
         params = {
-            "select": "id,nombre,razon_social,dominio_principal,estado_onboarding,activo,config,fecha_alta",
+            "select": "id,nombre,nombre_comercial,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,codigo_postal,regimen_fiscal,estado_onboarding,activo,config,fecha_alta",
             "order": "fecha_alta.desc",
         }
         data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
@@ -774,7 +774,7 @@ class PlatformRepository:
 
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,nombre,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "select": "id,nombre,nombre_comercial,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
             "id": f"eq.{organizacion_id}",
             "limit": "1",
         }

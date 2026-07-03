@@ -245,8 +245,25 @@ class TenantSummary(BaseModel):
 
     id: UUID
     nombre: str
+    nombre_comercial: str | None = None
     razon_social: str | None = None
+    rfc: str | None = None
+    pais: str | None = None
+    estado: str | None = None
+    ciudad: str | None = None
     dominio_principal: str | None = None
+    telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     estado_onboarding: str | None = None
     activo: bool | None = None
     commercial_plan_id: UUID | None = None
@@ -686,6 +703,7 @@ class CreateTenantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nombre: str = Field(..., min_length=2)
+    nombre_comercial: str | None = None
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -693,6 +711,17 @@ class CreateTenantRequest(BaseModel):
     estado: str | None = None
     ciudad: str | None = None
     telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     sitio_web: str | None = None
     activo: bool | None = None
     estado_onboarding: str | None = None
@@ -715,6 +744,7 @@ class TenantBasicInfo(BaseModel):
 
     id: UUID
     nombre: str
+    nombre_comercial: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
     pais: str | None = None
@@ -722,6 +752,17 @@ class TenantBasicInfo(BaseModel):
     ciudad: str | None = None
     dominio_principal: str | None = None
     telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
     commercial_plan_id: UUID | None = None
@@ -817,6 +858,7 @@ class UpdateTenantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nombre: str | None = None
+    nombre_comercial: str | None = None
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -824,6 +866,17 @@ class UpdateTenantRequest(BaseModel):
     estado: str | None = None
     ciudad: str | None = None
     telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     sitio_web: str | None = None
     activo: bool | None = None
     estado_onboarding: str | None = None
@@ -2076,6 +2129,8 @@ async def create_tenant(
     tenant_payload: dict[str, Any] = {
         "nombre": payload.nombre,
     }
+    if payload.nombre_comercial:
+        tenant_payload["nombre_comercial"] = payload.nombre_comercial
     if payload.razon_social:
         tenant_payload["razon_social"] = payload.razon_social
     if payload.dominio_principal:
@@ -2090,6 +2145,28 @@ async def create_tenant(
         tenant_payload["ciudad"] = payload.ciudad
     if payload.telefono:
         tenant_payload["telefono"] = payload.telefono
+    if payload.correo_contacto_principal:
+        tenant_payload["correo_contacto_principal"] = payload.correo_contacto_principal
+    if payload.correo_facturacion:
+        tenant_payload["correo_facturacion"] = payload.correo_facturacion
+    if payload.contacto_nombre:
+        tenant_payload["contacto_nombre"] = payload.contacto_nombre
+    if payload.contacto_telefono:
+        tenant_payload["contacto_telefono"] = payload.contacto_telefono
+    if payload.timezone:
+        tenant_payload["timezone"] = payload.timezone
+    if payload.idioma:
+        tenant_payload["idioma"] = payload.idioma
+    if payload.moneda:
+        tenant_payload["moneda"] = payload.moneda
+    if payload.logo_url:
+        tenant_payload["logo_url"] = payload.logo_url
+    if payload.direccion_fiscal:
+        tenant_payload["direccion_fiscal"] = payload.direccion_fiscal
+    if payload.codigo_postal:
+        tenant_payload["codigo_postal"] = payload.codigo_postal
+    if payload.regimen_fiscal:
+        tenant_payload["regimen_fiscal"] = payload.regimen_fiscal
     if payload.sitio_web:
         tenant_payload["sitio_web"] = payload.sitio_web
     if payload.activo is not None:
@@ -2178,6 +2255,8 @@ async def create_tenant_with_admin(
             raise HTTPException(status_code=409, detail="email_already_registered")
 
         tenant_payload: dict[str, Any] = {"nombre": payload.tenant.nombre}
+        if payload.tenant.nombre_comercial:
+            tenant_payload["nombre_comercial"] = payload.tenant.nombre_comercial
         if payload.tenant.razon_social:
             tenant_payload["razon_social"] = payload.tenant.razon_social
         if payload.tenant.dominio_principal:
@@ -2192,6 +2271,28 @@ async def create_tenant_with_admin(
             tenant_payload["ciudad"] = payload.tenant.ciudad
         if payload.tenant.telefono:
             tenant_payload["telefono"] = payload.tenant.telefono
+        if payload.tenant.correo_contacto_principal:
+            tenant_payload["correo_contacto_principal"] = payload.tenant.correo_contacto_principal
+        if payload.tenant.correo_facturacion:
+            tenant_payload["correo_facturacion"] = payload.tenant.correo_facturacion
+        if payload.tenant.contacto_nombre:
+            tenant_payload["contacto_nombre"] = payload.tenant.contacto_nombre
+        if payload.tenant.contacto_telefono:
+            tenant_payload["contacto_telefono"] = payload.tenant.contacto_telefono
+        if payload.tenant.timezone:
+            tenant_payload["timezone"] = payload.tenant.timezone
+        if payload.tenant.idioma:
+            tenant_payload["idioma"] = payload.tenant.idioma
+        if payload.tenant.moneda:
+            tenant_payload["moneda"] = payload.tenant.moneda
+        if payload.tenant.logo_url:
+            tenant_payload["logo_url"] = payload.tenant.logo_url
+        if payload.tenant.direccion_fiscal:
+            tenant_payload["direccion_fiscal"] = payload.tenant.direccion_fiscal
+        if payload.tenant.codigo_postal:
+            tenant_payload["codigo_postal"] = payload.tenant.codigo_postal
+        if payload.tenant.regimen_fiscal:
+            tenant_payload["regimen_fiscal"] = payload.tenant.regimen_fiscal
         if payload.tenant.sitio_web:
             tenant_payload["sitio_web"] = payload.tenant.sitio_web
         if payload.tenant.activo is not None:

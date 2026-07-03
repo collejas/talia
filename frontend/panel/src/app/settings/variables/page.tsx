@@ -58,13 +58,25 @@ const MASTER_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 type TenantSettingsResponse = {
   organizacion_id: string
   nombre: string
+  nombre_comercial?: string | null
   razon_social?: string | null
-  dominio_principal?: string | null
   rfc?: string | null
   pais?: string | null
   estado?: string | null
   ciudad?: string | null
+  dominio_principal?: string | null
   telefono?: string | null
+  correo_contacto_principal?: string | null
+  correo_facturacion?: string | null
+  contacto_nombre?: string | null
+  contacto_telefono?: string | null
+  timezone?: string | null
+  idioma?: string | null
+  moneda?: string | null
+  logo_url?: string | null
+  direccion_fiscal?: string | null
+  codigo_postal?: string | null
+  regimen_fiscal?: string | null
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
@@ -135,6 +147,7 @@ export default async function SettingsVariablesPage() {
   const tenantInfo: TenantOrganizationInfo | null = data
     ? {
         nombre: data.nombre,
+        nombre_comercial: data.nombre_comercial,
         razon_social: data.razon_social,
         rfc: data.rfc,
         pais: data.pais,
@@ -142,6 +155,17 @@ export default async function SettingsVariablesPage() {
         ciudad: data.ciudad,
         dominio_principal: data.dominio_principal,
         telefono: data.telefono,
+        correo_contacto_principal: data.correo_contacto_principal,
+        correo_facturacion: data.correo_facturacion,
+        contacto_nombre: data.contacto_nombre,
+        contacto_telefono: data.contacto_telefono,
+        timezone: data.timezone,
+        idioma: data.idioma,
+        moneda: data.moneda,
+        logo_url: data.logo_url,
+        direccion_fiscal: data.direccion_fiscal,
+        codigo_postal: data.codigo_postal,
+        regimen_fiscal: data.regimen_fiscal,
         sitio_web: data.sitio_web,
         estado_onboarding: data.estado_onboarding,
         activo: data.activo,
@@ -279,7 +303,9 @@ export default async function SettingsVariablesPage() {
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle>Datos generales</CardTitle>
-              <CardDescription>Actualiza los campos de <code>public.organizaciones</code> del tenant.</CardDescription>
+              <CardDescription>
+                Actualiza identidad, contacto, ubicación, fiscalidad y branding de <code>public.organizaciones</code>.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} showActiveToggle={false} />

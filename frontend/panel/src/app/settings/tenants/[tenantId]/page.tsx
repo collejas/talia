@@ -325,7 +325,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle>Datos generales</CardTitle>
-            <CardDescription>Actualiza los campos de `public.organizaciones` del tenant.</CardDescription>
+            <CardDescription>
+              Actualiza identidad, contacto, ubicación, fiscalidad y branding de `public.organizaciones`.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />

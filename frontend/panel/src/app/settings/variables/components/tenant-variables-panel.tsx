@@ -25,6 +25,7 @@ import { formatApiError } from "@/app/settings/variables/utils/format-error"
 export type TenantScopedSettings = {
   organizacion_id: string
   nombre: string
+  nombre_comercial?: string | null
   razon_social?: string | null
   dominio_principal?: string | null
   rfc?: string | null
@@ -32,6 +33,17 @@ export type TenantScopedSettings = {
   estado?: string | null
   ciudad?: string | null
   telefono?: string | null
+  correo_contacto_principal?: string | null
+  correo_facturacion?: string | null
+  contacto_nombre?: string | null
+  contacto_telefono?: string | null
+  timezone?: string | null
+  idioma?: string | null
+  moneda?: string | null
+  logo_url?: string | null
+  direccion_fiscal?: string | null
+  codigo_postal?: string | null
+  regimen_fiscal?: string | null
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null

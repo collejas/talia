@@ -631,6 +631,7 @@ export type RouteItem = {
 
 export type TenantOrganizationInfo = {
   nombre?: string | null
+  nombre_comercial?: string | null
   razon_social?: string | null
   rfc?: string | null
   pais?: string | null
@@ -638,6 +639,17 @@ export type TenantOrganizationInfo = {
   ciudad?: string | null
   dominio_principal?: string | null
   telefono?: string | null
+  correo_contacto_principal?: string | null
+  correo_facturacion?: string | null
+  contacto_nombre?: string | null
+  contacto_telefono?: string | null
+  timezone?: string | null
+  idioma?: string | null
+  moneda?: string | null
+  logo_url?: string | null
+  direccion_fiscal?: string | null
+  codigo_postal?: string | null
+  regimen_fiscal?: string | null
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
@@ -668,77 +680,180 @@ export function TenantOrganizationInfoForm({
   return (
     <form action={formAction} className="space-y-6">
       <input type="hidden" name="tenant_id" value={tenantId} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="tenant_nombre">Nombre</Label>
-          <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_razon_social">Razón social</Label>
-          <Input id="tenant_razon_social" name="tenant_razon_social" defaultValue={info?.razon_social ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_rfc">RFC</Label>
-          <Input id="tenant_rfc" name="tenant_rfc" defaultValue={info?.rfc ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_pais">País</Label>
-          <Input id="tenant_pais" name="tenant_pais" defaultValue={info?.pais ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_estado">Estado</Label>
-          <Input id="tenant_estado" name="tenant_estado" defaultValue={info?.estado ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_ciudad">Ciudad</Label>
-          <Input id="tenant_ciudad" name="tenant_ciudad" defaultValue={info?.ciudad ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_dominio">Dominio principal</Label>
-          <Input id="tenant_dominio" name="tenant_dominio" defaultValue={info?.dominio_principal ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_telefono">Teléfono</Label>
-          <Input id="tenant_telefono" name="tenant_telefono" defaultValue={info?.telefono ?? ""} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tenant_sitio">Sitio web</Label>
-          <Input id="tenant_sitio" name="tenant_sitio" defaultValue={info?.sitio_web ?? ""} />
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {showActiveToggle ? (
-          <div className="space-y-2">
-            <Label>Activo</Label>
-            <input type="hidden" name="tenant_activo_present" value="1" />
-            <div className="flex items-center gap-3">
-              <input
-                id="tenant_activo"
-                name="tenant_activo"
-                type="checkbox"
-                className="size-4"
-                defaultChecked={info?.activo ?? true}
-              />
-              <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+      <div className="space-y-6">
+        <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Identidad</p>
+            <p className="text-xs text-muted-foreground">
+              Nombre público, razón social y datos fiscales base del tenant.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_nombre">Nombre</Label>
+              <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_nombre_comercial">Nombre comercial</Label>
+              <Input id="tenant_nombre_comercial" name="tenant_nombre_comercial" defaultValue={info?.nombre_comercial ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_razon_social">Razón social</Label>
+              <Input id="tenant_razon_social" name="tenant_razon_social" defaultValue={info?.razon_social ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_rfc">RFC</Label>
+              <Input id="tenant_rfc" name="tenant_rfc" defaultValue={info?.rfc ?? ""} />
             </div>
           </div>
-        ) : null}
-        <div className="space-y-2">
-          <Label htmlFor="tenant_estado_onboarding">Estado de onboarding</Label>
-          <select
-            id="tenant_estado_onboarding"
-            name="tenant_estado_onboarding"
-            defaultValue={defaultOnboarding}
-            className="rounded-md border border-border px-3 py-2 text-sm"
-          >
-            <option value="pendiente">Pendiente</option>
-            <option value="en_progreso">En progreso</option>
-            <option value="completado">Completado</option>
-            <option value="pausado">Pausado</option>
-            <option value="cancelado">Cancelado</option>
-          </select>
-        </div>
+        </section>
+
+        <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Contacto operativo</p>
+            <p className="text-xs text-muted-foreground">
+              Dirección de contacto principal y correo para operación o facturación.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_contacto_nombre">Contacto principal</Label>
+              <Input id="tenant_contacto_nombre" name="tenant_contacto_nombre" defaultValue={info?.contacto_nombre ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_contacto_telefono">Teléfono del contacto</Label>
+              <Input id="tenant_contacto_telefono" name="tenant_contacto_telefono" defaultValue={info?.contacto_telefono ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_correo_contacto_principal">Correo principal</Label>
+              <Input
+                id="tenant_correo_contacto_principal"
+                name="tenant_correo_contacto_principal"
+                defaultValue={info?.correo_contacto_principal ?? ""}
+                type="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_correo_facturacion">Correo de facturación</Label>
+              <Input
+                id="tenant_correo_facturacion"
+                name="tenant_correo_facturacion"
+                defaultValue={info?.correo_facturacion ?? ""}
+                type="email"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Ubicación y operación</p>
+            <p className="text-xs text-muted-foreground">
+              Datos que ayudan a ordenar horarios, moneda y localización del tenant.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_pais">País</Label>
+              <Input id="tenant_pais" name="tenant_pais" defaultValue={info?.pais ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_estado">Estado</Label>
+              <Input id="tenant_estado" name="tenant_estado" defaultValue={info?.estado ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_ciudad">Ciudad</Label>
+              <Input id="tenant_ciudad" name="tenant_ciudad" defaultValue={info?.ciudad ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_timezone">Zona horaria</Label>
+              <Input id="tenant_timezone" name="tenant_timezone" defaultValue={info?.timezone ?? ""} placeholder="America/Mexico_City" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_idioma">Idioma</Label>
+              <Input id="tenant_idioma" name="tenant_idioma" defaultValue={info?.idioma ?? ""} placeholder="es-MX" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_moneda">Moneda</Label>
+              <Input id="tenant_moneda" name="tenant_moneda" defaultValue={info?.moneda ?? ""} placeholder="MXN" />
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Marca y dirección fiscal</p>
+            <p className="text-xs text-muted-foreground">
+              Enlace público, logo y domicilio principal para documentos y soporte.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_dominio">Dominio principal</Label>
+              <Input id="tenant_dominio" name="tenant_dominio" defaultValue={info?.dominio_principal ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_sitio">Sitio web</Label>
+              <Input id="tenant_sitio" name="tenant_sitio" defaultValue={info?.sitio_web ?? ""} type="url" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="tenant_logo_url">Logo URL</Label>
+              <Input id="tenant_logo_url" name="tenant_logo_url" defaultValue={info?.logo_url ?? ""} type="url" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="tenant_direccion_fiscal">Dirección fiscal</Label>
+              <Textarea
+                id="tenant_direccion_fiscal"
+                name="tenant_direccion_fiscal"
+                defaultValue={info?.direccion_fiscal ?? ""}
+                rows={3}
+                placeholder="Calle, número, colonia, municipio y referencias"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_codigo_postal">Código postal</Label>
+              <Input id="tenant_codigo_postal" name="tenant_codigo_postal" defaultValue={info?.codigo_postal ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_regimen_fiscal">Régimen fiscal</Label>
+              <Input id="tenant_regimen_fiscal" name="tenant_regimen_fiscal" defaultValue={info?.regimen_fiscal ?? ""} />
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2">
+          {showActiveToggle ? (
+            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <Label>Activo</Label>
+              <input type="hidden" name="tenant_activo_present" value="1" />
+              <div className="flex items-center gap-3">
+                <input
+                  id="tenant_activo"
+                  name="tenant_activo"
+                  type="checkbox"
+                  className="size-4"
+                  defaultChecked={info?.activo ?? true}
+                />
+                <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+              </div>
+            </div>
+          ) : null}
+          <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4">
+            <Label htmlFor="tenant_estado_onboarding">Estado de onboarding</Label>
+            <select
+              id="tenant_estado_onboarding"
+              name="tenant_estado_onboarding"
+              defaultValue={defaultOnboarding}
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="pendiente">Pendiente</option>
+              <option value="en_progreso">En progreso</option>
+              <option value="completado">Completado</option>
+              <option value="pausado">Pausado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+        </section>
       </div>
 
       <div className="flex items-center justify-between gap-3">

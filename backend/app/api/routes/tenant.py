@@ -122,13 +122,25 @@ class TenantScopedSettings(BaseModel):
 
     organizacion_id: UUID
     nombre: str
+    nombre_comercial: str | None = None
     razon_social: str | None = None
-    dominio_principal: str | None = None
     rfc: str | None = None
     pais: str | None = None
     estado: str | None = None
     ciudad: str | None = None
+    dominio_principal: str | None = None
     telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
     activo: bool | None = None
@@ -147,6 +159,7 @@ class TenantScopedUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nombre: str | None = Field(default=None, min_length=2)
+    nombre_comercial: str | None = None
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -154,6 +167,17 @@ class TenantScopedUpdateRequest(BaseModel):
     estado: str | None = None
     ciudad: str | None = None
     telefono: str | None = None
+    correo_contacto_principal: str | None = None
+    correo_facturacion: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    timezone: str | None = None
+    idioma: str | None = None
+    moneda: str | None = None
+    logo_url: str | None = None
+    direccion_fiscal: str | None = None
+    codigo_postal: str | None = None
+    regimen_fiscal: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
 
@@ -188,13 +212,25 @@ async def _build_tenant_response(
     data = {
         "organizacion_id": organizacion_id,
         "nombre": row.get("nombre") or "",
+        "nombre_comercial": row.get("nombre_comercial"),
         "razon_social": row.get("razon_social"),
-        "dominio_principal": row.get("dominio_principal"),
         "rfc": row.get("rfc"),
         "pais": row.get("pais"),
         "estado": row.get("estado"),
         "ciudad": row.get("ciudad"),
+        "dominio_principal": row.get("dominio_principal"),
         "telefono": row.get("telefono"),
+        "correo_contacto_principal": row.get("correo_contacto_principal"),
+        "correo_facturacion": row.get("correo_facturacion"),
+        "contacto_nombre": row.get("contacto_nombre"),
+        "contacto_telefono": row.get("contacto_telefono"),
+        "timezone": row.get("timezone"),
+        "idioma": row.get("idioma"),
+        "moneda": row.get("moneda"),
+        "logo_url": row.get("logo_url"),
+        "direccion_fiscal": row.get("direccion_fiscal"),
+        "codigo_postal": row.get("codigo_postal"),
+        "regimen_fiscal": row.get("regimen_fiscal"),
         "sitio_web": row.get("sitio_web"),
         "estado_onboarding": row.get("estado_onboarding"),
         "activo": row.get("activo"),
