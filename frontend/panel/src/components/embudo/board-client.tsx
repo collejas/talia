@@ -36,6 +36,7 @@ import {
   type LeadDrawerSubmitPayload,
   type StagePrepState,
 } from "@/components/embudo/lead-drawer";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateTimeCalendarPicker } from "@/components/ui/datetime-calendar-picker";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
+import { formatDateTime } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ScoringKpisOverview } from "@/components/embudo/scoring-kpis";
@@ -60,6 +62,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 
@@ -88,6 +91,25 @@ type ProgressionContext = {
   destinationStage: EmbudoStage;
   pathStages: EmbudoStage[];
 };
+
+type ProgressionQuoteEntry = {
+  id: string;
+  version: number;
+  status: string;
+  channel: string | null;
+  total: number | null;
+  currency: string | null;
+  title: string | null;
+  description: string | null;
+  createdAt: string | null;
+  sentAt: string | null;
+};
+
+type ProgressionQuotesState =
+  | { status: "idle"; data: ProgressionQuoteEntry[] }
+  | { status: "loading"; data: ProgressionQuoteEntry[] }
+  | { status: "loaded"; data: ProgressionQuoteEntry[] }
+  | { status: "error"; data: ProgressionQuoteEntry[]; error: string };
 
 type ProgressionFieldType =
   | "text"
@@ -273,6 +295,11 @@ export function EmbudoBoardClient({
   const [progressionStagePrep, setProgressionStagePrep] = useState<StagePrepMetadata>({});
   const [progressionError, setProgressionError] = useState<string | null>(null);
   const [progressionPending, setProgressionPending] = useState(false);
+  const [progressionQuotesState, setProgressionQuotesState] = useState<ProgressionQuotesState>({
+    status: "idle",
+    data: [],
+  });
+  const [selectedWonQuoteId, setSelectedWonQuoteId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [appliedDays, setAppliedDays] = useState<number | null>(null);
   const [appliedCanal, setAppliedCanal] = useState("");
@@ -396,6 +423,59 @@ export function EmbudoBoardClient({
     },
     [],
   );
+
+  const loadOpportunityQuotes = useCallback(async (oportunidadId: string) => {
+    try {
+      setProgressionQuotesState((current) => ({ status: "loading", data: current.data }));
+      const response = await fetch(`/api/embudo/leads/${oportunidadId}/quotes`, {
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setProgressionQuotesState({ status: "error", data: [], error: message });
+        return;
+      }
+      const quotes = Array.isArray(body?.quotes) ? (body.quotes as unknown[]) : [];
+      const normalizedQuotes = quotes
+        .map((quote) => {
+          if (!quote || typeof quote !== "object" || Array.isArray(quote)) return null;
+          const row = quote as Record<string, unknown>;
+          return {
+            id: String(row.id ?? ""),
+            version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
+            status: typeof row.estado === "string" ? row.estado : "borrador",
+            channel: typeof row.canal_envio === "string" ? row.canal_envio : null,
+            total:
+              typeof row.total === "number"
+                ? row.total
+                : typeof row.total === "string" && Number.isFinite(Number(row.total))
+                ? Number(row.total)
+                : null,
+            currency: typeof row.moneda === "string" ? row.moneda : null,
+            title: typeof row.titulo === "string" ? row.titulo : null,
+            description: typeof row.descripcion === "string" ? row.descripcion : null,
+            createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
+            sentAt: typeof row.enviada_en === "string" ? row.enviada_en : null,
+          } satisfies ProgressionQuoteEntry;
+        })
+        .filter((item): item is ProgressionQuoteEntry => Boolean(item && item.id));
+      setProgressionQuotesState({ status: "loaded", data: normalizedQuotes });
+      const acceptedQuote =
+        normalizedQuotes.find((quote) => quote.status.toLowerCase() === "aceptada") ?? null;
+      setSelectedWonQuoteId(acceptedQuote?.id ?? normalizedQuotes[0]?.id ?? null);
+    } catch (error) {
+      setProgressionQuotesState({
+        status: "error",
+        data: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las cotizaciones.",
+      });
+    }
+  }, []);
 
   const visitantesDisplay = useMemo(() => {
     const formatter = new Intl.NumberFormat("es-MX");
@@ -628,6 +708,8 @@ export function EmbudoBoardClient({
     setProgressionStagePrep(extractStagePrep(context.card));
     setProgressionError(null);
     setProgressionPending(false);
+    setProgressionQuotesState({ status: "idle", data: [] });
+    setSelectedWonQuoteId(null);
     setProgressionDialogOpen(true);
   }, []);
 
@@ -637,7 +719,18 @@ export function EmbudoBoardClient({
     setProgressionStagePrep({});
     setProgressionError(null);
     setProgressionPending(false);
+    setProgressionQuotesState({ status: "idle", data: [] });
+    setSelectedWonQuoteId(null);
   }, []);
+
+  useEffect(() => {
+    if (!progressionDialogOpen || !progressionContext) return;
+    const includesWon = progressionContext.pathStages.some((stage) =>
+      matchesStageCode(normalizeStageCode(stage), "cerrado_ganado"),
+    );
+    if (!includesWon) return;
+    void loadOpportunityQuotes(progressionContext.card.oportunidadId);
+  }, [loadOpportunityQuotes, progressionContext, progressionDialogOpen]);
 
   const handleProgressionFieldChange = useCallback(
     (stageCode: string, fieldKey: string, value: string | boolean) => {
@@ -671,19 +764,42 @@ export function EmbudoBoardClient({
     setMovePending(true);
 
     try {
-      let acceptedForWon = true;
       const pathIncludesWon = pathStages.some((stage) =>
         matchesStageCode(normalizeStageCode(stage), "cerrado_ganado"),
       );
       if (pathIncludesWon) {
-        const acceptedCheck = await ensureLeadHasAcceptedQuote(card.oportunidadId);
-        if (!acceptedCheck.ok) {
-          setProgressionError(
-            acceptedCheck.error || "No se pudo verificar las cotizaciones del lead.",
-          );
+        const selectedQuote =
+          progressionQuotesState.data.find((quote) => quote.id === selectedWonQuoteId) ?? null;
+        if (!selectedQuote) {
+          setProgressionError("Selecciona una cotización para marcarla como ganada.");
+          setMovePending(false);
           return;
         }
-        acceptedForWon = acceptedCheck.accepted;
+
+        const response = await fetch(`/api/embudo/quotes/${selectedQuote.id}/mark`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            estado: "aceptada",
+            canal: selectedQuote.channel,
+            metadata: { quote_version: selectedQuote.version },
+          }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setProgressionError(
+            typeof body?.error === "string" && body.error
+              ? body.error
+              : "No se pudo marcar la cotización como ganada.",
+          );
+          setMovePending(false);
+          return;
+        }
+
+        setMovePending(false);
+        await fetchBoardData(selectedVendedorId || null, { silent: true });
+        closeProgressionDialog();
+        return;
       }
 
       let furthestValidStage: EmbudoStage | null = null;
@@ -691,11 +807,6 @@ export function EmbudoBoardClient({
 
       for (const stage of pathStages) {
         const stageCode = normalizeStageCode(stage);
-        if (matchesStageCode(stageCode, "cerrado_ganado") && !acceptedForWon) {
-          blockMessage =
-            "Necesitas una cotización aceptada antes de mover el lead a Cerrado (Ganado).";
-          break;
-        }
         const missingRequirement = getMissingStageRequirementFromPrep(stage, progressionStagePrep);
         if (missingRequirement) {
           blockMessage = `Falta “${missingRequirement}” para completar la etapa “${stage.nombre}”.`;
@@ -1401,6 +1512,13 @@ export function EmbudoBoardClient({
     handleDragCancel();
   };
 
+  const progressionIncludesWon = Boolean(
+    progressionContext?.pathStages.some((stage) => matchesStageCode(normalizeStageCode(stage), "cerrado_ganado")),
+  );
+  const progressionQuotesLoading = progressionQuotesState.status === "loading";
+  const progressionQuotesError =
+    progressionQuotesState.status === "error" ? progressionQuotesState.error : null;
+
   const hasContent =
     stages.length > 0 ||
     boardState.sinConversacion.length > 0 ||
@@ -1864,103 +1982,193 @@ export function EmbudoBoardClient({
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[65vh] space-y-4 overflow-auto pr-1">
-            {(progressionContext?.pathStages ?? []).map((stage) => {
-              const requirements = getStageRequirements(stage);
-              if (!requirements.length) {
-                return (
-                  <div key={stage.id} className="rounded-lg border p-3">
-                    <p className="text-sm font-medium">{stage.nombre}</p>
-                    <p className="text-xs text-muted-foreground">Sin campos obligatorios.</p>
+            {progressionIncludesWon ? (
+              <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Selecciona la cotización que ganará la oportunidad</p>
+                  <p className="text-xs text-muted-foreground">
+                    Al confirmar, el sistema marcará la cotización como aceptada y moverá la oportunidad a
+                    Cerrado (Ganado).
+                  </p>
+                </div>
+                {progressionQuotesLoading ? (
+                  <div className="flex items-center gap-2 rounded-md border border-dashed border-emerald-200 bg-white/70 px-3 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Cargando cotizaciones...
                   </div>
+                ) : progressionQuotesError ? (
+                  <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {progressionQuotesError}
+                  </p>
+                ) : progressionQuotesState.data.length ? (
+                  <div className="space-y-2">
+                    {progressionQuotesState.data.map((quote) => {
+                      const isSelected = quote.id === selectedWonQuoteId;
+                      const status = quote.status.toLowerCase();
+                      const totalValue =
+                        quote.total != null
+                          ? new Intl.NumberFormat("es-MX", {
+                              style: "currency",
+                              currency: (quote.currency || "MXN").toUpperCase(),
+                              maximumFractionDigits: 0,
+                            }).format(quote.total)
+                          : "Sin total";
+                      return (
+                        <button
+                          key={quote.id}
+                          type="button"
+                          onClick={() => setSelectedWonQuoteId(quote.id)}
+                          disabled={progressionPending}
+                          className={cn(
+                            "w-full rounded-lg border p-3 text-left transition",
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                              : "border-border bg-background hover:border-emerald-300 hover:bg-emerald-50/40",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={status === "aceptada" ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
+                                  {status}
+                                </Badge>
+                                {isSelected ? (
+                                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                                    Seleccionada
+                                  </Badge>
+                                ) : null}
+                                {quote.channel ? (
+                                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                    {quote.channel}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              <p className="text-sm font-medium text-foreground">
+                                Cotización v{quote.version}
+                                {quote.title ? ` · ${quote.title}` : ""}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {quote.description || "Sin descripción"}
+                              </p>
+                            </div>
+                            <div className="text-right text-sm">
+                              <p className="font-semibold text-foreground">{totalValue}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {quote.sentAt || quote.createdAt
+                                  ? `Actualizada ${formatDateTime(quote.sentAt ?? quote.createdAt ?? "")}`
+                                  : "Sin fecha"}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-emerald-200 bg-white/70 px-3 py-4 text-sm text-muted-foreground">
+                    Esta oportunidad todavía no tiene cotizaciones.
+                  </div>
+                )}
+              </div>
+            ) : (
+              (progressionContext?.pathStages ?? []).map((stage) => {
+                const requirements = getStageRequirements(stage);
+                if (!requirements.length) {
+                  return (
+                    <div key={stage.id} className="rounded-lg border p-3">
+                      <p className="text-sm font-medium">{stage.nombre}</p>
+                      <p className="text-xs text-muted-foreground">Sin campos obligatorios.</p>
+                    </div>
+                  );
+                }
+                const stageEntry = resolveStagePrepEntry(
+                  progressionStagePrep,
+                  stage.codigo,
+                  normalizeStageCode(stage),
+                  resolveStageRequirementKey(normalizeStageCode(stage)) ?? undefined,
                 );
-              }
-              const stageEntry = resolveStagePrepEntry(
-                progressionStagePrep,
-                stage.codigo,
-                normalizeStageCode(stage),
-                resolveStageRequirementKey(normalizeStageCode(stage)) ?? undefined,
-              );
-              const stageKey =
-                stageEntry?.key ||
-                normalizeStageCode(stage) ||
-                stage.codigo.toLowerCase();
+                const stageKey =
+                  stageEntry?.key ||
+                  normalizeStageCode(stage) ||
+                  stage.codigo.toLowerCase();
 
-              return (
-                <div key={stage.id} className="space-y-3 rounded-lg border p-3">
-                  <p className="text-sm font-medium">{stage.nombre}</p>
-                  {requirements.map((requirement) => {
-                    const value = readStagePrepFieldValue(
-                      progressionStagePrep,
-                      stage,
-                      requirement.key,
-                    );
-                    const inputId = `progression-${stage.id}-${requirement.key}`;
-                    const fieldType = requirement.type;
-                    const stringValue = typeof value === "string" ? value : "";
-                    const boolValue = value === true;
-                    return (
-                      <div key={requirement.key} className="space-y-1">
-                        <Label htmlFor={inputId} className="text-xs font-medium">
-                          {requirement.label} *
-                        </Label>
-                        {fieldType === "select" ? (
-                          <select
-                            id={inputId}
-                            className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full items-center rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                            value={stringValue}
-                            onChange={(event) =>
-                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
-                            }
-                            disabled={progressionPending}
-                          >
-                            <option value="">Selecciona una opción</option>
-                            {(requirement.options ?? []).map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : fieldType === "checkbox" ? (
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
+                return (
+                  <div key={stage.id} className="space-y-3 rounded-lg border p-3">
+                    <p className="text-sm font-medium">{stage.nombre}</p>
+                    {requirements.map((requirement) => {
+                      const value = readStagePrepFieldValue(
+                        progressionStagePrep,
+                        stage,
+                        requirement.key,
+                      );
+                      const inputId = `progression-${stage.id}-${requirement.key}`;
+                      const fieldType = requirement.type;
+                      const stringValue = typeof value === "string" ? value : "";
+                      const boolValue = value === true;
+                      return (
+                        <div key={requirement.key} className="space-y-1">
+                          <Label htmlFor={inputId} className="text-xs font-medium">
+                            {requirement.label} *
+                          </Label>
+                          {fieldType === "select" ? (
+                            <select
                               id={inputId}
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={boolValue}
+                              className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full items-center rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                              value={stringValue}
                               onChange={(event) =>
-                                handleProgressionFieldChange(stageKey, requirement.key, event.target.checked)
+                                handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
+                              }
+                              disabled={progressionPending}
+                            >
+                              <option value="">Selecciona una opción</option>
+                              {(requirement.options ?? []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : fieldType === "checkbox" ? (
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                id={inputId}
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={boolValue}
+                                onChange={(event) =>
+                                  handleProgressionFieldChange(stageKey, requirement.key, event.target.checked)
+                                }
+                                disabled={progressionPending}
+                              />
+                              <span>Marcar como completado</span>
+                            </label>
+                          ) : fieldType === "textarea" ? (
+                            <textarea
+                              id={inputId}
+                              className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 min-h-[90px] w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                              value={stringValue}
+                              onChange={(event) =>
+                                handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
                               }
                               disabled={progressionPending}
                             />
-                            <span>Marcar como completado</span>
-                          </label>
-                        ) : fieldType === "textarea" ? (
-                          <textarea
-                            id={inputId}
-                            className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 min-h-[90px] w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                            value={stringValue}
-                            onChange={(event) =>
-                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
-                            }
-                            disabled={progressionPending}
-                          />
-                        ) : (
-                          <Input
-                            id={inputId}
-                            type={resolveProgressionInputType(fieldType)}
-                            value={stringValue}
-                            onChange={(event) =>
-                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
-                            }
-                            disabled={progressionPending}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                          ) : (
+                            <Input
+                              id={inputId}
+                              type={resolveProgressionInputType(fieldType)}
+                              value={stringValue}
+                              onChange={(event) =>
+                                handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
+                              }
+                              disabled={progressionPending}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
             {progressionError ? (
               <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {progressionError}
@@ -1971,8 +2179,12 @@ export function EmbudoBoardClient({
             <Button type="button" variant="outline" onClick={closeProgressionDialog} disabled={progressionPending}>
               Cancelar
             </Button>
-            <Button type="button" onClick={() => void handleProgressionSubmit()} disabled={progressionPending}>
-              Guardar y avanzar
+            <Button
+              type="button"
+              onClick={() => void handleProgressionSubmit()}
+              disabled={progressionPending || (progressionIncludesWon && (!selectedWonQuoteId || progressionQuotesLoading))}
+            >
+              {progressionIncludesWon ? "Marcar como ganada" : "Guardar y avanzar"}
             </Button>
           </DialogFooter>
         </DialogContent>
