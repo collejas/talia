@@ -30,8 +30,12 @@ export type TenantScopedSettings = {
   dominio_principal?: string | null
   rfc?: string | null
   pais?: string | null
+  pais_codigo_iso2?: string | null
   estado?: string | null
+  estado_clave_entidad?: string | null
   ciudad?: string | null
+  municipio_clave_entidad?: string | null
+  municipio_clave_municipio?: string | null
   telefono?: string | null
   correo_contacto_principal?: string | null
   correo_facturacion?: string | null
@@ -42,6 +46,12 @@ export type TenantScopedSettings = {
   moneda?: string | null
   logo_url?: string | null
   direccion_fiscal?: string | null
+  direccion_fiscal_calle?: string | null
+  direccion_fiscal_numero_exterior?: string | null
+  direccion_fiscal_numero_interior?: string | null
+  direccion_fiscal_colonia?: string | null
+  direccion_fiscal_localidad?: string | null
+  direccion_fiscal_referencia?: string | null
   codigo_postal?: string | null
   regimen_fiscal?: string | null
   sitio_web?: string | null

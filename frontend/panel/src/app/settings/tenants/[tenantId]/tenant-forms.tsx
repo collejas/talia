@@ -34,6 +34,7 @@ import {
   updateWebchatSettingsAction,
   validateTenantAction,
 } from "./actions"
+import { TenantFiscalAddressFields } from "./tenant-fiscal-address-fields"
 
 export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
@@ -635,8 +636,12 @@ export type TenantOrganizationInfo = {
   razon_social?: string | null
   rfc?: string | null
   pais?: string | null
+  pais_codigo_iso2?: string | null
   estado?: string | null
+  estado_clave_entidad?: string | null
   ciudad?: string | null
+  municipio_clave_entidad?: string | null
+  municipio_clave_municipio?: string | null
   dominio_principal?: string | null
   telefono?: string | null
   correo_contacto_principal?: string | null
@@ -648,6 +653,12 @@ export type TenantOrganizationInfo = {
   moneda?: string | null
   logo_url?: string | null
   direccion_fiscal?: string | null
+  direccion_fiscal_calle?: string | null
+  direccion_fiscal_numero_exterior?: string | null
+  direccion_fiscal_numero_interior?: string | null
+  direccion_fiscal_colonia?: string | null
+  direccion_fiscal_localidad?: string | null
+  direccion_fiscal_referencia?: string | null
   codigo_postal?: string | null
   regimen_fiscal?: string | null
   sitio_web?: string | null
@@ -747,24 +758,12 @@ export function TenantOrganizationInfoForm({
 
         <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
           <div className="space-y-1">
-            <p className="text-sm font-medium">Ubicación y operación</p>
+            <p className="text-sm font-medium">Operación</p>
             <p className="text-xs text-muted-foreground">
-              Datos que ayudan a ordenar horarios, moneda y localización del tenant.
+              Datos que ayudan a ordenar horarios y moneda del tenant.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="tenant_pais">País</Label>
-              <Input id="tenant_pais" name="tenant_pais" defaultValue={info?.pais ?? ""} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_estado">Estado</Label>
-              <Input id="tenant_estado" name="tenant_estado" defaultValue={info?.estado ?? ""} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_ciudad">Ciudad</Label>
-              <Input id="tenant_ciudad" name="tenant_ciudad" defaultValue={info?.ciudad ?? ""} />
-            </div>
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="tenant_timezone">Zona horaria</Label>
               <Input id="tenant_timezone" name="tenant_timezone" defaultValue={info?.timezone ?? ""} placeholder="America/Mexico_City" />
@@ -784,7 +783,7 @@ export function TenantOrganizationInfoForm({
           <div className="space-y-1">
             <p className="text-sm font-medium">Marca y dirección fiscal</p>
             <p className="text-xs text-muted-foreground">
-              Enlace público, logo y domicilio principal para documentos y soporte.
+              Enlace público, logo y domicilio fiscal estructurado para documentos y soporte.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -800,20 +799,9 @@ export function TenantOrganizationInfoForm({
               <Label htmlFor="tenant_logo_url">Logo URL</Label>
               <Input id="tenant_logo_url" name="tenant_logo_url" defaultValue={info?.logo_url ?? ""} type="url" />
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="tenant_direccion_fiscal">Dirección fiscal</Label>
-              <Textarea
-                id="tenant_direccion_fiscal"
-                name="tenant_direccion_fiscal"
-                defaultValue={info?.direccion_fiscal ?? ""}
-                rows={3}
-                placeholder="Calle, número, colonia, municipio y referencias"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_codigo_postal">Código postal</Label>
-              <Input id="tenant_codigo_postal" name="tenant_codigo_postal" defaultValue={info?.codigo_postal ?? ""} />
-            </div>
+          </div>
+          <TenantFiscalAddressFields values={info} />
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="tenant_regimen_fiscal">Régimen fiscal</Label>
               <Input id="tenant_regimen_fiscal" name="tenant_regimen_fiscal" defaultValue={info?.regimen_fiscal ?? ""} />

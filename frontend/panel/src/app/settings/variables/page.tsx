@@ -62,8 +62,12 @@ type TenantSettingsResponse = {
   razon_social?: string | null
   rfc?: string | null
   pais?: string | null
+  pais_codigo_iso2?: string | null
   estado?: string | null
+  estado_clave_entidad?: string | null
   ciudad?: string | null
+  municipio_clave_entidad?: string | null
+  municipio_clave_municipio?: string | null
   dominio_principal?: string | null
   telefono?: string | null
   correo_contacto_principal?: string | null
@@ -75,6 +79,12 @@ type TenantSettingsResponse = {
   moneda?: string | null
   logo_url?: string | null
   direccion_fiscal?: string | null
+  direccion_fiscal_calle?: string | null
+  direccion_fiscal_numero_exterior?: string | null
+  direccion_fiscal_numero_interior?: string | null
+  direccion_fiscal_colonia?: string | null
+  direccion_fiscal_localidad?: string | null
+  direccion_fiscal_referencia?: string | null
   codigo_postal?: string | null
   regimen_fiscal?: string | null
   sitio_web?: string | null
@@ -151,8 +161,12 @@ export default async function SettingsVariablesPage() {
         razon_social: data.razon_social,
         rfc: data.rfc,
         pais: data.pais,
+        pais_codigo_iso2: data.pais_codigo_iso2,
         estado: data.estado,
+        estado_clave_entidad: data.estado_clave_entidad,
         ciudad: data.ciudad,
+        municipio_clave_entidad: data.municipio_clave_entidad,
+        municipio_clave_municipio: data.municipio_clave_municipio,
         dominio_principal: data.dominio_principal,
         telefono: data.telefono,
         correo_contacto_principal: data.correo_contacto_principal,
@@ -164,6 +178,12 @@ export default async function SettingsVariablesPage() {
         moneda: data.moneda,
         logo_url: data.logo_url,
         direccion_fiscal: data.direccion_fiscal,
+        direccion_fiscal_calle: data.direccion_fiscal_calle,
+        direccion_fiscal_numero_exterior: data.direccion_fiscal_numero_exterior,
+        direccion_fiscal_numero_interior: data.direccion_fiscal_numero_interior,
+        direccion_fiscal_colonia: data.direccion_fiscal_colonia,
+        direccion_fiscal_localidad: data.direccion_fiscal_localidad,
+        direccion_fiscal_referencia: data.direccion_fiscal_referencia,
         codigo_postal: data.codigo_postal,
         regimen_fiscal: data.regimen_fiscal,
         sitio_web: data.sitio_web,

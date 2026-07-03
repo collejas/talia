@@ -126,8 +126,12 @@ class TenantScopedSettings(BaseModel):
     razon_social: str | None = None
     rfc: str | None = None
     pais: str | None = None
+    pais_codigo_iso2: str | None = None
     estado: str | None = None
+    estado_clave_entidad: str | None = None
     ciudad: str | None = None
+    municipio_clave_entidad: str | None = None
+    municipio_clave_municipio: str | None = None
     dominio_principal: str | None = None
     telefono: str | None = None
     correo_contacto_principal: str | None = None
@@ -139,6 +143,12 @@ class TenantScopedSettings(BaseModel):
     moneda: str | None = None
     logo_url: str | None = None
     direccion_fiscal: str | None = None
+    direccion_fiscal_calle: str | None = None
+    direccion_fiscal_numero_exterior: str | None = None
+    direccion_fiscal_numero_interior: str | None = None
+    direccion_fiscal_colonia: str | None = None
+    direccion_fiscal_localidad: str | None = None
+    direccion_fiscal_referencia: str | None = None
     codigo_postal: str | None = None
     regimen_fiscal: str | None = None
     sitio_web: str | None = None
@@ -164,8 +174,12 @@ class TenantScopedUpdateRequest(BaseModel):
     dominio_principal: str | None = None
     rfc: str | None = None
     pais: str | None = None
+    pais_codigo_iso2: str | None = None
     estado: str | None = None
+    estado_clave_entidad: str | None = None
     ciudad: str | None = None
+    municipio_clave_entidad: str | None = None
+    municipio_clave_municipio: str | None = None
     telefono: str | None = None
     correo_contacto_principal: str | None = None
     correo_facturacion: str | None = None
@@ -176,6 +190,12 @@ class TenantScopedUpdateRequest(BaseModel):
     moneda: str | None = None
     logo_url: str | None = None
     direccion_fiscal: str | None = None
+    direccion_fiscal_calle: str | None = None
+    direccion_fiscal_numero_exterior: str | None = None
+    direccion_fiscal_numero_interior: str | None = None
+    direccion_fiscal_colonia: str | None = None
+    direccion_fiscal_localidad: str | None = None
+    direccion_fiscal_referencia: str | None = None
     codigo_postal: str | None = None
     regimen_fiscal: str | None = None
     sitio_web: str | None = None
@@ -204,6 +224,95 @@ class TenantValidationPayload(BaseModel):
     scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"] = "full"
 
 
+def _build_organization_address_summary(source: Any) -> str | None:
+    calle = getattr(source, "direccion_fiscal_calle", None)
+    numero_exterior = getattr(source, "direccion_fiscal_numero_exterior", None)
+    numero_interior = getattr(source, "direccion_fiscal_numero_interior", None)
+    colonia = getattr(source, "direccion_fiscal_colonia", None)
+    localidad = getattr(source, "direccion_fiscal_localidad", None)
+    ciudad = getattr(source, "ciudad", None)
+    estado = getattr(source, "estado", None)
+    pais = getattr(source, "pais", None) or getattr(source, "pais_codigo_iso2", None)
+    codigo_postal = getattr(source, "codigo_postal", None)
+    referencia = getattr(source, "direccion_fiscal_referencia", None)
+
+    parts: list[str] = []
+    street_parts = [str(calle).strip() if calle else ""]
+    if numero_exterior:
+        street_parts.append(f"No. {str(numero_exterior).strip()}")
+    if numero_interior:
+        street_parts.append(f"Int. {str(numero_interior).strip()}")
+    street = " ".join(part for part in street_parts if part)
+    if street:
+        parts.append(street)
+    if colonia:
+        parts.append(f"Col. {str(colonia).strip()}")
+    if localidad:
+        parts.append(str(localidad).strip())
+    if ciudad and str(ciudad).strip() != (str(localidad).strip() if localidad else ""):
+        parts.append(str(ciudad).strip())
+    if estado:
+        parts.append(str(estado).strip())
+    if pais:
+        parts.append(str(pais).strip())
+    if codigo_postal:
+        parts.append(f"CP {str(codigo_postal).strip()}")
+    if referencia:
+        parts.append(f"Ref. {str(referencia).strip()}")
+    summary = ", ".join(part for part in parts if part)
+    return summary or None
+
+
+def _apply_organization_fields(target: dict[str, Any], source: Any) -> dict[str, Any]:
+    for source_name, target_name in (
+        ("pais", "pais"),
+        ("pais_codigo_iso2", "pais_codigo_iso2"),
+        ("estado", "estado"),
+        ("estado_clave_entidad", "estado_clave_entidad"),
+        ("ciudad", "ciudad"),
+        ("municipio_clave_entidad", "municipio_clave_entidad"),
+        ("municipio_clave_municipio", "municipio_clave_municipio"),
+        ("direccion_fiscal_calle", "direccion_fiscal_calle"),
+        ("direccion_fiscal_numero_exterior", "direccion_fiscal_numero_exterior"),
+        ("direccion_fiscal_numero_interior", "direccion_fiscal_numero_interior"),
+        ("direccion_fiscal_colonia", "direccion_fiscal_colonia"),
+        ("direccion_fiscal_localidad", "direccion_fiscal_localidad"),
+        ("direccion_fiscal_referencia", "direccion_fiscal_referencia"),
+        ("codigo_postal", "codigo_postal"),
+        ("regimen_fiscal", "regimen_fiscal"),
+        ("sitio_web", "sitio_web"),
+        ("nombre", "nombre"),
+        ("nombre_comercial", "nombre_comercial"),
+        ("razon_social", "razon_social"),
+        ("dominio_principal", "dominio_principal"),
+        ("rfc", "rfc"),
+        ("telefono", "telefono"),
+        ("correo_contacto_principal", "correo_contacto_principal"),
+        ("correo_facturacion", "correo_facturacion"),
+        ("contacto_nombre", "contacto_nombre"),
+        ("contacto_telefono", "contacto_telefono"),
+        ("timezone", "timezone"),
+        ("idioma", "idioma"),
+        ("moneda", "moneda"),
+        ("logo_url", "logo_url"),
+    ):
+        value = getattr(source, source_name, None)
+        if value is not None:
+            target[target_name] = value
+
+    if "pais" not in target:
+        country = getattr(source, "pais_codigo_iso2", None)
+        if country is not None:
+            target["pais"] = country
+
+    if "direccion_fiscal" not in target:
+        summary = _build_organization_address_summary(source)
+        if summary:
+            target["direccion_fiscal"] = summary
+
+    return target
+
+
 async def _build_tenant_response(
     organizacion_id: UUID,
     row: dict[str, Any],
@@ -216,8 +325,12 @@ async def _build_tenant_response(
         "razon_social": row.get("razon_social"),
         "rfc": row.get("rfc"),
         "pais": row.get("pais"),
+        "pais_codigo_iso2": row.get("pais_codigo_iso2"),
         "estado": row.get("estado"),
+        "estado_clave_entidad": row.get("estado_clave_entidad"),
         "ciudad": row.get("ciudad"),
+        "municipio_clave_entidad": row.get("municipio_clave_entidad"),
+        "municipio_clave_municipio": row.get("municipio_clave_municipio"),
         "dominio_principal": row.get("dominio_principal"),
         "telefono": row.get("telefono"),
         "correo_contacto_principal": row.get("correo_contacto_principal"),
@@ -229,6 +342,12 @@ async def _build_tenant_response(
         "moneda": row.get("moneda"),
         "logo_url": row.get("logo_url"),
         "direccion_fiscal": row.get("direccion_fiscal"),
+        "direccion_fiscal_calle": row.get("direccion_fiscal_calle"),
+        "direccion_fiscal_numero_exterior": row.get("direccion_fiscal_numero_exterior"),
+        "direccion_fiscal_numero_interior": row.get("direccion_fiscal_numero_interior"),
+        "direccion_fiscal_colonia": row.get("direccion_fiscal_colonia"),
+        "direccion_fiscal_localidad": row.get("direccion_fiscal_localidad"),
+        "direccion_fiscal_referencia": row.get("direccion_fiscal_referencia"),
         "codigo_postal": row.get("codigo_postal"),
         "regimen_fiscal": row.get("regimen_fiscal"),
         "sitio_web": row.get("sitio_web"),
@@ -311,6 +430,7 @@ async def update_tenant_settings(
 ) -> TenantScopedSettings:
     await require_permission(user_token, "settings.manage")
     update_payload = payload.model_dump(exclude_none=True)
+    update_payload = _apply_organization_fields(update_payload, payload)
     if not update_payload:
         raise HTTPException(status_code=400, detail="nothing_to_update")
     try:

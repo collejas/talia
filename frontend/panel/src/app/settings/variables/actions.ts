@@ -79,6 +79,41 @@ function parseSidList(raw: string): string[] {
   return unique
 }
 
+function buildFiscalAddressSummary(formData: FormData): string {
+  const street = [getText(formData, "tenant_direccion_fiscal_calle")]
+    .concat(
+      getText(formData, "tenant_direccion_fiscal_numero_exterior")
+        ? [`No. ${getText(formData, "tenant_direccion_fiscal_numero_exterior")}`]
+        : [],
+    )
+    .concat(
+      getText(formData, "tenant_direccion_fiscal_numero_interior")
+        ? [`Int. ${getText(formData, "tenant_direccion_fiscal_numero_interior")}`]
+        : [],
+    )
+    .filter(Boolean)
+    .join(" ")
+
+  const parts = [street]
+  const colonia = getText(formData, "tenant_direccion_fiscal_colonia")
+  const localidad = getText(formData, "tenant_direccion_fiscal_localidad")
+  const city = getText(formData, "tenant_ciudad")
+  const state = getText(formData, "tenant_estado")
+  const country = getText(formData, "tenant_pais_codigo_iso2") || getText(formData, "tenant_pais")
+  const postalCode = getText(formData, "tenant_codigo_postal")
+  const reference = getText(formData, "tenant_direccion_fiscal_referencia")
+
+  if (colonia) parts.push(`Col. ${colonia}`)
+  if (localidad) parts.push(localidad)
+  if (city && city !== localidad) parts.push(city)
+  if (state) parts.push(state)
+  if (country) parts.push(country)
+  if (postalCode) parts.push(`CP ${postalCode}`)
+  if (reference) parts.push(`Ref. ${reference}`)
+
+  return parts.filter(Boolean).join(", ")
+}
+
 async function upsertTenantSecret(clave: string, valor: string, tier: "A" | "B", etiqueta?: string): Promise<void> {
   const response = await callCrmApi<{ ok: boolean }>(
     "/tenant/me/secrets",
@@ -139,14 +174,21 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
         payload[key] = value
       }
     }
+    const setString = (key: string, value: string) => {
+      payload[key] = value
+    }
 
     addString("nombre", getText(formData, "tenant_nombre"))
     addString("nombre_comercial", getText(formData, "tenant_nombre_comercial"))
     addString("razon_social", getText(formData, "tenant_razon_social"))
     addString("rfc", getText(formData, "tenant_rfc"))
-    addString("pais", getText(formData, "tenant_pais"))
-    addString("estado", getText(formData, "tenant_estado"))
-    addString("ciudad", getText(formData, "tenant_ciudad"))
+    setString("pais", getText(formData, "tenant_pais_codigo_iso2") || getText(formData, "tenant_pais"))
+    setString("pais_codigo_iso2", getText(formData, "tenant_pais_codigo_iso2"))
+    setString("estado", getText(formData, "tenant_estado"))
+    setString("estado_clave_entidad", getText(formData, "tenant_estado_clave_entidad"))
+    setString("ciudad", getText(formData, "tenant_ciudad"))
+    setString("municipio_clave_entidad", getText(formData, "tenant_municipio_clave_entidad"))
+    setString("municipio_clave_municipio", getText(formData, "tenant_municipio_clave_municipio"))
     addString("dominio_principal", getText(formData, "tenant_dominio"))
     addString("telefono", getText(formData, "tenant_telefono"))
     addString("correo_contacto_principal", getText(formData, "tenant_correo_contacto_principal"))
@@ -157,8 +199,14 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     addString("idioma", getText(formData, "tenant_idioma"))
     addString("moneda", getText(formData, "tenant_moneda"))
     addString("logo_url", getText(formData, "tenant_logo_url"))
-    addString("direccion_fiscal", getText(formData, "tenant_direccion_fiscal"))
-    addString("codigo_postal", getText(formData, "tenant_codigo_postal"))
+    setString("direccion_fiscal", buildFiscalAddressSummary(formData))
+    setString("direccion_fiscal_calle", getText(formData, "tenant_direccion_fiscal_calle"))
+    setString("direccion_fiscal_numero_exterior", getText(formData, "tenant_direccion_fiscal_numero_exterior"))
+    setString("direccion_fiscal_numero_interior", getText(formData, "tenant_direccion_fiscal_numero_interior"))
+    setString("direccion_fiscal_colonia", getText(formData, "tenant_direccion_fiscal_colonia"))
+    setString("direccion_fiscal_localidad", getText(formData, "tenant_direccion_fiscal_localidad"))
+    setString("direccion_fiscal_referencia", getText(formData, "tenant_direccion_fiscal_referencia"))
+    setString("codigo_postal", getText(formData, "tenant_codigo_postal"))
     addString("regimen_fiscal", getText(formData, "tenant_regimen_fiscal"))
     addString("sitio_web", getText(formData, "tenant_sitio"))
     const onboarding = getText(formData, "tenant_estado_onboarding")
