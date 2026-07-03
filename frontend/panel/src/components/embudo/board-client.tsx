@@ -63,7 +63,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Download, Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import { Download, Eye, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export type EmbudoBoardClientProps = {
@@ -737,14 +737,8 @@ export function EmbudoBoardClient({
     setProgressionPdfQuoteId(null);
   }, []);
 
-  const handleProgressionQuotePdfDownload = useCallback(async (quote: ProgressionQuoteEntry) => {
-    if (!quote.pdfPath) {
-      setProgressionError("Esta cotización todavía no tiene un PDF disponible.");
-      return;
-    }
-
+  const fetchProgressionQuotePdfUrl = useCallback(async (quote: ProgressionQuoteEntry) => {
     try {
-      setProgressionPdfQuoteId(quote.id);
       const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`, {
         cache: "no-store",
       });
@@ -759,11 +753,23 @@ export function EmbudoBoardClient({
       if (!url) {
         throw new Error("No se pudo obtener el enlace del PDF.");
       }
+      return url;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "No se pudo obtener el PDF.");
+    }
+  }, []);
 
+  const handleProgressionQuotePdfDownload = useCallback(async (quote: ProgressionQuoteEntry) => {
+    if (!quote.pdfPath) {
+      setProgressionError("Esta cotización todavía no tiene un PDF disponible.");
+      return;
+    }
+
+    try {
+      setProgressionPdfQuoteId(quote.id);
+      const url = await fetchProgressionQuotePdfUrl(quote);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
       anchor.download = `cotizacion-v${quote.version}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
@@ -775,7 +781,26 @@ export function EmbudoBoardClient({
     } finally {
       setProgressionPdfQuoteId(null);
     }
-  }, []);
+  }, [fetchProgressionQuotePdfUrl]);
+
+  const handleProgressionQuotePdfView = useCallback(async (quote: ProgressionQuoteEntry) => {
+    if (!quote.pdfPath) {
+      setProgressionError("Esta cotización todavía no tiene un PDF disponible.");
+      return;
+    }
+
+    try {
+      setProgressionPdfQuoteId(quote.id);
+      const url = await fetchProgressionQuotePdfUrl(quote);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setProgressionError(
+        error instanceof Error ? error.message : "No se pudo abrir el PDF.",
+      );
+    } finally {
+      setProgressionPdfQuoteId(null);
+    }
+  }, [fetchProgressionQuotePdfUrl]);
 
   useEffect(() => {
     if (!progressionDialogOpen || !progressionContext) return;
@@ -2134,7 +2159,22 @@ export function EmbudoBoardClient({
                                 ) : (
                                   <Download className="h-4 w-4" />
                                 )}
-                                PDF
+                                Descargar
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => void handleProgressionQuotePdfView(quote)}
+                                disabled={progressionPending || progressionPdfQuoteId === quote.id}
+                              >
+                                {progressionPdfQuoteId === quote.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                                Ver PDF
                               </Button>
                             </div>
                           </div>
