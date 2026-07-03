@@ -150,6 +150,7 @@ type LeadDrawerProps = {
     context: LeadAdvanceStagePayload,
   ) => Promise<{ ok: boolean; error?: string }>;
   onRevertStage?: () => Promise<LeadActionResult>;
+  onQuotesChanged?: (oportunidadId: string) => void | Promise<void>;
   onScheduleDemo?: (context: {
     card: EmbudoCard;
     originStage: EmbudoStage | null;
@@ -720,6 +721,7 @@ export function LeadDrawer({
   onDelete,
   onAdvanceStage,
   onRevertStage,
+  onQuotesChanged,
   onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
@@ -2459,6 +2461,7 @@ export function LeadDrawer({
         setQuoteError(null);
         setQuoteSuccess("Cotización creada sin envío.");
         await fetchQuotes();
+        await onQuotesChanged?.(card.oportunidadId);
       } catch (createError) {
         setQuoteError(
           createError instanceof Error
@@ -2532,6 +2535,7 @@ export function LeadDrawer({
         setQuoteError(null);
         setQuoteSuccess("Cotización enviada correctamente.");
         await fetchQuotes();
+        await onQuotesChanged?.(card.oportunidadId);
       } catch (sendError) {
         setQuoteError(
           sendError instanceof Error

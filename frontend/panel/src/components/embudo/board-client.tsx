@@ -489,6 +489,19 @@ export function EmbudoBoardClient({
     }
   }, []);
 
+  const handleLeadQuotesChanged = useCallback(
+    async (oportunidadId: string) => {
+      if (!progressionDialogOpen || !progressionContext) return;
+      if (progressionContext.card.oportunidadId !== oportunidadId) return;
+      const includesWon = progressionContext.pathStages.some((stage) =>
+        matchesStageCode(normalizeStageCode(stage), "cerrado_ganado"),
+      );
+      if (!includesWon) return;
+      await loadOpportunityQuotes(oportunidadId);
+    },
+    [loadOpportunityQuotes, progressionContext, progressionDialogOpen],
+  );
+
   const visitantesDisplay = useMemo(() => {
     const formatter = new Intl.NumberFormat("es-MX");
     const safeValue = Number.isFinite(boardState.visitantesSinChat)
@@ -1966,6 +1979,7 @@ export function EmbudoBoardClient({
         onDelete={handleLeadDelete}
         onRevertStage={handleRevertLeadStage}
         onAdvanceStage={handleAutoAdvanceStage}
+        onQuotesChanged={handleLeadQuotesChanged}
         onScheduleDemo={
           selectedCard
             ? (context) => handleDrawerScheduleDemo(context)
