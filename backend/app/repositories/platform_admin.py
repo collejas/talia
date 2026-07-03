@@ -55,7 +55,7 @@ class PlatformRepository:
 
     async def list_organizaciones(self) -> list[dict[str, Any]]:
         params = {
-            "select": "id,nombre,nombre_comercial,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,estado_onboarding,activo,config,fecha_alta",
+            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,estado_onboarding,activo,config,fecha_alta",
             "order": "fecha_alta.desc",
         }
         data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
@@ -774,7 +774,7 @@ class PlatformRepository:
 
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,nombre,nombre_comercial,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
             "id": f"eq.{organizacion_id}",
             "limit": "1",
         }

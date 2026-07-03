@@ -26,6 +26,7 @@ export type TenantScopedSettings = {
   organizacion_id: string
   nombre: string
   nombre_comercial?: string | null
+  eslogan_empresa?: string | null
   razon_social?: string | null
   dominio_principal?: string | null
   rfc?: string | null
@@ -76,6 +77,7 @@ export function TenantVariablesPanel({
 }) {
   const [form, setForm] = useState(() => ({
     nombre: data?.nombre ?? "",
+    eslogan_empresa: data?.eslogan_empresa ?? "",
     razon_social: data?.razon_social ?? "",
     dominio_principal: data?.dominio_principal ?? "",
     rfc: data?.rfc ?? "",
@@ -153,6 +155,16 @@ export function TenantVariablesPanel({
                 onChange={(event) =>
                   handleChange("razon_social", event.target.value)
                 }
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label htmlFor="variables-eslogan">Eslogan de empresa</Label>
+              <Input
+                id="variables-eslogan"
+                value={form.eslogan_empresa}
+                onChange={(event) => handleChange("eslogan_empresa", event.target.value)}
+                placeholder="Una frase breve que resuma la propuesta comercial"
+                maxLength={255}
               />
             </div>
             <div className="space-y-1">

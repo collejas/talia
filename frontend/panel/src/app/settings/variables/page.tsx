@@ -59,6 +59,7 @@ type TenantSettingsResponse = {
   organizacion_id: string
   nombre: string
   nombre_comercial?: string | null
+  eslogan_empresa?: string | null
   razon_social?: string | null
   rfc?: string | null
   pais?: string | null
@@ -158,6 +159,7 @@ export default async function SettingsVariablesPage() {
     ? {
         nombre: data.nombre,
         nombre_comercial: data.nombre_comercial,
+        eslogan_empresa: data.eslogan_empresa,
         razon_social: data.razon_social,
         rfc: data.rfc,
         pais: data.pais,

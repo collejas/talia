@@ -246,6 +246,7 @@ class TenantSummary(BaseModel):
     id: UUID
     nombre: str
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
     pais: str | None = None
@@ -347,6 +348,7 @@ def _apply_organization_fields(target: dict[str, Any], source: Any) -> dict[str,
         ("sitio_web", "sitio_web"),
         ("nombre", "nombre"),
         ("nombre_comercial", "nombre_comercial"),
+        ("eslogan_empresa", "eslogan_empresa"),
         ("razon_social", "razon_social"),
         ("dominio_principal", "dominio_principal"),
         ("rfc", "rfc"),
@@ -803,6 +805,7 @@ class CreateTenantRequest(BaseModel):
 
     nombre: str = Field(..., min_length=2)
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = Field(default=None, max_length=255)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -854,6 +857,7 @@ class TenantBasicInfo(BaseModel):
     id: UUID
     nombre: str
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
     pais: str | None = None
@@ -978,6 +982,7 @@ class UpdateTenantRequest(BaseModel):
 
     nombre: str | None = None
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = Field(default=None, max_length=255)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -2260,6 +2265,8 @@ async def create_tenant(
     }
     if payload.nombre_comercial:
         tenant_payload["nombre_comercial"] = payload.nombre_comercial
+    if payload.eslogan_empresa:
+        tenant_payload["eslogan_empresa"] = payload.eslogan_empresa
     if payload.razon_social:
         tenant_payload["razon_social"] = payload.razon_social
     if payload.dominio_principal:
@@ -2408,6 +2415,8 @@ async def create_tenant_with_admin(
         tenant_payload: dict[str, Any] = {"nombre": payload.tenant.nombre}
         if payload.tenant.nombre_comercial:
             tenant_payload["nombre_comercial"] = payload.tenant.nombre_comercial
+        if payload.tenant.eslogan_empresa:
+            tenant_payload["eslogan_empresa"] = payload.tenant.eslogan_empresa
         if payload.tenant.razon_social:
             tenant_payload["razon_social"] = payload.tenant.razon_social
         if payload.tenant.dominio_principal:

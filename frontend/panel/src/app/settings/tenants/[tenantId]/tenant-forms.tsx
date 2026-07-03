@@ -633,6 +633,7 @@ export type RouteItem = {
 export type TenantOrganizationInfo = {
   nombre?: string | null
   nombre_comercial?: string | null
+  eslogan_empresa?: string | null
   razon_social?: string | null
   rfc?: string | null
   pais?: string | null
@@ -707,6 +708,16 @@ export function TenantOrganizationInfoForm({
             <div className="space-y-2">
               <Label htmlFor="tenant_nombre_comercial">Nombre comercial</Label>
               <Input id="tenant_nombre_comercial" name="tenant_nombre_comercial" defaultValue={info?.nombre_comercial ?? ""} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="tenant_eslogan_empresa">Eslogan de empresa</Label>
+              <Input
+                id="tenant_eslogan_empresa"
+                name="tenant_eslogan_empresa"
+                defaultValue={info?.eslogan_empresa ?? ""}
+                maxLength={255}
+                placeholder="Una frase breve que resuma la propuesta comercial"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="tenant_razon_social">Razón social</Label>

@@ -123,6 +123,7 @@ class TenantScopedSettings(BaseModel):
     organizacion_id: UUID
     nombre: str
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
     pais: str | None = None
@@ -170,6 +171,7 @@ class TenantScopedUpdateRequest(BaseModel):
 
     nombre: str | None = Field(default=None, min_length=2)
     nombre_comercial: str | None = None
+    eslogan_empresa: str | None = Field(default=None, max_length=255)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -283,6 +285,7 @@ def _apply_organization_fields(target: dict[str, Any], source: Any) -> dict[str,
         ("sitio_web", "sitio_web"),
         ("nombre", "nombre"),
         ("nombre_comercial", "nombre_comercial"),
+        ("eslogan_empresa", "eslogan_empresa"),
         ("razon_social", "razon_social"),
         ("dominio_principal", "dominio_principal"),
         ("rfc", "rfc"),
@@ -322,6 +325,7 @@ async def _build_tenant_response(
         "organizacion_id": organizacion_id,
         "nombre": row.get("nombre") or "",
         "nombre_comercial": row.get("nombre_comercial"),
+        "eslogan_empresa": row.get("eslogan_empresa"),
         "razon_social": row.get("razon_social"),
         "rfc": row.get("rfc"),
         "pais": row.get("pais"),

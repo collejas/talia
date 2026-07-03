@@ -238,8 +238,12 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
         payload[key] = value
       }
     }
+    const setString = (key: string, value: string) => {
+      payload[key] = value
+    }
 
     addString("nombre", getText(formData, "tenant_nombre"))
+    setString("eslogan_empresa", getText(formData, "tenant_eslogan_empresa"))
     addString("razon_social", getText(formData, "tenant_razon_social"))
     addString("rfc", getText(formData, "tenant_rfc"))
     addString("pais", getText(formData, "tenant_pais"))

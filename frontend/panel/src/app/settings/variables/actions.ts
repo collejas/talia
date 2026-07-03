@@ -180,6 +180,7 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
 
     addString("nombre", getText(formData, "tenant_nombre"))
     addString("nombre_comercial", getText(formData, "tenant_nombre_comercial"))
+    setString("eslogan_empresa", getText(formData, "tenant_eslogan_empresa"))
     addString("razon_social", getText(formData, "tenant_razon_social"))
     addString("rfc", getText(formData, "tenant_rfc"))
     setString("pais", getText(formData, "tenant_pais_codigo_iso2") || getText(formData, "tenant_pais"))
