@@ -157,6 +157,7 @@ class QuoteRenderContext:
     vendor_assessor_phone: str | None = None
     logo_url: str | None = None
     organization_name: str | None = None
+    organization_slogan: str | None = None
 
 
 @dataclass
@@ -222,13 +223,14 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         padding-bottom: 14px;
         border-bottom: 1px solid #dbe3f0;
         margin-bottom: 14px;
-        align-items: flex-start;
+        align-items: center;
     }
 
     .brand-stack {
         display: flex;
-        flex-direction: column;
-        gap: 10px;
+        flex-direction: row;
+        align-items: center;
+        gap: 14px;
         max-width: 72%;
     }
 
@@ -251,7 +253,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .title {
-        margin: 4px 0 6px;
+        margin: 0;
         font-size: 22pt;
         line-height: 1.08;
         font-weight: 700;
@@ -259,9 +261,17 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .subtitle {
-        margin: 0;
+        margin: 3px 0 0;
         color: #475569;
         font-size: 10pt;
+        line-height: 1.2;
+    }
+
+    .brand-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 78px;
     }
 
     .top-meta {
@@ -578,6 +588,7 @@ def _build_modern_quote_html(
         context.organization_name or context.vendor_company_name or context.issuer_name,
         "Sin organización",
     )
+    organization_slogan = _safe_text(context.organization_slogan, "")
     vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
     vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
     client_name = _safe_text(context.contact_name, "Sin cliente")
@@ -610,8 +621,9 @@ def _build_modern_quote_html(
           <div class="topbar">
             <div class="brand-stack">
               {logo_html}
-              <div>
+              <div class="brand-copy">
                 <h1 class="title">{html_escape(organization_name)}</h1>
+                <p class="subtitle">{html_escape(organization_slogan)}</p>
               </div>
             </div>
             <div class="top-meta">
@@ -872,6 +884,7 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(
         f"Organización: {_safe_text(context.organization_name or context.vendor_company_name, '—')}"
     )
+    lines.append(f"Eslogan: {_safe_text(context.organization_slogan, '—')}")
     lines.append(f"Lead / Proyecto: {context.lead_label}")
     lines.append(
         f"Fecha de emisión: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}"
@@ -990,6 +1003,7 @@ def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
             context.organization_name or context.vendor_company_name,
             "Organización",
         ),
+        "organizacion.eslogan_empresa": _safe_text(context.organization_slogan, ""),
         "cotizacion.referencia": context.reference,
         "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
         "cotizacion.descripcion": _safe_text(context.descripcion, ""),

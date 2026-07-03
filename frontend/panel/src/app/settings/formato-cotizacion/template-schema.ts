@@ -42,6 +42,8 @@ const DEFAULT_VARIABLES = [
   "cliente.correo",
   "cliente.telefono",
   "lead.nombre",
+  "organizacion.nombre",
+  "organizacion.eslogan_empresa",
   "cotizacion.referencia",
   "cotizacion.fecha",
   "cotizacion.descripcion",
@@ -106,10 +108,9 @@ export function buildQuoteTemplateAssets(config: QuoteTemplateConfig): { html: s
     <header>
       <div class="brand">
         <img src="${safeLogo}" alt="Logo" class="logo" />
-        <div>
-          <p class="eyebrow">${config.headerTitle}</p>
-          <h1>${config.headerSubtitle}</h1>
-          <p class="muted">Proyecto {{lead.nombre}} · Emitida el {{cotizacion.fecha}}</p>
+        <div class="brand-copy">
+          <h1>{{organizacion.nombre}}</h1>
+          <p class="subtitle">{{organizacion.eslogan_empresa}}</p>
         </div>
       </div>
     </header>
@@ -181,6 +182,12 @@ header {
   align-items: center;
   gap: 16px;
 }
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 64px;
+}
 .logo {
   width: 64px;
   height: 64px;
@@ -190,17 +197,16 @@ header {
   padding: 8px;
   background: #fff;
 }
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.75rem;
-  color: var(--quote-accent);
-  margin-bottom: 4px;
-}
 h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 1.75rem;
   color: var(--quote-primary);
+}
+.subtitle {
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1.2;
 }
 h2 {
   border-bottom: 1px solid #e2e8f0;

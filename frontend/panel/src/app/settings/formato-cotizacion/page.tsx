@@ -19,7 +19,8 @@ export default async function QuoteTemplateSettingsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Formato de cotización</h1>
           <p className="max-w-3xl text-muted-foreground">
             Define el HTML y CSS que usa Tal-IA al generar el PDF de las cotizaciones. Puedes usar
-            placeholders como <code>{"{{cliente.nombre}}"}</code> para inyectar datos del lead.
+            placeholders como <code>{"{{cliente.nombre}}"}</code>, <code>{"{{organizacion.nombre}}"}</code> y
+            <code>{"{{organizacion.eslogan_empresa}}"}</code> para inyectar datos dinámicos.
           </p>
         </div>
         <QuoteTemplateSettingsForm

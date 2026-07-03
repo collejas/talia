@@ -2203,6 +2203,7 @@ async def _resolve_quote_vendor_context(
 ) -> dict[str, str | None]:
     tenant_name: str | None = None
     tenant_razon_social: str | None = None
+    tenant_slogan: str | None = None
     try:
         platform_repo = PlatformRepository()
         tenant_row = await platform_repo.get_organizacion_details(organizacion_id=organizacion_id)
@@ -2212,6 +2213,7 @@ async def _resolve_quote_vendor_context(
     if isinstance(tenant_row, dict):
         tenant_name = _clean_text(tenant_row.get("nombre"))
         tenant_razon_social = _clean_text(tenant_row.get("razon_social"))
+        tenant_slogan = _clean_text(tenant_row.get("eslogan_empresa"))
 
     seller_row = _single_related(opportunity.get("propietario")) or _single_related(
         opportunity.get("asignado")
@@ -2240,6 +2242,7 @@ async def _resolve_quote_vendor_context(
 
     return {
         "organization_name": tenant_name,
+        "organization_slogan": tenant_slogan,
         "vendor_company_name": tenant_name,
         "vendor_razon_social": tenant_razon_social,
         "vendor_assessor_name": seller_name,
@@ -2489,6 +2492,7 @@ async def _render_quote_pdf_after_sale(
         valido_hasta=_parse_date(quote_row.get("valida_hasta")),
         items=items_list if isinstance(items_list, list) else [],
         organization_name=vendor_context["organization_name"],
+        organization_slogan=vendor_context["organization_slogan"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27400,6 +27404,7 @@ async def create_lead_quote(
         items=normalized_items,
         economic_details_html=body.get("detalles_propuesta_html"),
         organization_name=vendor_context["organization_name"],
+        organization_slogan=vendor_context["organization_slogan"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27516,6 +27521,7 @@ async def preview_lead_quote_pdf(
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
         organization_name=vendor_context["organization_name"],
+        organization_slogan=vendor_context["organization_slogan"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27672,6 +27678,7 @@ async def send_lead_quote(
         items=normalized_items,
         economic_details_html=payload.detalles_propuesta_html,
         organization_name=vendor_context["organization_name"],
+        organization_slogan=vendor_context["organization_slogan"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
