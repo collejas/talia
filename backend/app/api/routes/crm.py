@@ -27350,9 +27350,83 @@ async def create_lead_quote(
     )
     if opportunity is None:
         raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    contact = _single_related(opportunity.get("contacto")) or {}
+    cuenta = _single_related(opportunity.get("cuenta")) or {}
+    oportunidad_metadata = _ensure_dict(opportunity.get("metadata"), default={})
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(
+        organizacion_id=organizacion_id
+    )
+    lead_label = (
+        opportunity.get("titulo")
+        or contact.get("nombre_completo")
+        or cuenta.get("nombre")
+        or "Oportunidad sin nombre"
+    )
     body = _quote_payload_from_body(payload)
     metadata = _quote_metadata_from_payload(body)
     repo_items = _quote_items_to_repository_payload(body.pop("items", None))
+    currency = (body.get("moneda") or "MXN").upper()
+    normalized_items = _normalize_quote_items(payload.items or [])
+    totals = _quote_totals_from_items(normalized_items)
+    if totals:
+        body["subtotal"] = totals["subtotal"]
+        body["impuestos"] = totals["impuestos"]
+        body["total"] = totals["total"]
+    conceptos_context = body.get("conceptos") or _concepts_from_items(normalized_items)
+    project_description = _clean_text(body.get("descripcion")) or None
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity,
+    )
+    logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+
+    issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
+    issuer_email = mail_settings.username
+    quote_context = quotes_service.QuoteRenderContext(
+        lead_label=lead_label,
+        reference=str(oportunidad_id).split("-")[0],
+        issuer_name=issuer_name,
+        issuer_email=issuer_email,
+        contact_name=_clean_text(contact.get("nombre_completo")),
+        contact_company=_clean_text(contact.get("company_name")),
+        contact_email=_clean_text(contact.get("correo")),
+        contact_phone=_clean_text(contact.get("telefono_e164")),
+        conceptos=conceptos_context,
+        subtotal=_as_number(body.get("subtotal")),
+        impuestos=_as_number(body.get("impuestos")),
+        total=_as_number(body.get("total")),
+        moneda=currency,
+        valido_hasta=_to_iso_date(body.get("valido_hasta")),
+        descripcion=project_description,
+        notes=oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        items=normalized_items,
+        economic_details_html=body.get("detalles_propuesta_html"),
+        vendor_company_name=vendor_context["vendor_company_name"],
+        vendor_razon_social=vendor_context["vendor_razon_social"],
+        vendor_assessor_name=vendor_context["vendor_assessor_name"],
+        vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        logo_url=logo_url,
+    )
+
+    try:
+        pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="quote_pdf_render_failed") from exc
+
+    try:
+        upload = await storage.upload_quote_document(
+            content=pdf_doc.content,
+            filename=pdf_doc.filename,
+            lead_id=str(oportunidad_id),
+            content_type="application/pdf",
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="quote_upload_failed") from exc
+
+    body["pdf_url"] = upload["url"]
+    body["pdf_path"] = upload["path"]
+    metadata = _quote_metadata_from_payload(body)
     try:
         created_row = await repo.create_quote_entry(
             organizacion_id=organizacion_id,

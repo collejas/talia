@@ -3324,42 +3324,41 @@ export function LeadDrawer({
                               <p className="text-xs text-muted-foreground">
                                 Total: {formatQuoteCurrency(quote.total, quote.currency)}
                               </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {quote.pdfPath ? "PDF disponible para ver o descargar." : "PDF no disponible para esta cotización."}
+                              </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {quote.pdfPath ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="gap-1"
-                                    onClick={() => handleQuotePdfPreview(quote)}
-                                    disabled={quotePdfLoadingId === quote.id}
-                                  >
-                                    {quotePdfLoadingId === quote.id ? (
-                                      <IconLoader2 className="size-4 animate-spin" />
-                                    ) : (
-                                      <IconEye className="size-4" />
-                                    )}
-                                    Ver PDF
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="gap-1"
-                                    onClick={() => handleQuotePdfDownload(quote)}
-                                    disabled={quotePdfLoadingId === quote.id}
-                                  >
-                                    {quotePdfLoadingId === quote.id ? (
-                                      <IconLoader2 className="size-4 animate-spin" />
-                                    ) : (
-                                      <IconDownload className="size-4" />
-                                    )}
-                                    Descargar
-                                  </Button>
-                                </>
-                              ) : null}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1"
+                                onClick={() => handleQuotePdfPreview(quote)}
+                                disabled={!quote.pdfPath || quotePdfLoadingId === quote.id}
+                              >
+                                {quotePdfLoadingId === quote.id ? (
+                                  <IconLoader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <IconEye className="size-4" />
+                                )}
+                                Ver PDF
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1"
+                                onClick={() => handleQuotePdfDownload(quote)}
+                                disabled={!quote.pdfPath || quotePdfLoadingId === quote.id}
+                              >
+                                {quotePdfLoadingId === quote.id ? (
+                                  <IconLoader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <IconDownload className="size-4" />
+                                )}
+                                Descargar
+                              </Button>
                               <Button
                                 type="button"
                                 size="sm"

@@ -78,7 +78,7 @@ poetry install
 sudo systemctl restart talia-api.service
 sudo systemctl is-active --quiet talia-api.service
 
-6) Si hubo cambios de FRONTEND y BACKEND al mismo tiempo]4
+6) Si hubo cambios de FRONTEND y BACKEND al mismo tiempo
 
 cd /var/www/talia
 RESTART_API=1 bash scripts/deploy_panel_atomic.sh
