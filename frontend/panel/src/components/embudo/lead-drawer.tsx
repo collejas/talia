@@ -2603,33 +2603,25 @@ export function LeadDrawer({
     return payload.url;
   }, []);
 
+  const fetchQuotePdfBlob = useCallback(async (quote: LeadQuoteEntry) => {
+    const url = await fetchQuotePdfUrl(quote);
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("No pudimos obtener el PDF.");
+    }
+    return response.blob();
+  }, [fetchQuotePdfUrl]);
+
   const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
     try {
       setQuotePdfLoadingId(quote.id);
-      const url = await fetchQuotePdfUrl(quote);
-      window.open(url, "_blank", "noopener,noreferrer");
+      const blob = await fetchQuotePdfBlob(quote);
+      const objectUrl = window.URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 30_000);
     } catch (error) {
       console.error("[LeadDrawer] quote pdf preview failed", error);
       window.alert(error instanceof Error ? error.message : "No pudimos generar el enlace de descarga. Inténtalo de nuevo.");
-    } finally {
-      setQuotePdfLoadingId(null);
-    }
-  }, [fetchQuotePdfUrl]);
-
-  const handleQuotePdfDownload = useCallback(async (quote: LeadQuoteEntry) => {
-    try {
-      setQuotePdfLoadingId(quote.id);
-      const url = await fetchQuotePdfUrl(quote);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.rel = "noopener";
-      anchor.download = `cotizacion-v${quote.version}.pdf`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    } catch (error) {
-      console.error("[LeadDrawer] quote pdf download failed", error);
-      window.alert(error instanceof Error ? error.message : "No pudimos descargar el PDF. Inténtalo de nuevo.");
     } finally {
       setQuotePdfLoadingId(null);
     }
@@ -3343,21 +3335,6 @@ export function LeadDrawer({
                                   <IconEye className="size-4" />
                                 )}
                                 Ver PDF
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => handleQuotePdfDownload(quote)}
-                                disabled={!quote.pdfPath || quotePdfLoadingId === quote.id}
-                              >
-                                {quotePdfLoadingId === quote.id ? (
-                                  <IconLoader2 className="size-4 animate-spin" />
-                                ) : (
-                                  <IconDownload className="size-4" />
-                                )}
-                                Descargar
                               </Button>
                               <Button
                                 type="button"
