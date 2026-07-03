@@ -2361,8 +2361,7 @@ export function LeadDrawer({
   const quoteCompactTextareaClass =
     "min-h-[88px] border-0 bg-muted/35 px-2 py-1.5 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
 
-  const buildQuotePayload = () => {
-    const emails = parseEmailList(quoteEmailTo);
+  const buildQuoteBasePayload = () => {
     const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
     const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
     const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -2398,7 +2397,6 @@ export function LeadDrawer({
       );
 
     return {
-      channel: quoteChannel,
       titulo: quoteTitle.trim() || null,
       descripcion: quoteDescription.trim() || null,
       conceptos: conceptsPayload.length ? conceptsPayload : undefined,
@@ -2410,10 +2408,65 @@ export function LeadDrawer({
       valido_hasta: quoteValidoHasta?.trim() || null,
       detalles_propuesta_html: quoteEconomicDetails.trim() || null,
       message: quoteMessage.trim() || null,
+    };
+  };
+
+  const buildQuotePayload = () => {
+    const emails = parseEmailList(quoteEmailTo);
+    return {
+      channel: quoteChannel,
+      ...buildQuoteBasePayload(),
       email_to: quoteChannel === "email" ? emails : undefined,
       whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
       subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
     };
+  };
+
+  const handleCreateQuote = () => {
+    if (!card) return;
+    setQuoteError(null);
+    startQuoteAction(async () => {
+      try {
+        const payload = buildQuoteBasePayload();
+        const itemsPayload = payload.items ?? [];
+        const subtotalValue = payload.subtotal;
+        const totalValue = payload.total;
+        const hasItems = itemsPayload.length > 0;
+        const hasTotals = subtotalValue != null || totalValue != null;
+        if (!hasItems && !hasTotals) {
+          setQuoteError("Agrega al menos un concepto con cantidad o define un monto estimado.");
+          return;
+        }
+        const currencyValue = payload.moneda ?? "MXN";
+        if (currencyValue.length !== 3) {
+          setQuoteError("La moneda debe tener exactamente 3 caracteres (ej. MXN).");
+          return;
+        }
+
+        const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const responseBody = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message =
+            typeof responseBody?.error === "string" && responseBody.error ? responseBody.error : `Error ${response.status}`;
+          setQuoteError(message);
+          return;
+        }
+        setQuoteDialogOpen(false);
+        setQuoteError(null);
+        setQuoteSuccess("Cotización creada sin envío.");
+        await fetchQuotes();
+      } catch (createError) {
+        setQuoteError(
+          createError instanceof Error
+            ? createError.message
+            : "No se pudo crear la cotización.",
+        );
+      }
+    });
   };
 
   const handleSendQuote = () => {
@@ -4404,14 +4457,22 @@ export function LeadDrawer({
                     <div className="space-y-2 border-t border-border/40 pt-3">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Acciones</h4>
-                        <p className="text-[11px] text-muted-foreground">Vista previa y envío.</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Previsualiza, crea la cotización o envíala por canal.
+                        </p>
                       </div>
                       <div className="grid gap-2">
                         <Button type="button" variant="outline" onClick={handleOpenQuotePreview}>
                           Vista previa PDF
                         </Button>
+                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quotePending}>
+                          {quotePending ? "Creando..." : "Crear cotización"}
+                        </Button>
                         <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
                           {quotePending ? "Enviando..." : "Enviar cotización"}
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={handleSaveQuoteDraft}>
+                          Guardar borrador local
                         </Button>
                         <Button type="button" variant="ghost" onClick={() => setQuoteDialogOpen(false)}>
                           Cerrar
