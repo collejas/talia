@@ -63,7 +63,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import { Download, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export type EmbudoBoardClientProps = {
@@ -99,6 +99,7 @@ type ProgressionQuoteEntry = {
   channel: string | null;
   total: number | null;
   currency: string | null;
+  pdfPath: string | null;
   title: string | null;
   description: string | null;
   createdAt: string | null;
@@ -300,6 +301,7 @@ export function EmbudoBoardClient({
     data: [],
   });
   const [selectedWonQuoteId, setSelectedWonQuoteId] = useState<string | null>(null);
+  const [progressionPdfQuoteId, setProgressionPdfQuoteId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [appliedDays, setAppliedDays] = useState<number | null>(null);
   const [appliedCanal, setAppliedCanal] = useState("");
@@ -442,6 +444,10 @@ export function EmbudoBoardClient({
         .map((quote) => {
           if (!quote || typeof quote !== "object" || Array.isArray(quote)) return null;
           const row = quote as Record<string, unknown>;
+          const metadataRecord =
+            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+              ? (row.metadata as Record<string, unknown>)
+              : {};
           return {
             id: String(row.id ?? ""),
             version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
@@ -454,6 +460,12 @@ export function EmbudoBoardClient({
                 ? Number(row.total)
                 : null,
             currency: typeof row.moneda === "string" ? row.moneda : null,
+            pdfPath:
+              typeof row.pdf_path === "string"
+                ? row.pdf_path
+                : typeof metadataRecord.pdf_path === "string"
+                  ? (metadataRecord.pdf_path as string)
+                  : null,
             title: typeof row.titulo === "string" ? row.titulo : null,
             description: typeof row.descripcion === "string" ? row.descripcion : null,
             createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
@@ -710,6 +722,7 @@ export function EmbudoBoardClient({
     setProgressionPending(false);
     setProgressionQuotesState({ status: "idle", data: [] });
     setSelectedWonQuoteId(null);
+    setProgressionPdfQuoteId(null);
     setProgressionDialogOpen(true);
   }, []);
 
@@ -721,6 +734,47 @@ export function EmbudoBoardClient({
     setProgressionPending(false);
     setProgressionQuotesState({ status: "idle", data: [] });
     setSelectedWonQuoteId(null);
+    setProgressionPdfQuoteId(null);
+  }, []);
+
+  const handleProgressionQuotePdfDownload = useCallback(async (quote: ProgressionQuoteEntry) => {
+    if (!quote.pdfPath) {
+      setProgressionError("Esta cotización todavía no tiene un PDF disponible.");
+      return;
+    }
+
+    try {
+      setProgressionPdfQuoteId(quote.id);
+      const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`, {
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body?.error === "string" && body.error ? body.error : "No se pudo descargar el PDF.";
+        throw new Error(message);
+      }
+
+      const url = typeof body?.url === "string" ? body.url : null;
+      if (!url) {
+        throw new Error("No se pudo obtener el enlace del PDF.");
+      }
+
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.download = `cotizacion-v${quote.version}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (error) {
+      setProgressionError(
+        error instanceof Error ? error.message : "No se pudo descargar el PDF.",
+      );
+    } finally {
+      setProgressionPdfQuoteId(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -2014,53 +2068,77 @@ export function EmbudoBoardClient({
                             }).format(quote.total)
                           : "Sin total";
                       return (
-                        <button
+                        <div
                           key={quote.id}
-                          type="button"
-                          onClick={() => setSelectedWonQuoteId(quote.id)}
-                          disabled={progressionPending}
                           className={cn(
-                            "w-full rounded-lg border p-3 text-left transition",
+                            "w-full rounded-lg border p-3 transition",
                             isSelected
                               ? "border-emerald-500 bg-emerald-50 shadow-sm"
                               : "border-border bg-background hover:border-emerald-300 hover:bg-emerald-50/40",
                           )}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant={status === "aceptada" ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
-                                  {status}
-                                </Badge>
-                                {isSelected ? (
-                                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                                    Seleccionada
+                            <button
+                              type="button"
+                              onClick={() => setSelectedWonQuoteId(quote.id)}
+                              disabled={progressionPending}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge
+                                    variant={status === "aceptada" ? "default" : "outline"}
+                                    className="text-[10px] uppercase tracking-wide"
+                                  >
+                                    {status}
                                   </Badge>
-                                ) : null}
-                                {quote.channel ? (
-                                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                                    {quote.channel}
-                                  </Badge>
-                                ) : null}
+                                  {isSelected ? (
+                                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                                      Seleccionada
+                                    </Badge>
+                                  ) : null}
+                                  {quote.channel ? (
+                                    <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                      {quote.channel}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <p className="text-sm font-medium text-foreground">
+                                  Cotización v{quote.version}
+                                  {quote.title ? ` · ${quote.title}` : ""}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {quote.description || "Sin descripción"}
+                                </p>
                               </div>
-                              <p className="text-sm font-medium text-foreground">
-                                Cotización v{quote.version}
-                                {quote.title ? ` · ${quote.title}` : ""}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {quote.description || "Sin descripción"}
-                              </p>
-                            </div>
-                            <div className="text-right text-sm">
-                              <p className="font-semibold text-foreground">{totalValue}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {quote.sentAt || quote.createdAt
-                                  ? `Actualizada ${formatDateTime(quote.sentAt ?? quote.createdAt ?? "")}`
-                                  : "Sin fecha"}
-                              </p>
+                            </button>
+                            <div className="flex shrink-0 flex-col items-end gap-2 text-right text-sm">
+                              <div>
+                                <p className="font-semibold text-foreground">{totalValue}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {quote.sentAt || quote.createdAt
+                                    ? `Actualizada ${formatDateTime(quote.sentAt ?? quote.createdAt ?? "")}`
+                                    : "Sin fecha"}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => void handleProgressionQuotePdfDownload(quote)}
+                                disabled={progressionPending || progressionPdfQuoteId === quote.id}
+                              >
+                                {progressionPdfQuoteId === quote.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                                PDF
+                              </Button>
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
