@@ -186,6 +186,8 @@ header {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 64px;
 }
 .logo {
@@ -199,8 +201,11 @@ header {
 }
 h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.55rem;
   color: var(--quote-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .subtitle {
   margin: 4px 0 0;

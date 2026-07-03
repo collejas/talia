@@ -803,9 +803,9 @@ async def sync_role_permissions_from_matrix(
 class CreateTenantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nombre: str = Field(..., min_length=2)
+    nombre: str = Field(..., min_length=2, max_length=40)
     nombre_comercial: str | None = None
-    eslogan_empresa: str | None = Field(default=None, max_length=255)
+    eslogan_empresa: str | None = Field(default=None, max_length=75)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None
@@ -982,7 +982,7 @@ class UpdateTenantRequest(BaseModel):
 
     nombre: str | None = None
     nombre_comercial: str | None = None
-    eslogan_empresa: str | None = Field(default=None, max_length=255)
+    eslogan_empresa: str | None = Field(default=None, max_length=75)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None

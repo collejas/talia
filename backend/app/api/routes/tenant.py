@@ -169,9 +169,9 @@ class TenantContactCatalogsResponse(BaseModel):
 class TenantScopedUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nombre: str | None = Field(default=None, min_length=2)
+    nombre: str | None = Field(default=None, min_length=2, max_length=40)
     nombre_comercial: str | None = None
-    eslogan_empresa: str | None = Field(default=None, max_length=255)
+    eslogan_empresa: str | None = Field(default=None, max_length=75)
     razon_social: str | None = None
     dominio_principal: str | None = None
     rfc: str | None = None

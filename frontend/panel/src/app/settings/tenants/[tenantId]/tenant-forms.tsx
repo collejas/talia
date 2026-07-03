@@ -703,7 +703,7 @@ export function TenantOrganizationInfoForm({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="tenant_nombre">Nombre</Label>
-              <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} />
+              <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} maxLength={40} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="tenant_nombre_comercial">Nombre comercial</Label>
@@ -715,7 +715,7 @@ export function TenantOrganizationInfoForm({
                 id="tenant_eslogan_empresa"
                 name="tenant_eslogan_empresa"
                 defaultValue={info?.eslogan_empresa ?? ""}
-                maxLength={255}
+                maxLength={75}
                 placeholder="Una frase breve que resuma la propuesta comercial"
               />
             </div>

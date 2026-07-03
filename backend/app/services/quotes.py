@@ -231,7 +231,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         flex-direction: row;
         align-items: center;
         gap: 14px;
-        max-width: 72%;
+        max-width: 78%;
     }
 
     .brand-logo {
@@ -254,10 +254,13 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .title {
         margin: 0;
-        font-size: 22pt;
+        font-size: 20pt;
         line-height: 1.08;
         font-weight: 700;
         color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .subtitle {
@@ -271,6 +274,8 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: flex;
         flex-direction: column;
         justify-content: center;
+        flex: 1 1 auto;
+        min-width: 0;
         min-height: 78px;
     }
 

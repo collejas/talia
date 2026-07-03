@@ -145,6 +145,7 @@ export function TenantVariablesPanel({
                 value={form.nombre}
                 onChange={(event) => handleChange("nombre", event.target.value)}
                 required
+                maxLength={40}
               />
             </div>
             <div className="space-y-1">
@@ -164,7 +165,7 @@ export function TenantVariablesPanel({
                 value={form.eslogan_empresa}
                 onChange={(event) => handleChange("eslogan_empresa", event.target.value)}
                 placeholder="Una frase breve que resuma la propuesta comercial"
-                maxLength={255}
+                maxLength={75}
               />
             </div>
             <div className="space-y-1">
