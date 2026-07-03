@@ -52,6 +52,7 @@ import {
   IconBrandWhatsapp,
   IconCalendarEvent,
   IconChecklist,
+  IconEye,
   IconDownload,
   IconHandStop,
   IconLoader2,
@@ -2587,29 +2588,52 @@ export function LeadDrawer({
     }
   };
 
-  const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
+  const fetchQuotePdfUrl = useCallback(async (quote: LeadQuoteEntry) => {
     if (!quote.pdfPath) {
-      window.alert("Esta cotización no tiene un PDF disponible.");
-      return;
+      throw new Error("Esta cotización no tiene un PDF disponible.");
     }
+    const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`);
+    if (!response.ok) {
+      throw new Error("No pudimos generar el enlace del PDF.");
+    }
+    const payload = (await response.json()) as { url?: string };
+    if (!payload?.url) {
+      throw new Error("No pudimos generar el enlace del PDF.");
+    }
+    return payload.url;
+  }, []);
+
+  const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
     try {
       setQuotePdfLoadingId(quote.id);
-      const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`);
-      if (!response.ok) {
-        throw new Error("request_failed");
-      }
-      const payload = (await response.json()) as { url?: string };
-      if (!payload?.url) {
-        throw new Error("missing_url");
-      }
-      window.open(payload.url, "_blank", "noopener,noreferrer");
+      const url = await fetchQuotePdfUrl(quote);
+      window.open(url, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error("[LeadDrawer] quote pdf preview failed", error);
-      window.alert("No pudimos generar el enlace de descarga. Inténtalo de nuevo.");
+      window.alert(error instanceof Error ? error.message : "No pudimos generar el enlace de descarga. Inténtalo de nuevo.");
     } finally {
       setQuotePdfLoadingId(null);
     }
-  }, []);
+  }, [fetchQuotePdfUrl]);
+
+  const handleQuotePdfDownload = useCallback(async (quote: LeadQuoteEntry) => {
+    try {
+      setQuotePdfLoadingId(quote.id);
+      const url = await fetchQuotePdfUrl(quote);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.rel = "noopener";
+      anchor.download = `cotizacion-v${quote.version}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (error) {
+      console.error("[LeadDrawer] quote pdf download failed", error);
+      window.alert(error instanceof Error ? error.message : "No pudimos descargar el PDF. Inténtalo de nuevo.");
+    } finally {
+      setQuotePdfLoadingId(null);
+    }
+  }, [fetchQuotePdfUrl]);
 
   const handleQuoteStatusChange = useCallback(
     (quote: LeadQuoteEntry, nextStatus: "aceptada" | "rechazada" | "cancelada") => {
@@ -3303,21 +3327,38 @@ export function LeadDrawer({
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {quote.pdfPath ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() => handleQuotePdfPreview(quote)}
-                                  disabled={quotePdfLoadingId === quote.id}
-                                >
-                                  {quotePdfLoadingId === quote.id ? (
-                                    <IconLoader2 className="size-4 animate-spin" />
-                                  ) : (
-                                    <IconDownload className="size-4" />
-                                  )}
-                                  Ver PDF
-                                </Button>
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => handleQuotePdfPreview(quote)}
+                                    disabled={quotePdfLoadingId === quote.id}
+                                  >
+                                    {quotePdfLoadingId === quote.id ? (
+                                      <IconLoader2 className="size-4 animate-spin" />
+                                    ) : (
+                                      <IconEye className="size-4" />
+                                    )}
+                                    Ver PDF
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => handleQuotePdfDownload(quote)}
+                                    disabled={quotePdfLoadingId === quote.id}
+                                  >
+                                    {quotePdfLoadingId === quote.id ? (
+                                      <IconLoader2 className="size-4 animate-spin" />
+                                    ) : (
+                                      <IconDownload className="size-4" />
+                                    )}
+                                    Descargar
+                                  </Button>
+                                </>
                               ) : null}
                               <Button
                                 type="button"
