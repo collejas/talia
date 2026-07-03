@@ -158,6 +158,17 @@ class QuoteRenderContext:
     logo_url: str | None = None
     organization_name: str | None = None
     organization_slogan: str | None = None
+    organization_razon_social: str | None = None
+    organization_rfc: str | None = None
+    organization_street: str | None = None
+    organization_exterior_number: str | None = None
+    organization_interior_number: str | None = None
+    organization_colonia: str | None = None
+    organization_postal_code: str | None = None
+    organization_state: str | None = None
+    organization_city: str | None = None
+    organization_country: str | None = None
+    organization_website: str | None = None
 
 
 @dataclass
@@ -223,15 +234,30 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         padding-bottom: 14px;
         border-bottom: 1px solid #dbe3f0;
         margin-bottom: 14px;
-        align-items: center;
+        align-items: flex-start;
     }
 
     .brand-stack {
         display: flex;
         flex-direction: row;
+        align-items: flex-start;
+        gap: 18px;
+        max-width: 80%;
+    }
+
+    .brand-left {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .brand-head {
+        display: flex;
+        flex-direction: row;
         align-items: center;
         gap: 14px;
-        max-width: 78%;
+        min-width: 0;
     }
 
     .brand-logo {
@@ -274,9 +300,27 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: flex;
         flex-direction: column;
         justify-content: center;
-        flex: 1 1 auto;
+        flex: 0 1 auto;
         min-width: 0;
         min-height: 78px;
+        max-width: 360px;
+    }
+
+    .brand-lines {
+        display: grid;
+        gap: 2px;
+        margin-top: 8px;
+        color: #334155;
+        font-size: 8.9pt;
+        line-height: 1.25;
+    }
+
+    .brand-lines p {
+        margin: 0;
+    }
+
+    .brand-lines strong {
+        color: #0f172a;
     }
 
     .top-meta {
@@ -594,6 +638,20 @@ def _build_modern_quote_html(
         "Sin organización",
     )
     organization_slogan = _safe_text(context.organization_slogan, "")
+    organization_razon_social = _safe_text(
+        context.organization_razon_social or context.vendor_razon_social or context.vendor_company_name,
+        "Sin razón social",
+    )
+    organization_rfc = _safe_text(context.organization_rfc, "—")
+    organization_street = _safe_text(context.organization_street, "Sin calle")
+    organization_exterior_number = _safe_text(context.organization_exterior_number, "S/N")
+    organization_interior_number = _safe_text(context.organization_interior_number, "S/N")
+    organization_colonia = _safe_text(context.organization_colonia, "Sin colonia")
+    organization_postal_code = _safe_text(context.organization_postal_code, "—")
+    organization_state = _safe_text(context.organization_state, "Sin estado")
+    organization_city = _safe_text(context.organization_city, "Sin ciudad")
+    organization_country = _safe_text(context.organization_country, "Sin país")
+    organization_website = _safe_text(context.organization_website, "Sin sitio web")
     vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
     vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
     client_name = _safe_text(context.contact_name, "Sin cliente")
@@ -607,6 +665,36 @@ def _build_modern_quote_html(
         f'<div><img class="brand-logo" src="{html_escape(logo_url, quote=True)}" alt="Logo de la empresa" /></div>'
         if logo_url
         else ""
+    )
+    organization_details_html = "".join(
+        [
+            '<div class="brand-lines">',
+            (
+                "<p><strong>"
+                f"{html_escape(organization_razon_social)}"
+                "</strong> · RFC "
+                f"{html_escape(organization_rfc)}"
+                "</p>"
+            ),
+            (
+                "<p>"
+                f"{html_escape(organization_street)}, {html_escape(organization_exterior_number)}"
+                + (
+                    f", {html_escape(organization_interior_number)}"
+                    if organization_interior_number != "S/N"
+                    else ""
+                )
+                + "</p>"
+            ),
+            (
+                "<p>"
+                f"{html_escape(organization_colonia)}, CP {html_escape(organization_postal_code)}, "
+                f"{html_escape(organization_state)}, {html_escape(organization_city)}, {html_escape(organization_country)}"
+                "</p>"
+            ),
+            f"<p>{html_escape(organization_website)}</p>",
+            "</div>",
+        ]
     )
     notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
     conditions_html = _build_quote_conditions_html(template_config, context.economic_details_html)
@@ -625,10 +713,15 @@ def _build_modern_quote_html(
         <div class="sheet">
           <div class="topbar">
             <div class="brand-stack">
-              {logo_html}
-              <div class="brand-copy">
-                <h1 class="title">{html_escape(organization_name)}</h1>
-                <p class="subtitle">{html_escape(organization_slogan)}</p>
+              <div class="brand-left">
+                <div class="brand-head">
+                  {logo_html}
+                  <div class="brand-copy">
+                    <h1 class="title">{html_escape(organization_name)}</h1>
+                    <p class="subtitle">{html_escape(organization_slogan)}</p>
+                  </div>
+                </div>
+                {organization_details_html}
               </div>
             </div>
             <div class="top-meta">
@@ -890,6 +983,23 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
         f"Organización: {_safe_text(context.organization_name or context.vendor_company_name, '—')}"
     )
     lines.append(f"Eslogan: {_safe_text(context.organization_slogan, '—')}")
+    lines.append(
+        "Razón social / RFC: "
+        f"{_safe_text(context.organization_razon_social or context.vendor_razon_social or context.vendor_company_name, '—')} · "
+        f"{_safe_text(context.organization_rfc, '—')}"
+    )
+    lines.append(
+        "Dirección fiscal: "
+        f"{_safe_text(context.organization_street, '—')} "
+        f"{_safe_text(context.organization_exterior_number, '')}"
+        f"{', ' + _safe_text(context.organization_interior_number, '') if context.organization_interior_number else ''}"
+    )
+    lines.append(
+        "Ubicación: "
+        f"{_safe_text(context.organization_colonia, '—')} · CP {_safe_text(context.organization_postal_code, '—')} · "
+        f"{_safe_text(context.organization_state, '—')} · {_safe_text(context.organization_city, '—')} · {_safe_text(context.organization_country, '—')}"
+    )
+    lines.append(f"Sitio web: {_safe_text(context.organization_website, '—')}")
     lines.append(f"Lead / Proyecto: {context.lead_label}")
     lines.append(
         f"Fecha de emisión: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}"
@@ -1009,6 +1119,24 @@ def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
             "Organización",
         ),
         "organizacion.eslogan_empresa": _safe_text(context.organization_slogan, ""),
+        "organizacion.razon_social": _safe_text(
+            context.organization_razon_social or context.vendor_razon_social or context.vendor_company_name,
+            "Razón social",
+        ),
+        "organizacion.rfc": _safe_text(context.organization_rfc, "—"),
+        "organizacion.direccion_fiscal_calle": _safe_text(context.organization_street, ""),
+        "organizacion.direccion_fiscal_numero_exterior": _safe_text(
+            context.organization_exterior_number, ""
+        ),
+        "organizacion.direccion_fiscal_numero_interior": _safe_text(
+            context.organization_interior_number, ""
+        ),
+        "organizacion.direccion_fiscal_colonia": _safe_text(context.organization_colonia, ""),
+        "organizacion.codigo_postal": _safe_text(context.organization_postal_code, "—"),
+        "organizacion.estado": _safe_text(context.organization_state, ""),
+        "organizacion.ciudad": _safe_text(context.organization_city, ""),
+        "organizacion.pais": _safe_text(context.organization_country, ""),
+        "organizacion.sitio_web": _safe_text(context.organization_website, ""),
         "cotizacion.referencia": context.reference,
         "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
         "cotizacion.descripcion": _safe_text(context.descripcion, ""),

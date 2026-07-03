@@ -105,7 +105,7 @@ export function QuoteTemplateSettingsForm({
 
   const placeholdersTip = useMemo(
     () =>
-      "Puedes usar {{cliente.nombre}}, {{organizacion.nombre}}, {{organizacion.eslogan_empresa}}, {{tabla_conceptos}} u otros tokens dentro de los textos.",
+      "Puedes usar {{cliente.nombre}}, {{organizacion.nombre}}, {{organizacion.eslogan_empresa}}, {{organizacion.rfc}}, {{organizacion.sitio_web}} y otros tokens dentro de los textos.",
     [],
   )
 

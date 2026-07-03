@@ -2204,6 +2204,16 @@ async def _resolve_quote_vendor_context(
     tenant_name: str | None = None
     tenant_razon_social: str | None = None
     tenant_slogan: str | None = None
+    tenant_rfc: str | None = None
+    tenant_street: str | None = None
+    tenant_exterior_number: str | None = None
+    tenant_interior_number: str | None = None
+    tenant_colonia: str | None = None
+    tenant_postal_code: str | None = None
+    tenant_state: str | None = None
+    tenant_city: str | None = None
+    tenant_country: str | None = None
+    tenant_website: str | None = None
     try:
         platform_repo = PlatformRepository()
         tenant_row = await platform_repo.get_organizacion_details(organizacion_id=organizacion_id)
@@ -2214,6 +2224,18 @@ async def _resolve_quote_vendor_context(
         tenant_name = _clean_text(tenant_row.get("nombre"))
         tenant_razon_social = _clean_text(tenant_row.get("razon_social"))
         tenant_slogan = _clean_text(tenant_row.get("eslogan_empresa"))
+        tenant_rfc = _clean_text(tenant_row.get("rfc"))
+        tenant_street = _clean_text(tenant_row.get("direccion_fiscal_calle"))
+        tenant_exterior_number = _clean_text(tenant_row.get("direccion_fiscal_numero_exterior"))
+        tenant_interior_number = _clean_text(tenant_row.get("direccion_fiscal_numero_interior"))
+        tenant_colonia = _clean_text(tenant_row.get("direccion_fiscal_colonia"))
+        tenant_postal_code = _clean_text(tenant_row.get("codigo_postal"))
+        tenant_state = _clean_text(tenant_row.get("estado"))
+        tenant_city = _clean_text(tenant_row.get("ciudad"))
+        tenant_country = _clean_text(
+            tenant_row.get("pais") or tenant_row.get("pais_codigo_iso2")
+        )
+        tenant_website = _clean_text(tenant_row.get("sitio_web") or tenant_row.get("dominio_principal"))
 
     seller_row = _single_related(opportunity.get("propietario")) or _single_related(
         opportunity.get("asignado")
@@ -2243,6 +2265,17 @@ async def _resolve_quote_vendor_context(
     return {
         "organization_name": tenant_name,
         "organization_slogan": tenant_slogan,
+        "organization_razon_social": tenant_razon_social,
+        "organization_rfc": tenant_rfc,
+        "organization_street": tenant_street,
+        "organization_exterior_number": tenant_exterior_number,
+        "organization_interior_number": tenant_interior_number,
+        "organization_colonia": tenant_colonia,
+        "organization_postal_code": tenant_postal_code,
+        "organization_state": tenant_state,
+        "organization_city": tenant_city,
+        "organization_country": tenant_country,
+        "organization_website": tenant_website,
         "vendor_company_name": tenant_name,
         "vendor_razon_social": tenant_razon_social,
         "vendor_assessor_name": seller_name,
@@ -2493,6 +2526,17 @@ async def _render_quote_pdf_after_sale(
         items=items_list if isinstance(items_list, list) else [],
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
+        organization_razon_social=vendor_context["organization_razon_social"],
+        organization_rfc=vendor_context["organization_rfc"],
+        organization_street=vendor_context["organization_street"],
+        organization_exterior_number=vendor_context["organization_exterior_number"],
+        organization_interior_number=vendor_context["organization_interior_number"],
+        organization_colonia=vendor_context["organization_colonia"],
+        organization_postal_code=vendor_context["organization_postal_code"],
+        organization_state=vendor_context["organization_state"],
+        organization_city=vendor_context["organization_city"],
+        organization_country=vendor_context["organization_country"],
+        organization_website=vendor_context["organization_website"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27405,6 +27449,17 @@ async def create_lead_quote(
         economic_details_html=body.get("detalles_propuesta_html"),
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
+        organization_razon_social=vendor_context["organization_razon_social"],
+        organization_rfc=vendor_context["organization_rfc"],
+        organization_street=vendor_context["organization_street"],
+        organization_exterior_number=vendor_context["organization_exterior_number"],
+        organization_interior_number=vendor_context["organization_interior_number"],
+        organization_colonia=vendor_context["organization_colonia"],
+        organization_postal_code=vendor_context["organization_postal_code"],
+        organization_state=vendor_context["organization_state"],
+        organization_city=vendor_context["organization_city"],
+        organization_country=vendor_context["organization_country"],
+        organization_website=vendor_context["organization_website"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27522,6 +27577,17 @@ async def preview_lead_quote_pdf(
         economic_details_html=base_payload.detalles_propuesta_html,
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
+        organization_razon_social=vendor_context["organization_razon_social"],
+        organization_rfc=vendor_context["organization_rfc"],
+        organization_street=vendor_context["organization_street"],
+        organization_exterior_number=vendor_context["organization_exterior_number"],
+        organization_interior_number=vendor_context["organization_interior_number"],
+        organization_colonia=vendor_context["organization_colonia"],
+        organization_postal_code=vendor_context["organization_postal_code"],
+        organization_state=vendor_context["organization_state"],
+        organization_city=vendor_context["organization_city"],
+        organization_country=vendor_context["organization_country"],
+        organization_website=vendor_context["organization_website"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27679,6 +27745,17 @@ async def send_lead_quote(
         economic_details_html=payload.detalles_propuesta_html,
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
+        organization_razon_social=vendor_context["organization_razon_social"],
+        organization_rfc=vendor_context["organization_rfc"],
+        organization_street=vendor_context["organization_street"],
+        organization_exterior_number=vendor_context["organization_exterior_number"],
+        organization_interior_number=vendor_context["organization_interior_number"],
+        organization_colonia=vendor_context["organization_colonia"],
+        organization_postal_code=vendor_context["organization_postal_code"],
+        organization_state=vendor_context["organization_state"],
+        organization_city=vendor_context["organization_city"],
+        organization_country=vendor_context["organization_country"],
+        organization_website=vendor_context["organization_website"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],

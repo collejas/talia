@@ -44,6 +44,17 @@ const DEFAULT_VARIABLES = [
   "lead.nombre",
   "organizacion.nombre",
   "organizacion.eslogan_empresa",
+  "organizacion.razon_social",
+  "organizacion.rfc",
+  "organizacion.direccion_fiscal_calle",
+  "organizacion.direccion_fiscal_numero_exterior",
+  "organizacion.direccion_fiscal_numero_interior",
+  "organizacion.direccion_fiscal_colonia",
+  "organizacion.codigo_postal",
+  "organizacion.estado",
+  "organizacion.ciudad",
+  "organizacion.pais",
+  "organizacion.sitio_web",
   "cotizacion.referencia",
   "cotizacion.fecha",
   "cotizacion.descripcion",
@@ -107,10 +118,24 @@ export function buildQuoteTemplateAssets(config: QuoteTemplateConfig): { html: s
   <body>
     <header>
       <div class="brand">
-        <img src="${safeLogo}" alt="Logo" class="logo" />
-        <div class="brand-copy">
-          <h1>{{organizacion.nombre}}</h1>
-          <p class="subtitle">{{organizacion.eslogan_empresa}}</p>
+        <div class="brand-left">
+          <div class="brand-head">
+            <img src="${safeLogo}" alt="Logo" class="logo" />
+            <div class="brand-copy">
+              <h1>{{organizacion.nombre}}</h1>
+              <p class="subtitle">{{organizacion.eslogan_empresa}}</p>
+            </div>
+          </div>
+          <div class="brand-lines">
+            <p><strong>{{organizacion.razon_social}}</strong> · RFC {{organizacion.rfc}}</p>
+            <p>
+              {{organizacion.direccion_fiscal_calle}}, {{organizacion.direccion_fiscal_numero_exterior}}, {{organizacion.direccion_fiscal_numero_interior}}
+            </p>
+            <p>
+              {{organizacion.direccion_fiscal_colonia}}, CP {{organizacion.codigo_postal}}, {{organizacion.estado}}, {{organizacion.ciudad}}, {{organizacion.pais}}
+            </p>
+            <p>{{organizacion.sitio_web}}</p>
+          </div>
         </div>
       </div>
     </header>
@@ -179,16 +204,30 @@ header {
 }
 .brand {
   display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.brand-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.brand-head {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  min-width: 0;
 }
 .brand-copy {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   min-height: 64px;
+  max-width: 360px;
 }
 .logo {
   width: 64px;
@@ -212,6 +251,20 @@ h1 {
   color: #475569;
   font-size: 0.95rem;
   line-height: 1.2;
+}
+.brand-lines {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+  color: #334155;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+.brand-lines p {
+  margin: 0;
+}
+.brand-lines strong {
+  color: var(--quote-primary);
 }
 h2 {
   border-bottom: 1px solid #e2e8f0;
