@@ -2239,6 +2239,7 @@ async def _resolve_quote_vendor_context(
                 seller_phone = seller_phone or _clean_text(user_row.get("telefono_e164"))
 
     return {
+        "organization_name": tenant_name,
         "vendor_company_name": tenant_name,
         "vendor_razon_social": tenant_razon_social,
         "vendor_assessor_name": seller_name,
@@ -2487,6 +2488,7 @@ async def _render_quote_pdf_after_sale(
         moneda=_clean_text(quote_row.get("moneda") or "MXN") or "MXN",
         valido_hasta=_parse_date(quote_row.get("valida_hasta")),
         items=items_list if isinstance(items_list, list) else [],
+        organization_name=vendor_context["organization_name"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -14143,11 +14145,6 @@ class LeadQuoteListResponse(BaseModel):
 class CRMSaleLogsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
     logs: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class QuoteSignedUrlResponse(BaseModel):
-    url: HttpUrl
-    expires_in: int = Field(default=300, ge=1)
 
 
 class CRMDocumentSignedUrlResponse(BaseModel):
@@ -27402,6 +27399,7 @@ async def create_lead_quote(
         notes=oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=body.get("detalles_propuesta_html"),
+        organization_name=vendor_context["organization_name"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27517,6 +27515,7 @@ async def preview_lead_quote_pdf(
         descripcion=project_description,
         items=normalized_items,
         economic_details_html=base_payload.detalles_propuesta_html,
+        organization_name=vendor_context["organization_name"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27672,6 +27671,7 @@ async def send_lead_quote(
         or contact.get("necesidad_proposito"),
         items=normalized_items,
         economic_details_html=payload.detalles_propuesta_html,
+        organization_name=vendor_context["organization_name"],
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27787,46 +27787,6 @@ async def send_lead_quote(
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
-
-
-@router.get(
-    "/quotes/{quote_id}/pdf",
-    response_model=QuoteSignedUrlResponse,
-)
-async def get_quote_pdf_signed_url(
-    *,
-    repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("propuesta.view")),
-    quote_id: UUID,
-    expires_in: int = Query(300, ge=30, le=3600),
-) -> QuoteSignedUrlResponse:
-    try:
-        row = await repo.get_quote_entry(
-            organizacion_id=organizacion_id,
-            quote_id=quote_id,
-        )
-    except CRMRepositoryError:
-        raise HTTPException(status_code=404, detail="quote_not_found") from None
-
-    metadata = _ensure_dict(row.get("metadata"), default={})
-    pdf_path = (
-        metadata.get("pdf_path")
-        or metadata.get("pdfPath")
-        or row.get("pdf_path")
-    )
-    if not isinstance(pdf_path, str) or not pdf_path.strip():
-        raise HTTPException(status_code=404, detail="quote_pdf_not_found")
-
-    try:
-        signed_url = await storage.generate_quote_signed_url(
-            path=pdf_path,
-            expires_in=expires_in,
-        )
-    except StorageError as exc:
-        raise HTTPException(status_code=502, detail="quote_pdf_link_failed") from exc
-
-    return QuoteSignedUrlResponse(url=signed_url, expires_in=expires_in)
 
 
 @router.post("/cotizaciones/{cotizacion_id}/mark", response_model=LeadQuoteResponse)

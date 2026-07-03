@@ -156,6 +156,7 @@ class QuoteRenderContext:
     vendor_assessor_name: str | None = None
     vendor_assessor_phone: str | None = None
     logo_url: str | None = None
+    organization_name: str | None = None
 
 
 @dataclass
@@ -573,6 +574,10 @@ def _build_modern_quote_html(
         context.vendor_razon_social or context.vendor_company_name or context.issuer_name,
         "Sin razón social",
     )
+    organization_name = _safe_text(
+        context.organization_name or context.vendor_company_name or context.issuer_name,
+        "Sin organización",
+    )
     vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
     vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
     client_name = _safe_text(context.contact_name, "Sin cliente")
@@ -606,7 +611,7 @@ def _build_modern_quote_html(
             <div class="brand-stack">
               {logo_html}
               <div>
-                <h1 class="title">{html_escape(project_name)}</h1>
+                <h1 class="title">{html_escape(organization_name)}</h1>
               </div>
             </div>
             <div class="top-meta">
@@ -640,6 +645,7 @@ def _build_modern_quote_html(
             </div>
             <div class="card">
               <h3>Proyecto</h3>
+              <p><strong>{html_escape(project_name)}</strong></p>
               <p><strong>{html_escape(project_description or "Sin necesidades")}</strong></p>
             </div>
             <div class="card">
@@ -863,6 +869,9 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append("Documento de cotización")
     lines.append(divider)
 
+    lines.append(
+        f"Organización: {_safe_text(context.organization_name or context.vendor_company_name, '—')}"
+    )
     lines.append(f"Lead / Proyecto: {context.lead_label}")
     lines.append(
         f"Fecha de emisión: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}"
@@ -977,6 +986,10 @@ def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
         "cliente.correo": _safe_text(context.contact_email),
         "cliente.telefono": _safe_text(context.contact_phone),
         "lead.nombre": _safe_text(context.lead_label, "Proyecto"),
+        "organizacion.nombre": _safe_text(
+            context.organization_name or context.vendor_company_name,
+            "Organización",
+        ),
         "cotizacion.referencia": context.reference,
         "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
         "cotizacion.descripcion": _safe_text(context.descripcion, ""),

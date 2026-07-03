@@ -169,7 +169,6 @@ type LeadQuoteEntry = {
   sentAt: string | null;
   total: number | null;
   currency: string | null;
-  pdfPath: string | null;
   createdAt: string | null;
   title: string | null;
   description: string | null;
@@ -870,6 +869,8 @@ export function LeadDrawer({
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
   const [quotePdfLoadingId, setQuotePdfLoadingId] = useState<string | null>(null);
   const [quotePreviewPdfLoading, setQuotePreviewPdfLoading] = useState(false);
+  const [quotePreviewPdfUrl, setQuotePreviewPdfUrl] = useState<string | null>(null);
+  const [quotePreviewPdfFilename, setQuotePreviewPdfFilename] = useState("cotizacion.pdf");
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
@@ -2248,14 +2249,14 @@ export function LeadDrawer({
       setQuoteCatalogSelection([]);
       setQuotePreviewOpen(false);
       setQuotePreviewError(null);
+      if (quotePreviewPdfUrl) {
+        window.URL.revokeObjectURL(quotePreviewPdfUrl);
+        setQuotePreviewPdfUrl(null);
+      }
       setQuoteError(null);
       setQuoteAttachments([]);
     }
   };
-
-  const handleOpenQuotePreview = useCallback(() => {
-    setQuotePreviewOpen(true);
-  }, []);
 
   useEffect(() => {
     if (!quoteDialogOpen) return;
@@ -2332,6 +2333,7 @@ export function LeadDrawer({
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
   const quoteLatestEntry = quotesState.data[0] ?? null;
   const quotePreviewItems = quoteItems.filter((item) => !isBlankQuoteItem(item));
+  const quotePreviewPdfReady = Boolean(quotePreviewPdfUrl);
   const opportunityAssigneeId = card?.asignadoId ?? selectedVendorId ?? "";
   const quoteAssignedVendor =
     vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
@@ -2424,6 +2426,89 @@ export function LeadDrawer({
       subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
     };
   };
+
+  const fetchRenderedQuotePdf = useCallback(async (body: Record<string, unknown>) => {
+    if (!card) {
+      throw new Error("No hay oportunidad activa.");
+    }
+    const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/pdf`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/pdf",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const bodyError = await response.json().catch(() => ({}));
+      const message =
+        typeof bodyError?.error === "string" && bodyError.error ? bodyError.error : `Error ${response.status}`;
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)"?/i);
+    const filename = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].replace(/"/g, "")) : "cotizacion.pdf";
+    return { blob, filename };
+  }, [card]);
+
+  const openGeneratedQuotePdfPreview = useCallback(async (body: Record<string, unknown>) => {
+    setQuotePreviewError(null);
+    setQuotePreviewPdfLoading(true);
+    setQuotePreviewOpen(true);
+    if (quotePreviewPdfUrl) {
+      window.URL.revokeObjectURL(quotePreviewPdfUrl);
+      setQuotePreviewPdfUrl(null);
+    }
+    setQuotePreviewPdfFilename("cotizacion.pdf");
+    try {
+      const { blob, filename } = await fetchRenderedQuotePdf(body);
+      const objectUrl = window.URL.createObjectURL(blob);
+      setQuotePreviewPdfUrl(objectUrl);
+      setQuotePreviewPdfFilename(filename);
+    } catch (error) {
+      setQuotePreviewPdfUrl(null);
+      setQuotePreviewPdfFilename("cotizacion.pdf");
+      setQuotePreviewError(
+        error instanceof Error ? error.message : "No se pudo generar la vista previa PDF.",
+      );
+    } finally {
+      setQuotePreviewPdfLoading(false);
+    }
+  }, [fetchRenderedQuotePdf, quotePreviewPdfUrl]);
+
+  const buildQuotePdfPayloadFromEntry = useCallback((quote: LeadQuoteEntry) => {
+    const items = (quote.items ?? []).map((item, index) => ({
+      catalog_item_id: item.catalogItemId,
+      titulo: item.title ?? null,
+      descripcion: item.description ?? quote.description ?? null,
+      unidad: item.unit ?? "unidad",
+      cantidad: item.quantity ?? null,
+      precio_unitario: item.unitPrice ?? null,
+      descuento: item.discount ?? null,
+      total: item.total ?? null,
+      moneda: item.currency ?? quote.currency ?? quoteMoneda,
+      orden: index + 1,
+      metadatos: item.fotoUrl ? { fotoUrl: item.fotoUrl } : undefined,
+    }));
+    return {
+      titulo: quote.title ?? null,
+      descripcion: quote.description ?? quoteProjectNeeds,
+      conceptos: quote.concepts ?? undefined,
+      items,
+      subtotal: quote.subtotal ?? null,
+      impuestos: quote.taxes ?? null,
+      total: quote.total ?? null,
+      moneda: (quote.currency || quoteMoneda || "MXN").trim().toUpperCase(),
+      valido_hasta: quote.validUntil ?? null,
+      detalles_propuesta_html: quote.economicDetailsHtml ?? null,
+      message: quote.description ?? null,
+    };
+  }, [quoteMoneda, quoteProjectNeeds]);
+
+  const handleOpenQuotePreview = useCallback(() => {
+    void openGeneratedQuotePdfPreview(buildQuoteBasePayload());
+  }, [buildQuoteBasePayload, openGeneratedQuotePdfPreview]);
 
   const handleCreateQuote = () => {
     if (!card) return;
@@ -2552,23 +2637,7 @@ export function LeadDrawer({
     setQuotePreviewError(null);
     try {
       setQuotePreviewPdfLoading(true);
-      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/pdf`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/pdf",
-        },
-        body: JSON.stringify(buildQuotePayload()),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        const message = typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
-        throw new Error(message);
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("Content-Disposition") ?? "";
-      const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)"?/i);
-      const filename = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].replace(/"/g, "")) : "cotizacion.pdf";
+      const { blob, filename } = await fetchRenderedQuotePdf(buildQuoteBasePayload());
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -2588,34 +2657,10 @@ export function LeadDrawer({
     }
   };
 
-  const fetchQuotePdfUrl = useCallback(async (quote: LeadQuoteEntry) => {
-    if (!quote.pdfPath) {
-      throw new Error("Esta cotización no tiene un PDF disponible.");
-    }
-    const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`);
-    if (!response.ok) {
-      throw new Error("No pudimos generar el enlace del PDF.");
-    }
-    const payload = (await response.json()) as { url?: string };
-    if (!payload?.url) {
-      throw new Error("No pudimos generar el enlace del PDF.");
-    }
-    return payload.url;
-  }, []);
-
-  const fetchQuotePdfBlob = useCallback(async (quote: LeadQuoteEntry) => {
-    const url = await fetchQuotePdfUrl(quote);
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("No pudimos obtener el PDF.");
-    }
-    return response.blob();
-  }, [fetchQuotePdfUrl]);
-
   const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
     try {
       setQuotePdfLoadingId(quote.id);
-      const blob = await fetchQuotePdfBlob(quote);
+      const { blob } = await fetchRenderedQuotePdf(buildQuotePdfPayloadFromEntry(quote));
       const objectUrl = window.URL.createObjectURL(blob);
       window.open(objectUrl, "_blank", "noopener,noreferrer");
       window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 30_000);
@@ -2625,7 +2670,7 @@ export function LeadDrawer({
     } finally {
       setQuotePdfLoadingId(null);
     }
-  }, [fetchQuotePdfUrl]);
+  }, [buildQuotePdfPayloadFromEntry, fetchRenderedQuotePdf]);
 
   const handleQuoteStatusChange = useCallback(
     (quote: LeadQuoteEntry, nextStatus: "aceptada" | "rechazada" | "cancelada") => {
@@ -3317,7 +3362,7 @@ export function LeadDrawer({
                                 Total: {formatQuoteCurrency(quote.total, quote.currency)}
                               </p>
                               <p className="text-[11px] text-muted-foreground">
-                                {quote.pdfPath ? "PDF disponible para ver o descargar." : "PDF no disponible para esta cotización."}
+                                PDF disponible para vista previa y descarga.
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -3327,7 +3372,7 @@ export function LeadDrawer({
                                 size="sm"
                                 className="gap-1"
                                 onClick={() => handleQuotePdfPreview(quote)}
-                                disabled={!quote.pdfPath || quotePdfLoadingId === quote.id}
+                                disabled={quotePdfLoadingId === quote.id}
                               >
                                 {quotePdfLoadingId === quote.id ? (
                                   <IconLoader2 className="size-4 animate-spin" />
@@ -4686,6 +4731,10 @@ export function LeadDrawer({
         open={quotePreviewOpen}
         onOpenChange={(openState) => {
           setQuotePreviewOpen(openState);
+          if (!openState && quotePreviewPdfUrl) {
+            window.URL.revokeObjectURL(quotePreviewPdfUrl);
+            setQuotePreviewPdfUrl(null);
+          }
         }}
       >
         <DialogContent className="flex h-[88vh] w-[94vw] max-w-[94vw] flex-col overflow-hidden p-0">
@@ -4709,227 +4758,34 @@ export function LeadDrawer({
           ) : null}
           <div className="grid min-h-0 flex-1 gap-3 grid-rows-[minmax(0,1fr)] p-3 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="h-full min-h-0 rounded-lg bg-muted/20 p-3">
-              <ScrollArea className="h-full">
-                <div className="mx-auto max-w-4xl space-y-3 rounded-xl border border-border/40 bg-white px-5 pb-28 pt-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-4 border-b border-border/30 pb-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Cotización</p>
-                      <h3 className="mt-1 text-2xl font-semibold text-foreground">{quoteTitle || "Nueva cotización"}</h3>
-                    </div>
-                    <div className="space-y-1 text-right text-sm">
-                      <p className="font-semibold text-foreground">{quoteCurrentFolio}</p>
-                      <p className="text-muted-foreground">{quoteCurrentStatus}</p>
-                    </div>
+              <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border/40 bg-background shadow-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-border/30 px-3 py-2">
+                  <div className="space-y-0.5">
+                    <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">PDF real</p>
+                    <p className="text-sm font-medium text-foreground">{quotePreviewPdfFilename}</p>
                   </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cliente</h4>
-                      <div className="mt-2 space-y-1">
-                        <p className="font-medium text-foreground">{quoteClientName}</p>
-                        <p className="text-muted-foreground">{quoteClientContact}</p>
-                        <p className="text-muted-foreground">{quoteClientEmail}</p>
-                        <p className="text-muted-foreground">{quoteClientPhone}</p>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proyecto</h4>
-                      <div className="mt-2 space-y-1">
-                        <p className="font-medium text-foreground">{quoteProjectNeeds}</p>
-                        <p className="text-muted-foreground">Referencia: {formatOpportunityReference(card.codigoOportunidad)}</p>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-border/30 bg-muted/15 p-3 text-sm">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</h4>
-                      <div className="mt-2 space-y-1">
-                        <p className="font-medium text-foreground">{quoteAssignedVendorName}</p>
-                        <p className="text-muted-foreground">{quoteAssignedVendorEmail}</p>
-                        <p className="text-muted-foreground">{quoteAssignedVendorPhone}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div className="rounded-md bg-background/80 p-3 text-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vigente hasta</p>
-                        <p className="text-foreground">{quoteValidoHasta || "Sin vigencia"}</p>
-                      </div>
-                      <div className="rounded-md bg-background/80 p-3 text-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {quoteChannel === "email" ? "Destinatarios" : "WhatsApp destino"}
-                        </p>
-                        <p className="mt-1 text-foreground">{quoteChannel === "email" ? quoteEmailTo || "Sin destinatarios" : quoteWhatsappTo || "Sin destino"}</p>
-                      </div>
-                      <div className="rounded-md bg-background/80 p-3 text-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {quoteChannel === "email" ? "Asunto" : "Mensaje introductorio"}
-                        </p>
-                        <p className="mt-1 text-foreground">{quoteChannel === "email" ? quoteSubject || "Sin asunto" : quoteMessage || "Sin mensaje"}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2 border-b border-border/30 pb-2">
-                      <h4 className="text-sm font-semibold text-foreground">Partidas cotizadas</h4>
-                      <span className="text-xs text-muted-foreground">{quoteSummaryCurrency}</span>
-                    </div>
-                    {quotePreviewItems.length ? (
-                      <div className="overflow-hidden rounded-md border border-border/30">
-                        <div className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px] gap-2 border-b border-border/30 bg-muted/20 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          <span>Img.</span>
-                          <span>Concepto</span>
-                          <span>Cant.</span>
-                          <span>Unidad</span>
-                          <span>Precio</span>
-                          <span>Desc.</span>
-                          <span>Total</span>
-                        </div>
-                        <div className="max-h-[420px] overflow-auto bg-background">
-                          {quotePreviewItems.map((item, index) => {
-                            const catalogImageUrl = item.catalogItemId
-                              ? catalogItemsById.get(item.catalogItemId)?.fotoUrl ?? null
-                              : null;
-                            const imageUrl = item.fotoUrl || catalogImageUrl;
-                            return (
-                              <div
-                                key={item.key}
-                                className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px] items-start gap-2 border-b border-border/20 px-2 py-2 last:border-b-0"
-                              >
-                                <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30">
-                                  {imageUrl ? (
-                                    <>
-                                      <Image
-                                        src={imageUrl}
-                                        alt=""
-                                        width={40}
-                                        height={40}
-                                        unoptimized
-                                        className="h-full w-full object-cover"
-                                        onError={(event) => {
-                                          const fallback = event.currentTarget.parentElement?.querySelector<HTMLElement>(
-                                            "[data-fallback='true']",
-                                          );
-                                          if (fallback) fallback.classList.remove("hidden");
-                                          event.currentTarget.style.display = "none";
-                                        }}
-                                      />
-                                      <span
-                                        data-fallback="true"
-                                        className="hidden absolute inset-0 items-center justify-center text-[9px] uppercase text-muted-foreground"
-                                      >
-                                        Sin img
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[9px] uppercase text-muted-foreground">Sin img</span>
-                                  )}
-                                </div>
-                                <div className="min-w-0 space-y-1">
-                                  <p className="truncate text-sm font-medium text-foreground">
-                                    {index + 1}. {item.nombre || "Sin concepto"}
-                                  </p>
-                                </div>
-                                <div className="pt-1 text-xs text-foreground">{item.cantidad || "-"}</div>
-                                <div className="pt-1 text-xs text-foreground">{item.unidad || "-"}</div>
-                                <div className="pt-1 text-xs text-foreground">
-                                  {formatQuoteCurrency(parseNumberInput(item.precioUnitario), item.moneda || quoteSummaryCurrency)}
-                                </div>
-                                <div className="pt-1 text-xs text-foreground">
-                                  {item.descuento ? item.descuento : "0"}
-                                </div>
-                                <div className="pt-1 text-xs font-semibold text-foreground">
-                                  {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteSummaryCurrency)}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-md border border-dashed border-border/40 px-3 py-4 text-sm text-muted-foreground">
-                        Todavía no hay partidas para previsualizar.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-                        <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
-                        <div className="mt-3 space-y-3 rounded-md bg-background px-3 py-3 text-sm text-foreground">
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              {quoteTemplateLoading ? "Cargando..." : quoteTemplateConfig.notesTitle}
-                            </p>
-                            <p className="text-sm text-foreground">{quoteTemplateConfig.notesBody}</p>
-                          </div>
-                          <div className="space-y-1 border-t border-border/30 pt-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              {quoteTemplateConfig.termsTitle}
-                            </p>
-                            <p className="text-sm text-foreground">{quoteTemplateConfig.termsBody}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-                        <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
-                        <div className="mt-2 space-y-3">
-                          <div className="rounded-md bg-background px-3 py-2 text-sm text-foreground min-h-[48px]">
-                            {quoteMessage.trim()}
-                          </div>
-                          <div className="rounded-md border border-dashed border-border/40 bg-background px-3 py-2 text-sm text-muted-foreground">
-                            {quoteAttachments.length ? (
-                              <div className="space-y-1">
-                                <p className="font-medium text-foreground">
-                                  Anexos: {quoteAttachments.length} archivo{quoteAttachments.length === 1 ? "" : "s"}
-                                </p>
-                                <ul className="space-y-0.5">
-                                  {quoteAttachments.map((attachment) => (
-                                    <li key={attachment.id} className="truncate">
-                                      {attachment.name}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : (
-                              "Anexos: no hay archivos cargados todavía."
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-                        <h4 className="text-sm font-semibold text-foreground">Resumen financiero</h4>
-                        <div className="mt-3 space-y-1.5 text-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-muted-foreground">Subtotal</span>
-                            <span className="font-medium text-foreground">
-                              {formatQuoteCurrency(quoteSummarySubtotal, quoteSummaryCurrency)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-muted-foreground">IVA</span>
-                            <span className="font-medium text-foreground">
-                              {formatQuoteCurrency(quoteSummaryTaxes, quoteSummaryCurrency)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2 text-base font-semibold">
-                            <span className="text-foreground">Total</span>
-                            <span className="text-foreground">
-                              {formatQuoteCurrency(quoteSummaryTotal, quoteSummaryCurrency)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <Badge variant="outline" className="h-6 rounded-full px-2 text-[10px] uppercase tracking-wide">
+                    {quotePreviewPdfLoading ? "Generando..." : quotePreviewPdfReady ? "Listo" : "Sin vista previa"}
+                  </Badge>
                 </div>
-              </ScrollArea>
+                <div className="relative min-h-0 flex-1 bg-muted/10">
+                  {quotePreviewPdfLoading && !quotePreviewPdfReady ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      Generando PDF...
+                    </div>
+                  ) : quotePreviewPdfUrl ? (
+                    <iframe
+                      title="Vista previa PDF"
+                      src={quotePreviewPdfUrl}
+                      className="h-full w-full"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+                      No se pudo generar la vista previa. Usa descargar para validar el archivo.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="h-full min-h-0 space-y-3 overflow-y-auto pb-28 pr-1">
@@ -4943,9 +4799,9 @@ export function LeadDrawer({
               </div>
               <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
                 <h4 className="text-sm font-semibold text-foreground">Plantilla</h4>
-                <p className="mt-1 text-xs text-muted-foreground">Por ahora solo una vista ejecutiva.</p>
+                <p className="mt-1 text-xs text-muted-foreground">La vista previa ya usa el PDF renderizado real.</p>
                 <div className="mt-3 rounded-md bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                  Esta es una maqueta visual. Luego se conectará al PDF real.
+                  El mismo render alimenta la vista previa y la descarga.
                 </div>
               </div>
               <div className="rounded-lg bg-background p-3 shadow-sm ring-1 ring-border/40">
@@ -5638,12 +5494,6 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     sentAt: typeof row.enviada_en === "string" ? row.enviada_en : null,
     total: totalValue,
     currency: typeof row.moneda === "string" ? row.moneda : null,
-    pdfPath:
-      typeof row.pdf_path === "string"
-        ? row.pdf_path
-        : typeof metadataRecord["pdf_path"] === "string"
-          ? (metadataRecord["pdf_path"] as string)
-          : null,
     createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
     title: typeof row.titulo === "string" ? row.titulo : null,
     description: typeof row.descripcion === "string" ? row.descripcion : null,

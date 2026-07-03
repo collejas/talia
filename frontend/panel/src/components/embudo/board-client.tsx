@@ -99,7 +99,6 @@ type ProgressionQuoteEntry = {
   channel: string | null;
   total: number | null;
   currency: string | null;
-  pdfPath: string | null;
   title: string | null;
   description: string | null;
   createdAt: string | null;
@@ -459,12 +458,6 @@ export function EmbudoBoardClient({
                 ? Number(row.total)
                 : null,
             currency: typeof row.moneda === "string" ? row.moneda : null,
-            pdfPath:
-              typeof row.pdf_path === "string"
-                ? row.pdf_path
-                : typeof metadataRecord.pdf_path === "string"
-                  ? (metadataRecord.pdf_path as string)
-                  : null,
             title: typeof row.titulo === "string" ? row.titulo : null,
             description: typeof row.descripcion === "string" ? row.descripcion : null,
             createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
