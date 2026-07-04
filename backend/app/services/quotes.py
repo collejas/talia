@@ -498,7 +498,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         width: 34px;
         height: 34px;
         object-fit: cover;
-        border: 1px solid #dbe3f0;
         background: #eef2f7;
         display: block;
     }
