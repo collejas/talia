@@ -8,6 +8,7 @@ export type QuoteVendorSettings = {
   conditions: QuoteVendorConditionItem[]
   notesTitle: string
   notesBody: string
+  validityDays: number
 }
 
 export const DEFAULT_QUOTE_VENDOR_SETTINGS: QuoteVendorSettings = {
@@ -20,6 +21,7 @@ export const DEFAULT_QUOTE_VENDOR_SETTINGS: QuoteVendorSettings = {
   ],
   notesTitle: "Notas",
   notesBody: "",
+  validityDays: 15,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,6 +30,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim().length ? value.trim() : fallback
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(1, Math.floor(value))
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim())
+    if (Number.isFinite(parsed)) {
+      return Math.max(1, Math.floor(parsed))
+    }
+  }
+  return fallback
 }
 
 function readConditions(value: unknown): QuoteVendorConditionItem[] {
@@ -63,6 +78,7 @@ export function normalizeQuoteVendorSettings(value: unknown): QuoteVendorSetting
     conditions: readConditions(value.conditions),
     notesTitle: readString(value.notesTitle, DEFAULT_QUOTE_VENDOR_SETTINGS.notesTitle),
     notesBody: readString(value.notesBody, DEFAULT_QUOTE_VENDOR_SETTINGS.notesBody),
+    validityDays: readNumber(value.validityDays ?? value.validity_days, DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays),
   }
 }
 
@@ -88,6 +104,6 @@ export function buildQuoteVendorSettingsPayload(settings: QuoteVendorSettings): 
       .filter((item) => item.subtitle.length > 0 || item.description.length > 0),
     notesTitle: settings.notesTitle.trim() || DEFAULT_QUOTE_VENDOR_SETTINGS.notesTitle,
     notesBody: settings.notesBody.trim(),
+    validityDays: Math.max(1, Math.floor(settings.validityDays || DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
   }
 }
-

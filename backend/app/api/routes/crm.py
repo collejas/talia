@@ -2301,6 +2301,7 @@ def _resolve_quote_vendor_settings_from_config(config: Mapping[str, Any] | None)
         ],
         "notesTitle": "Notas",
         "notesBody": "",
+        "validityDays": 15,
     }
     if not isinstance(config, Mapping):
         return default
@@ -2322,12 +2323,81 @@ def _resolve_quote_vendor_settings_from_config(config: Mapping[str, Any] | None)
     if not conditions:
         conditions = list(default["conditions"])
 
+    validity_days_value = source.get("validityDays")
+    if validity_days_value is None:
+        validity_days_value = source.get("validity_days")
+    if validity_days_value is None:
+        validity_days_value = source.get("vigenciaDias")
+    try:
+        validity_days = int(str(validity_days_value).strip()) if validity_days_value is not None else default["validityDays"]
+    except ValueError:
+        validity_days = default["validityDays"]
+    validity_days = max(1, validity_days)
+
     return {
         "conditionsTitle": _clean_text(source.get("conditionsTitle")) or default["conditionsTitle"],
         "conditions": conditions,
         "notesTitle": _clean_text(source.get("notesTitle")) or default["notesTitle"],
         "notesBody": _clean_text(source.get("notesBody")) or default["notesBody"],
+        "validityDays": validity_days,
     }
+
+
+def _normalize_quote_vendor_settings_payload(
+    value: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    return _resolve_quote_vendor_settings_from_config({"quote_vendedores": value})
+
+
+def _is_default_quote_vendor_settings(value: Mapping[str, Any] | None) -> bool:
+    normalized = _normalize_quote_vendor_settings_payload(value)
+    if normalized is None:
+        return True
+    default = _resolve_quote_vendor_settings_from_config({})
+    return (
+        normalized.get("conditionsTitle") == default.get("conditionsTitle")
+        and normalized.get("conditions") == default.get("conditions")
+        and normalized.get("notesTitle") == default.get("notesTitle")
+        and normalized.get("notesBody") == default.get("notesBody")
+        and normalized.get("validityDays") == default.get("validityDays")
+    )
+
+
+def _resolve_effective_quote_vendor_settings(
+    *,
+    payload_settings: Mapping[str, Any] | None,
+    tenant_settings: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    tenant_resolved = _resolve_quote_vendor_settings_from_config(
+        {"quote_vendedores": tenant_settings} if isinstance(tenant_settings, Mapping) else None
+    )
+    payload_resolved = _normalize_quote_vendor_settings_payload(payload_settings)
+    if payload_resolved is None or _is_default_quote_vendor_settings(payload_settings):
+        return tenant_resolved
+    return payload_resolved
+
+
+def _resolve_quote_valid_until(
+    raw_value: Any,
+    quote_vendor_settings: Mapping[str, Any] | None,
+) -> date | None:
+    parsed = _to_iso_date(raw_value)
+    if parsed is not None:
+        return parsed
+    validity_days = 15
+    if isinstance(quote_vendor_settings, Mapping):
+        value = (
+            quote_vendor_settings.get("validityDays")
+            or quote_vendor_settings.get("validity_days")
+            or quote_vendor_settings.get("vigenciaDias")
+        )
+        try:
+            validity_days = max(1, int(str(value).strip())) if value is not None else 15
+        except ValueError:
+            validity_days = 15
+    return date.today() + timedelta(days=validity_days)
 
 
 async def _resolve_quote_logo_url(
@@ -27475,10 +27545,11 @@ async def create_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=opportunity,
     )
-    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
-        metadata.get("quote_vendedores")
+    quote_vendor_settings = _resolve_effective_quote_vendor_settings(
+        payload_settings=metadata.get("quote_vendedores")
         if isinstance(metadata.get("quote_vendedores"), Mapping)
-        else vendor_context.get("quote_vendor_settings"),
+        else None,
+        tenant_settings=vendor_context.get("quote_vendor_settings"),
     )
     quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
@@ -27501,7 +27572,7 @@ async def create_lead_quote(
         impuestos=_as_number(body.get("impuestos")),
         total=_as_number(body.get("total")),
         moneda=currency,
-        valido_hasta=_to_iso_date(body.get("valido_hasta")),
+        valido_hasta=_resolve_quote_valid_until(body.get("valido_hasta"), quote_vendor_settings),
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=normalized_items,
@@ -27614,11 +27685,12 @@ async def preview_lead_quote_pdf(
         organizacion_id=organizacion_id,
         opportunity=opportunity_row,
     )
-    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
-        base_payload.metadatos.get("quote_vendedores")
+    quote_vendor_settings = _resolve_effective_quote_vendor_settings(
+        payload_settings=base_payload.metadatos.get("quote_vendedores")
         if isinstance(base_payload.metadatos, dict)
         and isinstance(base_payload.metadatos.get("quote_vendedores"), Mapping)
-        else vendor_context.get("quote_vendor_settings"),
+        else None,
+        tenant_settings=vendor_context.get("quote_vendor_settings"),
     )
     quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
@@ -27641,7 +27713,7 @@ async def preview_lead_quote_pdf(
         impuestos=base_payload.impuestos,
         total=base_payload.total,
         moneda=currency,
-        valido_hasta=_to_iso_date(base_payload.valido_hasta),
+        valido_hasta=_resolve_quote_valid_until(base_payload.valido_hasta, quote_vendor_settings),
         descripcion=project_description,
         items=normalized_items,
         quote_vendor_settings=quote_vendor_settings,
@@ -27753,11 +27825,12 @@ async def send_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=oportunidad_row,
     )
-    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
-        base_payload.metadatos.get("quote_vendedores")
+    quote_vendor_settings = _resolve_effective_quote_vendor_settings(
+        payload_settings=base_payload.metadatos.get("quote_vendedores")
         if isinstance(base_payload.metadatos, dict)
         and isinstance(base_payload.metadatos.get("quote_vendedores"), Mapping)
-        else vendor_context.get("quote_vendor_settings"),
+        else None,
+        tenant_settings=vendor_context.get("quote_vendor_settings"),
     )
     quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
@@ -27817,7 +27890,7 @@ async def send_lead_quote(
         impuestos=base_payload.impuestos,
         total=base_payload.total,
         moneda=currency,
-        valido_hasta=_to_iso_date(base_payload.valido_hasta),
+        valido_hasta=_resolve_quote_valid_until(base_payload.valido_hasta, quote_vendor_settings),
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=normalized_items,
@@ -27844,7 +27917,7 @@ async def send_lead_quote(
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
     try:
-        quote_valid_until = _to_iso_date(create_payload.get("valido_hasta"))
+        quote_valid_until = _resolve_quote_valid_until(create_payload.get("valido_hasta"), quote_vendor_settings)
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
             filename=pdf_doc.filename,

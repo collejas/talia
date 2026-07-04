@@ -36,6 +36,7 @@ export function QuoteVendorsForm({ config }: Props) {
   const [conditions, setConditions] = useState(initial.conditions.length ? [...initial.conditions] : [createEmptyCondition()])
   const [notesTitle, setNotesTitle] = useState(initial.notesTitle)
   const [notesBody, setNotesBody] = useState(initial.notesBody)
+  const [validityDays, setValidityDays] = useState(String(initial.validityDays))
   const [status, setStatus] = useState<SaveState>(null)
   const [saving, setSaving] = useState(false)
 
@@ -44,6 +45,7 @@ export function QuoteVendorsForm({ config }: Props) {
     setConditions(savedSettings.conditions.length ? [...savedSettings.conditions] : [createEmptyCondition()])
     setNotesTitle(savedSettings.notesTitle)
     setNotesBody(savedSettings.notesBody)
+    setValidityDays(String(savedSettings.validityDays))
     setStatus({ type: "success", message: "Se restauraron los valores actuales del tenant." })
   }
 
@@ -74,6 +76,7 @@ export function QuoteVendorsForm({ config }: Props) {
         conditions,
         notesTitle,
         notesBody,
+        validityDays: Number(validityDays),
       })
       const response = await fetch("/api/settings/variables/config", {
         method: "POST",
@@ -94,6 +97,7 @@ export function QuoteVendorsForm({ config }: Props) {
       setConditions(nextSettings.conditions.length ? [...nextSettings.conditions] : [createEmptyCondition()])
       setNotesTitle(nextSettings.notesTitle)
       setNotesBody(nextSettings.notesBody)
+      setValidityDays(String(nextSettings.validityDays))
       setStatus({ type: "success", message: "Cotizaciones Vendedores guardado correctamente." })
     } catch (error) {
       setStatus({
@@ -111,12 +115,28 @@ export function QuoteVendorsForm({ config }: Props) {
         <CardTitle>Cotizaciones Vendedores</CardTitle>
         <CardDescription>
           Define la base de <span className="font-medium text-foreground">Condiciones comerciales</span> y
-          <span className="font-medium text-foreground"> Notas</span> que alimentan las cotizaciones.
+          <span className="font-medium text-foreground"> Notas</span> que alimentan las cotizaciones, además de la
+          vigencia por defecto.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="quote-vendors-validity-days">Vigencia por defecto (días)</Label>
+              <Input
+                id="quote-vendors-validity-days"
+                type="number"
+                min={1}
+                max={365}
+                value={validityDays}
+                onChange={(event) => setValidityDays(event.target.value)}
+                placeholder={String(DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)}
+              />
+              <p className="text-xs text-muted-foreground">
+                La cotización convertirá este contador en una fecha de vencimiento al generar el PDF.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="quote-vendors-conditions-title">Título de condiciones</Label>
               <Input

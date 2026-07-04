@@ -890,7 +890,7 @@ export function LeadDrawer({
   const [quoteTotal, setQuoteTotal] = useState("");
   const [quoteMoneda, setQuoteMoneda] = useState(card?.moneda ?? "MXN");
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
-    formatDateInput(addDays(new Date(), 14)),
+    formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
   );
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
@@ -2141,6 +2141,11 @@ export function LeadDrawer({
     updateWonStagePrep(acceptedQuote.total ?? null);
   }, [card?.oportunidadId, quotesState.status, quotesState.data, updateWonStagePrep]);
 
+  const quoteValidityDays = useMemo(
+    () => Math.max(1, Math.floor(quoteVendorSettings.validityDays || DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
+    [quoteVendorSettings.validityDays],
+  );
+
   const openQuoteDialog = useCallback(
     (channel: QuoteChannel) => {
       if (!card) return;
@@ -2171,7 +2176,8 @@ export function LeadDrawer({
       const defaultTaxes =
         latestQuote?.taxes != null && Number.isFinite(latestQuote.taxes) ? String(latestQuote.taxes) : "";
       const validUntil =
-        formatIsoDateForInput(latestQuote?.validUntil) ?? formatDateInput(addDays(new Date(), 14));
+        formatIsoDateForInput(latestQuote?.validUntil) ??
+        formatDateInput(addDays(new Date(), quoteValidityDays));
       const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
       const latestQuoteVendorSettings = isRecord(latestQuote?.metadata)
         ? latestQuote.metadata.quote_vendedores ?? null
@@ -2248,7 +2254,7 @@ export function LeadDrawer({
       setQuoteSuccess(null);
       setQuoteDialogOpen(true);
     },
-    [card, quoteMoneda, quotesState.data],
+    [card, quoteMoneda, quoteValidityDays, quotesState.data],
   );
 
   const handleQuoteDialogOpenChange = (openState: boolean) => {
@@ -2282,6 +2288,9 @@ export function LeadDrawer({
         if (!rawConfig || typeof rawConfig !== "object") return;
         const vendorSettings = extractQuoteVendorSettings(rawConfig);
         setQuoteVendorSettings(vendorSettings);
+        const currentDefaultDate = formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays));
+        const nextDefaultDate = formatDateInput(addDays(new Date(), vendorSettings.validityDays));
+        setQuoteValidoHasta((current) => (current === currentDefaultDate ? nextDefaultDate : current));
       } finally {
         if (!cancelled) setQuoteVendorSettingsLoading(false);
       }
@@ -2356,6 +2365,7 @@ export function LeadDrawer({
     () => buildQuoteVendorSettingsPayload(quoteVendorSettings),
     [quoteVendorSettings],
   );
+  const quoteActionsDisabled = quotePending || quoteVendorSettingsLoading;
 
   const handleQuoteVendorConditionChange = (
     index: number,
@@ -2549,11 +2559,19 @@ export function LeadDrawer({
   }, [quoteMoneda, quoteProjectNeeds]);
 
   const handleOpenQuotePreview = useCallback(() => {
+    if (quoteVendorSettingsLoading) {
+      setQuoteError("Espera a que cargue la configuración de cotización.");
+      return;
+    }
     void openGeneratedQuotePdfPreview(buildQuoteBasePayload());
-  }, [buildQuoteBasePayload, openGeneratedQuotePdfPreview]);
+  }, [buildQuoteBasePayload, openGeneratedQuotePdfPreview, quoteVendorSettingsLoading]);
 
   const handleCreateQuote = () => {
     if (!card) return;
+    if (quoteVendorSettingsLoading) {
+      setQuoteError("Espera a que cargue la configuración de cotización.");
+      return;
+    }
     setQuoteError(null);
     startQuoteAction(async () => {
       try {
@@ -2602,6 +2620,10 @@ export function LeadDrawer({
 
   const handleSendQuote = () => {
     if (!card) return;
+    if (quoteVendorSettingsLoading) {
+      setQuoteError("Espera a que cargue la configuración de cotización.");
+      return;
+    }
     if (quoteChannel === "email") {
       const emails = parseEmailList(quoteEmailTo);
       if (!emails.length) {
@@ -4672,16 +4694,16 @@ export function LeadDrawer({
                         </p>
                       </div>
                       <div className="grid gap-2">
-                        <Button type="button" variant="outline" onClick={handleOpenQuotePreview}>
+                        <Button type="button" variant="outline" onClick={handleOpenQuotePreview} disabled={quoteActionsDisabled}>
                           Vista previa PDF
                         </Button>
-                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quotePending}>
-                          {quotePending ? "Creando..." : "Crear cotización"}
+                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quoteActionsDisabled}>
+                          {quotePending ? "Creando..." : quoteVendorSettingsLoading ? "Cargando..." : "Crear cotización"}
                         </Button>
-                        <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
-                          {quotePending ? "Enviando..." : "Enviar cotización"}
+                        <Button type="button" onClick={handleSendQuote} disabled={quoteActionsDisabled}>
+                          {quotePending ? "Enviando..." : quoteVendorSettingsLoading ? "Cargando..." : "Enviar cotización"}
                         </Button>
-                        <Button type="button" variant="ghost" onClick={handleSaveQuoteDraft}>
+                        <Button type="button" variant="ghost" onClick={handleSaveQuoteDraft} disabled={quoteVendorSettingsLoading}>
                           Guardar borrador local
                         </Button>
                         <Button type="button" variant="ghost" onClick={() => setQuoteDialogOpen(false)}>
