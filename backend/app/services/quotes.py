@@ -262,8 +262,8 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .brand-logo {
-        width: 66px;
-        height: 66px;
+        width: 59px;
+        height: 59px;
         object-fit: contain;
         border-radius: 14px;
         border: 1px solid #dbe3f0;
@@ -274,14 +274,14 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .eyebrow {
         margin: 0;
         color: #64748b;
-        font-size: 8pt;
+        font-size: 7.2pt;
         letter-spacing: 0.26em;
         text-transform: uppercase;
     }
 
     .title {
         margin: 0;
-        font-size: 14pt;
+        font-size: 12.6pt;
         line-height: 1.08;
         font-weight: 700;
         color: #0f172a;
@@ -293,7 +293,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .subtitle {
         margin: 2px 0 0;
         color: #475569;
-        font-size: 10pt;
+        font-size: 9pt;
         line-height: 1.15;
     }
 
@@ -312,7 +312,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         gap: 2px;
         margin-top: 4px;
         color: #334155;
-        font-size: 8pt;
+        font-size: 7.2pt;
         line-height: 1.18;
     }
 
@@ -341,7 +341,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .meta-label {
         color: #64748b;
-        font-size: 8pt;
+        font-size: 7.2pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         line-height: 1.22;
@@ -351,7 +351,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: block;
         margin-top: 0;
         color: #0f172a;
-        font-size: 9.5pt;
+        font-size: 8.55pt;
         font-weight: 700;
         line-height: 1.22;
     }
@@ -372,7 +372,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .card h3 {
         margin: 0 0 6px;
-        font-size: 9pt;
+        font-size: 8.1pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #64748b;
@@ -382,12 +382,12 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         margin: 0 0 2px;
         color: #334155;
         line-height: 1.14;
-        font-size: 8.6pt;
+        font-size: 7.74pt;
     }
 
     .card p strong {
         color: #0f172a;
-        font-size: 8.6pt;
+        font-size: 7.74pt;
     }
 
     .card-secondary p:not(:first-of-type) {

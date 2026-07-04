@@ -228,8 +228,8 @@ header {
   max-width: 360px;
 }
 .logo {
-  width: 54px;
-  height: 54px;
+  width: 49px;
+  height: 49px;
   object-fit: contain;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -238,7 +238,7 @@ header {
 }
 h1 {
   margin: 0;
-  font-size: 14pt;
+  font-size: 12.6pt;
   color: var(--quote-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -247,7 +247,7 @@ h1 {
 .subtitle {
   margin: 2px 0 0;
   color: #475569;
-  font-size: 10pt;
+  font-size: 9pt;
   line-height: 1.15;
 }
 .brand-lines {
@@ -255,7 +255,7 @@ h1 {
   gap: 2px;
   margin-top: 4px;
   color: #334155;
-  font-size: 8pt;
+  font-size: 7.2pt;
   line-height: 1.18;
 }
 .brand-lines p {

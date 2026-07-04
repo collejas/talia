@@ -115,8 +115,8 @@ header, section, footer { margin-bottom: 24px; }
   max-width: 360px;
 }
 .logo {
-  width: 54px;
-  height: 54px;
+  width: 49px;
+  height: 49px;
   object-fit: contain;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -125,7 +125,7 @@ header, section, footer { margin-bottom: 24px; }
 }
 h1 {
   margin: 0;
-  font-size: 14pt;
+  font-size: 12.6pt;
   color: var(--quote-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -134,7 +134,7 @@ h1 {
 .subtitle {
   margin: 2px 0 0;
   color: #475569;
-  font-size: 10pt;
+  font-size: 9pt;
   line-height: 1.15;
 }
 .brand-lines {
@@ -142,7 +142,7 @@ h1 {
   gap: 2px;
   margin-top: 4px;
   color: #334155;
-  font-size: 8pt;
+  font-size: 7.2pt;
   line-height: 1.18;
 }
 .brand-lines p {
@@ -166,7 +166,7 @@ h1 {
 }
 .meta-label {
   color: #64748b;
-  font-size: 8pt;
+  font-size: 7.2pt;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   line-height: 1.22;
@@ -175,7 +175,7 @@ h1 {
   display: block;
   margin-top: 0;
   color: #0f172a;
-  font-size: 9.5pt;
+  font-size: 8.55pt;
   font-weight: 700;
   line-height: 1.22;
 }
@@ -203,7 +203,7 @@ h2 {
   padding: 8px 12px;
   border-radius: 6px;
   list-style: none;
-  font-size: 8.8pt;
+  font-size: 7.9pt;
 }
 .proposal-details {
   margin-top: 16px;
