@@ -77,6 +77,7 @@ import {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
 const QUOTE_TAX_RATE = 0.16;
+const QUOTE_TIME_ZONE = "America/Mexico_City";
 
 type QuoteAttachmentDraft = {
   id: string;
@@ -170,6 +171,7 @@ type QuoteChannel = "email" | "whatsapp";
 type LeadQuoteEntry = {
   id: string;
   version: number;
+  folio: string | null;
   status: string;
   channel: string | null;
   sentAt: string | null;
@@ -892,6 +894,7 @@ export function LeadDrawer({
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
     formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
   );
+  const [quoteFolio, setQuoteFolio] = useState("");
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
   const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
@@ -908,6 +911,7 @@ export function LeadDrawer({
   );
   const [quoteVendorSettingsLoading, setQuoteVendorSettingsLoading] = useState(false);
   const quoteAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const quoteFolioReservationRef = useRef<Promise<string> | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -2192,6 +2196,7 @@ export function LeadDrawer({
       setQuoteTotal(formatPresetNumberString(defaultTotal));
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
+      setQuoteFolio("");
       if (isRecord(latestQuoteVendorSettings)) {
         setQuoteVendorSettings(extractQuoteVendorSettings(latestQuoteVendorSettings));
       }
@@ -2219,6 +2224,7 @@ export function LeadDrawer({
               if (typeof draft.quoteTotal === "string") setQuoteTotal(draft.quoteTotal);
               if (typeof draft.quoteMoneda === "string") setQuoteMoneda(draft.quoteMoneda);
               if (typeof draft.quoteValidoHasta === "string") setQuoteValidoHasta(draft.quoteValidoHasta);
+              if (typeof draft.quoteFolio === "string") setQuoteFolio(draft.quoteFolio);
               if (isRecord(draft.quoteVendorSettings)) {
                 setQuoteVendorSettings(extractQuoteVendorSettings(draft.quoteVendorSettings));
               }
@@ -2300,6 +2306,57 @@ export function LeadDrawer({
     };
   }, [quoteDialogOpen]);
 
+  const ensureQuoteFolio = useCallback(async () => {
+    if (!card) {
+      return "";
+    }
+    const currentFolio = quoteFolio.trim();
+    if (currentFolio) {
+      return currentFolio;
+    }
+    if (quoteFolioReservationRef.current) {
+      return quoteFolioReservationRef.current;
+    }
+    const reservation = (async () => {
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/folio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const responseBody = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof responseBody?.error === "string" && responseBody.error
+            ? responseBody.error
+            : `Error ${response.status}`;
+        throw new Error(message);
+      }
+      const folio = typeof responseBody?.folio === "string" ? responseBody.folio.trim() : "";
+      if (!folio) {
+        throw new Error("No se pudo reservar el folio de la cotización.");
+      }
+      setQuoteFolio(folio);
+      return folio;
+    })();
+    quoteFolioReservationRef.current = reservation;
+    try {
+      return await reservation;
+    } finally {
+      quoteFolioReservationRef.current = null;
+    }
+  }, [card, quoteFolio]);
+
+  useEffect(() => {
+    if (!quoteDialogOpen || quoteFolio.trim()) return;
+    let cancelled = false;
+    void ensureQuoteFolio().catch((error) => {
+      if (cancelled) return;
+      setQuoteError(error instanceof Error ? error.message : "No se pudo reservar el folio de la cotización.");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureQuoteFolio, quoteDialogOpen, quoteFolio]);
+
   const handleSaveQuoteDraft = () => {
     if (!card || !quoteDraftStorageKey || typeof window === "undefined") return;
     const draft = {
@@ -2314,6 +2371,7 @@ export function LeadDrawer({
       quoteTotal,
       quoteMoneda,
       quoteValidoHasta,
+      quoteFolio,
       quoteItems,
       quoteVendorSettings,
     };
@@ -2333,7 +2391,7 @@ export function LeadDrawer({
     vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
   const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
   const quoteCurrentStatus = quoteLatestEntry?.status ?? "Borrador";
-  const quoteCurrentFolio = quoteLatestEntry ? `COT-${String(quoteLatestEntry.version).padStart(5, "0")}` : "COT-00000";
+  const quoteCurrentFolio = quoteFolio.trim() || (quoteDialogOpen ? "Reservando folio..." : quoteLatestEntry?.folio?.trim() || "COT-00000");
   const quoteClientName = card?.empresa?.trim() || card?.contactoProfileName?.trim() || card?.nombre?.trim() || "Sin cliente";
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
@@ -2403,7 +2461,7 @@ export function LeadDrawer({
     });
   };
 
-  const buildQuoteBasePayload = useCallback(() => {
+  const buildQuoteBasePayload = useCallback((folioOverride?: string | null) => {
     const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
     const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
     const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -2448,6 +2506,7 @@ export function LeadDrawer({
       total: totalValue ?? null,
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
+      folio: (folioOverride ?? quoteFolio).trim() || null,
       metadatos: {
         quote_vendedores: quoteVendorSettingsSnapshot,
       },
@@ -2464,14 +2523,15 @@ export function LeadDrawer({
     quoteTitle,
     quoteTotal,
     quoteValidoHasta,
+    quoteFolio,
     quoteVendorSettingsSnapshot,
   ]);
 
-  const buildQuotePayload = () => {
+  const buildQuotePayload = (folioOverride?: string | null) => {
     const emails = parseEmailList(quoteEmailTo);
     return {
       channel: quoteChannel,
-      ...buildQuoteBasePayload(),
+      ...buildQuoteBasePayload(folioOverride),
       email_to: quoteChannel === "email" ? emails : undefined,
       whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
       subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
@@ -2543,6 +2603,7 @@ export function LeadDrawer({
       metadatos: item.fotoUrl ? { fotoUrl: item.fotoUrl } : undefined,
     }));
     return {
+      folio: quote.folio ?? null,
       titulo: quote.title ?? null,
       descripcion: quote.description ?? quoteProjectNeeds,
       conceptos: quote.concepts ?? undefined,
@@ -2556,13 +2617,18 @@ export function LeadDrawer({
     };
   }, [quoteMoneda, quoteProjectNeeds]);
 
-  const handleOpenQuotePreview = useCallback(() => {
+  const handleOpenQuotePreview = useCallback(async () => {
     if (quoteVendorSettingsLoading) {
       setQuoteError("Espera a que cargue la configuración de cotización.");
       return;
     }
-    void openGeneratedQuotePdfPreview(buildQuoteBasePayload());
-  }, [buildQuoteBasePayload, openGeneratedQuotePdfPreview, quoteVendorSettingsLoading]);
+    try {
+      const folio = await ensureQuoteFolio();
+      void openGeneratedQuotePdfPreview(buildQuoteBasePayload(folio));
+    } catch (error) {
+      setQuoteError(error instanceof Error ? error.message : "No se pudo reservar el folio de la cotización.");
+    }
+  }, [buildQuoteBasePayload, ensureQuoteFolio, openGeneratedQuotePdfPreview, quoteVendorSettingsLoading]);
 
   const handleCreateQuote = () => {
     if (!card) return;
@@ -2573,7 +2639,8 @@ export function LeadDrawer({
     setQuoteError(null);
     startQuoteAction(async () => {
       try {
-        const payload = buildQuoteBasePayload();
+        const folio = await ensureQuoteFolio();
+        const payload = buildQuoteBasePayload(folio);
         const itemsPayload = payload.items ?? [];
         const subtotalValue = payload.subtotal;
         const totalValue = payload.total;
@@ -2646,7 +2713,8 @@ export function LeadDrawer({
     setQuoteError(null);
     startQuoteAction(async () => {
       try {
-        const payload = buildQuotePayload();
+        const folio = await ensureQuoteFolio();
+        const payload = buildQuotePayload(folio);
         const subtotalValue = payload.subtotal;
         const totalValue = payload.total;
         const itemsPayload = payload.items;
@@ -2699,7 +2767,8 @@ export function LeadDrawer({
     setQuotePreviewError(null);
     try {
       setQuotePreviewPdfLoading(true);
-      const { blob, filename } = await fetchRenderedQuotePdf(buildQuoteBasePayload());
+      const folio = await ensureQuoteFolio();
+      const { blob, filename } = await fetchRenderedQuotePdf(buildQuoteBasePayload(folio));
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -5579,6 +5648,7 @@ function formatDateTime(value: string): string {
     return new Date(value).toLocaleString("es-MX", {
       dateStyle: "short",
       timeStyle: "short",
+      timeZone: QUOTE_TIME_ZONE,
     });
   } catch {
     return value;
@@ -5653,6 +5723,7 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
   return {
     id: String(row.id ?? `${row.version ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`),
     version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
+    folio: typeof row.folio === "string" ? row.folio : null,
     status: typeof row.estado === "string" ? row.estado : "borrador",
     channel: typeof row.canal_envio === "string" ? row.canal_envio : null,
     sentAt: typeof row.enviada_en === "string" ? row.enviada_en : null,
@@ -5816,6 +5887,7 @@ function formatQuoteDate(value: string | null): string {
     return new Intl.DateTimeFormat("es-MX", {
       dateStyle: "medium",
       timeStyle: "short",
+      timeZone: QUOTE_TIME_ZONE,
     }).format(new Date(value));
   } catch {
     return value;

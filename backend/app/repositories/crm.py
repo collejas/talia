@@ -3491,6 +3491,31 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
         return data
 
+    async def reserve_quote_folio(
+        self,
+        *,
+        organizacion_id: UUID,
+        vendedor_nombre: str,
+        fecha: date | None = None,
+    ) -> dict[str, Any]:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_vendedor_nombre": vendedor_nombre,
+            "p_fecha": fecha.isoformat() if fecha else None,
+        }
+        result = await self._rpc("crm_reservar_folio_cotizacion", body)
+        if isinstance(result, dict):
+            payload = result.get("crm_reservar_folio_cotizacion")
+            if isinstance(payload, dict):
+                return payload
+            if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+                return payload[0]
+            if isinstance(result.get("folio"), str):
+                return result
+        elif isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        raise CRMRepositoryError(f"Respuesta invalida al reservar folio de cotizacion: {result!r}")
+
     async def create_quote(
         self,
         *,
@@ -3562,7 +3587,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
             "items.order": "id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -3581,7 +3606,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{quote_id}",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
             "items.order": "id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -3599,6 +3624,7 @@ class CRMRepository:
         oportunidad_id: UUID,
         cuenta_id: UUID | None,
         contacto_id: UUID | None,
+        folio: str | None,
         estatus: str,
         total: float | None,
         moneda: str,
@@ -3612,6 +3638,7 @@ class CRMRepository:
             "oportunidad_id": str(oportunidad_id),
             "cuenta_id": str(cuenta_id) if cuenta_id else None,
             "contacto_id": str(contacto_id) if contacto_id else None,
+            "folio": folio,
             "estatus": estatus,
             "total": total,
             "moneda": moneda,

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request as UrlRequest, urlopen
+from zoneinfo import ZoneInfo
 
 from weasyprint import HTML as WeasyHTML
 
@@ -23,6 +24,7 @@ from app.core.logging import get_logger
 from app.services import twilio as twilio_service
 
 logger = get_logger("app.services.quotes")
+QUOTE_DISPLAY_TIMEZONE = ZoneInfo("America/Mexico_City")
 PDF_STYLE_OVERRIDES = textwrap.dedent(
     """
     @page {
@@ -134,6 +136,7 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
 class QuoteRenderContext:
     """Información requerida para renderizar PDF y mensajes."""
 
+    folio: str | None
     lead_label: str
     reference: str
     issuer_name: str
@@ -680,8 +683,8 @@ def _build_modern_quote_html(
     *,
     image_cache: dict[str, str | None] | None = None,
 ) -> str:
-    folio = f"COT-{context.reference.upper()}"
-    issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
+    folio = _safe_text(context.folio, f"Cot-{context.reference.upper()}")
+    issued_at = context.created_at.astimezone(QUOTE_DISPLAY_TIMEZONE).strftime("%d/%m/%Y %H:%M")
     valid_until = context.valido_hasta.isoformat() if context.valido_hasta else "Sin vigencia"
     currency = _safe_text(context.moneda, "MXN")
     vendor_company = _safe_text(context.vendor_company_name or context.issuer_name, "Sin empresa")
@@ -1207,7 +1210,7 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(f"Sitio web: {_safe_text(context.organization_website, '—')}")
     lines.append(f"Lead / Proyecto: {context.lead_label}")
     lines.append(
-        f"Fecha de emisión: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}"
+        f"Fecha de emisión: {context.created_at.astimezone(QUOTE_DISPLAY_TIMEZONE).strftime('%Y-%m-%d')}"
     )
     lines.append("")
 

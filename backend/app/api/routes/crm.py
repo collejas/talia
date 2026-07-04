@@ -2400,6 +2400,32 @@ def _resolve_quote_valid_until(
     return date.today() + timedelta(days=validity_days)
 
 
+def _normalize_quote_folio_value(value: Any) -> str | None:
+    folio = _clean_text(value)
+    return folio or None
+
+
+async def _reserve_quote_folio_for_opportunity(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    vendor_context: Mapping[str, Any],
+) -> dict[str, Any]:
+    seller_name = (
+        _clean_text(vendor_context.get("vendor_assessor_name"))
+        or _clean_text(vendor_context.get("vendor_company_name"))
+        or "Vendedor"
+    )
+    folio_row = await repo.reserve_quote_folio(
+        organizacion_id=organizacion_id,
+        vendedor_nombre=seller_name,
+        fecha=datetime.now(timezone.utc).date(),
+    )
+    if not isinstance(folio_row, dict) or not isinstance(folio_row.get("folio"), str):
+        raise CRMRepositoryError("quote_folio_reservation_failed")
+    return folio_row
+
+
 async def _resolve_quote_logo_url(
     *,
     organizacion_id: UUID,
@@ -7928,6 +7954,7 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         id=row.get("id"),
         oportunidad_id=oportunidad_id,
         version=metadata.get("version") or row.get("version") or 1,
+        folio=_clean_text(row.get("folio") or metadata.get("folio")) or None,
         titulo=metadata.get("titulo") or row.get("titulo"),
         descripcion=metadata.get("descripcion") or row.get("descripcion"),
         conceptos=_ensure_concept_list(metadata.get("conceptos") or row.get("conceptos")),
@@ -14253,6 +14280,7 @@ class LeadQuoteItem(BaseModel):
 
 
 class LeadQuoteCreatePayload(BaseModel):
+    folio: str | None = Field(default=None, max_length=80)
     titulo: str | None = Field(default=None, max_length=200)
     descripcion: str | None = Field(default=None, max_length=2000)
     message: str | None = Field(default=None, max_length=2000)
@@ -14286,6 +14314,7 @@ class LeadQuote(BaseModel):
     id: UUID
     oportunidad_id: UUID
     version: int
+    folio: str | None = None
     titulo: str | None = None
     descripcion: str | None = None
     conceptos: list[dict[str, Any]] = Field(default_factory=list)
@@ -14310,6 +14339,13 @@ class LeadQuote(BaseModel):
 
 class LeadQuoteResponse(BaseModel):
     quote: LeadQuote
+
+
+class LeadQuoteFolioResponse(BaseModel):
+    folio: str
+    secuencia: int
+    fecha: date
+    iniciales: str
 
 
 class LeadQuoteListResponse(BaseModel):
@@ -27502,6 +27538,41 @@ async def list_lead_quotes(
 
 
 @router.post(
+    "/oportunidades/{oportunidad_id}/quotes/folio",
+    response_model=LeadQuoteFolioResponse,
+)
+async def reserve_lead_quote_folio(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+) -> LeadQuoteFolioResponse:
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity,
+    )
+    folio_row = await _reserve_quote_folio_for_opportunity(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        vendor_context=vendor_context,
+    )
+    return LeadQuoteFolioResponse(
+        folio=str(folio_row["folio"]),
+        secuencia=int(folio_row["secuencia"]),
+        fecha=_to_iso_date(folio_row["fecha"]) or date.today(),
+        iniciales=str(folio_row["iniciales"]),
+    )
+
+
+@router.post(
     "/oportunidades/{oportunidad_id}/quotes",
     response_model=LeadQuoteResponse,
     status_code=status.HTTP_201_CREATED,
@@ -27560,10 +27631,22 @@ async def create_lead_quote(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+    quote_folio = _normalize_quote_folio_value(body.get("folio"))
+    if not quote_folio:
+        quote_folio = str(
+            (
+                await _reserve_quote_folio_for_opportunity(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    vendor_context=vendor_context,
+                )
+            )["folio"]
+        )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
     quote_context = quotes_service.QuoteRenderContext(
+        folio=quote_folio,
         lead_label=lead_label,
         reference=str(oportunidad_id).split("-")[0],
         issuer_name=issuer_name,
@@ -27626,10 +27709,11 @@ async def create_lead_quote(
         created_row = await repo.create_quote_entry(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
-            cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
-            contacto_id=_safe_uuid(opportunity.get("contacto_principal_id")),
-            estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
-            total=_as_number(body.get("total")),
+        cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+        contacto_id=_safe_uuid(opportunity.get("contacto_principal_id")),
+        folio=quote_folio,
+        estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
+        total=_as_number(body.get("total")),
             moneda=(body.get("moneda") or "MXN").upper(),
             valida_hasta=valido_hasta.isoformat() if valido_hasta else None,
             metadata=metadata,
@@ -27701,10 +27785,22 @@ async def preview_lead_quote_pdf(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+    quote_folio = _normalize_quote_folio_value(base_payload.folio)
+    if not quote_folio:
+        quote_folio = str(
+            (
+                await _reserve_quote_folio_for_opportunity(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    vendor_context=vendor_context,
+                )
+            )["folio"]
+        )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
     quote_context = quotes_service.QuoteRenderContext(
+        folio=quote_folio,
         lead_label=lead_label,
         reference=str(oportunidad_id).split("-")[0],
         issuer_name=issuer_name,
@@ -27841,6 +27937,17 @@ async def send_lead_quote(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+    quote_folio = _normalize_quote_folio_value(base_payload.folio)
+    if not quote_folio:
+        quote_folio = str(
+            (
+                await _reserve_quote_folio_for_opportunity(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    vendor_context=vendor_context,
+                )
+            )["folio"]
+        )
 
     attachment_payloads: list[dict[str, object]] = []
     attachment_total_bytes = 0
@@ -27882,6 +27989,7 @@ async def send_lead_quote(
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
     quote_context = quotes_service.QuoteRenderContext(
+        folio=quote_folio,
         lead_label=lead_label,
         reference=str(oportunidad_id).split("-")[0],
         issuer_name=issuer_name,
@@ -27922,7 +28030,7 @@ async def send_lead_quote(
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
     try:
-        quote_valid_until = _resolve_quote_valid_until(create_payload.get("valido_hasta"), quote_vendor_settings)
+        quote_valid_until = _resolve_quote_valid_until(base_payload.valido_hasta, quote_vendor_settings)
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
             filename=pdf_doc.filename,
@@ -27935,6 +28043,7 @@ async def send_lead_quote(
     create_payload = _quote_payload_from_body(base_payload)
     create_payload["pdf_url"] = upload["url"]
     create_payload["pdf_path"] = upload["path"]
+    create_payload["folio"] = quote_folio
     metadata = _quote_metadata_from_payload(create_payload)
     repo_items = _quote_items_to_repository_payload(create_payload.pop("items", None))
     try:
@@ -27943,6 +28052,7 @@ async def send_lead_quote(
             oportunidad_id=oportunidad_id,
             cuenta_id=_safe_uuid(oportunidad_row.get("cuenta_id")),
             contacto_id=_safe_uuid(oportunidad_row.get("contacto_principal_id")),
+            folio=quote_folio,
             estatus=create_payload.pop("estado", None)
             or create_payload.pop("estatus", None)
             or "borrador",
