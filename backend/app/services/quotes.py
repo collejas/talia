@@ -231,9 +231,9 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: flex;
         justify-content: space-between;
         gap: 20px;
-        padding-bottom: 14px;
+        padding-bottom: 2px;
         border-bottom: 1px solid #dbe3f0;
-        margin-bottom: 14px;
+        margin-bottom: 12px;
         align-items: flex-start;
     }
 
@@ -248,7 +248,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .brand-left {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 6px;
         min-width: 0;
     }
 
@@ -309,7 +309,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .brand-lines {
         display: grid;
         gap: 2px;
-        margin-top: 8px;
+        margin-top: 6px;
         color: #334155;
         font-size: 8.9pt;
         line-height: 1.25;
@@ -327,13 +327,15 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         min-width: 180px;
         text-align: right;
         display: grid;
-        gap: 4px;
+        gap: 5px;
         align-content: start;
+        padding-top: 1px;
     }
 
     .meta-block {
-        display: grid;
-        gap: 1px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
 
     .meta-label {
@@ -341,14 +343,16 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-size: 7.8pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
-        line-height: 1.05;
+        line-height: 1.22;
     }
 
     .meta-value {
+        display: block;
+        margin-top: 0;
         color: #0f172a;
         font-size: 9pt;
         font-weight: 700;
-        line-height: 1.05;
+        line-height: 1.22;
     }
 
     .info-grid {

@@ -140,7 +140,7 @@ h1 {
 .brand-lines {
   display: grid;
   gap: 2px;
-  margin-top: 8px;
+  margin-top: 6px;
   color: #334155;
   font-size: 0.82rem;
   line-height: 1.25;
@@ -150,6 +150,34 @@ h1 {
 }
 .brand-lines strong {
   color: var(--quote-primary);
+}
+.top-meta {
+  min-width: 180px;
+  text-align: right;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding-top: 1px;
+}
+.meta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meta-label {
+  color: #64748b;
+  font-size: 7.8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1.22;
+}
+.meta-value {
+  display: block;
+  margin-top: 0;
+  color: #0f172a;
+  font-size: 9pt;
+  font-weight: 700;
+  line-height: 1.22;
 }
 h2 {
   border-bottom: 1px solid #e2e8f0;
