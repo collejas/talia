@@ -436,10 +436,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-size: 7.74pt;
     }
 
-    .card-secondary p:not(:first-of-type) {
-        text-transform: lowercase;
-    }
-
     .section {
         margin-top: 14px;
     }
@@ -712,10 +708,10 @@ def _build_modern_quote_html(
     organization_city = _safe_text(context.organization_city, "Sin ciudad")
     organization_country = _safe_text(context.organization_country, "Sin país")
     organization_website = _safe_text(context.organization_website, "Sin sitio web")
-    vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
+    vendor_name = _title_case_name(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
     vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
     vendor_email = _safe_text(context.vendor_assessor_email, "Sin correo")
-    client_name = _safe_text(context.contact_name, "Sin cliente")
+    client_name = _title_case_name(context.contact_name, "Sin cliente")
     client_company = _safe_text(context.contact_company, "Sin razón social")
     client_email = _safe_text(context.contact_email, "Sin email")
     client_phone = _safe_text(context.contact_phone, "Sin teléfono")
@@ -1291,6 +1287,23 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
         return fallback
     trimmed = value.strip()
     return trimmed if trimmed else fallback
+
+
+def _title_case_name(value: str | None, fallback: str = "—") -> str:
+    text = _safe_text(value, fallback)
+    if text == fallback:
+        return fallback
+    words = []
+    for raw_word in text.split():
+        if not raw_word:
+            continue
+        if raw_word.isupper() and len(raw_word) <= 4:
+            words.append(raw_word)
+            continue
+        parts = raw_word.split("-")
+        titled_parts = [part[:1].upper() + part[1:].lower() if part else part for part in parts]
+        words.append("-".join(titled_parts))
+    return " ".join(words) if words else fallback
 
 
 def _format_unit(value: Any) -> str:
