@@ -2175,9 +2175,7 @@ export function LeadDrawer({
           : defaultSubtotal;
       const defaultTaxes =
         latestQuote?.taxes != null && Number.isFinite(latestQuote.taxes) ? String(latestQuote.taxes) : "";
-      const validUntil =
-        formatIsoDateForInput(latestQuote?.validUntil) ??
-        formatDateInput(addDays(new Date(), quoteValidityDays));
+      const validUntil = formatDateInput(addDays(new Date(), quoteValidityDays));
       const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
       const latestQuoteVendorSettings = isRecord(latestQuote?.metadata)
         ? latestQuote.metadata.quote_vendedores ?? null
@@ -6151,17 +6149,6 @@ function generateLocalId(): string {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2, 10);
-}
-
-function formatIsoDateForInput(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return formatDateInput(parsed);
-  } catch {
-    return null;
-  }
 }
 
 function formatOpportunityReference(code: string | null | undefined): string {
