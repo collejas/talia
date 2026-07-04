@@ -388,8 +388,12 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .meta-value-tight {
         white-space: nowrap;
-        letter-spacing: 0;
-        font-size: 7.7pt;
+        letter-spacing: 0.08em;
+        font-size: 6.5pt;
+        font-weight: 400;
+        color: #64748b;
+        line-height: 1.22;
+        text-transform: uppercase;
     }
 
     .info-grid {
