@@ -5684,7 +5684,11 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
         ? row.fotoUrl
         : typeof row.foto_url === "string"
           ? row.foto_url
-          : null,
+          : typeof row.metadatos === "object" && row.metadatos !== null && !Array.isArray(row.metadatos) && typeof (row.metadatos as Record<string, unknown>).fotoUrl === "string"
+            ? String((row.metadatos as Record<string, unknown>).fotoUrl)
+            : typeof row.metadata === "object" && row.metadata !== null && !Array.isArray(row.metadata) && typeof (row.metadata as Record<string, unknown>).fotoUrl === "string"
+              ? String((row.metadata as Record<string, unknown>).fotoUrl)
+              : null,
     title:
       typeof row.titulo === "string"
         ? row.titulo

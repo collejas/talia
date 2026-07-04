@@ -8012,6 +8012,11 @@ def _quote_items_to_repository_payload(
             "moneda": item.get("moneda"),
             "orden": item.get("orden") or index,
         }
+        item_metadata = item.get("metadatos")
+        if isinstance(item_metadata, Mapping):
+            image_url = item_metadata.get("fotoUrl") or item_metadata.get("foto_url")
+            if isinstance(image_url, str) and image_url.strip():
+                metadata["fotoUrl"] = image_url.strip()
         if catalog_item_id:
             metadata["catalog_item_id"] = catalog_item_id
         repository_items.append(

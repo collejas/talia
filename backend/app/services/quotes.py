@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from base64 import b64encode
+from mimetypes import guess_type
 import textwrap
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from html import escape as html_escape
+from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urljoin, urlparse
+from urllib.request import Request as UrlRequest, urlopen
 
 from weasyprint import HTML as WeasyHTML
 
@@ -1014,7 +1019,7 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
         if total_value is None:
             total_value = _item_total(related)
         total = html_escape(_format_currency(total_value, context.moneda, include_currency_code=False))
-        image_url = _item_image_url(related)
+        image_url = _item_image_src(related)
         image_html = (
             f'<img class="item-image" src="{html_escape(image_url, quote=True)}" alt="Producto" />'
             if image_url
@@ -1032,6 +1037,18 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
             "</tr>"
         )
     return "".join(rows)
+
+
+def _item_image_src(record: Any) -> str | None:
+    raw_url = _item_image_url(record)
+    if not raw_url:
+        return None
+    if raw_url.startswith("data:"):
+        return raw_url
+    embedded = _image_url_to_data_uri(raw_url)
+    return embedded or raw_url
+
+
 def _item_image_url(record: Any) -> str | None:
     if not isinstance(record, dict):
         return None
@@ -1054,6 +1071,62 @@ def _item_image_url(record: Any) -> str | None:
                 if isinstance(media_url, str) and media_url.strip():
                     return media_url.strip()
     return None
+
+
+def _image_url_to_data_uri(image_url: str) -> str | None:
+    candidate = image_url.strip()
+    if not candidate:
+        return None
+    if candidate.startswith("data:"):
+        return candidate
+
+    parsed = urlparse(candidate)
+    if parsed.scheme in {"http", "https"}:
+        resolved_url = candidate
+    elif candidate.startswith("/"):
+        base_url = _resolve_template_base_url()
+        if not base_url:
+            return None
+        resolved_url = urljoin(f"{base_url.rstrip('/')}/", candidate)
+    else:
+        repo_root = Path(__file__).resolve().parents[4]
+        local_candidates = [
+            repo_root / "frontend/panel/public" / candidate.lstrip("/"),
+            repo_root / "backend/app/public" / candidate.lstrip("/"),
+            repo_root / "backend/app/public/shared" / candidate.lstrip("/"),
+        ]
+        for local_candidate in local_candidates:
+            if not local_candidate.exists() or not local_candidate.is_file():
+                continue
+            try:
+                content = local_candidate.read_bytes()
+            except OSError:
+                continue
+            mime_type, _ = guess_type(str(local_candidate))
+            safe_mime = mime_type or "image/png"
+            encoded = b64encode(content).decode("ascii")
+            return f"data:{safe_mime};base64,{encoded}"
+        return None
+
+    try:
+        request = UrlRequest(
+            resolved_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; TaliaQuotePdf/1.0)",
+                "Accept": "image/*,*/*;q=0.8",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            content = response.read()
+            content_type = response.headers.get_content_type() or response.headers.get("Content-Type")
+    except Exception:
+        return None
+
+    if not content:
+        return None
+    safe_mime = content_type or guess_type(candidate or resolved_url)[0] or "image/png"
+    encoded = b64encode(content).decode("ascii")
+    return f"data:{safe_mime};base64,{encoded}"
 
 
 def _format_discount(value: Any, currency: str | None) -> str:
