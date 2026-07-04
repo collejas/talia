@@ -345,7 +345,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .meta-label {
         color: #64748b;
-        font-size: 7.2pt;
+        font-size: 6.5pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         line-height: 1.22;
@@ -355,7 +355,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: block;
         margin-top: 0;
         color: #0f172a;
-        font-size: 8.55pt;
+        font-size: 7.7pt;
         font-weight: 700;
         line-height: 1.22;
     }
