@@ -569,11 +569,12 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .summary-box {
         background: #eef6ff;
         border-color: #cfe0ff;
+        padding-right: 0;
     }
 
     .summary-row {
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 10px;
         margin-bottom: 6px;
         font-size: 7.5pt;
@@ -581,11 +582,15 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .summary-row span {
         color: #475569;
+        flex: 1 1 auto;
     }
 
     .summary-row strong {
         color: #0f172a;
         font-size: 8.5pt;
+        margin-left: auto;
+        text-align: right;
+        display: block;
     }
 
     .summary-total {

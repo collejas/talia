@@ -379,7 +379,7 @@ section {
 }
 .totals-item {
   border: 1px solid #e2e8f0;
-  padding: 12px 16px;
+  padding: 12px 0 12px 16px;
   background: #f8fafc;
   display: flex;
   flex-direction: column;
@@ -390,10 +390,14 @@ section {
   text-transform: uppercase;
   color: #64748b;
   letter-spacing: 0.08em;
+  flex: 1 1 auto;
 }
 .totals-item strong {
   font-size: 7.5pt;
   color: var(--quote-primary);
+  margin-left: auto;
+  text-align: right;
+  display: block;
 }
 .muted {
   color: #475569;
