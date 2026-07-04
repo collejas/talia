@@ -234,9 +234,9 @@ h2 {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.concept-title { width: 28%; font-weight: 600; font-size: 7.7pt; }
+.concept-title { width: 42%; font-weight: 600; font-size: 7.7pt; }
 .concept-unit {
-  width: 12%;
+  width: 7ch;
   text-align: center;
   font-size: 7.5pt;
 }
@@ -247,7 +247,7 @@ h2 {
   white-space: nowrap;
 }
 .concept-qty {
-  width: 12%;
+  width: 6ch;
   text-align: center;
   font-size: 7.5pt;
 }

@@ -474,17 +474,17 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .item-concept {
-        width: 34%;
+        width: 42%;
     }
 
     .item-qty {
-        width: 9%;
+        width: 6ch;
         text-align: center;
         white-space: nowrap;
     }
 
     .item-unit {
-        width: 9%;
+        width: 7ch;
         text-align: center;
         white-space: nowrap;
     }

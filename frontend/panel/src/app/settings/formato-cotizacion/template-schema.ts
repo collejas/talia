@@ -315,11 +315,11 @@ section {
 }
 .concept-title {
   font-weight: 600;
-  width: 28%;
+  width: 42%;
   font-size: 7.7pt;
 }
 .concept-unit {
-  width: 12%;
+  width: 7ch;
   text-align: center;
   font-size: 7.5pt;
 }
@@ -330,7 +330,7 @@ section {
   white-space: nowrap;
 }
 .concept-qty {
-  width: 12%;
+  width: 6ch;
   text-align: center;
   font-size: 7.5pt;
 }
