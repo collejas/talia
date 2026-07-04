@@ -814,8 +814,8 @@ def _build_modern_quote_html(
               <h3>Cliente</h3>
               <p><strong>{html_escape(client_company)}</strong></p>
               <p>{html_escape(client_name)}</p>
-              <p>{html_escape(client_email)}</p>
               <p>{html_escape(client_phone)}</p>
+              <p>{html_escape(client_email)}</p>
             </div>
             <div class="card">
               <h3>Proyecto</h3>
