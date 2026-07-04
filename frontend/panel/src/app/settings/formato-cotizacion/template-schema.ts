@@ -224,12 +224,12 @@ header {
   justify-content: center;
   flex: 0 1 auto;
   min-width: 0;
-  min-height: 64px;
+  min-height: 54px;
   max-width: 360px;
 }
 .logo {
-  width: 64px;
-  height: 64px;
+  width: 54px;
+  height: 54px;
   object-fit: contain;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -238,25 +238,25 @@ header {
 }
 h1 {
   margin: 0;
-  font-size: 1.55rem;
+  font-size: 1.4rem;
   color: var(--quote-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .subtitle {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: #475569;
-  font-size: 0.95rem;
-  line-height: 1.2;
+  font-size: 0.85rem;
+  line-height: 1.15;
 }
 .brand-lines {
   display: grid;
   gap: 2px;
-  margin-top: 8px;
+  margin-top: 4px;
   color: #334155;
-  font-size: 0.82rem;
-  line-height: 1.25;
+  font-size: 0.74rem;
+  line-height: 1.18;
 }
 .brand-lines p {
   margin: 0;

@@ -262,8 +262,8 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .brand-logo {
-        width: 78px;
-        height: 78px;
+        width: 66px;
+        height: 66px;
         object-fit: contain;
         border-radius: 14px;
         border: 1px solid #dbe3f0;
@@ -274,14 +274,14 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .eyebrow {
         margin: 0;
         color: #64748b;
-        font-size: 8.5pt;
+        font-size: 7.7pt;
         letter-spacing: 0.26em;
         text-transform: uppercase;
     }
 
     .title {
         margin: 0;
-        font-size: 20pt;
+        font-size: 18pt;
         line-height: 1.08;
         font-weight: 700;
         color: #0f172a;
@@ -293,7 +293,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .subtitle {
         margin: 2px 0 0;
         color: #475569;
-        font-size: 7.7pt;
+        font-size: 6.9pt;
         line-height: 1.15;
     }
 
@@ -303,7 +303,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         justify-content: center;
         flex: 0 1 auto;
         min-width: 0;
-        min-height: 78px;
+        min-height: 66px;
         max-width: 360px;
     }
 
@@ -312,7 +312,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         gap: 2px;
         margin-top: 4px;
         color: #334155;
-        font-size: 6.8pt;
+        font-size: 6.1pt;
         line-height: 1.18;
     }
 
