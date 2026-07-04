@@ -118,7 +118,6 @@ header, section, footer { margin-bottom: 24px; }
   width: 49px;
   height: 49px;
   object-fit: contain;
-  border: 1px solid #e2e8f0;
   padding: 8px;
   background: #fff;
 }
