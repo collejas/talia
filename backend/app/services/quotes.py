@@ -24,7 +24,6 @@ from app.core.logging import get_logger
 from app.services import twilio as twilio_service
 
 logger = get_logger("app.services.quotes")
-QUOTE_DISPLAY_TIMEZONE = ZoneInfo("America/Mexico_City")
 PDF_STYLE_OVERRIDES = textwrap.dedent(
     """
     @page {
@@ -155,6 +154,7 @@ class QuoteRenderContext:
     notes: str | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    display_timezone: str | None = None
     quote_vendor_settings: dict[str, Any] | None = None
     vendor_company_name: str | None = None
     vendor_razon_social: str | None = None
@@ -208,6 +208,25 @@ def _coerce_date_value(value: Any) -> date | None:
         except ValueError:
             return None
     return None
+
+
+def _resolve_display_timezone(value: str | None) -> ZoneInfo:
+    candidates = [
+        value,
+        settings.webchat_calendar_timezone,
+        "America/Mexico_City",
+    ]
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        cleaned = candidate.strip()
+        if not cleaned:
+            continue
+        try:
+            return ZoneInfo(cleaned)
+        except Exception:
+            continue
+    return ZoneInfo("UTC")
 
 
 async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
@@ -684,7 +703,8 @@ def _build_modern_quote_html(
     image_cache: dict[str, str | None] | None = None,
 ) -> str:
     folio = _safe_text(context.folio, f"Cot-{context.reference.upper()}")
-    issued_at = context.created_at.astimezone(QUOTE_DISPLAY_TIMEZONE).strftime("%d/%m/%Y %H:%M")
+    display_timezone = _resolve_display_timezone(context.display_timezone)
+    issued_at = context.created_at.astimezone(display_timezone).strftime("%d/%m/%Y %H:%M")
     valid_until = context.valido_hasta.isoformat() if context.valido_hasta else "Sin vigencia"
     currency = _safe_text(context.moneda, "MXN")
     vendor_company = _safe_text(context.vendor_company_name or context.issuer_name, "Sin empresa")
@@ -1210,7 +1230,7 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
     lines.append(f"Sitio web: {_safe_text(context.organization_website, '—')}")
     lines.append(f"Lead / Proyecto: {context.lead_label}")
     lines.append(
-        f"Fecha de emisión: {context.created_at.astimezone(QUOTE_DISPLAY_TIMEZONE).strftime('%Y-%m-%d')}"
+        f"Fecha de emisión: {context.created_at.astimezone(display_timezone).strftime('%Y-%m-%d')}"
     )
     lines.append("")
 

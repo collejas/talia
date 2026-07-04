@@ -37,6 +37,7 @@ import {
 } from "@/lib/embudo/actions";
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
+import { getActiveTimeZone } from "@/lib/timezone";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -77,7 +78,6 @@ import {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
 const QUOTE_TAX_RATE = 0.16;
-const QUOTE_TIME_ZONE = "America/Mexico_City";
 
 type QuoteAttachmentDraft = {
   id: string;
@@ -5648,7 +5648,7 @@ function formatDateTime(value: string): string {
     return new Date(value).toLocaleString("es-MX", {
       dateStyle: "short",
       timeStyle: "short",
-      timeZone: QUOTE_TIME_ZONE,
+      timeZone: getActiveTimeZone(),
     });
   } catch {
     return value;
@@ -5887,7 +5887,7 @@ function formatQuoteDate(value: string | null): string {
     return new Intl.DateTimeFormat("es-MX", {
       dateStyle: "medium",
       timeStyle: "short",
-      timeZone: QUOTE_TIME_ZONE,
+      timeZone: getActiveTimeZone(),
     }).format(new Date(value));
   } catch {
     return value;

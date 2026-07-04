@@ -2426,6 +2426,20 @@ async def _reserve_quote_folio_for_opportunity(
     return folio_row
 
 
+async def _resolve_quote_display_timezone_name(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    usuario_id: UUID | None = None,
+) -> str:
+    timezone_name, _source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    return timezone_name
+
+
 async def _resolve_quote_logo_url(
     *,
     organizacion_id: UUID,
@@ -2639,6 +2653,10 @@ async def _render_quote_pdf_after_sale(
         organizacion_id=organizacion_id,
         opportunity=opportunity,
     )
+    quote_display_timezone = await _resolve_quote_display_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+    )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
     subtotal_value = _as_number(quote_row.get("subtotal"))
     impuestos_value = _as_number(quote_row.get("impuestos"))
@@ -2680,6 +2698,7 @@ async def _render_quote_pdf_after_sale(
         organization_city=vendor_context["organization_city"],
         organization_country=vendor_context["organization_country"],
         organization_website=vendor_context["organization_website"],
+        display_timezone=quote_display_timezone,
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27621,6 +27640,11 @@ async def create_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=opportunity,
     )
+    quote_display_timezone = await _resolve_quote_display_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
     quote_vendor_settings = _resolve_effective_quote_vendor_settings(
         payload_settings=metadata.get("quote_vendedores")
         if isinstance(metadata.get("quote_vendedores"), Mapping)
@@ -27678,6 +27702,7 @@ async def create_lead_quote(
         organization_city=vendor_context["organization_city"],
         organization_country=vendor_context["organization_country"],
         organization_website=vendor_context["organization_website"],
+        display_timezone=quote_display_timezone,
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27774,6 +27799,11 @@ async def preview_lead_quote_pdf(
         organizacion_id=organizacion_id,
         opportunity=opportunity_row,
     )
+    quote_display_timezone = await _resolve_quote_display_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
     quote_vendor_settings = _resolve_effective_quote_vendor_settings(
         payload_settings=base_payload.metadatos.get("quote_vendedores")
         if isinstance(base_payload.metadatos, dict)
@@ -27831,6 +27861,7 @@ async def preview_lead_quote_pdf(
         organization_city=vendor_context["organization_city"],
         organization_country=vendor_context["organization_country"],
         organization_website=vendor_context["organization_website"],
+        display_timezone=quote_display_timezone,
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
@@ -27925,6 +27956,11 @@ async def send_lead_quote(
         repo=repo,
         organizacion_id=organizacion_id,
         opportunity=oportunidad_row,
+    )
+    quote_display_timezone = await _resolve_quote_display_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
     )
     quote_vendor_settings = _resolve_effective_quote_vendor_settings(
         payload_settings=base_payload.metadatos.get("quote_vendedores")
@@ -28021,6 +28057,7 @@ async def send_lead_quote(
         organization_city=vendor_context["organization_city"],
         organization_country=vendor_context["organization_country"],
         organization_website=vendor_context["organization_website"],
+        display_timezone=quote_display_timezone,
         vendor_company_name=vendor_context["vendor_company_name"],
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
