@@ -2283,8 +2283,8 @@ export function LeadDrawer({
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || cancelled) return;
         const rawConfig = payload && typeof payload === "object" ? (payload as Record<string, unknown>).config : null;
-        if (!rawConfig || typeof rawConfig !== "object") return;
-        const vendorSettings = extractQuoteVendorSettings(rawConfig);
+        if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) return;
+        const vendorSettings = extractQuoteVendorSettings(rawConfig as Record<string, unknown>);
         setQuoteVendorSettings(vendorSettings);
         const currentDefaultDate = formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays));
         const nextDefaultDate = formatDateInput(addDays(new Date(), vendorSettings.validityDays));
