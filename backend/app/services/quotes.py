@@ -243,7 +243,8 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         flex-direction: row;
         align-items: flex-start;
         gap: 18px;
-        max-width: 80%;
+        flex: 1 1 auto;
+        max-width: 100%;
     }
 
     .brand-left {
@@ -295,6 +296,9 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         color: #475569;
         font-size: 9pt;
         line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .brand-copy {
@@ -304,7 +308,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         flex: 0 1 auto;
         min-width: 0;
         min-height: 66px;
-        max-width: 360px;
+        max-width: 460px;
     }
 
     .brand-lines {

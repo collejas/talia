@@ -112,7 +112,7 @@ header, section, footer { margin-bottom: 24px; }
   flex: 0 1 auto;
   min-width: 0;
   min-height: 54px;
-  max-width: 360px;
+  max-width: 460px;
 }
 .logo {
   width: 49px;
@@ -136,6 +136,9 @@ h1 {
   color: #475569;
   font-size: 9pt;
   line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .brand-lines {
   display: grid;
