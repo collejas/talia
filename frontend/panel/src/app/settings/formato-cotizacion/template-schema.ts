@@ -297,10 +297,11 @@ section {
   font-size: 8.8pt;
 }
 .concept-table {
-  width: 100%;
+  width: calc(100% + 8px);
   border-collapse: collapse;
   margin-top: 12px;
   table-layout: fixed;
+  margin-left: -8px;
 }
 .concept-table th,
 .concept-table td {

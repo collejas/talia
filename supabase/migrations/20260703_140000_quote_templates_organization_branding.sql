@@ -220,10 +220,11 @@ h2 {
 .proposal-detail h3 { margin: 0 0 6px; font-size: 9pt; }
 .proposal-detail p { margin: 0; font-size: 8.8pt; color: #334155; line-height: 1.5; }
 .concept-table {
-  width: 100%;
+  width: calc(100% + 8px);
   border-collapse: collapse;
   margin-top: 12px;
   table-layout: fixed;
+  margin-left: -8px;
 }
 .concept-table th,
 .concept-table td {

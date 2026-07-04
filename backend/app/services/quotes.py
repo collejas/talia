@@ -425,9 +425,10 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .items-table {
-        width: 100%;
+        width: calc(100% + 8px);
         border-collapse: collapse;
         table-layout: fixed;
+        margin-left: -8px;
     }
 
     .items-table th,
