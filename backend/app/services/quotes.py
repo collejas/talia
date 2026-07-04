@@ -673,17 +673,18 @@ def _build_modern_quote_html(
             ),
             (
                 "<p>"
-                f"{html_escape(organization_street)}, {html_escape(organization_exterior_number)}"
+                f"{html_escape(organization_street)}, # {html_escape(organization_exterior_number)}"
                 + (
-                    f", {html_escape(organization_interior_number)}"
+                    f" {html_escape(organization_interior_number)}"
                     if organization_interior_number != "S/N"
                     else ""
                 )
+                + f", Colonia: {html_escape(organization_colonia)}"
                 + "</p>"
             ),
             (
                 "<p>"
-                f"{html_escape(organization_colonia)}, CP {html_escape(organization_postal_code)}, "
+                f"CP {html_escape(organization_postal_code)}, "
                 f"{html_escape(organization_state)}, {html_escape(organization_city)}, {html_escape(organization_country)}"
                 "</p>"
             ),

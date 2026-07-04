@@ -21,8 +21,8 @@ SET
           </div>
           <div class="brand-lines">
             <p><strong>{{organizacion.razon_social}}</strong> · RFC {{organizacion.rfc}}</p>
-            <p>{{organizacion.direccion_fiscal_calle}}, {{organizacion.direccion_fiscal_numero_exterior}}, {{organizacion.direccion_fiscal_numero_interior}}</p>
-            <p>{{organizacion.direccion_fiscal_colonia}}, CP {{organizacion.codigo_postal}}, {{organizacion.estado}}, {{organizacion.ciudad}}, {{organizacion.pais}}</p>
+            <p>{{organizacion.direccion_fiscal_calle}}, # {{organizacion.direccion_fiscal_numero_exterior}} {{organizacion.direccion_fiscal_numero_interior}}, Colonia: {{organizacion.direccion_fiscal_colonia}}</p>
+            <p>CP {{organizacion.codigo_postal}}, {{organizacion.estado}}, {{organizacion.ciudad}}, {{organizacion.pais}}</p>
             <p>{{organizacion.sitio_web}}</p>
           </div>
         </div>
