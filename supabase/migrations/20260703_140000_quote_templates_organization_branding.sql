@@ -132,18 +132,18 @@ h1 {
   text-overflow: ellipsis;
 }
 .subtitle {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: #475569;
-  font-size: 0.95rem;
-  line-height: 1.2;
+  font-size: 0.77rem;
+  line-height: 1.15;
 }
 .brand-lines {
   display: grid;
   gap: 2px;
-  margin-top: 6px;
+  margin-top: 4px;
   color: #334155;
-  font-size: 0.82rem;
-  line-height: 1.25;
+  font-size: 0.63rem;
+  line-height: 1.18;
 }
 .brand-lines p {
   margin: 0;

@@ -291,10 +291,10 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .subtitle {
-        margin: 3px 0 0;
+        margin: 2px 0 0;
         color: #475569;
-        font-size: 10pt;
-        line-height: 1.2;
+        font-size: 7.7pt;
+        line-height: 1.15;
     }
 
     .brand-copy {
@@ -310,10 +310,10 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .brand-lines {
         display: grid;
         gap: 2px;
-        margin-top: 6px;
+        margin-top: 4px;
         color: #334155;
-        font-size: 8.9pt;
-        line-height: 1.25;
+        font-size: 6.8pt;
+        line-height: 1.18;
     }
 
     .brand-lines p {
