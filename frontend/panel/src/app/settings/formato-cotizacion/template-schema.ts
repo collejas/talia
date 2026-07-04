@@ -307,7 +307,7 @@ section {
   border: 1px solid #d7e3f4;
   padding: 8px 10px;
   vertical-align: top;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-table th {
   background: #f8fafc;
@@ -319,23 +319,23 @@ section {
 .concept-title {
   font-weight: 600;
   width: 28%;
-  font-size: 9pt;
+  font-size: 7.7pt;
 }
 .concept-unit {
   width: 12%;
   text-align: center;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-price {
   width: 18%;
   text-align: right;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
   white-space: nowrap;
 }
 .concept-qty {
   width: 12%;
   text-align: center;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-amount {
   width: 30%;
@@ -371,7 +371,7 @@ section {
 }
 .proposal-detail p {
   margin: 0;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
   color: #334155;
   line-height: 1.5;
 }
@@ -391,23 +391,23 @@ section {
   gap: 4px;
 }
 .totals-item span {
-  font-size: 8.5pt;
+  font-size: 7.2pt;
   text-transform: uppercase;
   color: #64748b;
   letter-spacing: 0.08em;
 }
 .totals-item strong {
-  font-size: 10pt;
+  font-size: 8.5pt;
   color: var(--quote-primary);
 }
 .muted {
   color: #475569;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 footer {
   border-top: 1px solid #e2e8f0;
   padding-top: 16px;
-  font-size: 8.5pt;
+  font-size: 7.2pt;
 }
 `
 

@@ -230,7 +230,7 @@ h2 {
   border: 1px solid #d7e3f4;
   padding: 8px 10px;
   vertical-align: top;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-table th {
   background: #f8fafc;
@@ -238,22 +238,22 @@ h2 {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.concept-title { width: 28%; font-weight: 600; font-size: 9pt; }
+.concept-title { width: 28%; font-weight: 600; font-size: 7.7pt; }
 .concept-unit {
   width: 12%;
   text-align: center;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-price {
   width: 18%;
   text-align: right;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
   white-space: nowrap;
 }
 .concept-qty {
   width: 12%;
   text-align: center;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 .concept-amount {
   width: 30%;
@@ -272,12 +272,12 @@ h2 {
 }
 .muted {
   color: #475569;
-  font-size: 8.8pt;
+  font-size: 7.5pt;
 }
 footer {
   border-top: 1px solid #e2e8f0;
   padding-top: 16px;
-  font-size: 8.5pt;
+  font-size: 7.2pt;
 }
 $$,
     variables = to_jsonb(ARRAY[

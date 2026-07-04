@@ -435,7 +435,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         border-bottom: 1px solid #dbe3f0;
         padding: 8px 8px;
         vertical-align: top;
-        font-size: 8.8pt;
+        font-size: 7.5pt;
     }
 
     .items-table thead th {
@@ -507,13 +507,13 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-weight: 700;
         color: #0f172a;
         margin: 0 0 3px;
-        font-size: 9pt;
+        font-size: 7.7pt;
     }
 
     .item-concept-desc {
         margin: 0;
         color: #475569;
-        font-size: 8pt;
+        font-size: 6.8pt;
     }
 
     .empty-row {
