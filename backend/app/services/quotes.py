@@ -155,6 +155,7 @@ class QuoteRenderContext:
     vendor_razon_social: str | None = None
     vendor_assessor_name: str | None = None
     vendor_assessor_phone: str | None = None
+    vendor_assessor_email: str | None = None
     logo_url: str | None = None
     organization_name: str | None = None
     organization_slogan: str | None = None
@@ -358,32 +359,39 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .info-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
+        gap: 8px;
+        margin-bottom: 10px;
     }
 
     .card {
         border: 1px solid #dbe3f0;
         border-radius: 14px;
         background: #f8fbff;
-        padding: 12px;
+        padding: 10px;
     }
 
     .card h3 {
-        margin: 0 0 8px;
-        font-size: 9pt;
+        margin: 0 0 6px;
+        font-size: 8pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #64748b;
     }
 
     .card p {
-        margin: 0 0 4px;
+        margin: 0 0 2px;
         color: #334155;
+        line-height: 1.14;
+        font-size: 7.9pt;
     }
 
     .card p strong {
         color: #0f172a;
+        font-size: 8pt;
+    }
+
+    .card-secondary p:not(:first-of-type) {
+        text-transform: lowercase;
     }
 
     .section {
@@ -649,6 +657,7 @@ def _build_modern_quote_html(
     organization_website = _safe_text(context.organization_website, "Sin sitio web")
     vendor_name = _safe_text(context.vendor_assessor_name or context.issuer_name, "Sin asesor")
     vendor_phone = _safe_text(context.vendor_assessor_phone, "Sin teléfono")
+    vendor_email = _safe_text(context.vendor_assessor_email, "Sin correo")
     client_name = _safe_text(context.contact_name, "Sin cliente")
     client_company = _safe_text(context.contact_company, "Sin razón social")
     client_email = _safe_text(context.contact_email, "Sin email")
@@ -741,7 +750,7 @@ def _build_modern_quote_html(
           </div>
 
           <div class="info-grid">
-            <div class="card">
+            <div class="card card-secondary">
               <h3>Cliente</h3>
               <p><strong>{html_escape(client_company)}</strong></p>
               <p>{html_escape(client_name)}</p>
@@ -753,12 +762,12 @@ def _build_modern_quote_html(
               <p><strong>{html_escape(project_name)}</strong></p>
               <p><strong>{html_escape(project_description or "Sin necesidades")}</strong></p>
             </div>
-            <div class="card">
+            <div class="card card-secondary">
               <h3>Vendedor</h3>
               <p><strong>{html_escape(vendor_company)}</strong></p>
-              <p>{html_escape(vendor_razon_social)}</p>
               <p>{html_escape(vendor_name)}</p>
               <p>{html_escape(vendor_phone)}</p>
+              <p>{html_escape(vendor_email)}</p>
             </div>
           </div>
 

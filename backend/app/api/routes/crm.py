@@ -2242,6 +2242,7 @@ async def _resolve_quote_vendor_context(
     ) or {}
     seller_name = _clean_text(seller_row.get("nombre_completo") or seller_row.get("correo"))
     seller_phone = _clean_text(seller_row.get("telefono_e164"))
+    seller_email = _clean_text(seller_row.get("correo"))
 
     if (not seller_name or not seller_phone) and opportunity.get("propietario_usuario_id"):
         owner_id = _safe_uuid(opportunity.get("propietario_usuario_id"))
@@ -2261,6 +2262,7 @@ async def _resolve_quote_vendor_context(
                     user_row.get("nombre_completo") or user_row.get("correo")
                 )
                 seller_phone = seller_phone or _clean_text(user_row.get("telefono_e164"))
+                seller_email = seller_email or _clean_text(user_row.get("correo"))
 
     return {
         "organization_name": tenant_name,
@@ -2280,6 +2282,7 @@ async def _resolve_quote_vendor_context(
         "vendor_razon_social": tenant_razon_social,
         "vendor_assessor_name": seller_name,
         "vendor_assessor_phone": seller_phone,
+        "vendor_assessor_email": seller_email,
     }
 
 
@@ -2541,6 +2544,7 @@ async def _render_quote_pdf_after_sale(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
     )
     try:
@@ -27464,6 +27468,7 @@ async def create_lead_quote(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
     )
 
@@ -27592,6 +27597,7 @@ async def preview_lead_quote_pdf(
         vendor_razon_social=vendor_context["vendor_razon_social"],
         vendor_assessor_name=vendor_context["vendor_assessor_name"],
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
     )
 
