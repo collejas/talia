@@ -100,7 +100,6 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
     .proposal-details {
         margin-top: 16px;
         border: 1px solid #dbe3f3;
-        border-radius: 12px;
         padding: 16px 18px;
         background: #f8fbff;
     }
@@ -224,7 +223,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .sheet {
         background: #ffffff;
         border: 1px solid #dbe3f0;
-        border-radius: 16px;
         padding: 18px;
     }
 
@@ -266,7 +264,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         width: 59px;
         height: 59px;
         object-fit: contain;
-        border-radius: 14px;
         border: 1px solid #dbe3f0;
         background: #ffffff;
         padding: 8px;
@@ -369,7 +366,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .card {
         border: 1px solid #dbe3f0;
-        border-radius: 14px;
         background: #f8fbff;
         padding: 10px;
     }
@@ -457,7 +453,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .item-image {
         width: 34px;
         height: 34px;
-        border-radius: 8px;
         object-fit: cover;
         border: 1px solid #dbe3f0;
         background: #eef2f7;
@@ -467,7 +462,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .item-image-fallback {
         width: 34px;
         height: 34px;
-        border-radius: 8px;
         border: 1px dashed #cbd5e1;
         background: #f8fafc;
         color: #94a3b8;
@@ -534,7 +528,6 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .note-box,
     .summary-box {
         border: 1px solid #dbe3f0;
-        border-radius: 14px;
         background: #f8fbff;
         padding: 12px;
     }

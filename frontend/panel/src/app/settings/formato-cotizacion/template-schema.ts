@@ -231,7 +231,6 @@ header {
   width: 49px;
   height: 49px;
   object-fit: contain;
-  border-radius: 12px;
   border: 1px solid #e2e8f0;
   padding: 8px;
   background: #fff;
@@ -280,7 +279,6 @@ section {
 .intro {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
   padding: 16px 20px;
 }
 .highlights {
@@ -292,7 +290,6 @@ section {
   background: #f0fdf4;
   border-left: 3px solid var(--quote-accent);
   padding: 8px 12px;
-  border-radius: 6px;
   list-style: none;
   font-size: 8.8pt;
 }
@@ -356,7 +353,6 @@ section {
 .proposal-details {
   margin-top: 16px;
   border: 1px solid #dbe3f3;
-  border-radius: 12px;
   padding: 16px 18px;
   background: #f8fbff;
 }
@@ -384,7 +380,6 @@ section {
 }
 .totals-item {
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
   padding: 12px 16px;
   background: #f8fafc;
   display: flex;
