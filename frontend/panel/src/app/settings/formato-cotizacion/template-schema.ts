@@ -312,7 +312,7 @@ section {
 .concept-table th {
   background: #f8fafc;
   color: var(--quote-primary);
-  font-size: 7.8pt;
+  font-size: 7pt;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }

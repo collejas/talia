@@ -442,7 +442,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         color: #64748b;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        font-size: 7.8pt;
+        font-size: 7pt;
         padding-top: 6px;
         padding-bottom: 6px;
         background: #f8fbff;
