@@ -7968,11 +7968,19 @@ def _as_number(value: Any) -> float | None:
     return None
 
 
-def _to_iso_date(value: Any) -> str | None:
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, str):
+def _to_iso_date(value: Any) -> date | None:
+    if isinstance(value, date) and not isinstance(value, datetime):
         return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return date.fromisoformat(cleaned.split("T")[0])
+        except ValueError:
+            return None
     return None
 
 
@@ -27525,6 +27533,7 @@ async def create_lead_quote(
         raise HTTPException(status_code=502, detail="quote_pdf_render_failed") from exc
 
     try:
+        valido_hasta = _to_iso_date(body.get("valido_hasta"))
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
             filename=pdf_doc.filename,
@@ -27546,7 +27555,7 @@ async def create_lead_quote(
             estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
             total=_as_number(body.get("total")),
             moneda=(body.get("moneda") or "MXN").upper(),
-            valida_hasta=_to_iso_date(body.get("valido_hasta")),
+            valida_hasta=valido_hasta.isoformat() if valido_hasta else None,
             metadata=metadata,
             items=repo_items,
             usuario_id=usuario_id,
@@ -27632,7 +27641,7 @@ async def preview_lead_quote_pdf(
         impuestos=base_payload.impuestos,
         total=base_payload.total,
         moneda=currency,
-        valido_hasta=base_payload.valido_hasta,
+        valido_hasta=_to_iso_date(base_payload.valido_hasta),
         descripcion=project_description,
         items=normalized_items,
         quote_vendor_settings=quote_vendor_settings,
@@ -27808,7 +27817,7 @@ async def send_lead_quote(
         impuestos=base_payload.impuestos,
         total=base_payload.total,
         moneda=currency,
-        valido_hasta=base_payload.valido_hasta,
+        valido_hasta=_to_iso_date(base_payload.valido_hasta),
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=normalized_items,
@@ -27835,6 +27844,7 @@ async def send_lead_quote(
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
     try:
+        quote_valid_until = _to_iso_date(create_payload.get("valido_hasta"))
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
             filename=pdf_doc.filename,
@@ -27860,7 +27870,7 @@ async def send_lead_quote(
             or "borrador",
             total=_as_number(create_payload.get("total")),
             moneda=(create_payload.get("moneda") or currency).upper(),
-            valida_hasta=_to_iso_date(create_payload.get("valido_hasta")),
+            valida_hasta=quote_valid_until.isoformat() if quote_valid_until else None,
             metadata=metadata,
             items=repo_items,
             usuario_id=usuario_id,

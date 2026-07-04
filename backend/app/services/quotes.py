@@ -167,6 +167,11 @@ class QuoteRenderContext:
     organization_country: str | None = None
     organization_website: str | None = None
 
+    def __post_init__(self) -> None:
+        """Normaliza fechas que llegan desde capas externas."""
+
+        self.valido_hasta = _coerce_date_value(self.valido_hasta)
+
 
 @dataclass
 class QuoteDocument:
@@ -178,6 +183,22 @@ class QuoteDocument:
 
 class QuoteSendError(RuntimeError):
     """Errores relacionados con el envío por WhatsApp."""
+
+
+def _coerce_date_value(value: Any) -> date | None:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return date.fromisoformat(cleaned.split("T")[0])
+        except ValueError:
+            return None
+    return None
 
 
 async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
@@ -863,6 +884,8 @@ def _normalize_quote_vendor_settings(value: Any) -> dict[str, Any]:
 
 def _build_quote_vendor_conditions_html(
     settings: dict[str, Any],
+    *,
+    fallback_html: str | None = None,
 ) -> str:
     items = settings.get("conditions")
     if isinstance(items, list) and items:
@@ -883,6 +906,8 @@ def _build_quote_vendor_conditions_html(
         pieces.append("</div>")
         if len(pieces) > 2:
             return "".join(pieces)
+    if fallback_html:
+        return fallback_html
     return '<div class="proposal-details"><div class="proposal-detail"><h3>Sin condiciones comerciales adicionales.</h3><p>—</p></div></div>'
 
 
@@ -1090,6 +1115,23 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
         lines.append(f"Correo de contacto: {context.issuer_email}")
     lines.append("")
     lines.append(divider)
+    fallback_html = "".join(
+        [
+            "<html><head><meta charset='utf-8' />",
+            "<style>",
+            "@page { size: A4; margin: 12mm; }",
+            "body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.45; color: #0f172a; }",
+            "pre { white-space: pre-wrap; word-break: break-word; margin: 0; }",
+            "</style></head><body><pre>",
+            html_escape("\n".join(lines)),
+            "</pre></body></html>",
+        ]
+    )
+    pdf_bytes = WeasyHTML(string=fallback_html, base_url=_resolve_template_base_url()).write_pdf()
+    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
+    return QuoteDocument(filename=filename, content=pdf_bytes)
+
+
 def _safe_text(value: str | None, fallback: str = "—") -> str:
     if value is None:
         return fallback
@@ -1126,6 +1168,23 @@ def _coerce_float(value: Any) -> float | None:
             return float(stripped)
         except ValueError:
             return None
+    return None
+
+
+def _record_value(record: Any, key: str) -> Any:
+    if not isinstance(record, dict):
+        return None
+    if key in record:
+        return record.get(key)
+    normalized_key = key.replace(" ", "_")
+    if normalized_key in record:
+        return record.get(normalized_key)
+    for candidate_key, value in record.items():
+        if not isinstance(candidate_key, str):
+            continue
+        normalized_candidate = candidate_key.replace(" ", "_")
+        if normalized_candidate == normalized_key:
+            return value
     return None
 
 
@@ -1292,6 +1351,16 @@ def _concept_title_for_display(concept: dict[str, Any], idx: int) -> str:
 
 def _clean_concept_title(concept: dict[str, Any], idx: int) -> str:
     return _sanitize_text(_concept_title_for_display(concept, idx))
+
+
+def _normalize_detail_text(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, str):
+        cleaned = " ".join(value.split())
+        return cleaned or "—"
+    text = str(value).strip()
+    return text or "—"
 
 
 def _wrap_text(value: str, width: int = 90) -> list[str]:
