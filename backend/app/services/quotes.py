@@ -29,7 +29,7 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
 
     body {
         margin: 0;
-        font-size: 0.95rem;
+        font-size: 9.5pt;
         line-height: 1.5;
     }
 
@@ -45,12 +45,12 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
         border: 1px solid #d7e3f4;
         padding: 8px 10px;
         vertical-align: top;
-        font-size: 0.92rem;
+        font-size: 8.8pt;
     }
 
     .concept-table th {
         background: #f8fafc;
-        font-size: 0.78rem;
+        font-size: 7.8pt;
         letter-spacing: 0.06em;
         text-transform: uppercase;
     }
@@ -63,20 +63,20 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
     .concept-unit {
         width: 12%;
         text-align: center;
-        font-size: 0.9rem;
+        font-size: 8.8pt;
     }
 
     .concept-price {
         width: 18%;
         text-align: right;
-        font-size: 0.9rem;
+        font-size: 8.8pt;
         white-space: nowrap;
     }
 
     .concept-qty {
         width: 12%;
         text-align: center;
-        font-size: 0.9rem;
+        font-size: 8.8pt;
     }
 
     .concept-amount {
@@ -89,7 +89,7 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
     .concept-table tfoot td {
         border-top: 2px solid #cfd8ea;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 10pt;
     }
 
     .concept-table .totals-label {
@@ -115,12 +115,12 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
 
     .proposal-detail h3 {
         margin: 0 0 6px;
-        font-size: 1rem;
+        font-size: 9pt;
     }
 
     .proposal-detail p {
         margin: 0;
-        font-size: 0.92rem;
+        font-size: 8.8pt;
         color: #334155;
         line-height: 1.5;
     }
@@ -217,7 +217,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-family: Arial, Helvetica, sans-serif;
         color: #0f172a;
         background: #f3f6fb;
-        font-size: 10.8pt;
+        font-size: 9.5pt;
         line-height: 1.45;
     }
 
@@ -274,14 +274,14 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .eyebrow {
         margin: 0;
         color: #64748b;
-        font-size: 7.7pt;
+        font-size: 8pt;
         letter-spacing: 0.26em;
         text-transform: uppercase;
     }
 
     .title {
         margin: 0;
-        font-size: 18pt;
+        font-size: 14pt;
         line-height: 1.08;
         font-weight: 700;
         color: #0f172a;
@@ -293,7 +293,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .subtitle {
         margin: 2px 0 0;
         color: #475569;
-        font-size: 6.9pt;
+        font-size: 10pt;
         line-height: 1.15;
     }
 
@@ -312,7 +312,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         gap: 2px;
         margin-top: 4px;
         color: #334155;
-        font-size: 6.1pt;
+        font-size: 8pt;
         line-height: 1.18;
     }
 
@@ -341,7 +341,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .meta-label {
         color: #64748b;
-        font-size: 7.8pt;
+        font-size: 8pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         line-height: 1.22;
@@ -351,7 +351,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: block;
         margin-top: 0;
         color: #0f172a;
-        font-size: 9pt;
+        font-size: 9.5pt;
         font-weight: 700;
         line-height: 1.22;
     }
@@ -372,7 +372,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .card h3 {
         margin: 0 0 6px;
-        font-size: 8pt;
+        font-size: 9pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #64748b;
@@ -382,12 +382,12 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         margin: 0 0 2px;
         color: #334155;
         line-height: 1.14;
-        font-size: 7.9pt;
+        font-size: 8.6pt;
     }
 
     .card p strong {
         color: #0f172a;
-        font-size: 8pt;
+        font-size: 8.6pt;
     }
 
     .card-secondary p:not(:first-of-type) {
@@ -416,7 +416,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .section-head span {
-        font-size: 9pt;
+        font-size: 8.5pt;
         color: #64748b;
     }
 
@@ -431,7 +431,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         border-bottom: 1px solid #dbe3f0;
         padding: 8px 8px;
         vertical-align: top;
-        font-size: 9pt;
+        font-size: 8.8pt;
     }
 
     .items-table thead th {
@@ -503,12 +503,13 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-weight: 700;
         color: #0f172a;
         margin: 0 0 3px;
+        font-size: 9pt;
     }
 
     .item-concept-desc {
         margin: 0;
         color: #475569;
-        font-size: 8.7pt;
+        font-size: 8pt;
     }
 
     .empty-row {
@@ -548,7 +549,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .richtext span {
         margin: 0;
         color: #334155;
-        font-size: 9.2pt;
+        font-size: 8.8pt;
         line-height: 1.5;
     }
 
@@ -567,7 +568,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         justify-content: space-between;
         gap: 10px;
         margin-bottom: 6px;
-        font-size: 10pt;
+        font-size: 9pt;
     }
 
     .summary-row span {
@@ -576,6 +577,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .summary-row strong {
         color: #0f172a;
+        font-size: 10pt;
     }
 
     .summary-total {

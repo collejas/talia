@@ -84,7 +84,7 @@ body {
   margin: 0;
   padding: 24px 28px;
   line-height: 1.5;
-  font-size: 0.95rem;
+  font-size: 9.5pt;
 }
 header, section, footer { margin-bottom: 24px; }
 .brand {
@@ -125,7 +125,7 @@ header, section, footer { margin-bottom: 24px; }
 }
 h1 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 14pt;
   color: var(--quote-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -134,7 +134,7 @@ h1 {
 .subtitle {
   margin: 2px 0 0;
   color: #475569;
-  font-size: 0.69rem;
+  font-size: 10pt;
   line-height: 1.15;
 }
 .brand-lines {
@@ -142,7 +142,7 @@ h1 {
   gap: 2px;
   margin-top: 4px;
   color: #334155;
-  font-size: 0.57rem;
+  font-size: 8pt;
   line-height: 1.18;
 }
 .brand-lines p {
@@ -166,7 +166,7 @@ h1 {
 }
 .meta-label {
   color: #64748b;
-  font-size: 7.8pt;
+  font-size: 8pt;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   line-height: 1.22;
@@ -175,7 +175,7 @@ h1 {
   display: block;
   margin-top: 0;
   color: #0f172a;
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 700;
   line-height: 1.22;
 }
@@ -184,7 +184,7 @@ h2 {
   padding-bottom: 6px;
   margin-top: 32px;
   color: var(--quote-primary);
-  font-size: 1.1rem;
+  font-size: 12pt;
 }
 .intro {
   background: #f8fafc;
@@ -203,6 +203,7 @@ h2 {
   padding: 8px 12px;
   border-radius: 6px;
   list-style: none;
+  font-size: 8.8pt;
 }
 .proposal-details {
   margin-top: 16px;
@@ -213,8 +214,8 @@ h2 {
 }
 .proposal-detail { margin-bottom: 12px; }
 .proposal-detail:last-child { margin-bottom: 0; }
-.proposal-detail h3 { margin: 0 0 6px; font-size: 1rem; }
-.proposal-detail p { margin: 0; font-size: 0.92rem; color: #334155; line-height: 1.5; }
+.proposal-detail h3 { margin: 0 0 6px; font-size: 9pt; }
+.proposal-detail p { margin: 0; font-size: 8.8pt; color: #334155; line-height: 1.5; }
 .concept-table {
   width: 100%;
   border-collapse: collapse;
@@ -226,30 +227,30 @@ h2 {
   border: 1px solid #d7e3f4;
   padding: 8px 10px;
   vertical-align: top;
-  font-size: 0.92rem;
+  font-size: 8.8pt;
 }
 .concept-table th {
   background: #f8fafc;
-  font-size: 0.78rem;
+  font-size: 7.8pt;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.concept-title { width: 28%; font-weight: 600; }
+.concept-title { width: 28%; font-weight: 600; font-size: 9pt; }
 .concept-unit {
   width: 12%;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 8.8pt;
 }
 .concept-price {
   width: 18%;
   text-align: right;
-  font-size: 0.9rem;
+  font-size: 8.8pt;
   white-space: nowrap;
 }
 .concept-qty {
   width: 12%;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 8.8pt;
 }
 .concept-amount {
   width: 30%;
@@ -268,12 +269,12 @@ h2 {
 }
 .muted {
   color: #475569;
-  font-size: 0.9rem;
+  font-size: 8.8pt;
 }
 footer {
   border-top: 1px solid #e2e8f0;
   padding-top: 16px;
-  font-size: 0.95rem;
+  font-size: 8.5pt;
 }
 $$,
     variables = to_jsonb(ARRAY[
