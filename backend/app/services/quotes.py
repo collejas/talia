@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from functools import lru_cache
 from base64 import b64encode
 from mimetypes import guess_type
 import textwrap
@@ -210,7 +211,8 @@ async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
     """Genera el PDF de cotización con el formato nuevo."""
 
     try:
-        return await _render_modern_pdf(context)
+        image_cache = await _prepare_quote_image_cache(context)
+        return await _render_modern_pdf(context, image_cache=image_cache)
     except Exception as exc:  # pragma: no cover - defensivo
         logger.exception("quote_modern_render_failed", exc_info=exc)
     return _render_plaintext_pdf(context)
@@ -659,8 +661,12 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 ).strip()
 
 
-async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
-    html_doc = _build_modern_quote_html(context)
+async def _render_modern_pdf(
+    context: QuoteRenderContext,
+    *,
+    image_cache: dict[str, str | None] | None = None,
+) -> QuoteDocument:
+    html_doc = _build_modern_quote_html(context, image_cache=image_cache)
     base_url = _resolve_template_base_url()
     try:
         pdf_bytes = await asyncio.to_thread(
@@ -675,6 +681,8 @@ async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
 
 def _build_modern_quote_html(
     context: QuoteRenderContext,
+    *,
+    image_cache: dict[str, str | None] | None = None,
 ) -> str:
     folio = f"COT-{context.reference.upper()}"
     issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
@@ -764,7 +772,7 @@ def _build_modern_quote_html(
         validity_days = max(1, int(str(validity_days_value).strip())) if validity_days_value is not None else 15
     except ValueError:
         validity_days = 15
-    items_html = _build_modern_quote_items_html(context)
+    items_html = _build_modern_quote_items_html(context, image_cache=image_cache)
     subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
     taxes = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
     total = _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)
@@ -977,7 +985,11 @@ def _build_quote_vendor_notes_html(
     )
 
 
-def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
+def _build_modern_quote_items_html(
+    context: QuoteRenderContext,
+    *,
+    image_cache: dict[str, str | None] | None = None,
+) -> str:
     concepts = context.conceptos or []
     items = context.items or []
     if not concepts and not items:
@@ -1018,7 +1030,7 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
         if total_value is None:
             total_value = _item_total(related)
         total = html_escape(_format_currency(total_value, context.moneda, include_currency_code=False))
-        image_url = _item_image_src(related)
+        image_url = _item_image_src(related, image_cache=image_cache)
         image_html = (
             f'<img class="item-image" src="{html_escape(image_url, quote=True)}" alt="Producto" />'
             if image_url
@@ -1038,12 +1050,18 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
     return "".join(rows)
 
 
-def _item_image_src(record: Any) -> str | None:
+def _item_image_src(
+    record: Any,
+    *,
+    image_cache: dict[str, str | None] | None = None,
+) -> str | None:
     raw_url = _item_image_url(record)
     if not raw_url:
         return None
     if raw_url.startswith("data:"):
         return raw_url
+    if image_cache is not None and raw_url in image_cache:
+        return image_cache[raw_url]
     embedded = _image_url_to_data_uri(raw_url)
     return embedded or raw_url
 
@@ -1072,6 +1090,7 @@ def _item_image_url(record: Any) -> str | None:
     return None
 
 
+@lru_cache(maxsize=256)
 def _image_url_to_data_uri(image_url: str) -> str | None:
     candidate = image_url.strip()
     if not candidate:
@@ -1115,7 +1134,7 @@ def _image_url_to_data_uri(image_url: str) -> str | None:
                 "Accept": "image/*,*/*;q=0.8",
             },
         )
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=4) as response:
             content = response.read()
             content_type = response.headers.get_content_type() or response.headers.get("Content-Type")
     except Exception:
@@ -1126,6 +1145,25 @@ def _image_url_to_data_uri(image_url: str) -> str | None:
     safe_mime = content_type or guess_type(candidate or resolved_url)[0] or "image/png"
     encoded = b64encode(content).decode("ascii")
     return f"data:{safe_mime};base64,{encoded}"
+
+
+async def _prepare_quote_image_cache(context: QuoteRenderContext) -> dict[str, str | None]:
+    raw_urls: set[str] = set()
+    for item in context.items or []:
+        if not isinstance(item, dict):
+            continue
+        raw_url = _item_image_url(item)
+        if raw_url and not raw_url.startswith("data:"):
+            raw_urls.add(raw_url)
+    if not raw_urls:
+        return {}
+
+    async def resolve(url: str) -> tuple[str, str | None]:
+        embedded = await asyncio.to_thread(_image_url_to_data_uri, url)
+        return url, embedded
+
+    resolved = await asyncio.gather(*(resolve(url) for url in raw_urls))
+    return {url: embedded for url, embedded in resolved}
 
 
 def _format_discount(value: Any, currency: str | None) -> str:
