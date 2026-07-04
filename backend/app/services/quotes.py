@@ -8,18 +8,15 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from html import escape as html_escape
-from html.parser import HTMLParser
 from typing import Any, Iterable
 
 from weasyprint import HTML as WeasyHTML
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import quote_templates as quote_templates_service
 from app.services import twilio as twilio_service
 
 logger = get_logger("app.services.quotes")
-RAW_HTML_TOKENS = {"tabla_conceptos", "resumen_totales", "detalles_propuesta"}
 PDF_STYLE_OVERRIDES = textwrap.dedent(
     """
     @page {
@@ -149,7 +146,7 @@ class QuoteRenderContext:
     notes: str | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    economic_details_html: str | None = None
+    quote_vendor_settings: dict[str, Any] | None = None
     vendor_company_name: str | None = None
     vendor_razon_social: str | None = None
     vendor_assessor_name: str | None = None
@@ -184,19 +181,12 @@ class QuoteSendError(RuntimeError):
 
 
 async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
-    """Genera el PDF de cotización con el formato nuevo y un fallback legado."""
+    """Genera el PDF de cotización con el formato nuevo."""
 
     try:
         return await _render_modern_pdf(context)
     except Exception as exc:  # pragma: no cover - defensivo
         logger.exception("quote_modern_render_failed", exc_info=exc)
-        try:
-            template = await quote_templates_service.fetch_active_template()
-            return await _render_template_based_pdf(context, template)
-        except quote_templates_service.QuoteTemplateError as template_exc:
-            logger.warning("quote_template_unavailable: %s", template_exc)
-        except Exception as template_exc:  # pragma: no cover - defensivo
-            logger.exception("quote_template_render_failed", exc_info=template_exc)
     return _render_plaintext_pdf(context)
 
 
@@ -616,16 +606,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
 
 async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
-    template_config: dict[str, Any] | None = None
-    try:
-        template = await quote_templates_service.fetch_active_template()
-        template_config = template.config if isinstance(template.config, dict) else None
-    except quote_templates_service.QuoteTemplateError as exc:
-        logger.warning("quote_template_unavailable: %s", exc)
-    except Exception as exc:  # pragma: no cover - defensivo
-        logger.exception("quote_template_load_failed", exc_info=exc)
-
-    html_doc = _build_modern_quote_html(context, template_config=template_config)
+    html_doc = _build_modern_quote_html(context)
     base_url = _resolve_template_base_url()
     try:
         pdf_bytes = await asyncio.to_thread(
@@ -640,7 +621,6 @@ async def _render_modern_pdf(context: QuoteRenderContext) -> QuoteDocument:
 
 def _build_modern_quote_html(
     context: QuoteRenderContext,
-    template_config: dict[str, Any] | None = None,
 ) -> str:
     folio = f"COT-{context.reference.upper()}"
     issued_at = context.created_at.astimezone(timezone.utc).strftime("%d/%m/%Y %H:%M")
@@ -685,6 +665,7 @@ def _build_modern_quote_html(
         if logo_url
         else ""
     )
+    quote_vendor_settings = _normalize_quote_vendor_settings(context.quote_vendor_settings)
     organization_details_html = "".join(
         [
             '<div class="brand-lines">',
@@ -716,8 +697,14 @@ def _build_modern_quote_html(
             "</div>",
         ]
     )
-    notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
-    conditions_html = _build_quote_conditions_html(template_config, context.economic_details_html)
+    notes_html = _build_quote_vendor_notes_html(
+        quote_vendor_settings,
+        fallback_body=context.notes,
+    )
+    conditions_html = _build_quote_vendor_conditions_html(
+        quote_vendor_settings,
+        fallback_html=None,
+    )
     items_html = _build_modern_quote_items_html(context)
     subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
     taxes = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
@@ -836,25 +823,84 @@ def _build_modern_quote_html(
     """
 
 
-def _build_quote_conditions_html(
-    template_config: dict[str, Any] | None,
-    fallback_html: str | None,
+def _normalize_quote_vendor_settings(value: Any) -> dict[str, Any]:
+    default = {
+        "conditionsTitle": "Condiciones comerciales",
+        "conditions": [
+            {
+                "subtitle": "Vigencia",
+                "description": "15 días naturales a partir de la fecha de emisión.",
+            },
+        ],
+        "notesTitle": "Notas",
+        "notesBody": "",
+    }
+    if not isinstance(value, dict):
+        return default
+
+    conditions_raw = value.get("conditions")
+    conditions: list[dict[str, str]] = []
+    if isinstance(conditions_raw, list):
+        for item in conditions_raw:
+            if not isinstance(item, dict):
+                continue
+            subtitle = _safe_text(item.get("subtitle"), "")
+            description = _safe_text(item.get("description"), "")
+            if not subtitle and not description:
+                continue
+            conditions.append({"subtitle": subtitle, "description": description})
+
+    if not conditions:
+        conditions = list(default["conditions"])
+
+    return {
+        "conditionsTitle": _safe_text(value.get("conditionsTitle"), default["conditionsTitle"]),
+        "conditions": conditions,
+        "notesTitle": _safe_text(value.get("notesTitle"), default["notesTitle"]),
+        "notesBody": _safe_text(value.get("notesBody"), default["notesBody"]),
+    }
+
+
+def _build_quote_vendor_conditions_html(
+    settings: dict[str, Any],
 ) -> str:
-    if isinstance(template_config, dict):
-        notes_title = _safe_text(template_config.get("notesTitle"), "Notas")
-        notes_body = _safe_text(template_config.get("notesBody"), "")
-        terms_title = _safe_text(template_config.get("termsTitle"), "Términos")
-        terms_body = _safe_text(template_config.get("termsBody"), "")
-        pieces = [
+    items = settings.get("conditions")
+    if isinstance(items, list) and items:
+        pieces = ['<div class="proposal-details">']
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            subtitle = _safe_text(item.get("subtitle"), "")
+            description = _safe_text(item.get("description"), "")
+            if not subtitle and not description:
+                continue
+            pieces.append(
+                '<div class="proposal-detail">'
+                f"<h3>{html_escape(subtitle)}</h3>"
+                f"<p>{html_escape(description)}</p>"
+                "</div>"
+            )
+        pieces.append("</div>")
+        if len(pieces) > 2:
+            return "".join(pieces)
+    return '<div class="proposal-details"><div class="proposal-detail"><h3>Sin condiciones comerciales adicionales.</h3><p>—</p></div></div>'
+
+
+def _build_quote_vendor_notes_html(
+    settings: dict[str, Any],
+    *,
+    fallback_body: str | None,
+) -> str:
+    notes_title = _safe_text(settings.get("notesTitle"), "Notas")
+    notes_body = _safe_text(settings.get("notesBody"), "")
+    if not notes_body:
+        notes_body = _safe_text(fallback_body, "Sin notas para el cliente.")
+    return "".join(
+        [
             '<div class="proposal-details">',
             f'<div class="proposal-detail"><h3>{html_escape(notes_title)}</h3><p>{html_escape(notes_body)}</p></div>',
-            f'<div class="proposal-detail"><h3>{html_escape(terms_title)}</h3><p>{html_escape(terms_body)}</p></div>',
             "</div>",
         ]
-        return "".join(pieces)
-    return _build_quote_rich_text_block(
-        fallback_html,
-        "Sin condiciones comerciales adicionales.",
     )
 
 
@@ -917,15 +963,6 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
             "</tr>"
         )
     return "".join(rows)
-
-
-def _build_quote_rich_text_block(value: str | None, fallback: str) -> str:
-    sanitized = _sanitize_html_fragment(value)
-    if sanitized:
-        return sanitized
-    return f"<p>{html_escape(fallback)}</p>"
-
-
 def _item_image_url(record: Any) -> str | None:
     if not isinstance(record, dict):
         return None
@@ -959,28 +996,6 @@ def _format_discount(value: Any, currency: str | None) -> str:
     if amount < 1:
         return f"{amount * 100:.0f}%"
     return _format_currency(amount, currency)
-
-
-async def _render_template_based_pdf(
-    context: QuoteRenderContext, template: quote_templates_service.QuoteTemplate
-) -> QuoteDocument:
-    """Construye el PDF usando la información declarativa almacenada en Supabase."""
-
-    replacements = _build_replacements(context)
-    filled_html = _replace_tokens(template.html, replacements)
-    final_html = _inject_styles(filled_html, template.css)
-    base_url = _resolve_template_base_url()
-
-    try:
-        pdf_bytes = await asyncio.to_thread(
-            lambda: WeasyHTML(string=final_html, base_url=base_url).write_pdf()
-        )
-    except Exception as exc:
-        logger.exception("weasyprint_render_failed", exc_info=exc)
-        return _render_plaintext_pdf(context)
-
-    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
-    return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
 def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
@@ -1075,205 +1090,11 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
         lines.append(f"Correo de contacto: {context.issuer_email}")
     lines.append("")
     lines.append(divider)
-    lines.append(
-        "Tal-IA automatiza ventas y soporte omnicanal. Esta cotización es referencial "
-        "y puede ajustarse según necesidades específicas."
-    )
-
-    pdf_bytes = _build_pdf_from_lines(lines)
-    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
-    return QuoteDocument(filename=filename, content=pdf_bytes)
-
-
-def _build_concepts_block(context: QuoteRenderContext) -> list[str]:
-    concept_rows = context.conceptos or []
-    if not concept_rows:
-        return ["· Pendiente de definir."]
-
-    lines: list[str] = []
-    for idx, concept in enumerate(concept_rows, start=1):
-        title = _clean_concept_title(concept, idx)
-        lines.append(f"{idx}. {title}")
-        desc = concept.get("descripcion") or concept.get("description") or concept.get("detalle")
-        if desc:
-            lines.extend([f"   {part}" for part in _wrap_text(str(desc))])
-        monto = _concept_total(concept)
-        if monto is not None:
-            lines.append(f"   Importe: {_format_currency(monto, context.moneda)}")
-        lines.append("")
-    return lines
-
-
-def _build_totals_block(context: QuoteRenderContext) -> list[str]:
-    lines = [
-        f"Subtotal: {_format_currency(context.subtotal, context.moneda, include_currency_code=False)}",
-        f"Impuestos: {_format_currency(context.impuestos, context.moneda, include_currency_code=False)}",
-        f"Total estimado: {_format_currency(_resolve_total(context), context.moneda, include_currency_code=False)}",
-    ]
-    return lines
-
-
-def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
-    tabla_html = _build_concepts_html(context)
-    user_details = _sanitize_html_fragment(context.economic_details_html)
-    if user_details:
-        detalles_html = f'<div class="proposal-details">{user_details}</div>'
-    else:
-        detalles_html = _build_default_proposal_details(context)
-    resumen_html = _build_totals_html(context)
-    vigencia = context.valido_hasta.isoformat() if context.valido_hasta else "-"
-
-    values = {
-        "cliente.nombre": _safe_text(context.contact_name),
-        "cliente.empresa": _safe_text(context.contact_company),
-        "cliente.correo": _safe_text(context.contact_email),
-        "cliente.telefono": _safe_text(context.contact_phone),
-        "lead.nombre": _safe_text(context.lead_label, "Proyecto"),
-        "organizacion.nombre": _safe_text(
-            context.organization_name or context.vendor_company_name,
-            "Organización",
-        ),
-        "organizacion.eslogan_empresa": _safe_text(context.organization_slogan, ""),
-        "organizacion.razon_social": _safe_text(
-            context.organization_razon_social or context.vendor_razon_social or context.vendor_company_name,
-            "Razón social",
-        ),
-        "organizacion.rfc": _safe_text(context.organization_rfc, "—"),
-        "organizacion.direccion_fiscal_calle": _safe_text(context.organization_street, ""),
-        "organizacion.direccion_fiscal_numero_exterior": _safe_text(
-            context.organization_exterior_number, ""
-        ),
-        "organizacion.direccion_fiscal_numero_interior": _safe_text(
-            context.organization_interior_number, ""
-        ),
-        "organizacion.direccion_fiscal_colonia": _safe_text(context.organization_colonia, ""),
-        "organizacion.codigo_postal": _safe_text(context.organization_postal_code, "—"),
-        "organizacion.estado": _safe_text(context.organization_state, ""),
-        "organizacion.ciudad": _safe_text(context.organization_city, ""),
-        "organizacion.pais": _safe_text(context.organization_country, ""),
-        "organizacion.sitio_web": _safe_text(context.organization_website, ""),
-        "cotizacion.referencia": context.reference,
-        "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
-        "cotizacion.descripcion": _safe_text(context.descripcion, ""),
-        "cotizacion.vigencia": vigencia,
-        "tabla_conceptos": tabla_html,
-        "detalles_propuesta": detalles_html,
-        "resumen_totales": resumen_html,
-        "ejecutivo.nombre": context.issuer_name,
-        "ejecutivo.correo": context.issuer_email or "",
-        "empresa.nombre": "Tal-IA",
-    }
-    return values
-
-
-def _replace_tokens(text: str, replacements: dict[str, str]) -> str:
-    if not text:
-        return ""
-    result = text
-    for key, value in replacements.items():
-        replacement = value if key in RAW_HTML_TOKENS else html_escape(value)
-        result = result.replace(f"{{{{{key}}}}}", replacement)
-    return result
-
-
 def _safe_text(value: str | None, fallback: str = "—") -> str:
     if value is None:
         return fallback
     trimmed = value.strip()
     return trimmed if trimmed else fallback
-
-
-def _build_concepts_html(context: QuoteRenderContext) -> str:
-    """Renderiza la tabla de conceptos incluyendo precio unitario."""
-
-    concepts = context.conceptos or []
-    rows: list[str] = []
-    items = context.items or []
-    if not concepts:
-        rows.append('<tr><td class="concept-title" colspan="5">Pendiente de definir.</td></tr>')
-    else:
-        for idx, concept in enumerate(concepts, start=1):
-            related = items[idx - 1] if idx - 1 < len(items) else {}
-            title = html_escape(_concept_title_for_display(concept, idx))
-            unit_source = (
-                _record_value(concept, "unidad")
-                or _record_value(related, "unidad")
-                or related.get("unidad")
-                or concept.get("unidad")
-            )
-            qty_source = (
-                _record_value(concept, "cantidad")
-                or _record_value(related, "cantidad")
-                or related.get("cantidad")
-                or concept.get("cantidad")
-            )
-            amount_value = _concept_total(concept)
-            if amount_value is None:
-                amount_value = _item_total(related)
-
-            quantity_value = _coerce_float(qty_source)
-            price_value = _resolve_unit_price(concept, related, amount_value, quantity_value)
-            if amount_value is None and price_value is not None and quantity_value is not None:
-                amount_value = price_value * quantity_value
-
-            unit = html_escape(_format_unit(unit_source))
-            price = html_escape(_format_currency(price_value, context.moneda, include_currency_code=False))
-            qty = html_escape(_format_quantity(qty_source))
-            amount = html_escape(_format_currency(amount_value, context.moneda, include_currency_code=False))
-            rows.append(
-                "<tr>"
-                f'<td class="concept-title">{title}</td>'
-                f'<td class="concept-unit">{unit}</td>'
-                f'<td class="concept-price">{price}</td>'
-                f'<td class="concept-qty">{qty}</td>'
-                f'<td class="concept-amount">{amount}</td>'
-                "</tr>"
-            )
-
-    totals = [
-        ("Subtotal", _format_currency(context.subtotal, context.moneda, include_currency_code=False)),
-        ("IVA", _format_currency(context.impuestos, context.moneda, include_currency_code=False)),
-        ("Total", _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)),
-    ]
-    totals_rows = [
-        "<tr>"
-        f'<td colspan="4" class="totals-label">{html_escape(label)}</td>'
-        f'<td class="concept-amount">{html_escape(value)}</td>'
-        "</tr>"
-        for label, value in totals
-    ]
-    tfoot_html = f"<tfoot>{''.join(totals_rows)}</tfoot>"
-
-    table = (
-        '<table class="concept-table">'
-        "<thead><tr><th>Concepto</th><th>Unidad</th><th>Precio unitario</th><th>Cantidad</th><th>Importe</th></tr></thead>"
-        f"<tbody>{''.join(rows)}</tbody>"
-        f"{tfoot_html}"
-        "</table>"
-    )
-    return table
-
-
-def _build_default_proposal_details(context: QuoteRenderContext) -> str:
-    concepts = context.conceptos or []
-    if not concepts:
-        return '<div class="proposal-details"><p>Sin detalles adicionales.</p></div>'
-    blocks: list[str] = []
-    items = context.items or []
-    for idx, concept in enumerate(concepts, start=1):
-        related = items[idx - 1] if idx - 1 < len(items) else {}
-        title = html_escape(_concept_title_for_display(concept, idx))
-        desc_value = (
-            _record_value(concept, "descripcion")
-            or _record_value(concept, "detalle")
-            or _record_value(related, "descripcion")
-            or _record_value(related, "detalle")
-            or related.get("descripcion")
-            or concept.get("descripcion")
-        )
-        desc = _normalize_detail_text(desc_value)
-        blocks.append('<div class="proposal-detail">' f"<h3>{title}</h3>" f"<p>{desc}</p>" "</div>")
-    return f"<div class=\"proposal-details\">{''.join(blocks)}</div>"
 
 
 def _format_unit(value: Any) -> str:
@@ -1306,14 +1127,6 @@ def _coerce_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
-
-
-def _normalize_detail_text(value: Any) -> str:
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if cleaned:
-            return html_escape(cleaned).replace("\n", "<br />")
-    return "Sin descripción adicional."
 
 
 def _item_total(record: Any) -> float | None:
@@ -1361,136 +1174,6 @@ def _resolve_unit_price(
         if quantity > 0:
             return amount / quantity
     return None
-
-
-def _record_value(record: Any, key: str) -> Any:
-    if not isinstance(record, dict):
-        return None
-    if key in record:
-        value = record.get(key)
-        if value is not None:
-            return value
-    metadata = record.get("metadata") or record.get("metadatos")
-    if isinstance(metadata, dict):
-        return metadata.get(key)
-    return None
-
-
-_ALLOWED_RICH_TEXT_TAGS = {
-    "p",
-    "br",
-    "div",
-    "span",
-    "strong",
-    "em",
-    "b",
-    "i",
-    "u",
-    "ul",
-    "ol",
-    "li",
-    "a",
-    "blockquote",
-    "h3",
-    "h4",
-    "h5",
-    "hr",
-}
-_SELF_CLOSING_TAGS = {"br", "hr"}
-_ALLOWED_RICH_TEXT_ATTRS = {"a": {"href", "title"}}
-
-
-def _sanitize_html_fragment(value: str | None) -> str | None:
-    if not value:
-        return None
-    parser = _QuoteHTMLSanitizer()
-    parser.feed(value)
-    parser.close()
-    sanitized = parser.get_html().strip()
-    return sanitized or None
-
-
-class _QuoteHTMLSanitizer(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self._parts: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        tag = tag.lower()
-        if tag not in _ALLOWED_RICH_TEXT_TAGS:
-            return
-        attr_text = ""
-        allowed_attrs = _ALLOWED_RICH_TEXT_ATTRS.get(tag, set())
-        for attr, raw_value in attrs:
-            if attr in allowed_attrs and raw_value is not None:
-                if attr == "href" and not _is_safe_href(raw_value):
-                    continue
-                attr_text += f' {attr}="{html_escape(raw_value, quote=True)}"'
-        if tag in _SELF_CLOSING_TAGS:
-            self._parts.append(f"<{tag}{attr_text} />")
-        else:
-            self._parts.append(f"<{tag}{attr_text}>")
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-
-    def handle_endtag(self, tag: str) -> None:
-        tag = tag.lower()
-        if tag in _ALLOWED_RICH_TEXT_TAGS and tag not in _SELF_CLOSING_TAGS:
-            self._parts.append(f"</{tag}>")
-
-    def handle_data(self, data: str) -> None:
-        if data:
-            escaped = html_escape(data).replace("\n", "<br />")
-            self._parts.append(escaped)
-
-    def handle_entityref(self, name: str) -> None:
-        self._parts.append(f"&{name};")
-
-    def handle_charref(self, name: str) -> None:
-        self._parts.append(f"&#{name};")
-
-    def get_html(self) -> str:
-        return "".join(self._parts)
-
-
-def _is_safe_href(value: str) -> bool:
-    lowered = value.strip().lower()
-    if not lowered:
-        return False
-    return lowered.startswith(("http://", "https://", "mailto:", "tel:", "#")) or value.startswith(
-        "/"
-    )
-
-
-def _build_totals_html(context: QuoteRenderContext) -> str:
-    subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
-    impuestos = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
-    total = _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)
-    blocks = [
-        ("Subtotal", subtotal),
-        ("Impuestos", impuestos),
-        ("Total estimado", total),
-    ]
-    items = [
-        f'<div class="totals-item"><span>{html_escape(label)}</span><strong>{html_escape(value)}</strong></div>'
-        for label, value in blocks
-    ]
-    return f"<div class=\"totals-grid\">{''.join(items)}</div>"
-
-
-def _inject_styles(html_doc: str, css: str) -> str:
-    style_blocks = [css.strip(), PDF_STYLE_OVERRIDES]
-    combined_css = "\n\n".join(block for block in style_blocks if block)
-    combined_cm = combined_css.strip()
-    if not combined_cm:
-        return html_doc
-    style_tag = f"<style>{combined_cm}</style>"
-    if "</head>" in html_doc:
-        return html_doc.replace("</head>", f"{style_tag}</head>", 1)
-    if "<head>" in html_doc:
-        return html_doc.replace("<head>", f"<head>{style_tag}", 1)
-    return f"{style_tag}{html_doc}"
 
 
 def _resolve_template_base_url() -> str | None:

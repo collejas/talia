@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Drawer,
   DrawerContent,
@@ -45,7 +46,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
-import { DEFAULT_TEMPLATE_CONFIG, type QuoteTemplateConfig } from "@/app/settings/formato-cotizacion/template-schema";
+import {
+  DEFAULT_QUOTE_VENDOR_SETTINGS,
+  buildQuoteVendorSettingsPayload,
+  extractQuoteVendorSettings,
+  type QuoteVendorSettings,
+} from "@/lib/settings/quote-vendors";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   IconAlertTriangle,
@@ -172,11 +178,11 @@ type LeadQuoteEntry = {
   createdAt: string | null;
   title: string | null;
   description: string | null;
-  economicDetailsHtml: string | null;
   concepts: Record<string, unknown>[] | null;
   subtotal: number | null;
   taxes: number | null;
   validUntil: string | null;
+  metadata: Record<string, unknown> | null;
   items: LeadQuoteItemEntry[] | null;
 };
 
@@ -875,9 +881,7 @@ export function LeadDrawer({
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteDescription, setQuoteDescription] = useState("");
-  const [quoteEconomicDetails, setQuoteEconomicDetails] = useState("");
   const [quoteSubject, setQuoteSubject] = useState("");
-  const [quoteMessage, setQuoteMessage] = useState("");
   const [quoteEmailTo, setQuoteEmailTo] = useState("");
   const [quoteWhatsappTo, setQuoteWhatsappTo] = useState("");
   const [quoteAttachments, setQuoteAttachments] = useState<QuoteAttachmentDraft[]>([]);
@@ -899,8 +903,10 @@ export function LeadDrawer({
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
-  const [quoteTemplateConfig, setQuoteTemplateConfig] = useState<QuoteTemplateConfig>(DEFAULT_TEMPLATE_CONFIG);
-  const [quoteTemplateLoading, setQuoteTemplateLoading] = useState(false);
+  const [quoteVendorSettings, setQuoteVendorSettings] = useState<QuoteVendorSettings>(
+    DEFAULT_QUOTE_VENDOR_SETTINGS,
+  );
+  const [quoteVendorSettingsLoading, setQuoteVendorSettingsLoading] = useState(false);
   const quoteAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
@@ -2146,7 +2152,6 @@ export function LeadDrawer({
         card.proyectoNecesidades?.trim() || latestQuote?.description?.trim() || "";
       const defaultSubject =
         `Cotización Tal-IA · ${card.empresa ?? card.titulo ?? ""}`.trim() || "Cotización Tal-IA";
-      const defaultMessage = "";
       const defaultMoneda = (
         latestQuote?.currency ||
         card.moneda ||
@@ -2168,12 +2173,13 @@ export function LeadDrawer({
       const validUntil =
         formatIsoDateForInput(latestQuote?.validUntil) ?? formatDateInput(addDays(new Date(), 14));
       const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
+      const latestQuoteVendorSettings = isRecord(latestQuote?.metadata)
+        ? latestQuote.metadata.quote_vendedores ?? null
+        : null;
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
       setQuoteDescription(defaultDescription);
-      setQuoteEconomicDetails(latestQuote?.economicDetailsHtml ?? "");
       setQuoteSubject(defaultSubject);
-      setQuoteMessage(defaultMessage);
       setQuoteEmailTo(card.correo ?? "");
       setQuoteWhatsappTo(card.telefono ?? "");
       setQuoteAttachments([]);
@@ -2182,6 +2188,9 @@ export function LeadDrawer({
       setQuoteTotal(formatPresetNumberString(defaultTotal));
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
+      if (isRecord(latestQuoteVendorSettings)) {
+        setQuoteVendorSettings(extractQuoteVendorSettings(latestQuoteVendorSettings));
+      }
       setQuoteItems(initialItems);
       setCatalogSearch("");
       setQuoteCatalogPickerOpen(false);
@@ -2198,9 +2207,7 @@ export function LeadDrawer({
               }
               if (typeof draft.quoteTitle === "string") setQuoteTitle(draft.quoteTitle);
               if (typeof draft.quoteDescription === "string") setQuoteDescription(draft.quoteDescription);
-              if (typeof draft.quoteEconomicDetails === "string") setQuoteEconomicDetails(draft.quoteEconomicDetails);
               if (typeof draft.quoteSubject === "string") setQuoteSubject(draft.quoteSubject);
-              if (typeof draft.quoteMessage === "string") setQuoteMessage(draft.quoteMessage);
               if (typeof draft.quoteEmailTo === "string") setQuoteEmailTo(draft.quoteEmailTo);
               if (typeof draft.quoteWhatsappTo === "string") setQuoteWhatsappTo(draft.quoteWhatsappTo);
               if (typeof draft.quoteSubtotal === "string") setQuoteSubtotal(draft.quoteSubtotal);
@@ -2208,6 +2215,9 @@ export function LeadDrawer({
               if (typeof draft.quoteTotal === "string") setQuoteTotal(draft.quoteTotal);
               if (typeof draft.quoteMoneda === "string") setQuoteMoneda(draft.quoteMoneda);
               if (typeof draft.quoteValidoHasta === "string") setQuoteValidoHasta(draft.quoteValidoHasta);
+              if (isRecord(draft.quoteVendorSettings)) {
+                setQuoteVendorSettings(extractQuoteVendorSettings(draft.quoteVendorSettings));
+              }
               if (Array.isArray(draft.quoteItems)) {
                 const restoredItems = draft.quoteItems
                   .filter(isRecord)
@@ -2262,40 +2272,18 @@ export function LeadDrawer({
     if (!quoteDialogOpen) return;
     let cancelled = false;
 
-    const pickString = (value: unknown, fallback: string) =>
-      typeof value === "string" && value.trim().length ? value.trim() : fallback;
-
     const loadTemplate = async () => {
-      setQuoteTemplateLoading(true);
+      setQuoteVendorSettingsLoading(true);
       try {
-        const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" });
+        const response = await fetch("/api/settings/variables", { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || cancelled) return;
         const rawConfig = payload && typeof payload === "object" ? (payload as Record<string, unknown>).config : null;
         if (!rawConfig || typeof rawConfig !== "object") return;
-        const config = rawConfig as Record<string, unknown>;
-        setQuoteTemplateConfig({
-          logoUrl: pickString(config.logoUrl, DEFAULT_TEMPLATE_CONFIG.logoUrl),
-          primaryColor: pickString(config.primaryColor, DEFAULT_TEMPLATE_CONFIG.primaryColor),
-          accentColor: pickString(config.accentColor, DEFAULT_TEMPLATE_CONFIG.accentColor),
-          headerTitle: pickString(config.headerTitle, DEFAULT_TEMPLATE_CONFIG.headerTitle),
-          headerSubtitle: pickString(config.headerSubtitle, DEFAULT_TEMPLATE_CONFIG.headerSubtitle),
-          introText: pickString(config.introText, DEFAULT_TEMPLATE_CONFIG.introText),
-          highlights: Array.isArray(config.highlights)
-            ? config.highlights
-                .map((item) => (typeof item === "string" ? item.trim() : ""))
-                .filter((item) => item.length > 0)
-            : [...DEFAULT_TEMPLATE_CONFIG.highlights],
-          notesTitle: pickString(config.notesTitle, DEFAULT_TEMPLATE_CONFIG.notesTitle),
-          notesBody: pickString(config.notesBody, DEFAULT_TEMPLATE_CONFIG.notesBody),
-          termsTitle: pickString(config.termsTitle, DEFAULT_TEMPLATE_CONFIG.termsTitle),
-          termsBody: pickString(config.termsBody, DEFAULT_TEMPLATE_CONFIG.termsBody),
-          signatureName: pickString(config.signatureName, DEFAULT_TEMPLATE_CONFIG.signatureName),
-          signatureRole: pickString(config.signatureRole, DEFAULT_TEMPLATE_CONFIG.signatureRole),
-          footerNote: pickString(config.footerNote, DEFAULT_TEMPLATE_CONFIG.footerNote),
-        });
+        const vendorSettings = extractQuoteVendorSettings(rawConfig);
+        setQuoteVendorSettings(vendorSettings);
       } finally {
-        if (!cancelled) setQuoteTemplateLoading(false);
+        if (!cancelled) setQuoteVendorSettingsLoading(false);
       }
     };
 
@@ -2311,9 +2299,7 @@ export function LeadDrawer({
       quoteChannel,
       quoteTitle,
       quoteDescription,
-      quoteEconomicDetails,
       quoteSubject,
-      quoteMessage,
       quoteEmailTo,
       quoteWhatsappTo,
       quoteSubtotal,
@@ -2322,6 +2308,7 @@ export function LeadDrawer({
       quoteMoneda,
       quoteValidoHasta,
       quoteItems,
+      quoteVendorSettings,
     };
     window.localStorage.setItem(quoteDraftStorageKey, JSON.stringify(draft));
     setQuoteSuccess("Borrador guardado localmente.");
@@ -2365,8 +2352,50 @@ export function LeadDrawer({
     "h-8 border-0 bg-muted/35 px-2 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
   const quoteCompactTextareaClass =
     "min-h-[88px] border-0 bg-muted/35 px-2 py-1.5 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
+  const quoteVendorSettingsSnapshot = useMemo(
+    () => buildQuoteVendorSettingsPayload(quoteVendorSettings),
+    [quoteVendorSettings],
+  );
 
-  const buildQuoteBasePayload = () => {
+  const handleQuoteVendorConditionChange = (
+    index: number,
+    field: "subtitle" | "description",
+    value: string,
+  ) => {
+    setQuoteVendorSettings((current) => ({
+      ...current,
+      conditions: current.conditions.map((item, position) =>
+        position === index ? { ...item, [field]: value } : item,
+      ),
+    }));
+  };
+
+  const handleAddQuoteVendorCondition = () => {
+    setQuoteVendorSettings((current) => ({
+      ...current,
+      conditions: [
+        ...current.conditions,
+        { subtitle: "", description: "" },
+      ],
+    }));
+  };
+
+  const handleRemoveQuoteVendorCondition = (index: number) => {
+    setQuoteVendorSettings((current) => {
+      if (current.conditions.length <= 1) {
+        return {
+          ...current,
+          conditions: [{ subtitle: "", description: "" }],
+        };
+      }
+      return {
+        ...current,
+        conditions: current.conditions.filter((_, position) => position !== index),
+      };
+    });
+  };
+
+  const buildQuoteBasePayload = useCallback(() => {
     const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
     const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
     const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -2411,10 +2440,24 @@ export function LeadDrawer({
       total: totalValue ?? null,
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
-      detalles_propuesta_html: quoteEconomicDetails.trim() || null,
-      message: quoteMessage.trim() || null,
+      metadatos: {
+        quote_vendedores: quoteVendorSettingsSnapshot,
+      },
     };
-  };
+  }, [
+    computedQuoteTotals?.subtotal,
+    computedQuoteTotals?.taxes,
+    computedQuoteTotals?.total,
+    quoteDescription,
+    quoteImpuestos,
+    quoteItems,
+    quoteMoneda,
+    quoteSubtotal,
+    quoteTitle,
+    quoteTotal,
+    quoteValidoHasta,
+    quoteVendorSettingsSnapshot,
+  ]);
 
   const buildQuotePayload = () => {
     const emails = parseEmailList(quoteEmailTo);
@@ -2501,8 +2544,7 @@ export function LeadDrawer({
       total: quote.total ?? null,
       moneda: (quote.currency || quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quote.validUntil ?? null,
-      detalles_propuesta_html: quote.economicDetailsHtml ?? null,
-      message: quote.description ?? null,
+      metadatos: quote.metadata ?? undefined,
     };
   }, [quoteMoneda, quoteProjectNeeds]);
 
@@ -4309,43 +4351,145 @@ export function LeadDrawer({
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
-                          <p className="text-[11px] text-muted-foreground">Define la regla comercial de la operación.</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Define la base estructurada que se guardará en la cotización.
+                          </p>
+                        </div>
+                        {quoteVendorSettingsLoading ? (
+                          <span className="text-[11px] text-muted-foreground">Cargando base...</span>
+                        ) : null}
+                      </div>
+                      <div className="space-y-3 rounded-md border border-border/40 bg-muted/20 p-3">
+                        <div className="space-y-2">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Título del bloque
+                          </Label>
+                          <Input
+                            value={quoteVendorSettings.conditionsTitle}
+                            onChange={(event) =>
+                              setQuoteVendorSettings((current) => ({
+                                ...current,
+                                conditionsTitle: event.target.value,
+                              }))
+                            }
+                            disabled={quotePending || quoteVendorSettingsLoading}
+                            className={quoteCompactInputClass}
+                            placeholder="Condiciones comerciales"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Subtítulos y descripciones
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 px-2 text-[11px]"
+                              onClick={handleAddQuoteVendorCondition}
+                              disabled={quotePending || quoteVendorSettingsLoading}
+                            >
+                              <IconPlus className="size-3.5" />
+                              Agregar
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            {quoteVendorSettings.conditions.map((item, index) => (
+                              <div
+                                key={`quote-vendor-condition-${index}`}
+                                className="grid gap-2 rounded-md border border-border/30 bg-background p-2 md:grid-cols-[180px_minmax(0,1fr)_auto]"
+                              >
+                                <div className="space-y-1.5">
+                                  <Label className="text-[11px] text-muted-foreground">Subtítulo</Label>
+                                  <Input
+                                    value={item.subtitle}
+                                    onChange={(event) =>
+                                      handleQuoteVendorConditionChange(index, "subtitle", event.target.value)
+                                    }
+                                    disabled={quotePending || quoteVendorSettingsLoading}
+                                    placeholder="Vigencia"
+                                    className={quoteCompactInputClass}
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-[11px] text-muted-foreground">Descripción</Label>
+                                  <Textarea
+                                    value={item.description}
+                                    onChange={(event) =>
+                                      handleQuoteVendorConditionChange(index, "description", event.target.value)
+                                    }
+                                    disabled={quotePending || quoteVendorSettingsLoading}
+                                    rows={2}
+                                    placeholder="Detalle de la condición."
+                                    className={quoteCompactTextareaClass}
+                                  />
+                                </div>
+                                <div className="flex items-end md:justify-end">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                    onClick={() => handleRemoveQuoteVendorCondition(index)}
+                                    disabled={quotePending || quoteVendorSettingsLoading}
+                                  >
+                                    <IconTrash className="size-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 text-[11px]">
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Contado</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Crédito 15 días</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Anticipo + saldo</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Entrega 7 días</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">Garantía 1 año</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">IVA incluido</span>
-                        <span className="rounded-full bg-muted/35 px-2.5 py-1 text-foreground">MXN</span>
-                      </div>
-                      <Textarea
-                        value={quoteEconomicDetails}
-                        onChange={(event) => setQuoteEconomicDetails(event.target.value)}
-                        disabled={quotePending}
-                        rows={3}
-                        placeholder="Condiciones comerciales y observaciones."
-                        className={quoteCompactTextareaClass}
-                      />
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
-                          <p className="text-[11px] text-muted-foreground">Información visible e interna de apoyo.</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            La nota se guarda junto con la cotización y los anexos siguen disponibles.
+                          </p>
                         </div>
                       </div>
-                      <Textarea
-                        value={quoteMessage}
-                        onChange={(event) => setQuoteMessage(event.target.value)}
-                        disabled={quotePending}
-                        rows={3}
-                        placeholder="Captura aquí las notas de apoyo."
-                        className={quoteCompactTextareaClass}
-                      />
+                      <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-3">
+                        <div className="space-y-2">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Título de notas
+                          </Label>
+                          <Input
+                            value={quoteVendorSettings.notesTitle}
+                            onChange={(event) =>
+                              setQuoteVendorSettings((current) => ({
+                                ...current,
+                                notesTitle: event.target.value,
+                              }))
+                            }
+                            disabled={quotePending || quoteVendorSettingsLoading}
+                            className={quoteCompactInputClass}
+                            placeholder="Notas"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Descripción de notas
+                          </Label>
+                          <Textarea
+                            value={quoteVendorSettings.notesBody}
+                            onChange={(event) =>
+                              setQuoteVendorSettings((current) => ({
+                                ...current,
+                                notesBody: event.target.value,
+                              }))
+                            }
+                            disabled={quotePending || quoteVendorSettingsLoading}
+                            rows={3}
+                            placeholder="Captura aquí las notas de apoyo."
+                            className={quoteCompactTextareaClass}
+                          />
+                        </div>
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
@@ -5497,16 +5641,11 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
     title: typeof row.titulo === "string" ? row.titulo : null,
     description: typeof row.descripcion === "string" ? row.descripcion : null,
-    economicDetailsHtml:
-      typeof row.detalles_propuesta_html === "string"
-        ? row.detalles_propuesta_html
-        : typeof metadataRecord["detalles_propuesta_html"] === "string"
-          ? (metadataRecord["detalles_propuesta_html"] as string)
-          : null,
     concepts: Array.isArray(row.conceptos) ? (row.conceptos as Record<string, unknown>[]) : null,
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     validUntil: typeof row.valido_hasta === "string" ? row.valido_hasta : null,
+    metadata: metadataRecord,
     items: Array.isArray(row.items)
       ? (row.items as unknown[])
           .map((item) => mapQuoteItemEntry(item))

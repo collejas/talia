@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { QuoteVendorsForm } from "@/components/settings/quote-vendors-form"
 import { type TenantScopedSettings } from "@/app/settings/variables/components/tenant-variables-panel"
 import { callCrmApi } from "@/lib/api/crm"
 import { TenantExtrasCatalogsForm } from "../tenants/[tenantId]/tenant-forms"
@@ -23,14 +24,25 @@ export default async function SettingsAccountPage() {
     <AppViewLayout title="Extras" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         {data ? (
-          <div className="rounded-lg border border-border bg-card p-6">
-            <div className="mb-4 space-y-1">
-              <h2 className="text-lg font-semibold">Extras</h2>
-              <p className="text-sm text-muted-foreground">
-                Cada tenant puede definir sus propios catálogos manuales para campos select, listas reutilizables y otras configuraciones operativas.
-              </p>
+          <div className="space-y-6">
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="mb-4 space-y-1">
+                <h2 className="text-lg font-semibold">Cotizaciones Vendedores</h2>
+                <p className="text-sm text-muted-foreground">
+                  Define la base estructurada que alimenta las secciones de condiciones comerciales y notas en todas las cotizaciones.
+                </p>
+              </div>
+              <QuoteVendorsForm config={data.config ?? null} />
             </div>
-            <TenantExtrasCatalogsForm tenantId={data.organizacion_id} config={data.config ?? null} />
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="mb-4 space-y-1">
+                <h2 className="text-lg font-semibold">Extras</h2>
+                <p className="text-sm text-muted-foreground">
+                  Cada tenant puede definir sus propios catálogos manuales para campos select, listas reutilizables y otras configuraciones operativas.
+                </p>
+              </div>
+              <TenantExtrasCatalogsForm tenantId={data.organizacion_id} config={data.config ?? null} />
+            </div>
           </div>
         ) : null}
       </div>

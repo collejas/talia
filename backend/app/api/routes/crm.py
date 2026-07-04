@@ -2200,7 +2200,7 @@ async def _resolve_quote_vendor_context(
     repo: CRMRepository,
     organizacion_id: UUID,
     opportunity: Mapping[str, Any],
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
     tenant_name: str | None = None
     tenant_razon_social: str | None = None
     tenant_slogan: str | None = None
@@ -2214,6 +2214,7 @@ async def _resolve_quote_vendor_context(
     tenant_city: str | None = None
     tenant_country: str | None = None
     tenant_website: str | None = None
+    quote_vendor_settings: dict[str, Any] | None = None
     try:
         platform_repo = PlatformRepository()
         tenant_row = await platform_repo.get_organizacion_details(organizacion_id=organizacion_id)
@@ -2236,6 +2237,8 @@ async def _resolve_quote_vendor_context(
             tenant_row.get("pais") or tenant_row.get("pais_codigo_iso2")
         )
         tenant_website = _clean_text(tenant_row.get("sitio_web") or tenant_row.get("dominio_principal"))
+        tenant_config = tenant_row.get("config") if isinstance(tenant_row.get("config"), dict) else {}
+        quote_vendor_settings = _resolve_quote_vendor_settings_from_config(tenant_config)
 
     seller_row = _single_related(opportunity.get("propietario")) or _single_related(
         opportunity.get("asignado")
@@ -2283,6 +2286,47 @@ async def _resolve_quote_vendor_context(
         "vendor_assessor_name": seller_name,
         "vendor_assessor_phone": seller_phone,
         "vendor_assessor_email": seller_email,
+        "quote_vendor_settings": quote_vendor_settings,
+    }
+
+
+def _resolve_quote_vendor_settings_from_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    default = {
+        "conditionsTitle": "Condiciones comerciales",
+        "conditions": [
+            {
+                "subtitle": "Vigencia",
+                "description": "15 días naturales a partir de la fecha de emisión.",
+            }
+        ],
+        "notesTitle": "Notas",
+        "notesBody": "",
+    }
+    if not isinstance(config, Mapping):
+        return default
+    source = config.get("quote_vendedores") or config.get("quoteVendors") or config.get("cotizaciones_vendedores")
+    if not isinstance(source, Mapping):
+        return default
+
+    conditions: list[dict[str, str]] = []
+    raw_conditions = source.get("conditions")
+    if isinstance(raw_conditions, list):
+        for item in raw_conditions:
+            if not isinstance(item, Mapping):
+                continue
+            subtitle = _clean_text(item.get("subtitle"))
+            description = _clean_text(item.get("description"))
+            if not subtitle and not description:
+                continue
+            conditions.append({"subtitle": subtitle, "description": description})
+    if not conditions:
+        conditions = list(default["conditions"])
+
+    return {
+        "conditionsTitle": _clean_text(source.get("conditionsTitle")) or default["conditionsTitle"],
+        "conditions": conditions,
+        "notesTitle": _clean_text(source.get("notesTitle")) or default["notesTitle"],
+        "notesBody": _clean_text(source.get("notesBody")) or default["notesBody"],
     }
 
 
@@ -7816,8 +7860,6 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         version=metadata.get("version") or row.get("version") or 1,
         titulo=metadata.get("titulo") or row.get("titulo"),
         descripcion=metadata.get("descripcion") or row.get("descripcion"),
-        detalles_propuesta_html=metadata.get("detalles_propuesta_html")
-        or row.get("detalles_propuesta_html"),
         conceptos=_ensure_concept_list(metadata.get("conceptos") or row.get("conceptos")),
         subtotal=metadata.get("subtotal") or row.get("subtotal"),
         impuestos=metadata.get("impuestos") or row.get("impuestos"),
@@ -7866,7 +7908,6 @@ def _quote_metadata_from_payload(body: dict[str, Any]) -> dict[str, Any]:
     for key in (
         "titulo",
         "descripcion",
-        "detalles_propuesta_html",
         "conceptos",
         "subtotal",
         "impuestos",
@@ -12719,6 +12760,18 @@ def _build_assistant_document_model(
     )
 
 
+class CRMReminderSettings(BaseModel):
+    slug: str
+    reminder_enabled: bool
+    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
+    updated_at: datetime | None = None
+
+
+class CRMReminderSettingsUpdate(BaseModel):
+    reminder_enabled: bool
+    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
+
+
 class CRMQuoteTemplate(BaseModel):
     slug: str
     nombre: str
@@ -12741,18 +12794,6 @@ class CRMQuoteTemplateUpdate(BaseModel):
     config: dict[str, Any]
     version: int = 1
     is_active: bool = True
-
-
-class CRMReminderSettings(BaseModel):
-    slug: str
-    reminder_enabled: bool
-    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
-    updated_at: datetime | None = None
-
-
-class CRMReminderSettingsUpdate(BaseModel):
-    reminder_enabled: bool
-    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
 
 
 class CRMCatalogItem(BaseModel):
@@ -14131,7 +14172,6 @@ class LeadQuoteItem(BaseModel):
 class LeadQuoteCreatePayload(BaseModel):
     titulo: str | None = Field(default=None, max_length=200)
     descripcion: str | None = Field(default=None, max_length=2000)
-    detalles_propuesta_html: str | None = Field(default=None, max_length=16000)
     message: str | None = Field(default=None, max_length=2000)
     conceptos: list[dict[str, Any]] | None = Field(default=None)
     subtotal: float | None = Field(default=None)
@@ -14165,7 +14205,6 @@ class LeadQuote(BaseModel):
     version: int
     titulo: str | None = None
     descripcion: str | None = None
-    detalles_propuesta_html: str | None = None
     conceptos: list[dict[str, Any]] = Field(default_factory=list)
     subtotal: float | None = None
     impuestos: float | None = None
@@ -27428,6 +27467,14 @@ async def create_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=opportunity,
     )
+    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
+        metadata.get("quote_vendedores")
+        if isinstance(metadata.get("quote_vendedores"), Mapping)
+        else vendor_context.get("quote_vendor_settings"),
+    )
+    quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
+        oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
+    )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
@@ -27448,9 +27495,9 @@ async def create_lead_quote(
         moneda=currency,
         valido_hasta=_to_iso_date(body.get("valido_hasta")),
         descripcion=project_description,
-        notes=oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        notes=quote_vendor_notes,
         items=normalized_items,
-        economic_details_html=body.get("detalles_propuesta_html"),
+        quote_vendor_settings=quote_vendor_settings,
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
         organization_razon_social=vendor_context["organization_razon_social"],
@@ -27558,6 +27605,15 @@ async def preview_lead_quote_pdf(
         organizacion_id=organizacion_id,
         opportunity=opportunity_row,
     )
+    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
+        base_payload.metadatos.get("quote_vendedores")
+        if isinstance(base_payload.metadatos, dict)
+        and isinstance(base_payload.metadatos.get("quote_vendedores"), Mapping)
+        else vendor_context.get("quote_vendor_settings"),
+    )
+    quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
+        oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
+    )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
@@ -27579,7 +27635,7 @@ async def preview_lead_quote_pdf(
         valido_hasta=base_payload.valido_hasta,
         descripcion=project_description,
         items=normalized_items,
-        economic_details_html=base_payload.detalles_propuesta_html,
+        quote_vendor_settings=quote_vendor_settings,
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
         organization_razon_social=vendor_context["organization_razon_social"],
@@ -27688,6 +27744,15 @@ async def send_lead_quote(
         organizacion_id=organizacion_id,
         opportunity=oportunidad_row,
     )
+    quote_vendor_settings = _resolve_quote_vendor_settings_from_config(
+        base_payload.metadatos.get("quote_vendedores")
+        if isinstance(base_payload.metadatos, dict)
+        and isinstance(base_payload.metadatos.get("quote_vendedores"), Mapping)
+        else vendor_context.get("quote_vendor_settings"),
+    )
+    quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or (
+        oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
+    )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
 
     attachment_payloads: list[dict[str, object]] = []
@@ -27745,10 +27810,9 @@ async def send_lead_quote(
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
         descripcion=project_description,
-        notes=base_payload.message or oportunidad_metadata.get("proyecto_necesidades")
-        or contact.get("necesidad_proposito"),
+        notes=quote_vendor_notes,
         items=normalized_items,
-        economic_details_html=payload.detalles_propuesta_html,
+        quote_vendor_settings=quote_vendor_settings,
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
         organization_razon_social=vendor_context["organization_razon_social"],
