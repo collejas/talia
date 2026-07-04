@@ -212,8 +212,8 @@ h2 {
 }
 .proposal-detail { margin-bottom: 12px; }
 .proposal-detail:last-child { margin-bottom: 0; }
-.proposal-detail h3 { margin: 0 0 6px; font-size: 9pt; }
-.proposal-detail p { margin: 0; font-size: 8.8pt; color: #334155; line-height: 1.5; }
+.proposal-detail h3 { margin: 0 0 6px; font-size: 7pt; }
+.proposal-detail p { margin: 0; font-size: 7.5pt; color: #334155; line-height: 1.5; }
 .concept-table {
   width: calc(100% + 8px);
   border-collapse: collapse;
@@ -273,7 +273,7 @@ h2 {
 footer {
   border-top: 1px solid #e2e8f0;
   padding-top: 16px;
-  font-size: 7.2pt;
+  font-size: 7pt;
 }
 $$,
     variables = to_jsonb(ARRAY[

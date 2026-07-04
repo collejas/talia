@@ -544,7 +544,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .box-title {
         margin: 0 0 8px;
-        font-size: 9pt;
+        font-size: 7pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #64748b;
@@ -557,7 +557,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .richtext span {
         margin: 0;
         color: #334155;
-        font-size: 8.8pt;
+        font-size: 7.5pt;
         line-height: 1.5;
     }
 
@@ -576,7 +576,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         justify-content: space-between;
         gap: 10px;
         margin-bottom: 6px;
-        font-size: 9pt;
+        font-size: 7.5pt;
     }
 
     .summary-row span {
@@ -585,14 +585,14 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
 
     .summary-row strong {
         color: #0f172a;
-        font-size: 10pt;
+        font-size: 8.5pt;
     }
 
     .summary-total {
         margin-top: 10px;
         padding-top: 10px;
         border-top: 1px solid #cfe0ff;
-        font-size: 12pt;
+        font-size: 8.5pt;
         font-weight: 700;
     }
 

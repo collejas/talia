@@ -363,7 +363,7 @@ section {
 }
 .proposal-detail h3 {
   margin: 0 0 6px;
-  font-size: 9pt;
+  font-size: 7pt;
 }
 .proposal-detail p {
   margin: 0;
@@ -386,13 +386,13 @@ section {
   gap: 4px;
 }
 .totals-item span {
-  font-size: 7.2pt;
+  font-size: 7pt;
   text-transform: uppercase;
   color: #64748b;
   letter-spacing: 0.08em;
 }
 .totals-item strong {
-  font-size: 8.5pt;
+  font-size: 7.5pt;
   color: var(--quote-primary);
 }
 .muted {
@@ -402,7 +402,7 @@ section {
 footer {
   border-top: 1px solid #e2e8f0;
   padding-top: 16px;
-  font-size: 7.2pt;
+  font-size: 7pt;
 }
 `
 
