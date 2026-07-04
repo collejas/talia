@@ -354,8 +354,23 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         color: #64748b;
         font-size: 6.5pt;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.08em;
         line-height: 1.22;
+    }
+
+    .meta-label-nowrap {
+        white-space: nowrap;
+        letter-spacing: 0;
+        font-size: 6.5pt;
+    }
+
+    .meta-row {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: baseline;
+        gap: 4px;
+        justify-content: flex-end;
+        width: 100%;
     }
 
     .meta-value {
@@ -365,6 +380,16 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         font-size: 7.7pt;
         font-weight: 700;
         line-height: 1.22;
+    }
+
+    .meta-value-nowrap {
+        white-space: nowrap;
+    }
+
+    .meta-value-tight {
+        white-space: nowrap;
+        letter-spacing: 0;
+        font-size: 7.7pt;
     }
 
     .info-grid {
@@ -726,6 +751,11 @@ def _build_modern_quote_html(
         quote_vendor_settings,
         fallback_html=None,
     )
+    validity_days_value = quote_vendor_settings.get("validityDays", 15)
+    try:
+        validity_days = max(1, int(str(validity_days_value).strip())) if validity_days_value is not None else 15
+    except ValueError:
+        validity_days = 15
     items_html = _build_modern_quote_items_html(context)
     subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
     taxes = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
@@ -762,7 +792,10 @@ def _build_modern_quote_html(
                 <span class="meta-value">{html_escape(issued_at)}</span>
               </div>
               <div class="meta-block">
-                <span class="meta-label">Vigencia</span>
+                <div class="meta-row">
+                  <span class="meta-label meta-label-nowrap">Días de Vigencia</span>
+                  <span class="meta-value meta-value-tight">{html_escape(str(validity_days))}, hasta:</span>
+                </div>
                 <span class="meta-value">{html_escape(valid_until)}</span>
               </div>
               <div class="meta-block">
@@ -855,6 +888,7 @@ def _normalize_quote_vendor_settings(value: Any) -> dict[str, Any]:
         ],
         "notesTitle": "Notas",
         "notesBody": "",
+        "validityDays": 15,
     }
     if not isinstance(value, dict):
         return default
@@ -879,6 +913,12 @@ def _normalize_quote_vendor_settings(value: Any) -> dict[str, Any]:
         "conditions": conditions,
         "notesTitle": _safe_text(value.get("notesTitle"), default["notesTitle"]),
         "notesBody": _safe_text(value.get("notesBody"), default["notesBody"]),
+        "validityDays": max(
+            1,
+            int(str(value.get("validityDays") or value.get("validity_days") or value.get("vigenciaDias") or default["validityDays"]).strip())
+            if (value.get("validityDays") or value.get("validity_days") or value.get("vigenciaDias") or default["validityDays"]) is not None
+            else default["validityDays"],
+        ),
     }
 
 
