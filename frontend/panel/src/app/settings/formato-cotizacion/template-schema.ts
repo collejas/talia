@@ -324,7 +324,7 @@ section {
   font-size: 7.5pt;
 }
 .concept-price {
-  width: 18%;
+  width: 12ch;
   text-align: right;
   font-size: 7.5pt;
   white-space: nowrap;
@@ -335,7 +335,7 @@ section {
   font-size: 7.5pt;
 }
 .concept-amount {
-  width: 30%;
+  width: 15ch;
   text-align: right;
   font-weight: 600;
   color: var(--quote-primary);

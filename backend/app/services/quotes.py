@@ -492,9 +492,20 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .item-price,
     .item-discount,
     .item-total {
-        width: 15%;
         text-align: right;
         white-space: nowrap;
+    }
+
+    .item-price {
+        width: 12ch;
+    }
+
+    .item-discount {
+        width: 11ch;
+    }
+
+    .item-total {
+        width: 15ch;
     }
 
     .item-concept-title {
