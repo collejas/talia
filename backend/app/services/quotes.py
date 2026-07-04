@@ -706,9 +706,9 @@ def _build_modern_quote_html(
     notes_html = _build_quote_rich_text_block(context.notes, "Sin notas para el cliente.")
     conditions_html = _build_quote_conditions_html(template_config, context.economic_details_html)
     items_html = _build_modern_quote_items_html(context)
-    subtotal = _format_currency(context.subtotal, context.moneda)
-    taxes = _format_currency(context.impuestos, context.moneda)
-    total = _format_currency(_resolve_total(context), context.moneda)
+    subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
+    taxes = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
+    total = _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)
 
     return f"""
     <html>
@@ -879,13 +879,13 @@ def _build_modern_quote_items_html(context: QuoteRenderContext) -> str:
         if amount_value is None:
             amount_value = _item_total(related)
         price_value = _resolve_unit_price(concept, related, amount_value, _coerce_float(quantity_value))
-        price = html_escape(_format_currency(price_value, context.moneda))
+        price = html_escape(_format_currency(price_value, context.moneda, include_currency_code=False))
         discount_value = _record_value(concept, "descuento") or _record_value(related, "descuento")
         discount = html_escape(_format_discount(discount_value, context.moneda))
         total_value = amount_value
         if total_value is None:
             total_value = _item_total(related)
-        total = html_escape(_format_currency(total_value, context.moneda))
+        total = html_escape(_format_currency(total_value, context.moneda, include_currency_code=False))
         image_url = _item_image_url(related)
         image_html = (
             f'<img class="item-image" src="{html_escape(image_url, quote=True)}" alt="Producto" />'
@@ -1093,9 +1093,9 @@ def _build_concepts_block(context: QuoteRenderContext) -> list[str]:
 
 def _build_totals_block(context: QuoteRenderContext) -> list[str]:
     lines = [
-        f"Subtotal: {_format_currency(context.subtotal, context.moneda)}",
-        f"Impuestos: {_format_currency(context.impuestos, context.moneda)}",
-        f"Total estimado: {_format_currency(_resolve_total(context), context.moneda)}",
+        f"Subtotal: {_format_currency(context.subtotal, context.moneda, include_currency_code=False)}",
+        f"Impuestos: {_format_currency(context.impuestos, context.moneda, include_currency_code=False)}",
+        f"Total estimado: {_format_currency(_resolve_total(context), context.moneda, include_currency_code=False)}",
     ]
     return lines
 
@@ -1204,9 +1204,9 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
                 amount_value = price_value * quantity_value
 
             unit = html_escape(_format_unit(unit_source))
-            price = html_escape(_format_currency(price_value, context.moneda))
+            price = html_escape(_format_currency(price_value, context.moneda, include_currency_code=False))
             qty = html_escape(_format_quantity(qty_source))
-            amount = html_escape(_format_currency(amount_value, context.moneda))
+            amount = html_escape(_format_currency(amount_value, context.moneda, include_currency_code=False))
             rows.append(
                 "<tr>"
                 f'<td class="concept-title">{title}</td>'
@@ -1218,9 +1218,9 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
             )
 
     totals = [
-        ("Subtotal", _format_currency(context.subtotal, context.moneda)),
-        ("IVA", _format_currency(context.impuestos, context.moneda)),
-        ("Total", _format_currency(_resolve_total(context), context.moneda)),
+        ("Subtotal", _format_currency(context.subtotal, context.moneda, include_currency_code=False)),
+        ("IVA", _format_currency(context.impuestos, context.moneda, include_currency_code=False)),
+        ("Total", _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)),
     ]
     totals_rows = [
         "<tr>"
@@ -1451,9 +1451,9 @@ def _is_safe_href(value: str) -> bool:
 
 
 def _build_totals_html(context: QuoteRenderContext) -> str:
-    subtotal = _format_currency(context.subtotal, context.moneda)
-    impuestos = _format_currency(context.impuestos, context.moneda)
-    total = _format_currency(_resolve_total(context), context.moneda)
+    subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
+    impuestos = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
+    total = _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)
     blocks = [
         ("Subtotal", subtotal),
         ("Impuestos", impuestos),
@@ -1608,11 +1608,17 @@ def _sanitize_text(value: str) -> str:
     return "".join(ch for ch in normalized if ord(ch) < 128)
 
 
-def _format_currency(value: float | None, currency: str | None) -> str:
+def _format_currency(
+    value: float | None,
+    currency: str | None,
+    include_currency_code: bool = True,
+) -> str:
     if value is None:
         return "-"
-    code = (currency or "MXN").upper()
-    return f"{code} {value:,.2f}"
+    if include_currency_code:
+        code = (currency or "MXN").upper()
+        return f"{code} {value:,.2f}"
+    return f"$ {value:,.2f}"
 
 
 def _pdf_escape(value: str) -> str:
