@@ -327,37 +327,28 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         min-width: 180px;
         text-align: right;
         display: grid;
-        gap: 8px;
-    }
-
-    .meta-pill {
-        display: inline-block;
-        padding: 5px 10px;
-        border-radius: 999px;
-        background: #eef6ff;
-        color: #1d4ed8;
-        font-size: 8.5pt;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
+        gap: 4px;
+        align-content: start;
     }
 
     .meta-block {
         display: grid;
-        gap: 2px;
+        gap: 1px;
     }
 
     .meta-label {
         color: #64748b;
-        font-size: 8.5pt;
+        font-size: 7.8pt;
         text-transform: uppercase;
         letter-spacing: 0.12em;
+        line-height: 1.05;
     }
 
     .meta-value {
         color: #0f172a;
-        font-size: 10pt;
+        font-size: 9pt;
         font-weight: 700;
+        line-height: 1.05;
     }
 
     .info-grid {
@@ -729,7 +720,6 @@ def _build_modern_quote_html(
                 <span class="meta-label">Folio</span>
                 <span class="meta-value">{html_escape(folio)}</span>
               </div>
-              <span class="meta-pill">Borrador</span>
               <div class="meta-block">
                 <span class="meta-label">Emitida</span>
                 <span class="meta-value">{html_escape(issued_at)}</span>
