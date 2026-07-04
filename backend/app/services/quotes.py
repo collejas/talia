@@ -774,10 +774,6 @@ def _build_modern_quote_html(
           </div>
 
           <div class="section">
-            <div class="section-head">
-              <h2>Partidas cotizadas</h2>
-              <span>{html_escape(currency)}</span>
-            </div>
             <table class="items-table">
               <thead>
                 <tr>
