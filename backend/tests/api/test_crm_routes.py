@@ -122,6 +122,14 @@ class DummyCRMRepository(CRMRepository):
             }
         ]
 
+    async def get_persona_by_phone_e164(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_persona_by_phone_e164", kwargs))
+        return None
+
+    async def get_persona_by_email(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_persona_by_email", kwargs))
+        return None
+
     async def personas_list(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("personas_list", kwargs))
         return []

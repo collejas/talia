@@ -271,3 +271,111 @@ async def test_update_persona_uses_correo_as_correo_principal(monkeypatch: pytes
 
     assert any(name == "PATCH /rest/v1/personas" for name, _ in calls)
     assert result["correo_principal"] == "new@example.com"
+
+
+@pytest.mark.asyncio
+async def test_update_persona_syncs_email_aliases_when_primary_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = CRMRepository()
+    persona_id = uuid4()
+    organizacion_id = uuid4()
+    existing_row = {
+        "id": str(persona_id),
+        "organizacion_id": str(organizacion_id),
+        "nombre_completo": "Ada Lovelace",
+        "correo_principal": "old@example.com",
+        "correo_secundario": "old@example.com",
+        "correo_institucional": "old@example.com",
+        "company_name": None,
+        "notas": None,
+        "origen": None,
+        "estado": "lead",
+        "metadata": {},
+        "persona_datos": {},
+        "cuenta_id": None,
+        "creado_en": "2026-01-01T00:00:00Z",
+        "actualizado_en": "2026-01-01T00:00:00Z",
+    }
+    updated_row = {
+        **existing_row,
+        "correo_principal": "new@example.com",
+        "correo_secundario": "new@example.com",
+        "correo_institucional": "new@example.com",
+        "correo": "new@example.com",
+        "actualizado_en": "2026-01-02T00:00:00Z",
+    }
+    calls: list[tuple[str, dict[str, object] | None]] = []
+    get_persona_calls = 0
+
+    async def fake_get_persona(
+        *,
+        organizacion_id: uuid.UUID,
+        persona_id: uuid.UUID,
+    ) -> dict[str, object] | None:
+        nonlocal get_persona_calls
+        assert organizacion_id == UUID(existing_row["organizacion_id"])
+        assert persona_id == UUID(existing_row["id"])
+        get_persona_calls += 1
+        if get_persona_calls == 1:
+            return dict(existing_row)
+        return dict(updated_row)
+
+    async def fake_request(
+        method: str,
+        path: str,
+        *,
+        params: dict[str, object] | None = None,
+        json: dict[str, object] | None = None,
+        prefer: str | None = None,
+    ) -> SimpleNamespace:
+        calls.append((f"{method} {path}", dict(json) if isinstance(json, dict) else None))
+        if method == "PATCH" and path == "/rest/v1/personas":
+            assert params is not None
+            assert params["id"] == f"eq.{persona_id}"
+            assert json is not None
+            assert json["correo_principal"] == "new@example.com"
+            assert json["correo_secundario"] == "new@example.com"
+            assert json["correo_institucional"] == "new@example.com"
+            return SimpleNamespace(status_code=200, json=lambda: [dict(updated_row)])
+        if method == "DELETE" and path == "/rest/v1/cuenta_personas":
+            return SimpleNamespace(status_code=200, json=lambda: [])
+        raise AssertionError(f"Unexpected request: {method} {path}")
+
+    monkeypatch.setattr(repo, "get_persona", fake_get_persona)
+    monkeypatch.setattr(repo, "_request", fake_request)
+
+    result = await repo.update_persona(
+        organizacion_id=organizacion_id,
+        persona_id=persona_id,
+        payload={"correo": "new@example.com"},
+    )
+
+    assert any(name == "PATCH /rest/v1/personas" for name, _ in calls)
+    assert result["correo_principal"] == "new@example.com"
+    assert result["correo_secundario"] == "new@example.com"
+    assert result["correo_institucional"] == "new@example.com"
+
+
+@pytest.mark.asyncio
+async def test_persona_to_contact_row_prefers_primary_email(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+
+    async def fake_get_primary_account_for_persona(**_: object) -> dict[str, object]:
+        return {}
+
+    monkeypatch.setattr(repo, "_get_primary_account_for_persona", fake_get_primary_account_for_persona)
+
+    persona = {
+        "id": str(uuid4()),
+        "organizacion_id": str(uuid4()),
+        "nombre_completo": "Ada Lovelace",
+        "correo_principal": "new@example.com",
+        "correo_secundario": "old@example.com",
+        "correo_institucional": "old@example.com",
+        "metadata": {},
+        "persona_datos": {},
+    }
+
+    row = await repo._persona_to_contact_row(persona=persona, organizacion_id=uuid4())
+
+    assert row["correo"] == "new@example.com"
+    assert row["email"] == "new@example.com"
