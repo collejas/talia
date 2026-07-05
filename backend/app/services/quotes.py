@@ -592,31 +592,20 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .bottom-grid {
-        display: table;
+        display: block;
         width: 100%;
-        table-layout: fixed;
         margin-top: 14px;
     }
 
-    .bottom-grid > .section,
-    .side-stack {
-        display: table-cell;
-        vertical-align: top;
-    }
-
-    .bottom-grid > .section {
-        width: auto;
-        padding-right: 12px;
-    }
-
-    .side-stack {
-        width: 280px;
-    }
-
-    .side-stack-inner {
+    .bottom-stack {
         display: grid;
         gap: 12px;
-        width: 280px;
+        width: 100%;
+    }
+
+    .bottom-stack > .section {
+        width: 100%;
+        margin-top: 0;
     }
 
     .prose-box,
@@ -664,10 +653,10 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         background: #eef6ff;
         border-color: #cfe0ff;
         padding-right: 8px;
-        height: 112px;
+        height: auto;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .note-box {
@@ -681,9 +670,9 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
         display: flex;
         justify-content: flex-start;
         gap: 10px;
-        margin-bottom: 2px;
+        margin-bottom: 1px;
         font-size: 7.5pt;
-        line-height: 1.08;
+        line-height: 1.05;
     }
 
     .summary-row span {
@@ -700,7 +689,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .summary-total {
-        margin-top: 3px;
+        margin-top: 2px;
         padding-top: 3px;
         border-top: 1px solid #cfe0ff;
         font-size: 8.5pt;
@@ -708,7 +697,7 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .summary-box .box-title {
-        margin-bottom: 4px;
+        margin-bottom: 3px;
     }
 
     .prose-box .proposal-details,
@@ -915,7 +904,7 @@ def _build_modern_quote_html(
             </div>
             <div class="top-meta">
               <div class="meta-block">
-                <span class="meta-label">Folio</span>
+                <span class="meta-label">Cotización Folio</span>
                 <span class="meta-value">{html_escape(folio)}</span>
               </div>
               <div class="meta-block">
@@ -976,22 +965,24 @@ def _build_modern_quote_html(
           </div>
 
           <div class="bottom-grid">
-            <div class="section" style="margin-top:0;">
-              <div class="prose-box">
-                <p class="box-title">Condiciones comerciales</p>
-                <div class="richtext">{conditions_html}</div>
-              </div>
-            </div>
-
-            <div class="side-stack">
-              <div class="side-stack-inner">
+            <div class="bottom-stack">
+              <div class="section" style="margin-top:0;">
                 <div class="summary-box">
                   <p class="box-title">Resumen financiero</p>
                   <div class="summary-row"><span>Subtotal</span><strong>{html_escape(subtotal)}</strong></div>
                   <div class="summary-row"><span>IVA</span><strong>{html_escape(taxes)}</strong></div>
                   <div class="summary-row summary-total"><span>Total</span><strong>{html_escape(total)}</strong></div>
                 </div>
+              </div>
 
+              <div class="section" style="margin-top:0;">
+                <div class="prose-box">
+                  <p class="box-title">Condiciones comerciales</p>
+                  <div class="richtext">{conditions_html}</div>
+                </div>
+              </div>
+
+              <div class="section" style="margin-top:0;">
                 <div class="note-box">
                   <p class="box-title">Notas y anexos</p>
                   <div class="richtext">{notes_html}</div>
