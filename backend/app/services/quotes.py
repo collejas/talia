@@ -592,10 +592,31 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .bottom-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 280px;
-        gap: 12px;
+        display: table;
+        width: 100%;
+        table-layout: fixed;
         margin-top: 14px;
+    }
+
+    .bottom-grid > .section,
+    .side-stack {
+        display: table-cell;
+        vertical-align: top;
+    }
+
+    .bottom-grid > .section {
+        width: auto;
+        padding-right: 12px;
+    }
+
+    .side-stack {
+        width: 280px;
+    }
+
+    .side-stack-inner {
+        display: grid;
+        gap: 12px;
+        width: 280px;
     }
 
     .prose-box,
@@ -603,12 +624,21 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .summary-box {
         border: 1px solid #dbe3f0;
         background: #f8fbff;
-        padding: 12px;
+        padding: 8px 10px;
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .prose-box,
+    .note-box {
+        overflow: visible;
     }
 
     .box-title {
         margin: 0 0 8px;
         font-size: 7pt;
+        line-height: 1.1;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #64748b;
@@ -633,15 +663,27 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     .summary-box {
         background: #eef6ff;
         border-color: #cfe0ff;
-        padding-right: 0;
+        padding-right: 8px;
+        height: 112px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .note-box {
+        height: auto;
+        overflow: visible;
+        width: 100%;
+        display: block;
     }
 
     .summary-row {
         display: flex;
         justify-content: flex-start;
         gap: 10px;
-        margin-bottom: 6px;
+        margin-bottom: 2px;
         font-size: 7.5pt;
+        line-height: 1.08;
     }
 
     .summary-row span {
@@ -658,11 +700,65 @@ MODERN_QUOTE_PDF_STYLE = textwrap.dedent(
     }
 
     .summary-total {
-        margin-top: 10px;
-        padding-top: 10px;
+        margin-top: 3px;
+        padding-top: 3px;
         border-top: 1px solid #cfe0ff;
         font-size: 8.5pt;
         font-weight: 700;
+    }
+
+    .summary-box .box-title {
+        margin-bottom: 4px;
+    }
+
+    .prose-box .proposal-details,
+    .note-box .proposal-details {
+        margin-top: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .prose-box .proposal-detail,
+    .note-box .proposal-detail,
+    .prose-box .proposal-detail p,
+    .note-box .proposal-detail p {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .prose-box .proposal-detail,
+    .note-box .proposal-detail {
+        margin-bottom: 8px;
+    }
+
+    .note-box .annexes-block {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid #dbe3f0;
+    }
+
+    .note-box .annexes-title {
+        margin: 0 0 4px;
+        font-size: 7pt;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #64748b;
+    }
+
+    .note-box .annexes-text {
+        margin: 0;
+        font-size: 7.5pt;
+        line-height: 1.35;
+        color: #334155;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .prose-box .proposal-detail:last-child,
+    .note-box .proposal-detail:last-child {
+        margin-bottom: 0;
     }
 
     .footer {
@@ -885,20 +981,26 @@ def _build_modern_quote_html(
                 <p class="box-title">Condiciones comerciales</p>
                 <div class="richtext">{conditions_html}</div>
               </div>
-              <div class="note-box" style="margin-top:12px;">
-                <p class="box-title">Notas y anexos</p>
-                <div class="richtext">{notes_html}</div>
-                <div class="richtext" style="margin-top:10px;color:#64748b;">
-                  Anexos: no hay archivos cargados todavía.
-                </div>
-              </div>
             </div>
 
-            <div class="summary-box">
-              <p class="box-title">Resumen financiero</p>
-              <div class="summary-row"><span>Subtotal</span><strong>{html_escape(subtotal)}</strong></div>
-              <div class="summary-row"><span>IVA</span><strong>{html_escape(taxes)}</strong></div>
-              <div class="summary-row summary-total"><span>Total</span><strong>{html_escape(total)}</strong></div>
+            <div class="side-stack">
+              <div class="side-stack-inner">
+                <div class="summary-box">
+                  <p class="box-title">Resumen financiero</p>
+                  <div class="summary-row"><span>Subtotal</span><strong>{html_escape(subtotal)}</strong></div>
+                  <div class="summary-row"><span>IVA</span><strong>{html_escape(taxes)}</strong></div>
+                  <div class="summary-row summary-total"><span>Total</span><strong>{html_escape(total)}</strong></div>
+                </div>
+
+                <div class="note-box">
+                  <p class="box-title">Notas y anexos</p>
+                  <div class="richtext">{notes_html}</div>
+                  <div class="annexes-block">
+                    <p class="annexes-title">Anexos</p>
+                    <p class="annexes-text">No hay archivos cargados todavía.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
