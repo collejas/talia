@@ -2400,6 +2400,105 @@ def _resolve_quote_valid_until(
     return date.today() + timedelta(days=validity_days)
 
 
+async def _build_quote_pdf_context_from_quote_entry(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity_row: Mapping[str, Any],
+    quote_row: Mapping[str, Any],
+    usuario_id: UUID | None = None,
+) -> quotes_service.QuoteRenderContext:
+    contact = _single_related(opportunity_row.get("contacto")) or {}
+    cuenta = _single_related(opportunity_row.get("cuenta")) or {}
+    opportunity_metadata = _ensure_dict(opportunity_row.get("metadata"), default={})
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(
+        organizacion_id=organizacion_id
+    )
+    lead_label = (
+        opportunity_row.get("titulo")
+        or contact.get("nombre_completo")
+        or cuenta.get("nombre")
+        or "Oportunidad sin nombre"
+    )
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity_row,
+    )
+    quote_display_timezone = await _resolve_quote_display_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    quote_model = _quote_from_row(dict(quote_row))
+    quote_metadata = quote_model.metadatos or {}
+    quote_vendor_settings = _resolve_effective_quote_vendor_settings(
+        payload_settings=quote_metadata.get("quote_vendedores")
+        if isinstance(quote_metadata.get("quote_vendedores"), Mapping)
+        else None,
+        tenant_settings=vendor_context.get("quote_vendor_settings"),
+    )
+    quote_vendor_notes = _clean_text(quote_vendor_settings.get("notesBody")) or _clean_text(
+        quote_metadata.get("message")
+    ) or (
+        opportunity_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
+    )
+    logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
+    reference = str(opportunity_row.get("id") or quote_model.oportunidad_id or quote_row.get("oportunidad_id")).split("-")[0]
+    project_description = (
+        _clean_text(quote_model.descripcion)
+        or _clean_text(quote_metadata.get("descripcion"))
+        or None
+    )
+    quote_items = [
+        item.model_dump(exclude_none=True) if isinstance(item, BaseModel) else item
+        for item in quote_model.items
+        if isinstance(item, (BaseModel, dict))
+    ]
+    return quotes_service.QuoteRenderContext(
+        folio=_normalize_quote_folio_value(quote_model.folio or quote_row.get("folio")),
+        lead_label=lead_label,
+        reference=reference,
+        issuer_name=mail_settings.from_name or mail_settings.username or "Tal-IA",
+        issuer_email=mail_settings.username,
+        contact_name=_clean_text(contact.get("nombre_completo")),
+        contact_company=_clean_text(contact.get("company_name")),
+        contact_email=_clean_text(contact.get("correo")),
+        contact_phone=_clean_text(contact.get("telefono_e164")),
+        conceptos=quote_model.conceptos or _concepts_from_items(quote_items),
+        subtotal=quote_model.subtotal,
+        impuestos=quote_model.impuestos,
+        total=quote_model.total,
+        moneda=_clean_text(quote_model.moneda) or "MXN",
+        valido_hasta=quote_model.valido_hasta,
+        descripcion=project_description,
+        notes=quote_vendor_notes,
+        items=quote_items,
+        created_at=quote_model.creado_en or quote_model.actualizado_en or datetime.now(timezone.utc),
+        quote_vendor_settings=quote_vendor_settings,
+        organization_name=vendor_context["organization_name"],
+        organization_slogan=vendor_context["organization_slogan"],
+        organization_razon_social=vendor_context["organization_razon_social"],
+        organization_rfc=vendor_context["organization_rfc"],
+        organization_street=vendor_context["organization_street"],
+        organization_exterior_number=vendor_context["organization_exterior_number"],
+        organization_interior_number=vendor_context["organization_interior_number"],
+        organization_colonia=vendor_context["organization_colonia"],
+        organization_postal_code=vendor_context["organization_postal_code"],
+        organization_state=vendor_context["organization_state"],
+        organization_city=vendor_context["organization_city"],
+        organization_country=vendor_context["organization_country"],
+        organization_website=vendor_context["organization_website"],
+        display_timezone=quote_display_timezone,
+        vendor_company_name=vendor_context["vendor_company_name"],
+        vendor_razon_social=vendor_context["vendor_razon_social"],
+        vendor_assessor_name=vendor_context["vendor_assessor_name"],
+        vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
+        vendor_assessor_email=vendor_context["vendor_assessor_email"],
+        logo_url=logo_url,
+    )
+
+
 def _normalize_quote_folio_value(value: Any) -> str | None:
     folio = _clean_text(value)
     return folio or None
@@ -27872,7 +27971,45 @@ async def preview_lead_quote_pdf(
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
     headers = {
-        "Content-Disposition": f'attachment; filename="{pdf_doc.filename}"',
+        "Content-Disposition": f'inline; filename="{pdf_doc.filename}"',
+    }
+    return Response(content=pdf_doc.content, media_type="application/pdf", headers=headers)
+
+
+@router.get("/oportunidades/{oportunidad_id}/quotes/{quote_id}/pdf")
+async def get_lead_quote_pdf(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+    quote_id: UUID,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> Response:
+    opportunity_row = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity_row is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+
+    quote_row = await repo.get_quote_entry(
+        organizacion_id=organizacion_id,
+        quote_id=quote_id,
+    )
+    if str(quote_row.get("oportunidad_id")) != str(oportunidad_id):
+        raise HTTPException(status_code=404, detail="quote_no_encontrada")
+
+    quote_context = await _build_quote_pdf_context_from_quote_entry(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity_row=opportunity_row,
+        quote_row=quote_row,
+        usuario_id=usuario_id,
+    )
+    pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    headers = {
+        "Content-Disposition": f'inline; filename="{pdf_doc.filename}"',
     }
     return Response(content=pdf_doc.content, media_type="application/pdf", headers=headers)
 

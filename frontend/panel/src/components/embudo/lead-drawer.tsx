@@ -2790,18 +2790,19 @@ export function LeadDrawer({
 
   const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
     try {
+      if (!card) {
+        throw new Error("No hay oportunidad activa.");
+      }
       setQuotePdfLoadingId(quote.id);
-      const { blob } = await fetchRenderedQuotePdf(buildQuotePdfPayloadFromEntry(quote));
-      const objectUrl = window.URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 30_000);
+      const previewUrl = `/api/embudo/leads/${card.oportunidadId}/quotes/${quote.id}/pdf`;
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error("[LeadDrawer] quote pdf preview failed", error);
       window.alert(error instanceof Error ? error.message : "No pudimos generar el enlace de descarga. Inténtalo de nuevo.");
     } finally {
       setQuotePdfLoadingId(null);
     }
-  }, [buildQuotePdfPayloadFromEntry, fetchRenderedQuotePdf]);
+  }, [card]);
 
   const handleQuoteStatusChange = useCallback(
     (quote: LeadQuoteEntry, nextStatus: "aceptada" | "rechazada" | "cancelada") => {

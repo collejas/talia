@@ -6,6 +6,7 @@ import asyncio
 from functools import lru_cache
 from base64 import b64encode
 from mimetypes import guess_type
+import re
 import textwrap
 import unicodedata
 from dataclasses import dataclass, field
@@ -778,7 +779,7 @@ async def _render_modern_pdf(
     except Exception as exc:
         logger.exception("quote_modern_weasyprint_render_failed", exc_info=exc)
         raise
-    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
+    filename = _quote_pdf_filename(context.folio, context.reference)
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
@@ -1394,7 +1395,7 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
         ]
     )
     pdf_bytes = WeasyHTML(string=fallback_html, base_url=_resolve_template_base_url()).write_pdf()
-    filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
+    filename = _quote_pdf_filename(context.folio, context.reference)
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
@@ -1403,6 +1404,21 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
         return fallback
     trimmed = value.strip()
     return trimmed if trimmed else fallback
+
+
+def _quote_pdf_filename(folio: str | None, reference: str) -> str:
+    candidate = _safe_text(folio, "")
+    if not candidate:
+        candidate = f"Cot-{reference.upper()}"
+    candidate = Path(candidate).name
+    candidate = unicodedata.normalize("NFKC", candidate)
+    candidate = re.sub(r"[^\w.-]+", "-", candidate, flags=re.UNICODE)
+    candidate = re.sub(r"-{2,}", "-", candidate).strip("._-")
+    if not candidate:
+        candidate = f"Cot-{reference.upper()}"
+    if not candidate.lower().endswith(".pdf"):
+        candidate = f"{candidate}.pdf"
+    return candidate
 
 
 def _title_case_name(value: str | None, fallback: str = "—") -> str:
