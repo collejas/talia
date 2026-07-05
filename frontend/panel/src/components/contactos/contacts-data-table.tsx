@@ -860,30 +860,39 @@ export function ContactsDataTable({
         return;
       }
       const detail = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      setTableRows((current) => {
-        const previous = current.find((row) => {
+      const updateRows = (rows: ContactTableRow[]) =>
+        rows.map((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
-          return extractString(rowRaw, ['persona_id']) === id || extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
-        }) ?? null;
-        const nextRow = mapContactDetailToTableRow(detail, previous);
-        const replaced = current.map((row) => {
-          const rowRaw = row.raw as Record<string, unknown> | undefined;
-          const rowId = extractString(rowRaw, ['persona_id']) || extractString(rowRaw, ['contacto_id']) || extractString(rowRaw, ['id']);
-          return rowId === id ? nextRow : row;
+          const rowId = extractString(rowRaw, ["persona_id"]) || extractString(rowRaw, ["contacto_id"]) || extractString(rowRaw, ["id"]);
+          if (rowId !== id) {
+            return row;
+          }
+          return mapContactDetailToTableRow(detail, row);
         });
-        if (!replaced.some((row) => {
+      const hasRow = (rows: ContactTableRow[]) =>
+        rows.some((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
-          return extractString(rowRaw, ['persona_id']) === id || extractString(rowRaw, ['contacto_id']) === id || extractString(rowRaw, ['id']) === id;
-        })) {
+          return extractString(rowRaw, ["persona_id"]) === id || extractString(rowRaw, ["contacto_id"]) === id || extractString(rowRaw, ["id"]) === id;
+        });
+      setTableRows((current) => {
+        const replaced = updateRows(current);
+        if (!hasRow(current)) {
+          const nextRow = mapContactDetailToTableRow(detail, null);
           return [nextRow, ...current];
         }
         return replaced;
+      });
+      setRemoteSearchData((current) => {
+        if (!current || remoteSearchQuery !== searchQuery) {
+          return current;
+        }
+        return updateRows(current);
       });
       router.refresh();
     } catch {
       router.refresh();
     }
-  }, [router]);
+  }, [remoteSearchQuery, router, searchQuery]);
 
   const handleCreated = React.useCallback(
     (personaId: string) => {

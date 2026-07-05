@@ -21727,9 +21727,6 @@ async def create_persona_alta(
             },
         )
 
-    if not dedupe_contacto_id:
-        dedupe_contacto_id = suggested_persona_id
-
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
             raise HTTPException(status_code=400, detail="cuenta_id_required")

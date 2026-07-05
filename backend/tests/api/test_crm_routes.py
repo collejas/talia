@@ -2262,6 +2262,54 @@ async def test_update_persona_edit_flow_allows_owner_when_not_elevated(
 
 
 @pytest.mark.asyncio
+async def test_update_persona_edit_flow_does_not_reuse_suggested_contact_automatically(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    actor_user = uuid.uuid4()
+    contact_id = uuid.uuid4()
+    suggested_id = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(actor_user),
+        "organizacion_id": str(uuid.uuid4()),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["contacts.write"],
+    }
+    fake_repo.persona_owner_id = actor_user
+
+    async def fake_dedupe_preview(**_: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]], uuid.UUID | None, uuid.UUID | None, bool]:
+        return [], [], suggested_id, None, False
+
+    monkeypatch.setattr(crm_routes, "_persona_alta_build_dedupe_preview", fake_dedupe_preview)
+
+    resp = await client.patch(
+        f"/crm/personas/{contact_id}",
+        headers=_headers(),
+        json={
+            "persona": {
+                "nombre": "Ana",
+                "apellido_paterno": "Pérez",
+                "nombre_completo": "Ana Pérez",
+                "correo_principal": "ana@example.com",
+                "telefono_principal_e164": "+5215550000001",
+            },
+            "contexto_comercial": {
+                "modo": "solo_persona",
+                "usar_cuenta_existente": False,
+                "crear_cuenta_nueva": False,
+                "es_persona_fisica_actividad_empresarial": False,
+            },
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    update_calls = [kwargs for name, kwargs in fake_repo.calls if name == "update_persona"]
+    assert update_calls, "expected update_persona to be called"
+    assert update_calls[-1]["persona_id"] == contact_id
+    assert update_calls[-1]["persona_id"] != suggested_id
+
+
+@pytest.mark.asyncio
 async def test_update_persona_edit_flow_denies_non_owner_when_not_elevated(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

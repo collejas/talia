@@ -790,9 +790,6 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         ...INITIAL_STATE,
         loadedId: action.personaId,
         mode,
-        personaNombre: hydratedName.nombre,
-        personaApellidoPaterno: hydratedName.apellidoPaterno,
-        personaApellidoMaterno: hydratedName.apellidoMaterno,
         persona: {
           ...INITIAL_STATE.persona,
           codigo_contacto: readString(detail, "codigo_contacto") || readString(detail, "legacy_contacto_codigo"),
