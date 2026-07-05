@@ -80,6 +80,9 @@ export function UserProfileForm({ profile }: { profile: UserProfileResponse }) {
             <Badge variant={profile.mail.habilitado ? "default" : "outline"}>
               {profile.mail.habilitado ? "Conexión activa" : "Conexión desactivada"}
             </Badge>
+            {!profile.mail.habilitado && profile.mail.configurado ? (
+              <Badge variant="destructive">Configurado pero apagado</Badge>
+            ) : null}
             {profile.mail.password_configured ? (
               <Badge variant="secondary">Credenciales guardadas</Badge>
             ) : (
@@ -134,22 +137,37 @@ export function UserProfileForm({ profile }: { profile: UserProfileResponse }) {
           <CardContent>
             <form action={mailAction} className="space-y-6">
               <input type="hidden" name="section" value="mail" />
-              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-                <div className="space-y-1">
-                  <p className="font-medium">Activar uso de tu correo</p>
-                  <p className="text-xs text-muted-foreground">
-                    Cuando la conexión esté completa, las cotizaciones usarán esta cuenta.
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="font-medium">Usar tu correo para enviar cotizaciones</p>
+                    <p className="text-xs text-muted-foreground">
+                      Actívalo para que la app envíe desde tu cuenta personal; si está apagado o incompleto, usa el correo del sistema.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={profile.mail.habilitado ? "default" : "outline"}>
+                      {profile.mail.habilitado ? "Activo" : "Apagado"}
+                    </Badge>
+                    <input type="hidden" name="mail_habilitado" value="false" />
+                    <Checkbox
+                      id="mail-enabled"
+                      name="mail_habilitado"
+                      value="true"
+                      defaultChecked={profile.mail.habilitado || profile.mail.configurado}
+                    />
+                  </div>
+                </div>
+                {profile.mail.configurado && !profile.mail.habilitado ? (
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                    Tu correo ya está configurado, pero está apagado. Enciéndelo para que las cotizaciones salgan desde esta cuenta.
                   </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input type="hidden" name="mail_habilitado" value="false" />
-                  <Checkbox
-                    id="mail-enabled"
-                    name="mail_habilitado"
-                    value="true"
-                    defaultChecked={profile.mail.habilitado}
-                  />
-                </div>
+                ) : null}
+                {!profile.mail.configurado ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Completa usuario, contraseña y servidor SMTP para que la cuenta quede lista.
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
