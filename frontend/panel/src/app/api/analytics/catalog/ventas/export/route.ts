@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { resolveOrganizacionId } from "@/lib/settings/org";
 
 export async function GET(request: Request) {
   const baseUrl = getPanelApiBaseUrl();
+  const organizacionId = await resolveOrganizacionId();
   let token: string;
   try {
     token = await resolvePanelApiToken();
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
     headers: {
       Accept: "text/csv",
       Authorization: `Bearer ${token}`,
+      ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
     },
     cache: "no-store",
   });

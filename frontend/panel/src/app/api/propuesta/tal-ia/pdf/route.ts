@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 import { resolveProspeccionAccessToken } from "@/app/api/prospeccion/prospectos/proxy-helpers"
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 type ProxyOptions = {
   method: "GET" | "POST"
@@ -15,9 +16,13 @@ async function proxyPdfRequest({ method, body }: ProxyOptions) {
   }
 
   const backendUrl = new URL(`${getPanelApiBaseUrl()}/propuesta/tal-ia/pdf`)
+  const organizacionId = await resolveOrganizacionId()
   const headers = new Headers()
   headers.set("Accept", "application/pdf")
   headers.set("Authorization", `Bearer ${token}`)
+  if (organizacionId) {
+    headers.set("X-Organizacion-Id", organizacionId)
+  }
   if (method === "POST") {
     headers.set("Content-Type", "application/json")
   }

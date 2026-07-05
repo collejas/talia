@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { resolveOrganizacionId } from "@/lib/settings/org";
 
 function safeJson(payload: string): Record<string, unknown> | null {
   try {
@@ -33,6 +34,7 @@ export async function POST(
 
   const body = await request.json().catch(() => ({}));
   let baseUrl: string;
+  const organizacionId = await resolveOrganizacionId();
   try {
     baseUrl = getPanelApiBaseUrl();
   } catch (error) {
@@ -45,6 +47,7 @@ export async function POST(
       Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
     },
     body: JSON.stringify(body ?? {}),
     cache: "no-store",
