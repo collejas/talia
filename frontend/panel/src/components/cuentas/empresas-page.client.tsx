@@ -26,8 +26,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
+import { usePermissions } from "@/hooks/use-permissions";
 import type { DataTableRow } from "@/components/data-table";
-import type { AccountAdvancedFilters, AccountCards, AccountFilters } from "@/lib/cuentas/types";
+import type { AccountAdvancedFilters, AccountCards } from "@/lib/cuentas/types";
 
 type Props = {
   rows: DataTableRow[];
@@ -83,26 +84,14 @@ function isStoredAccountFilters(value: unknown): value is StoredAccountFilters {
   );
 }
 
-function loadStoredAccountFilters(): StoredAccountFilters | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(ACCOUNT_FILTERS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!isStoredAccountFilters(parsed)) return null;
-    return {
-      searchTerm: parsed.searchTerm,
-      ownerFilter: parsed.ownerFilter,
-      createdFromFilter: parsed.createdFromFilter,
-      createdToFilter: parsed.createdToFilter,
-      advancedFilters: { ...DEFAULT_ADVANCED_FILTERS, ...parsed.advancedFilters },
-    };
-  } catch {
-    return null;
-  }
+function getAccountFiltersStorageKey(tenantKey: string): string {
+  const normalized = tenantKey.trim();
+  return normalized ? `${ACCOUNT_FILTERS_STORAGE_KEY}:${normalized}` : ACCOUNT_FILTERS_STORAGE_KEY;
 }
 
 export function EmpresasPageClient({ rows }: Props) {
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const tenantKey = permissionContext.organizacion_id?.trim() || "unknown";
   const [tableRows, setTableRows] = React.useState<DataTableRow[]>(rows);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -119,20 +108,46 @@ export function EmpresasPageClient({ rows }: Props) {
   }, [rows]);
 
   React.useEffect(() => {
-    const stored = loadStoredAccountFilters();
+    if (permissionsLoading) return;
+    const storageKey = getAccountFiltersStorageKey(tenantKey);
+    const stored = (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!isStoredAccountFilters(parsed)) return null;
+        return {
+          searchTerm: parsed.searchTerm,
+          ownerFilter: parsed.ownerFilter,
+          createdFromFilter: parsed.createdFromFilter,
+          createdToFilter: parsed.createdToFilter,
+          advancedFilters: { ...DEFAULT_ADVANCED_FILTERS, ...parsed.advancedFilters },
+        } as StoredAccountFilters;
+      } catch {
+        return null;
+      }
+    })();
     if (stored) {
       setSearchTerm(stored.searchTerm);
       setOwnerFilter(stored.ownerFilter);
       setCreatedFromFilter(stored.createdFromFilter);
       setCreatedToFilter(stored.createdToFilter);
       setAdvancedFilters(stored.advancedFilters);
+    } else {
+      setSearchTerm("");
+      setOwnerFilter("all");
+      setCreatedFromFilter("");
+      setCreatedToFilter("");
+      setAdvancedFilters({ ...DEFAULT_ADVANCED_FILTERS });
     }
     setFiltersHydrated(true);
-  }, []);
+  }, [permissionsLoading, tenantKey]);
 
   React.useEffect(() => {
     if (!filtersHydrated || typeof window === "undefined") return;
     try {
+      const storageKey = getAccountFiltersStorageKey(tenantKey);
       const payload: StoredAccountFilters = {
         searchTerm,
         ownerFilter,
@@ -140,11 +155,11 @@ export function EmpresasPageClient({ rows }: Props) {
         createdToFilter,
         advancedFilters,
       };
-      window.localStorage.setItem(ACCOUNT_FILTERS_STORAGE_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch {
       // Ignore persistence failures.
     }
-  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchTerm]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchTerm, tenantKey]);
 
   const tamanoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.tamanoOptions, advancedFilters.tamano),
