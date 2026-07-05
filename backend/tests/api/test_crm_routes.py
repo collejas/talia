@@ -2330,6 +2330,59 @@ async def test_list_opportunities_uses_lightweight_repo_call(
     assert captured["include_contact_rows"] is False
 
 
+@pytest.mark.asyncio
+async def test_list_sales_reps_scoped_to_organization(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seller_id = uuid.uuid4()
+    supervisor_id = uuid.uuid4()
+    organizacion_id = uuid.uuid4()
+    fake_repo.permission_context = {
+        "usuario_id": str(supervisor_id),
+        "organizacion_id": str(organizacion_id),
+        "es_admin": False,
+        "es_owner": False,
+        "permisos": ["pipeline.reassign.team"],
+    }
+    fake_repo.current_user_has_perm = AsyncMock(side_effect=lambda codigo: codigo == "pipeline.reassign.team")
+    fake_repo.list_supervised_sales_reps = AsyncMock(
+        return_value=[
+            {
+                "id": str(seller_id),
+                "nombre_completo": "Vendedor Demo",
+                "correo": "vendedor@example.com",
+                "telefono_e164": "+5215550000000",
+            }
+        ]
+    )
+    fake_repo.get_employee_vendor = AsyncMock(return_value={"usuario_id": str(supervisor_id), "es_vendedor": True})
+    fake_repo.list_users = AsyncMock(return_value=[{"id": str(supervisor_id), "nombre_completo": "Supervisor Demo"}])
+    monkeypatch.setattr(crm_routes, "CRMRepository", lambda *args, **kwargs: fake_repo)
+
+    resp = await client.get(
+        "/crm/usuarios/vendedores",
+        headers={
+            **_headers(include_user_token=True),
+            "X-Organizacion-Id": str(organizacion_id),
+            "X-Usuario-Id": str(supervisor_id),
+        },
+        params={"limit": "50", "scope": "team"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload
+    assert payload[0]["id"] == str(seller_id)
+
+    supervised_kwargs = fake_repo.list_supervised_sales_reps.await_args.kwargs
+    assert supervised_kwargs["organizacion_id"] == uuid.UUID(fake_repo.permission_context["organizacion_id"])
+    assert supervised_kwargs["supervisor_id"] == supervisor_id
+
+    employee_kwargs = fake_repo.get_employee_vendor.await_args.kwargs
+    assert employee_kwargs["organizacion_id"] == uuid.UUID(fake_repo.permission_context["organizacion_id"])
+    assert employee_kwargs["usuario_id"] == supervisor_id
+
+
 
 @pytest.mark.asyncio
 async def test_pipeline_board_filters_by_tablero(

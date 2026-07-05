@@ -533,23 +533,9 @@ function isStoredContactFilters(value: unknown): value is StoredContactFilters {
   );
 }
 
-function loadStoredContactFilters(): StoredContactFilters | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(CONTACT_FILTERS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!isStoredContactFilters(parsed)) return null;
-    return {
-      searchTerm: parsed.searchTerm,
-      ownerFilter: parsed.ownerFilter,
-      createdFromFilter: parsed.createdFromFilter,
-      createdToFilter: parsed.createdToFilter,
-      advancedFilters: { ...cloneDefaultAdvancedFilters(), ...parsed.advancedFilters },
-    };
-  } catch {
-    return null;
-  }
+function getContactFiltersStorageKey(tenantKey: string): string {
+  const normalized = tenantKey.trim();
+  return normalized ? `${CONTACT_FILTERS_STORAGE_KEY}:${normalized}` : CONTACT_FILTERS_STORAGE_KEY;
 }
 
 export function ContactsDataTable({
@@ -567,6 +553,7 @@ export function ContactsDataTable({
 }) {
   const router = useRouter();
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const tenantKey = permissionContext.organizacion_id?.trim() || "unknown";
   const [tableRows, setTableRows] = React.useState<ContactTableRow[]>(data);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const normalizedPerms = React.useMemo(
@@ -659,20 +646,46 @@ export function ContactsDataTable({
   const searchQuery = searchTerm.trim();
 
   React.useEffect(() => {
-    const stored = loadStoredContactFilters();
+    if (permissionsLoading) return;
+    const storageKey = getContactFiltersStorageKey(tenantKey);
+    const stored = (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!isStoredContactFilters(parsed)) return null;
+        return {
+          searchTerm: parsed.searchTerm,
+          ownerFilter: parsed.ownerFilter,
+          createdFromFilter: parsed.createdFromFilter,
+          createdToFilter: parsed.createdToFilter,
+          advancedFilters: { ...cloneDefaultAdvancedFilters(), ...parsed.advancedFilters },
+        } as StoredContactFilters;
+      } catch {
+        return null;
+      }
+    })();
     if (stored) {
       setSearchTerm(stored.searchTerm);
       setOwnerFilter(stored.ownerFilter);
       setCreatedFromFilter(stored.createdFromFilter);
       setCreatedToFilter(stored.createdToFilter);
       setAdvancedFilters(stored.advancedFilters);
+    } else {
+      setSearchTerm("");
+      setOwnerFilter("all");
+      setCreatedFromFilter("");
+      setCreatedToFilter("");
+      setAdvancedFilters(cloneDefaultAdvancedFilters());
     }
     setFiltersHydrated(true);
-  }, []);
+  }, [permissionsLoading, tenantKey]);
 
   React.useEffect(() => {
     if (!filtersHydrated || typeof window === "undefined") return;
     try {
+      const storageKey = getContactFiltersStorageKey(tenantKey);
       const payload: StoredContactFilters = {
         searchTerm,
         ownerFilter,
@@ -680,11 +693,11 @@ export function ContactsDataTable({
         createdToFilter,
         advancedFilters,
       };
-      window.localStorage.setItem(CONTACT_FILTERS_STORAGE_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch {
       // Ignore persistence failures.
     }
-  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchTerm]);
+  }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchTerm, tenantKey]);
 
   React.useEffect(() => {
     if (!filtersHydrated) return;
@@ -759,7 +772,11 @@ export function ContactsDataTable({
   }, [advancedFilters, createdFromFilter, createdToFilter, filtersHydrated, ownerFilter, searchQuery]);
 
   React.useEffect(() => {
-    if (permissionsLoading || !canReassign) return;
+    if (permissionsLoading || !canReassign) {
+      setVendorOptions([]);
+      setVendorError(null);
+      return;
+    }
     const controller = new AbortController();
 
     const run = async () => {
@@ -805,7 +822,7 @@ export function ContactsDataTable({
 
     run();
     return () => controller.abort();
-  }, [permissionsLoading, canReassign, canReassignAny]);
+  }, [permissionsLoading, canReassign, canReassignAny, tenantKey]);
 
   const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);

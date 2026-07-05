@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import type { ContactCatalogOption } from "@/components/contactos/contact-catalog-select"
+import { usePermissions } from "@/hooks/use-permissions"
 
 type CatalogsResponse = {
   catalogos?: Record<string, unknown> | null
@@ -41,6 +42,8 @@ function valuesToOptions(values: string[]): ContactCatalogOption[] {
 }
 
 export function useTenantContactCatalogs() {
+  const { context: permissionContext } = usePermissions()
+  const tenantKey = permissionContext.organizacion_id?.trim() || "unknown"
   const [puestoOptions, setPuestoOptions] = useState<ContactCatalogOption[]>([])
   const [rolDecisionOptions, setRolDecisionOptions] = useState<ContactCatalogOption[]>([])
   const [clasificacionNegocioOptions, setClasificacionNegocioOptions] = useState<ContactCatalogOption[]>([])
@@ -54,6 +57,7 @@ export function useTenantContactCatalogs() {
     const controller = new AbortController()
 
     const load = async () => {
+      setLoading(true)
       try {
         const response = await fetch("/api/personas/catalogos/config", {
           method: "GET",
@@ -106,10 +110,17 @@ export function useTenantContactCatalogs() {
       }
     }
 
+    setPuestoOptions([])
+    setRolDecisionOptions([])
+    setClasificacionNegocioOptions([])
+    setTamanoOptions([])
+    setUsoCfdiOptions([])
+    setFormaPagoOptions([])
+    setMetodoPagoOptions([])
     void load()
 
     return () => controller.abort()
-  }, [])
+  }, [tenantKey])
 
   return useMemo(
     () => ({

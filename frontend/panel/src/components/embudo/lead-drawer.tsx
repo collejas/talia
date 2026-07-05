@@ -923,6 +923,7 @@ export function LeadDrawer({
   const [activityError, setActivityError] = useState<string | null>(null);
 
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const tenantKey = permissionContext.organizacion_id?.trim() || "unknown";
   const normalizedPerms = useMemo(
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
@@ -1150,6 +1151,11 @@ export function LeadDrawer({
     fetchVendors();
     return () => controller.abort();
   }, [open, isCreateMode, card, canReassign, canReassignAny, permissionsLoading]);
+
+  useEffect(() => {
+    setVendorOptions([]);
+    setVendorError(null);
+  }, [tenantKey]);
 
   useEffect(() => {
     if (!computedQuoteTotals) return;

@@ -54,6 +54,7 @@ type Props = {
   filterOptions?: OportunidadesFilterOptions;
   filterInitial?: Partial<OportunidadesFiltersState>;
   permissionContext?: {
+    organizacion_id?: string;
     roles?: string[];
     permisos?: string[];
     es_admin?: boolean;
@@ -69,6 +70,7 @@ export function OportunidadesTableClient({
   permissionContext,
 }: Props) {
   const router = useRouter();
+  const tenantKey = permissionContext?.organizacion_id?.trim() || "unknown";
   const [resolvedFilterOptions, setResolvedFilterOptions] = useState<OportunidadesFilterOptions | undefined>(
     filterOptions,
   );
@@ -125,8 +127,8 @@ export function OportunidadesTableClient({
   const [vendorError, setVendorError] = useState<string | null>(null);
 
   useEffect(() => {
-    setResolvedFilterOptions((current) => mergeFilterOptions(current ?? filterOptions, filterOptions));
-  }, [filterOptions]);
+    setResolvedFilterOptions(filterOptions);
+  }, [filterOptions, tenantKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -142,7 +144,9 @@ export function OportunidadesTableClient({
           return response.json();
         })
         .then((json) => {
-          setResolvedFilterOptions((current) => mergeFilterOptions(current, json as OportunidadesFilterOptions));
+          setResolvedFilterOptions(
+            mergeFilterOptions(filterOptions, json as OportunidadesFilterOptions),
+          );
         })
         .catch((error) => {
           if ((error as Error).name === "AbortError") return;
@@ -153,10 +157,12 @@ export function OportunidadesTableClient({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, []);
+  }, [filterOptions]);
 
   useEffect(() => {
     if (!canReassign) {
+      setVendorOptions([]);
+      setVendorError(null);
       return;
     }
     const controller = new AbortController();
@@ -200,7 +206,7 @@ export function OportunidadesTableClient({
     };
     fetchVendors();
     return () => controller.abort();
-  }, [canReassign, canReassignAny]);
+  }, [canReassign, canReassignAny, tenantKey]);
 
   const handleReassign = async (row: DataTableRow, vendorId: string) => {
     const raw = row.raw as Record<string, unknown> | undefined;

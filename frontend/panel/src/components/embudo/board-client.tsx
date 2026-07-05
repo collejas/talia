@@ -316,6 +316,7 @@ export function EmbudoBoardClient({
   const [draftEtapaIds, setDraftEtapaIds] = useState<string[]>([]);
 
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const tenantKey = permissionContext.organizacion_id?.trim() || "unknown";
   const normalizedRoles = permissionContext.roles
     .map((role) => (role ?? "").toString().trim().toLowerCase())
     .filter(Boolean);
@@ -605,10 +606,15 @@ export function EmbudoBoardClient({
   }, [showVendorFilter]);
 
   useEffect(() => {
+    setVendorOptions([]);
+    setVendorError(null);
+  }, [tenantKey]);
+
+  useEffect(() => {
     if (showVendorFilter && !vendorOptions.length) {
       void fetchSupervisedVendors();
     }
-  }, [showVendorFilter, vendorOptions.length, fetchSupervisedVendors]);
+  }, [fetchSupervisedVendors, showVendorFilter, tenantKey, vendorOptions.length]);
 
   const defaultCreateStage = useMemo(() => sortStages(stages)[0] ?? null, [stages]);
 
