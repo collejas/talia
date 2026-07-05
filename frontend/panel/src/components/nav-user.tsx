@@ -116,11 +116,11 @@ export function NavUser({
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault()
-                  void router.push("/settings/account")
+                  void router.push("/user")
                 }}
               >
                 <IconUserCircle />
-                Account
+                User
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconCreditCard />

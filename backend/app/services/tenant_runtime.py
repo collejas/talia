@@ -620,6 +620,11 @@ class MailRuntimeSettings:
         )
 
 
+def build_user_mail_secret_aad(*, organizacion_id: UUID, usuario_id: UUID, clave: str) -> str:
+    normalized_key = clave.strip().lower()
+    return f"org:{organizacion_id}:user:{usuario_id}:key:{normalized_key}"
+
+
 def _coerce_bool(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -733,6 +738,102 @@ async def get_mail_runtime_settings(
     password_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="mail.password")
     if password_secret:
         settings_payload.password = password_secret
+
+    return settings_payload
+
+
+async def get_user_mail_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+    usuario_id: UUID | None = None,
+) -> MailRuntimeSettings:
+    settings_payload = await get_mail_runtime_settings(organizacion_id=organizacion_id)
+    if organizacion_id is None or usuario_id is None:
+        return settings_payload
+
+    data = await _supabase_get(
+        "/rest/v1/usuarios_correo_config",
+        params={
+            "select": (
+                "usuario_id,organizacion_id,mail_habilitado,mail_username,mail_password_nonce,"
+                "mail_password_ciphertext,mail_incoming_server,mail_incoming_port_imap,"
+                "mail_outgoing_server,mail_outgoing_port_smtp,mail_use_ssl,mail_use_tls,"
+                "mail_from_name,mail_reply_to,actualizado_en"
+            ),
+            "organizacion_id": f"eq.{organizacion_id}",
+            "usuario_id": f"eq.{usuario_id}",
+            "limit": "1",
+        },
+    )
+    if not isinstance(data, list) or not data:
+        return settings_payload
+
+    row = data[0] if isinstance(data[0], dict) else None
+    if not isinstance(row, dict):
+        return settings_payload
+
+    if row.get("mail_habilitado") is False:
+        return settings_payload
+
+    username = _coerce_str(row.get("mail_username"))
+    outgoing_server = _coerce_str(row.get("mail_outgoing_server"))
+    outgoing_port = _coerce_int_or_none(row.get("mail_outgoing_port_smtp"))
+    password_ciphertext = _coerce_str(row.get("mail_password_ciphertext"))
+    password_nonce = _coerce_str(row.get("mail_password_nonce"))
+
+    if not username or not outgoing_server or outgoing_port is None or not password_ciphertext or not password_nonce:
+        return settings_payload
+
+    master_key = settings.secrets_master_key
+    if not master_key:
+        logger.warning(
+            "tenant_runtime.user_mail_master_key_missing",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(usuario_id),
+            },
+        )
+        return settings_payload
+
+    aad = build_user_mail_secret_aad(
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        clave="mail.password",
+    )
+    try:
+        plaintext_password = decrypt_secret(
+            nonce_b64=password_nonce,
+            ciphertext_b64=password_ciphertext,
+            master_key=master_key,
+            aad=aad,
+        )
+    except SecretsCryptoError as exc:
+        logger.warning(
+            "tenant_runtime.user_mail_decrypt_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(usuario_id),
+                "error": str(exc),
+            },
+        )
+        return settings_payload
+
+    settings_payload.username = username
+    settings_payload.password = plaintext_password
+    settings_payload.incoming_server = _coerce_str(row.get("mail_incoming_server")) or settings_payload.incoming_server
+    incoming_port = _coerce_int_or_none(row.get("mail_incoming_port_imap"))
+    if incoming_port is not None:
+        settings_payload.incoming_port_imap = incoming_port
+    settings_payload.outgoing_server = outgoing_server
+    settings_payload.outgoing_port_smtp = outgoing_port
+    settings_payload.use_ssl = _coerce_bool(row.get("mail_use_ssl"), settings_payload.use_ssl)
+    settings_payload.use_tls = _coerce_bool(row.get("mail_use_tls"), settings_payload.use_tls)
+    from_name = _coerce_str(row.get("mail_from_name"))
+    if from_name is not None:
+        settings_payload.from_name = from_name
+    reply_to = _coerce_str(row.get("mail_reply_to"))
+    if reply_to is not None:
+        settings_payload.reply_to = reply_to
 
     return settings_payload
 

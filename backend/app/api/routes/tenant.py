@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.api.routes.admin import (
     ChannelRoute,
@@ -202,6 +203,149 @@ class TenantScopedUpdateRequest(BaseModel):
     regimen_fiscal: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
+
+
+class UserMailConnectionState(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    habilitado: bool = False
+    configurado: bool = False
+    usa_fallback_sistema: bool = True
+    username: str | None = None
+    incoming_server: str | None = None
+    incoming_port_imap: int | None = None
+    outgoing_server: str | None = None
+    outgoing_port_smtp: int | None = None
+    use_ssl: bool = False
+    use_tls: bool = True
+    from_name: str | None = None
+    reply_to: str | None = None
+    password_configured: bool = False
+
+
+class UserProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    organizacion_id: UUID
+    usuario_id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+    telefono_e164: str | None = None
+    timezone: str | None = None
+    mail: UserMailConnectionState
+
+
+class UserProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre_completo: str | None = Field(default=None, max_length=255)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    timezone: str | None = Field(default=None, max_length=64)
+    mail_habilitado: bool | None = None
+    mail_username: EmailStr | None = None
+    mail_password: str | None = Field(default=None, max_length=512)
+    mail_incoming_server: str | None = Field(default=None, max_length=255)
+    mail_incoming_port_imap: int | None = Field(default=None, ge=1, le=65535)
+    mail_outgoing_server: str | None = Field(default=None, max_length=255)
+    mail_outgoing_port_smtp: int | None = Field(default=None, ge=1, le=65535)
+    mail_use_ssl: bool | None = None
+    mail_use_tls: bool | None = None
+    mail_from_name: str | None = Field(default=None, max_length=255)
+    mail_reply_to: EmailStr | None = None
+
+
+def _clean_optional_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
+def _normalize_optional_timezone(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    trimmed = raw.strip()
+    if not trimmed:
+        return None
+    try:
+        ZoneInfo(trimmed)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="timezone_invalida") from exc
+    return trimmed
+
+
+def _normalize_optional_phone(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    trimmed = raw.strip()
+    if not trimmed:
+        return None
+    normalized = trimmed.replace(" ", "")
+    if not normalized.startswith("+") or not normalized[1:].isdigit() or len(normalized) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="telefono_invalido",
+        )
+    return normalized
+
+
+def _mail_connection_ready(row: dict[str, Any] | None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    if row.get("mail_habilitado") is False:
+        return False
+    required = [
+        _clean_optional_text(row.get("mail_username")),
+        _clean_optional_text(row.get("mail_password_ciphertext")),
+        _clean_optional_text(row.get("mail_password_nonce")),
+        _clean_optional_text(row.get("mail_outgoing_server")),
+        row.get("mail_outgoing_port_smtp"),
+    ]
+    return all(value is not None and value != "" for value in required)
+
+
+def _build_mail_state(row: dict[str, Any] | None) -> UserMailConnectionState:
+    if not isinstance(row, dict):
+        return UserMailConnectionState()
+    configured = _mail_connection_ready(row)
+    enabled = bool(row.get("mail_habilitado"))
+    return UserMailConnectionState(
+        habilitado=enabled,
+        configurado=configured,
+        usa_fallback_sistema=not configured,
+        username=_clean_optional_text(row.get("mail_username")),
+        incoming_server=_clean_optional_text(row.get("mail_incoming_server")),
+        incoming_port_imap=row.get("mail_incoming_port_imap"),
+        outgoing_server=_clean_optional_text(row.get("mail_outgoing_server")),
+        outgoing_port_smtp=row.get("mail_outgoing_port_smtp"),
+        use_ssl=bool(row.get("mail_use_ssl")) if row.get("mail_use_ssl") is not None else False,
+        use_tls=bool(row.get("mail_use_tls")) if row.get("mail_use_tls") is not None else True,
+        from_name=_clean_optional_text(row.get("mail_from_name")),
+        reply_to=_clean_optional_text(row.get("mail_reply_to")),
+        password_configured=bool(_clean_optional_text(row.get("mail_password_ciphertext"))),
+    )
+
+
+async def _load_user_profile_response(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    usuario_id: UUID,
+) -> UserProfileResponse:
+    user_row = await repo.get_user_by_id(organizacion_id=organizacion_id, usuario_id=usuario_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    mail_row = await repo.get_user_mail_config(organizacion_id=organizacion_id, usuario_id=usuario_id)
+    return UserProfileResponse(
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        nombre_completo=_clean_optional_text(user_row.get("nombre_completo")),
+        correo=_clean_optional_text(user_row.get("correo")),
+        telefono_e164=_clean_optional_text(user_row.get("telefono_e164")),
+        timezone=_clean_optional_text(user_row.get("timezone")),
+        mail=_build_mail_state(mail_row),
+    )
 
 
 class TenantSecretEntry(BaseModel):
@@ -446,6 +590,152 @@ async def update_tenant_settings(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+@router.get("/me/profile", response_model=UserProfileResponse)
+async def get_user_profile(
+    context: TenantContext = Depends(require_tenant_context),
+    repo: CRMRepository = Depends(get_crm_repo),
+) -> UserProfileResponse:
+    return await _load_user_profile_response(
+        repo=repo,
+        organizacion_id=context.organizacion_id,
+        usuario_id=context.user_id,
+    )
+
+
+@router.put("/me/profile", response_model=UserProfileResponse)
+async def update_user_profile(
+    payload: UserProfileUpdateRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: CRMRepository = Depends(get_crm_repo),
+) -> UserProfileResponse:
+    user_updates: dict[str, Any] = {}
+    if payload.nombre_completo is not None:
+        user_updates["nombre_completo"] = _clean_optional_text(payload.nombre_completo)
+    if payload.telefono_e164 is not None:
+        user_updates["telefono_e164"] = _normalize_optional_phone(payload.telefono_e164)
+    if payload.timezone is not None:
+        user_updates["timezone"] = _normalize_optional_timezone(payload.timezone)
+
+    if user_updates:
+        try:
+            await repo.update_user_profile_by_id(
+                organizacion_id=context.organizacion_id,
+                usuario_id=context.user_id,
+                payload=user_updates,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    mail_fields_present = any(
+        value is not None
+        for value in (
+            payload.mail_habilitado,
+            payload.mail_username,
+            payload.mail_password,
+            payload.mail_incoming_server,
+            payload.mail_incoming_port_imap,
+            payload.mail_outgoing_server,
+            payload.mail_outgoing_port_smtp,
+            payload.mail_use_ssl,
+            payload.mail_use_tls,
+            payload.mail_from_name,
+            payload.mail_reply_to,
+        )
+    )
+    if mail_fields_present:
+        current_mail_row = await repo.get_user_mail_config(
+            organizacion_id=context.organizacion_id,
+            usuario_id=context.user_id,
+        )
+        merged_mail: dict[str, Any] = dict(current_mail_row or {})
+
+        if payload.mail_habilitado is not None:
+            merged_mail["mail_habilitado"] = payload.mail_habilitado
+        if payload.mail_username is not None:
+            merged_mail["mail_username"] = _clean_optional_text(str(payload.mail_username))
+        if payload.mail_incoming_server is not None:
+            merged_mail["mail_incoming_server"] = _clean_optional_text(payload.mail_incoming_server)
+        if payload.mail_incoming_port_imap is not None:
+            merged_mail["mail_incoming_port_imap"] = payload.mail_incoming_port_imap
+        if payload.mail_outgoing_server is not None:
+            merged_mail["mail_outgoing_server"] = _clean_optional_text(payload.mail_outgoing_server)
+        if payload.mail_outgoing_port_smtp is not None:
+            merged_mail["mail_outgoing_port_smtp"] = payload.mail_outgoing_port_smtp
+        if payload.mail_use_ssl is not None:
+            merged_mail["mail_use_ssl"] = payload.mail_use_ssl
+        if payload.mail_use_tls is not None:
+            merged_mail["mail_use_tls"] = payload.mail_use_tls
+        if payload.mail_from_name is not None:
+            merged_mail["mail_from_name"] = _clean_optional_text(payload.mail_from_name)
+        if payload.mail_reply_to is not None:
+            merged_mail["mail_reply_to"] = _clean_optional_text(str(payload.mail_reply_to))
+
+        if payload.mail_password is not None:
+            password = payload.mail_password.strip()
+            if password:
+                aad = tenant_runtime.build_user_mail_secret_aad(
+                    organizacion_id=context.organizacion_id,
+                    usuario_id=context.user_id,
+                    clave="mail.password",
+                )
+                try:
+                    nonce_b64, ciphertext_b64 = encrypt_secret(
+                        plaintext=password,
+                        master_key=_get_master_key_for_tier("A"),
+                        aad=aad,
+                    )
+                except SecretsCryptoError as exc:
+                    raise HTTPException(status_code=500, detail=str(exc)) from exc
+                merged_mail["mail_password_nonce"] = nonce_b64
+                merged_mail["mail_password_ciphertext"] = ciphertext_b64
+
+        merged_mail.setdefault("mail_habilitado", True)
+        merged_mail = {
+            key: value
+            for key, value in merged_mail.items()
+            if key
+            in {
+                "mail_habilitado",
+                "mail_username",
+                "mail_password_nonce",
+                "mail_password_ciphertext",
+                "mail_incoming_server",
+                "mail_incoming_port_imap",
+                "mail_outgoing_server",
+                "mail_outgoing_port_smtp",
+                "mail_use_ssl",
+                "mail_use_tls",
+                "mail_from_name",
+                "mail_reply_to",
+            }
+        }
+        try:
+            await repo.upsert_user_mail_config(
+                organizacion_id=context.organizacion_id,
+                usuario_id=context.user_id,
+                payload=merged_mail,
+            )
+        except CRMRepositoryError as exc:
+            logger.exception(
+                "tenant_user_mail_profile_update_failed",
+                extra={
+                    "organizacion_id": str(context.organizacion_id),
+                    "usuario_id": str(context.user_id),
+                    "mail_habilitado": merged_mail.get("mail_habilitado"),
+                    "mail_username_present": bool(merged_mail.get("mail_username")),
+                    "mail_incoming_server_present": bool(merged_mail.get("mail_incoming_server")),
+                    "mail_outgoing_server_present": bool(merged_mail.get("mail_outgoing_server")),
+                },
+            )
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return await _load_user_profile_response(
+        repo=repo,
+        organizacion_id=context.organizacion_id,
+        usuario_id=context.user_id,
+    )
 
 
 @router.post("/me/secrets", response_model=TenantSecretsResponse)

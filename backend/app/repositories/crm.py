@@ -2209,6 +2209,156 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios por id: {data!r}")
         return data
 
+    async def get_user_by_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{usuario_id}",
+            "select": "id,nombre_completo,correo,telefono_e164,timezone,organizacion_id",
+            "limit": "1",
+        }
+        resp = await self._request_service_role("GET", "/rest/v1/usuarios", params=params, organizacion_id=organizacion_id)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def update_user_profile_by_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._request_service_role(
+            "PATCH",
+            "/rest/v1/usuarios",
+            params={"organizacion_id": f"eq.{organizacion_id}", "id": f"eq.{usuario_id}"},
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("usuario_update_failed")
+        return data[0]
+
+    async def get_user_mail_config(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "usuario_id": f"eq.{usuario_id}",
+            "select": (
+                "usuario_id,organizacion_id,mail_habilitado,mail_username,mail_password_nonce,"
+                "mail_password_ciphertext,mail_incoming_server,mail_incoming_port_imap,"
+                "mail_outgoing_server,mail_outgoing_port_smtp,mail_use_ssl,mail_use_tls,"
+                "mail_from_name,mail_reply_to,creado_en,actualizado_en"
+            ),
+            "limit": "1",
+        }
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/usuarios_correo_config",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def upsert_user_mail_config(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "usuario_id": str(usuario_id),
+            **payload,
+        }
+        log_payload = {
+            "organizacion_id": str(organizacion_id),
+            "usuario_id": str(usuario_id),
+            "mail_habilitado": body.get("mail_habilitado"),
+            "mail_username_present": bool(body.get("mail_username")),
+            "mail_password_nonce_present": bool(body.get("mail_password_nonce")),
+            "mail_password_ciphertext_present": bool(body.get("mail_password_ciphertext")),
+            "mail_incoming_server_present": bool(body.get("mail_incoming_server")),
+            "mail_incoming_port_imap": body.get("mail_incoming_port_imap"),
+            "mail_outgoing_server_present": bool(body.get("mail_outgoing_server")),
+            "mail_outgoing_port_smtp": body.get("mail_outgoing_port_smtp"),
+            "mail_use_ssl": body.get("mail_use_ssl"),
+            "mail_use_tls": body.get("mail_use_tls"),
+            "mail_from_name_present": bool(body.get("mail_from_name")),
+            "mail_reply_to_present": bool(body.get("mail_reply_to")),
+        }
+        logger.info("crm.user_mail_config_upsert_start", extra=log_payload)
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/usuarios_correo_config",
+            params={"on_conflict": "usuario_id"},
+            json=body,
+            prefer="resolution=merge-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        try:
+            data = resp.json()
+        except Exception:
+            logger.warning(
+                "crm.user_mail_config_upsert_non_json_response",
+                extra={
+                    **log_payload,
+                    "status_code": resp.status_code,
+                    "response_text": resp.text[:500],
+                },
+            )
+            data = None
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            logger.info(
+                "crm.user_mail_config_upsert_success",
+                extra={**log_payload, "result_shape": "list", "result_count": len(data)},
+            )
+            return data[0]
+        if isinstance(data, dict):
+            logger.info(
+                "crm.user_mail_config_upsert_success",
+                extra={**log_payload, "result_shape": "dict"},
+            )
+            return data
+        refreshed = await self.get_user_mail_config(
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+        )
+        if isinstance(refreshed, dict):
+            logger.info(
+                "crm.user_mail_config_upsert_refreshed_success",
+                extra=log_payload,
+            )
+            return refreshed
+        logger.error(
+            "crm.user_mail_config_upsert_failed",
+            extra={
+                **log_payload,
+                "status_code": resp.status_code,
+                "response_text": resp.text[:500],
+            },
+        )
+        raise CRMRepositoryError(
+            f"usuario_mail_config_upsert_failed:{resp.status_code}:{resp.text[:300]}"
+        )
+
     async def list_users_with_primary_role_by_ids(
         self,
         *,

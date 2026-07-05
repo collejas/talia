@@ -2215,6 +2215,7 @@ async def _resolve_quote_vendor_context(
     tenant_country: str | None = None
     tenant_website: str | None = None
     quote_vendor_settings: dict[str, Any] | None = None
+    seller_user_id: UUID | None = None
     try:
         platform_repo = PlatformRepository()
         tenant_row = await platform_repo.get_organizacion_details(organizacion_id=organizacion_id)
@@ -2247,25 +2248,26 @@ async def _resolve_quote_vendor_context(
     seller_phone = _clean_text(seller_row.get("telefono_e164"))
     seller_email = _clean_text(seller_row.get("correo"))
 
-    if (not seller_name or not seller_phone) and opportunity.get("propietario_usuario_id"):
-        owner_id = _safe_uuid(opportunity.get("propietario_usuario_id"))
-        if owner_id is None:
-            owner_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
-        if owner_id is not None:
-            try:
-                users = await repo.list_users_by_ids(
-                    organizacion_id=organizacion_id,
-                    user_ids=[owner_id],
-                )
-            except CRMRepositoryError:
-                users = []
-            if users and isinstance(users[0], dict):
-                user_row = users[0]
-                seller_name = seller_name or _clean_text(
-                    user_row.get("nombre_completo") or user_row.get("correo")
-                )
-                seller_phone = seller_phone or _clean_text(user_row.get("telefono_e164"))
-                seller_email = seller_email or _clean_text(user_row.get("correo"))
+    owner_id = _safe_uuid(opportunity.get("propietario_usuario_id"))
+    if owner_id is None:
+        owner_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+    seller_user_id = owner_id
+
+    if (not seller_name or not seller_phone) and seller_user_id is not None:
+        try:
+            users = await repo.list_users_by_ids(
+                organizacion_id=organizacion_id,
+                user_ids=[seller_user_id],
+            )
+        except CRMRepositoryError:
+            users = []
+        if users and isinstance(users[0], dict):
+            user_row = users[0]
+            seller_name = seller_name or _clean_text(
+                user_row.get("nombre_completo") or user_row.get("correo")
+            )
+            seller_phone = seller_phone or _clean_text(user_row.get("telefono_e164"))
+            seller_email = seller_email or _clean_text(user_row.get("correo"))
 
     return {
         "organization_name": tenant_name,
@@ -2286,6 +2288,7 @@ async def _resolve_quote_vendor_context(
         "vendor_assessor_name": seller_name,
         "vendor_assessor_phone": seller_phone,
         "vendor_assessor_email": seller_email,
+        "seller_user_id": str(seller_user_id) if seller_user_id else None,
         "quote_vendor_settings": quote_vendor_settings,
     }
 
@@ -2400,6 +2403,28 @@ def _resolve_quote_valid_until(
     return date.today() + timedelta(days=validity_days)
 
 
+async def _resolve_quote_sender_runtime(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity: Mapping[str, Any],
+    usuario_id: UUID | None = None,
+) -> tuple[dict[str, Any], tenant_runtime.MailRuntimeSettings]:
+    vendor_context = await _resolve_quote_vendor_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity,
+    )
+    seller_user_id = _safe_uuid(vendor_context.get("seller_user_id"))
+    if seller_user_id is None:
+        seller_user_id = usuario_id
+    mail_settings = await tenant_runtime.get_user_mail_runtime_settings(
+        organizacion_id=organizacion_id,
+        usuario_id=seller_user_id,
+    )
+    return vendor_context, mail_settings
+
+
 async def _build_quote_pdf_context_from_quote_entry(
     *,
     repo: CRMRepository,
@@ -2411,19 +2436,17 @@ async def _build_quote_pdf_context_from_quote_entry(
     contact = _single_related(opportunity_row.get("contacto")) or {}
     cuenta = _single_related(opportunity_row.get("cuenta")) or {}
     opportunity_metadata = _ensure_dict(opportunity_row.get("metadata"), default={})
-    mail_settings = await tenant_runtime.get_mail_runtime_settings(
-        organizacion_id=organizacion_id
+    vendor_context, mail_settings = await _resolve_quote_sender_runtime(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        opportunity=opportunity_row,
+        usuario_id=usuario_id,
     )
     lead_label = (
         opportunity_row.get("titulo")
         or contact.get("nombre_completo")
         or cuenta.get("nombre")
         or "Oportunidad sin nombre"
-    )
-    vendor_context = await _resolve_quote_vendor_context(
-        repo=repo,
-        organizacion_id=organizacion_id,
-        opportunity=opportunity_row,
     )
     quote_display_timezone = await _resolve_quote_display_timezone_name(
         repo=repo,
@@ -27713,9 +27736,6 @@ async def create_lead_quote(
     contact = _single_related(opportunity.get("contacto")) or {}
     cuenta = _single_related(opportunity.get("cuenta")) or {}
     oportunidad_metadata = _ensure_dict(opportunity.get("metadata"), default={})
-    mail_settings = await tenant_runtime.get_mail_runtime_settings(
-        organizacion_id=organizacion_id
-    )
     lead_label = (
         opportunity.get("titulo")
         or contact.get("nombre_completo")
@@ -27734,10 +27754,11 @@ async def create_lead_quote(
         body["total"] = totals["total"]
     conceptos_context = body.get("conceptos") or _concepts_from_items(normalized_items)
     project_description = _clean_text(body.get("descripcion")) or None
-    vendor_context = await _resolve_quote_vendor_context(
+    vendor_context, mail_settings = await _resolve_quote_sender_runtime(
         repo=repo,
         organizacion_id=organizacion_id,
         opportunity=opportunity,
+        usuario_id=usuario_id,
     )
     quote_display_timezone = await _resolve_quote_display_timezone_name(
         repo=repo,
@@ -27870,9 +27891,6 @@ async def preview_lead_quote_pdf(
     contact = _single_related(opportunity_row.get("contacto")) or {}
     cuenta = _single_related(opportunity_row.get("cuenta")) or {}
     oportunidad_metadata = _ensure_dict(opportunity_row.get("metadata"), default={})
-    mail_settings = await tenant_runtime.get_mail_runtime_settings(
-        organizacion_id=organizacion_id
-    )
     lead_label = (
         opportunity_row.get("titulo")
         or contact.get("nombre_completo")
@@ -27893,10 +27911,11 @@ async def preview_lead_quote_pdf(
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
     project_description = _clean_text(base_payload.descripcion) or None
-    vendor_context = await _resolve_quote_vendor_context(
+    vendor_context, mail_settings = await _resolve_quote_sender_runtime(
         repo=repo,
         organizacion_id=organizacion_id,
         opportunity=opportunity_row,
+        usuario_id=usuario_id,
     )
     quote_display_timezone = await _resolve_quote_display_timezone_name(
         repo=repo,
@@ -28037,12 +28056,6 @@ async def send_lead_quote(
     contact = _single_related(oportunidad_row.get("contacto")) or {}
     cuenta = _single_related(oportunidad_row.get("cuenta")) or {}
     oportunidad_metadata = _ensure_dict(oportunidad_row.get("metadata"), default={})
-    mail_settings = await tenant_runtime.get_mail_runtime_settings(
-        organizacion_id=organizacion_id
-    )
-    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(
-        organizacion_id=organizacion_id
-    )
     lead_label = (
         oportunidad_row.get("titulo")
         or contact.get("nombre_completo")
@@ -28089,10 +28102,11 @@ async def send_lead_quote(
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
     project_description = _clean_text(base_payload.descripcion) or None
-    vendor_context = await _resolve_quote_vendor_context(
+    vendor_context, mail_settings = await _resolve_quote_sender_runtime(
         repo=repo,
         organizacion_id=organizacion_id,
         opportunity=oportunidad_row,
+        usuario_id=usuario_id,
     )
     quote_display_timezone = await _resolve_quote_display_timezone_name(
         repo=repo,
@@ -28268,7 +28282,7 @@ async def send_lead_quote(
                     *attachment_payloads,
                 ],
                 mail_settings=mail_settings,
-                brevo_settings=brevo_settings,
+                provider_preference="smtp",
             )
         except EmailSendError as exc:
             raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
