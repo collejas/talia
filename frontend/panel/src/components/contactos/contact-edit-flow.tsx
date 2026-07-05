@@ -534,6 +534,52 @@ function buildFullName(persona: PersonaDraft): string {
     .trim();
 }
 
+function splitDisplayName(value: string): { nombre: string; apellidoPaterno: string; apellidoMaterno: string } {
+  const cleaned = value.trim().replace(/,/g, " ").replace(/\s+/g, " ");
+  if (!cleaned) {
+    return { nombre: "", apellidoPaterno: "", apellidoMaterno: "" };
+  }
+
+  const parts = cleaned.split(" ").filter(Boolean);
+  if (parts.length <= 1) {
+    return { nombre: parts[0] || "", apellidoPaterno: "", apellidoMaterno: "" };
+  }
+  if (parts.length === 2) {
+    return { nombre: parts[0], apellidoPaterno: parts[1], apellidoMaterno: "" };
+  }
+  if (parts.length === 3) {
+    return { nombre: parts[0], apellidoPaterno: parts[1], apellidoMaterno: parts[2] };
+  }
+
+  return {
+    nombre: parts.slice(0, -2).join(" "),
+    apellidoPaterno: parts[parts.length - 2],
+    apellidoMaterno: parts[parts.length - 1],
+  };
+}
+
+function getHydratedPersonaName(detail: Record<string, unknown>): { nombre: string; apellidoPaterno: string; apellidoMaterno: string } {
+  const explicitNombre = readString(detail, "nombre_nombres");
+  const explicitApellidoPaterno = readString(detail, "apellido_paterno");
+  const explicitApellidoMaterno = readString(detail, "apellido_materno");
+  if (explicitNombre || explicitApellidoPaterno || explicitApellidoMaterno) {
+    if (explicitNombre && !explicitApellidoPaterno && !explicitApellidoMaterno) {
+      return splitDisplayName(explicitNombre);
+    }
+    return {
+      nombre: explicitNombre || "",
+      apellidoPaterno: explicitApellidoPaterno || "",
+      apellidoMaterno: explicitApellidoMaterno || "",
+    };
+  }
+
+  const fromNombreCompleto = readString(detail, "nombre_completo") || readString(detail, "nombre");
+  if (!fromNombreCompleto) {
+    return { nombre: "", apellidoPaterno: "", apellidoMaterno: "" };
+  }
+  return splitDisplayName(fromNombreCompleto);
+}
+
 function cleanObject<T extends Record<string, unknown>>(
   input: T,
   options?: { keepEmptyStringsAsNull?: boolean },
@@ -708,6 +754,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
     case "hydrate": {
       const detail = action.detail;
       const mode = inferMode(detail);
+      const hydratedName = getHydratedPersonaName(detail);
       const hasFiscalOrAddressData = [
         "regimen_capital",
         "uso_cfdi",
@@ -743,12 +790,15 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         ...INITIAL_STATE,
         loadedId: action.personaId,
         mode,
+        personaNombre: hydratedName.nombre,
+        personaApellidoPaterno: hydratedName.apellidoPaterno,
+        personaApellidoMaterno: hydratedName.apellidoMaterno,
         persona: {
           ...INITIAL_STATE.persona,
           codigo_contacto: readString(detail, "codigo_contacto") || readString(detail, "legacy_contacto_codigo"),
-          nombre: readString(detail, "nombre_nombres") || readString(detail, "nombre") || "",
-          apellido_paterno: readString(detail, "apellido_paterno"),
-          apellido_materno: readString(detail, "apellido_materno"),
+          nombre: hydratedName.nombre,
+          apellido_paterno: hydratedName.apellidoPaterno,
+          apellido_materno: hydratedName.apellidoMaterno,
           correo_principal: readString(detail, "correo_principal") || readString(detail, "correo") || readString(detail, "email"),
           correo_institucional: readString(detail, "correo_institucional"),
           correo_personal_3: readString(detail, "correo_personal_3"),

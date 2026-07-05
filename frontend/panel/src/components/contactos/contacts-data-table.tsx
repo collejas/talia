@@ -121,6 +121,24 @@ function extractFirstString(raw: Record<string, unknown> | undefined, keys: stri
   return null;
 }
 
+function getContactDisplayName(raw: Record<string, unknown> | undefined): string | null {
+  const firstName = extractString(raw, ["nombre_nombres"]) || extractString(raw, ["nombre"]);
+  const lastName = extractString(raw, ["apellido_paterno"]);
+  const secondLastName = extractString(raw, ["apellido_materno"]);
+  const fromParts = [firstName, lastName, secondLastName].filter(Boolean).join(" ").trim();
+  return (
+    extractString(raw, ["nombre_completo"]) ||
+    fromParts ||
+    extractString(raw, ["company_name"]) ||
+    extractString(raw, ["nombre"]) ||
+    null
+  );
+}
+
+function getContactEmailValue(raw: Record<string, unknown> | undefined): string | null {
+  return extractFirstString(raw, ["correo_principal", "correo", "correo_secundario", "correo_institucional", "email"]);
+}
+
 function getContactOwnerId(raw: Record<string, unknown> | undefined): string | null {
   return extractString(raw, ["propietario_usuario_id"]) || extractString(raw, ["propietario_id"]);
 }
@@ -273,12 +291,7 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
 
   return {
     id: (previous?.id ?? Number.parseInt(contactId, 10)) || 0,
-    header:
-      extractString(detail, ["nombre_completo"]) ||
-      extractString(detail, ["nombre"]) ||
-      extractString(detail, ["company_name"]) ||
-      previous?.header ||
-      "Contacto sin nombre",
+    header: getContactDisplayName(detail) || previous?.header || "Contacto sin nombre",
     type: normalizeLabel(extractString(detail, ["estado"]) || previous?.type),
     status: isCaptureComplete({
       ...((previous?.raw ?? {}) as Record<string, unknown>),
@@ -295,11 +308,37 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
       persona_id: contactId || extractString(previousRaw, ["persona_id"]) || extractString(previousRaw, ["contacto_id"]) || "",
       contacto_id: contactId || extractString(previousRaw, ["contacto_id"]) || "",
       codigo_contacto: extractString(detail, ["codigo_contacto"]) || extractString(previousRaw, ["codigo_contacto"]) || "",
+      nombre_nombres: extractString(detail, ["nombre_nombres"]) || extractString(previousRaw, ["nombre_nombres"]) || "",
+      apellido_paterno: extractString(detail, ["apellido_paterno"]) || extractString(previousRaw, ["apellido_paterno"]) || "",
+      apellido_materno: extractString(detail, ["apellido_materno"]) || extractString(previousRaw, ["apellido_materno"]) || "",
+      nombre_completo: extractString(detail, ["nombre_completo"]) || extractString(previousRaw, ["nombre_completo"]) || "",
       propietario_id: extractString(detail, ["propietario_id"]) || extractString(previousRaw, ["propietario_id"]) || "",
       propietario_nombre: extractString(detail, ["propietario_nombre"]) || extractString(previousRaw, ["propietario_nombre"]) || "",
       company_name: extractString(detail, ["company_name"]) || extractString(previousRaw, ["company_name"]) || "",
       cuenta_id: extractString(detail, ["cuenta_id"]) || extractString(previousRaw, ["cuenta_id"]) || "",
       cuenta_tipo: extractString(detail, ["cuenta_tipo"]) || extractString(previousRaw, ["cuenta_tipo"]) || "",
+      correo:
+        getContactEmailValue(detail) ||
+        getContactEmailValue(previousRaw) ||
+        extractString(previousRaw, ["correo"]) ||
+        "",
+      correo_principal:
+        extractString(detail, ["correo_principal"]) ||
+        extractString(previousRaw, ["correo_principal"]) ||
+        "",
+      correo_secundario:
+        extractString(detail, ["correo_secundario"]) ||
+        extractString(previousRaw, ["correo_secundario"]) ||
+        "",
+      correo_institucional:
+        extractString(detail, ["correo_institucional"]) ||
+        extractString(previousRaw, ["correo_institucional"]) ||
+        "",
+      email:
+        getContactEmailValue(detail) ||
+        getContactEmailValue(previousRaw) ||
+        extractString(previousRaw, ["email"]) ||
+        "",
       estado: extractString(detail, ["estado"]) || extractString(previousRaw, ["estado"]) || "",
       captura_estado: extractString(detail, ["captura_estado"]) || extractString(previousRaw, ["captura_estado"]) || "",
       creado_en: extractString(detail, ["creado_en"]) || extractString(previousRaw, ["creado_en"]) || "",

@@ -9770,7 +9770,12 @@ class CRMRepository:
         }
         return merged_target
 
-    async def get_persona_by_id(self, *, persona_id: str) -> dict[str, Any] | None:
+    async def get_persona_by_id(
+        self,
+        *,
+        persona_id: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
         persona_key = persona_id.strip()
         if not persona_key:
             return None
@@ -9779,6 +9784,8 @@ class CRMRepository:
             "limit": "1",
             "select": PERSONA_SELECT_FIELDS,
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json() or []
         if isinstance(data, list) and data:

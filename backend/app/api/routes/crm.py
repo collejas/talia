@@ -23923,7 +23923,7 @@ async def get_persona(
     _: str = Depends(require_permission("contacts.read")),
     persona_id: UUID,
 ) -> CRMPersona:
-    row = await repo.get_persona_by_id(persona_id=str(persona_id))
+    row = await repo.get_persona(organizacion_id=organizacion_id, persona_id=persona_id)
     if row is None:
         raise HTTPException(status_code=404, detail="persona_no_encontrada")
     owner_user_id = _contact_owner_user_id(row)
