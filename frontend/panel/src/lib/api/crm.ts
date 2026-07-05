@@ -3,8 +3,9 @@
 import { cookies } from "next/headers";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
+import { ACCESS_TOKEN_COOKIE, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies";
 import { decodeJwtOrganizacionId, decodeJwtPayload, decodeJwtUserId } from "@/lib/auth/jwt";
+import { parseTenantContextCookie } from "@/lib/auth/tenant-context";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 import { resolveServerAccessToken } from "@/lib/auth/server-session";
 
@@ -41,6 +42,7 @@ export async function callCrmApi<T = unknown>(
   let baseUrl: string;
   let token: string;
   let userAccessToken = await resolveCurrentAccessToken();
+  const selectedOrganizacionId = await resolveSelectedOrganizacionId(userAccessToken);
   try {
     baseUrl = getPanelApiBaseUrl();
     token = await resolvePanelApiToken();
@@ -56,8 +58,7 @@ export async function callCrmApi<T = unknown>(
   if (options.organizacionId !== undefined) {
     resolvedOrganizacionId = options.organizacionId;
   } else {
-    const tenantOrgId = decodeJwtOrganizacionId(userAccessToken);
-    resolvedOrganizacionId = tenantOrgId ?? resolveDefaultOrganizacionId();
+    resolvedOrganizacionId = selectedOrganizacionId ?? resolveDefaultOrganizacionId();
   }
 
   const sanitizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -292,6 +293,25 @@ async function resolveCurrentAccessToken(): Promise<string | null> {
     return token ?? null;
   } catch {
     return null;
+  }
+}
+
+async function resolveSelectedOrganizacionId(userAccessToken: string | null): Promise<string | null> {
+  try {
+    const store = await cookies();
+    const tenantContext = parseTenantContextCookie(store.get(TENANT_CONTEXT_COOKIE)?.value ?? null);
+    if (!tenantContext || !userAccessToken) {
+      return decodeJwtOrganizacionId(userAccessToken);
+    }
+
+    const currentUserId = decodeJwtUserId(userAccessToken);
+    if (!currentUserId || tenantContext.user_id !== currentUserId) {
+      return decodeJwtOrganizacionId(userAccessToken);
+    }
+
+    return tenantContext.tenant_id || decodeJwtOrganizacionId(userAccessToken);
+  } catch {
+    return decodeJwtOrganizacionId(userAccessToken);
   }
 }
 

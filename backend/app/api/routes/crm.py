@@ -14902,6 +14902,7 @@ def _contact_capture_complete(row: Mapping[str, Any]) -> bool:
 async def _load_all_contacts_for_export(
     *,
     repo: CRMRepository,
+    organizacion_id: UUID,
     usuario_token: str,
     search: str | None = None,
     estado: str | None = None,
@@ -14934,6 +14935,7 @@ async def _load_all_contacts_for_export(
     while True:
         batch = await repo.contactos_list(
             usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
             limit=page_size,
             offset=offset,
             estado=estado,
@@ -23574,6 +23576,7 @@ async def get_personas_list_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
     search: str | None = Query(default=None, min_length=1),
@@ -23602,6 +23605,7 @@ async def get_personas_list_legacy(
     try:
         rows = await repo.personas_list(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
             search=search,
@@ -23657,6 +23661,7 @@ async def get_personas_list(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
     search: str | None = Query(default=None, min_length=1),
@@ -23685,6 +23690,7 @@ async def get_personas_list(
     rows = await get_personas_list_legacy(
         repo=repo,
         _=_,
+        organizacion_id=organizacion_id,
         user_token=user_token,
         limit=limit,
         search=search,
@@ -23718,6 +23724,7 @@ async def export_personas_csv_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.export_csv")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     search: str | None = Query(default=None, min_length=1),
     estado: str | None = Query(default=None),
@@ -23749,6 +23756,7 @@ async def export_personas_csv_legacy(
     try:
         rows = await _load_all_contacts_for_export(
             repo=repo,
+            organizacion_id=organizacion_id,
             usuario_token=user_token,
             search=search,
             estado=estado,
@@ -23814,6 +23822,7 @@ async def export_personas_csv(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.export_csv")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     search: str | None = Query(default=None, min_length=1),
     estado: str | None = Query(default=None),
@@ -23830,6 +23839,7 @@ async def export_personas_csv(
     try:
         rows = await _load_all_contacts_for_export(
             repo=repo,
+            organizacion_id=organizacion_id,
             usuario_token=user_token,
             search=search,
             estado=estado,

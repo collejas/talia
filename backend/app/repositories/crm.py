@@ -13351,6 +13351,8 @@ class CRMRepository:
             payload["p_estado_direccion"] = estado_direccion.strip()
         if municipio and municipio.strip():
             payload["p_municipio"] = municipio.strip()
+        if organizacion_id is not None:
+            payload["p_organizacion_id"] = str(organizacion_id)
 
         resp = await self._request_with_user(
             "POST",
@@ -13367,6 +13369,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         limit: int = 200,
         offset: int = 0,
         search: str | None = None,
@@ -13446,6 +13449,8 @@ class CRMRepository:
             body["p_estado_direccion"] = estado_direccion.strip()
         if municipio and municipio.strip():
             body["p_municipio"] = municipio.strip()
+        if organizacion_id is not None:
+            body["p_organizacion_id"] = str(organizacion_id)
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/panel_contactos_list",
@@ -13461,6 +13466,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         limit: int = 200,
         offset: int = 0,
         search: str | None = None,
@@ -13488,6 +13494,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         return await self.personas_list(
             usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
             search=search,

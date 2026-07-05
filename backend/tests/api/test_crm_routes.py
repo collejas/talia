@@ -122,6 +122,14 @@ class DummyCRMRepository(CRMRepository):
             }
         ]
 
+    async def personas_list(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("personas_list", kwargs))
+        return []
+
+    async def contactos_list(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("contactos_list", kwargs))
+        return []
+
     async def list_pipelines(self, **kwargs: Any) -> list[dict[str, Any]]:
         """Simula la lista de etapas del pipeline."""
 
@@ -1223,6 +1231,40 @@ async def test_list_accounts(client: AsyncClient) -> None:
     assert payload["items"]
     assert payload["limit"] == 50
     assert payload["offset"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_contacts_forwards_organizacion_id(
+    client: AsyncClient,
+    fake_repo: DummyCRMRepository,
+) -> None:
+    organizacion_id = uuid.uuid4()
+    headers = _headers(include_user_token=True)
+    headers["X-Organizacion-Id"] = str(organizacion_id)
+
+    resp = await client.get("/crm/personas/list", headers=headers)
+
+    assert resp.status_code == 200
+    personas_calls = [call for call in fake_repo.calls if call[0] == "personas_list"]
+    assert personas_calls
+    assert personas_calls[-1][1]["organizacion_id"] == organizacion_id
+
+
+@pytest.mark.asyncio
+async def test_export_contacts_forwards_organizacion_id(
+    client: AsyncClient,
+    fake_repo: DummyCRMRepository,
+) -> None:
+    organizacion_id = uuid.uuid4()
+    headers = _headers(include_user_token=True)
+    headers["X-Organizacion-Id"] = str(organizacion_id)
+
+    resp = await client.get("/crm/personas/export", headers=headers)
+
+    assert resp.status_code == 200
+    contactos_calls = [call for call in fake_repo.calls if call[0] == "contactos_list"]
+    assert contactos_calls
+    assert contactos_calls[-1][1]["organizacion_id"] == organizacion_id
 
 
 
