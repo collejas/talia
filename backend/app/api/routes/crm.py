@@ -28967,6 +28967,11 @@ async def crear_busqueda_denue(
     denue_settings = await tenant_runtime.get_denue_runtime_settings(
         organizacion_id=tenant_organizacion_id
     )
+    if not (denue_settings.token or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="DENUE no está configurado para este tenant. Falta el token denue.token en settings/variables.",
+        )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
     advanced_meta = await _build_advanced_meta(payload, repo)
     modo = payload.modo or "radio"

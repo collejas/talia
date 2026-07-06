@@ -241,6 +241,22 @@ async def test_request_list_treats_known_remote_protocol_error_as_empty_for_smal
     assert rows == []
 
 
+@pytest.mark.anyio
+async def test_request_list_rejects_missing_token_before_http(monkeypatch) -> None:
+    client = DenueClient(token=None, base_url="https://example.com")
+
+    async def fake_get(url: str, *, method: str, segments: list[str] | None = None) -> httpx.Response:
+        raise AssertionError("No se esperaba llamar al HTTP client sin token")
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    with pytest.raises(DenueError, match="denue_token_missing"):
+        await client._request_list(
+            "BuscarAreaAct",
+            ["01", "0", "0", "0", "0", "61", "611", "6114", "611411", "0", "1", "50", "0"],
+        )
+
+
 def test_expand_state_to_municipalities_returns_aguscalientes_municipalities() -> None:
     targets = expand_state_to_municipalities("01")
 

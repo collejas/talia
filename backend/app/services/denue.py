@@ -347,6 +347,8 @@ class DenueClient:
         return await self._request_list("BuscarAreaActEstr", segments)
 
     async def _request_list(self, method: str, segments: list[str]) -> list[dict[str, Any]]:
+        if not self.token:
+            raise DenueError("denue_token_missing")
         path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}"
         search_logger.info(
             "denue.request_path",
