@@ -401,6 +401,10 @@ def _send_email_brevo(
             "email.brevo_response_error",
             extra={"status": response.status_code, "detail": detail},
         )
+        if response.status_code in {401, 403}:
+            raise EmailSendError(
+                "Brevo rechazó la autenticación del correo. Revisa la API key, el remitente configurado y que la cuenta tenga permiso para enviar SMTP."
+            )
         raise EmailSendError(f"Brevo respondió {response.status_code}")
 
     message_id_value: str | None = None

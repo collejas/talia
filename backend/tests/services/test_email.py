@@ -110,6 +110,43 @@ def test_send_email_uses_tenant_brevo_sender_when_available(monkeypatch):
     assert payload["sender"]["name"] == "PUI - Geoactiv"
 
 
+def test_send_email_brevo_401_returns_actionable_message(monkeypatch):
+    class DummyResponse:
+        status_code = 401
+        text = '{"message":"invalid api key"}'
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None, headers=None):
+            return DummyResponse()
+
+    monkeypatch.setattr("app.services.email.httpx.Client", DummyClient)
+    monkeypatch.setattr(settings, "brevo_api_key", "test-key", raising=False)
+    monkeypatch.setattr(settings, "mail_username", "sender@example.com", raising=False)
+
+    try:
+        send_email(
+            subject="Hola",
+            body_text="Texto plano",
+            recipients=["usuario@example.com"],
+            provider_preference="brevo",
+        )
+    except EmailSendError as exc:
+        message = str(exc)
+        assert "Brevo rechazó la autenticación" in message
+        assert "API key" in message
+    else:  # pragma: no cover - defensivo
+        raise AssertionError("Se esperaba EmailSendError por Brevo 401")
+
+
 def test_send_email_forces_smtp_when_provider_preference_smtp(monkeypatch):
     called: dict[str, object] = {"smtp": False, "brevo": False}
 
