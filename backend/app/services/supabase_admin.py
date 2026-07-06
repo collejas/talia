@@ -14,7 +14,6 @@ DEFAULT_TIMEOUT = 10.0
 class SupabaseAdminError(RuntimeError):
     """Error en las llamadas de administración de Supabase."""
 
-
 def _require_service_role() -> tuple[str, str]:
     if not settings.supabase_url or not settings.supabase_service_role:
         raise SupabaseAdminError("Supabase no está configurado para crear usuarios.")
@@ -31,6 +30,33 @@ def _format_phone(phone: str | None) -> tuple[str, bool]:
     if not sanitized[1:].isdigit() or len(sanitized) < 8:
         return DEFAULT_PHONE, False
     return sanitized, True
+
+
+async def _find_user_id_by_email(*, base_url: str, service_role: str, email: str) -> str | None:
+    headers = {
+        "apikey": service_role,
+        "Authorization": f"Bearer {service_role}",
+    }
+    params = {"email": email}
+    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        resp = await client.get(f"{base_url}/auth/v1/admin/users", params=params, headers=headers)
+    if resp.status_code >= 400:
+        raise SupabaseAdminError(f"Supabase list users failure: {resp.status_code} {resp.text}")
+    data = resp.json()
+    users: list[dict[str, Any]] = []
+    if isinstance(data, dict) and isinstance(data.get("users"), list):
+        users = [row for row in data["users"] if isinstance(row, dict)]
+    elif isinstance(data, list):
+        users = [row for row in data if isinstance(row, dict)]
+
+    target = email.strip().lower()
+    for row in users:
+        current = str(row.get("email") or "").strip().lower()
+        if current and current == target:
+            user_id = str(row.get("id") or "").strip()
+            if user_id:
+                return user_id
+    return None
 
 
 async def create_supabase_user(
@@ -65,6 +91,11 @@ async def create_supabase_user(
             lowered_body = invite_resp.text.lower()
             if "already registered" in lowered_body or "already been registered" in lowered_body:
                 raise SupabaseAdminError("user_email_already_registered")
+            if "error sending invite email" in lowered_body or "unexpected_failure" in lowered_body:
+                raise SupabaseAdminError(
+                    "No se pudo enviar el correo de invitación de Supabase. "
+                    "Revisa la configuración SMTP de Auth o las credenciales del proveedor de correo."
+                )
             raise SupabaseAdminError(
                 f"Supabase invite user failure: {invite_resp.status_code} {invite_resp.text}"
             )
@@ -73,31 +104,10 @@ async def create_supabase_user(
         if not user_id:
             raise SupabaseAdminError("Supabase no respondió con un id de usuario.")
 
-    return user_id, phone_value
+    return str(user_id), phone_value
 
 
 async def is_email_registered(*, email: str) -> bool:
     base_url, service_role = _require_service_role()
-    headers = {
-        "apikey": service_role,
-        "Authorization": f"Bearer {service_role}",
-    }
-    params = {"email": email}
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-        resp = await client.get(f"{base_url}/auth/v1/admin/users", params=params, headers=headers)
-    if resp.status_code >= 400:
-        raise SupabaseAdminError(
-            f"Supabase list users failure: {resp.status_code} {resp.text}"
-        )
-    data = resp.json()
-    users: list[dict[str, Any]] = []
-    if isinstance(data, dict) and isinstance(data.get("users"), list):
-        users = [row for row in data["users"] if isinstance(row, dict)]
-    elif isinstance(data, list):
-        users = [row for row in data if isinstance(row, dict)]
-    target = email.strip().lower()
-    for row in users:
-        current = str(row.get("email") or "").strip().lower()
-        if current and current == target:
-            return True
-    return False
+    user_id = await _find_user_id_by_email(base_url=base_url, service_role=service_role, email=email)
+    return bool(user_id)

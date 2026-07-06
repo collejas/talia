@@ -193,7 +193,10 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     test_user_id = uuid4()
     with (
         patch("app.api.routes.admin.is_email_registered", AsyncMock(return_value=False)),
-        patch("app.api.routes.admin.create_supabase_user", AsyncMock(return_value=(str(test_user_id), "+521234567890"))),
+        patch(
+            "app.api.routes.admin.create_supabase_user",
+            AsyncMock(return_value=(str(test_user_id), "+521234567890")),
+        ),
     ):
         response = await async_client.post("/admin/tenants/con_usuario", json=payload)
 

@@ -411,7 +411,11 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
         {success && (
           <div className="mt-6 space-y-3 rounded-lg border border-border/60 bg-muted p-4 text-sm">
             <p className="font-semibold text-foreground">Tenant creado correctamente</p>
-            <p className="text-muted-foreground">Se envió el correo de recuperación.</p>
+            <p className="text-muted-foreground">
+              {success.invite_email_sent
+                ? "Se creó el usuario administrador y se envió el correo de acceso."
+                : "Se creó el usuario administrador, pero Supabase no pudo enviar el correo de acceso."}
+            </p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-muted-foreground">Tenant ID</p>
