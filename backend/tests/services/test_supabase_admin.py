@@ -91,7 +91,7 @@ async def test_create_supabase_user_falls_back_when_invite_email_fails(monkeypat
     monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co", raising=False)
     monkeypatch.setattr(settings, "supabase_service_role", "service-role-key", raising=False)
 
-    with pytest.raises(SupabaseAdminError, match="No se pudo enviar el correo de invitación"):
+    with pytest.raises(SupabaseAdminError, match="No se pudo crear el tenant porque el correo de invitación falló"):
         await create_supabase_user(
             email=email,
             nombre="Admin",

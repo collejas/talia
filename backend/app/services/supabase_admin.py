@@ -93,8 +93,8 @@ async def create_supabase_user(
                 raise SupabaseAdminError("user_email_already_registered")
             if "error sending invite email" in lowered_body or "unexpected_failure" in lowered_body:
                 raise SupabaseAdminError(
-                    "No se pudo enviar el correo de invitación de Supabase. "
-                    "Revisa la configuración SMTP de Auth o las credenciales del proveedor de correo."
+                    "No se pudo crear el tenant porque el correo de invitación falló. "
+                    "Revisa la configuración SMTP de Supabase o las credenciales del proveedor de correo."
                 )
             raise SupabaseAdminError(
                 f"Supabase invite user failure: {invite_resp.status_code} {invite_resp.text}"
