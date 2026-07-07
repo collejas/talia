@@ -16594,6 +16594,11 @@ class CRMRepository:
                     "fuente",
                     "fuente_busqueda",
                     "display_name",
+                    "nombre_comercial",
+                    "titulo",
+                    "nombre",
+                    "primer_apellido",
+                    "segundo_apellido",
                     "actividad",
                     "estrato",
                     "busqueda_ref",
@@ -16729,6 +16734,11 @@ class CRMRepository:
             or_filters = ",".join(
                 [
                     f"display_name.ilike.{pattern}",
+                    f"nombre_comercial.ilike.{pattern}",
+                    f"titulo.ilike.{pattern}",
+                    f"nombre.ilike.{pattern}",
+                    f"primer_apellido.ilike.{pattern}",
+                    f"segundo_apellido.ilike.{pattern}",
                     f"actividad.ilike.{pattern}",
                     f"phone.ilike.{pattern}",
                     f"phone_e164.ilike.{pattern}",

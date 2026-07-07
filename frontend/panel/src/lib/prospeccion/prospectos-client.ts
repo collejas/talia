@@ -8,6 +8,10 @@ export type ProspectoItem = {
   id: string
   display_name: string | null
   nombre_comercial?: string | null
+  titulo?: string | null
+  nombre?: string | null
+  primer_apellido?: string | null
+  segundo_apellido?: string | null
   actividad: string | null
   estrato?: string | null
   phone: string | null
@@ -539,7 +543,12 @@ export type BrevoCatalogTemplate = {
 }
 
 export type ProspectoManualInput = {
-  display_name: string
+  display_name?: string | null
+  nombre_comercial?: string | null
+  titulo?: string | null
+  nombre?: string | null
+  primer_apellido?: string | null
+  segundo_apellido?: string | null
   actividad?: string | null
   phone?: string | null
   email?: string | null
@@ -550,6 +559,14 @@ export type ProspectoManualInput = {
 }
 
 export type ProspectoUpdateInput = Partial<ProspectoManualInput>
+
+export type ProspectoImportSummary = {
+  ok: boolean
+  total: number
+  created: number
+  skipped: number
+  prospectos: ProspectoItem[]
+}
 
 export const PROSPECTO_IDS_MAX_BATCH = 300
 export const PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION = 300
@@ -1984,6 +2001,16 @@ function extractValidationErrorMessage(payload: unknown, status: number): string
  */
 export async function crearProspectoManual(payload: ProspectoManualInput) {
   return requestJson<{ ok: boolean; prospecto: ProspectoItem }>("/api/prospeccion/prospectos/manual", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Importa prospectos manuales en lote desde archivos ya normalizados.
+ */
+export async function importarProspectos(payload: { items: ProspectoManualInput[] }) {
+  return requestJson<ProspectoImportSummary>("/api/prospeccion/prospectos/importar", {
     method: "POST",
     body: JSON.stringify(payload),
   })

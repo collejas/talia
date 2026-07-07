@@ -15,6 +15,7 @@ class DummyCRMRepository(CRMRepository):
 
     def __init__(self) -> None:  # pragma: no cover - simple init
         self._user_token = None
+        self._timeout = 30.0
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.pipeline_stages: list[dict[str, Any]] = []
         self.pipeline_opportunities: list[dict[str, Any]] = []
@@ -26,6 +27,7 @@ class DummyCRMRepository(CRMRepository):
         self.existing_prospectos_by_emails_result: list[dict[str, Any]] = []
         self.existing_prospectos_by_phones_result: list[dict[str, Any]] = []
         self.last_upserted_prospectos: list[dict[str, Any]] = []
+        self.last_bulk_inserted_prospectos: list[dict[str, Any]] = []
         self.products_by_id: dict[str, dict[str, Any]] = {}
         self.catalog_items_by_id: dict[str, dict[str, Any]] = {}
         self.propiedad_unidades_by_id: dict[str, dict[str, Any]] = {}
@@ -1182,6 +1184,28 @@ class DummyCRMRepository(CRMRepository):
             for item in items
         ]
 
+    async def create_prospecto_manual(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_prospecto_manual", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(uuid.uuid4()))
+        if kwargs.get("organizacion_id") is not None:
+            body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
+    async def bulk_insert_prospectos(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("bulk_insert_prospectos", kwargs))
+        items = [dict(item) for item in kwargs.get("items", [])]
+        self.last_bulk_inserted_prospectos = items
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                **item,
+            }
+            for item in items
+        ]
+
     async def refresh_prospeccion_query_daily_mv(self, **kwargs: Any) -> None:
         self.calls.append(("refresh_prospeccion_query_daily_mv", kwargs))
 
@@ -1553,6 +1577,82 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
     assert fake_repo.last_upserted_prospectos[0].get("busqueda_ref")
     assert fake_repo.last_upserted_prospectos[0].get("query_sort") == "Pizza artesanal cerca de mi"
 
+
+
+@pytest.mark.asyncio
+async def test_crear_prospecto_manual_permite_datos_de_persona(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    resp = await client.post(
+        "/crm/prospeccion/prospectos/manual",
+        headers=_headers(include_user_token=True),
+        json={
+            "display_name": "Grupo Demo",
+            "nombre_comercial": "Grupo Demo SA de CV",
+            "titulo": "Ing.",
+            "nombre": "Ana",
+            "primer_apellido": "Lopez",
+            "segundo_apellido": "Garcia",
+            "email": "Ana@Ejemplo.com",
+            "phone": "55 1111 2222",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["prospecto"]["titulo"] == "Ing."
+    assert payload["prospecto"]["nombre"] == "Ana"
+    assert payload["prospecto"]["primer_apellido"] == "Lopez"
+    assert payload["prospecto"]["segundo_apellido"] == "Garcia"
+    assert payload["prospecto"]["nombre_comercial"] == "Grupo Demo SA de CV"
+    assert fake_repo.calls and fake_repo.calls[-1][0] == "create_prospecto_manual"
+    create_call = fake_repo.calls[-1][1]
+    assert create_call["payload"]["titulo"] == "Ing."
+    assert create_call["payload"]["nombre"] == "Ana"
+    assert create_call["payload"]["primer_apellido"] == "Lopez"
+    assert create_call["payload"]["segundo_apellido"] == "Garcia"
+
+
+@pytest.mark.asyncio
+async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    resp = await client.post(
+        "/crm/prospeccion/prospectos/importar",
+        headers=_headers(include_user_token=True),
+        json={
+            "items": [
+                {
+                    "nombre_comercial": "Alpha SA de CV",
+                    "titulo": "Lic.",
+                    "nombre": "Carlos",
+                    "primer_apellido": "Perez",
+                    "email": "carlos@ejemplo.com",
+                    "phone": "+52 55 1234 5678",
+                },
+                {
+                    "nombre": "Mariana",
+                    "primer_apellido": "Ruiz",
+                    "segundo_apellido": "Lopez",
+                },
+            ]
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["created"] == 2
+    assert len(payload["prospectos"]) == 2
+    assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == "Lic."
+    assert fake_repo.last_bulk_inserted_prospectos[0]["nombre"] == "Carlos"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["primer_apellido"] == "Perez"
+    assert fake_repo.last_bulk_inserted_prospectos[1]["display_name"] == "Mariana Ruiz Lopez"
+    call_names = [call_name for call_name, _ in fake_repo.calls]
+    assert "list_prospectos_by_emails" in call_names
+    assert "list_prospectos_by_phones" in call_names
+    assert "bulk_insert_prospectos" in call_names
 
 
 @pytest.mark.asyncio

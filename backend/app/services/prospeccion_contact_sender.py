@@ -133,8 +133,32 @@ def _build_placeholder_context(*sources: Any) -> dict[str, Any]:
                 context[str(key)] = value
     if "nombre" not in context and context.get("display_name"):
         context["nombre"] = context["display_name"]
+    if "nombre_completo" not in context:
+        person_parts = [
+            _clean_text(context.get("nombre")),
+            _clean_text(context.get("primer_apellido")),
+            _clean_text(context.get("segundo_apellido")),
+        ]
+        nombre_completo = " ".join(part for part in person_parts if part)
+        if nombre_completo:
+            context["nombre_completo"] = nombre_completo
+    if "nombre_completo_con_titulo" not in context:
+        titulo = _clean_text(context.get("titulo"))
+        nombre_completo = _clean_text(context.get("nombre_completo"))
+        if titulo and nombre_completo:
+            context["nombre_completo_con_titulo"] = f"{titulo} {nombre_completo}".strip()
     if "telefono" not in context and context.get("phone"):
         context["telefono"] = context["phone"]
+    if "empresa" not in context and context.get("nombre_comercial"):
+        context["empresa"] = context["nombre_comercial"]
+    if "company_name" not in context and context.get("nombre_comercial"):
+        context["company_name"] = context["nombre_comercial"]
+    if "full_name" not in context and context.get("nombre_completo"):
+        context["full_name"] = context["nombre_completo"]
+    if "apellido_paterno" not in context and context.get("primer_apellido"):
+        context["apellido_paterno"] = context["primer_apellido"]
+    if "apellido_materno" not in context and context.get("segundo_apellido"):
+        context["apellido_materno"] = context["segundo_apellido"]
     return context
 
 

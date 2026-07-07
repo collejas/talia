@@ -27,6 +27,7 @@ import Link from "next/link"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
+import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -235,6 +236,24 @@ function parseCountValue(value: string): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
+function composeProspectoDisplayName(values: {
+  displayName?: string
+  nombreComercial?: string
+  nombre?: string
+  primerApellido?: string
+  segundoApellido?: string
+}): string {
+  const explicit = values.displayName?.trim()
+  if (explicit) return explicit
+  const company = values.nombreComercial?.trim()
+  if (company) return company
+  const person = [values.nombre, values.primerApellido, values.segundoApellido]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+  return person
+}
+
 function normalizeEnvioCanal(raw?: string | null): ConEnvioCanalFilter | null {
   const value = (raw || "").trim().toLowerCase()
   if (!value) return null
@@ -297,6 +316,11 @@ const initialFilters: Filters = {
 
 type ProspectoFormState = {
   displayName: string
+  nombreComercial: string
+  titulo: string
+  nombre: string
+  primerApellido: string
+  segundoApellido: string
   actividad: string
   phone: string
   email: string
@@ -308,6 +332,11 @@ type ProspectoFormState = {
 
 const initialProspectoForm: ProspectoFormState = {
   displayName: "",
+  nombreComercial: "",
+  titulo: "",
+  nombre: "",
+  primerApellido: "",
+  segundoApellido: "",
   actividad: "",
   phone: "",
   email: "",
@@ -3243,13 +3272,18 @@ function ProspectosView() {
     } else if (phoneValue) {
       canal = "llamada"
     }
+    const personName = composeProspectoDisplayName({
+      nombre: prospecto.nombre ?? undefined,
+      primerApellido: prospecto.primer_apellido ?? undefined,
+      segundoApellido: prospecto.segundo_apellido ?? undefined,
+    })
     setConvertForm({
-      nombre: prospecto.display_name ?? "",
+      nombre: personName || prospecto.display_name || "",
       correo: emailValue,
       telefono: phoneValue,
       telefonoTipoLinea: "",
       telefonoExtension: "",
-      company: prospecto.nombre_comercial ?? prospecto.display_name ?? prospecto.segmento ?? "",
+      company: prospecto.nombre_comercial ?? prospecto.segmento ?? prospecto.display_name ?? "",
       notas: "",
       stage: stageValue,
       canal,
@@ -3353,6 +3387,11 @@ function ProspectosView() {
     const notaValue = metadataRecord["notas"]
     setFormValues({
       displayName: prospecto.display_name ?? "",
+      nombreComercial: prospecto.nombre_comercial ?? "",
+      titulo: prospecto.titulo ?? "",
+      nombre: prospecto.nombre ?? "",
+      primerApellido: prospecto.primer_apellido ?? "",
+      segundoApellido: prospecto.segundo_apellido ?? "",
       actividad: prospecto.actividad ?? "",
       phone:
         prospecto.telefono_principal_e164 ||
@@ -3421,13 +3460,27 @@ function ProspectosView() {
   }
 
   const handleFormSubmit = useCallback(async () => {
-    const trimmedName = formValues.displayName.trim()
-    if (!trimmedName) {
-      setFormError("El nombre es obligatorio.")
+    const displayName = formValues.displayName.trim()
+    const nombreComercial = formValues.nombreComercial.trim()
+    const nombre = formValues.nombre.trim()
+    const primerApellido = formValues.primerApellido.trim()
+    const segundoApellido = formValues.segundoApellido.trim()
+    if (!displayName && !nombreComercial && !nombre && !primerApellido && !segundoApellido) {
+      setFormError("Debes capturar al menos un nombre visible, empresa o nombre de persona.")
       return
     }
-    const payload: Record<string, unknown> = {
-      display_name: trimmedName,
+    const derivedDisplayName = composeProspectoDisplayName({
+      displayName,
+      nombreComercial,
+      nombre,
+      primerApellido,
+      segundoApellido,
+    })
+    const payload: Record<string, unknown> = {}
+    if (displayName) {
+      payload.display_name = displayName
+    } else if (nombreComercial) {
+      payload.display_name = derivedDisplayName
     }
     const assignField = (value: string, key: string) => {
       const trimmed = value.trim()
@@ -3443,6 +3496,11 @@ function ProspectosView() {
     assignField(formValues.website, "website")
     assignField(formValues.address, "address")
     assignField(formValues.segmento, "segmento")
+    assignField(formValues.nombreComercial, "nombre_comercial")
+    assignField(formValues.titulo, "titulo")
+    assignField(formValues.nombre, "nombre")
+    assignField(formValues.primerApellido, "primer_apellido")
+    assignField(formValues.segundoApellido, "segundo_apellido")
 
     const notasValue = formValues.notas.trim()
     if (formMode === "create") {
@@ -4809,6 +4867,15 @@ function ProspectosView() {
 	                <IconPlus className="mr-1.5 size-4" />
 	                Agregar prospecto
 	              </Button>
+              <ProspectosImportador
+                onImported={(summary) => {
+                  setBanner({
+                    type: "success",
+                    message: `Importación lista: ${summary.created.toLocaleString("es-MX")} prospectos creados y ${summary.skipped.toLocaleString("es-MX")} omitidos.`,
+                  })
+                  void fetchProspectos(offset)
+                }}
+              />
               <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
                 <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
                 Actualizar
@@ -5128,11 +5195,29 @@ function ProspectosView() {
                                 const locationLabel = [...locationBits, countryName]
                                   .filter((value): value is string => Boolean(value && value.length))
                                   .join(" · ")
+                                const personName = composeProspectoDisplayName({
+                                  nombre: prospecto.nombre ?? undefined,
+                                  primerApellido: prospecto.primer_apellido ?? undefined,
+                                  segundoApellido: prospecto.segundo_apellido ?? undefined,
+                                })
                                 return (
                                   <TableCell key={columnId}>
                                     <div className="max-w-[220px] truncate text-[11px] font-medium" title={prospecto.display_name || "Sin nombre"}>
                                       {prospecto.display_name || "Sin nombre"}
                                     </div>
+                                    {personName && personName !== prospecto.display_name ? (
+                                      <p className="mt-0.5 max-w-[220px] truncate text-[10px] text-muted-foreground" title={personName}>
+                                        Persona: {personName}
+                                      </p>
+                                    ) : null}
+                                    {prospecto.nombre_comercial && prospecto.nombre_comercial !== prospecto.display_name ? (
+                                      <p
+                                        className="mt-0.5 max-w-[220px] truncate text-[10px] text-muted-foreground"
+                                        title={prospecto.nombre_comercial}
+                                      >
+                                        Empresa: {prospecto.nombre_comercial}
+                                      </p>
+                                    ) : null}
                                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                       {prospecto.actividad ? (
                                         <span className="block max-w-[200px] truncate" title={prospecto.actividad}>
@@ -5566,21 +5651,60 @@ function ProspectosView() {
               {formMode === "create" ? "Agregar prospecto manual" : "Editar prospecto"}
             </DialogTitle>
             <DialogDescription>
-              Completa los campos básicos del prospecto. Todos los registros creados aquí se marcan con la fuente Usuario
-              y quedarán listos para verificación o contacto.
+              Completa los datos visibles del prospecto y, si aplica, su nombre como persona de contacto.
+              Los registros creados aquí se marcan con la fuente Usuario y quedarán listos para verificación o contacto.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label>Nombre</Label>
+              <Label>Nombre visible</Label>
               <Input
                 value={formValues.displayName}
                 onChange={(event) => setFormValues((prev) => ({ ...prev, displayName: event.target.value }))}
-                placeholder="Ej. Hotel Centro Histórico"
-                required
+                placeholder="Ej. Hotel Centro Histórico o nombre del contacto"
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Empresa / nombre comercial</Label>
+                <Input
+                  value={formValues.nombreComercial}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, nombreComercial: event.target.value }))}
+                  placeholder="Razón social, empresa o marca"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Título</Label>
+                <Input
+                  value={formValues.titulo}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, titulo: event.target.value }))}
+                  placeholder="Lic., Ing., Dr., Mtra."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Nombre</Label>
+                <Input
+                  value={formValues.nombre}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, nombre: event.target.value }))}
+                  placeholder="Nombre de la persona"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Primer apellido</Label>
+                <Input
+                  value={formValues.primerApellido}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, primerApellido: event.target.value }))}
+                  placeholder="Apellido paterno"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Segundo apellido</Label>
+                <Input
+                  value={formValues.segundoApellido}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, segundoApellido: event.target.value }))}
+                  placeholder="Apellido materno"
+                />
+              </div>
               <div className="space-y-1">
                 <Label>Actividad</Label>
                 <Input

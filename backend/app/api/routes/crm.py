@@ -4320,7 +4320,12 @@ class ProspectoManualPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    display_name: str = Field(..., min_length=2, max_length=200)
+    display_name: str | None = Field(default=None, min_length=2, max_length=200)
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    titulo: str | None = Field(default=None, max_length=40)
+    nombre: str | None = Field(default=None, max_length=120)
+    primer_apellido: str | None = Field(default=None, max_length=120)
+    segundo_apellido: str | None = Field(default=None, max_length=120)
     actividad: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=60)
     email: str | None = Field(default=None, max_length=320)
@@ -4331,11 +4336,29 @@ class ProspectoManualPayload(BaseModel):
 
     @field_validator("display_name")
     @classmethod
-    def _strip_display_name(cls, value: str) -> str:
+    def _strip_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         trimmed = value.strip()
         if not trimmed:
             raise ValueError("display_name_required")
         return trimmed
+
+    @field_validator("nombre_comercial", "titulo", "nombre", "primer_apellido", "segundo_apellido")
+    @classmethod
+    def _strip_person_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @model_validator(mode="after")
+    def _ensure_name_source(self) -> "ProspectoManualPayload":
+        if self.display_name:
+            return self
+        if any((self.nombre_comercial, self.nombre, self.primer_apellido, self.segundo_apellido)):
+            return self
+        raise ValueError("display_name_required")
 
 
 class ProspectoUpdatePayload(BaseModel):
@@ -4344,6 +4367,11 @@ class ProspectoUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, min_length=2, max_length=200)
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    titulo: str | None = Field(default=None, max_length=40)
+    nombre: str | None = Field(default=None, max_length=120)
+    primer_apellido: str | None = Field(default=None, max_length=120)
+    segundo_apellido: str | None = Field(default=None, max_length=120)
     actividad: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=60)
     email: str | None = Field(default=None, max_length=320)
@@ -4362,12 +4390,28 @@ class ProspectoUpdatePayload(BaseModel):
             raise ValueError("display_name_required")
         return trimmed
 
+    @field_validator("nombre_comercial", "titulo", "nombre", "primer_apellido", "segundo_apellido")
+    @classmethod
+    def _strip_person_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
     @model_validator(mode="after")
     def _ensure_any_field(self) -> ProspectoUpdatePayload:
         provided = self.model_dump(exclude_unset=True)
         if not provided:
             raise ValueError("fields_required")
         return self
+
+
+class ProspectosImportPayload(BaseModel):
+    """Lote de prospectos manuales/importados para crear en bloque."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ProspectoManualPayload] = Field(default_factory=list, min_length=1, max_length=2000)
 
 
 class ProspectosTablePreferencePayload(BaseModel):
@@ -8841,24 +8885,76 @@ async def _get_prospecto_or_404(
     return row
 
 
+def _compose_prospecto_display_name(
+    *,
+    display_name: Any = None,
+    nombre_comercial: Any = None,
+    nombre: Any = None,
+    primer_apellido: Any = None,
+    segundo_apellido: Any = None,
+) -> str:
+    """Construye un nombre visible estable para prospectos importados o manuales."""
+
+    explicit_display_name = _clean_text(display_name)
+    if explicit_display_name:
+        return explicit_display_name
+
+    commercial_name = _clean_text(nombre_comercial)
+    if commercial_name:
+        return commercial_name
+
+    person_parts = [
+        _clean_text(nombre),
+        _clean_text(primer_apellido),
+        _clean_text(segundo_apellido),
+    ]
+    person_name = " ".join(part for part in person_parts if part)
+    if person_name:
+        return person_name
+    return "Prospecto"
+
+
 def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str, Any]:
     """Normaliza el payload manual para enviarlo al repositorio."""
 
     raw = payload.model_dump(exclude_unset=True)
+    display_name = _compose_prospecto_display_name(
+        display_name=raw.get("display_name"),
+        nombre_comercial=raw.get("nombre_comercial"),
+        nombre=raw.get("nombre"),
+        primer_apellido=raw.get("primer_apellido"),
+        segundo_apellido=raw.get("segundo_apellido"),
+    )
     data: dict[str, Any] = {
         "fuente": "usuario",
         "fuente_busqueda": "manual",
-        "display_name": payload.display_name.strip(),
-        "name": payload.display_name.strip(),
-        "nombre_comercial": payload.display_name.strip(),
+        "display_name": display_name,
+        "name": display_name,
         "lookup_error": None,
         "whatsapp_permitido": False,
         "llamada_permitida": False,
     }
+    company_name = _clean_text(raw.get("nombre_comercial"))
+    has_display_name = "display_name" in raw and raw.get("display_name") is not None
+    if company_name:
+        data["nombre_comercial"] = company_name
+    elif has_display_name:
+        data["nombre_comercial"] = display_name
     metadata = raw.get("metadata")
     if isinstance(metadata, dict):
         data["metadata"] = metadata
-    for field in ("actividad", "phone", "email", "website", "address", "segmento"):
+    for field in (
+        "titulo",
+        "nombre",
+        "primer_apellido",
+        "segundo_apellido",
+        "actividad",
+        "phone",
+        "email",
+        "website",
+        "address",
+        "segmento",
+    ):
         if field not in raw:
             continue
         value = raw[field]
@@ -8871,11 +8967,67 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
             data[field] = _clean_text(value)
         else:
             data[field] = value
+    if "display_name" in raw and raw.get("display_name") is not None:
+        data["display_name"] = display_name
+        data["name"] = display_name
+        if company_name:
+            data["nombre_comercial"] = company_name
+        else:
+            data["nombre_comercial"] = display_name
+    elif "nombre_comercial" in raw and raw.get("nombre_comercial") is not None:
+        data["display_name"] = display_name
+        data["name"] = display_name
+        data["nombre_comercial"] = company_name or display_name
+    elif any(raw.get(field) for field in ("nombre", "primer_apellido", "segundo_apellido")):
+        data["display_name"] = display_name
+        data["name"] = display_name
+        if company_name:
+            data["nombre_comercial"] = company_name
     phone_value = data.get("phone")
     if "address" in raw:
         data["address_full"] = data.get("address")
     data["lookup_status"] = "pendiente" if phone_value else "sin_numero"
     return data
+
+
+def _dedupe_import_prospectos(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dedupe por correo y telefono sin descartar prospectos sin contacto."""
+
+    deduped: list[dict[str, Any]] = []
+    seen_emails: dict[str, int] = {}
+    seen_phones_without_email: dict[str, int] = {}
+
+    for item in items:
+        normalized = dict(item)
+        email_value = _normalize_email(normalized.get("email"))
+        if email_value:
+            normalized["email"] = email_value
+
+        phone_value = normalized.get("phone_e164") or normalized.get("phone")
+        phone_e164_value = _normalize_phone_e164(phone_value)
+        if phone_e164_value:
+            normalized["phone_e164"] = phone_e164_value
+            if not normalized.get("phone"):
+                normalized["phone"] = _clean_text(phone_value)
+
+        target_index: int | None = None
+        if email_value and email_value in seen_emails:
+            target_index = seen_emails[email_value]
+        elif not email_value and phone_e164_value and phone_e164_value in seen_phones_without_email:
+            target_index = seen_phones_without_email[phone_e164_value]
+
+        if target_index is None:
+            deduped.append(normalized)
+            target_index = len(deduped) - 1
+        else:
+            _merge_prospecto_payload(deduped[target_index], normalized)
+
+        if email_value:
+            seen_emails[email_value] = target_index
+        elif phone_e164_value:
+            seen_phones_without_email[phone_e164_value] = target_index
+
+    return deduped
 
 
 def _build_prospecto_update_payload(
@@ -8888,6 +9040,11 @@ def _build_prospecto_update_payload(
     updates: dict[str, Any] = {}
     for field in (
         "display_name",
+        "nombre_comercial",
+        "titulo",
+        "nombre",
+        "primer_apellido",
+        "segundo_apellido",
         "actividad",
         "email",
         "website",
@@ -8903,7 +9060,7 @@ def _build_prospecto_update_payload(
             updates[field] = _clean_text(value)
         else:
             updates[field] = value
-    if "display_name" in updates:
+    if "display_name" in updates and "nombre_comercial" not in raw:
         updates["nombre_comercial"] = updates["display_name"]
     if "address" in updates:
         updates["address_full"] = updates["address"]
@@ -34008,6 +34165,90 @@ async def crear_prospecto_manual(
     )
 
     return {"ok": True, "prospecto": prospecto}
+
+
+@router.post("/prospeccion/prospectos/importar")
+async def importar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ProspectosImportPayload,
+) -> dict[str, Any]:
+    """Importa prospectos manuales en lote desde CSV o Excel ya normalizado en el panel."""
+
+    raw_items = [_build_manual_prospecto_payload(item) for item in payload.items]
+    if not raw_items:
+        raise HTTPException(status_code=400, detail="prospectos_import_empty")
+
+    deduped_items = _dedupe_import_prospectos(raw_items)
+    if not deduped_items:
+        raise HTTPException(status_code=400, detail="prospectos_import_empty")
+
+    candidate_emails = [str(item.get("email") or "") for item in deduped_items if str(item.get("email") or "").strip()]
+    candidate_phones = [
+        str(item.get("phone_e164") or item.get("phone") or "").strip()
+        for item in deduped_items
+        if str(item.get("phone_e164") or item.get("phone") or "").strip()
+    ]
+
+    existing_email_rows: list[dict[str, Any]] = []
+    existing_phone_rows: list[dict[str, Any]] = []
+    try:
+        if candidate_emails:
+            existing_email_rows = await repo.list_prospectos_by_emails(
+                usuario_token=user_token,
+                emails=candidate_emails,
+            )
+        if candidate_phones:
+            existing_phone_rows = await repo.list_prospectos_by_phones(
+                usuario_token=user_token,
+                phones=candidate_phones,
+            )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    filtered_items = _filter_prospectos_against_existing_contacts(
+        deduped_items,
+        existing_email_rows=existing_email_rows,
+        existing_phone_rows=existing_phone_rows,
+    )
+    if not filtered_items:
+        return {
+            "ok": True,
+            "total": len(payload.items),
+            "created": 0,
+            "skipped": len(payload.items),
+            "prospectos": [],
+        }
+
+    try:
+        created = await repo.bulk_insert_prospectos(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            items=filtered_items,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_imported",
+        payload={
+            "total": len(created),
+            "origen": "csv_xls",
+        },
+    )
+
+    return {
+        "ok": True,
+        "total": len(payload.items),
+        "created": len(created),
+        "skipped": max(0, len(payload.items) - len(created)),
+        "prospectos": created,
+    }
 
 
 @router.patch("/prospeccion/prospectos/{prospecto_id}")

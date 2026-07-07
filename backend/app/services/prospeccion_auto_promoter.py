@@ -37,6 +37,20 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _compose_person_name(row: dict[str, Any]) -> str | None:
+    titulo = _clean_text(row.get("titulo"))
+    nombre = _clean_text(row.get("nombre"))
+    primer_apellido = _clean_text(row.get("primer_apellido"))
+    segundo_apellido = _clean_text(row.get("segundo_apellido"))
+    parts = [part for part in (nombre, primer_apellido, segundo_apellido) if part]
+    if not parts:
+        return None
+    full_name = " ".join(parts)
+    if titulo:
+        return f"{titulo} {full_name}".strip()
+    return full_name
+
+
 def _describe_source(row: dict[str, Any]) -> str:
     fuente_busqueda = _clean_text(row.get("fuente_busqueda"))
     fuente = _clean_text(row.get("fuente"))
@@ -136,7 +150,12 @@ async def _auto_promote_prospecto_locked(
     except (TypeError, ValueError):
         return False
 
-    display_name = _clean_text(prospecto.get("display_name")) or "Prospecto sin nombre"
+    display_name = (
+        _compose_person_name(prospecto)
+        or _clean_text(prospecto.get("display_name"))
+        or _clean_text(prospecto.get("nombre_comercial"))
+        or "Prospecto sin nombre"
+    )
     correo = _clean_text(prospecto.get("email"))
     telefono = normalize_phone(_clean_text(prospecto.get("phone_e164") or prospecto.get("phone")))
     segmento = _clean_text(prospecto.get("segmento"))
