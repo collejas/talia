@@ -60,6 +60,16 @@ function getAccountField(row: DataTableRow, key: string): string {
   return "—";
 }
 
+function formatDateTime(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function canViewAccountSensitiveRow(row: DataTableRow): boolean {
   const raw = row.raw as Record<string, unknown> | undefined;
   return raw?.can_view_sensitive_fields === true;
@@ -181,6 +191,15 @@ const ACCOUNT_COLUMNS: Array<{
     label: "Propietario",
     sortValue: (row) => getAccountField(row, "propietario_nombre"),
     accessor: (row) => <span>{getAccountField(row, "propietario_nombre")}</span>,
+  },
+  {
+    id: "account_created_at",
+    label: "Creado en",
+    sortValue: (row) => getAccountField(row, "creado_en"),
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return <span className="tabular-nums">{formatDateTime(raw?.creado_en)}</span>;
+    },
   },
 ];
 
@@ -380,7 +399,18 @@ export function AccountsDataTable({ rows }: Props) {
   };
 
   const accountColumnOrder = React.useMemo(
-    () => ["account_id", "account_name", "account_contact_code", "account_contact", "account_phone", "account_email", "account_rfc", "account_owner", "actions"],
+    () => [
+      "account_id",
+      "account_name",
+      "account_contact_code",
+      "account_contact",
+      "account_phone",
+      "account_email",
+      "account_rfc",
+      "account_owner",
+      "account_created_at",
+      "actions",
+    ],
     [],
   );
 
@@ -399,6 +429,7 @@ export function AccountsDataTable({ rows }: Props) {
       account_email: true,
       account_rfc: true,
       account_owner: true,
+      account_created_at: true,
       actions: true,
     }),
     [],
