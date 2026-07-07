@@ -4331,6 +4331,22 @@ class ProspectoManualPayload(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     website: str | None = Field(default=None, max_length=200)
     address: str | None = Field(default=None, max_length=400)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    colonia: str | None = Field(default=None, max_length=255)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    estado_cve: str | None = Field(default=None, max_length=16)
+    estado_nombre: str | None = Field(default=None, max_length=120)
+    municipio_cve: str | None = Field(default=None, max_length=16)
+    municipio_nombre: str | None = Field(default=None, max_length=120)
+    localidad_cve: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    cvegeo: str | None = Field(default=None, max_length=16)
+    asentamiento: str | None = Field(default=None, max_length=120)
+    entre_calles: str | None = Field(default=None, max_length=255)
+    referencia: str | None = Field(default=None, max_length=255)
     segmento: str | None = Field(default=None, max_length=120)
     metadata: dict[str, Any] | None = Field(default=None)
 
@@ -4377,6 +4393,22 @@ class ProspectoUpdatePayload(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     website: str | None = Field(default=None, max_length=200)
     address: str | None = Field(default=None, max_length=400)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    colonia: str | None = Field(default=None, max_length=255)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    estado_cve: str | None = Field(default=None, max_length=16)
+    estado_nombre: str | None = Field(default=None, max_length=120)
+    municipio_cve: str | None = Field(default=None, max_length=16)
+    municipio_nombre: str | None = Field(default=None, max_length=120)
+    localidad_cve: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    cvegeo: str | None = Field(default=None, max_length=16)
+    asentamiento: str | None = Field(default=None, max_length=120)
+    entre_calles: str | None = Field(default=None, max_length=255)
+    referencia: str | None = Field(default=None, max_length=255)
     segmento: str | None = Field(default=None, max_length=120)
     metadata: dict[str, Any] | None = Field(default=None)
 
@@ -8914,6 +8946,74 @@ def _compose_prospecto_display_name(
     return "Prospecto"
 
 
+_PROSPECTO_ADDRESS_FIELDS = (
+    "tipo_vialidad",
+    "nombre_vialidad",
+    "numero_exterior",
+    "numero_interior",
+    "colonia",
+    "codigo_postal",
+    "estado_cve",
+    "estado_nombre",
+    "municipio_cve",
+    "municipio_nombre",
+    "localidad_cve",
+    "localidad",
+    "cvegeo",
+    "asentamiento",
+    "entre_calles",
+    "referencia",
+)
+
+
+def _compose_prospecto_address_text(raw: dict[str, Any]) -> str | None:
+    """Construye una dirección consolidada a partir de campos estructurados."""
+
+    if not isinstance(raw, dict):
+        return None
+    direct_address = _clean_text(raw.get("address"))
+    if not any(_clean_text(raw.get(field)) for field in _PROSPECTO_ADDRESS_FIELDS):
+        return direct_address
+
+    street_parts = [
+        _clean_text(raw.get("tipo_vialidad")),
+        _clean_text(raw.get("nombre_vialidad")),
+        _clean_text(raw.get("numero_exterior")),
+    ]
+    street = " ".join(part for part in street_parts if part)
+    if street and _clean_text(raw.get("numero_interior")):
+        street = f"{street} Int. {_clean_text(raw.get('numero_interior'))}"
+
+    address_parts: list[str] = []
+    if street:
+        address_parts.append(street)
+
+    settlement = _clean_text(raw.get("asentamiento")) or _clean_text(raw.get("colonia"))
+    if settlement:
+        address_parts.append(settlement)
+
+    municipality = _clean_text(raw.get("municipio_nombre")) or _clean_text(raw.get("municipio_cve"))
+    state = _clean_text(raw.get("estado_nombre")) or _clean_text(raw.get("estado_cve"))
+    locality = _clean_text(raw.get("localidad"))
+    locality_parts = [part for part in (locality, municipality, state) if part]
+    if locality_parts:
+        address_parts.append(", ".join(locality_parts))
+
+    postal_code = _clean_text(raw.get("codigo_postal"))
+    if postal_code:
+        address_parts.append(f"CP {postal_code}")
+
+    extra_parts = [
+        _clean_text(raw.get("entre_calles")),
+        _clean_text(raw.get("referencia")),
+        _clean_text(raw.get("cvegeo")),
+    ]
+    address_parts.extend(part for part in extra_parts if part)
+
+    consolidated = ", ".join(part for part in address_parts if part)
+    return consolidated or direct_address
+
+
 def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str, Any]:
     """Normaliza el payload manual para enviarlo al repositorio."""
 
@@ -8967,6 +9067,18 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
             data[field] = _clean_text(value)
         else:
             data[field] = value
+    for field in _PROSPECTO_ADDRESS_FIELDS:
+        if field not in raw:
+            continue
+        value = raw[field]
+        if isinstance(value, str):
+            data[field] = _clean_text(value)
+        else:
+            data[field] = value
+    consolidated_address = _compose_prospecto_address_text(raw)
+    if consolidated_address:
+        data["address"] = consolidated_address
+        data["address_full"] = consolidated_address
     if "display_name" in raw and raw.get("display_name") is not None:
         data["display_name"] = display_name
         data["name"] = display_name
@@ -8984,7 +9096,8 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         if company_name:
             data["nombre_comercial"] = company_name
     phone_value = data.get("phone")
-    if "address" in raw:
+    if "address" in raw and not consolidated_address:
+        data["address"] = _clean_text(raw.get("address"))
         data["address_full"] = data.get("address")
     data["lookup_status"] = "pendiente" if phone_value else "sin_numero"
     return data
@@ -9049,6 +9162,22 @@ def _build_prospecto_update_payload(
         "email",
         "website",
         "address",
+        "tipo_vialidad",
+        "nombre_vialidad",
+        "numero_exterior",
+        "numero_interior",
+        "colonia",
+        "codigo_postal",
+        "estado_cve",
+        "estado_nombre",
+        "municipio_cve",
+        "municipio_nombre",
+        "localidad_cve",
+        "localidad",
+        "cvegeo",
+        "asentamiento",
+        "entre_calles",
+        "referencia",
         "segmento",
     ):
         if field not in raw:
@@ -9062,7 +9191,11 @@ def _build_prospecto_update_payload(
             updates[field] = value
     if "display_name" in updates and "nombre_comercial" not in raw:
         updates["nombre_comercial"] = updates["display_name"]
-    if "address" in updates:
+    consolidated_address = _compose_prospecto_address_text(raw)
+    if consolidated_address:
+        updates["address"] = consolidated_address
+        updates["address_full"] = consolidated_address
+    elif "address" in updates:
         updates["address_full"] = updates["address"]
     phone_changed = False
     if "phone" in raw:

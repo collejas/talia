@@ -38,6 +38,7 @@ type ParsedProspectoPreview = {
   email: string
   phone: string
   persona: string
+  address: string
 }
 
 const ACCEPTED_FILE_EXT = ".csv,.xlsx,.xls"
@@ -52,9 +53,25 @@ const PROSPECT_TEMPLATE_HEADERS = [
   "Correo",
   "Teléfono",
   "Sitio web",
-  "Dirección",
+  "Tipo de vialidad",
+  "Nombre de vialidad",
+  "Número exterior",
+  "Número interior",
+  "Colonia",
+  "Código postal",
+  "Estado nombre",
+  "Estado cve",
+  "Municipio nombre",
+  "Municipio cve",
+  "Localidad",
+  "Localidad cve",
+  "CVEGEO",
+  "Asentamiento",
+  "Entre calles",
+  "Referencia",
   "Segmento",
   "Actividad",
+  "Dirección libre (opcional)",
 ] as const
 const PROSPECT_TEMPLATE_EXAMPLE = [
   "Grupo Demo",
@@ -66,9 +83,25 @@ const PROSPECT_TEMPLATE_EXAMPLE = [
   "ana@ejemplo.com",
   "+52 55 1111 2222",
   "https://ejemplo.com",
-  "Av. Reforma 123, CDMX",
+  "Av.",
+  "Reforma",
+  "123",
+  "10",
+  "Juarez",
+  "06600",
+  "Ciudad de Mexico",
+  "09",
+  "Cuauhtemoc",
+  "016",
+  "Roma Norte",
+  "009",
+  "090010001001",
+  "Centro",
+  "Al lado del parque",
+  "Frente al metro",
   "Servicios",
   "Consultoría",
+  "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600",
 ]
 
 type ProspectoImportField =
@@ -83,6 +116,22 @@ type ProspectoImportField =
   | "email"
   | "website"
   | "address"
+  | "tipo_vialidad"
+  | "nombre_vialidad"
+  | "numero_exterior"
+  | "numero_interior"
+  | "colonia"
+  | "codigo_postal"
+  | "estado_cve"
+  | "estado_nombre"
+  | "municipio_cve"
+  | "municipio_nombre"
+  | "localidad_cve"
+  | "localidad"
+  | "cvegeo"
+  | "asentamiento"
+  | "entre_calles"
+  | "referencia"
   | "segmento"
 
 const HEADER_ALIASES: Record<string, ProspectoImportField> = {
@@ -122,7 +171,34 @@ const HEADER_ALIASES: Record<string, ProspectoImportField> = {
   website: "website",
   web: "website",
   direccion: "address",
+  direccionlibreopcional: "address",
   address: "address",
+  tipovialidad: "tipo_vialidad",
+  nombredevialidad: "nombre_vialidad",
+  nombredelavialidad: "nombre_vialidad",
+  nombrevialidad: "nombre_vialidad",
+  numeroexterior: "numero_exterior",
+  noexterior: "numero_exterior",
+  exterior: "numero_exterior",
+  numerointerior: "numero_interior",
+  nointerno: "numero_interior",
+  interior: "numero_interior",
+  colonia: "colonia",
+  codigopostal: "codigo_postal",
+  cpost: "codigo_postal",
+  cpostal: "codigo_postal",
+  estadonombre: "estado_nombre",
+  estado: "estado_nombre",
+  estadocve: "estado_cve",
+  municipio: "municipio_nombre",
+  municipionombre: "municipio_nombre",
+  municipiocve: "municipio_cve",
+  localidad: "localidad",
+  localidadcve: "localidad_cve",
+  cvegeo: "cvegeo",
+  asentamiento: "asentamiento",
+  entrecalles: "entre_calles",
+  referencia: "referencia",
   segmento: "segmento",
 }
 
@@ -168,6 +244,25 @@ function composeDisplayName(item: ProspectoManualInput): string {
   return ""
 }
 
+function composeAddressPreview(item: ProspectoManualInput): string {
+  const freeText = normalizeCell(item.address)
+  if (freeText) return freeText
+  const street = [item.tipo_vialidad, item.nombre_vialidad, item.numero_exterior]
+    .map((value) => normalizeCell(value))
+    .filter(Boolean)
+    .join(" ")
+  const interior = normalizeCell(item.numero_interior)
+  const settlement = normalizeCell(item.asentamiento) || normalizeCell(item.colonia)
+  const locality = [item.localidad, item.municipio_nombre, item.estado_nombre]
+    .map((value) => normalizeCell(value))
+    .filter(Boolean)
+    .join(", ")
+  const postal = normalizeCell(item.codigo_postal)
+  return [street ? `${street}${interior ? ` Int. ${interior}` : ""}` : "", settlement, locality, postal ? `CP ${postal}` : ""]
+    .filter(Boolean)
+    .join(", ")
+}
+
 function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | null {
   const mapped: Partial<Record<ProspectoImportField, string>> = {}
   for (const [header, value] of Object.entries(row)) {
@@ -197,6 +292,22 @@ function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | nu
     email: normalizeCell(mapped.email) || undefined,
     website: normalizeCell(mapped.website) || undefined,
     address: normalizeCell(mapped.address) || undefined,
+    tipo_vialidad: normalizeCell(mapped.tipo_vialidad) || undefined,
+    nombre_vialidad: normalizeCell(mapped.nombre_vialidad) || undefined,
+    numero_exterior: normalizeCell(mapped.numero_exterior) || undefined,
+    numero_interior: normalizeCell(mapped.numero_interior) || undefined,
+    colonia: normalizeCell(mapped.colonia) || undefined,
+    codigo_postal: normalizeCell(mapped.codigo_postal) || undefined,
+    estado_cve: normalizeCell(mapped.estado_cve) || undefined,
+    estado_nombre: normalizeCell(mapped.estado_nombre) || undefined,
+    municipio_cve: normalizeCell(mapped.municipio_cve) || undefined,
+    municipio_nombre: normalizeCell(mapped.municipio_nombre) || undefined,
+    localidad_cve: normalizeCell(mapped.localidad_cve) || undefined,
+    localidad: normalizeCell(mapped.localidad) || undefined,
+    cvegeo: normalizeCell(mapped.cvegeo) || undefined,
+    asentamiento: normalizeCell(mapped.asentamiento) || undefined,
+    entre_calles: normalizeCell(mapped.entre_calles) || undefined,
+    referencia: normalizeCell(mapped.referencia) || undefined,
     segmento: normalizeCell(mapped.segmento) || undefined,
   }
 }
@@ -269,6 +380,7 @@ async function parseImportedFile(file: File): Promise<{
         persona: [normalizeCell(item.titulo), normalizeCell(item.nombre), normalizeCell(item.primer_apellido), normalizeCell(item.segundo_apellido)]
           .filter(Boolean)
           .join(" "),
+        address: composeAddressPreview(item),
       })
     }
   })
@@ -391,7 +503,7 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
               <Input type="file" accept={ACCEPTED_FILE_EXT} onChange={handleFileChange} />
               <p className="text-xs text-muted-foreground">
                 Columnas sugeridas: empresa, título, nombre, primer apellido, segundo apellido, correo, teléfono,
-                sitio web, dirección y segmento.
+                sitio web, tipo de vialidad, nombre de vialidad, número exterior, colonia, CP, municipio, estado y segmento.
               </p>
             </div>
 
@@ -415,6 +527,7 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
                         <p className="text-muted-foreground">
                           {row.contact || "Sin contacto"}
                         </p>
+                        {row.address ? <p className="text-muted-foreground">{row.address}</p> : null}
                       </div>
                     ))}
                   </div>

@@ -1590,13 +1590,20 @@ async def test_crear_prospecto_manual_permite_datos_de_persona(
             "display_name": "Grupo Demo",
             "nombre_comercial": "Grupo Demo SA de CV",
             "titulo": "Ing.",
-            "nombre": "Ana",
-            "primer_apellido": "Lopez",
-            "segundo_apellido": "Garcia",
-            "email": "Ana@Ejemplo.com",
-            "phone": "55 1111 2222",
-        },
-    )
+                "nombre": "Ana",
+                "primer_apellido": "Lopez",
+                "segundo_apellido": "Garcia",
+                "tipo_vialidad": "Av.",
+                "nombre_vialidad": "Reforma",
+                "numero_exterior": "123",
+                "colonia": "Juarez",
+                "codigo_postal": "06600",
+                "municipio_nombre": "Cuauhtemoc",
+                "estado_nombre": "Ciudad de Mexico",
+                "email": "Ana@Ejemplo.com",
+                "phone": "55 1111 2222",
+            },
+        )
 
     assert resp.status_code == 200, resp.text
     payload = resp.json()
@@ -1606,12 +1613,16 @@ async def test_crear_prospecto_manual_permite_datos_de_persona(
     assert payload["prospecto"]["primer_apellido"] == "Lopez"
     assert payload["prospecto"]["segundo_apellido"] == "Garcia"
     assert payload["prospecto"]["nombre_comercial"] == "Grupo Demo SA de CV"
+    assert payload["prospecto"]["address"] == "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600"
+    assert payload["prospecto"]["address_full"] == "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600"
     assert fake_repo.calls and fake_repo.calls[-1][0] == "create_prospecto_manual"
     create_call = fake_repo.calls[-1][1]
     assert create_call["payload"]["titulo"] == "Ing."
     assert create_call["payload"]["nombre"] == "Ana"
     assert create_call["payload"]["primer_apellido"] == "Lopez"
     assert create_call["payload"]["segundo_apellido"] == "Garcia"
+    assert create_call["payload"]["address"] == "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600"
+    assert create_call["payload"]["address_full"] == "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600"
 
 
 @pytest.mark.asyncio
@@ -1628,6 +1639,11 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
                     "titulo": "Lic.",
                     "nombre": "Carlos",
                     "primer_apellido": "Perez",
+                    "tipo_vialidad": "Calle",
+                    "nombre_vialidad": "Madero",
+                    "numero_exterior": "456",
+                    "municipio_nombre": "Monterrey",
+                    "estado_nombre": "Nuevo Leon",
                     "email": "carlos@ejemplo.com",
                     "phone": "+52 55 1234 5678",
                 },
@@ -1635,6 +1651,8 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
                     "nombre": "Mariana",
                     "primer_apellido": "Ruiz",
                     "segundo_apellido": "Lopez",
+                    "colonia": "Centro",
+                    "codigo_postal": "64000",
                 },
             ]
         },
@@ -1648,7 +1666,10 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == "Lic."
     assert fake_repo.last_bulk_inserted_prospectos[0]["nombre"] == "Carlos"
     assert fake_repo.last_bulk_inserted_prospectos[0]["primer_apellido"] == "Perez"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["address"] == "Calle Madero 456, Monterrey, Nuevo Leon"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["address_full"] == "Calle Madero 456, Monterrey, Nuevo Leon"
     assert fake_repo.last_bulk_inserted_prospectos[1]["display_name"] == "Mariana Ruiz Lopez"
+    assert fake_repo.last_bulk_inserted_prospectos[1]["address"] == "Centro, CP 64000"
     call_names = [call_name for call_name, _ in fake_repo.calls]
     assert "list_prospectos_by_emails" in call_names
     assert "list_prospectos_by_phones" in call_names

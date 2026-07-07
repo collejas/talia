@@ -40,8 +40,23 @@ export type ProspectoItem = {
   website_tls_ok?: boolean | null
   website: string | null
   address: string | null
+  address_full?: string | null
+  tipo_vialidad?: string | null
+  nombre_vialidad?: string | null
+  numero_exterior?: string | null
+  numero_interior?: string | null
+  colonia?: string | null
+  codigo_postal?: string | null
   estado_nombre?: string | null
+  estado_cve?: string | null
   municipio_nombre?: string | null
+  municipio_cve?: string | null
+  localidad_cve?: string | null
+  localidad?: string | null
+  cvegeo?: string | null
+  asentamiento?: string | null
+  entre_calles?: string | null
+  referencia?: string | null
   state_name?: string | null
   municipality_name?: string | null
   country_name?: string | null
@@ -554,6 +569,22 @@ export type ProspectoManualInput = {
   email?: string | null
   website?: string | null
   address?: string | null
+  tipo_vialidad?: string | null
+  nombre_vialidad?: string | null
+  numero_exterior?: string | null
+  numero_interior?: string | null
+  colonia?: string | null
+  codigo_postal?: string | null
+  estado_cve?: string | null
+  estado_nombre?: string | null
+  municipio_cve?: string | null
+  municipio_nombre?: string | null
+  localidad_cve?: string | null
+  localidad?: string | null
+  cvegeo?: string | null
+  asentamiento?: string | null
+  entre_calles?: string | null
+  referencia?: string | null
   segmento?: string | null
   metadata?: Record<string, unknown> | null
 }
