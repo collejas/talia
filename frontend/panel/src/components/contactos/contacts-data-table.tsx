@@ -463,6 +463,16 @@ const CONTACT_COLUMNS: Array<{
     },
     defaultVisible: true,
   },
+  {
+    id: "contact_created_at",
+    label: "Creado en",
+    sortValue: (row) => formatContactValue((row.raw as Record<string, unknown> | undefined)?.creado_en),
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      return <span className="tabular-nums">{formatDate(raw?.creado_en)}</span>;
+    },
+    defaultVisible: true,
+  },
 ];
 
 const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) => ({
@@ -983,7 +993,17 @@ export function ContactsDataTable({
   }, [canWrite, canReassign, canEditAny, canDeleteAny, canEditContactRow, canDeleteContactRow]);
 
   const contactColumnOrder = React.useMemo(
-    () => ["contact_id", "contact_name", "contact_account_code", "contact_company", "contact_phone", "contact_email", "contact_owner", "acciones"],
+    () => [
+      "contact_id",
+      "contact_name",
+      "contact_account_code",
+      "contact_company",
+      "contact_phone",
+      "contact_email",
+      "contact_owner",
+      "contact_created_at",
+      "acciones",
+    ],
     [],
   );
 
@@ -1001,6 +1021,7 @@ export function ContactsDataTable({
       contact_phone: true,
       contact_email: true,
       contact_owner: true,
+      contact_created_at: true,
       acciones: true,
     }),
     [],
