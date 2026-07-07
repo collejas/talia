@@ -1,0 +1,38 @@
+{
+  "source_pdf": "Manual Sm Sinergia Lidera v1.pdf",
+  "source_pages": 52,
+  "output_files": [
+    "00_indice_base_conocimiento.md",
+    "01_identidad_filosofia_propuesta_valor.md",
+    "02_servicio_1_habilidades_profesionales.md",
+    "03_servicio_2_coaching_liderazgo_transformacional.md",
+    "04_servicio_3_planeacion_estrategica_ia.md",
+    "05_servicio_4_consultoria_direccion_estrategica.md",
+    "06_servicio_5_implementacion_software_organizacional.md",
+    "07_costos_horarios_modalidades_contacto.md",
+    "08_faq_comercial.md",
+    "09_reglas_asistente.md",
+    "sm_sinergia_lidera_kb_completa.md"
+  ],
+  "recommended_for_vector_store": [
+    "00_indice_base_conocimiento.md",
+    "01_identidad_filosofia_propuesta_valor.md",
+    "02_servicio_1_habilidades_profesionales.md",
+    "03_servicio_2_coaching_liderazgo_transformacional.md",
+    "04_servicio_3_planeacion_estrategica_ia.md",
+    "05_servicio_4_consultoria_direccion_estrategica.md",
+    "06_servicio_5_implementacion_software_organizacional.md",
+    "07_costos_horarios_modalidades_contacto.md",
+    "08_faq_comercial.md",
+    "09_reglas_asistente.md"
+  ],
+  "operations": [
+    "converted_pdf_text_to_markdown",
+    "removed_page_markers",
+    "normalized_line_breaks",
+    "separated_by_service",
+    "created_commercial_faq",
+    "created_assistant_rules",
+    "added_frontmatter_metadata"
+  ]
+}
