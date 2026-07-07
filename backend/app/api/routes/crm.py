@@ -4343,7 +4343,6 @@ class ProspectoManualPayload(BaseModel):
     municipio_nombre: str | None = Field(default=None, max_length=120)
     localidad_cve: str | None = Field(default=None, max_length=16)
     localidad: str | None = Field(default=None, max_length=120)
-    cvegeo: str | None = Field(default=None, max_length=16)
     asentamiento: str | None = Field(default=None, max_length=120)
     entre_calles: str | None = Field(default=None, max_length=255)
     referencia: str | None = Field(default=None, max_length=255)
@@ -4405,7 +4404,6 @@ class ProspectoUpdatePayload(BaseModel):
     municipio_nombre: str | None = Field(default=None, max_length=120)
     localidad_cve: str | None = Field(default=None, max_length=16)
     localidad: str | None = Field(default=None, max_length=120)
-    cvegeo: str | None = Field(default=None, max_length=16)
     asentamiento: str | None = Field(default=None, max_length=120)
     entre_calles: str | None = Field(default=None, max_length=255)
     referencia: str | None = Field(default=None, max_length=255)
@@ -8959,7 +8957,6 @@ _PROSPECTO_ADDRESS_FIELDS = (
     "municipio_nombre",
     "localidad_cve",
     "localidad",
-    "cvegeo",
     "asentamiento",
     "entre_calles",
     "referencia",
@@ -9006,7 +9003,6 @@ def _compose_prospecto_address_text(raw: dict[str, Any]) -> str | None:
     extra_parts = [
         _clean_text(raw.get("entre_calles")),
         _clean_text(raw.get("referencia")),
-        _clean_text(raw.get("cvegeo")),
     ]
     address_parts.extend(part for part in extra_parts if part)
 
@@ -9174,7 +9170,6 @@ def _build_prospecto_update_payload(
         "municipio_nombre",
         "localidad_cve",
         "localidad",
-        "cvegeo",
         "asentamiento",
         "entre_calles",
         "referencia",

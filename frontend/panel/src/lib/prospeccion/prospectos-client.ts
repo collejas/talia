@@ -53,7 +53,6 @@ export type ProspectoItem = {
   municipio_cve?: string | null
   localidad_cve?: string | null
   localidad?: string | null
-  cvegeo?: string | null
   asentamiento?: string | null
   entre_calles?: string | null
   referencia?: string | null
@@ -581,7 +580,6 @@ export type ProspectoManualInput = {
   municipio_nombre?: string | null
   localidad_cve?: string | null
   localidad?: string | null
-  cvegeo?: string | null
   asentamiento?: string | null
   entre_calles?: string | null
   referencia?: string | null

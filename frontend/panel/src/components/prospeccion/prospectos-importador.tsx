@@ -65,7 +65,6 @@ const PROSPECT_TEMPLATE_HEADERS = [
   "Municipio cve",
   "Localidad",
   "Localidad cve",
-  "CVEGEO",
   "Asentamiento",
   "Entre calles",
   "Referencia",
@@ -95,7 +94,6 @@ const PROSPECT_TEMPLATE_EXAMPLE = [
   "016",
   "Roma Norte",
   "009",
-  "090010001001",
   "Centro",
   "Al lado del parque",
   "Frente al metro",
@@ -128,7 +126,6 @@ type ProspectoImportField =
   | "municipio_nombre"
   | "localidad_cve"
   | "localidad"
-  | "cvegeo"
   | "asentamiento"
   | "entre_calles"
   | "referencia"
@@ -195,7 +192,6 @@ const HEADER_ALIASES: Record<string, ProspectoImportField> = {
   municipiocve: "municipio_cve",
   localidad: "localidad",
   localidadcve: "localidad_cve",
-  cvegeo: "cvegeo",
   asentamiento: "asentamiento",
   entrecalles: "entre_calles",
   referencia: "referencia",
@@ -304,7 +300,6 @@ function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | nu
     municipio_nombre: normalizeCell(mapped.municipio_nombre) || undefined,
     localidad_cve: normalizeCell(mapped.localidad_cve) || undefined,
     localidad: normalizeCell(mapped.localidad) || undefined,
-    cvegeo: normalizeCell(mapped.cvegeo) || undefined,
     asentamiento: normalizeCell(mapped.asentamiento) || undefined,
     entre_calles: normalizeCell(mapped.entre_calles) || undefined,
     referencia: normalizeCell(mapped.referencia) || undefined,
