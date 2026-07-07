@@ -96,6 +96,12 @@ export type ProspectoFiltroInput = {
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
   whatsapp_permitido?: boolean | null
   llamada_permitida?: boolean | null
+  envios_correo_min?: number | null
+  envios_correo_max?: number | null
+  envios_whatsapp_min?: number | null
+  envios_whatsapp_max?: number | null
+  envios_voz_min?: number | null
+  envios_voz_max?: number | null
 }
 
 export type ProspeccionCanalConfigInput = {
@@ -670,6 +676,12 @@ type ListProspectosParams = {
   conEnvio?: boolean
   conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
   conScraper?: boolean
+  enviosCorreoMin?: number
+  enviosCorreoMax?: number
+  enviosWhatsappMin?: number
+  enviosWhatsappMax?: number
+  enviosVozMin?: number
+  enviosVozMax?: number
   includeScraperStatus?: boolean
 }
 
@@ -742,6 +754,24 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   }
   if (typeof params.conScraper === "boolean") {
     url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")
+  }
+  if (typeof params.enviosCorreoMin === "number") {
+    url.searchParams.set("envios_correo_min", String(params.enviosCorreoMin))
+  }
+  if (typeof params.enviosCorreoMax === "number") {
+    url.searchParams.set("envios_correo_max", String(params.enviosCorreoMax))
+  }
+  if (typeof params.enviosWhatsappMin === "number") {
+    url.searchParams.set("envios_whatsapp_min", String(params.enviosWhatsappMin))
+  }
+  if (typeof params.enviosWhatsappMax === "number") {
+    url.searchParams.set("envios_whatsapp_max", String(params.enviosWhatsappMax))
+  }
+  if (typeof params.enviosVozMin === "number") {
+    url.searchParams.set("envios_voz_min", String(params.enviosVozMin))
+  }
+  if (typeof params.enviosVozMax === "number") {
+    url.searchParams.set("envios_voz_max", String(params.enviosVozMax))
   }
   if (typeof params.includeScraperStatus === "boolean") {
     url.searchParams.set("include_scraper_status", params.includeScraperStatus ? "true" : "false")

@@ -115,6 +115,7 @@ type ConEnvioModoFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
 type MinRatingFilter = "" | "3" | "4" | "4.5"
 type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
+type EnvioCountChannel = "correo" | "whatsapp" | "voz"
 type OrderOption = "creado" | "nombre"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 type ProspectosSortKey =
@@ -144,6 +145,12 @@ type Filters = {
   campanaId: string
   conEnvioModo: ConEnvioModoFilter
   conEnvioCanales: ConEnvioCanalFilter[]
+  enviosCorreoMin: string
+  enviosCorreoMax: string
+  enviosWhatsappMin: string
+  enviosWhatsappMax: string
+  enviosVozMin: string
+  enviosVozMax: string
   conScraper: ConScraperFilter
   segmento: string
   geoEstado: string
@@ -192,6 +199,41 @@ const envioCanalLabel: Record<string, string> = {
   whatsapp: "WhatsApp",
   llamada: "Voz",
 }
+const envioCountChannelLabel: Record<EnvioCountChannel, string> = {
+  correo: "Correo",
+  whatsapp: "WhatsApp",
+  voz: "Voz",
+}
+const ENVIO_COUNT_FILTER_FIELDS: Record<
+  EnvioCountChannel,
+  { min: keyof Filters; max: keyof Filters }
+> = {
+  correo: {
+    min: "enviosCorreoMin",
+    max: "enviosCorreoMax",
+  },
+  whatsapp: {
+    min: "enviosWhatsappMin",
+    max: "enviosWhatsappMax",
+  },
+  voz: {
+    min: "enviosVozMin",
+    max: "enviosVozMax",
+  },
+}
+
+function normalizeCountInput(value: unknown): string {
+  const raw = typeof value === "number" && Number.isFinite(value) ? String(value) : typeof value === "string" ? value : ""
+  const trimmed = raw.trim()
+  return /^\d+$/.test(trimmed) ? trimmed : ""
+}
+
+function parseCountValue(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number.parseInt(trimmed, 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
 
 function normalizeEnvioCanal(raw?: string | null): ConEnvioCanalFilter | null {
   const value = (raw || "").trim().toLowerCase()
@@ -231,6 +273,12 @@ const initialFilters: Filters = {
   campanaId: "",
   conEnvioModo: "",
   conEnvioCanales: [],
+  enviosCorreoMin: "",
+  enviosCorreoMax: "",
+  enviosWhatsappMin: "",
+  enviosWhatsappMax: "",
+  enviosVozMin: "",
+  enviosVozMax: "",
   conScraper: "",
   segmento: "",
   geoEstado: "",
@@ -700,6 +748,12 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       : filtersObj["conEnvio"] === "si"
         ? ["correo", "whatsapp", "llamada"]
         : [],
+    enviosCorreoMin: normalizeCountInput(filtersObj["enviosCorreoMin"]),
+    enviosCorreoMax: normalizeCountInput(filtersObj["enviosCorreoMax"]),
+    enviosWhatsappMin: normalizeCountInput(filtersObj["enviosWhatsappMin"]),
+    enviosWhatsappMax: normalizeCountInput(filtersObj["enviosWhatsappMax"]),
+    enviosVozMin: normalizeCountInput(filtersObj["enviosVozMin"]),
+    enviosVozMax: normalizeCountInput(filtersObj["enviosVozMax"]),
     conScraper:
       filtersObj["conScraper"] === "si" || filtersObj["conScraper"] === "no"
         ? filtersObj["conScraper"]
@@ -1510,6 +1564,14 @@ function ProspectosView() {
       const prefix = filters.conEnvioModo === "no" ? "Sin envío" : "Con envío"
       chips.push(`${prefix}: ${labels.join(", ")}`)
     }
+    for (const channel of ["correo", "whatsapp", "voz"] as const) {
+      const config = ENVIO_COUNT_FILTER_FIELDS[channel]
+      const minValue = filters[config.min] as string
+      const maxValue = filters[config.max] as string
+      if (!minValue && !maxValue) continue
+      const rangeLabel = minValue && maxValue ? `${minValue} - ${maxValue}` : minValue ? `${minValue}+` : `hasta ${maxValue}`
+      chips.push(`${envioCountChannelLabel[channel]} envíos: ${rangeLabel}`)
+    }
     if (filters.conScraper) {
       chips.push(`Con scraper: ${filters.conScraper === "si" ? "Sí" : "No"}`)
     }
@@ -1552,6 +1614,7 @@ function ProspectosView() {
         filters.contactFilters.includes("website_has"),
         filters.contactFilters.includes("website_missing")
       )
+      const envioCountFilters = buildEnvioCountFilters(filters)
       const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
         filters.dateOption,
         filters.customDateFrom,
@@ -1582,6 +1645,7 @@ function ProspectosView() {
           phonePresent,
           emailPresent,
           websitePresent,
+          ...envioCountFilters,
           metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
           queryFilters: filters.queryFilters.length ? filters.queryFilters : undefined,
@@ -1668,6 +1732,7 @@ function ProspectosView() {
           filters.contactFilters.includes("website_has"),
           filters.contactFilters.includes("website_missing")
         )
+        const envioCountFilters = buildEnvioCountFilters(filters)
         const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
           filters.dateOption,
           filters.customDateFrom,
@@ -1698,6 +1763,7 @@ function ProspectosView() {
           phonePresent,
           emailPresent,
           websitePresent,
+          ...envioCountFilters,
           metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
           dateFrom,
@@ -3974,6 +4040,55 @@ function ProspectosView() {
               </DropdownMenu>
             </div>
             <div className="space-y-1">
+              <Label>Cantidad de envíos</Label>
+              <div className="grid gap-3 xl:grid-cols-3">
+                {(["correo", "whatsapp", "voz"] as const).map((channel) => {
+                  const config = ENVIO_COUNT_FILTER_FIELDS[channel]
+                  const minValue = filters[config.min] as string
+                  const maxValue = filters[config.max] as string
+                  return (
+                    <div key={channel} className="rounded-lg border bg-background p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {envioCountChannelLabel[channel]}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder="Mín"
+                          value={minValue}
+                          onChange={(event) =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              [config.min]: event.target.value,
+                            }))
+                          }
+                          className="h-9 w-full"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder="Máx"
+                          value={maxValue}
+                          onChange={(event) =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              [config.max]: event.target.value,
+                            }))
+                          }
+                          className="h-9 w-full"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="space-y-1">
               <Label>Con scraper</Label>
               <Select
                 value={filters.conScraper || "all"}
@@ -5995,6 +6110,17 @@ function resolveConEnvio(
   if (modo === "no") return false
   if (canales.length) return true
   return undefined
+}
+
+function buildEnvioCountFilters(filters: Filters) {
+  return {
+    enviosCorreoMin: parseCountValue(filters.enviosCorreoMin),
+    enviosCorreoMax: parseCountValue(filters.enviosCorreoMax),
+    enviosWhatsappMin: parseCountValue(filters.enviosWhatsappMin),
+    enviosWhatsappMax: parseCountValue(filters.enviosWhatsappMax),
+    enviosVozMin: parseCountValue(filters.enviosVozMin),
+    enviosVozMax: parseCountValue(filters.enviosVozMax),
+  }
 }
 
 function getProspectoEnvioCanales(

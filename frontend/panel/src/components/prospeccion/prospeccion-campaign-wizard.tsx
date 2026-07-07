@@ -135,6 +135,12 @@ function sanitizeFilters(filters: ProspectoFiltroInput): ProspectoFiltroInput {
   if (filters.stage) clean.stage = filters.stage
   if (typeof filters.whatsapp_permitido === "boolean") clean.whatsapp_permitido = filters.whatsapp_permitido
   if (typeof filters.llamada_permitida === "boolean") clean.llamada_permitida = filters.llamada_permitida
+  if (typeof filters.envios_correo_min === "number") clean.envios_correo_min = filters.envios_correo_min
+  if (typeof filters.envios_correo_max === "number") clean.envios_correo_max = filters.envios_correo_max
+  if (typeof filters.envios_whatsapp_min === "number") clean.envios_whatsapp_min = filters.envios_whatsapp_min
+  if (typeof filters.envios_whatsapp_max === "number") clean.envios_whatsapp_max = filters.envios_whatsapp_max
+  if (typeof filters.envios_voz_min === "number") clean.envios_voz_min = filters.envios_voz_min
+  if (typeof filters.envios_voz_max === "number") clean.envios_voz_max = filters.envios_voz_max
   return clean
 }
 

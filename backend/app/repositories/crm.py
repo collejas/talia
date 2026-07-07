@@ -16577,6 +16577,12 @@ class CRMRepository:
         con_envio: bool | None = None,
         con_envio_canales: Sequence[str] | None = None,
         con_scraper: bool | None = None,
+        envios_correo_min: int | None = None,
+        envios_correo_max: int | None = None,
+        envios_whatsapp_min: int | None = None,
+        envios_whatsapp_max: int | None = None,
+        envios_voz_min: int | None = None,
+        envios_voz_max: int | None = None,
         timezone_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
@@ -16679,6 +16685,17 @@ class CRMRepository:
 
         if min_rating is not None:
             params["rating"] = f"gte.{min_rating}"
+
+        envio_count_filters = (
+            ("envios_correo_total", envios_correo_min, envios_correo_max),
+            ("envios_whatsapp_total", envios_whatsapp_min, envios_whatsapp_max),
+            ("envios_voz_total", envios_voz_min, envios_voz_max),
+        )
+        for column_name, minimum, maximum in envio_count_filters:
+            if minimum is not None:
+                and_filters.append(f"{column_name}.gte.{int(minimum)}")
+            if maximum is not None:
+                and_filters.append(f"{column_name}.lte.{int(maximum)}")
 
         if estrato_group:
             normalized_estrato_group = str(estrato_group).strip().lower()

@@ -4056,7 +4056,25 @@ class ProspectoListQuery(BaseModel):
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
+    envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_whatsapp_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_whatsapp_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_voz_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_voz_max: int | None = Field(default=None, ge=0, le=1_000_000)
     include_scraper_status: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def _validate_envio_count_ranges(self) -> "ProspectoListQuery":
+        ranges = (
+            ("envios_correo", self.envios_correo_min, self.envios_correo_max),
+            ("envios_whatsapp", self.envios_whatsapp_min, self.envios_whatsapp_max),
+            ("envios_voz", self.envios_voz_min, self.envios_voz_max),
+        )
+        for name, minimum, maximum in ranges:
+            if minimum is not None and maximum is not None and minimum > maximum:
+                raise ValueError(f"{name}_min_must_be_less_or_equal_than_max")
+        return self
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -4078,6 +4096,24 @@ class ProspectoFiltroPayload(BaseModel):
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
+    envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_whatsapp_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_whatsapp_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_voz_min: int | None = Field(default=None, ge=0, le=1_000_000)
+    envios_voz_max: int | None = Field(default=None, ge=0, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _validate_envio_count_ranges(self) -> "ProspectoFiltroPayload":
+        ranges = (
+            ("envios_correo", self.envios_correo_min, self.envios_correo_max),
+            ("envios_whatsapp", self.envios_whatsapp_min, self.envios_whatsapp_max),
+            ("envios_voz", self.envios_voz_min, self.envios_voz_max),
+        )
+        for name, minimum, maximum in ranges:
+            if minimum is not None and maximum is not None and minimum > maximum:
+                raise ValueError(f"{name}_min_must_be_less_or_equal_than_max")
+        return self
 
 
 class ProspeccionCanalConfig(BaseModel):
@@ -9290,6 +9326,12 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "campana_id": filters.campana_id,
         "con_envio": filters.con_envio,
         "con_scraper": filters.con_scraper,
+        "envios_correo_min": filters.envios_correo_min,
+        "envios_correo_max": filters.envios_correo_max,
+        "envios_whatsapp_min": filters.envios_whatsapp_min,
+        "envios_whatsapp_max": filters.envios_whatsapp_max,
+        "envios_voz_min": filters.envios_voz_min,
+        "envios_voz_max": filters.envios_voz_max,
     }
 
 
@@ -30096,6 +30138,12 @@ async def listar_prospectos(
         Query(alias="con_envio_canal"),
     ] = None,
     con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
+    envios_correo_min: Annotated[int | None, Query(alias="envios_correo_min")] = None,
+    envios_correo_max: Annotated[int | None, Query(alias="envios_correo_max")] = None,
+    envios_whatsapp_min: Annotated[int | None, Query(alias="envios_whatsapp_min")] = None,
+    envios_whatsapp_max: Annotated[int | None, Query(alias="envios_whatsapp_max")] = None,
+    envios_voz_min: Annotated[int | None, Query(alias="envios_voz_min")] = None,
+    envios_voz_max: Annotated[int | None, Query(alias="envios_voz_max")] = None,
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
     actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
 ) -> dict[str, Any]:
@@ -30148,6 +30196,12 @@ async def listar_prospectos(
                 con_envio=params.con_envio,
                 con_envio_canales=con_envio_canales_values or None,
                 con_scraper=params.con_scraper,
+                envios_correo_min=envios_correo_min,
+                envios_correo_max=envios_correo_max,
+                envios_whatsapp_min=envios_whatsapp_min,
+                envios_whatsapp_max=envios_whatsapp_max,
+                envios_voz_min=envios_voz_min,
+                envios_voz_max=envios_voz_max,
                 timezone_name=effective_timezone,
             )
         except CRMRepositoryError as exc:
@@ -30218,6 +30272,17 @@ async def listar_prospectos(
                 "con_envio_filter": params.con_envio is not None,
                 "con_envio_canal_filter": bool(con_envio_canales_values),
                 "con_scraper_filter": params.con_scraper is not None,
+                "envios_count_filter": any(
+                    value is not None
+                    for value in (
+                        envios_correo_min,
+                        envios_correo_max,
+                        envios_whatsapp_min,
+                        envios_whatsapp_max,
+                        envios_voz_min,
+                        envios_voz_max,
+                    )
+                ),
                 "metadata_query_filter": bool(metadata_query),
                 "actividad_filter": bool(actividad),
                 "rows_returned": len(rows),
@@ -30423,6 +30488,12 @@ async def listar_prospectos_bootstrap(
             params=params,
             con_envio_canal=con_envio_canal,
             con_envio_canales=con_envio_canales,
+            envios_correo_min=params.envios_correo_min,
+            envios_correo_max=params.envios_correo_max,
+            envios_whatsapp_min=params.envios_whatsapp_min,
+            envios_whatsapp_max=params.envios_whatsapp_max,
+            envios_voz_min=params.envios_voz_min,
+            envios_voz_max=params.envios_voz_max,
             metadata_query=metadata_query,
             actividad=actividad,
         )
