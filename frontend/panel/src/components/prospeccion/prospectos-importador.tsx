@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState, type ChangeEvent } from "react"
-import { IconAlertTriangle, IconCircleCheck, IconLoader, IconUpload } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCircleCheck, IconDownload, IconLoader, IconUpload } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -42,8 +42,50 @@ type ParsedProspectoPreview = {
 
 const ACCEPTED_FILE_EXT = ".csv,.xlsx,.xls"
 const MAX_IMPORT_ROWS = 2000
+const PROSPECT_TEMPLATE_HEADERS = [
+  "Nombre visible",
+  "Empresa / nombre comercial",
+  "Título",
+  "Nombre",
+  "Primer apellido",
+  "Segundo apellido",
+  "Correo",
+  "Teléfono",
+  "Sitio web",
+  "Dirección",
+  "Segmento",
+  "Actividad",
+] as const
+const PROSPECT_TEMPLATE_EXAMPLE = [
+  "Grupo Demo",
+  "Grupo Demo SA de CV",
+  "Ing.",
+  "Ana",
+  "Lopez",
+  "Garcia",
+  "ana@ejemplo.com",
+  "+52 55 1111 2222",
+  "https://ejemplo.com",
+  "Av. Reforma 123, CDMX",
+  "Servicios",
+  "Consultoría",
+]
 
-const HEADER_ALIASES: Record<string, keyof ProspectoManualInput> = {
+type ProspectoImportField =
+  | "display_name"
+  | "nombre_comercial"
+  | "titulo"
+  | "nombre"
+  | "primer_apellido"
+  | "segundo_apellido"
+  | "actividad"
+  | "phone"
+  | "email"
+  | "website"
+  | "address"
+  | "segmento"
+
+const HEADER_ALIASES: Record<string, ProspectoImportField> = {
   displayname: "display_name",
   nombrevisible: "display_name",
   nombrevisibleprospecto: "display_name",
@@ -101,6 +143,18 @@ function normalizeCell(value: unknown): string {
   return String(value).trim()
 }
 
+function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = "noopener noreferrer"
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 function composeDisplayName(item: ProspectoManualInput): string {
   const explicit = normalizeCell(item.display_name)
   if (explicit) return explicit
@@ -115,7 +169,7 @@ function composeDisplayName(item: ProspectoManualInput): string {
 }
 
 function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | null {
-  const mapped: Partial<ProspectoManualInput> = {}
+  const mapped: Partial<Record<ProspectoImportField, string>> = {}
   for (const [header, value] of Object.entries(row)) {
     const normalizedHeader = normalizeHeader(header)
     const field = HEADER_ALIASES[normalizedHeader]
@@ -145,6 +199,23 @@ function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | nu
     address: normalizeCell(mapped.address) || undefined,
     segmento: normalizeCell(mapped.segmento) || undefined,
   }
+}
+
+async function downloadProspectTemplate(): Promise<void> {
+  const workbookModule = await import("xlsx")
+  const worksheet = workbookModule.utils.aoa_to_sheet([
+    [...PROSPECT_TEMPLATE_HEADERS],
+    [...PROSPECT_TEMPLATE_EXAMPLE],
+  ])
+  const workbook = workbookModule.utils.book_new()
+  workbookModule.utils.book_append_sheet(workbook, worksheet, "Prospectos")
+  const buffer = workbookModule.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer
+  downloadBlob(
+    "plantilla_importacion_prospectos.xlsx",
+    new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+  )
 }
 
 async function parseImportedFile(file: File): Promise<{
@@ -218,6 +289,7 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
   const validItemCount = parsedItems.length
   const invalidCount = errors.length
   const readyToImport = validItemCount > 0 && status === "ready"
+  const isImporting = status === "importing"
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
@@ -278,6 +350,10 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
     }
   }, [onImported, parsedItems])
 
+  const handleDownloadTemplate = useCallback(() => {
+    void downloadProspectTemplate()
+  }, [])
+
   const fileLabel = useMemo(() => file?.name ?? "", [file])
 
   return (
@@ -298,6 +374,19 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Plantilla descargable</p>
+                <p className="text-xs text-muted-foreground">
+                  Descarga un archivo base con encabezados listos para completar y volver a importar.
+                </p>
+              </div>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void handleDownloadTemplate()}>
+                <IconDownload className="mr-1.5 size-4" />
+                Descargar plantilla
+              </Button>
+            </div>
+
             <div className="space-y-1">
               <Input type="file" accept={ACCEPTED_FILE_EXT} onChange={handleFileChange} />
               <p className="text-xs text-muted-foreground">
@@ -372,8 +461,8 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
             <Button variant="ghost" onClick={() => handleOpenChange(false)} type="button">
               Cerrar
             </Button>
-            <Button onClick={() => void handleImport()} disabled={!readyToImport || status === "importing"}>
-              {status === "importing" ? (
+            <Button onClick={() => void handleImport()} disabled={!readyToImport || isImporting}>
+              {isImporting ? (
                 <>
                   <IconLoader className="mr-2 size-4 animate-spin" />
                   Importando...
