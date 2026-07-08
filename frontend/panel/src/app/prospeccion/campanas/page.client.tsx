@@ -67,7 +67,11 @@ const EMAIL_IMAGE_MAX_WIDTH_LANDSCAPE = 600
 const EMAIL_IMAGE_MAX_WIDTH_PORTRAIT = 420
 const EMAIL_TEMPLATE_PLACEHOLDER_PATTERN = /{{\s*([\w.-]+)\s*}}/g
 const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
+  { token: "{{display_name}}", label: "Nombre visible" },
   { token: "{{nombre}}", label: "Nombre" },
+  { token: "{{titulo}}", label: "Título" },
+  { token: "{{primer_apellido}}", label: "Primer apellido" },
+  { token: "{{segundo_apellido}}", label: "Segundo apellido" },
   { token: "{{empresa}}", label: "Empresa" },
   { token: "{{email}}", label: "Correo" },
   { token: "{{telefono}}", label: "Teléfono" },
@@ -956,7 +960,11 @@ ${secondCellHtml}
 
   const previewTemplateContext = useMemo(() => {
     if (!previewProspecto) return null
-    const nombre = (previewProspecto.display_name || "").trim()
+    const displayName = (previewProspecto.display_name || "").trim()
+    const titulo = (previewProspecto.titulo || "").trim()
+    const nombre = (previewProspecto.nombre || "").trim()
+    const primerApellido = (previewProspecto.primer_apellido || "").trim()
+    const segundoApellido = (previewProspecto.segundo_apellido || "").trim()
     const segmento = (previewProspecto.segmento || "").trim()
     const empresa = (templateForm.nombreEmpresa || "").trim() || segmento
     const email = (
@@ -1002,7 +1010,11 @@ ${secondCellHtml}
       bookingUrl = websiteUrl
     }
     return {
+      display_name: displayName,
       nombre,
+      titulo,
+      primer_apellido: primerApellido,
+      segundo_apellido: segundoApellido,
       empresa,
       email,
       telefono,
@@ -2164,7 +2176,7 @@ ${secondCellHtml}
                             onFocus={() => {
                               lastFocusedCorreoFieldRef.current = "asunto"
                             }}
-                            placeholder="Hola {{nombre}}, tenemos una propuesta para ti"
+                        placeholder="Hola {{nombre}}, tenemos una propuesta para ti"
                           />
                         </div>
                         <div className="space-y-1">
@@ -2198,7 +2210,7 @@ ${secondCellHtml}
                             onFocus={() => {
                               lastFocusedCorreoFieldRef.current = "cuerpoTexto"
                             }}
-                            placeholder="Hola {{nombre}}, ..."
+                            placeholder="Hola {{titulo}} {{nombre}} {{primer_apellido}}, ..."
                           />
                         </div>
                       </div>
@@ -2213,7 +2225,7 @@ ${secondCellHtml}
                               rows={5}
                               value={templateForm.cuerpoTexto}
                               onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
-                              placeholder="Hola {{nombre}}, ..."
+                              placeholder="Hola {{titulo}} {{nombre}} {{primer_apellido}}, ..."
                             />
                           </div>
                           <div className="space-y-1">
@@ -2448,7 +2460,7 @@ ${secondCellHtml}
                             </Button>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
+                            Variables: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
                           </p>
                         </div>
                       ) : null}
