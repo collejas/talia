@@ -979,6 +979,7 @@ function ProspectosView() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingDisplayNameBase, setEditingDisplayNameBase] = useState("")
   const [metadataBase, setMetadataBase] = useState<Record<string, unknown>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ProspectoItem | null>(null)
@@ -2223,6 +2224,7 @@ function ProspectosView() {
       setFormError(null)
       setFormMode("create")
       setEditingId(null)
+      setEditingDisplayNameBase("")
       setMetadataBase({})
       setFormSubmitting(false)
     }
@@ -3383,6 +3385,7 @@ function ProspectosView() {
     const metadataRecord = isRecord(prospecto.metadata) ? { ...prospecto.metadata } : {}
     setFormMode("edit")
     setEditingId(prospecto.id)
+    setEditingDisplayNameBase(prospecto.display_name ?? "")
     setMetadataBase(metadataRecord)
     const notaValue = metadataRecord["notas"]
     setFormValues({
@@ -3477,10 +3480,14 @@ function ProspectosView() {
       segundoApellido,
     })
     const payload: Record<string, unknown> = {}
-    if (displayName) {
+    if (formMode === "create") {
+      if (displayName) {
+        payload.display_name = displayName
+      } else if (nombreComercial) {
+        payload.display_name = derivedDisplayName
+      }
+    } else if (displayName && displayName !== editingDisplayNameBase.trim()) {
       payload.display_name = displayName
-    } else if (nombreComercial) {
-      payload.display_name = derivedDisplayName
     }
     const assignField = (value: string, key: string) => {
       const trimmed = value.trim()
@@ -3549,7 +3556,7 @@ function ProspectosView() {
     } finally {
       setFormSubmitting(false)
     }
-  }, [fetchProspectos, formMode, formValues, metadataBase, editingId, offset])
+  }, [fetchProspectos, formMode, formValues, metadataBase, editingId, offset, editingDisplayNameBase])
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget?.id) return

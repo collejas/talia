@@ -1717,6 +1717,51 @@ def test_build_contact_envios_entries_includes_person_fields() -> None:
 
 
 @pytest.mark.asyncio
+async def test_actualizar_prospecto_recalcula_nombre_visible_desde_persona_o_empresa(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    prospecto_id = uuid.uuid4()
+    fake_repo.prospectos_by_ids_result = [
+        {
+            "id": str(prospecto_id),
+            "display_name": "Grupo Demo",
+            "nombre_comercial": "Grupo Demo SA de CV",
+            "nombre": "Ana",
+            "primer_apellido": "Lopez",
+            "segundo_apellido": "Garcia",
+            "actividad": "Servicios",
+            "email": "ana@ejemplo.com",
+            "phone": "+52 55 1111 2222",
+            "metadata": {},
+        }
+    ]
+
+    resp = await client.patch(
+        f"/crm/prospeccion/prospectos/{prospecto_id}",
+        headers=_headers(include_user_token=True),
+        json={
+            "nombre_comercial": "Grupo Demo SA de CV",
+            "nombre": "Ana",
+            "primer_apellido": "Lopez",
+            "segundo_apellido": "Garcia",
+            "actividad": "Consultoría",
+            "email": "ana@ejemplo.com",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["prospecto"]["display_name"] == "Grupo Demo SA de CV"
+    call_names = [name for name, _ in fake_repo.calls]
+    assert "update_prospecto" in call_names
+    update_call = next(call_kwargs for call_name, call_kwargs in fake_repo.calls if call_name == "update_prospecto")
+    assert update_call["prospecto_id"] == prospecto_id
+    assert update_call["payload"]["display_name"] == "Grupo Demo SA de CV"
+    assert update_call["payload"]["nombre_comercial"] == "Grupo Demo SA de CV"
+
+
+@pytest.mark.asyncio
 async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

@@ -9184,8 +9184,16 @@ def _build_prospecto_update_payload(
             updates[field] = _clean_text(value)
         else:
             updates[field] = value
-    if "display_name" in updates and "nombre_comercial" not in raw:
-        updates["nombre_comercial"] = updates["display_name"]
+    if any(field in raw for field in ("display_name", "nombre_comercial", "nombre", "primer_apellido", "segundo_apellido")):
+        updates["display_name"] = _compose_prospecto_display_name(
+            display_name=raw.get("display_name") if "display_name" in raw else None,
+            nombre_comercial=raw.get("nombre_comercial"),
+            nombre=raw.get("nombre"),
+            primer_apellido=raw.get("primer_apellido"),
+            segundo_apellido=raw.get("segundo_apellido"),
+        )
+        if "display_name" in raw and not _clean_text(raw.get("nombre_comercial")):
+            updates["nombre_comercial"] = updates["display_name"]
     consolidated_address = _compose_prospecto_address_text(raw)
     if consolidated_address:
         updates["address"] = consolidated_address
