@@ -69,6 +69,26 @@ def _normalize_country_code(country_code: str | None) -> str | None:
     return None
 
 
+def _mx_phone_lookup_candidates(phone_number: str) -> list[str]:
+    """Genera variantes mexicanas del mismo número para cubrir formatos antiguos y nuevos."""
+
+    cleaned = phone_number.strip()
+    candidates = [cleaned]
+    if not cleaned.startswith("+52"):
+        return candidates
+
+    digits = "".join(ch for ch in cleaned if ch.isdigit())
+    if len(digits) == 13 and digits.startswith("521"):
+        alt = f"+52{digits[3:]}"
+        if alt not in candidates:
+            candidates.append(alt)
+    elif len(digits) == 12 and digits.startswith("52"):
+        alt = f"+521{digits[2:]}"
+        if alt not in candidates:
+            candidates.append(alt)
+    return candidates
+
+
 async def lookup_phone_number_free(
     phone_number: str,
     *,
@@ -77,39 +97,48 @@ async def lookup_phone_number_free(
     """Clasifica un teléfono con metadata local de phonenumbers (sin API externa)."""
 
     region = _normalize_country_code(country_code)
-    try:
-        parsed = phonenumbers.parse(phone_number, region)
-    except NumberParseException as exc:
-        raise TwilioLookupError(str(exc) or "phone_parse_failed") from exc
-    if region and shortnumberinfo.is_valid_short_number_for_region(parsed, region):
+    candidates = _mx_phone_lookup_candidates(phone_number) if region == "MX" else [phone_number]
+    parse_errors: list[str] = []
+    for candidate in candidates:
+        try:
+            parsed = phonenumbers.parse(candidate, region)
+        except NumberParseException as exc:
+            parse_errors.append(str(exc) or "phone_parse_failed")
+            continue
+        if region and shortnumberinfo.is_valid_short_number_for_region(parsed, region):
+            return {
+                "phone_number": candidate,
+                "country_code": region,
+                "national_format": candidate,
+                "carrier": {
+                    "type": "short_code",
+                    "number_type": "short_code",
+                    "source": "phonenumbers",
+                },
+            }
+        if not phonenumbers.is_possible_number(parsed):
+            parse_errors.append("phone_not_possible")
+            continue
+        if not phonenumbers.is_valid_number(parsed):
+            parse_errors.append("phone_not_valid")
+            continue
+
+        number_type = phonenumbers.number_type(parsed)
+        number_type_label = _PHONE_NUMBER_TYPE_LABELS.get(number_type, "unknown")
+        carrier_type = _carrier_type_from_phone_number_type(number_type)
         return {
-            "phone_number": phone_number,
-            "country_code": region,
-            "national_format": phone_number,
+            "phone_number": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164),
+            "country_code": phonenumbers.region_code_for_number(parsed),
+            "national_format": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL),
             "carrier": {
-                "type": "short_code",
-                "number_type": "short_code",
+                "type": carrier_type,
+                "number_type": number_type_label,
                 "source": "phonenumbers",
             },
         }
-    if not phonenumbers.is_possible_number(parsed):
-        raise TwilioLookupError("phone_not_possible")
-    if not phonenumbers.is_valid_number(parsed):
-        raise TwilioLookupError("phone_not_valid")
-
-    number_type = phonenumbers.number_type(parsed)
-    number_type_label = _PHONE_NUMBER_TYPE_LABELS.get(number_type, "unknown")
-    carrier_type = _carrier_type_from_phone_number_type(number_type)
-    return {
-        "phone_number": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164),
-        "country_code": phonenumbers.region_code_for_number(parsed),
-        "national_format": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL),
-        "carrier": {
-            "type": carrier_type,
-            "number_type": number_type_label,
-            "source": "phonenumbers",
-        },
-    }
+    if parse_errors:
+        raise TwilioLookupError(parse_errors[-1])
+    raise TwilioLookupError("phone_not_valid")
 
 
 async def lookup_phone_number(

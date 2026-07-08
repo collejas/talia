@@ -662,9 +662,6 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       extractStringField(data, "message") ||
       (typeof rawText === "string" && rawText.trim().length ? rawText : null) ||
       `Error ${response.status}`
-    if (detail === "twilio_not_configured" || detail.includes("Twilio credentials are not configured")) {
-      throw new Error("Twilio no está configurado (faltan credenciales). Configura `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` en el backend.")
-    }
     if (detail === "whatsapp_template_required") {
       throw new Error(
         "WhatsApp de prospección en frío requiere plantilla aprobada. Configura `whatsapp.templates.sales` o selecciona una plantilla con `twilio_content_sid`."
@@ -999,7 +996,6 @@ export async function verificarProspectos(payload: {
   prospecto_ids: string[]
   country_code?: string
   reintentar?: boolean
-  proveedor?: "gratis" | "twilio"
 }): Promise<ProspectoLookupResponse> {
   const prospectoIds = payload.prospecto_ids
     .map((id) => (id || "").trim())
@@ -1015,7 +1011,6 @@ export async function verificarProspectos(payload: {
   return requestJson<ProspectoLookupResponse>("/api/prospeccion/prospectos/verificar-telefonos", {
     method: "POST",
     body: JSON.stringify({
-      proveedor: payload.proveedor ?? "gratis",
       ...payload,
       prospecto_ids: prospectoIds,
     }),
@@ -1084,7 +1079,6 @@ export async function verificarSitiosWebProspectos(payload: {
 export async function verificarCompletoProspectos(payload: {
   prospecto_ids: string[]
   country_code?: string
-  proveedor?: "gratis" | "twilio"
   check_smtp?: boolean
   reintentar?: boolean
 }): Promise<ProspectoFullLookupResponse> {
@@ -1102,7 +1096,6 @@ export async function verificarCompletoProspectos(payload: {
   return requestJson<ProspectoFullLookupResponse>("/api/prospeccion/prospectos/verificar-completo", {
     method: "POST",
     body: JSON.stringify({
-      proveedor: payload.proveedor ?? "gratis",
       check_smtp: payload.check_smtp ?? true,
       ...payload,
       prospecto_ids: prospectoIds,
@@ -1114,10 +1107,8 @@ export async function ejecutarChecklistLookup(payload: {
   limit?: number
   reintentar?: boolean
   countryCode?: string
-  proveedor?: "gratis" | "twilio"
 } = {}): Promise<ChecklistLookupResponse> {
   const body: Record<string, unknown> = {}
-  body.proveedor = payload.proveedor ?? "gratis"
   if (typeof payload.limit === "number") {
     body.limit = payload.limit
   }

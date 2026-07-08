@@ -1763,6 +1763,48 @@ async def test_actualizar_prospecto_no_resetea_verificacion_si_el_telefono_no_ca
 
 
 @pytest.mark.asyncio
+async def test_actualizar_prospecto_no_resetea_verificacion_si_el_telefono_cambia_solo_de_formato(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    prospecto_id = uuid.uuid4()
+    fake_repo.prospectos_by_ids_result = [
+        {
+            "id": str(prospecto_id),
+            "display_name": "Grupo Demo",
+            "nombre_comercial": "Grupo Demo SA de CV",
+            "nombre": "Ana",
+            "primer_apellido": "Lopez",
+            "segundo_apellido": "Garcia",
+            "actividad": "Servicios",
+            "email": "ana@ejemplo.com",
+            "phone": "+52 55 1111 2222",
+            "phone_e164": "+5215511112222",
+            "lookup_status": "verificado",
+            "metadata": {},
+        }
+    ]
+
+    resp = await client.patch(
+        f"/crm/prospeccion/prospectos/{prospecto_id}",
+        headers=_headers(include_user_token=True),
+        json={
+            "phone": "55 1111 2222",
+            "actividad": "Consultoría",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    update_call = next(call_kwargs for call_name, call_kwargs in fake_repo.calls if call_name == "update_prospecto")
+    payload = update_call["payload"]
+    assert payload["actividad"] == "Consultoría"
+    assert "lookup_status" not in payload
+    assert "phone" not in payload
+    assert "phone_e164" not in payload
+    assert "phone_national" not in payload
+    assert "carrier_type" not in payload
+
+
+@pytest.mark.asyncio
 async def test_actualizar_prospecto_recalcula_nombre_visible_desde_persona_o_empresa(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

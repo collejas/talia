@@ -49,3 +49,11 @@ async def test_lookup_phone_number_free_classifies_short_code() -> None:
     result = await lookup_phone_number_free("911", country_code="US")
 
     assert (result.get("carrier") or {}).get("type") == "short_code"
+
+
+@pytest.mark.asyncio
+async def test_lookup_phone_number_free_accepts_mexico_legacy_mobile_format() -> None:
+    result = await lookup_phone_number_free("+5215511112222", country_code="MX")
+
+    assert result["phone_number"].startswith("+52")
+    assert (result.get("carrier") or {}).get("type") in {"mobile", "fixed_line_or_mobile", "landline", "unknown"}

@@ -2245,7 +2245,6 @@ function ProspectosView() {
       const response = await ejecutarChecklistLookup({
         limit: targetLimit,
         reintentar: true,
-        proveedor: "gratis",
       })
       if (!response.procesados) {
         setVerificationDialog({
@@ -2587,6 +2586,46 @@ function ProspectosView() {
       return next
     })
   }
+
+  const applyLookupUpdates = useCallback(
+    (
+      updates: Array<{
+        prospecto_id: string
+        lookup_status?: string | null
+        website_lookup_status?: string | null
+        email_lookup_status?: string | null
+        carrier_type?: string | null
+        website_http_status?: number | null
+        website_final_url?: string | null
+        email_risk_score?: number | null
+        email_recommendation?: string | null
+      }>,
+    ) => {
+      if (!updates.length) return
+      const updateMap = new Map(updates.map((item) => [item.prospecto_id, item]))
+      setItems((prev) =>
+        prev.map((item) => {
+          const update = updateMap.get(item.id)
+          if (!update) return item
+          return {
+            ...item,
+            lookup_status: update.lookup_status ?? item.lookup_status,
+            website_lookup_status: update.website_lookup_status ?? item.website_lookup_status,
+            email_lookup_status: update.email_lookup_status ?? item.email_lookup_status,
+            carrier_type: update.carrier_type ?? item.carrier_type,
+            website_http_status:
+              typeof update.website_http_status === "number" ? update.website_http_status : item.website_http_status,
+            website_final_url: update.website_final_url ?? item.website_final_url,
+            email_risk_score:
+              typeof update.email_risk_score === "number" ? update.email_risk_score : item.email_risk_score,
+            email_recommendation: update.email_recommendation ?? item.email_recommendation,
+          }
+        }),
+      )
+    },
+    [],
+  )
+
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setFilters((prev) => ({ ...prev, search: searchInput.trim() }))
@@ -2775,8 +2814,8 @@ function ProspectosView() {
     try {
       const response = await verificarProspectos({
         prospecto_ids: selectedIds,
-        proveedor: "gratis",
       })
+      applyLookupUpdates(response.detalles ?? [])
       setVerificationDialog({
         open: true,
         status: "success",
@@ -2796,7 +2835,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const handleVerifyEmails = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2813,6 +2852,14 @@ function ProspectosView() {
         prospecto_ids: selectedIds,
         check_smtp: true,
       })
+      applyLookupUpdates(
+        (response.detalles ?? []).map((item) => ({
+          prospecto_id: item.prospecto_id,
+          email_lookup_status: item.email_lookup_status ?? null,
+          email_risk_score: item.email_risk_score ?? null,
+          email_recommendation: item.email_recommendation ?? null,
+        })),
+      )
       setVerificationDialog({
         open: true,
         status: "success",
@@ -2832,7 +2879,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const handleVerifyWebsites = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2848,6 +2895,14 @@ function ProspectosView() {
       const response = await verificarSitiosWebProspectos({
         prospecto_ids: selectedIds,
       })
+      applyLookupUpdates(
+        (response.detalles ?? []).map((item) => ({
+          prospecto_id: item.prospecto_id,
+          website_lookup_status: item.website_lookup_status ?? null,
+          website_http_status: item.website_http_status ?? null,
+          website_final_url: item.website_final_url ?? null,
+        })),
+      )
       setVerificationDialog({
         open: true,
         status: "success",
@@ -2867,7 +2922,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const handleVerifyFull = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2882,9 +2937,29 @@ function ProspectosView() {
     try {
       const response = await verificarCompletoProspectos({
         prospecto_ids: selectedIds,
-        proveedor: "gratis",
         check_smtp: true,
       })
+      applyLookupUpdates(
+        [
+          ...(response.telefonos?.detalles ?? []).map((item) => ({
+            prospecto_id: item.prospecto_id,
+            lookup_status: item.lookup_status ?? null,
+            carrier_type: item.carrier_type ?? null,
+          })),
+          ...(response.sitios_web?.detalles ?? []).map((item) => ({
+            prospecto_id: item.prospecto_id,
+            website_lookup_status: item.website_lookup_status ?? null,
+            website_http_status: item.website_http_status ?? null,
+            website_final_url: item.website_final_url ?? null,
+          })),
+          ...(response.correos?.detalles ?? []).map((item) => ({
+            prospecto_id: item.prospecto_id,
+            email_lookup_status: item.email_lookup_status ?? null,
+            email_risk_score: item.email_risk_score ?? null,
+            email_recommendation: item.email_recommendation ?? null,
+          })),
+        ],
+      )
       const phones = response.telefonos?.procesados ?? 0
       const websites = response.sitios_web?.procesados ?? 0
       const emails = response.correos?.procesados ?? 0
@@ -2908,7 +2983,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const loadCampaignFilterOptions = useCallback(async () => {
     setCampaignFilterLoading(true)
