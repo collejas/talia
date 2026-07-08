@@ -9142,6 +9142,7 @@ def _dedupe_import_prospectos(items: Sequence[dict[str, Any]]) -> list[dict[str,
 def _build_prospecto_update_payload(
     *,
     update_payload: ProspectoUpdatePayload,
+    current_prospecto: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Determina los cambios permitidos y resetea lookup si se modifica el teléfono."""
 
@@ -9201,11 +9202,16 @@ def _build_prospecto_update_payload(
     elif "address" in updates:
         updates["address_full"] = updates["address"]
     phone_changed = False
+    current_phone = _normalize_phone_e164(
+        (current_prospecto or {}).get("phone_e164") or (current_prospecto or {}).get("phone")
+    )
     if "phone" in raw:
         phone_value = raw["phone"]
         normalized = _clean_text(phone_value) if isinstance(phone_value, str) else phone_value
-        updates["phone"] = normalized
-        phone_changed = True
+        normalized_phone = _normalize_phone_e164(normalized)
+        if normalized_phone != current_phone:
+            updates["phone"] = normalized
+            phone_changed = True
     if "metadata" in raw:
         metadata_value = raw["metadata"]
         updates["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
@@ -34421,12 +34427,12 @@ async def actualizar_prospecto(
 ) -> dict[str, Any]:
     """Actualiza campos básicos de cualquier prospecto."""
 
-    await _get_prospecto_or_404(
+    prospecto = await _get_prospecto_or_404(
         repo=repo,
         user_token=user_token,
         prospecto_id=prospecto_id,
     )
-    updates = _build_prospecto_update_payload(update_payload=payload)
+    updates = _build_prospecto_update_payload(update_payload=payload, current_prospecto=prospecto)
     try:
         updated = await repo.update_prospecto(
             usuario_token=user_token,
