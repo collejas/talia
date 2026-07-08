@@ -100,3 +100,40 @@ async def test_list_contactables_by_ids_uses_source_specific_columns(monkeypatch
     assert "address_full" in select
     assert params.get("fuente") == "eq.denue"
     assert "id" in params
+
+
+@pytest.mark.asyncio
+async def test_bulk_insert_prospectos_aligns_optional_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["json"] = kwargs.get("json")
+        return DummyResponse([{"ok": True}])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    await repo.bulk_insert_prospectos(
+        usuario_token="user-token",
+        items=[
+            {"nombre_comercial": "Grupo Demo", "email": "ana@ejemplo.com"},
+            {"nombre": "Ana", "primer_apellido": "Lopez"},
+        ],
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/rest/v1/prospeccion_prospectos"
+    json_payload = captured["json"]
+    assert isinstance(json_payload, list)
+    assert len(json_payload) == 2
+    first_keys = set(json_payload[0].keys())
+    second_keys = set(json_payload[1].keys())
+    assert first_keys == second_keys
+    assert json_payload[0]["primer_apellido"] is None
+    assert json_payload[1]["nombre_comercial"] is None

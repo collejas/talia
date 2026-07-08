@@ -49,6 +49,29 @@ def _normalize_pipeline_stage_row(row: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _align_postgrest_bulk_items(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Alinea las llaves de un lote antes de enviarlo a PostgREST."""
+
+    normalized_items = [dict(item) for item in items]
+    if not normalized_items:
+        return []
+
+    all_keys: list[str] = []
+    seen_keys: set[str] = set()
+    for row in normalized_items:
+        for key in row:
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            all_keys.append(key)
+
+    for row in normalized_items:
+        for key in all_keys:
+            row.setdefault(key, None)
+
+    return normalized_items
+
+
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,maneja_inventario))"
 
 PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS = 30.0
@@ -21700,7 +21723,7 @@ class CRMRepository:
         created: list[dict[str, Any]] = []
         chunk_size = 200
         for start in range(0, len(items), chunk_size):
-            chunk = list(items[start : start + chunk_size])
+            chunk = _align_postgrest_bulk_items(items[start : start + chunk_size])
             if organizacion_id is not None:
                 for row in chunk:
                     row.setdefault("organizacion_id", str(organizacion_id))
