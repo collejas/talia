@@ -34327,11 +34327,13 @@ async def importar_prospectos(
         if candidate_emails:
             existing_email_rows = await repo.list_prospectos_by_emails(
                 usuario_token=user_token,
+                organizacion_id=organizacion_id,
                 emails=candidate_emails,
             )
         if candidate_phones:
             existing_phone_rows = await repo.list_prospectos_by_phones(
                 usuario_token=user_token,
+                organizacion_id=organizacion_id,
                 phones=candidate_phones,
             )
     except CRMRepositoryError as exc:

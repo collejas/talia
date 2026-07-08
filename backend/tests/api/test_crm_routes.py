@@ -1629,9 +1629,10 @@ async def test_crear_prospecto_manual_permite_datos_de_persona(
 async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:
+    org_id = uuid.uuid4()
     resp = await client.post(
         "/crm/prospeccion/prospectos/importar",
-        headers=_headers(include_user_token=True),
+        headers={**_headers(include_user_token=True), "X-Organizacion-Id": str(org_id)},
         json={
             "items": [
                 {
@@ -1674,6 +1675,12 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert "list_prospectos_by_emails" in call_names
     assert "list_prospectos_by_phones" in call_names
     assert "bulk_insert_prospectos" in call_names
+    email_call = next(kwargs for call_name, kwargs in fake_repo.calls if call_name == "list_prospectos_by_emails")
+    phone_call = next(kwargs for call_name, kwargs in fake_repo.calls if call_name == "list_prospectos_by_phones")
+    bulk_call = next(kwargs for call_name, kwargs in fake_repo.calls if call_name == "bulk_insert_prospectos")
+    assert email_call["organizacion_id"] == org_id
+    assert phone_call["organizacion_id"] == org_id
+    assert bulk_call["organizacion_id"] == org_id
 
 
 @pytest.mark.asyncio

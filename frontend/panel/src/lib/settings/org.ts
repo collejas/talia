@@ -2,7 +2,6 @@ import { cookies } from "next/headers"
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt"
 import { parseTenantContextCookie } from "@/lib/auth/tenant-context"
-import { callCrmApi } from "@/lib/api/crm"
 import { TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
 
@@ -100,20 +99,12 @@ export async function resolveOrganizacionId(): Promise<string | null> {
       store.get("sb-access-token")?.value ||
       store.get("access_token")?.value ||
       null
-    const tenantOverrideRaw = store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null
-    const tenantOverride = parseTenantContextCookie(tenantOverrideRaw)
+    const tenantOverride = parseTenantContextCookie(store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null)
     if (token) {
       const tokenUserId = decodeJwtUserId(token)
       const decoded = decodeJwtOrganizacionId(token)
       if (tenantOverride && tokenUserId && tenantOverride.user_id === tokenUserId) {
-        const platformStatus = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
-          method: "GET",
-          organizacionId: null,
-          withUserToken: true,
-        })
-        if (platformStatus.ok && platformStatus.data?.is_platform_admin) {
-          return tenantOverride.tenant_id
-        }
+        return tenantOverride.tenant_id
       }
       if (tokenUserId) {
         const canonicalOrganizacionId = await resolveUsuarioOrganizacionIdFromDb(tokenUserId)
