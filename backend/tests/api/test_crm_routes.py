@@ -1683,6 +1683,39 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert bulk_call["organizacion_id"] == org_id
 
 
+def test_build_contact_envios_entries_includes_person_fields() -> None:
+    entries, suppressed = crm_routes._build_contact_envios_entries(
+        batch_id=uuid.uuid4(),
+        prospectos=[
+            {
+                "id": str(uuid.uuid4()),
+                "display_name": "Grupo Demo",
+                "nombre_comercial": "Grupo Demo SA de CV",
+                "titulo": "Ing.",
+                "nombre": "Ana",
+                "primer_apellido": "Lopez",
+                "segundo_apellido": "Garcia",
+                "email": "ana@ejemplo.com",
+                "phone": "+52 55 1111 2222",
+                "segmento": "Servicios",
+            }
+        ],
+        canales={"correo": {"enabled": True, "body": "Hola {{nombre}}"}},
+        programacion=None,
+        separacion_segundos=5,
+    )
+
+    assert suppressed == {}
+    assert len(entries) == 1
+    detalle = entries[0]["detalle"]
+    assert detalle["display_name"] == "Grupo Demo"
+    assert detalle["nombre_comercial"] == "Grupo Demo SA de CV"
+    assert detalle["titulo"] == "Ing."
+    assert detalle["nombre"] == "Ana"
+    assert detalle["primer_apellido"] == "Lopez"
+    assert detalle["segundo_apellido"] == "Garcia"
+
+
 @pytest.mark.asyncio
 async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     client: AsyncClient, fake_repo: DummyCRMRepository

@@ -9771,6 +9771,11 @@ def _build_contact_envios_entries(
         metadata = _ensure_dict(prospecto.get("metadata"), default={})
         detalle = {
             "display_name": prospecto.get("display_name"),
+            "nombre_comercial": prospecto.get("nombre_comercial"),
+            "titulo": prospecto.get("titulo"),
+            "nombre": prospecto.get("nombre"),
+            "primer_apellido": prospecto.get("primer_apellido"),
+            "segundo_apellido": prospecto.get("segundo_apellido"),
             "actividad": prospecto.get("actividad"),
             "email": prospecto.get("email"),
             "phone": prospecto.get("phone_e164") or prospecto.get("phone"),
@@ -9825,6 +9830,11 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
             {
                 "prospecto_id": key,
                 "display_name": detalle.get("display_name"),
+                "nombre_comercial": detalle.get("nombre_comercial"),
+                "titulo": detalle.get("titulo"),
+                "nombre": detalle.get("nombre"),
+                "primer_apellido": detalle.get("primer_apellido"),
+                "segundo_apellido": detalle.get("segundo_apellido"),
                 "email": detalle.get("email"),
                 "telefono": detalle.get("phone"),
                 "segmento": detalle.get("segmento"),
@@ -9833,6 +9843,16 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
         )
         if detalle.get("display_name"):
             resumen["display_name"] = detalle.get("display_name")
+        if detalle.get("nombre_comercial"):
+            resumen["nombre_comercial"] = detalle.get("nombre_comercial")
+        if detalle.get("titulo"):
+            resumen["titulo"] = detalle.get("titulo")
+        if detalle.get("nombre"):
+            resumen["nombre"] = detalle.get("nombre")
+        if detalle.get("primer_apellido"):
+            resumen["primer_apellido"] = detalle.get("primer_apellido")
+        if detalle.get("segundo_apellido"):
+            resumen["segundo_apellido"] = detalle.get("segundo_apellido")
         if detalle.get("email"):
             resumen["email"] = detalle.get("email")
         if detalle.get("phone"):
