@@ -44,7 +44,6 @@ type ParsedProspectoPreview = {
 const ACCEPTED_FILE_EXT = ".csv,.xlsx,.xls"
 const MAX_IMPORT_ROWS = 2000
 const PROSPECT_TEMPLATE_HEADERS = [
-  "Nombre visible",
   "Empresa / nombre comercial",
   "Título",
   "Nombre",
@@ -63,17 +62,10 @@ const PROSPECT_TEMPLATE_HEADERS = [
   "Estado cve",
   "Municipio nombre",
   "Municipio cve",
-  "Localidad",
-  "Localidad cve",
-  "Asentamiento",
-  "Entre calles",
-  "Referencia",
   "Segmento",
   "Actividad",
-  "Dirección libre (opcional)",
 ] as const
 const PROSPECT_TEMPLATE_EXAMPLE = [
-  "Grupo Demo",
   "Grupo Demo SA de CV",
   "Ing.",
   "Ana",
@@ -92,18 +84,11 @@ const PROSPECT_TEMPLATE_EXAMPLE = [
   "09",
   "Cuauhtemoc",
   "016",
-  "Roma Norte",
-  "009",
-  "Centro",
-  "Al lado del parque",
-  "Frente al metro",
   "Servicios",
   "Consultoría",
-  "Av. Reforma 123, Juarez, Cuauhtemoc, Ciudad de Mexico, CP 06600",
 ]
 
 type ProspectoImportField =
-  | "display_name"
   | "nombre_comercial"
   | "titulo"
   | "nombre"
@@ -132,9 +117,6 @@ type ProspectoImportField =
   | "segmento"
 
 const HEADER_ALIASES: Record<string, ProspectoImportField> = {
-  displayname: "display_name",
-  nombrevisible: "display_name",
-  nombrevisibleprospecto: "display_name",
   nombre: "nombre",
   nombrecontacto: "nombre",
   firstname: "nombre",
@@ -270,14 +252,13 @@ function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | nu
     mapped[field] = text
   }
 
-  const explicitDisplayName = normalizeCell(mapped.display_name) || normalizeCell(mapped.nombre_comercial)
   const display_name_for_preview = composeDisplayName(mapped)
   if (!display_name_for_preview) {
     return null
   }
 
   return {
-    display_name: explicitDisplayName || undefined,
+    display_name: display_name_for_preview || undefined,
     nombre_comercial: normalizeCell(mapped.nombre_comercial) || undefined,
     titulo: normalizeCell(mapped.titulo) || undefined,
     nombre: normalizeCell(mapped.nombre) || undefined,
@@ -498,7 +479,8 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
               <Input type="file" accept={ACCEPTED_FILE_EXT} onChange={handleFileChange} />
               <p className="text-xs text-muted-foreground">
                 Columnas sugeridas: empresa, título, nombre, primer apellido, segundo apellido, correo, teléfono,
-                sitio web, tipo de vialidad, nombre de vialidad, número exterior, colonia, CP, municipio, estado y segmento.
+                sitio web, tipo de vialidad, nombre de vialidad, número exterior, número interior, colonia, CP,
+                municipio, estado, segmento y actividad.
               </p>
             </div>
 
