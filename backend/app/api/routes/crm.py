@@ -9132,13 +9132,20 @@ def _build_prospecto_update_payload(
     updates: dict[str, Any] = {}
     for field in (
         "display_name",
+        "name",
         "nombre_comercial",
         "titulo",
         "nombre",
         "primer_apellido",
         "segundo_apellido",
         "actividad",
+        "phone",
+        "phone_e164",
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
         "email",
+        "correo_principal",
+        "correo_secundario",
         "website",
         "address",
         "tipo_vialidad",
@@ -9162,19 +9169,34 @@ def _build_prospecto_update_payload(
             continue
         value = raw[field]
         if field == "email":
+            normalized_email = _normalize_email(value)
+            updates["email"] = normalized_email
+            updates["correo_principal"] = normalized_email
+            continue
+        if field in {"phone", "phone_e164", "telefono_principal_e164", "telefono_movil_1_e164"}:
+            normalized_phone = _normalize_phone_e164(value)
+            updates["phone"] = normalized_phone
+            updates["phone_e164"] = normalized_phone
+            updates["telefono_principal_e164"] = normalized_phone
+            updates["telefono_movil_1_e164"] = normalized_phone
+            continue
+        if field in {"correo_principal", "correo_secundario"}:
             updates[field] = _normalize_email(value)
+            continue
         elif isinstance(value, str):
             updates[field] = _clean_text(value)
         else:
             updates[field] = value
     if any(field in raw for field in ("display_name", "nombre_comercial", "nombre", "primer_apellido", "segundo_apellido")):
-        updates["display_name"] = _compose_prospecto_display_name(
+        composed_display_name = _compose_prospecto_display_name(
             display_name=raw.get("display_name") if "display_name" in raw else None,
             nombre_comercial=raw.get("nombre_comercial"),
             nombre=raw.get("nombre"),
             primer_apellido=raw.get("primer_apellido"),
             segundo_apellido=raw.get("segundo_apellido"),
         )
+        updates["display_name"] = composed_display_name
+        updates["name"] = composed_display_name
         if "display_name" in raw and not _clean_text(raw.get("nombre_comercial")):
             updates["nombre_comercial"] = updates["display_name"]
     consolidated_address = _compose_prospecto_address_text(raw)

@@ -1089,6 +1089,11 @@ function ProspectosView() {
   const prospectosStreamRef = useRef<EventSource | null>(null)
   const prospectosStreamRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prospectosStreamRefreshInFlightRef = useRef(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const geoEstadoLabelMap = useMemo(
@@ -1420,7 +1425,7 @@ function ProspectosView() {
         clearTimeout(tablePrefsSaveTimeoutRef.current)
       }
     }
-  }, [columnOrder, columnVisibility, tablePrefsHydrated])
+    }, [columnOrder, columnVisibility, tablePrefsHydrated])
 
   useEffect(() => {
     let cancelled = false
@@ -3617,7 +3622,10 @@ function ProspectosView() {
         if (!editingId) {
           throw new Error("prospecto_missing_id")
         }
-        await actualizarProspecto(editingId, payload)
+        const response = await actualizarProspecto(editingId, payload)
+        if (response?.prospecto) {
+          setItems((prev) => prev.map((item) => (item.id === response.prospecto.id ? response.prospecto : item)))
+        }
         setBanner({
           type: "success",
           message: "Se actualizó el prospecto.",
@@ -3729,6 +3737,10 @@ function ProspectosView() {
       setGroupDeleteLoading(false)
     }
   }, [fetchProspectos, fetchStageSummary, selectedGroupQueryValues, selectedGroupValues])
+
+  if (!mounted) {
+    return null
+  }
 
   return (
     <div className="space-y-4">
@@ -5852,7 +5864,7 @@ function ProspectosView() {
             <Button variant="ghost" onClick={() => setFormDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => void handleFormSubmit()} disabled={formSubmitting}>
+            <Button type="button" onClick={() => void handleFormSubmit()} disabled={formSubmitting}>
               {formSubmitting ? (
                 <>
                   <IconLoader className="mr-2 size-4 animate-spin" />
@@ -6425,6 +6437,16 @@ function EnrichmentChecklist({
   onOpenScraper,
   onOpenManual,
 }: EnrichmentChecklistProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
+
   const cards = [
     {
       key: "telefonos",
