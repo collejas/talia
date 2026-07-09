@@ -1092,7 +1092,12 @@ function ProspectosView() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    const timeoutId = window.setTimeout(() => {
+      setMounted(true)
+    }, 0)
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
   }, [])
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
@@ -6440,7 +6445,12 @@ function EnrichmentChecklist({
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    const timeoutId = window.setTimeout(() => {
+      setMounted(true)
+    }, 0)
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
   }, [])
 
   if (!mounted) {
