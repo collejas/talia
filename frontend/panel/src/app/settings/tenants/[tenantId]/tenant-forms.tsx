@@ -2388,7 +2388,7 @@ export function TenantWhatsAppSettings({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_twilio_phone_number">whatsapp.twilio.phone_number</Label>
+              <Label htmlFor="whatsapp_twilio_phone_number">Número de WhatsApp</Label>
               <Input
                 id="whatsapp_twilio_phone_number"
                 name="whatsapp_twilio_phone_number"
@@ -2397,7 +2397,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_twilio_phone_number_sid">whatsapp.twilio.phone_number_sid</Label>
+              <Label htmlFor="whatsapp_twilio_phone_number_sid">SID del número</Label>
               <Input
                 id="whatsapp_twilio_phone_number_sid"
                 name="whatsapp_twilio_phone_number_sid"
@@ -2413,9 +2413,40 @@ export function TenantWhatsAppSettings({
                 className="size-4"
                 defaultChecked={Boolean(initialValues.whatsapp_twilio_validate_signatures ?? true)}
               />
-              <Label htmlFor="whatsapp_twilio_validate_signatures">
-                whatsapp.twilio.validate_signatures
-              </Label>
+              <Label htmlFor="whatsapp_twilio_validate_signatures">Validar firmas</Label>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Plantillas Twilio</p>
+            <p className="text-xs text-muted-foreground">SIDs para mensajes automáticos de Twilio.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_sales">SID plantilla de ventas</Label>
+              <Input
+                id="whatsapp_template_sales"
+                name="whatsapp_template_sales"
+                placeholder="HX..."
+                defaultValue={initialValues.whatsapp_template_sales ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_appointment">SID plantilla de cita</Label>
+              <Input
+                id="whatsapp_template_appointment"
+                name="whatsapp_template_appointment"
+                placeholder="HX..."
+                defaultValue={initialValues.whatsapp_template_appointment ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_cancel">SID plantilla de cancelación</Label>
+              <Input
+                id="whatsapp_template_cancel"
+                name="whatsapp_template_cancel"
+                placeholder="HX..."
+                defaultValue={initialValues.whatsapp_template_cancel ?? ""}
+              />
             </div>
           </div>
         </div>
@@ -2432,7 +2463,7 @@ export function TenantWhatsAppSettings({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_phone_number_id">whatsapp.meta.phone_number_id</Label>
+              <Label htmlFor="whatsapp_meta_phone_number_id">Phone Number ID</Label>
               <Input
                 id="whatsapp_meta_phone_number_id"
                 name="whatsapp_meta_phone_number_id"
@@ -2441,7 +2472,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_graph_api_version">whatsapp.meta.graph_api_version</Label>
+              <Label htmlFor="whatsapp_meta_graph_api_version">Graph API version</Label>
               <Input
                 id="whatsapp_meta_graph_api_version"
                 name="whatsapp_meta_graph_api_version"
@@ -2480,48 +2511,13 @@ export function TenantWhatsAppSettings({
               />
             </div>
           </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_template_sales">whatsapp.templates.sales</Label>
-            <Input
-              id="whatsapp_template_sales"
-              name="whatsapp_template_sales"
-              placeholder="HX..."
-              defaultValue={initialValues.whatsapp_template_sales ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_template_appointment">whatsapp.templates.appointment</Label>
-            <Input
-              id="whatsapp_template_appointment"
-              name="whatsapp_template_appointment"
-              placeholder="HX..."
-              defaultValue={initialValues.whatsapp_template_appointment ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_template_cancel">whatsapp.templates.cancel</Label>
-            <Input
-              id="whatsapp_template_cancel"
-              name="whatsapp_template_cancel"
-              placeholder="HX..."
-              defaultValue={initialValues.whatsapp_template_cancel ?? ""}
-            />
-          </div>
-        </div>
-        <div className="rounded-lg border border-border/60 p-4 space-y-4">
           <div className="space-y-1">
-            <p className="text-sm font-medium">Meta templates</p>
-            <p className="text-xs text-muted-foreground">
-              Si el provider del tenant es Meta, aquí se guardan nombre técnico e idioma aprobado de cada
-              plantilla.
-            </p>
+            <p className="text-sm font-medium">Plantillas Meta</p>
+            <p className="text-xs text-muted-foreground">Nombre técnico e idioma aprobados para cada plantilla de Meta.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_sales_meta_name">whatsapp.templates_meta.sales.name</Label>
+              <Label htmlFor="whatsapp_template_sales_meta_name">Nombre plantilla de ventas</Label>
               <Input
                 id="whatsapp_template_sales_meta_name"
                 name="whatsapp_template_sales_meta_name"
@@ -2530,7 +2526,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_sales_meta_language">whatsapp.templates_meta.sales.language</Label>
+              <Label htmlFor="whatsapp_template_sales_meta_language">Idioma plantilla de ventas</Label>
               <Input
                 id="whatsapp_template_sales_meta_language"
                 name="whatsapp_template_sales_meta_language"
@@ -2540,7 +2536,7 @@ export function TenantWhatsAppSettings({
             </div>
             <div className="space-y-2">
               <Label htmlFor="whatsapp_template_appointment_meta_name">
-                whatsapp.templates_meta.appointment.name
+                Nombre plantilla de cita
               </Label>
               <Input
                 id="whatsapp_template_appointment_meta_name"
@@ -2551,7 +2547,7 @@ export function TenantWhatsAppSettings({
             </div>
             <div className="space-y-2">
               <Label htmlFor="whatsapp_template_appointment_meta_language">
-                whatsapp.templates_meta.appointment.language
+                Idioma plantilla de cita
               </Label>
               <Input
                 id="whatsapp_template_appointment_meta_language"
@@ -2561,7 +2557,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_cancel_meta_name">whatsapp.templates_meta.cancel.name</Label>
+              <Label htmlFor="whatsapp_template_cancel_meta_name">Nombre plantilla de cancelación</Label>
               <Input
                 id="whatsapp_template_cancel_meta_name"
                 name="whatsapp_template_cancel_meta_name"
@@ -2570,9 +2566,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_cancel_meta_language">
-                whatsapp.templates_meta.cancel.language
-              </Label>
+              <Label htmlFor="whatsapp_template_cancel_meta_language">Idioma plantilla de cancelación</Label>
               <Input
                 id="whatsapp_template_cancel_meta_language"
                 name="whatsapp_template_cancel_meta_language"
@@ -2583,14 +2577,7 @@ export function TenantWhatsAppSettings({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Si el tenant sigue en Twilio, estos campos usan SID de plantilla. Si el tenant usa Meta, guarda el
-          nombre técnico aprobado y el idioma aquí para las notificaciones automáticas; las plantillas de
-          prospección se siguen gestionando aparte.
-        </p>
-
-        <p className="text-xs text-muted-foreground">
-          La sección guarda la configuración no sensible bajo <code>organizaciones.config.whatsapp</code> y los
-          secretos de Meta quedan en <code>secretos.clave</code>.
+          La configuración de Twilio queda en este bloque y la de Meta en el suyo, incluyendo las plantillas.
         </p>
 
         <div className="flex items-center justify-between gap-3">
@@ -2726,30 +2713,6 @@ export function TenantWhatsAppProspeccionSettings({
     <div className="space-y-6">
       <form action={formAction} className="space-y-4">
         <input type="hidden" name="tenant_id" value={tenantId} />
-        <div className="space-y-2">
-          <Label htmlFor="whatsapp_prospeccion_prompt_id">Prompt ID (prospección)</Label>
-          <Input
-            id="whatsapp_prospeccion_prompt_id"
-            name="whatsapp_prospeccion_prompt_id"
-            placeholder="pmpt_..."
-            defaultValue={initialValues.whatsapp_prospeccion_prompt_id ?? ""}
-          />
-          <p className="text-xs text-muted-foreground">
-            Se guarda en <code>organizaciones.config.whatsapp.prospeccion.prompt_id</code>.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="whatsapp_prospeccion_prompt_version">Prompt version (prospección)</Label>
-          <Input
-            id="whatsapp_prospeccion_prompt_version"
-            name="whatsapp_prospeccion_prompt_version"
-            placeholder="1"
-            defaultValue={initialValues.whatsapp_prospeccion_prompt_version ?? ""}
-          />
-          <p className="text-xs text-muted-foreground">
-            Se guarda en <code>organizaciones.config.whatsapp.prospeccion.prompt_version</code>.
-          </p>
-        </div>
         <div className="space-y-2">
           <Label htmlFor="whatsapp_template_prospeccion_sids">Plantillas Whats-Prosp (SIDs)</Label>
           <Textarea

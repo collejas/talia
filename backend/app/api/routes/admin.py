@@ -3268,7 +3268,7 @@ def build_validation_report(
         "messenger.inactivity_hours",
     ]
     whatsapp_provider = str(_get_config_value(config, "whatsapp.provider") or "twilio").strip().lower()
-    whatsapp_config_keys = [
+    whatsapp_common_config_keys = [
         "whatsapp.provider",
         "whatsapp.prompt_id",
         "whatsapp.prompt_version",
@@ -3277,21 +3277,27 @@ def build_validation_report(
         "whatsapp.reengage_minutes",
         "whatsapp.reengage_max_attempts",
         "whatsapp.escalate_minutes",
+    ]
+    whatsapp_twilio_config_keys = [
+        "whatsapp.twilio.phone_number",
+        "whatsapp.twilio.phone_number_sid",
+        "whatsapp.twilio.validate_signatures",
         "whatsapp.templates.sales",
         "whatsapp.templates.appointment",
         "whatsapp.templates.cancel",
     ]
-    whatsapp_twilio_keys = [
-        "whatsapp.twilio.phone_number",
-        "whatsapp.twilio.phone_number_sid",
-        "whatsapp.twilio.validate_signatures",
-    ]
-    whatsapp_meta_keys = [
+    whatsapp_meta_config_keys = [
         "whatsapp.meta.phone_number_id",
         "whatsapp.meta.graph_api_version",
+        "whatsapp.templates_meta.sales.name",
+        "whatsapp.templates_meta.sales.language",
+        "whatsapp.templates_meta.appointment.name",
+        "whatsapp.templates_meta.appointment.language",
+        "whatsapp.templates_meta.cancel.name",
+        "whatsapp.templates_meta.cancel.language",
     ]
-    whatsapp_provider_config_keys = whatsapp_twilio_keys if whatsapp_provider != "meta" else whatsapp_meta_keys
-    whatsapp_config_keys.extend(whatsapp_provider_config_keys)
+    whatsapp_provider_config_keys = whatsapp_twilio_config_keys if whatsapp_provider != "meta" else whatsapp_meta_config_keys
+    whatsapp_config_keys = whatsapp_common_config_keys + whatsapp_provider_config_keys
 
     if scope == "full":
         whatsapp_full_config_keys = list(whatsapp_config_keys)

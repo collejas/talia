@@ -13,10 +13,12 @@ import { formatApiError } from "@/app/settings/variables/utils/format-error"
 type FieldSpec = {
   label: string
   path: string
-  type?: "text" | "number" | "list"
+  type?: "text" | "number" | "list" | "select"
   placeholder?: string
+  defaultValue?: string
   multiline?: boolean
   control?: "checkbox"
+  options?: Array<{ label: string; value: string }>
 }
 
 type SecretField = {
@@ -34,6 +36,11 @@ type SectionConfig = {
     title: string
     description?: string
     fieldPaths: string[]
+    subgroups?: Array<{
+      title: string
+      description?: string
+      fieldPaths: string[]
+    }>
   }>
   fields: FieldSpec[]
   secrets?: SecretField[]
@@ -88,7 +95,7 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
             ? raw
             : ""
       } else {
-        values[field.path] = raw !== undefined && raw !== null ? String(raw) : ""
+        values[field.path] = raw !== undefined && raw !== null ? String(raw) : field.defaultValue ?? ""
       }
     })
     return values
@@ -128,6 +135,29 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     }
 
     const fieldValue: string = typeof values[field.path] === "string" ? (values[field.path] as string) : ""
+
+    if (field.type === "select") {
+      return (
+        <div key={field.path} className="space-y-1">
+          <Label htmlFor={field.path}>{field.label}</Label>
+          <select
+            id={field.path}
+            value={fieldValue}
+            onChange={(event) => handleChange(field.path, event.target.value)}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          >
+            <option value="" disabled>
+              Selecciona una opción
+            </option>
+            {(field.options ?? []).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )
+    }
 
     if (field.multiline || field.type === "list") {
       return (
@@ -169,7 +199,30 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
           <p className="text-sm font-medium">{group.title}</p>
           {group.description ? <p className="text-xs text-muted-foreground">{group.description}</p> : null}
         </div>
-        <div className="grid gap-4 md:grid-cols-2">{groupFields.map(renderField)}</div>
+        {group.subgroups?.length ? (
+          <div className="space-y-4">
+            {group.subgroups.map((subgroup) => {
+              const subgroupFields = section.fields.filter((field) => subgroup.fieldPaths.includes(field.path))
+              return (
+                <div key={subgroup.title} className="rounded-lg border border-border/60 bg-background/70 p-4 space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{subgroup.title}</p>
+                    {subgroup.description ? (
+                      <p className="text-xs text-muted-foreground">{subgroup.description}</p>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">{subgroupFields.map(renderField)}</div>
+                </div>
+              )
+            })}
+            {groupFields
+              .filter((field) => !group.subgroups?.some((subgroup) => subgroup.fieldPaths.includes(field.path)))
+              .map(renderField)
+            }
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">{groupFields.map(renderField)}</div>
+        )}
       </div>
     )
   }

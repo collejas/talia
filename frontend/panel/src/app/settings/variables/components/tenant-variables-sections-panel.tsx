@@ -11,14 +11,21 @@ type SectionConfig = {
     title: string
     description?: string
     fieldPaths: string[]
+    subgroups?: Array<{
+      title: string
+      description?: string
+      fieldPaths: string[]
+    }>
   }>
   fields: Array<{
     label: string
     path: string
-    type?: "text" | "number" | "list"
+    type?: "text" | "number" | "list" | "select"
     placeholder?: string
+    defaultValue?: string
     multiline?: boolean
     control?: "checkbox"
+    options?: Array<{ label: string; value: string }>
   }>
   secrets?: Array<{
     clave: string
@@ -205,26 +212,137 @@ const SECTIONS: SectionConfig[] = [
   },
   {
     title: "WhatsApp",
-    description: "Prompts, reglas de reengage y templates para WhatsApp.",
+    description: "Separa la configuración común de WhatsApp de los datos específicos de Twilio y Meta.",
+    groups: [
+      {
+        title: "Proveedor activo",
+        description: "Selecciona el adapter que debe usar el backend para este tenant.",
+        fieldPaths: ["whatsapp.provider"],
+      },
+      {
+        title: "Configuración común",
+        description: "Aplica tanto si operas con Twilio como si operas con Meta.",
+        fieldPaths: [
+          "whatsapp.prompt_id",
+          "whatsapp.prompt_version",
+          "whatsapp.welcome_document_prompt_version",
+          "whatsapp.location_href",
+          "whatsapp.assistant_id",
+          "whatsapp.inactivity_minutes",
+          "whatsapp.reengage_minutes",
+          "whatsapp.reengage_max_attempts",
+          "whatsapp.escalate_minutes",
+        ],
+      },
+      {
+        title: "Twilio",
+        description: "Completa estos campos si el proveedor activo es Twilio.",
+        fieldPaths: [
+          "whatsapp.twilio.phone_number",
+          "whatsapp.twilio.phone_number_sid",
+          "whatsapp.twilio.validate_signatures",
+          "whatsapp.templates.sales",
+          "whatsapp.templates.appointment",
+          "whatsapp.templates.cancel",
+        ],
+        subgroups: [
+          {
+            title: "Credenciales Twilio",
+            description: "Datos operativos del número y validación de Twilio.",
+            fieldPaths: [
+              "whatsapp.twilio.phone_number",
+              "whatsapp.twilio.phone_number_sid",
+              "whatsapp.twilio.validate_signatures",
+            ],
+          },
+          {
+            title: "Plantillas Twilio",
+            description: "SIDs de plantillas usadas para notificaciones de Twilio.",
+            fieldPaths: [
+              "whatsapp.templates.sales",
+              "whatsapp.templates.appointment",
+              "whatsapp.templates.cancel",
+            ],
+          },
+        ],
+      },
+      {
+        title: "Meta",
+        description: "Completa estos campos si el proveedor activo es Meta.",
+        fieldPaths: [
+          "whatsapp.meta.phone_number_id",
+          "whatsapp.meta.graph_api_version",
+          "whatsapp.templates_meta.sales.name",
+          "whatsapp.templates_meta.sales.language",
+          "whatsapp.templates_meta.appointment.name",
+          "whatsapp.templates_meta.appointment.language",
+          "whatsapp.templates_meta.cancel.name",
+          "whatsapp.templates_meta.cancel.language",
+        ],
+        subgroups: [
+          {
+            title: "Conexión Meta",
+            description: "Identificadores de la cuenta de Meta y del Graph API.",
+            fieldPaths: ["whatsapp.meta.phone_number_id", "whatsapp.meta.graph_api_version"],
+          },
+          {
+            title: "Plantillas Meta",
+            description: "Nombre técnico e idioma aprobados para cada plantilla.",
+            fieldPaths: [
+              "whatsapp.templates_meta.sales.name",
+              "whatsapp.templates_meta.sales.language",
+              "whatsapp.templates_meta.appointment.name",
+              "whatsapp.templates_meta.appointment.language",
+              "whatsapp.templates_meta.cancel.name",
+              "whatsapp.templates_meta.cancel.language",
+            ],
+          },
+        ],
+      },
+    ],
     fields: [
-      { label: "whatsapp.prompt_id", path: "whatsapp.prompt_id" },
-      { label: "whatsapp.prompt_version", path: "whatsapp.prompt_version" },
-      { label: "whatsapp.welcome_document_prompt_version", path: "whatsapp.welcome_document_prompt_version" },
-      { label: "whatsapp.location_href", path: "whatsapp.location_href" },
-      { label: "whatsapp.assistant_id", path: "whatsapp.assistant_id" },
-      { label: "whatsapp.inactivity_minutes", path: "whatsapp.inactivity_minutes", type: "number" },
-      { label: "whatsapp.reengage_minutes", path: "whatsapp.reengage_minutes", type: "number" },
-      { label: "whatsapp.reengage_max_attempts", path: "whatsapp.reengage_max_attempts", type: "number" },
-      { label: "whatsapp.escalate_minutes", path: "whatsapp.escalate_minutes", type: "number" },
-      { label: "whatsapp.templates.sales", path: "whatsapp.templates.sales" },
-      { label: "whatsapp.templates.appointment", path: "whatsapp.templates.appointment" },
-      { label: "whatsapp.templates.cancel", path: "whatsapp.templates.cancel" },
+      {
+        label: "Proveedor activo",
+        path: "whatsapp.provider",
+        type: "select",
+        defaultValue: "twilio",
+        options: [
+          { label: "Meta WhatsApp Cloud API", value: "meta" },
+          { label: "Twilio", value: "twilio" },
+        ],
+      },
+      { label: "Prompt ID", path: "whatsapp.prompt_id" },
+      { label: "Versión del prompt", path: "whatsapp.prompt_version" },
+      { label: "Versión del PDF de bienvenida", path: "whatsapp.welcome_document_prompt_version" },
+      { label: "Link de ubicación", path: "whatsapp.location_href" },
+      { label: "Assistant ID", path: "whatsapp.assistant_id" },
+      { label: "Minutos de inactividad", path: "whatsapp.inactivity_minutes", type: "number" },
+      { label: "Minutos para reenganche", path: "whatsapp.reengage_minutes", type: "number" },
+      { label: "Máximo de intentos de reenganche", path: "whatsapp.reengage_max_attempts", type: "number" },
+      { label: "Minutos para escalar", path: "whatsapp.escalate_minutes", type: "number" },
+      { label: "Número de WhatsApp", path: "whatsapp.twilio.phone_number" },
+      { label: "SID del número", path: "whatsapp.twilio.phone_number_sid" },
+      { label: "Validar firmas", path: "whatsapp.twilio.validate_signatures", control: "checkbox" },
+      { label: "SID plantilla de ventas", path: "whatsapp.templates.sales" },
+      { label: "SID plantilla de cita", path: "whatsapp.templates.appointment" },
+      { label: "SID plantilla de cancelación", path: "whatsapp.templates.cancel" },
+      { label: "Phone Number ID", path: "whatsapp.meta.phone_number_id" },
+      { label: "Graph API version", path: "whatsapp.meta.graph_api_version" },
+      { label: "Nombre plantilla ventas", path: "whatsapp.templates_meta.sales.name" },
+      { label: "Idioma plantilla ventas", path: "whatsapp.templates_meta.sales.language" },
+      { label: "Nombre plantilla cita", path: "whatsapp.templates_meta.appointment.name" },
+      { label: "Idioma plantilla cita", path: "whatsapp.templates_meta.appointment.language" },
+      { label: "Nombre plantilla cancelación", path: "whatsapp.templates_meta.cancel.name" },
+      { label: "Idioma plantilla cancelación", path: "whatsapp.templates_meta.cancel.language" },
     ],
     routeChannel: "whatsapp",
     routeDescription: "Registra el número que recibirá mensajes de WhatsApp.",
     validationScope: "whatsapp",
     validationDescription: "Detecta faltantes en config/rutas/secretos para WhatsApp.",
-    notes: ["Esta sección guarda la configuración no sensible de `organizaciones.config.whatsapp`."],
+    notes: [
+      "Twilio usa sus propios SIDs y plantillas de envío; Meta usa nombre e idioma de plantillas aprobadas.",
+      "Los secretos sensibles siguen en la pestaña Secretos con claves como `meta.whatsapp.*`.",
+    ],
   },
   {
     title: "Messenger",
