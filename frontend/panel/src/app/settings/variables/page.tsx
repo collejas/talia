@@ -244,6 +244,7 @@ export default async function SettingsVariablesPage() {
   }
   const whatsappConfig = getNestedRecord(config, "whatsapp") ?? {}
   const whatsappTemplates = getNestedRecord(whatsappConfig, "templates") ?? {}
+  const whatsappTemplatesMeta = getNestedRecord(whatsappConfig, "templates_meta") ?? {}
   const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
   const whatsappInitialValues = {
     whatsapp_provider: getNestedString(whatsappConfig, "provider") as "twilio" | "meta" | undefined,
@@ -261,6 +262,24 @@ export default async function SettingsVariablesPage() {
     whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
+    whatsapp_template_sales_meta_name: getNestedString(getNestedRecord(whatsappTemplatesMeta, "sales") ?? {}, "name"),
+    whatsapp_template_sales_meta_language: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "sales") ?? {},
+      "language",
+    ),
+    whatsapp_template_appointment_meta_name: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "appointment") ?? {},
+      "name",
+    ),
+    whatsapp_template_appointment_meta_language: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "appointment") ?? {},
+      "language",
+    ),
+    whatsapp_template_cancel_meta_name: getNestedString(getNestedRecord(whatsappTemplatesMeta, "cancel") ?? {}, "name"),
+    whatsapp_template_cancel_meta_language: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "cancel") ?? {},
+      "language",
+    ),
     whatsapp_template_prospeccion_sids: (getNestedStringArray(whatsappTemplates, "prospeccion") ?? []).join("\n"),
     whatsapp_prospeccion_prompt_id: getNestedString(whatsappProspeccionConfig, "prompt_id"),
     whatsapp_prospeccion_prompt_version: getNestedString(whatsappProspeccionConfig, "prompt_version"),

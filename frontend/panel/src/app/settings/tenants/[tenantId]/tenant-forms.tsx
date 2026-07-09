@@ -2,6 +2,7 @@
 
 import { createContext, ReactNode, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useFormStatus } from "react-dom"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1098,6 +1099,48 @@ type OpenaiInitialValues = {
   voice_model?: string
   voice_max_tokens?: number
   voice_stt_model?: string
+}
+
+function buildWhatsAppSettingsKey(initialValues: WhatsAppInitialValues): string {
+  return JSON.stringify({
+    whatsapp_provider: initialValues.whatsapp_provider ?? "twilio",
+    whatsapp_prompt_id: initialValues.whatsapp_prompt_id ?? "",
+    whatsapp_prompt_version: initialValues.whatsapp_prompt_version ?? "",
+    whatsapp_welcome_document_prompt_version: initialValues.whatsapp_welcome_document_prompt_version ?? "",
+    whatsapp_location_href: initialValues.whatsapp_location_href ?? "",
+    whatsapp_assistant_id: initialValues.whatsapp_assistant_id ?? "",
+    whatsapp_inactivity_minutes: initialValues.whatsapp_inactivity_minutes ?? "",
+    whatsapp_reengage_minutes: initialValues.whatsapp_reengage_minutes ?? "",
+    whatsapp_reengage_max_attempts: initialValues.whatsapp_reengage_max_attempts ?? "",
+    whatsapp_escalate_minutes: initialValues.whatsapp_escalate_minutes ?? "",
+    whatsapp_twilio_phone_number: initialValues.whatsapp_twilio_phone_number ?? "",
+    whatsapp_twilio_phone_number_sid: initialValues.whatsapp_twilio_phone_number_sid ?? "",
+    whatsapp_twilio_validate_signatures: initialValues.whatsapp_twilio_validate_signatures ?? true,
+    whatsapp_meta_phone_number_id: initialValues.whatsapp_meta_phone_number_id ?? "",
+    whatsapp_meta_graph_api_version: initialValues.whatsapp_meta_graph_api_version ?? "v21.0",
+    whatsapp_template_sales: initialValues.whatsapp_template_sales ?? "",
+    whatsapp_template_appointment: initialValues.whatsapp_template_appointment ?? "",
+    whatsapp_template_cancel: initialValues.whatsapp_template_cancel ?? "",
+    whatsapp_template_sales_meta_name: initialValues.whatsapp_template_sales_meta_name ?? "",
+    whatsapp_template_sales_meta_language: initialValues.whatsapp_template_sales_meta_language ?? "",
+    whatsapp_template_appointment_meta_name: initialValues.whatsapp_template_appointment_meta_name ?? "",
+    whatsapp_template_appointment_meta_language: initialValues.whatsapp_template_appointment_meta_language ?? "",
+    whatsapp_template_cancel_meta_name: initialValues.whatsapp_template_cancel_meta_name ?? "",
+    whatsapp_template_cancel_meta_language: initialValues.whatsapp_template_cancel_meta_language ?? "",
+  })
+}
+
+function buildWhatsProspSettingsKey(
+  initialValues: Pick<
+    WhatsAppInitialValues,
+    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+  >,
+): string {
+  return JSON.stringify({
+    whatsapp_template_prospeccion_sids: initialValues.whatsapp_template_prospeccion_sids ?? "",
+    whatsapp_prospeccion_prompt_id: initialValues.whatsapp_prospeccion_prompt_id ?? "",
+    whatsapp_prospeccion_prompt_version: initialValues.whatsapp_prospeccion_prompt_version ?? "",
+  })
 }
 
 type BusquedaInitialValues = {
@@ -2252,6 +2295,19 @@ export function TenantWhatsAppSettings({
   initialValues: WhatsAppInitialValues
   routes: RouteItem[]
 }) {
+  const formKey = useMemo(() => buildWhatsAppSettingsKey(initialValues), [initialValues])
+  return <TenantWhatsAppSettingsForm key={formKey} tenantId={tenantId} initialValues={initialValues} routes={routes} />
+}
+
+function TenantWhatsAppSettingsForm({
+  tenantId,
+  initialValues,
+  routes,
+}: {
+  tenantId: string
+  initialValues: WhatsAppInitialValues
+  routes: RouteItem[]
+}) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
   const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
@@ -2264,6 +2320,15 @@ export function TenantWhatsAppSettings({
   const isMetaProvider = provider === "meta"
   const twilioStateLabel = isMetaProvider ? "Inactivo" : "Activo"
   const metaStateLabel = isMetaProvider ? "Activo" : "Inactivo"
+  const router = useRouter()
+  const refreshMessageRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (state.status !== "success") return
+    const message = state.message ?? null
+    if (refreshMessageRef.current === message) return
+    refreshMessageRef.current = message
+    router.refresh()
+  }, [router, state.message, state.status])
 
   return (
     <div className="space-y-6">
@@ -2412,7 +2477,6 @@ export function TenantWhatsAppSettings({
         <fieldset
           className="rounded-lg border border-border/60 p-4 space-y-4"
           hidden={isMetaProvider}
-          disabled={isMetaProvider}
         >
           <div className="space-y-1">
             <p className="text-sm font-medium">Twilio</p>
@@ -2489,7 +2553,6 @@ export function TenantWhatsAppSettings({
         <fieldset
           className="rounded-lg border border-border/60 p-4 space-y-4"
           hidden={!isMetaProvider}
-          disabled={!isMetaProvider}
         >
           <div className="space-y-1">
             <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
@@ -2746,8 +2809,37 @@ export function TenantWhatsAppProspeccionSettings({
     "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
   >
 }) {
+  const formKey = useMemo(() => buildWhatsProspSettingsKey(initialValues), [initialValues])
+  return (
+    <TenantWhatsAppProspeccionSettingsForm
+      key={formKey}
+      tenantId={tenantId}
+      initialValues={initialValues}
+    />
+  )
+}
+
+function TenantWhatsAppProspeccionSettingsForm({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: Pick<
+    WhatsAppInitialValues,
+    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+  >
+}) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+  const router = useRouter()
+  const refreshMessageRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (state.status !== "success") return
+    const message = state.message ?? null
+    if (refreshMessageRef.current === message) return
+    refreshMessageRef.current = message
+    router.refresh()
+  }, [router, state.message, state.status])
 
   return (
     <div className="space-y-6">
