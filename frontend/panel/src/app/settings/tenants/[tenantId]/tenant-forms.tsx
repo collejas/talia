@@ -2268,6 +2268,108 @@ export function TenantWhatsAppSettings({
       <form action={formAction} className="space-y-6">
         <input type="hidden" name="tenant_id" value={tenantId} />
 
+        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Variables y funciones del asistente</p>
+            <p className="text-xs text-muted-foreground">
+              Se usan en ambos proveedores y controlan el comportamiento conversacional de WhatsApp.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_prompt_id">whatsapp.prompt_id</Label>
+              <Input
+                id="whatsapp_prompt_id"
+                name="whatsapp_prompt_id"
+                placeholder="pmpt_..."
+                defaultValue={initialValues.whatsapp_prompt_id ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_prompt_version">whatsapp.prompt_version</Label>
+              <Input
+                id="whatsapp_prompt_version"
+                name="whatsapp_prompt_version"
+                defaultValue={initialValues.whatsapp_prompt_version ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_welcome_document_prompt_version">
+                whatsapp.welcome_document_prompt_version
+              </Label>
+              <Input
+                id="whatsapp_welcome_document_prompt_version"
+                name="whatsapp_welcome_document_prompt_version"
+                defaultValue={initialValues.whatsapp_welcome_document_prompt_version ?? ""}
+              />
+              <p className="text-xs text-muted-foreground">
+                Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de bienvenida.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_location_href">whatsapp.location_href</Label>
+              <Input
+                id="whatsapp_location_href"
+                name="whatsapp_location_href"
+                placeholder="https://www.google.com/maps/..."
+                defaultValue={initialValues.whatsapp_location_href ?? ""}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pega aquí el link directo de Google Maps del desarrollo.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_assistant_id">whatsapp.assistant_id</Label>
+              <Input
+                id="whatsapp_assistant_id"
+                name="whatsapp_assistant_id"
+                placeholder="assistant_..."
+                defaultValue={initialValues.whatsapp_assistant_id ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_inactivity_minutes">whatsapp.inactivity_minutes</Label>
+              <Input
+                id="whatsapp_inactivity_minutes"
+                name="whatsapp_inactivity_minutes"
+                type="number"
+                min={0}
+                defaultValue={initialValues.whatsapp_inactivity_minutes ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_reengage_minutes">whatsapp.reengage_minutes</Label>
+              <Input
+                id="whatsapp_reengage_minutes"
+                name="whatsapp_reengage_minutes"
+                type="number"
+                min={0}
+                defaultValue={initialValues.whatsapp_reengage_minutes ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_reengage_max_attempts">whatsapp.reengage_max_attempts</Label>
+              <Input
+                id="whatsapp_reengage_max_attempts"
+                name="whatsapp_reengage_max_attempts"
+                type="number"
+                min={1}
+                defaultValue={initialValues.whatsapp_reengage_max_attempts ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_escalate_minutes">whatsapp.escalate_minutes</Label>
+              <Input
+                id="whatsapp_escalate_minutes"
+                name="whatsapp_escalate_minutes"
+                type="number"
+                min={0}
+                defaultValue={initialValues.whatsapp_escalate_minutes ?? ""}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-lg border border-border/60 p-4 space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
@@ -2297,103 +2399,6 @@ export function TenantWhatsAppSettings({
             </div>
           </div>
           <input type="hidden" name="whatsapp_provider" value={provider} />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_prompt_id">whatsapp.prompt_id</Label>
-            <Input
-              id="whatsapp_prompt_id"
-              name="whatsapp_prompt_id"
-              placeholder="pmpt_..."
-              defaultValue={initialValues.whatsapp_prompt_id ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_prompt_version">whatsapp.prompt_version</Label>
-            <Input
-              id="whatsapp_prompt_version"
-              name="whatsapp_prompt_version"
-              defaultValue={initialValues.whatsapp_prompt_version ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_welcome_document_prompt_version">
-              whatsapp.welcome_document_prompt_version
-            </Label>
-            <Input
-              id="whatsapp_welcome_document_prompt_version"
-              name="whatsapp_welcome_document_prompt_version"
-              defaultValue={initialValues.whatsapp_welcome_document_prompt_version ?? ""}
-            />
-            <p className="text-xs text-muted-foreground">
-              Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de bienvenida.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_location_href">whatsapp.location_href</Label>
-            <Input
-              id="whatsapp_location_href"
-              name="whatsapp_location_href"
-              placeholder="https://www.google.com/maps/..."
-              defaultValue={initialValues.whatsapp_location_href ?? ""}
-            />
-            <p className="text-xs text-muted-foreground">
-              Pega aquí el link directo de Google Maps del desarrollo.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_assistant_id">whatsapp.assistant_id</Label>
-            <Input
-              id="whatsapp_assistant_id"
-              name="whatsapp_assistant_id"
-              placeholder="assistant_..."
-              defaultValue={initialValues.whatsapp_assistant_id ?? ""}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_inactivity_minutes">whatsapp.inactivity_minutes</Label>
-            <Input
-              id="whatsapp_inactivity_minutes"
-              name="whatsapp_inactivity_minutes"
-              type="number"
-              min={0}
-              defaultValue={initialValues.whatsapp_inactivity_minutes ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_reengage_minutes">whatsapp.reengage_minutes</Label>
-            <Input
-              id="whatsapp_reengage_minutes"
-              name="whatsapp_reengage_minutes"
-              type="number"
-              min={0}
-              defaultValue={initialValues.whatsapp_reengage_minutes ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_reengage_max_attempts">whatsapp.reengage_max_attempts</Label>
-            <Input
-              id="whatsapp_reengage_max_attempts"
-              name="whatsapp_reengage_max_attempts"
-              type="number"
-              min={1}
-              defaultValue={initialValues.whatsapp_reengage_max_attempts ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_escalate_minutes">whatsapp.escalate_minutes</Label>
-            <Input
-              id="whatsapp_escalate_minutes"
-              name="whatsapp_escalate_minutes"
-              type="number"
-              min={0}
-              defaultValue={initialValues.whatsapp_escalate_minutes ?? ""}
-            />
-          </div>
         </div>
 
         <fieldset

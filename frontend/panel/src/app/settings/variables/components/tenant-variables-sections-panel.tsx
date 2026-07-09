@@ -220,12 +220,7 @@ const SECTIONS: SectionConfig[] = [
     description: "Separa la configuración común de WhatsApp de los datos específicos de Twilio y Meta.",
     groups: [
       {
-        title: "Proveedor activo",
-        description: "Selecciona el adapter que debe usar el backend para este tenant.",
-        fieldPaths: ["whatsapp.provider"],
-      },
-      {
-        title: "Configuración común",
+        title: "Variables y funciones del asistente",
         description: "Aplica tanto si operas con Twilio como si operas con Meta.",
         fieldPaths: [
           "whatsapp.prompt_id",
@@ -238,6 +233,11 @@ const SECTIONS: SectionConfig[] = [
           "whatsapp.reengage_max_attempts",
           "whatsapp.escalate_minutes",
         ],
+      },
+      {
+        title: "Proveedor activo",
+        description: "Selecciona el adapter que debe usar el backend para este tenant.",
+        fieldPaths: ["whatsapp.provider"],
       },
       {
         title: "Twilio",
@@ -308,13 +308,6 @@ const SECTIONS: SectionConfig[] = [
       },
     ],
     fields: [
-      {
-        label: "Proveedor activo",
-        path: "whatsapp.provider",
-        control: "switch",
-        switchValues: { on: "meta", off: "twilio" },
-        switchLabels: { off: "Twilio activo", on: "Meta activo" },
-      },
       { label: "Prompt ID", path: "whatsapp.prompt_id" },
       { label: "Versión del prompt", path: "whatsapp.prompt_version" },
       { label: "Versión del PDF de bienvenida", path: "whatsapp.welcome_document_prompt_version" },
@@ -324,6 +317,13 @@ const SECTIONS: SectionConfig[] = [
       { label: "Minutos para reenganche", path: "whatsapp.reengage_minutes", type: "number" },
       { label: "Máximo de intentos de reenganche", path: "whatsapp.reengage_max_attempts", type: "number" },
       { label: "Minutos para escalar", path: "whatsapp.escalate_minutes", type: "number" },
+      {
+        label: "Proveedor activo",
+        path: "whatsapp.provider",
+        control: "switch",
+        switchValues: { on: "meta", off: "twilio" },
+        switchLabels: { off: "Twilio activo", on: "Meta activo" },
+      },
       { label: "Número de WhatsApp", path: "whatsapp.twilio.phone_number" },
       { label: "SID del número", path: "whatsapp.twilio.phone_number_sid" },
       { label: "Validar firmas", path: "whatsapp.twilio.validate_signatures", control: "checkbox" },
