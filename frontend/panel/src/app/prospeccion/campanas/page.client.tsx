@@ -721,6 +721,33 @@ export function CampanasMetricsClient() {
     []
   )
 
+  const slugify = useCallback((value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80)
+  }, [])
+
+  const buildSafeTemplateSlug = useCallback(
+    (value: string, canal: "correo" | "whatsapp" | "llamada", fallback?: string) => {
+      const primary = slugify(value)
+      if (primary.length >= 3) return primary
+      const fallbackSlug = slugify(fallback || `plantilla-${canal}`)
+      if (fallbackSlug.length >= 3) return fallbackSlug
+      return `plantilla-${canal}`.slice(0, 80)
+    },
+    [slugify]
+  )
+
+  const effectiveTemplateSlug = useMemo(() => {
+    const preferred = templateForm.slug.trim() || templateForm.nombre.trim() || templatesCampanaNombre || "plantilla"
+    return buildSafeTemplateSlug(preferred, templateForm.canal, templatesCampanaNombre)
+  }, [buildSafeTemplateSlug, templateForm.canal, templateForm.nombre, templateForm.slug, templatesCampanaNombre])
+
   const insertCorreoLogo = useCallback(
     async (logoUrl: string) => {
       const normalized = normalizeLogoUrl(logoUrl)
@@ -732,7 +759,7 @@ export function CampanasMetricsClient() {
         url.searchParams.set("utm_source", "prospeccion")
         url.searchParams.set("utm_medium", "email_image")
         if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
-        if (templateForm.slug.trim()) url.searchParams.set("template_slug", templateForm.slug.trim())
+        if (effectiveTemplateSlug) url.searchParams.set("template_slug", effectiveTemplateSlug)
         if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
         url.searchParams.set("utm_content", "inline_image")
         resolvedLogoUrl = url.toString()
@@ -780,7 +807,7 @@ export function CampanasMetricsClient() {
       normalizeLogoUrl,
       templateForm.cuerpoHtml,
       templateForm.id,
-      templateForm.slug,
+      effectiveTemplateSlug,
       templatesCampanaId,
     ]
   )
@@ -905,14 +932,14 @@ ${secondCellHtml}
       url.searchParams.set("utm_source", "prospeccion")
       url.searchParams.set("utm_medium", "whatsapp_media")
       if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
-      if (templateForm.slug.trim()) url.searchParams.set("template_slug", templateForm.slug.trim())
+      if (effectiveTemplateSlug) url.searchParams.set("template_slug", effectiveTemplateSlug)
       if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
       if (templateForm.canal) url.searchParams.set("canal", templateForm.canal)
       return url.toString()
     } catch {
       return base
     }
-  }, [normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId])
+  }, [effectiveTemplateSlug, normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templatesCampanaId])
 
   const whatsappCtaUrl = useMemo(() => {
     const base = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim()
@@ -922,9 +949,9 @@ ${secondCellHtml}
       url.searchParams.set("utm_source", "prospeccion")
       url.searchParams.set("utm_medium", "whatsapp_cta")
       if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
-      if (templateForm.slug.trim()) {
-        url.searchParams.set("template_slug", templateForm.slug.trim())
-        url.searchParams.set("kw", templateForm.slug.trim())
+      if (effectiveTemplateSlug) {
+        url.searchParams.set("template_slug", effectiveTemplateSlug)
+        url.searchParams.set("kw", effectiveTemplateSlug)
       }
       if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
       if (templateForm.canal) url.searchParams.set("canal", templateForm.canal)
@@ -932,7 +959,7 @@ ${secondCellHtml}
     } catch {
       return base
     }
-  }, [templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templateForm.slug, templatesCampanaId, tenantBaseUrl])
+  }, [effectiveTemplateSlug, templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templatesCampanaId, tenantBaseUrl])
 
   const waMeUrl = useMemo(() => {
     const phoneDigits = normalizeWaPhone(tenantPhone)
@@ -983,7 +1010,7 @@ ${secondCellHtml}
     const canalOrigen = resolvePreviewCanalOrigen(previewProspecto)
     const websiteUrl =
       normalizeWebBaseUrl(templateForm.ctaBaseUrl || tenantBaseUrl || "https://talia.mx/") || "https://talia.mx/"
-    const kw = (templateForm.slug || segmento || "general").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
+    const kw = (effectiveTemplateSlug || segmento || "general").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
     let trackingUrl = websiteUrl
     let bookingUrl = websiteUrl
     try {
@@ -1033,9 +1060,9 @@ ${secondCellHtml}
     previewProspecto,
     resolvePreviewCanalOrigen,
     selectedLogoUrl,
+    effectiveTemplateSlug,
     templateForm.ctaBaseUrl,
     templateForm.nombreEmpresa,
-    templateForm.slug,
     tenantBaseUrl,
   ])
 
@@ -1077,7 +1104,7 @@ ${secondCellHtml}
         if (templatesCampanaId) formData.append("campana_id", templatesCampanaId)
         if (templateForm.canal) formData.append("canal", templateForm.canal)
         if (templateForm.id) formData.append("template_id", templateForm.id)
-        if (templateForm.slug.trim()) formData.append("template_slug", templateForm.slug.trim())
+        if (effectiveTemplateSlug) formData.append("template_slug", effectiveTemplateSlug)
 
         const response = await fetch("/api/settings/logos", {
           method: "POST",
@@ -1098,19 +1125,8 @@ ${secondCellHtml}
         if (logoFileInputRef.current) logoFileInputRef.current.value = ""
       }
     },
-    [templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId]
+    [effectiveTemplateSlug, templateForm.canal, templateForm.id, templatesCampanaId]
   )
-
-  const slugify = useCallback((value: string) => {
-    return value
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80)
-  }, [])
 
   const loadCampaignTemplates = useCallback(async (campanaId: string) => {
     setTemplatesLoading(true)
@@ -1255,14 +1271,14 @@ ${secondCellHtml}
     (template: ContactoTemplate) => {
       const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
       const baseName = (template.nombre ?? "").trim() || "Plantilla"
-      const baseSlug = (template.slug ?? "").trim() || slugify(baseName)
+      const baseSlug = buildSafeTemplateSlug((template.slug ?? "").trim() || baseName, template.canal, baseName)
       const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
       setSelectedLogoUrl(logoFromMetadata)
       setTemplateForm({
         id: "",
         canal: template.canal,
         nombre: `${baseName} copia`,
-        slug: `${baseSlug}-copia`,
+        slug: buildSafeTemplateSlug(`${baseSlug}-copia`, template.canal, `${baseName} copia`),
         descripcion: template.descripcion ?? "",
         asunto: template.asunto ?? "",
         cuerpoTexto: template.cuerpo_texto ?? "",
@@ -1303,7 +1319,7 @@ ${secondCellHtml}
       })
       setTemplateError(null)
     },
-    [slugify]
+    [buildSafeTemplateSlug]
   )
 
   const handleTemplateSave = useCallback(async () => {
@@ -1316,9 +1332,13 @@ ${secondCellHtml}
       return
     }
     const nombre = templateForm.nombre.trim()
-    const slug = (templateForm.slug.trim() || slugify(nombre)).trim()
+    const slug = effectiveTemplateSlug
     if (!nombre) {
       setTemplateError("Escribe un nombre para la plantilla.")
+      return
+    }
+    if (slug.length < 3) {
+      setTemplateError("El identificador interno no pudo generarse correctamente.")
       return
     }
     setTemplateSaving(true)
@@ -1411,7 +1431,23 @@ ${secondCellHtml}
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, normalizeLogoUrl, normalizeWaPhone, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, tenantBaseUrl, tenantPhone, waMeUrl, waRules, whatsappCtaUrl, whatsappMediaUrl])
+  }, [
+    effectiveTemplateSlug,
+    loadCampaignTemplates,
+    normalizeLogoUrl,
+    normalizeWaPhone,
+    resetTemplateForm,
+    selectedLogoUrl,
+    templateForm,
+    templatesCampanaCanal,
+    templatesCampanaId,
+    tenantBaseUrl,
+    tenantPhone,
+    waMeUrl,
+    waRules,
+    whatsappCtaUrl,
+    whatsappMediaUrl,
+  ])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -2107,7 +2143,7 @@ ${secondCellHtml}
                         Ponle un nombre fácil de reconocer. Este nombre solo lo verá tu equipo.
                       </p>
                     </div>
-                    <div className="space-y-3">
+                    <div className="grid gap-3">
                       <div className="space-y-1">
                         <Label>Nombre de la plantilla</Label>
                         <Input
@@ -2116,7 +2152,7 @@ ${secondCellHtml}
                             setTemplateForm((prev) => ({
                               ...prev,
                               nombre: event.target.value,
-                              slug: prev.slug ? prev.slug : slugify(event.target.value),
+                              slug: prev.slug ? prev.slug : buildSafeTemplateSlug(event.target.value, prev.canal, event.target.value),
                             }))
                           }
                           placeholder="Seguimiento inicial"
@@ -2130,29 +2166,38 @@ ${secondCellHtml}
                           placeholder="Resumen corto para el equipo"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label>Canal</Label>
-                        <Select
-                          value={templateForm.canal}
-                          onValueChange={(value) =>
-                            setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
-                          }
-                          disabled={Boolean(templatesCampanaCanal)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="correo">Correo</SelectItem>
-                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                            <SelectItem value="llamada">Llamada</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {templatesCampanaCanal ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Canal</Label>
+                          <Select
+                            value={templateForm.canal}
+                            onValueChange={(value) =>
+                              setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
+                            }
+                            disabled={Boolean(templatesCampanaCanal)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="correo">Correo</SelectItem>
+                              <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                              <SelectItem value="llamada">Llamada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {templatesCampanaCanal ? (
+                            <p className="text-xs text-muted-foreground">
+                              Canal fijo por campaña: {canalLabel[templatesCampanaCanal]}.
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Identificador interno</Label>
+                          <Input value={effectiveTemplateSlug} readOnly className="bg-muted/40" />
                           <p className="text-xs text-muted-foreground">
-                            Canal fijo por campaña: {canalLabel[templatesCampanaCanal]}.
+                            Se calcula automáticamente y se usa en links internos y seguimiento.
                           </p>
-                        ) : null}
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -2292,46 +2337,8 @@ ${secondCellHtml}
                       </div>
                     </summary>
                     <div className="mt-4 space-y-4">
-                      <div className="space-y-1">
-                        <Label>Identificador interno</Label>
-                        <Input
-                          value={templateForm.slug}
-                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
-                          placeholder="seguimiento-inicial"
-                        />
-                        <p className="text-xs text-muted-foreground">Se genera automáticamente, pero puedes ajustarlo aquí.</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label>Texto del link de agenda</Label>
-                        <Input
-                          value={templateForm.bookingLinkLabel}
-                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, bookingLinkLabel: event.target.value }))}
-                          placeholder="Agenda tu demo"
-                        />
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label>Nombre IA</Label>
-                          <Input
-                            value={templateForm.nombreIa}
-                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
-                            placeholder="Tal-IA"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Empresa</Label>
-                          <Input
-                            value={templateForm.nombreEmpresa}
-                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
-                            placeholder="Geoactiv"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-                        <div>
+                      <div className="rounded-md border bg-muted/20 p-3">
+                        <div className="mb-3">
                           <p className="text-sm font-medium text-foreground">Imagen o logo</p>
                           <p className="text-xs text-muted-foreground">Se usará en correo o WhatsApp según el canal.</p>
                         </div>
@@ -2366,7 +2373,7 @@ ${secondCellHtml}
                           </Button>
                         </div>
                         {logos.length ? (
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
                             {logos.map((logo) => (
                               <button
                                 key={logo.id}
@@ -2392,8 +2399,46 @@ ${secondCellHtml}
                         ) : null}
                       </div>
 
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Texto del link de agenda</Label>
+                          <Input
+                            value={templateForm.bookingLinkLabel}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, bookingLinkLabel: event.target.value }))}
+                            placeholder="Agenda tu demo"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Tracking URL</Label>
+                          <Input
+                            value={templateForm.ctaBaseUrl}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
+                            placeholder="https://tu-dominio.com"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Nombre IA</Label>
+                          <Input
+                            value={templateForm.nombreIa}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
+                            placeholder="Tal-IA"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Empresa</Label>
+                          <Input
+                            value={templateForm.nombreEmpresa}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
+                            placeholder="Geoactiv"
+                          />
+                        </div>
+                      </div>
+
                       {templateForm.canal === "correo" ? (
-                        <div className="space-y-4">
+                        <div className="space-y-4 rounded-md border bg-background/70 p-3">
                           <div className="space-y-1">
                             <Label>Diseño HTML avanzado</Label>
                             <Textarea
@@ -2466,7 +2511,7 @@ ${secondCellHtml}
                       ) : null}
 
                       {templateForm.canal === "whatsapp" ? (
-                        <div className="space-y-3">
+                        <div className="space-y-3 rounded-md border bg-background/70 p-3">
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
                               <Label>Código de plantilla WhatsApp</Label>
@@ -2515,24 +2560,6 @@ ${secondCellHtml}
                               </p>
                             </div>
                           </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-1">
-                              <Label>Nombre IA</Label>
-                              <Input
-                                value={templateForm.nombreIa}
-                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
-                                placeholder="Tal-IA"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label>Empresa</Label>
-                              <Input
-                                value={templateForm.nombreEmpresa}
-                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
-                                placeholder="Geoactiv"
-                              />
-                            </div>
-                          </div>
                           <div className="space-y-1">
                             <Label>Frase de WhatsApp para captación</Label>
                             <Select
@@ -2572,19 +2599,10 @@ ${secondCellHtml}
                             />
                           </div>
                           <div className="rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
-                            La imagen opcional se configura arriba, en la sección de configuración avanzada.
+                            La imagen opcional se configura arriba.
                           </div>
                         </div>
                       ) : null}
-
-                      <div className="space-y-1">
-                        <Label>Tracking URL</Label>
-                        <Input
-                          value={templateForm.ctaBaseUrl}
-                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
-                          placeholder="https://tu-dominio.com"
-                        />
-                      </div>
                     </div>
                   </details>
                 </div>
