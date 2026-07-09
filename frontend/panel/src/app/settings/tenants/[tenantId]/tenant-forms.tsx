@@ -2262,6 +2262,8 @@ export function TenantWhatsAppSettings({
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
   const [provider, setProvider] = useState<"twilio" | "meta">(initialValues.whatsapp_provider ?? "twilio")
   const isMetaProvider = provider === "meta"
+  const twilioStateLabel = isMetaProvider ? "Inactivo" : "Activo"
+  const metaStateLabel = isMetaProvider ? "Activo" : "Inactivo"
 
   return (
     <div className="space-y-6">
@@ -2378,10 +2380,13 @@ export function TenantWhatsAppSettings({
                 Solo se activa el bloque del proveedor seleccionado.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-sm ${!isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                Twilio
-              </span>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <span className={`text-sm ${!isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                  Twilio
+                </span>
+                <p className={`text-xs ${!isMetaProvider ? "text-emerald-600" : "text-muted-foreground"}`}>{twilioStateLabel}</p>
+              </div>
               <label className="relative inline-flex h-6 w-11 cursor-pointer items-center">
                 <input
                   id="whatsapp_provider_switch"
@@ -2393,9 +2398,12 @@ export function TenantWhatsAppSettings({
                 <span className="absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary" />
                 <span className="absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-5" />
               </label>
-              <span className={`text-sm ${isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                Meta
-              </span>
+              <div>
+                <span className={`text-sm ${isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                  Meta
+                </span>
+                <p className={`text-xs ${isMetaProvider ? "text-emerald-600" : "text-muted-foreground"}`}>{metaStateLabel}</p>
+              </div>
             </div>
           </div>
           <input type="hidden" name="whatsapp_provider" value={provider} />
@@ -2408,6 +2416,7 @@ export function TenantWhatsAppSettings({
         >
           <div className="space-y-1">
             <p className="text-sm font-medium">Twilio</p>
+            <p className="text-xs text-emerald-600">Estado: Activo</p>
             <p className="text-xs text-muted-foreground">
               Se conserva para tenants existentes o como fallback operativo.
             </p>
@@ -2484,6 +2493,7 @@ export function TenantWhatsAppSettings({
         >
           <div className="space-y-1">
             <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
+            <p className="text-xs text-emerald-600">Estado: Activo</p>
             <p className="text-xs text-muted-foreground">
               Este bloque prepara el provider nuevo que correrá en paralelo a Twilio.
             </p>
