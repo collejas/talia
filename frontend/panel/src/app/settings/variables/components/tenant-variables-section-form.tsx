@@ -13,12 +13,15 @@ import { formatApiError } from "@/app/settings/variables/utils/format-error"
 type FieldSpec = {
   label: string
   path: string
-  type?: "text" | "number" | "list" | "select"
+  type?: "text" | "number" | "list" | "select" | "switch"
   placeholder?: string
   defaultValue?: string
   multiline?: boolean
-  control?: "checkbox"
+  control?: "checkbox" | "switch"
   options?: Array<{ label: string; value: string }>
+  switchValues?: { on: string | boolean; off: string | boolean }
+  switchLabels?: { on: string; off: string }
+  visibleWhen?: { fieldPath: string; equals: string | boolean }
 }
 
 type SecretField = {
@@ -36,10 +39,12 @@ type SectionConfig = {
     title: string
     description?: string
     fieldPaths: string[]
+    visibleWhen?: { fieldPath: string; equals: string | boolean }
     subgroups?: Array<{
       title: string
       description?: string
       fieldPaths: string[]
+      visibleWhen?: { fieldPath: string; equals: string | boolean }
     }>
   }>
   fields: FieldSpec[]
@@ -82,12 +87,19 @@ type SecretPayload = {
 }
 
 export function TenantSectionForm({ section, config }: SectionFormProps) {
+  const isVisible = (visibleWhen: FieldSpec["visibleWhen"], valueMap: Record<string, FieldValue>) => {
+    if (!visibleWhen) return true
+    return valueMap[visibleWhen.fieldPath] === visibleWhen.equals
+  }
+
   const initialValues = useMemo(() => {
     const values: Record<string, FieldValue> = {}
     section.fields.forEach((field) => {
       const raw = getNestedValue(config, field.path)
       if (field.control === "checkbox") {
         values[field.path] = Boolean(raw)
+      } else if (field.control === "switch") {
+        values[field.path] = raw === (field.switchValues?.on ?? true)
       } else if (field.type === "list") {
         values[field.path] = Array.isArray(raw)
           ? raw.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean).join("\n")
@@ -115,6 +127,8 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
   const [secretValues, setSecretValues] = useState(initialSecretValues)
 
   const renderField = (field: FieldSpec) => {
+    if (!isVisible(field.visibleWhen, values)) return null
+
     if (field.control === "checkbox") {
       return (
         <div key={field.path} className="space-y-1 md:col-span-2">
@@ -135,6 +149,35 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     }
 
     const fieldValue: string = typeof values[field.path] === "string" ? (values[field.path] as string) : ""
+
+    if (field.control === "switch") {
+      const checked = Boolean(values[field.path])
+      const labelOff = field.switchLabels?.off ?? "Desactivado"
+      const labelOn = field.switchLabels?.on ?? "Activado"
+      return (
+        <div key={field.path} className="space-y-1">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background px-3 py-2">
+            <div className="space-y-0.5">
+              <Label htmlFor={field.path} className="text-sm font-medium">
+                {field.label}
+              </Label>
+              <p className="text-xs text-muted-foreground">{checked ? labelOn : labelOff}</p>
+            </div>
+            <label className="relative inline-flex h-6 w-11 cursor-pointer items-center">
+              <input
+                id={field.path}
+                type="checkbox"
+                className="peer sr-only"
+                checked={checked}
+                onChange={(event) => handleChange(field.path, event.target.checked)}
+              />
+              <span className="absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary" />
+              <span className="absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-5" />
+            </label>
+          </div>
+        </div>
+      )
+    }
 
     if (field.type === "select") {
       return (
@@ -192,6 +235,7 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
   }
 
   const renderFieldGroup = (group: NonNullable<SectionConfig["groups"]>[number]) => {
+    if (!isVisible(group.visibleWhen, values)) return null
     const groupFields = section.fields.filter((field) => group.fieldPaths.includes(field.path))
     return (
       <div key={group.title} className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-4">
@@ -202,6 +246,7 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
         {group.subgroups?.length ? (
           <div className="space-y-4">
             {group.subgroups.map((subgroup) => {
+              if (!isVisible(subgroup.visibleWhen, values)) return null
               const subgroupFields = section.fields.filter((field) => subgroup.fieldPaths.includes(field.path))
               return (
                 <div key={subgroup.title} className="rounded-lg border border-border/60 bg-background/70 p-4 space-y-4">
@@ -250,9 +295,16 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     try {
       const patch: Record<string, unknown> = {}
       section.fields.forEach((field) => {
+        if (!isVisible(field.visibleWhen, values)) return
         if (field.control === "checkbox") {
           const checkboxValue = Boolean(values[field.path])
           setNestedValue(patch, field.path.split("."), checkboxValue)
+          return
+        }
+        if (field.control === "switch") {
+          const switchValue = Boolean(values[field.path])
+          const nextValue = switchValue ? field.switchValues?.on ?? true : field.switchValues?.off ?? false
+          setNestedValue(patch, field.path.split("."), nextValue)
           return
         }
 

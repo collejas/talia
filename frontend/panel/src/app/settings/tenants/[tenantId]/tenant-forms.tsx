@@ -2260,29 +2260,46 @@ export function TenantWhatsAppSettings({
   const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
   const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
-  const provider = initialValues.whatsapp_provider ?? "meta"
+  const [provider, setProvider] = useState<"twilio" | "meta">(initialValues.whatsapp_provider ?? "twilio")
+  const isMetaProvider = provider === "meta"
 
   return (
     <div className="space-y-6">
       <form action={formAction} className="space-y-6">
         <input type="hidden" name="tenant_id" value={tenantId} />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_provider">whatsapp.provider</Label>
-            <select
-              id="whatsapp_provider"
-              name="whatsapp_provider"
-              defaultValue={provider}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="meta">Meta WhatsApp Cloud API</option>
-              <option value="twilio">Twilio</option>
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Define qué adapter usará el backend para este tenant.
-            </p>
+        <div className="rounded-lg border border-border/60 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="whatsapp_provider_switch">Proveedor activo</Label>
+              <p className="text-xs text-muted-foreground">
+                Solo se activa el bloque del proveedor seleccionado.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-sm ${!isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                Twilio
+              </span>
+              <label className="relative inline-flex h-6 w-11 cursor-pointer items-center">
+                <input
+                  id="whatsapp_provider_switch"
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={isMetaProvider}
+                  onChange={(event) => setProvider(event.target.checked ? "meta" : "twilio")}
+                />
+                <span className="absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary" />
+                <span className="absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-5" />
+              </label>
+              <span className={`text-sm ${isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                Meta
+              </span>
+            </div>
           </div>
+          <input type="hidden" name="whatsapp_provider" value={provider} />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="whatsapp_prompt_id">whatsapp.prompt_id</Label>
             <Input
@@ -2379,7 +2396,11 @@ export function TenantWhatsAppSettings({
           </div>
         </div>
 
-        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+        <fieldset
+          className="rounded-lg border border-border/60 p-4 space-y-4"
+          hidden={isMetaProvider}
+          disabled={isMetaProvider}
+        >
           <div className="space-y-1">
             <p className="text-sm font-medium">Twilio</p>
             <p className="text-xs text-muted-foreground">
@@ -2449,9 +2470,13 @@ export function TenantWhatsAppSettings({
               />
             </div>
           </div>
-        </div>
+        </fieldset>
 
-        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+        <fieldset
+          className="rounded-lg border border-border/60 p-4 space-y-4"
+          hidden={!isMetaProvider}
+          disabled={!isMetaProvider}
+        >
           <div className="space-y-1">
             <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
             <p className="text-xs text-muted-foreground">
@@ -2575,7 +2600,7 @@ export function TenantWhatsAppSettings({
               />
             </div>
           </div>
-        </div>
+        </fieldset>
         <p className="text-xs text-muted-foreground">
           La configuración de Twilio queda en este bloque y la de Meta en el suyo, incluyendo las plantillas.
         </p>

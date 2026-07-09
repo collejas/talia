@@ -214,7 +214,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const whatsappTemplatesMeta = getNestedRecord(whatsappConfig, "templates_meta") ?? {}
   const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
   const whatsappInitialValues: WhatsAppInitialValues = {
-    whatsapp_provider: (getNestedString(whatsappConfig, "provider") ?? "meta") as "twilio" | "meta",
+    whatsapp_provider: (getNestedString(whatsappConfig, "provider") ?? "twilio") as "twilio" | "meta",
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
     whatsapp_welcome_document_prompt_version: getNestedString(

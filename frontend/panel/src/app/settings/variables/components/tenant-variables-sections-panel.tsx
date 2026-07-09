@@ -11,21 +11,26 @@ type SectionConfig = {
     title: string
     description?: string
     fieldPaths: string[]
+    visibleWhen?: { fieldPath: string; equals: string | boolean }
     subgroups?: Array<{
       title: string
       description?: string
       fieldPaths: string[]
+      visibleWhen?: { fieldPath: string; equals: string | boolean }
     }>
   }>
   fields: Array<{
     label: string
     path: string
-    type?: "text" | "number" | "list" | "select"
+    type?: "text" | "number" | "list" | "select" | "switch"
     placeholder?: string
     defaultValue?: string
     multiline?: boolean
-    control?: "checkbox"
+    control?: "checkbox" | "switch"
     options?: Array<{ label: string; value: string }>
+    switchValues?: { on: string | boolean; off: string | boolean }
+    switchLabels?: { on: string; off: string }
+    visibleWhen?: { fieldPath: string; equals: string | boolean }
   }>
   secrets?: Array<{
     clave: string
@@ -237,6 +242,7 @@ const SECTIONS: SectionConfig[] = [
       {
         title: "Twilio",
         description: "Completa estos campos si el proveedor activo es Twilio.",
+        visibleWhen: { fieldPath: "whatsapp.provider", equals: false },
         fieldPaths: [
           "whatsapp.twilio.phone_number",
           "whatsapp.twilio.phone_number_sid",
@@ -269,6 +275,7 @@ const SECTIONS: SectionConfig[] = [
       {
         title: "Meta",
         description: "Completa estos campos si el proveedor activo es Meta.",
+        visibleWhen: { fieldPath: "whatsapp.provider", equals: true },
         fieldPaths: [
           "whatsapp.meta.phone_number_id",
           "whatsapp.meta.graph_api_version",
@@ -304,12 +311,9 @@ const SECTIONS: SectionConfig[] = [
       {
         label: "Proveedor activo",
         path: "whatsapp.provider",
-        type: "select",
-        defaultValue: "twilio",
-        options: [
-          { label: "Meta WhatsApp Cloud API", value: "meta" },
-          { label: "Twilio", value: "twilio" },
-        ],
+        control: "switch",
+        switchValues: { on: "meta", off: "twilio" },
+        switchLabels: { off: "Twilio activo", on: "Meta activo" },
       },
       { label: "Prompt ID", path: "whatsapp.prompt_id" },
       { label: "Versión del prompt", path: "whatsapp.prompt_version" },
