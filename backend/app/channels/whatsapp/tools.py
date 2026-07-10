@@ -1753,7 +1753,7 @@ async def _handle_information_email(
             if label and url:
                 resources.append({"label": label, "url": url})
 
-        persona = await _resolve_persona(persona_id)
+    persona = await _resolve_persona(persona_id)
     persona_notes = None
     persona_need = None
     if persona:

@@ -184,7 +184,6 @@ def build_sales_template_variables(
     email: str | None,
 ) -> dict[str, str]:
     summary_text = resumen or notes or "Pendiente de detalle"
-    next_action = str((extra or {}).get("siguiente_accion") or "").strip()
     phone = _contact_phone(contact)
     company = str(contact.get("company_name") or "").strip()
     email_value = _contact_email(contact, override=email)
@@ -192,10 +191,9 @@ def build_sales_template_variables(
         "1": seller_name,
         "2": _contact_name(contact),
         "3": summary_text,
-        "4": next_action or "Contacta y confirma próximos pasos.",
-        "5": phone or "N/D",
-        "6": email_value or "N/D",
-        "7": company or "Sin empresa",
+        "4": phone or "N/D",
+        "5": email_value or "N/D",
+        "6": company or "Sin empresa",
     }
 
 

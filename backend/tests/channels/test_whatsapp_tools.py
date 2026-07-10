@@ -104,7 +104,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     }
     context = ToolRuntimeContext(
         conversation_id="conv-test",
-        contact_id="contact-test",
+        persona_id="contact-test",
         channel="whatsapp",
     )
 
@@ -124,10 +124,9 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_vars"]["1"] == "Seller Demo"
     assert sent["template_vars"]["2"] == "Lead Demo"
     assert sent["template_vars"]["3"] == "Automatizar atención"
-    assert sent["template_vars"]["4"] == "demo"
-    assert sent["template_vars"]["5"] == "+529991112233"
-    assert sent["template_vars"]["6"] == "lead@example.com"
-    assert sent["template_vars"]["7"] == "Demo SA"
+    assert sent["template_vars"]["4"] == "+529991112233"
+    assert sent["template_vars"]["5"] == "lead@example.com"
+    assert sent["template_vars"]["6"] == "Demo SA"
     assert sent["template_name"] is None
     assert sent["template_language"] is None
     assert "booking_confirmed" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
@@ -194,7 +193,7 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     }
     context = ToolRuntimeContext(
         conversation_id="conv-test",
-        contact_id="contact-test",
+        persona_id="contact-test",
         channel="whatsapp",
     )
 
@@ -290,7 +289,7 @@ async def test_notify_sales_rep_sends_meta_template(monkeypatch: pytest.MonkeyPa
     }
     context = ToolRuntimeContext(
         conversation_id="conv-test",
-        contact_id="contact-test",
+        persona_id="contact-test",
         channel="whatsapp",
     )
 
@@ -544,7 +543,7 @@ async def test_handle_information_email_triggers_notification(
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
-        contact_id="contact-1",
+        persona_id="contact-1",
         channel="whatsapp",
     )
     arguments = {
@@ -629,7 +628,7 @@ async def test_handle_close_lead_triggers_notification(
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
-        contact_id="contact-1",
+        persona_id="contact-1",
         channel="whatsapp",
     )
     arguments = {
@@ -699,7 +698,7 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
 
     context = ToolRuntimeContext(
         conversation_id="conv-evasive",
-        contact_id="contact-evasive",
+        persona_id="contact-evasive",
         channel="whatsapp",
     )
     arguments = {
