@@ -284,7 +284,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma una cita en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
+  "description": "Confirma una cita en el slot seleccionado; el backend gestiona la invitación y los recordatorios.",
   "strict": true,
   "parameters": {
     "type": "object",
