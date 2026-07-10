@@ -103,6 +103,29 @@ def test_build_contact_write_parts_prefers_explicit_full_name_for_triggered_pers
     assert persona_body["apellido_materno"] is None
 
 
+def test_build_contact_write_parts_preserves_split_name_fields_from_contact_form() -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+    parts = repo._build_contact_write_parts(
+        organizacion_id=uuid4(),
+        contact_id=uuid4(),
+        payload={
+            "nombre": "Juan",
+            "nombre_nombres": "Juan",
+            "apellido_paterno": "Perez",
+            "apellido_materno": "Lopez",
+            "nombre_completo": "Juan Perez Lopez",
+            "correo_principal": "juan@example.com",
+            "telefono_principal_e164": "+5215550000000",
+        },
+    )
+
+    persona_body = parts["persona_body"]
+    assert persona_body["nombre"] == "Juan"
+    assert persona_body["nombre_completo"] == "Juan Perez Lopez"
+    assert persona_body["apellido_paterno"] == "Perez"
+    assert persona_body["apellido_materno"] == "Lopez"
+
+
 @pytest.mark.asyncio
 async def test_persona_to_contact_row_prefers_persona_company_and_need() -> None:
     repo = CRMRepository.__new__(CRMRepository)

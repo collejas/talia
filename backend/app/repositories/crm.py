@@ -126,6 +126,37 @@ def _is_account_code_duplicate_error(exc: Exception) -> bool:
     )
 
 
+def _normalize_account_type_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    body = dict(payload)
+    raw_tipo = str(body.get("tipo") or body.get("tipo_cuenta") or "").strip().lower()
+    raw_persona = str(body.get("tipo_persona") or "").strip().lower()
+    raw_code = str(body.get("codigo_cuenta") or "").strip().upper()
+
+    normalized_tipo = ""
+    if raw_tipo in {"persona_fisica_actividad_empresarial", "pfae"}:
+        normalized_tipo = "persona_fisica_actividad_empresarial"
+    elif raw_tipo in {"empresa", "moral"}:
+        normalized_tipo = "empresa"
+    elif raw_persona == "fisica":
+        normalized_tipo = "persona_fisica_actividad_empresarial"
+    elif raw_persona == "moral":
+        normalized_tipo = "empresa"
+    elif raw_code.startswith("PFAE-"):
+        normalized_tipo = "persona_fisica_actividad_empresarial"
+    elif raw_code.startswith("EMP-"):
+        normalized_tipo = "empresa"
+
+    if normalized_tipo:
+        body["tipo"] = normalized_tipo
+        if "tipo_cuenta" in body:
+            body["tipo_cuenta"] = normalized_tipo
+
+    # `cuentas` no tiene columna `tipo_persona`; ese dato solo se usa como señal de entrada.
+    body.pop("tipo_persona", None)
+
+    return body
+
+
 def _is_opportunity_code_duplicate_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return (
@@ -1890,7 +1921,7 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"organizacion_id": str(organizacion_id), **payload}
+        body = _normalize_account_type_payload({"organizacion_id": str(organizacion_id), **payload})
         body.pop("colonia", None)
         body["fecha_incorporacion"] = datetime.now(timezone.utc).isoformat()
         tipo_code = str(body.get("tipo") or body.get("tipo_cuenta") or "")
@@ -1949,7 +1980,9 @@ class CRMRepository:
                 raise CRMRepositoryError("cuenta_no_encontrada")
             return existing
 
-        body = {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
+        body = _normalize_account_type_payload(
+            {key: value for key, value in payload.items() if key not in {"codigo_cuenta", "fecha_incorporacion"}}
+        )
         body.pop("colonia", None)
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -8126,6 +8159,12 @@ class CRMRepository:
         contact_name_from_parts = " ".join(contact_name_parts).strip() if contact_name_parts else None
         raw_full_name = _clean_text(persona.get("nombre_completo")) or None
         preferred_name = raw_full_name or contact_name_from_parts or _clean_text(persona.get("nombre")) or None
+        account_type = _clean_text(account.get("tipo")) if isinstance(account, dict) else None
+        persona_fisica_moral = (
+            "fisica"
+            if account_type == "persona_fisica_actividad_empresarial"
+            else ("moral" if account_type else None)
+        )
 
         return {
             "id": persona.get("id"),
@@ -8177,7 +8216,7 @@ class CRMRepository:
             "contacto_datos": dict(metadata),
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else None,
             "cuenta_propietario_usuario_id": account.get("propietario_usuario_id") if isinstance(account, dict) else None,
-            "persona_fisica_moral": None,
+            "persona_fisica_moral": persona_fisica_moral,
             "nombre_nombres": persona.get("nombre"),
             "apellido_paterno": persona.get("apellido_paterno"),
             "apellido_materno": persona.get("apellido_materno"),
@@ -8198,7 +8237,7 @@ class CRMRepository:
             "email_facturacion": account.get("email_facturacion") if isinstance(account, dict) else None,
             "tipo_industria": account.get("tipo_industria") if isinstance(account, dict) else None,
             "tamano": account.get("tamano") if isinstance(account, dict) else None,
-            "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
+            "cuenta_tipo": account_type,
             "contexto_modo": relation_metadata.get("contexto_modo") if isinstance(relation_metadata, dict) else None,
             "puesto": persona.get("puesto"),
             "rol_en_cuenta": relation.get("rol_en_cuenta") if isinstance(relation, dict) else None,
@@ -8356,10 +8395,11 @@ class CRMRepository:
             isinstance(payload, dict)
             and "nombre_completo" in payload
             and self._pick_text(payload, "nombre_completo")
+            and not self._pick_text(payload, "apellido_paterno", "apellido_materno")
             and (
                 "nombre" not in payload
-                or "nombre_nombres" in payload
                 or self._pick_text(payload, "nombre") == self._pick_text(payload, "nombre_completo")
+                or self._pick_text(payload, "nombre_nombres") == self._pick_text(payload, "nombre_completo")
             )
         )
         if explicit_full_name_update:

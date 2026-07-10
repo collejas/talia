@@ -519,8 +519,9 @@ function inferMode(detail: ContactDetail): CreateMode {
     readString(detail, "tipo") ||
     readString(detail, "tipo_cuenta")
   ).trim().toLowerCase();
+  const personaKind = readString(detail, "persona_fisica_moral").trim().toLowerCase();
 
-  if (accountType === "persona_fisica_actividad_empresarial") {
+  if (accountType === "persona_fisica_actividad_empresarial" || personaKind === "fisica") {
     return "persona_fisica_actividad_empresarial";
   }
   return "empresa_existente";
@@ -753,6 +754,10 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
     case "hydrate": {
       const detail = action.detail;
       const mode = inferMode(detail);
+      const detailPersonaKind = readString(detail, "persona_fisica_moral").trim().toLowerCase();
+      const detailAccountType =
+        readString(detail, "cuenta_tipo") ||
+        (detailPersonaKind === "fisica" ? "persona_fisica_actividad_empresarial" : "");
       const hydratedName = getHydratedPersonaName(detail);
       const hasFiscalOrAddressData = [
         "regimen_capital",
@@ -832,10 +837,10 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           alias: readString(detail, "alias"),
           tipo_persona:
             (readString(detail, "persona_fisica_moral") as CuentaDraft["tipo_persona"]) ||
-            (readString(detail, "cuenta_tipo") === "persona_fisica_actividad_empresarial" || mode === "persona_fisica_actividad_empresarial" ? "fisica" : ""),
-          tipo_cuenta: readString(detail, "cuenta_tipo") || (mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa"),
+            (detailAccountType === "persona_fisica_actividad_empresarial" || mode === "persona_fisica_actividad_empresarial" ? "fisica" : ""),
+          tipo_cuenta: detailAccountType || (mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa"),
           tipo:
-            readString(detail, "cuenta_tipo") ||
+            detailAccountType ||
             (mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa"),
           codigo_cuenta: readString(detail, "codigo_cuenta"),
           rfc: sanitizeRfcInput(readString(detail, "rfc")),
@@ -1213,22 +1218,26 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   );
 
   const isCompanyMode = state.mode === "empresa_nueva";
-  const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
-  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Persona moral";
+  const resolvedAccountType = React.useMemo(
+    () => resolveAccountType(state.mode, state.cuenta.tipo_cuenta || state.cuenta.tipo),
+    [state.mode, state.cuenta.tipo, state.cuenta.tipo_cuenta],
+  );
+  const isPfaeAccount = resolvedAccountType === "persona_fisica_actividad_empresarial";
+  const accountTypeLabel = isPfaeAccount ? "Persona física con actividad empresarial" : "Persona moral";
   const accountTypeEditLabel =
     state.mode === "solo_persona"
       ? "Sin cuenta vinculada"
-      : isPfaeMode
+      : isPfaeAccount
         ? "PFAE"
         : "Moral";
   const rfcHint = React.useMemo(
-    () => getRfcLengthMessage(isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"),
-    [isPfaeMode],
+    () => getRfcLengthMessage(isPfaeAccount ? "persona_fisica_actividad_empresarial" : "empresa"),
+    [isPfaeAccount],
   );
 
   React.useEffect(() => {
-    const desiredPrefix = isPfaeMode ? "PFAE-" : "Emp-";
-    if (!isCompanyMode && !isPfaeMode) {
+    const desiredPrefix = isPfaeAccount ? "PFAE-" : "Emp-";
+    if (!isCompanyMode && state.mode !== "persona_fisica_actividad_empresarial") {
       if (!state.cuenta.cuenta_id && state.cuenta.codigo_cuenta) {
         dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: "" });
       }
@@ -1246,7 +1255,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
       try {
         const response = await fetch(
           `/api/personas/cuentas/codigo-siguiente?tipo=${encodeURIComponent(
-            isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa",
+            isPfaeAccount ? "persona_fisica_actividad_empresarial" : "empresa",
           )}`,
           {
             cache: "no-store",
@@ -1265,7 +1274,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
     run();
     return () => controller.abort();
-  }, [isCompanyMode, isPfaeMode, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
+  }, [isCompanyMode, isPfaeAccount, state.mode, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
 
   const loadRelations = React.useCallback(async () => {
     if (!resolvedPersonaId) return;
@@ -1775,12 +1784,8 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
           {state.mode !== "solo_persona" ? (
             <FormSection
-              title={isPfaeMode ? "Cuenta PFAE" : "Empresa moral"}
-              description={
-                isPfaeMode
-                  ? "Edita los datos fiscales, comerciales y de domicilio de la cuenta PFAE vinculada."
-                  : "Edita los datos fiscales, comerciales y de domicilio de la empresa moral vinculada."
-              }
+              title="Empresa"
+              description="Edita los datos fiscales, comerciales y de domicilio de la cuenta vinculada."
             >
               {state.mode === "empresa_existente" ? (
                 <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-background p-3 text-sm text-muted-foreground">
@@ -1794,7 +1799,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label="Razón social">
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
                 </Field>
-                <Field label={isPfaeMode ? "ID de empresa propia" : "ID de empresa"}>
+                <Field label="ID de empresa">
                   <Input value={state.cuenta.codigo_cuenta || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
                 </Field>
                 <Field label="Tipo de cuenta">
