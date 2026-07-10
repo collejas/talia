@@ -858,6 +858,34 @@ class Settings(BaseSettings):
             "TALIA_SALES_NOTIFICATION_JOB_LEASE_SECONDS",
         ),
     )
+    whatsapp_followup_queue_enabled: bool = Field(
+        default=True,
+        description="Activa la cola asíncrona de followups de WhatsApp por conversación.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_FOLLOWUP_QUEUE_ENABLED",
+            "TALIA_WHATSAPP_FOLLOWUP_QUEUE_ENABLED",
+        ),
+    )
+    whatsapp_followup_runner_interval_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=300,
+        description="Intervalo del worker de cola para followups de WhatsApp.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_FOLLOWUP_RUNNER_INTERVAL_SECONDS",
+            "TALIA_WHATSAPP_FOLLOWUP_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
+    whatsapp_followup_job_lease_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=900,
+        description="Lease por job de followup de WhatsApp en procesamiento.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_FOLLOWUP_JOB_LEASE_SECONDS",
+            "TALIA_WHATSAPP_FOLLOWUP_JOB_LEASE_SECONDS",
+        ),
+    )
     sales_notification_max_attempts: int = Field(
         default=5,
         ge=1,

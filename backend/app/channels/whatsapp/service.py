@@ -2548,6 +2548,20 @@ async def handle_incoming_message(
             outbound_message_id=outgoing_registration.get("message_id"),
         )
         try:
+            from app.services import whatsapp_followups as whatsapp_followup_jobs
+
+            await whatsapp_followup_jobs.schedule_customer_followup(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                organizacion_id=str(resolved_persona_org) if resolved_persona_org else None,
+                reason="assistant_reply",
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.followup.schedule_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        try:
             if welcome_document_sent_by_tool:
                 log_event(
                     logger,

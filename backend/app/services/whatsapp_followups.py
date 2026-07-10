@@ -1,4 +1,4 @@
-"""Rutinas para reenganche automático y alertas a vendedores en WhatsApp."""
+"""Cola persistente para reenganche automático y alertas a vendedores en WhatsApp."""
 
 from __future__ import annotations
 
@@ -14,19 +14,22 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services import conversation_summary, storage, tenant_runtime
+from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services.storage import StorageError
 
 logger = get_logger("app.services.whatsapp_followups")
 
 REENGAGE_TEMPLATE = "¿Seguimos en contacto?"
-
-# El query inicial no puede usar configuración por tenant.
-# Usamos una ventana corta para no excluir tenants con reengage_minutes bajos
-# y aplicamos la regla exacta por tenant dentro de _process_conversation.
-WHATSAPP_FOLLOWUP_PREFILTER_MINUTES = 3
 _INFERRED_INACTIVITY_LABEL = "Resumen inferido por inactividad"
+_DEFAULT_RETRY_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 900, 1800)
+
+
+def _safe_uuid(value: Any) -> UUID | None:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _contact_phone_value(contact: dict[str, Any] | None) -> str | None:
@@ -48,12 +51,130 @@ def _contact_phone_value(contact: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _extract_cursor(conversation: dict[str, Any]) -> tuple[datetime, str] | None:
-    convo_id = str(conversation.get("id") or "").strip()
-    last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
-    if not convo_id or not last_out:
+def _retry_delay_for_attempt(attempt_count: int) -> int:
+    index = max(0, int(attempt_count) - 1)
+    if index >= len(_DEFAULT_RETRY_BACKOFF_SECONDS):
+        return _DEFAULT_RETRY_BACKOFF_SECONDS[-1]
+    return _DEFAULT_RETRY_BACKOFF_SECONDS[index]
+
+
+async def schedule_customer_followup(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    organizacion_id: str | None,
+    opportunity_id: str | None = None,
+    reason: str = "outbound_message",
+) -> dict[str, Any] | None:
+    conversation_uuid = _safe_uuid(conversation_id)
+    persona_uuid = _safe_uuid(persona_id)
+    org_uuid = _safe_uuid(organizacion_id)
+    if not conversation_uuid or not persona_uuid or not org_uuid:
+        logger.warning(
+            "whatsapp.followup.schedule_invalid_ids",
+            extra={
+                "conversation_id": conversation_id,
+                "persona_id": persona_id,
+                "organizacion_id": organizacion_id,
+                "reason": reason,
+            },
+        )
         return None
-    return last_out, convo_id
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    due_at = datetime.now(timezone.utc) + timedelta(minutes=max(1, runtime.reengage_minutes))
+    repo = CRMRepository()
+    return await _schedule_next_followup_job(
+        repo=repo,
+        organizacion_id=org_uuid,
+        conversation_id=conversation_uuid,
+        persona_id=persona_uuid,
+        opportunity_id=_safe_uuid(opportunity_id),
+        due_at=due_at,
+        next_action="reengage",
+        scheduled_reason=reason,
+    )
+
+
+async def cancel_followup_jobs_for_inbound(*, conversation_id: str, reason: str = "customer_replied") -> int:
+    conversation_uuid = _safe_uuid(conversation_id)
+    if not conversation_uuid:
+        return 0
+    repo = CRMRepository()
+    try:
+        canceled = await repo.worker_cancel_active_whatsapp_followup_jobs(
+            conversation_id=conversation_uuid,
+            reason=reason,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.followup.cancel_failed",
+            extra={"conversation_id": conversation_id, "reason": reason, "error": str(exc)},
+        )
+        return 0
+    if canceled:
+        logger.info(
+            "whatsapp.followup.canceled",
+            extra={"conversation_id": conversation_id, "reason": reason, "rows": canceled},
+        )
+    return canceled
+
+
+async def _schedule_next_followup_job(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    conversation_id: UUID,
+    persona_id: UUID,
+    opportunity_id: UUID | None,
+    due_at: datetime,
+    next_action: str,
+    scheduled_reason: str,
+) -> dict[str, Any] | None:
+    try:
+        await repo.worker_cancel_active_whatsapp_followup_jobs(
+            conversation_id=conversation_id,
+            reason=f"replaced:{scheduled_reason}",
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.followup.replace_cancel_failed",
+            extra={"conversation_id": str(conversation_id), "error": str(exc)},
+        )
+    try:
+        row = await repo.worker_enqueue_whatsapp_followup_job(
+            organizacion_id=organizacion_id,
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            opportunity_id=opportunity_id,
+            due_at=due_at,
+            next_action=next_action,
+            scheduled_reason=scheduled_reason,
+            max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts or 5)),
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.followup.enqueue_failed",
+            extra={
+                "conversation_id": str(conversation_id),
+                "persona_id": str(persona_id),
+                "next_action": next_action,
+                "error": str(exc),
+            },
+        )
+        return None
+    await followup_runner.wakeup()
+    logger.info(
+        "whatsapp.followup.enqueued",
+        extra={
+            "job_id": row.get("id"),
+            "conversation_id": str(conversation_id),
+            "persona_id": str(persona_id),
+            "due_at": due_at.astimezone(timezone.utc).isoformat(),
+            "next_action": next_action,
+            "scheduled_reason": scheduled_reason,
+        },
+    )
+    return row
 
 
 async def run_followups(
@@ -63,136 +184,296 @@ async def run_followups(
     cursor_last_out: datetime | None = None,
     cursor_last_id: str | None = None,
 ) -> tuple[datetime | None, str | None]:
-    """Ejecuta el flujo de reenganche y escalación para conversaciones inactivas."""
-    current_ts = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    reengage_delta = timedelta(minutes=WHATSAPP_FOLLOWUP_PREFILTER_MINUTES)
-    cutoff = current_ts - reengage_delta
-    batch_limit = limit or 50
+    del cursor_last_out, cursor_last_id
+    reference_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     repo = CRMRepository()
-    active_cursor_out = cursor_last_out
-    active_cursor_id = str(cursor_last_id or "").strip() or None
     try:
-        conversations = await repo.list_whatsapp_conversations_for_followup(
-            inactive_since=cutoff,
-            limit=batch_limit,
-            cursor_last_out=active_cursor_out,
-            cursor_last_id=active_cursor_id,
-        )
+        requeued = await repo.worker_requeue_expired_whatsapp_followup_jobs(limit=200)
     except CRMRepositoryError as exc:
-        logger.warning("whatsapp.followup.list_failed", extra={"error": str(exc)})
-        return active_cursor_out, active_cursor_id
+        logger.warning("whatsapp.followup.requeue_expired_failed", extra={"error": str(exc)})
+        requeued = 0
+    if requeued:
+        logger.info("whatsapp.followup.requeue_expired_ok", extra={"rows": requeued})
 
-    if not conversations and active_cursor_out and active_cursor_id:
+    try:
+        jobs = await repo.worker_list_ready_whatsapp_followup_jobs(limit=limit or 50)
+    except CRMRepositoryError as exc:
+        logger.warning("whatsapp.followup.list_ready_failed", extra={"error": str(exc)})
+        return None, None
+    for row in jobs:
+        job_id = _safe_uuid(row.get("id"))
+        if not job_id:
+            continue
+        expected_attempt_count = int(row.get("attempt_count") or 0)
         try:
-            conversations = await repo.list_whatsapp_conversations_for_followup(
-                inactive_since=cutoff,
-                limit=batch_limit,
+            claimed = await repo.worker_claim_whatsapp_followup_job(
+                job_id=job_id,
+                expected_attempt_count=expected_attempt_count,
+                lease_seconds=max(30, int(settings.whatsapp_followup_job_lease_seconds)),
             )
-            if conversations:
-                logger.info("whatsapp.followup.cursor_wrapped")
-                active_cursor_out = None
-                active_cursor_id = None
         except CRMRepositoryError as exc:
-            logger.warning("whatsapp.followup.list_failed", extra={"error": str(exc)})
-            return active_cursor_out, active_cursor_id
-
-    for conversation in conversations:
-        try:
-            await _process_conversation(
-                repo=repo,
-                conversation=conversation,
-                reference_time=current_ts,
+            logger.warning(
+                "whatsapp.followup.claim_failed",
+                extra={"job_id": str(job_id), "error": str(exc)},
             )
-        except Exception as exc:  # pragma: no cover - defensivo
-            logger.exception(
-                "whatsapp.followup.unexpected_error",
-                extra={"conversation_id": conversation.get("id"), "error": str(exc)},
-            )
-    last_cursor = _extract_cursor(conversations[-1]) if conversations else None
-    if last_cursor is None:
-        return active_cursor_out, active_cursor_id
-    return last_cursor
+            continue
+        if not claimed:
+            continue
+        await _process_claimed_job(repo=repo, row=claimed, reference_time=reference_time)
+    return None, None
 
 
 class WhatsAppFollowupRunner:
-    """Ejecuta run_followups en intervalos definidos."""
+    """Procesa la cola persistente de followups de WhatsApp."""
 
-    def __init__(self, *, interval_minutes: int = 5) -> None:
-        self._interval = max(1, interval_minutes)
+    def __init__(self) -> None:
         self._task: asyncio.Task[None] | None = None
-        self._stop_event = asyncio.Event()
-        self._enabled = True
-        self._cursor_last_out: datetime | None = None
-        self._cursor_last_id: str | None = None
+        self._stop = asyncio.Event()
+        self._wake = asyncio.Event()
 
     async def start(self) -> None:
         if self._task and not self._task.done():
             return
         if not settings.supabase_url or not settings.supabase_service_role:
-            self._enabled = False
             logger.warning("whatsapp.followup.disabled", extra={"reason": "supabase_config_missing"})
             return
-        self._enabled = True
-        self._stop_event.clear()
+        if not bool(getattr(settings, "whatsapp_followup_queue_enabled", True)):
+            logger.warning("whatsapp.followup.disabled", extra={"reason": "disabled_by_config"})
+            return
+        self._stop = asyncio.Event()
+        self._wake = asyncio.Event()
         self._task = asyncio.create_task(self._run_loop(), name="whatsapp-followups")
-        logger.info("whatsapp.followup.started")
+        logger.info(
+            "whatsapp.followup.started",
+            extra={"interval_seconds": int(settings.whatsapp_followup_runner_interval_seconds)},
+        )
 
     async def shutdown(self) -> None:
-        if not self._task:
-            return
-        self._stop_event.set()
-        try:
+        self._stop.set()
+        self._wake.set()
+        if self._task:
             await self._task
-        finally:
             self._task = None
         logger.info("whatsapp.followup.stopped")
 
+    async def wakeup(self) -> None:
+        self._wake.set()
+
     async def _run_loop(self) -> None:
-        interval_seconds = self._interval * 60
-        while not self._stop_event.is_set():
+        interval_seconds = max(5, int(getattr(settings, "whatsapp_followup_runner_interval_seconds", 20)))
+        while not self._stop.is_set():
             try:
                 defer, details = await should_defer_non_critical_jobs(job_name="whatsapp_followups")
                 if defer:
                     logger.info("whatsapp.followup.deferred_due_to_blast", extra=details)
                 else:
-                    self._cursor_last_out, self._cursor_last_id = await run_followups(
-                        cursor_last_out=self._cursor_last_out,
-                        cursor_last_id=self._cursor_last_id,
-                    )
+                    await run_followups()
             except Exception as exc:  # pragma: no cover
                 logger.exception("whatsapp.followup.loop_error", extra={"error": str(exc)})
+            self._wake.clear()
+            wait_tasks = [
+                asyncio.create_task(self._stop.wait()),
+                asyncio.create_task(self._wake.wait()),
+            ]
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=interval_seconds)
-            except asyncio.TimeoutError:
-                continue
+                done, pending = await asyncio.wait(
+                    wait_tasks,
+                    timeout=interval_seconds,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done:
+                    _ = task.result()
+            finally:
+                for task in wait_tasks:
+                    if not task.done():
+                        task.cancel()
 
 
 followup_runner = WhatsAppFollowupRunner()
 
 
-async def _process_conversation(
+async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], reference_time: datetime) -> None:
+    job_id = _safe_uuid(row.get("id"))
+    conversation_id = _safe_uuid(row.get("conversation_id"))
+    if not job_id or not conversation_id:
+        return
+    try:
+        conversation = await repo.get_whatsapp_conversation_for_followup_job(conversation_id=conversation_id)
+    except CRMRepositoryError as exc:
+        await _fail_job(repo=repo, row=row, error=str(exc))
+        return
+    if not conversation:
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "conversation_missing"},
+        )
+        return
+
+    try:
+        context = await _load_followup_context(repo=repo, conversation=conversation, reference_time=reference_time)
+    except Exception as exc:  # pragma: no cover
+        await _fail_job(repo=repo, row=row, error=str(exc))
+        return
+    if context is None:
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "context_not_actionable"},
+        )
+        return
+
+    next_due = _calculate_next_followup_due(
+        conversation=context["conversation"],
+        opportunity=context["opportunity"],
+        whatsapp_settings=context["whatsapp_settings"],
+    )
+    if not next_due:
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "followup_not_needed"},
+        )
+        return
+
+    logger.info(
+        "whatsapp.followup.check",
+        extra={
+            "job_id": str(job_id),
+            "conversation_id": str(conversation_id),
+            "persona_id": context["persona_id"],
+            "last_out": next_due["last_out"].isoformat() if next_due.get("last_out") else None,
+            "due_at": next_due["due_at"].isoformat(),
+            "next_action": next_due["next_action"],
+            "attempts": next_due["reengage_attempts"],
+            "max_attempts": next_due["max_reengage_attempts"],
+        },
+    )
+
+    if next_due["due_at"] > reference_time:
+        await repo.worker_reschedule_whatsapp_followup_job(
+            job_id=job_id,
+            due_at=next_due["due_at"],
+            next_action=next_due["next_action"],
+            scheduled_reason="state_recomputed",
+        )
+        return
+
+    if next_due["next_action"] == "reengage":
+        result = await _send_persona_reengage_message(
+            conversation_id=str(conversation_id),
+            persona_id=context["persona_id"],
+            persona=context["contact"],
+            followup_meta=next_due["followup_meta"],
+            metadata=next_due["metadata"],
+            repo=repo,
+            opportunity_id=context["opp_uuid"],
+            org_id=context["org_uuid"],
+            whatsapp_settings=context["whatsapp_settings"],
+        )
+        if not result:
+            await _fail_job(repo=repo, row=row, error="reengage_send_failed")
+            return
+        next_action = "reengage" if result["attempt_count"] < next_due["max_reengage_attempts"] else "escalate"
+        delay_minutes = (
+            context["whatsapp_settings"].reengage_minutes
+            if next_action == "reengage"
+            else max(0, context["whatsapp_settings"].escalate_minutes)
+        )
+        next_job_due_at = result["sent_at"] + timedelta(minutes=delay_minutes)
+        await repo.worker_reschedule_whatsapp_followup_job(
+            job_id=job_id,
+            due_at=next_job_due_at,
+            next_action=next_action,
+            scheduled_reason="reengage_sent",
+        )
+        logger.info(
+            "whatsapp.followup.rescheduled_after_reengage",
+            extra={
+                "job_id": str(job_id),
+                "conversation_id": str(conversation_id),
+                "next_action": next_action,
+                "due_at": next_job_due_at.isoformat(),
+            },
+        )
+        return
+
+    if next_due["next_action"] == "escalate":
+        escalated = await _escalate_persona_to_sales(
+            conversation_id=str(conversation_id),
+            persona_id=context["persona_id"],
+            opportunity=context["opportunity"],
+            followup_meta=next_due["followup_meta"],
+            metadata=next_due["metadata"],
+            repo=repo,
+        )
+        if not escalated:
+            await _fail_job(repo=repo, row=row, error="escalate_send_failed")
+            return
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "escalated"},
+        )
+        return
+
+    await repo.worker_mark_whatsapp_followup_done(
+        job_id=job_id,
+        result={"scheduled_reason": "unknown_action"},
+    )
+
+
+async def _fail_job(*, repo: CRMRepository, row: dict[str, Any], error: str) -> None:
+    job_id = _safe_uuid(row.get("id"))
+    if not job_id:
+        return
+    attempt_count = int(row.get("attempt_count") or 0)
+    max_attempts = int(row.get("max_attempts") or settings.whatsapp_reengage_max_attempts or 5)
+    retry_delay = _retry_delay_for_attempt(attempt_count=attempt_count)
+    try:
+        updated = await repo.worker_mark_whatsapp_followup_retry_or_failed(
+            job_id=job_id,
+            attempt_count=attempt_count,
+            max_attempts=max_attempts,
+            error=error,
+            retry_delay_seconds=retry_delay,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.followup.mark_retry_failed",
+            extra={"job_id": str(job_id), "error": str(exc)},
+        )
+        return
+    logger.warning(
+        "whatsapp.followup.job_failed",
+        extra={
+            "job_id": str(job_id),
+            "attempt_count": attempt_count,
+            "max_attempts": max_attempts,
+            "retry_delay_seconds": retry_delay,
+            "state": str(updated.get("state") if isinstance(updated, dict) else ""),
+            "error": str(error),
+        },
+    )
+
+
+async def _load_followup_context(
     *,
     repo: CRMRepository,
     conversation: dict[str, Any],
     reference_time: datetime,
-) -> None:
+) -> dict[str, Any] | None:
     if _manual_override(conversation):
-        return
+        return None
     state = str(conversation.get("estado") or "").lower()
     if state == "cerrada":
-        return
-    convo_id = conversation.get("id")
-    persona_id = conversation.get("persona_id") or conversation.get("contacto_id")
+        return None
+    convo_id = str(conversation.get("id") or "").strip()
+    persona_id = str(conversation.get("persona_id") or conversation.get("contacto_id") or "").strip()
     if not convo_id or not persona_id:
-        return
+        return None
     last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
-    if not last_out:
-        return
-    if last_out > reference_time:
-        return
+    if not last_out or last_out > reference_time:
+        return None
     last_in = _parse_ts(conversation.get("ultimo_entrante_en"))
     if last_in and last_in > last_out:
-        return
+        return None
     if _is_outbound_prospeccion_without_reply(conversation):
         logger.info(
             "whatsapp.followup.skip_outbound_prospeccion",
@@ -202,7 +483,7 @@ async def _process_conversation(
                 "source": _ensure_dict(conversation.get("inbox_context")).get("source"),
             },
         )
-        return
+        return None
 
     try:
         contact = await storage.fetch_persona(persona_id)
@@ -211,11 +492,9 @@ async def _process_conversation(
             "whatsapp.followup.contact_failed",
             extra={"conversation_id": convo_id, "error": str(exc)},
         )
-        return
+        return None
     if not contact or not _contact_phone_value(contact):
-        return
-
-    contact_complete = bool(contact.get("notes")) and bool(contact.get("necesidad_proposito"))
+        return None
 
     try:
         oportunidad_id = await storage.ensure_conversation_opportunity(
@@ -228,16 +507,13 @@ async def _process_conversation(
             "whatsapp.followup.ensure_opportunity_failed",
             extra={"conversation_id": convo_id, "error": str(exc)},
         )
-        return
+        return None
 
     org_id = contact.get("organizacion_id") or conversation.get("organizacion_id")
-    if not org_id:
-        return
-    try:
-        org_uuid = UUID(str(org_id))
-        opp_uuid = UUID(str(oportunidad_id))
-    except (TypeError, ValueError):
-        return
+    org_uuid = _safe_uuid(org_id)
+    opp_uuid = _safe_uuid(oportunidad_id)
+    if not org_uuid or not opp_uuid:
+        return None
 
     try:
         opportunity = await repo.get_pipeline_opportunity(
@@ -249,18 +525,34 @@ async def _process_conversation(
             "whatsapp.followup.fetch_opportunity_failed",
             extra={"conversation_id": convo_id, "error": str(exc)},
         )
-        return
-    if not opportunity:
-        return
-    if _should_skip_reengage_for_business_rules(opportunity):
-        logger.info(
-            "whatsapp.followup.skip_business_rule",
-            extra={
-                "conversation_id": convo_id,
-                "persona_id": persona_id,
-            },
-        )
-        return
+        return None
+    if not opportunity or _should_skip_reengage_for_business_rules(opportunity):
+        return None
+
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    return {
+        "conversation": conversation,
+        "contact": contact,
+        "opportunity": opportunity,
+        "persona_id": persona_id,
+        "org_uuid": org_uuid,
+        "opp_uuid": opp_uuid,
+        "whatsapp_settings": whatsapp_settings,
+    }
+
+
+def _calculate_next_followup_due(
+    *,
+    conversation: dict[str, Any],
+    opportunity: dict[str, Any],
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+) -> dict[str, Any] | None:
+    last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
+    if not last_out:
+        return None
+    last_in = _parse_ts(conversation.get("ultimo_entrante_en"))
+    if last_in and last_in > last_out:
+        return None
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     followup_meta = _ensure_dict(metadata.get("whatsapp_followup"))
@@ -268,81 +560,39 @@ async def _process_conversation(
     escalate_meta = _ensure_dict(followup_meta.get("escalate"))
     reengage_sent_at = _parse_ts(reengage_meta.get("sent_at"))
     escalate_sent_at = _parse_ts(escalate_meta.get("sent_at"))
-
-    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
-    reengage_cutoff = reference_time - timedelta(minutes=whatsapp_settings.reengage_minutes)
-    escalate_cutoff = reference_time - timedelta(minutes=whatsapp_settings.escalate_minutes)
     reengage_attempts = int(reengage_meta.get("attempts") or 0)
     max_reengage_attempts = max(1, whatsapp_settings.reengage_max_attempts)
-    escalate_reference = reengage_sent_at or last_out
-    escalate_delay_minutes = max(0, whatsapp_settings.escalate_minutes)
-    if escalate_delay_minutes <= 0:
-        escalate_delay_reached = True
-    else:
-        escalate_delay_reached = (reference_time - escalate_reference) >= timedelta(
-            minutes=escalate_delay_minutes
-        )
 
-    should_reengage = (
-        last_out <= reengage_cutoff
-        and (reengage_sent_at is None or reengage_sent_at <= reengage_cutoff)
-        and reengage_attempts < max_reengage_attempts
-    )
+    if reengage_attempts < max_reengage_attempts:
+        due_at = last_out + timedelta(minutes=max(1, whatsapp_settings.reengage_minutes))
+        return {
+            "due_at": due_at,
+            "next_action": "reengage",
+            "metadata": metadata,
+            "followup_meta": followup_meta,
+            "reengage_attempts": reengage_attempts,
+            "max_reengage_attempts": max_reengage_attempts,
+            "last_out": last_out,
+            "reengage_sent_at": reengage_sent_at,
+            "escalate_sent_at": escalate_sent_at,
+        }
 
-    should_escalate = (
-        reengage_attempts >= max_reengage_attempts
-        and escalate_sent_at is None
-        and escalate_delay_reached
-    )
+    if escalate_sent_at is not None:
+        return None
 
-    last_out_iso = last_out.isoformat() if last_out else None
-    escalate_reference_iso = (
-        escalate_reference.isoformat() if isinstance(escalate_reference, datetime) else None
-    )
-    logger.info(
-        "whatsapp.followup.reengage_check",
-        extra={
-            "conversation_id": convo_id,
-            "persona_id": persona_id,
-            "last_out": last_out_iso,
-            "reengage_cutoff": reengage_cutoff.isoformat(),
-            "reengage_sent_at": reengage_sent_at.isoformat() if reengage_sent_at else None,
-            "attempts": reengage_attempts,
-            "persona_complete": contact_complete,
-            "should_reengage": should_reengage,
-            "escalate_cutoff": escalate_cutoff.isoformat(),
-            "escalate_reference": escalate_reference_iso,
-            "escalate_sent_at": escalate_sent_at.isoformat() if escalate_sent_at else None,
-            "escalate_delay_reached": escalate_delay_reached,
-            "should_escalate": should_escalate,
-        },
-    )
-
-    if should_reengage:
-        await _send_persona_reengage_message(
-            conversation_id=str(convo_id),
-            persona_id=str(persona_id),
-            persona=contact,
-            followup_meta=followup_meta,
-            metadata=metadata,
-            repo=repo,
-            opportunity_id=opp_uuid,
-            org_id=org_uuid,
-            whatsapp_settings=whatsapp_settings,
-        )
-        return
-
-    if should_escalate:
-        await _escalate_persona_to_sales(
-            conversation_id=str(convo_id),
-            persona_id=str(persona_id),
-            opportunity=opportunity,
-            followup_meta=followup_meta,
-            metadata=metadata,
-            repo=repo,
-        )
-        return
-
+    baseline = reengage_sent_at or last_out
+    due_at = baseline + timedelta(minutes=max(0, whatsapp_settings.escalate_minutes))
+    return {
+        "due_at": due_at,
+        "next_action": "escalate",
+        "metadata": metadata,
+        "followup_meta": followup_meta,
+        "reengage_attempts": reengage_attempts,
+        "max_reengage_attempts": max_reengage_attempts,
+        "last_out": last_out,
+        "reengage_sent_at": reengage_sent_at,
+        "escalate_sent_at": escalate_sent_at,
+    }
 
 
 async def _send_persona_reengage_message(
@@ -356,10 +606,10 @@ async def _send_persona_reengage_message(
     opportunity_id: UUID,
     org_id: UUID,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
-) -> None:
+) -> dict[str, Any] | None:
     phone = _contact_phone_value(persona) or ""
     if not phone:
-        return
+        return None
     logger.info(
         "whatsapp.followup.reengage_attempt",
         extra={
@@ -369,7 +619,6 @@ async def _send_persona_reengage_message(
             "reengage_minutes": whatsapp_settings.reengage_minutes,
         },
     )
-    send_result = None
     try:
         send_result = await whatsapp_service.send_manual_message(
             to_number=phone,
@@ -381,17 +630,13 @@ async def _send_persona_reengage_message(
             "whatsapp.followup.reengage_send_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        return
+        return None
 
+    sent_at = datetime.now(timezone.utc)
     message_sid = getattr(send_result, "sid", None) if send_result else None
     if message_sid:
         persona_id_value = persona.get("id") or persona_id
-        wa_id = None
-        if phone and phone.startswith("+"):
-            wa_id = phone.lstrip("+")
-        elif phone:
-            wa_id = phone
-        persona_id_str = str(persona_id_value) if persona_id_value else None
+        wa_id = phone.lstrip("+") if phone.startswith("+") else phone
         metadata_payload = {
             "reengage": True,
             "trigger": "whatsapp_followup",
@@ -404,7 +649,7 @@ async def _send_persona_reengage_message(
                 body=REENGAGE_TEMPLATE,
                 message_sid=message_sid,
                 conversation_id=conversation_id,
-                persona_id=persona_id_str,
+                persona_id=str(persona_id_value) if persona_id_value else None,
                 metadata=metadata_payload,
                 organizacion_id=str(persona.get("organizacion_id")) if persona.get("organizacion_id") else None,
             )
@@ -420,11 +665,10 @@ async def _send_persona_reengage_message(
 
     attempt_count = int(followup_meta.get("reengage", {}).get("attempts") or 0) + 1
     followup_meta["reengage"] = {
-        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "sent_at": sent_at.isoformat(),
         "attempts": attempt_count,
     }
-    restart_sequence_value = int(metadata.get("restart_sequence") or 1)
-    metadata["restart_sequence"] = restart_sequence_value
+    metadata["restart_sequence"] = int(metadata.get("restart_sequence") or 1)
     metadata["whatsapp_followup"] = followup_meta
     try:
         await repo.update_opportunity(
@@ -437,31 +681,30 @@ async def _send_persona_reengage_message(
             "whatsapp.followup.reengage_metadata_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        return
 
-    if attempt_count >= 1:
-        persona_id_value = str(persona.get("id") or persona_id)
+    try:
+        await storage.ensure_conversation_opportunity(
+            conversation_id=conversation_id,
+            persona_id=str(persona.get("id") or persona_id),
+            channel="whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.followup.ensure_restart_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+    else:
         try:
-            await storage.ensure_conversation_opportunity(
-                conversation_id=conversation_id,
-                persona_id=persona_id_value,
-                channel="whatsapp",
+            await storage.update_conversation(
+                conversation_id,
+                {"restart_sequence": metadata["restart_sequence"]},
             )
         except StorageError as exc:
             logger.warning(
-                "whatsapp.followup.ensure_restart_failed",
+                "whatsapp.followup.conversation_restart_update_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
-        else:
-            try:
-                await storage.update_conversation(
-                    conversation_id, {"restart_sequence": metadata["restart_sequence"]}
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "whatsapp.followup.conversation_restart_update_failed",
-                    extra={"conversation_id": conversation_id, "error": str(exc)},
-                )
+    return {"attempt_count": attempt_count, "sent_at": sent_at}
 
 
 async def _escalate_persona_to_sales(
@@ -472,7 +715,7 @@ async def _escalate_persona_to_sales(
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
     repo: CRMRepository,
-) -> None:
+) -> bool:
     persona = opportunity.get("contacto")
     if isinstance(persona, dict):
         persona = await _ensure_inferred_persona_context(
@@ -508,14 +751,14 @@ async def _escalate_persona_to_sales(
             "whatsapp.followup.escalate_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        return
+        return False
 
     followup_meta["escalate"] = {"sent_at": datetime.now(timezone.utc).isoformat()}
     metadata["whatsapp_followup"] = followup_meta
     org_id = opportunity.get("organizacion_id")
     opp_id = opportunity.get("id")
     if not org_id or not opp_id:
-        return
+        return True
     try:
         await repo.update_opportunity(
             organizacion_id=UUID(str(org_id)),
@@ -527,6 +770,7 @@ async def _escalate_persona_to_sales(
             "whatsapp.followup.escalate_metadata_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+    return True
 
 
 def _build_inactivity_need(summary_text: str) -> str:
@@ -632,8 +876,8 @@ async def _send_reengage_message(
     opportunity_id: UUID,
     org_id: UUID,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
-) -> None:
-    await _send_persona_reengage_message(
+) -> dict[str, Any] | None:
+    return await _send_persona_reengage_message(
         conversation_id=conversation_id,
         persona_id=persona_id,
         persona=contact,
@@ -654,8 +898,8 @@ async def _escalate_to_sales(
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
     repo: CRMRepository,
-) -> None:
-    await _escalate_persona_to_sales(
+) -> bool:
+    return await _escalate_persona_to_sales(
         conversation_id=conversation_id,
         persona_id=persona_id,
         opportunity=opportunity,
@@ -720,7 +964,6 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
 
 
 def _is_outbound_prospeccion_without_reply(conversation: dict[str, Any]) -> bool:
-    """Evita reenganches de prospección mientras el prospecto no haya respondido."""
     context = _ensure_dict(conversation.get("inbox_context"))
     source = str(context.get("source") or "").strip().lower()
     if source != "prospeccion":
@@ -730,7 +973,6 @@ def _is_outbound_prospeccion_without_reply(conversation: dict[str, Any]) -> bool
 
 
 def _should_skip_reengage_for_business_rules(opportunity: dict[str, Any]) -> bool:
-    """Reglas de negocio inmobiliaria para no reenganchar leads ya resueltos."""
     stage = opportunity.get("etapa")
     stage_category = ""
     stage_code = ""
@@ -752,7 +994,6 @@ def _should_skip_reengage_for_business_rules(opportunity: dict[str, Any]) -> boo
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     sales_notifications = _ensure_dict(metadata.get("sales_notifications"))
-    # Si ya hubo handoff comercial por WhatsApp, no volver a reenganchar al prospecto.
     primary_by_channel = _ensure_dict(metadata.get("sales_primary_notifications"))
     primary_whatsapp = _ensure_dict(primary_by_channel.get("whatsapp"))
     if primary_whatsapp:

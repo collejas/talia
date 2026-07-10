@@ -21118,6 +21118,293 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_sales_notification_retry_row_invalid:{row!r}")
         return row
 
+    async def worker_enqueue_whatsapp_followup_job(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversation_id: UUID,
+        persona_id: UUID,
+        opportunity_id: UUID | None,
+        due_at: datetime,
+        next_action: str,
+        scheduled_reason: str,
+        max_attempts: int,
+    ) -> dict[str, Any]:
+        row_payload = {
+            "organizacion_id": str(organizacion_id),
+            "conversation_id": str(conversation_id),
+            "persona_id": str(persona_id),
+            "opportunity_id": str(opportunity_id) if opportunity_id else None,
+            "due_at": due_at.astimezone(timezone.utc).isoformat(),
+            "next_action": str(next_action or "reengage").strip().lower() or "reengage",
+            "scheduled_reason": str(scheduled_reason or "outbound_message").strip() or "outbound_message",
+            "state": "pending",
+            "max_attempts": max(1, int(max_attempts)),
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/whatsapp_followup_jobs",
+            json=[row_payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_enqueue_invalid:{data!r}")
+        return data[0]
+
+    async def worker_cancel_active_whatsapp_followup_jobs(
+        self,
+        *,
+        conversation_id: UUID,
+        reason: str,
+    ) -> int:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "conversation_id": f"eq.{conversation_id}",
+                "state": "in.(pending,processing)",
+            },
+            json={
+                "state": "canceled",
+                "cancel_reason": str(reason or "canceled").strip()[:255] or "canceled",
+                "lease_until": None,
+                "processed_at": now_iso,
+                "updated_at": now_iso,
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_cancel_invalid:{data!r}")
+        return len(data)
+
+    async def worker_requeue_expired_whatsapp_followup_jobs(self, *, limit: int = 100) -> int:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "state": "eq.processing",
+                "lease_until": f"lt.{now_iso}",
+                "limit": str(max(1, int(limit))),
+            },
+            json={
+                "state": "pending",
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": "lease_expired_auto_requeue",
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_requeue_invalid:{data!r}")
+        return len(data)
+
+    async def worker_list_ready_whatsapp_followup_jobs(self, *, limit: int = 25) -> list[dict[str, Any]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "GET",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "select": "*",
+                "state": "eq.pending",
+                "due_at": f"lte.{now_iso}",
+                "order": "due_at.asc,created_at.asc",
+                "limit": str(max(1, int(limit))),
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_list_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_claim_whatsapp_followup_job(
+        self,
+        *,
+        job_id: UUID,
+        expected_attempt_count: int,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        lease_until = (now_dt + timedelta(seconds=max(30, int(lease_seconds)))).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.pending",
+                "attempt_count": f"eq.{max(0, int(expected_attempt_count))}",
+                "due_at": f"lte.{now_iso}",
+            },
+            json={
+                "state": "processing",
+                "attempt_count": max(0, int(expected_attempt_count)) + 1,
+                "lease_until": lease_until,
+                "updated_at": now_iso,
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_claim_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_claim_row_invalid:{row!r}")
+        return row
+
+    async def worker_mark_whatsapp_followup_done(
+        self,
+        *,
+        job_id: UUID,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, Any] = {
+            "state": "done",
+            "lease_until": None,
+            "processed_at": now_iso,
+            "updated_at": now_iso,
+            "last_error": None,
+        }
+        if isinstance(result, dict) and result:
+            payload["scheduled_reason"] = str(result.get("scheduled_reason") or payload.get("scheduled_reason") or "processed")
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.processing",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_done_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_done_row_invalid:{row!r}")
+        return row
+
+    async def worker_reschedule_whatsapp_followup_job(
+        self,
+        *,
+        job_id: UUID,
+        due_at: datetime,
+        next_action: str,
+        scheduled_reason: str,
+    ) -> dict[str, Any] | None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.processing",
+            },
+            json={
+                "state": "pending",
+                "due_at": due_at.astimezone(timezone.utc).isoformat(),
+                "next_action": str(next_action or "reengage").strip().lower() or "reengage",
+                "scheduled_reason": str(scheduled_reason or "rescheduled").strip() or "rescheduled",
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": None,
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_reschedule_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_reschedule_row_invalid:{row!r}")
+        return row
+
+    async def worker_mark_whatsapp_followup_retry_or_failed(
+        self,
+        *,
+        job_id: UUID,
+        attempt_count: int,
+        max_attempts: int,
+        error: str,
+        retry_delay_seconds: int,
+    ) -> dict[str, Any] | None:
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        attempts_done = max(0, int(attempt_count))
+        attempts_allowed = max(1, int(max_attempts))
+        error_text = str(error or "unknown_error").strip()[:1000] or "unknown_error"
+        should_retry = attempts_done < attempts_allowed
+        if should_retry:
+            due_at = (now_dt + timedelta(seconds=max(5, int(retry_delay_seconds)))).isoformat()
+            payload = {
+                "state": "pending",
+                "due_at": due_at,
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": error_text,
+            }
+        else:
+            payload = {
+                "state": "failed",
+                "processed_at": now_iso,
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": error_text,
+            }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_followup_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.processing",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_retry_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_whatsapp_followup_retry_row_invalid:{row!r}")
+        return row
+
+    async def get_whatsapp_conversation_for_followup_job(self, *, conversation_id: UUID) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/conversaciones",
+            params={
+                "id": f"eq.{conversation_id}",
+                "canal": "eq.whatsapp",
+                "select": (
+                    "id,contacto_id,persona_id,organizacion_id,estado,ultimo_saliente_en,ultimo_entrante_en,inbox_context,"
+                    "conversaciones_controles(manual_override)"
+                ),
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_followup_conversation_invalid:{row!r}")
+        return row
+
     async def worker_find_contact_by_prospecto(
         self,
         *,

@@ -1637,6 +1637,20 @@ async def register_whatsapp_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
 
+    if direction == "entrante" and conversation_id:
+        try:
+            from app.services import whatsapp_followups as whatsapp_followup_jobs
+
+            await whatsapp_followup_jobs.cancel_followup_jobs_for_inbound(
+                conversation_id=str(conversation_id),
+                reason="customer_replied",
+            )
+        except Exception as exc:
+            logger.warning(
+                "storage.whatsapp_followup_cancel_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
     try:
         persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(
