@@ -2,7 +2,12 @@ import base64
 
 from app.core.config import settings
 from app.services.tenant_runtime import BrevoRuntimeSettings
-from app.services.email import EmailSendError, _build_smtp_email_message, send_email
+from app.services.email import (
+    EmailSendError,
+    _build_smtp_email_message,
+    _send_email_smtp,
+    send_email,
+)
 
 
 def test_send_email_uses_brevo_adapter(monkeypatch):
@@ -255,3 +260,77 @@ def test_send_email_forces_brevo_and_fails_when_missing_api_key(monkeypatch):
         assert "API Key" in str(exc)
     else:  # pragma: no cover - defensivo
         raise AssertionError("Se esperaba EmailSendError por Brevo sin API key")
+
+
+def test_send_email_smtp_retries_with_ssl_for_port_465(monkeypatch):
+    from app.services.tenant_runtime import MailRuntimeSettings
+
+    attempts: list[tuple[str, int, bool]] = []
+
+    class DummySMTP:
+        def __init__(self, host, port, timeout=None):
+            attempts.append((host, port, False))
+            self.host = host
+            self.port = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def starttls(self, context=None):
+            raise RuntimeError("wrong transport")
+
+        def login(self, username, password):
+            return None
+
+        def send_message(self, message):
+            return None
+
+    class DummySMTPSSL:
+        def __init__(self, host, port, context=None, timeout=None):
+            attempts.append((host, port, True))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def login(self, username, password):
+            return None
+
+        def send_message(self, message):
+            return None
+
+    monkeypatch.setattr("app.services.email.smtplib.SMTP", DummySMTP)
+    monkeypatch.setattr("app.services.email.smtplib.SMTP_SSL", DummySMTPSSL)
+
+    message_id = _send_email_smtp(
+        message_id="<test@imlux.mx>",
+        subject="Hola",
+        body_text="Texto plano",
+        body_html=None,
+        recipients=["cliente@example.com"],
+        attachments=(),
+        headers={},
+        mail_settings=MailRuntimeSettings(
+            username="ventas.5qro@imlux.mx",
+            password="secret",
+            incoming_server="mail.imlux.mx",
+            incoming_port_imap=993,
+            outgoing_server="mail.imlux.mx",
+            outgoing_port_smtp=465,
+            use_ssl=False,
+            use_tls=True,
+            from_name="Haidee",
+            reply_to=None,
+        ),
+    )
+
+    assert message_id == "test@imlux.mx"
+    assert attempts == [
+        ("mail.imlux.mx", 465, False),
+        ("mail.imlux.mx", 465, True),
+    ]

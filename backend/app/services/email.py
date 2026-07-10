@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import smtplib
 import ssl
+from dataclasses import replace
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from email import policy
@@ -265,6 +266,22 @@ def _build_smtp_email_message(
     return message
 
 
+def _smtp_delivery_variants(mail_settings: MailRuntimeSettings) -> list[MailRuntimeSettings]:
+    variants = [mail_settings]
+    port = mail_settings.outgoing_port_smtp
+
+    if port == 465 and (not mail_settings.use_ssl or mail_settings.use_tls):
+        normalized = replace(mail_settings, use_ssl=True, use_tls=False)
+        if normalized != mail_settings:
+            variants.append(normalized)
+    elif port == 587 and mail_settings.use_ssl:
+        normalized = replace(mail_settings, use_ssl=False, use_tls=True)
+        if normalized != mail_settings:
+            variants.append(normalized)
+
+    return variants
+
+
 def _send_email_smtp(
     *,
     message_id: str,
@@ -277,42 +294,56 @@ def _send_email_smtp(
     mail_settings: MailRuntimeSettings,
 ) -> str:
     smtp_host = (mail_settings.outgoing_server or "").strip()
-    smtp_port = mail_settings.outgoing_port_smtp or 587
     username = (mail_settings.username or "").strip()
     password = mail_settings.password
 
     if not smtp_host or not username or not password:
         raise EmailSendError("Configuración SMTP incompleta (host/usuario/contraseña).")
 
-    message = _build_smtp_email_message(
-        message_id=message_id,
-        subject=subject,
-        body_text=body_text,
-        body_html=body_html,
-        recipients=recipients,
-        attachments=attachments,
-        headers=headers,
-        mail_settings=mail_settings,
-    )
+    last_exc: Exception | None = None
+    for variant in _smtp_delivery_variants(mail_settings):
+        smtp_port = variant.outgoing_port_smtp or 587
+        message = _build_smtp_email_message(
+            message_id=message_id,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            recipients=recipients,
+            attachments=attachments,
+            headers=headers,
+            mail_settings=variant,
+        )
 
-    context = ssl.create_default_context()
-    use_ssl = mail_settings.use_ssl
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
-                server.login(username, password)
-                server.send_message(message)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                if mail_settings.use_tls:
-                    server.starttls(context=context)
-                server.login(username, password)
-                server.send_message(message)
-    except Exception as exc:  # pragma: no cover - errores de red reales
-        logger.error("email.send_failed", extra={"error": str(exc)})
-        raise EmailSendError(str(exc)) from exc
+        context = ssl.create_default_context()
+        try:
+            if variant.use_ssl:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
+                    server.login(username, password)
+                    server.send_message(message)
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                    if variant.use_tls:
+                        server.starttls(context=context)
+                    server.login(username, password)
+                    server.send_message(message)
+            if variant != mail_settings:
+                logger.warning(
+                    "email.smtp_transport_autocorrected",
+                    extra={
+                        "smtp_host": smtp_host,
+                        "smtp_port": smtp_port,
+                        "original_use_ssl": mail_settings.use_ssl,
+                        "original_use_tls": mail_settings.use_tls,
+                        "effective_use_ssl": variant.use_ssl,
+                        "effective_use_tls": variant.use_tls,
+                    },
+                )
+            return message_id.strip("<>")
+        except Exception as exc:  # pragma: no cover - errores de red reales
+            last_exc = exc
 
-    return message_id.strip("<>")
+    logger.error("email.send_failed", extra={"error": str(last_exc) if last_exc else "unknown"})
+    raise EmailSendError(str(last_exc) if last_exc else "SMTP send failed")
 
 
 def _send_email_brevo(
