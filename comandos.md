@@ -202,7 +202,7 @@ du -shL /var/www/talia/current/panel
     '+5214441302811',
     'a2f79c76-340a-4fe7-b05a-6ff4dd532325'::uuid
   );
-
+Gran Penon
   select public.cleanup_test_phone_whatsapp(
     '+5214441302811',
     '39e32c05-bfc2-4794-8aab-225873f2bf19'::uuid

@@ -2913,6 +2913,41 @@ async def ensure_conversation_opportunity(
     except (TypeError, ValueError) as exc:
         raise StorageError("contacto_id_invalido") from exc
 
+    repo = CRMRepository()
+    log_event(
+        logger,
+        "storage.ensure_persona_conversation_opportunity.contact_sync_start",
+        conversation_id=conversation_id,
+        persona_id=str(persona_uuid),
+        organizacion_id=str(organizacion_uuid),
+    )
+    try:
+        contact_row = await repo.ensure_contact_record_for_persona(
+            organizacion_id=organizacion_uuid,
+            persona_id=persona_uuid,
+            use_service_role=True,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.ensure_persona_conversation_opportunity.contact_sync_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "persona_id": str(persona_uuid),
+                "organizacion_id": str(organizacion_uuid),
+                "error": str(exc),
+            },
+        )
+        raise StorageError(str(exc)) from exc
+    log_event(
+        logger,
+        "storage.ensure_persona_conversation_opportunity.contact_sync_done",
+        conversation_id=conversation_id,
+        persona_id=str(persona_uuid),
+        organizacion_id=str(organizacion_uuid),
+        contacto_id=str(contact_row.get("id")) if isinstance(contact_row, dict) and contact_row.get("id") else None,
+        codigo_contacto=str(contact_row.get("codigo_contacto")) if isinstance(contact_row, dict) and contact_row.get("codigo_contacto") else None,
+    )
+
     normalized_channel = (channel or "").strip().lower()
     requires_ready = (
         bool(require_contact_ready)
@@ -2921,7 +2956,6 @@ async def ensure_conversation_opportunity(
     )
     contact_ready = _contact_has_minimum_info(persona)
 
-    repo = CRMRepository()
     try:
         opportunity_id, restart_created, restart_sequence = await repo.ensure_conversation_opportunity(
             organizacion_id=organizacion_uuid,

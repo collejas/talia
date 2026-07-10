@@ -110,6 +110,94 @@ class FakeAttachmentRepository:
         return f"https://signed.example/{bucket}/{object_path}?exp={expires_in}"
 
 
+class FakeOpportunityRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def ensure_contact_record_for_persona(
+        self,
+        *,
+        organizacion_id: Any,
+        persona_id: Any,
+        use_service_role: bool = False,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "ensure_contact_record_for_persona",
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "persona_id": str(persona_id),
+                    "use_service_role": use_service_role,
+                },
+            )
+        )
+        return {"id": str(persona_id)}
+
+    async def ensure_conversation_opportunity(
+        self,
+        *,
+        organizacion_id: Any,
+        contacto_id: Any,
+        conversation_id: str,
+        canal: str | None = None,
+        contacto_nombre: str | None = None,
+        contacto_empresa: str | None = None,
+        force_new_opportunity_on_restart: bool = False,
+        contact_ready: bool | None = None,
+        require_contact_ready: bool = False,
+    ) -> tuple[str, bool, int]:
+        self.calls.append(
+            (
+                "ensure_conversation_opportunity",
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "contacto_id": str(contacto_id),
+                    "conversation_id": conversation_id,
+                    "canal": canal,
+                    "contact_ready": contact_ready,
+                    "require_contact_ready": require_contact_ready,
+                },
+            )
+        )
+        return ("opp-1", True, 1)
+
+    async def list_opportunities_by_conversation_ids(
+        self,
+        *,
+        organizacion_id: Any,
+        conversation_ids: list[str],
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        self.calls.append(
+            (
+                "list_opportunities_by_conversation_ids",
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "conversation_ids": list(conversation_ids),
+                    "limit": limit,
+                },
+            )
+        )
+        return []
+
+    async def get_contact_opportunity(
+        self,
+        *,
+        contact_id: Any,
+        conversation_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        self.calls.append(
+            (
+                "get_contact_opportunity",
+                {
+                    "contact_id": str(contact_id),
+                    "conversation_id": conversation_id,
+                },
+            )
+        )
+        return None
+
+
 @pytest.mark.asyncio
 async def test_register_webchat_message_sets_channel(
     monkeypatch: pytest.MonkeyPatch,
@@ -182,3 +270,34 @@ async def test_upload_whatsapp_attachment_uses_private_bucket(
     assert fake_repo.sign_calls[0]["bucket"] == "whatsapp"
     assert result["path"].startswith("whatsapp/conv-1/")
     assert result["url"].startswith("https://signed.example/whatsapp/whatsapp/conv-1/")
+
+
+@pytest.mark.asyncio
+async def test_ensure_persona_conversation_opportunity_syncs_contact_before_opportunity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_repo = FakeOpportunityRepository()
+    monkeypatch.setattr(storage, "CRMRepository", lambda: fake_repo)
+
+    async def fake_fetch_persona(persona_id: str) -> dict[str, Any]:
+        return {
+            "id": persona_id,
+            "organizacion_id": "39e32c05-bfc2-4794-8aab-225873f2bf19",
+            "nombre_completo": "Persona Demo",
+            "telefono_principal_e164": "+521111111111",
+            "correo_principal": "demo@example.com",
+        }
+
+    monkeypatch.setattr(storage, "fetch_persona", fake_fetch_persona)
+
+    opportunity_id = await storage.ensure_persona_conversation_opportunity(
+        conversation_id="conv-1",
+        persona_id="00000000-0000-0000-0000-000000000123",
+        channel="voice",
+    )
+
+    assert opportunity_id == "opp-1"
+    assert [call[0] for call in fake_repo.calls] == [
+        "ensure_contact_record_for_persona",
+        "ensure_conversation_opportunity",
+    ]
