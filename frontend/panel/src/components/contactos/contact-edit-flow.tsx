@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -1215,7 +1214,13 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
   const isCompanyMode = state.mode === "empresa_nueva";
   const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
-  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Empresa";
+  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Persona moral";
+  const accountTypeEditLabel =
+    state.mode === "solo_persona"
+      ? "Sin cuenta vinculada"
+      : isPfaeMode
+        ? "PFAE"
+        : "Moral";
   const rfcHint = React.useMemo(
     () => getRfcLengthMessage(isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"),
     [isPfaeMode],
@@ -1533,16 +1538,16 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     state.mode === "solo_persona"
       ? "Datos del contacto"
       : state.mode === "persona_fisica_actividad_empresarial"
-        ? "Persona y negocio"
+        ? "Datos de la persona física"
         : "Datos de la persona";
   const personSectionDescription =
     state.mode === "solo_persona"
       ? "Edita la persona que recibe seguimiento."
       : state.mode === "empresa_existente"
-        ? "Edita la persona y su vínculo con una empresa ya registrada."
+        ? "Edita la persona vinculada a esta cuenta."
         : state.mode === "empresa_nueva"
-          ? "Edita la persona y los datos de la empresa asociada."
-          : "Edita la persona y la empresa en un mismo flujo.";
+          ? "Edita la persona responsable y los datos de la cuenta moral."
+          : "Edita la persona y su cuenta PFAE en un mismo flujo.";
   const relationSectionTitle =
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Vínculo principal"
@@ -1556,39 +1561,28 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader className="space-y-2">
-          <DialogTitle>Editar persona</DialogTitle>
+          <DialogTitle>Editar contacto</DialogTitle>
           <DialogDescription>
-            {fullName ? `Persona: ${fullName}` : "Actualiza los datos de la persona, su empresa y su vínculo."}
+            {fullName ? `Contacto: ${fullName}` : "Actualiza los datos del contacto y de su cuenta vinculada."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           {state.loading ? <p className="text-xs text-muted-foreground">Cargando...</p> : null}
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-
-
-          <FormSection title="Tipo de registro">
-            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
-              {[
-                { value: "solo_persona", title: "Contacto", description: "Sin empresa asociada." },
-                { value: "empresa_existente", title: "Empresa existente", description: "Vincula a una empresa ya creada." },
-                { value: "empresa_nueva", title: "Nueva empresa", description: "Crea una empresa nueva." },
-                { value: "persona_fisica_actividad_empresarial", title: "Persona física con actividad empresarial", description: "Empresa propia vinculada." },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-4 ${state.mode === option.value ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <RadioGroupItem value={option.value} id={`mode-edit-${option.value}`} />
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">{option.title}</div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
+          <FormSection
+            title="Tipo de cuenta"
+            description={
+              state.mode === "solo_persona"
+                ? "Este contacto no tiene una cuenta vinculada."
+                : "El tipo actual se muestra aquí. Si necesitas cambiar entre Moral y PFAE, hazlo desde la vista de empresa."
+            }
+          >
+            <div className="grid gap-3 md:max-w-sm">
+              <Field label="Tipo de cuenta actual">
+                <Input value={accountTypeEditLabel} readOnly disabled className="bg-muted" />
+              </Field>
+            </div>
           </FormSection>
 
           <FormSection title={personSectionTitle} description={personSectionDescription}>
@@ -1761,54 +1755,36 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
             </Field>
           </FormSection>
-
           {state.mode === "empresa_existente" ? (
-            <FormSection title="Empresa existente" description="Busca una empresa existente y selecciónala.">
-              <div className="space-y-3">
-                <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
-                  <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
-                </Field>
-                {state.cuenta.cuenta_id ? (
-                  <div className="rounded-lg border border-border/60 bg-background p-3 text-sm">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa seleccionada</div>
-                    <div className="mt-1 font-medium">{state.cuenta.nombre_comercial || state.cuenta.razon_social || "Empresa vinculada"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {formatSummaryLine(
-                        [state.cuenta.codigo_cuenta, state.cuenta.rfc, state.cuenta.tipo_persona, state.cuenta.sitio_web || state.cuenta.correo_principal],
-                        "Sin datos adicionales",
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-                {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
-                {state.accountError ? <p className="text-xs text-destructive">{state.accountError}</p> : null}
-                {state.accountResults.length ? (
-                  <div className="space-y-2">
-                    {state.accountResults.map((account) => {
-                      const selected = state.cuenta.cuenta_id === account.id;
-                      return (
-                        <button
-                          key={account.id}
-                          type="button"
-                          className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
-                          onClick={() => dispatch({ type: "account/select", account })}
-                        >
-                          <div className="text-sm font-medium">{account.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[account.codigo_cuenta, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
+            <FormSection title="Cuenta vinculada" description="Esta edición usa la cuenta actualmente vinculada al contacto.">
+              <div className="rounded-lg border border-border/60 bg-background p-3 text-sm">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cuenta actual</div>
+                <div className="mt-1 font-medium">{state.cuenta.nombre_comercial || state.cuenta.razon_social || "Cuenta vinculada"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {formatSummaryLine(
+                    [state.cuenta.codigo_cuenta, state.cuenta.rfc, accountTypeEditLabel, state.cuenta.sitio_web || state.cuenta.correo_principal],
+                    "Sin datos adicionales",
+                  )}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Si necesitas cambiar el tipo de cuenta o la cuenta vinculada, hazlo desde la vista de empresa o desde Vinculaciones existentes.
+                </div>
               </div>
             </FormSection>
           ) : null}
 
           {state.mode !== "solo_persona" ? (
-            <FormSection title="Datos de la empresa" description="Edita los datos fiscales, comerciales y de domicilio de la cuenta vinculada.">
+            <FormSection
+              title={isPfaeMode ? "Cuenta PFAE" : "Empresa moral"}
+              description={
+                isPfaeMode
+                  ? "Edita los datos fiscales, comerciales y de domicilio de la cuenta PFAE vinculada."
+                  : "Edita los datos fiscales, comerciales y de domicilio de la empresa moral vinculada."
+              }
+            >
               {state.mode === "empresa_existente" ? (
                 <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-background p-3 text-sm text-muted-foreground">
-                  La empresa ya está vinculada. Si deseas cambiarla, selecciona otra en el bloque anterior.
+                  La cuenta ya está vinculada. Aquí puedes editar sus datos; para cambiar su tipo, usa la vista de empresa.
                 </div>
               ) : null}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
