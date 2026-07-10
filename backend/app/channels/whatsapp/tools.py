@@ -3207,34 +3207,6 @@ async def _notify_sales_rep(
                             "attachment_count": len(recent_attachments),
                         },
                     )
-                    try:
-                        await storage.register_whatsapp_message(
-                            direction="saliente",
-                            wa_id=None,
-                            phone_e164=seller_phone,
-                            body=message_body,
-                            message_sid=getattr(attachment_result, "sid", None),
-                            metadata={
-                                "trigger": trigger,
-                                "template_sid": None,
-                                "template_name": None,
-                                "template_language": None,
-                                "sender": "sales_notification_attachment",
-                            },
-                            attachments=recent_attachments,
-                            conversation_id=context.conversation_id,
-                            persona_id=persona_id,
-                            organizacion_id=str(org_id),
-                        )
-                    except StorageError as exc:
-                        logger.warning(
-                            "whatsapp.notify_sales.attachment_metadata_failed",
-                            extra={
-                                "conversation_id": context.conversation_id,
-                                "trigger": trigger,
-                                "error": str(exc),
-                            },
-                        )
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "whatsapp.notify_sales.attachment_send_failed",
@@ -3282,37 +3254,6 @@ async def _notify_sales_rep(
             "seller_id": seller_id,
         },
     )
-
-    if message_sid:
-        try:
-            await storage.register_whatsapp_message(
-                direction="saliente",
-                wa_id=None,
-                phone_e164=seller_phone,
-                body=message_body if not (template_sid or template_name) else None,
-                message_sid=message_sid,
-                metadata={
-                    "trigger": trigger,
-                    "template_sid": template_sid,
-                    "template_name": template_name,
-                    "template_language": template_language,
-                    "sender": "sales_notification",
-                },
-                attachments=recent_attachments,
-                conversation_id=context.conversation_id,
-                persona_id=persona_id,
-                organizacion_id=str(org_id),
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.notify_sales.metadata_failed",
-                extra={
-                    "conversation_id": context.conversation_id,
-                    "trigger": trigger,
-                    "error": str(exc),
-                    "message_sid": message_sid,
-                },
-            )
 
     previous_notification = _ensure_dict(notifications.get(trigger))
     retry_count = 0

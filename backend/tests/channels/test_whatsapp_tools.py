@@ -84,7 +84,10 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         fake_send_manual_message,
     )
 
-    async def fake_register_whatsapp_message(*_, **__):
+    register_calls: list[dict[str, object]] = []
+
+    async def fake_register_whatsapp_message(*_, **kwargs):
+        register_calls.append(kwargs)
         return None
 
     monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
@@ -128,6 +131,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_vars"]["5"] == "lead@example.com"
     assert sent["template_vars"]["6"] == "Demo SA"
     assert sent["template_name"] is None
+    assert register_calls == []
     assert sent["template_language"] is None
     assert "booking_confirmed" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
     assert (
