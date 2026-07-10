@@ -316,6 +316,7 @@ function mapContactDetailToTableRow(detail: Record<string, unknown>, previous?: 
       propietario_nombre: extractString(detail, ["propietario_nombre"]) || extractString(previousRaw, ["propietario_nombre"]) || "",
       company_name: extractString(detail, ["company_name"]) || extractString(previousRaw, ["company_name"]) || "",
       cuenta_id: extractString(detail, ["cuenta_id"]) || extractString(previousRaw, ["cuenta_id"]) || "",
+      codigo_cuenta: extractString(detail, ["codigo_cuenta"]) || extractString(previousRaw, ["codigo_cuenta"]) || "",
       cuenta_tipo: extractString(detail, ["cuenta_tipo"]) || extractString(previousRaw, ["cuenta_tipo"]) || "",
       correo:
         getContactEmailValue(detail) ||
@@ -628,9 +629,6 @@ export function ContactsDataTable({
   const [reassignOpen, setReassignOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [createInitialMode, setCreateInitialMode] = React.useState<
-    "empresa_existente" | "empresa_nueva" | "persona_fisica_actividad_empresarial"
-  >("empresa_existente");
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [linkInitialContact, setLinkInitialContact] = React.useState<{
     id: string;
@@ -860,16 +858,27 @@ export function ContactsDataTable({
   const refreshContactRow = React.useCallback(async (personaId: string) => {
     const id = personaId.trim();
     if (!id) {
-      router.refresh();
       return;
     }
     try {
-      const response = await fetch('/api/personas/' + encodeURIComponent(id), { cache: 'no-store' });
-      if (!response.ok) {
-        router.refresh();
+      let detail: Record<string, unknown> | null = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await fetch('/api/personas/' + encodeURIComponent(id), { cache: 'no-store' });
+        if (!response.ok) {
+          break;
+        }
+        const candidate = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        detail = candidate;
+        const cuentaId = extractString(candidate, ["cuenta_id"]);
+        const codigoCuenta = extractString(candidate, ["codigo_cuenta"]);
+        if (!cuentaId || codigoCuenta) {
+          break;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+      if (!detail) {
         return;
       }
-      const detail = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const updateRows = (rows: ContactTableRow[]) =>
         rows.map((row) => {
           const rowRaw = row.raw as Record<string, unknown> | undefined;
@@ -898,11 +907,10 @@ export function ContactsDataTable({
         }
         return updateRows(current);
       });
-      router.refresh();
     } catch {
-      router.refresh();
+      return;
     }
-  }, [remoteSearchQuery, router, searchQuery]);
+  }, [remoteSearchQuery, searchQuery]);
 
   const handleCreated = React.useCallback(
     (personaId: string) => {
@@ -1348,37 +1356,10 @@ export function ContactsDataTable({
             onClick={() => {
               setError(null);
               setSuccess(null);
-              setCreateInitialMode("empresa_existente");
               setCreateOpen(true);
             }}
           >
             Nuevo contacto
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setError(null);
-              setSuccess(null);
-              setCreateInitialMode("empresa_nueva");
-              setCreateOpen(true);
-            }}
-          >
-            Nueva empresa
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setError(null);
-              setSuccess(null);
-              setCreateInitialMode("persona_fisica_actividad_empresarial");
-              setCreateOpen(true);
-            }}
-          >
-            Persona física con actividad empresarial
           </Button>
           <Button
             type="button"
@@ -1810,7 +1791,6 @@ export function ContactsDataTable({
       <ContactCreateFlow
         open={createOpen}
         onOpenChange={setCreateOpen}
-        initialMode={createInitialMode}
         onCreated={(personaId) => handleCreated(personaId)}
       />
 

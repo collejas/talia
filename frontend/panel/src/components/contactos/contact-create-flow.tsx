@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -845,7 +844,7 @@ function Field({
   );
 }
 
-export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_existente" }: ContactCreateFlowProps) {
+export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_nueva" }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
   const { context: permissionContext } = usePermissions();
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
@@ -856,6 +855,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const [validationNotice, setValidationNotice] = React.useState<ValidationNoticeState | null>(null);
   const tenantCatalogs = useTenantContactCatalogs();
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const previousPfaeNameRef = React.useRef("");
 
   React.useEffect(() => {
     if (!open) {
@@ -943,6 +943,24 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     return () => controller.abort();
   }, [deferredAccountQuery, state.mode]);
 
+  React.useEffect(() => {
+    const fullName = buildFullName(state.persona);
+    const previousDerivedName = previousPfaeNameRef.current;
+    if (state.mode === "persona_fisica_actividad_empresarial") {
+      const currentReasonName = state.cuenta.razon_social.trim();
+      if ((!currentReasonName || currentReasonName === previousDerivedName) && currentReasonName !== fullName) {
+        dispatch({ type: "cuenta/set", field: "razon_social", value: fullName });
+      }
+    }
+    previousPfaeNameRef.current = fullName;
+  }, [
+    state.mode,
+    state.persona.nombre,
+    state.persona.apellido_paterno,
+    state.persona.apellido_materno,
+    state.cuenta.razon_social,
+  ]);
+
   const dedupeClipboardText = React.useMemo(() => buildDedupeClipboardText(pendingDedupe), [pendingDedupe]);
 
   const copyDedupeSummary = React.useCallback(async () => {
@@ -961,7 +979,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const isContactMode = state.mode === "empresa_existente";
   const isCompanyMode = state.mode === "empresa_nueva";
   const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
-  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Empresa";
+  const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Persona moral";
   const puestoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.puestoOptions, state.persona.puesto),
     [state.persona.puesto, tenantCatalogs.puestoOptions],
@@ -1040,14 +1058,14 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     isContactMode
       ? "Datos del contacto"
       : isPfaeMode
-        ? "Persona y negocio"
-        : "Datos de la persona";
+        ? "Datos de la persona física"
+        : "Datos del contacto";
   const personSectionDescription =
     isContactMode
       ? "Captura la persona y su vínculo con una empresa ya existente."
       : isCompanyMode
-        ? "Captura la persona responsable y los datos de la empresa."
-        : "Captura la persona y la empresa en un solo flujo.";
+        ? "Captura la persona responsable y los datos de la nueva empresa moral."
+        : "Captura la persona y su nuevo registro fiscal como PFAE en un solo flujo.";
   const relationSectionTitle =
     isPfaeMode
       ? "Vínculo principal"
@@ -1057,8 +1075,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       ? "La relación principal se creará automáticamente al guardar."
       : "Define el rol real de la persona dentro de la empresa.";
 
-  const submitLabel =
-    isContactMode ? "Guardar contacto" : isCompanyMode ? "Guardar empresa" : "Guardar registro";
+  const submitLabel = "Guardar contacto";
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
     const validationError = validateState(state);
@@ -1143,46 +1160,35 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-7xl">
         <DialogHeader className="space-y-2">
           <DialogTitle>Nuevo contacto</DialogTitle>
-          <DialogDescription>
-            Primero eliges qué quieres crear. Después completas solo el formulario que corresponda.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6">
           <div className="space-y-5">
-          <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar." required>
-            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
-              {[
-                {
-                  value: "empresa_nueva",
-                  title: "Empresa",
-                  description: "Datos de una empresa nueva con su contacto.",
-                },
-                {
-                  value: "persona_fisica_actividad_empresarial",
-                  title: "Persona física",
-                  description: "Persona, negocio y relación principal automática.",
-                },
-                {
-                  value: "empresa_existente",
-                  title: "Contacto",
-                  description: "Persona ligada a una empresa ya registrada.",
-                },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-4 ${state.mode === option.value ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+          <FormSection title="Tipo de cuenta" description="El contacto se crea junto con una cuenta nueva. Define si será Moral o PFAE." required>
+            <div className="grid gap-3 md:max-w-sm">
+              <Field label="Tipo de cuenta a crear" required>
+                <Select
+                  value={isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"}
+                  onValueChange={(value) =>
+                    dispatch({
+                      type: "mode/set",
+                      mode:
+                        value === "persona_fisica_actividad_empresarial"
+                          ? "persona_fisica_actividad_empresarial"
+                          : "empresa_nueva",
+                    })
+                  }
                 >
-                  <div className="flex items-start gap-3">
-                    <RadioGroupItem value={option.value} id={`mode-${option.value}`} />
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">{option.title}</div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="empresa">Moral</SelectItem>
+                    <SelectItem value="persona_fisica_actividad_empresarial">PFAE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
           </FormSection>
 
           <FormSection title={personSectionTitle} description={personSectionDescription}>
@@ -1388,8 +1394,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
           {isCompanyMode || isPfaeMode ? (
             <FormSection
-              title={isPfaeMode ? "Empresa propia" : "Empresa"}
-              description={isPfaeMode ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos de la empresa que se persistirán."}
+              title={isPfaeMode ? "Cuenta PFAE" : "Empresa moral"}
+              description={
+                isPfaeMode
+                  ? "La razón social se llena con el nombre de la persona y puedes ajustar los datos comerciales del registro PFAE."
+                  : "Datos de la empresa moral que se persistirán junto con el contacto."
+              }
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial" required>
@@ -1410,7 +1420,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <Input value={accountTypeLabel} readOnly disabled className="bg-muted" />
                 </Field>
                 <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
-                  El tipo se define por el modo seleccionado arriba.
+                  {isPfaeMode
+                    ? "Al elegir PFAE, la razón social toma el nombre completo de la persona y puedes ajustarla si hace falta."
+                    : "El tipo se define por la selección hecha arriba."}
                 </div>
                 <Field label="RFC" hint={rfcHint}>
                   <Input

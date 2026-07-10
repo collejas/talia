@@ -13036,6 +13036,13 @@ def _persona_alta_to_contact_payload(
         if contexto.modo == "persona_fisica_actividad_empresarial"
         else _persona_alta_clean_text(cuenta.tipo_persona if cuenta else None)
     )
+    account_type = (
+        "persona_fisica_actividad_empresarial"
+        if contexto.modo == "persona_fisica_actividad_empresarial"
+        else _persona_alta_clean_text(cuenta.tipo if cuenta else None)
+        or _persona_alta_clean_text(cuenta.tipo_cuenta if cuenta else None)
+        or (existing_account.tipo if existing_account else None)
+    )
     return {
         "cuenta_id": str(cuenta.cuenta_id) if cuenta and cuenta.cuenta_id else None,
         "nombre": _persona_alta_clean_text(persona.nombre),
@@ -13070,6 +13077,9 @@ def _persona_alta_to_contact_payload(
         "propietario_usuario_id": str(persona.propietario_usuario_id) if persona.propietario_usuario_id else None,
         "company_name": account_name if contexto.modo != "solo_persona" else None,
         "persona_fisica_moral": persona_fisica_moral,
+        "tipo_cuenta": account_type,
+        "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta if cuenta else None)
+        or (existing_account.codigo_cuenta if existing_account else None),
         "cuenta_correo_principal": _persona_alta_clean_text(cuenta.correo_principal if cuenta else None)
         or _persona_alta_clean_text(existing_account.correo_principal if existing_account else None)
         or _persona_alta_clean_text(existing_account.correo if existing_account else None),
@@ -13099,7 +13109,6 @@ def _persona_alta_to_contact_payload(
         "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
         "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
-        "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None),
         "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
         "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
         "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
@@ -13111,6 +13120,7 @@ def _persona_alta_to_contact_payload(
         "persona_datos": {
             "source": "personas_alta",
             "contexto_modo": contexto.modo,
+            "direccion_tipo": _persona_alta_clean_text(direccion.tipo if direccion else None),
         },
     }
 
@@ -13215,7 +13225,6 @@ def _persona_alta_to_account_payload(
         "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("clave_localidad")),
         "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("localidad")),
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
-        "tipo": _persona_alta_clean_text(direccion.tipo if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo")),
         "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
         "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),
         "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None) or _persona_alta_clean_text(existing_values.get("corredor_industrial")),
@@ -13229,6 +13238,7 @@ def _persona_alta_to_account_payload(
             "tipo_persona": _persona_alta_clean_text(cuenta.tipo_persona),
             "tamano": _persona_alta_clean_text(cuenta.tamano),
             "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta),
+            "direccion_tipo": _persona_alta_clean_text(direccion.tipo if direccion else None),
             "pais": _persona_alta_clean_text(existing_values.get("pais")),
             "source": "personas_alta",
         },

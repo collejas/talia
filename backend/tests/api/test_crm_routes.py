@@ -1421,6 +1421,96 @@ async def test_create_persona_alta_rejects_duplicate_contact_data(
 
 
 @pytest.mark.asyncio
+async def test_create_persona_alta_pfae_preserves_account_type_and_code(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    org_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+    expected_account_code = "PFAE-441"
+
+    async def _create_persona_with_linked_account(**kwargs: Any) -> dict[str, Any]:
+        fake_repo.calls.append(("create_persona", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(uuid.uuid4()))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body["cuenta_id"] = str(account_id)
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
+    async def _get_account_pfae(**kwargs: Any) -> dict[str, Any] | None:
+        fake_repo.calls.append(("get_account", kwargs))
+        return {
+            "id": str(kwargs["account_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "nombre": "Ana Perez Lopez",
+            "alias": "Ana Perez Lopez",
+            "tipo": "persona_fisica_actividad_empresarial",
+            "codigo_cuenta": expected_account_code,
+            "razon_social": "Ana Perez Lopez",
+            "rfc": "PELJ800101ABC",
+            "industria": None,
+            "tamano": None,
+            "sitio_web": None,
+            "telefono": None,
+            "correo": None,
+            "direccion": {},
+            "propietario_usuario_id": None,
+            "metadata": {},
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    fake_repo.create_persona = _create_persona_with_linked_account
+    fake_repo.get_account = _get_account_pfae
+
+    resp = await client.post(
+        "/crm/personas/alta",
+        headers={**_headers(), "X-Organizacion-Id": str(org_id)},
+        json={
+            "persona": {
+                "nombre": "Ana",
+                "apellido_paterno": "Perez",
+                "apellido_materno": "Lopez",
+                "correo_principal": "ana@example.com",
+                "telefono_principal_e164": "+5215512345678",
+                "origen": "prospeccion_propia",
+            },
+            "contexto_comercial": {
+                "modo": "persona_fisica_actividad_empresarial",
+                "usar_cuenta_existente": False,
+                "crear_cuenta_nueva": True,
+                "es_persona_fisica_actividad_empresarial": True,
+            },
+            "cuenta": {
+                "nombre_comercial": "Ana Perez Lopez",
+                "razon_social": "Ana Perez Lopez",
+                "tipo_persona": "fisica",
+                "tipo_cuenta": "persona_fisica_actividad_empresarial",
+                "tipo": "persona_fisica_actividad_empresarial",
+                "codigo_cuenta": expected_account_code,
+                "rfc": "PELJ800101ABC",
+            },
+            "extras": {
+                "direccion": {
+                    "tipo": "principal",
+                }
+            },
+        },
+    )
+
+    assert resp.status_code == 201, resp.text
+    create_persona_call = next(call_kwargs for call_name, call_kwargs in fake_repo.calls if call_name == "create_persona")
+    assert create_persona_call["payload"]["tipo_cuenta"] == "persona_fisica_actividad_empresarial"
+    assert create_persona_call["payload"]["codigo_cuenta"] == expected_account_code
+    assert "tipo" not in create_persona_call["payload"]
+
+    payload = resp.json()
+    assert payload["cuenta"]["tipo"] == "persona_fisica_actividad_empresarial"
+    assert payload["cuenta"]["codigo_cuenta"] == expected_account_code
+
+
+@pytest.mark.asyncio
 async def test_reassign_opportunity_aligns_contact_and_conversation(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:
