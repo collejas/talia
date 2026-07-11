@@ -223,6 +223,7 @@ type ContactCreateState = {
 type ContactCreateAction =
   | { type: "reset" }
   | { type: "mode/set"; mode: CreateMode }
+  | { type: "account-type/set"; value: "empresa" | "persona_fisica_actividad_empresarial" | "" }
   | { type: "persona/set"; field: keyof PersonaDraft; value: string }
   | { type: "cuenta/set"; field: keyof CuentaDraft; value: string }
   | { type: "relacion/set"; field: keyof RelacionDraft; value: string | boolean }
@@ -467,7 +468,12 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
     case "reset":
       return INITIAL_STATE;
     case "mode/set": {
-      const nextType = action.mode === "persona_fisica_actividad_empresarial" ? "persona_fisica_actividad_empresarial" : "empresa";
+      const nextType =
+        action.mode === "persona_fisica_actividad_empresarial"
+          ? "persona_fisica_actividad_empresarial"
+          : action.mode === "empresa_nueva"
+            ? ""
+            : "empresa";
       const nextState: ContactCreateState = {
         ...state,
         mode: action.mode,
@@ -479,7 +485,10 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           codigo_cuenta: action.mode === "solo_persona" || action.mode === "empresa_nueva" ? "" : state.cuenta.codigo_cuenta,
           tipo: action.mode === "solo_persona" ? "" : nextType,
           tipo_cuenta: action.mode === "solo_persona" ? "" : nextType,
-          tipo_persona: action.mode === "solo_persona" ? "" : getPersonaTypeFromAccountType(nextType),
+          tipo_persona:
+            action.mode === "solo_persona" || !nextType
+              ? ""
+              : getPersonaTypeFromAccountType(nextType),
           alias:
             action.mode === "persona_fisica_actividad_empresarial"
               ? state.cuenta.alias || buildFullName(state.persona)
@@ -516,6 +525,30 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         };
       }
       return nextState;
+    }
+    case "account-type/set": {
+      if (action.value === "persona_fisica_actividad_empresarial") {
+        return createReducer(state, { type: "mode/set", mode: "persona_fisica_actividad_empresarial" });
+      }
+      if (action.value === "empresa") {
+        return {
+          ...createReducer(state, { type: "mode/set", mode: "empresa_nueva" }),
+          cuenta: {
+            ...state.cuenta,
+            cuenta_id: "",
+            codigo_cuenta: "",
+            tipo: "empresa",
+            tipo_cuenta: "empresa",
+            tipo_persona: "moral",
+          },
+        };
+      }
+      return {
+        ...createReducer(state, { type: "mode/set", mode: "empresa_nueva" }),
+        cuenta: {
+          ...INITIAL_STATE.cuenta,
+        },
+      };
     }
     case "persona/set":
       return {
@@ -778,6 +811,9 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
 }
 
 function validateState(state: ContactCreateState): string | null {
+  if (state.mode === "empresa_nueva" && !state.cuenta.tipo.trim()) {
+    return "Selecciona el tipo de cuenta.";
+  }
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
   if (!state.persona.origen.trim()) return "Selecciona el origen del contacto.";
@@ -1011,6 +1047,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Persona moral";
   const selectedEntryMode: CreateMode = isPfaeMode ? "empresa_nueva" : state.mode;
   const selectedEntry = entryOptions.find((option) => option.mode === selectedEntryMode) ?? entryOptions[0];
+  const hasSelectedNewAccountType =
+    isPfaeMode || (isCompanyMode && state.cuenta.tipo === "empresa");
+  const shouldShowNewAccountForm =
+    !isSelectionScreen && (selectedEntry.mode !== "empresa_nueva" || hasSelectedNewAccountType);
   const puestoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.puestoOptions, state.persona.puesto),
     [state.persona.puesto, tenantCatalogs.puestoOptions],
@@ -1230,34 +1270,46 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </Button>
           </div>
           {isCompanyMode || isPfaeMode ? (
-          <FormSection title="Tipo de cuenta" description="El contacto se crea junto con una cuenta nueva. Define si será Moral o PFAE." required>
-            <div className="grid gap-3 md:max-w-sm">
-              <Field label="Tipo de cuenta a crear" required>
-                <Select
-                  value={isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa"}
-                  onValueChange={(value) =>
-                    dispatch({
-                      type: "mode/set",
-                      mode:
-                        value === "persona_fisica_actividad_empresarial"
-                          ? "persona_fisica_actividad_empresarial"
-                          : "empresa_nueva",
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecciona un tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="empresa">Moral</SelectItem>
-                    <SelectItem value="persona_fisica_actividad_empresarial">PFAE</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
+          <FormSection title="Tipo de cuenta" description="Selecciona primero el tipo de cuenta para mostrar el formulario correcto." required>
+            <div className="grid gap-3 md:grid-cols-2 md:max-w-2xl">
+              <button
+                type="button"
+                className={`rounded-2xl border px-5 py-5 text-left transition ${
+                  isCompanyMode && state.cuenta.tipo === "empresa"
+                    ? "border-foreground bg-muted/40"
+                    : "border-border/70 bg-background hover:border-foreground/40 hover:bg-muted/40"
+                }`}
+                onClick={() => dispatch({ type: "account-type/set", value: "empresa" })}
+              >
+                <div className="text-sm font-semibold">Moral</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Muestra el formulario para crear una empresa moral junto con el contacto.
+                </div>
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl border px-5 py-5 text-left transition ${
+                  isPfaeMode
+                    ? "border-foreground bg-muted/40"
+                    : "border-border/70 bg-background hover:border-foreground/40 hover:bg-muted/40"
+                }`}
+                onClick={() => dispatch({ type: "account-type/set", value: "persona_fisica_actividad_empresarial" })}
+              >
+                <div className="text-sm font-semibold">PFAE</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Muestra el formulario de persona física con actividad empresarial.
+                </div>
+              </button>
             </div>
+            {!hasSelectedNewAccountType ? (
+              <div className="rounded-xl border border-dashed border-border/70 bg-background p-4 text-sm text-muted-foreground">
+                El formulario se habilitará cuando selecciones uno de los dos tipos de cuenta.
+              </div>
+            ) : null}
           </FormSection>
           ) : null}
 
+          {shouldShowNewAccountForm ? (
           <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Nombre" required>
@@ -1428,6 +1480,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
             </Field>
           </FormSection>
+          ) : null}
 
           {isContactMode ? (
             <FormSection title="Empresa vinculada" description="Busca una empresa ya creada y selecciónala.">
@@ -1459,7 +1512,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          {isCompanyMode || isPfaeMode ? (
+          {(isCompanyMode || isPfaeMode) && hasSelectedNewAccountType ? (
             <FormSection
               title={isPfaeMode ? "Cuenta PFAE" : "Empresa moral"}
               description={
@@ -1651,7 +1704,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          {state.mode !== "solo_persona" ? (
+          {state.mode !== "solo_persona" && shouldShowNewAccountForm ? (
             <FormSection title="Direcciones" description="Captura la dirección principal, fiscal o sucursal del registro.">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Tipo de dirección">
@@ -1753,7 +1806,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           </FormSection>
           ) : null}
 
-          {state.mode !== "solo_persona" ? (
+          {state.mode !== "solo_persona" && shouldShowNewAccountForm ? (
           <FormSection title="Datos Fiscales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Datos fiscales, país, estado y municipio con claves reales.</p>
@@ -1809,7 +1862,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={state.saving} onClick={() => void submit()}>
+            <Button
+              type="button"
+              disabled={state.saving || (selectedEntry.mode === "empresa_nueva" && !hasSelectedNewAccountType)}
+              onClick={() => void submit()}
+            >
               {state.saving ? "Guardando..." : submitLabel}
             </Button>
             <Button type="button" variant="outline" disabled={state.saving} onClick={() => onOpenChange(false)}>
