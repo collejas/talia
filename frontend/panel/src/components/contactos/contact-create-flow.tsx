@@ -242,6 +242,7 @@ type ContactCreateFlowProps = {
   onOpenChange: (open: boolean) => void;
   onCreated?: (personaId: string) => void;
   initialMode?: CreateMode;
+  onRequestLinkExisting?: () => void;
 };
 
 type CreateEntryOption = {
@@ -886,7 +887,13 @@ function Field({
   );
 }
 
-export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_nueva" }: ContactCreateFlowProps) {
+export function ContactCreateFlow({
+  open,
+  onOpenChange,
+  onCreated,
+  initialMode = "empresa_nueva",
+  onRequestLinkExisting,
+}: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
   const [hasSelectedFlow, setHasSelectedFlow] = React.useState(false);
   const { context: permissionContext } = usePermissions();
@@ -1246,6 +1253,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     type="button"
                     className="rounded-2xl border border-border/70 bg-background px-5 py-5 text-left transition hover:border-foreground/40 hover:bg-muted/40"
                     onClick={() => {
+                      if (option.mode === "empresa_existente" && onRequestLinkExisting) {
+                        onOpenChange(false);
+                        onRequestLinkExisting();
+                        return;
+                      }
                       dispatch({ type: "mode/set", mode: option.mode });
                       setHasSelectedFlow(true);
                     }}

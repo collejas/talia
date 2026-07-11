@@ -1792,6 +1792,7 @@ export function ContactsDataTable({
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(personaId) => handleCreated(personaId)}
+        onRequestLinkExisting={() => setLinkOpen(true)}
       />
 
       <ContactEditFlow
