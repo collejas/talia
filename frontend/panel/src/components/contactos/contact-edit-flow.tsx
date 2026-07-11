@@ -273,6 +273,12 @@ type ContactEditFlowProps = {
   onSaved?: (personaId: string) => void;
 };
 
+type EditEntryOption = {
+  mode: CreateMode;
+  title: string;
+  description: string;
+};
+
 const PERSONA_ESTADO_OPTIONS = [
   { value: "activo", label: "Activo" },
   { value: "inactivo", label: "Inactivo" },
@@ -1565,6 +1571,32 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Actualiza la relación principal de la persona con su negocio."
       : "Actualiza la vinculación de la persona con la empresa.";
+  const editEntryOptions = React.useMemo<EditEntryOption[]>(
+    () => [
+      {
+        mode: "solo_persona",
+        title: "Contacto sin empresa",
+        description: "Este contacto no tiene una empresa vinculada.",
+      },
+      {
+        mode: "empresa_existente",
+        title: "Contacto vinculado a empresa",
+        description: "Este contacto está relacionado con una empresa ya existente.",
+      },
+      {
+        mode: "empresa_nueva",
+        title: "Contacto y empresa",
+        description: "Este contacto tiene una cuenta moral vinculada.",
+      },
+      {
+        mode: "persona_fisica_actividad_empresarial",
+        title: "Contacto y PFAE",
+        description: "Este contacto está vinculado a una cuenta PFAE.",
+      },
+    ],
+    [],
+  );
+  const selectedEditEntry = editEntryOptions.find((option) => option.mode === state.mode) ?? editEntryOptions[0];
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1579,20 +1611,20 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
         <div className="space-y-5">
           {state.loading ? <p className="text-xs text-muted-foreground">Cargando...</p> : null}
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-          <FormSection
-            title="Tipo de cuenta"
-            description={
-              state.mode === "solo_persona"
-                ? "Este contacto no tiene una cuenta vinculada."
-                : "El tipo actual se muestra aquí. Si necesitas cambiar entre Moral y PFAE, hazlo desde la vista de empresa."
-            }
-          >
-            <div className="grid gap-3 md:max-w-sm">
-              <Field label="Tipo de cuenta actual">
-                <Input value={accountTypeEditLabel} readOnly disabled className="bg-muted" />
-              </Field>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium">{selectedEditEntry.title}</div>
+              <div className="text-xs text-muted-foreground">{selectedEditEntry.description}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Tipo de cuenta actual: {accountTypeEditLabel}
+              </div>
             </div>
-          </FormSection>
+            {state.mode !== "solo_persona" ? (
+              <div className="max-w-xs text-right text-xs text-muted-foreground">
+                Si necesitas cambiar entre Moral y PFAE, hazlo desde la vista de empresa.
+              </div>
+            ) : null}
+          </div>
 
           <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

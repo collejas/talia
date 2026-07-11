@@ -243,6 +243,12 @@ type ContactCreateFlowProps = {
   initialMode?: CreateMode;
 };
 
+type CreateEntryOption = {
+  mode: CreateMode;
+  title: string;
+  description: string;
+};
+
 type ValidationNoticeState = {
   open: boolean;
   title: string;
@@ -846,6 +852,7 @@ function Field({
 
 export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_nueva" }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
+  const [hasSelectedFlow, setHasSelectedFlow] = React.useState(false);
   const { context: permissionContext } = usePermissions();
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
@@ -856,10 +863,31 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const tenantCatalogs = useTenantContactCatalogs();
   const currentUserId = permissionContext.usuario_id?.trim() || null;
   const previousPfaeNameRef = React.useRef("");
+  const entryOptions = React.useMemo<CreateEntryOption[]>(
+    () => [
+      {
+        mode: "solo_persona",
+        title: "Crear contacto",
+        description: "Crea un contacto sin vincularlo a una empresa.",
+      },
+      {
+        mode: "empresa_existente",
+        title: "Vincular contacto a empresa",
+        description: "Crea el contacto y relaciónalo con una empresa ya registrada.",
+      },
+      {
+        mode: "empresa_nueva",
+        title: "Crear contacto y empresa nueva",
+        description: "Crea el contacto y una nueva cuenta tipo Moral o PFAE.",
+      },
+    ],
+    [],
+  );
 
   React.useEffect(() => {
     if (!open) {
       dispatch({ type: "reset" });
+      setHasSelectedFlow(false);
       setPendingDedupe(null);
       setSelectedPersonaReuseId("");
       setSelectedCuentaReuseId("");
@@ -979,7 +1007,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const isContactMode = state.mode === "empresa_existente";
   const isCompanyMode = state.mode === "empresa_nueva";
   const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
+  const isSelectionScreen = !hasSelectedFlow;
   const accountTypeLabel = isPfaeMode ? "Persona física con actividad empresarial" : "Persona moral";
+  const selectedEntryMode: CreateMode = isPfaeMode ? "empresa_nueva" : state.mode;
+  const selectedEntry = entryOptions.find((option) => option.mode === selectedEntryMode) ?? entryOptions[0];
   const puestoOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.puestoOptions, state.persona.puesto),
     [state.persona.puesto, tenantCatalogs.puestoOptions],
@@ -1065,7 +1096,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       ? "Captura la persona y su vínculo con una empresa ya existente."
       : isCompanyMode
         ? "Captura la persona responsable y los datos de la nueva empresa moral."
-        : "Captura la persona y su nuevo registro fiscal como PFAE en un solo flujo.";
+        : isPfaeMode
+          ? "Captura la persona y su nuevo registro fiscal como PFAE en un solo flujo."
+          : "Captura la información principal del contacto.";
   const relationSectionTitle =
     isPfaeMode
       ? "Vínculo principal"
@@ -1163,7 +1196,40 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         </DialogHeader>
 
         <div className="grid gap-6">
+          {isSelectionScreen ? (
+            <div className="grid gap-4">
+              <p className="text-sm text-muted-foreground">Selecciona cómo quieres dar de alta el contacto.</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {entryOptions.map((option) => (
+                  <button
+                    key={option.title}
+                    type="button"
+                    className="rounded-2xl border border-border/70 bg-background px-5 py-5 text-left transition hover:border-foreground/40 hover:bg-muted/40"
+                    onClick={() => {
+                      dispatch({ type: "mode/set", mode: option.mode });
+                      setHasSelectedFlow(true);
+                    }}
+                  >
+                    <div className="text-sm font-semibold">{option.title}</div>
+                    <div className="mt-2 text-sm text-muted-foreground">{option.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {!isSelectionScreen ? (
           <div className="space-y-5">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium">{selectedEntry.title}</div>
+              <div className="text-xs text-muted-foreground">{selectedEntry.description}</div>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setHasSelectedFlow(false)}>
+              Cambiar opción
+            </Button>
+          </div>
+          {isCompanyMode || isPfaeMode ? (
           <FormSection title="Tipo de cuenta" description="El contacto se crea junto con una cuenta nueva. Define si será Moral o PFAE." required>
             <div className="grid gap-3 md:max-w-sm">
               <Field label="Tipo de cuenta a crear" required>
@@ -1190,6 +1256,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               </Field>
             </div>
           </FormSection>
+          ) : null}
 
           <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1686,6 +1753,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           </FormSection>
           ) : null}
 
+          {state.mode !== "solo_persona" ? (
           <FormSection title="Datos Fiscales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Datos fiscales, país, estado y municipio con claves reales.</p>
@@ -1735,6 +1803,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               </div>
             ) : null}
           </FormSection>
+          ) : null}
 
 
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
@@ -1748,6 +1817,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </Button>
           </div>
           </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
