@@ -12274,10 +12274,7 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "correo_principal": _persona_alta_normalize_email(payload.correo_principal)
             or _persona_alta_normalize_email(getattr(payload, "correo", None))
             or _persona_alta_normalize_email(getattr(payload, "email", None)),
-            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional)
-            or _persona_alta_normalize_email(payload.correo_principal)
-            or _persona_alta_normalize_email(getattr(payload, "correo", None))
-            or _persona_alta_normalize_email(getattr(payload, "email", None)),
+            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional),
             "correo_personal_3": _persona_alta_normalize_email(payload.correo_personal_3),
             "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164)
             or _persona_alta_normalize_phone(payload.telefono_movil_1_e164),
@@ -13051,8 +13048,7 @@ def _persona_alta_to_contact_payload(
         "apellido_materno": _persona_alta_clean_text(persona.apellido_materno),
         "nombre_completo": _persona_alta_full_name(persona),
         "correo_principal": _persona_alta_clean_text(persona.correo_principal),
-        "correo_secundario": _persona_alta_clean_text(persona.correo_secundario)
-        or _persona_alta_clean_text(persona.correo_institucional),
+        "correo_secundario": _persona_alta_clean_text(persona.correo_secundario),
         "correo_institucional": _persona_alta_clean_text(persona.correo_institucional),
         "correo_personal_3": _persona_alta_clean_text(persona.correo_personal_3),
         "telefono_principal_e164": _persona_alta_clean_text(persona.telefono_principal_e164),

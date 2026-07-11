@@ -626,8 +626,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
     ...state.persona,
     nombre_nombres: state.persona.nombre.trim(),
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
-    correo_institucional: state.persona.correo_institucional || state.persona.correo_principal,
-    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional || state.persona.correo_principal,
+    correo_institucional: state.persona.correo_institucional,
+    correo_secundario: state.persona.correo_secundario,
     estado: normalizePersonaEstado(state.persona.estado),
   }, { keepEmptyStringsAsNull: true });
 

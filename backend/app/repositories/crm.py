@@ -8173,8 +8173,8 @@ class CRMRepository:
             "nombre_completo": preferred_name or raw_full_name,
             "nombre": preferred_name or raw_full_name,
             "correo_principal": persona.get("correo_principal"),
-            "correo_secundario": persona.get("correo_secundario") or persona.get("correo_institucional"),
-            "correo_institucional": persona.get("correo_institucional") or persona.get("correo_principal"),
+            "correo_secundario": persona.get("correo_secundario"),
+            "correo_institucional": persona.get("correo_institucional"),
             "correo_personal_3": persona.get("correo_personal_3"),
             "codigo_contacto": persona.get("codigo_contacto") or _ensure_metadata(persona.get("metadata")).get("legacy_contacto_codigo"),
             "correo": persona.get("correo_principal") or persona.get("correo_secundario") or persona.get("correo_institucional") or persona.get("correo"),
@@ -8863,27 +8863,6 @@ class CRMRepository:
         )
         if existing_contact is None:
             raise CRMRepositoryError("persona_no_encontrada")
-        previous_primary_email = self._pick_text(
-            existing_contact,
-            "correo_principal",
-            "correo_secundario",
-            "correo_institucional",
-            "correo",
-            "email",
-        )
-        updated_primary_email = self._pick_text(
-            normalized_payload,
-            "correo_principal",
-            "correo",
-            "email",
-        )
-        if updated_primary_email and updated_primary_email != previous_primary_email:
-            for alias_field in ("correo_secundario", "correo_institucional"):
-                if alias_field in normalized_payload:
-                    continue
-                current_alias = self._pick_text(existing_contact, alias_field)
-                if not current_alias or current_alias == previous_primary_email:
-                    normalized_payload[alias_field] = updated_primary_email
         merged_contact = dict(existing_contact)
         merged_contact.update(normalized_payload)
         parts = self._build_contact_write_parts(
