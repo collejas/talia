@@ -129,7 +129,7 @@ function FormSection({
 
 const INITIAL_FORM: CreateAccountForm = {
   tipo: "empresa",
-  tipo_persona: "moral",
+  tipo_persona: "",
   nombre_comercial: "",
   razon_social: "",
   codigo_cuenta: "",
@@ -179,6 +179,12 @@ type Props = {
   onCreated?: () => void;
 };
 
+type AccountEntryOption = {
+  value: "empresa" | "persona_fisica_actividad_empresarial";
+  title: string;
+  description: string;
+};
+
 export function AccountCreateDialog({ onCreated }: Props) {
   const router = useRouter();
   const { context: permissionContext } = usePermissions();
@@ -188,13 +194,30 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const [codeLoading, setCodeLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CreateAccountForm>(INITIAL_FORM);
+  const [hasSelectedType, setHasSelectedType] = React.useState(false);
   const [primaryDirectionType, setPrimaryDirectionType] = React.useState<AccountDirectionPrimaryType>("fiscal");
   const [extraDirections, setExtraDirections] = React.useState<AccountDirectionDraft[]>([]);
   const currentUserId = permissionContext.usuario_id?.trim() || null;
+  const entryOptions = React.useMemo<AccountEntryOption[]>(
+    () => [
+      {
+        value: "empresa",
+        title: "Moral",
+        description: "Crea una empresa moral con su información fiscal, comercial y de domicilio.",
+      },
+      {
+        value: "persona_fisica_actividad_empresarial",
+        title: "PFAE",
+        description: "Crea una persona física con actividad empresarial como cuenta independiente.",
+      },
+    ],
+    [],
+  );
 
   const openDialog = React.useCallback(() => {
     setForm(INITIAL_FORM);
     setError(null);
+    setHasSelectedType(false);
     setPrimaryDirectionType("fiscal");
     setExtraDirections([]);
     setOpen(true);
@@ -202,6 +225,11 @@ export function AccountCreateDialog({ onCreated }: Props) {
 
   React.useEffect(() => {
     if (!open) return;
+    if (!hasSelectedType) {
+      setForm((prev) => (prev.codigo_cuenta ? { ...prev, codigo_cuenta: "" } : prev));
+      setCodeLoading(false);
+      return;
+    }
     const controller = new AbortController();
     const run = async () => {
       setCodeLoading(true);
@@ -229,7 +257,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
     };
     void run();
     return () => controller.abort();
-  }, [open, form.tipo]);
+  }, [open, form.tipo, hasSelectedType]);
 
   const clasificacionNegocioOptions = React.useMemo(
     () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, form.tipo_establecimiento),
@@ -254,6 +282,10 @@ export function AccountCreateDialog({ onCreated }: Props) {
   const rfcHint = React.useMemo(() => getRfcLengthMessage(form.tipo), [form.tipo]);
 
   const handleCreateConfirm = async () => {
+    if (!hasSelectedType) {
+      setError("Selecciona el tipo de cuenta.");
+      return;
+    }
     const primaryDirection = {
       key: "primary",
       tipo: primaryDirectionType,
@@ -410,38 +442,61 @@ export function AccountCreateDialog({ onCreated }: Props) {
   return (
     <>
       <div className="mb-4 flex items-center justify-end">
-        <Button onClick={openDialog}>Nueva empresa</Button>
+        <Button onClick={openDialog}>Nueva cuenta</Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nueva empresa</DialogTitle>
+            <DialogTitle>Nueva cuenta</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
             <FormSection
-              title="Datos de la empresa"
+              title="Tipo de cuenta"
+              description="Selecciona primero el tipo de cuenta para mostrar el formulario correcto."
+            >
+              <div className="grid gap-3 md:grid-cols-2 md:max-w-2xl">
+                {entryOptions.map((option) => {
+                  const selected = hasSelectedType && form.tipo === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`rounded-2xl border px-5 py-5 text-left transition ${
+                        selected
+                          ? "border-foreground bg-muted/40"
+                          : "border-border/70 bg-background hover:border-foreground/40 hover:bg-muted/40"
+                      }`}
+                      onClick={() => {
+                        setHasSelectedType(true);
+                        setError(null);
+                        setForm((prev) => ({
+                          ...prev,
+                          tipo: option.value,
+                          tipo_persona: option.value === "persona_fisica_actividad_empresarial" ? "fisica" : "moral",
+                          codigo_cuenta: "",
+                        }));
+                      }}
+                    >
+                      <div className="text-sm font-semibold">{option.title}</div>
+                      <div className="mt-2 text-sm text-muted-foreground">{option.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {!hasSelectedType ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-background p-4 text-sm text-muted-foreground">
+                  El formulario se habilitará cuando selecciones Moral o PFAE.
+                </div>
+              ) : null}
+            </FormSection>
+
+            {hasSelectedType ? (
+            <FormSection
+              title={form.tipo === "persona_fisica_actividad_empresarial" ? "Datos de la cuenta PFAE" : "Datos de la empresa"}
               description="Captura la identidad comercial, fiscal y de contacto principal."
             >
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="create-tipo">Tipo de alta *</Label>
-                  <select
-                    id="create-tipo"
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={form.tipo}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        tipo: event.target.value as CreateAccountForm["tipo"],
-                        tipo_persona: event.target.value === "persona_fisica_actividad_empresarial" ? "fisica" : "moral",
-                      }))
-                    }
-                  >
-                    <option value="empresa">Empresa</option>
-                    <option value="persona_fisica_actividad_empresarial">Persona física con actividad empresarial</option>
-                  </select>
-                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-nombre-comercial">Nombre comercial *</Label>
                   <Input
@@ -470,17 +525,13 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="create-tipo-persona">Tipo persona *</Label>
-                  <select
+                  <Input
                     id="create-tipo-persona"
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
-                    value={form.tipo_persona}
-                    onChange={(event) => setForm((prev) => ({ ...prev, tipo_persona: event.target.value as CreateAccountForm["tipo_persona"] }))}
-                    disabled={form.tipo === "persona_fisica_actividad_empresarial"}
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="fisica">Física</option>
-                    <option value="moral">Moral</option>
-                  </select>
+                    value={form.tipo_persona === "fisica" ? "Física" : form.tipo_persona === "moral" ? "Moral" : ""}
+                    readOnly
+                    disabled
+                    className="bg-muted"
+                  />
                 </div>
                 <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
                   Debes completar al menos nombre comercial o razón social.
@@ -599,7 +650,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </div>
               </div>
             </FormSection>
+            ) : null}
 
+            {hasSelectedType ? (
             <FormSection
               title="Direcciones"
               description="Agrega el domicilio principal y, si aplica, sucursales o una dirección fiscal diferente."
@@ -758,7 +811,9 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </Field>
               </div>
             </FormSection>
+            ) : null}
 
+            {hasSelectedType ? (
             <FormSection title="Datos fiscales" description="Captura la información de facturación de la empresa.">
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Régimen de capital">
@@ -805,6 +860,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
                 </Field>
               </div>
             </FormSection>
+            ) : null}
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
@@ -812,8 +868,8 @@ export function AccountCreateDialog({ onCreated }: Props) {
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <Button type="button" onClick={() => void handleCreateConfirm()} disabled={submitting}>
-                {submitting ? "Creando..." : "Crear empresa"}
+              <Button type="button" onClick={() => void handleCreateConfirm()} disabled={submitting || !hasSelectedType}>
+                {submitting ? "Creando..." : "Crear cuenta"}
               </Button>
             </div>
           </div>
