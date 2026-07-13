@@ -169,7 +169,6 @@ function aggregateConversionRows(
         }))
         .filter((row) => row.total > 0)
         .sort((a, b) => b.total - a.total || b.rate - a.rate || a.label.localeCompare(b.label))
-        .slice(0, 6)
     : [];
 }
 

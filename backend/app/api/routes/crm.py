@@ -40400,7 +40400,7 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
-            "schema_version": "resumen-v2-attribution-rankings-v1",
+            "schema_version": "resumen-v2-attribution-rankings-v3",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -40877,7 +40877,7 @@ async def demografia_resumen_v2(
                 -float(item.get("conversion_rate_pct") or 0),
                 str(item.get("label") or ""),
             ),
-        )[:6]
+        )
 
         template_conversion_top = sorted(
             (
@@ -40897,7 +40897,7 @@ async def demografia_resumen_v2(
                 -float(item.get("conversion_rate_pct") or 0),
                 str(item.get("label") or ""),
             ),
-        )[:6]
+        )
 
         wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
             usuario_token=effective_user_token,

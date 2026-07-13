@@ -370,10 +370,18 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
       () => buildAcquisitionMetrics(summary, loadedVisitsPayload),
       [summary, loadedVisitsPayload],
     );
-  const correoCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "correo");
-  const correoTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "correo");
-  const whatsappCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "whatsapp");
-  const whatsappTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "whatsapp");
+  const correoCampaignConversionRows = campaignConversionRows
+    .filter((item) => item.canal === "correo")
+    .slice(0, 6);
+  const correoTemplateConversionRows = templateConversionRows
+    .filter((item) => item.canal === "correo")
+    .slice(0, 6);
+  const whatsappCampaignConversionRows = campaignConversionRows
+    .filter((item) => item.canal === "whatsapp")
+    .slice(0, 6);
+  const whatsappTemplateConversionRows = templateConversionRows
+    .filter((item) => item.canal === "whatsapp")
+    .slice(0, 6);
   return (
     <section className={cn("grid gap-4", className)}>
       {loadingVisitsPayload ? (
