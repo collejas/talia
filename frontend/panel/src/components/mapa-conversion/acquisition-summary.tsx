@@ -53,10 +53,6 @@ const SOURCE_CLASS_CONFIG: ChartConfig = {
   converted: { label: "Convertidas", color: "var(--chart-2)" },
 };
 
-const CONVERSION_RANKING_CONFIG: ChartConfig = {
-  total: { label: "Sesiones atribuidas", color: "var(--chart-3)" },
-};
-
 const WHATSAPP_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -76,6 +72,19 @@ const EMAIL_CAMPAIGN_COLORS = [
   "#be123c",
   "#4338ca",
   "#475569",
+];
+
+const WHATSAPP_CAMPAIGN_COLORS = [
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-1)",
+  "#15803d",
+  "#c2410c",
+  "#0369a1",
+  "#be123c",
+  "#334155",
 ];
 
 const SOURCE_CLASS_COLORS: Record<string, string> = {
@@ -148,98 +157,35 @@ type EmailCampaignPieRow = {
 };
 
 function buildCampaignColorMap(rows: ConversionRankingRow[]) {
+  return buildCampaignColorMapWithPalette(rows, EMAIL_CAMPAIGN_COLORS);
+}
+
+function buildCampaignColorMapWithPalette(rows: ConversionRankingRow[], palette: string[]) {
   const colorMap = new Map<string, string>();
   let colorIndex = 0;
   for (const row of rows) {
     const key = row.value || row.label;
     if (!key || colorMap.has(key)) continue;
-    colorMap.set(key, EMAIL_CAMPAIGN_COLORS[colorIndex % EMAIL_CAMPAIGN_COLORS.length]);
+    colorMap.set(key, palette[colorIndex % palette.length]);
     colorIndex += 1;
   }
   return colorMap;
 }
 
-function ConversionRankingCard({
-  title,
-  description,
-  emptyMessage,
-  metricName = "Conversión",
-  data,
-}: {
-  title: string;
-  description: string;
-  emptyMessage: string;
-  metricName?: string;
-  data: ConversionRankingRow[];
-}) {
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {data.length ? (
-          <ChartContainer config={CONVERSION_RANKING_CONFIG} className="!h-[300px] w-full">
-            <BarChart data={data} margin={{ left: 12, right: 16 }} barSize={22} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" hide domain={[0, "auto"]} />
-              <YAxis
-                dataKey="label"
-                type="category"
-                width={168}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value: string) => truncateLabel(value)}
-              />
-              <ChartTooltip
-                cursor={{ fill: "hsl(var(--muted))" }}
-                content={<ChartTooltipContent />}
-                formatter={(value, _name, item) => {
-                  const payload = item.payload as ConversionRankingRow;
-                  const details = [
-                    `${payload.conversionLabel}: ${formatNumber(Number(value ?? 0))}`,
-                    `${payload.contextLabel}: ${formatNumber(payload.contextTotal)}`,
-                    payload.rate > 0 ? `${payload.rate.toFixed(1)}%` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ");
-                  return [details, "Conversión"];
-                }}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload as ConversionRankingRow | undefined;
-                  return item?.label || "Elemento";
-                }}
-              />
-              <Bar
-                dataKey="total"
-                name={metricName}
-                fill="var(--color-total)"
-                radius={[0, 4, 4, 0]}
-              >
-                <LabelList
-                  dataKey="rate"
-                  position="right"
-                  formatter={(value: number) => `${Number(value ?? 0).toFixed(1)}%`}
-                  className="fill-muted-foreground text-[11px]"
-                />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-        ) : (
-          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function EmailCampaignPieCard({
   data,
   colorMap,
+  title,
+  description,
+  emptyMessage,
+  metricLabel,
 }: {
   data: ConversionRankingRow[];
   colorMap: Map<string, string>;
+  title: string;
+  description: string;
+  emptyMessage: string;
+  metricLabel: string;
 }) {
   const pieData = data.map((row) => ({
     value: row.value || row.label,
@@ -251,23 +197,21 @@ function EmailCampaignPieCard({
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Correo · campañas que generaron visitas al sitio</CardTitle>
-        <CardDescription>
-          Distribución real de sesiones web atribuidas por campaña de correo.
-        </CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {pieData.length ? (
           <>
             <ChartContainer
-              config={{ total: { label: "Sesiones web", color: "var(--chart-1)" } }}
+              config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
               className="h-72"
             >
               <PieChart>
                 <ChartTooltip
                   content={<ChartTooltipContent hideLabel />}
                   formatter={(value, _name, item) => [
-                    `${formatNumber(toNumber(value))} sesiones`,
+                    `${formatNumber(toNumber(value))} ${metricLabel.toLowerCase()}`,
                     String(item?.payload?.label || "Campaña"),
                   ]}
                 />
@@ -302,9 +246,7 @@ function EmailCampaignPieCard({
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No hay campañas de correo con sesiones web atribuidas en este filtro.
-          </p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         )}
       </CardContent>
     </Card>
@@ -314,24 +256,30 @@ function EmailCampaignPieCard({
 function EmailTemplateAttributionCard({
   data,
   colorMap,
+  title,
+  description,
+  emptyMessage,
+  metricLabel,
 }: {
   data: ConversionRankingRow[];
   colorMap: Map<string, string>;
+  title: string;
+  description: string;
+  emptyMessage: string;
+  metricLabel: string;
 }) {
   const chartHeight = Math.max(320, data.length * 48);
 
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Correo · plantillas que generaron visitas al sitio</CardTitle>
-        <CardDescription>
-          Cada plantilla hereda el color de su campaña madre para mostrar qué piezas aportaron el resultado.
-        </CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         {data.length ? (
           <ChartContainer
-            config={{ total: { label: "Sesiones web", color: "var(--chart-1)" } }}
+            config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
             className="w-full"
             style={{ height: `${chartHeight}px` }}
           >
@@ -352,8 +300,8 @@ function EmailTemplateAttributionCard({
                 formatter={(value, _name, item) => {
                   const payload = item.payload as ConversionRankingRow;
                   return [
-                    `${formatNumber(Number(value ?? 0))} sesiones · Campaña ${payload.parentCampaignLabel || "Sin campaña"}`,
-                    "Sesiones web",
+                    `${formatNumber(Number(value ?? 0))} ${metricLabel.toLowerCase()} · Campaña ${payload.parentCampaignLabel || "Sin campaña"}`,
+                    metricLabel,
                   ];
                 }}
                 labelFormatter={(_, payload) => {
@@ -361,7 +309,7 @@ function EmailTemplateAttributionCard({
                   return item?.label || "Plantilla";
                 }}
               />
-              <Bar dataKey="total" name="Sesiones web" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="total" name={metricLabel} radius={[0, 4, 4, 0]}>
                 {data.map((item) => (
                   <Cell
                     key={`${item.parentCampaignValue || item.parentCampaignLabel || "sin-campana"}::${item.value}`}
@@ -381,9 +329,7 @@ function EmailTemplateAttributionCard({
             </BarChart>
           </ChartContainer>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No hay plantillas de correo con sesiones web atribuidas en este filtro.
-          </p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         )}
       </CardContent>
     </Card>
@@ -568,6 +514,10 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
   const correoCampaignColorMap = React.useMemo(
     () => buildCampaignColorMap(correoCampaignConversionRows),
     [correoCampaignConversionRows],
+  );
+  const whatsappCampaignColorMap = React.useMemo(
+    () => buildCampaignColorMapWithPalette(whatsappCampaignConversionRows, WHATSAPP_CAMPAIGN_COLORS),
+    [whatsappCampaignConversionRows],
   );
   return (
     <section className={cn("grid gap-4", className)}>
@@ -835,27 +785,37 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
         <EmailCampaignPieCard
           data={correoCampaignConversionRows}
           colorMap={correoCampaignColorMap}
+          title="Correo · campañas que generaron visitas al sitio"
+          description="Distribución real de sesiones web atribuidas por campaña de correo."
+          emptyMessage="No hay campañas de correo con sesiones web atribuidas en este filtro."
+          metricLabel="Sesiones web"
         />
         <EmailTemplateAttributionCard
           data={correoTemplateConversionRows}
           colorMap={correoCampaignColorMap}
+          title="Correo · plantillas que generaron visitas al sitio"
+          description="Cada plantilla hereda el color de su campaña madre para mostrar qué piezas aportaron el resultado."
+          emptyMessage="No hay plantillas de correo con sesiones web atribuidas en este filtro."
+          metricLabel="Sesiones web"
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <ConversionRankingCard
-          title="WhatsApp · campañas que convierten"
-          description="Ranking de campañas WhatsApp por oportunidades generadas desde conversaciones atribuibles."
-          emptyMessage="No hay campañas WhatsApp con conversión atribuida en este filtro."
-          metricName="Oportunidades"
+        <EmailCampaignPieCard
           data={whatsappCampaignConversionRows}
+          colorMap={whatsappCampaignColorMap}
+          title="WhatsApp · campañas que convierten"
+          description="Distribución real de oportunidades generadas por campaña de WhatsApp."
+          emptyMessage="No hay campañas WhatsApp con conversión atribuida en este filtro."
+          metricLabel="Oportunidades"
         />
-        <ConversionRankingCard
-          title="WhatsApp · plantillas que convierten"
-          description="Ranking de plantillas WhatsApp por oportunidades generadas desde conversaciones atribuibles."
-          emptyMessage="No hay plantillas WhatsApp con conversión atribuida en este filtro."
-          metricName="Oportunidades"
+        <EmailTemplateAttributionCard
           data={whatsappTemplateConversionRows}
+          colorMap={whatsappCampaignColorMap}
+          title="WhatsApp · plantillas que convierten"
+          description="Cada plantilla hereda el color de su campaña madre para mostrar qué piezas sí terminaron generando oportunidades."
+          emptyMessage="No hay plantillas WhatsApp con conversión atribuida en este filtro."
+          metricLabel="Oportunidades"
         />
       </div>
     </section>
