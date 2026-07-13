@@ -195,6 +195,7 @@ function EmailCampaignPieCard({
     total: row.total,
     fill: colorMap.get(row.value || row.label) || EMAIL_CAMPAIGN_COLORS[0],
   })) satisfies EmailCampaignPieRow[];
+  const totalSum = pieData.reduce((acc, item) => acc + item.total, 0);
 
   return (
     <Card className="h-full">
@@ -232,6 +233,12 @@ function EmailCampaignPieCard({
                     </Badge>
                   </div>
                 ))}
+                <div className="flex items-center justify-between gap-3 pt-1 text-sm font-semibold">
+                  <span>Total</span>
+                  <Badge className="shrink-0" variant="outline">
+                    {formatNumber(totalSum)}
+                  </Badge>
+                </div>
               </div>
               <div
                 className={[
