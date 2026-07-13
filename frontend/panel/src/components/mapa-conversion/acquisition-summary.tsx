@@ -203,45 +203,47 @@ function EmailCampaignPieCard({
       <CardContent className="flex flex-col gap-4">
         {pieData.length ? (
           <>
-            <ChartContainer
-              config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
-              className="h-72"
-            >
-              <PieChart>
-                <ChartTooltip
-                  content={<ChartTooltipContent hideLabel />}
-                  formatter={(value, _name, item) => [
-                    `${formatNumber(toNumber(value))} ${metricLabel.toLowerCase()}`,
-                    String(item?.payload?.label || "Campaña"),
-                  ]}
-                />
-                <Pie
-                  data={pieData}
-                  dataKey="total"
-                  nameKey="label"
-                  outerRadius={96}
-                  paddingAngle={0}
-                >
-                  {pieData.map((item) => (
-                    <Cell key={item.value} fill={item.fill} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
-            <div className="grid gap-2">
-              {pieData.map((item) => (
-                <div key={item.value} className="flex items-center justify-between gap-3 text-sm">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                    <span className="min-w-0 truncate" title={item.label}>
-                      {item.label}
-                    </span>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)] lg:items-center">
+              <ChartContainer
+                config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
+                className="h-72"
+              >
+                <PieChart>
+                  <ChartTooltip
+                    content={<ChartTooltipContent hideLabel />}
+                    formatter={(value, _name, item) => [
+                      `${formatNumber(toNumber(value))} ${metricLabel.toLowerCase()}`,
+                      String(item?.payload?.label || "Campaña"),
+                    ]}
+                  />
+                  <Pie
+                    data={pieData}
+                    dataKey="total"
+                    nameKey="label"
+                    outerRadius={96}
+                    paddingAngle={0}
+                  >
+                    {pieData.map((item) => (
+                      <Cell key={item.value} fill={item.fill} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="grid content-start gap-2">
+                {pieData.map((item) => (
+                  <div key={item.value} className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                      <span className="min-w-0 truncate" title={item.label}>
+                        {item.label}
+                      </span>
+                    </div>
+                    <Badge className="shrink-0" variant="outline">
+                      {formatNumber(item.total)}
+                    </Badge>
                   </div>
-                  <Badge className="shrink-0" variant="outline">
-                    {formatNumber(item.total)}
-                  </Badge>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </>
         ) : (
