@@ -2908,9 +2908,59 @@ async def ensure_conversation_opportunity(
 ) -> str | dict[str, Any]:
     """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
+    def _extract_cached_opportunity_id(conversation_row: dict[str, Any] | None) -> str | None:
+        if not isinstance(conversation_row, dict):
+            return None
+        inbox_context = _ensure_dict(conversation_row.get("inbox_context"))
+        crm_context = _ensure_dict(inbox_context.get("crm"))
+        candidates = (
+            inbox_context.get("opportunity_id"),
+            inbox_context.get("oportunidad_id"),
+            crm_context.get("opportunity_id"),
+            crm_context.get("oportunidad_id"),
+        )
+        for value in candidates:
+            text = str(value or "").strip()
+            if not text:
+                continue
+            try:
+                return str(UUID(text))
+            except (TypeError, ValueError):
+                continue
+        return None
+
     resolved_persona_id = persona_id or contact_id
     if not resolved_persona_id:
         raise StorageError("No fue posible resolver contacto para crear la oportunidad")
+
+    repo = CRMRepository()
+    conversation_row: dict[str, Any] | None = None
+    cached_opportunity_id: str | None = None
+    if not force_new_opportunity_on_restart:
+        try:
+            conversation_row = await repo.get_conversation_inbox_context(
+                conversation_id=conversation_id
+            )
+        except CRMRepositoryError:
+            conversation_row = None
+        cached_opportunity_id = _extract_cached_opportunity_id(conversation_row)
+        if cached_opportunity_id:
+            restart_sequence = int((conversation_row or {}).get("restart_sequence") or 1)
+            log_event(
+                logger,
+                "storage.ensure_persona_conversation_opportunity.cache_hit",
+                conversation_id=conversation_id,
+                persona_id=resolved_persona_id,
+                opportunity_id=cached_opportunity_id,
+                restart_sequence=restart_sequence,
+            )
+            if include_restart_metadata:
+                return {
+                    "oportunidad_id": cached_opportunity_id,
+                    "restart_created": False,
+                    "restart_sequence": restart_sequence,
+                }
+            return cached_opportunity_id
 
     persona = await fetch_persona(resolved_persona_id)
     organizacion_value = persona.get("organizacion_id")
@@ -2927,7 +2977,6 @@ async def ensure_conversation_opportunity(
     except (TypeError, ValueError) as exc:
         raise StorageError("contacto_id_invalido") from exc
 
-    repo = CRMRepository()
     log_event(
         logger,
         "storage.ensure_persona_conversation_opportunity.contact_sync_start",
@@ -2984,6 +3033,35 @@ async def ensure_conversation_opportunity(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+
+    current_context = _ensure_dict((conversation_row or {}).get("inbox_context"))
+    opportunity_cache_patch = {
+        "opportunity_id": str(opportunity_id),
+        "crm": {"opportunity_id": str(opportunity_id)},
+    }
+    merged_context = _deep_merge_dict(current_context, opportunity_cache_patch)
+    restart_sequence_value = max(1, int(restart_sequence or 1))
+    if (
+        merged_context != current_context
+        or int((conversation_row or {}).get("restart_sequence") or 0) != restart_sequence_value
+    ):
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id,
+                patch={
+                    "inbox_context": merged_context,
+                    "restart_sequence": restart_sequence_value,
+                },
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.ensure_persona_conversation_opportunity.cache_patch_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "opportunity_id": str(opportunity_id),
+                    "error": str(exc),
+                },
+            )
 
     created_new = restart_created
     if not created_new:

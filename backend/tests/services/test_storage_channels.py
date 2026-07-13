@@ -113,6 +113,46 @@ class FakeAttachmentRepository:
 class FakeOpportunityRepository:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.conversation_row: dict[str, Any] | None = None
+        self.updated_conversation: dict[str, Any] | None = None
+
+    async def get_conversation_inbox_context(
+        self,
+        *,
+        conversation_id: str,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "get_conversation_inbox_context",
+                {
+                    "conversation_id": conversation_id,
+                },
+            )
+        )
+        if self.conversation_row is None:
+            raise storage.CRMRepositoryError("conversation_not_found")
+        return self.conversation_row
+
+    async def update_conversation(
+        self,
+        *,
+        conversation_id: str,
+        patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        self.updated_conversation = {
+            "conversation_id": conversation_id,
+            "patch": patch,
+        }
+        self.calls.append(
+            (
+                "update_conversation",
+                {
+                    "conversation_id": conversation_id,
+                    "patch": patch,
+                },
+            )
+        )
+        return {"id": conversation_id, **patch}
 
     async def ensure_contact_record_for_persona(
         self,
@@ -298,6 +338,43 @@ async def test_ensure_persona_conversation_opportunity_syncs_contact_before_oppo
 
     assert opportunity_id == "opp-1"
     assert [call[0] for call in fake_repo.calls] == [
+        "get_conversation_inbox_context",
         "ensure_contact_record_for_persona",
         "ensure_conversation_opportunity",
+        "update_conversation",
     ]
+
+
+@pytest.mark.asyncio
+async def test_ensure_persona_conversation_opportunity_reuses_cached_opportunity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_repo = FakeOpportunityRepository()
+    fake_repo.conversation_row = {
+        "id": "conv-1",
+        "organizacion_id": "39e32c05-bfc2-4794-8aab-225873f2bf19",
+        "restart_sequence": 3,
+        "inbox_context": {
+            "opportunity_id": "00000000-0000-0000-0000-00000000abcd",
+        },
+    }
+    monkeypatch.setattr(storage, "CRMRepository", lambda: fake_repo)
+
+    async def fail_fetch_persona(_: str) -> dict[str, Any]:
+        raise AssertionError("No debe consultar persona cuando la conversación ya tiene opportunity_id cacheado")
+
+    monkeypatch.setattr(storage, "fetch_persona", fail_fetch_persona)
+
+    payload = await storage.ensure_persona_conversation_opportunity(
+        conversation_id="conv-1",
+        persona_id="00000000-0000-0000-0000-000000000123",
+        channel="whatsapp",
+        include_restart_metadata=True,
+    )
+
+    assert payload == {
+        "oportunidad_id": "00000000-0000-0000-0000-00000000abcd",
+        "restart_created": False,
+        "restart_sequence": 3,
+    }
+    assert [call[0] for call in fake_repo.calls] == ["get_conversation_inbox_context"]

@@ -1787,7 +1787,6 @@ async def handle_incoming_message(
     runtime_settings_started = time.perf_counter()
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=org_uuid,
-        force_refresh=True,
     )
     _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_settings_started)
     whatsapp_provider = _normalize_whatsapp_provider(whatsapp_settings.provider)
@@ -2179,16 +2178,19 @@ async def handle_incoming_message(
 
     # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
     read_indicator_started = time.perf_counter()
-    await _send_whatsapp_read_indicator(
-        incoming_message_sid=message.message_sid,
-        organizacion_id=org_uuid,
+    typing_indicator_started = time.perf_counter()
+    await asyncio.gather(
+        _send_whatsapp_read_indicator(
+            incoming_message_sid=message.message_sid,
+            organizacion_id=org_uuid,
+        ),
+        _send_whatsapp_typing_indicator(
+            incoming_message_sid=message.message_sid,
+            organizacion_id=org_uuid,
+        ),
+        return_exceptions=True,
     )
     _record_stage_timing(stage_timings, "read_indicator_ms", read_indicator_started)
-    typing_indicator_started = time.perf_counter()
-    await _send_whatsapp_typing_indicator(
-        incoming_message_sid=message.message_sid,
-        organizacion_id=org_uuid,
-    )
     _record_stage_timing(stage_timings, "typing_indicator_ms", typing_indicator_started)
 
     try:
@@ -3689,7 +3691,6 @@ async def _send_meta_whatsapp_reply(
 
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
-        force_refresh=True,
     )
     if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
         logger.warning("whatsapp.meta_not_configured")
@@ -3911,7 +3912,6 @@ async def _send_whatsapp_reply(
 ) -> TwilioSendResult:
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
-        force_refresh=True,
     )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":
@@ -3953,7 +3953,6 @@ async def _send_whatsapp_typing_indicator(
 
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
-        force_refresh=True,
     )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":

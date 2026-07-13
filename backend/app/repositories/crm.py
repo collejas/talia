@@ -5767,7 +5767,7 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_id_required")
         params = {
             "id": f"eq.{conversation_key}",
-            "select": "id,organizacion_id,inbox_context",
+            "select": "id,organizacion_id,inbox_context,restart_sequence",
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
