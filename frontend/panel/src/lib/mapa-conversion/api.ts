@@ -129,16 +129,20 @@ export type DemografiaSummaryResponse = {
       value: string;
       label: string;
       canal?: string | null;
-      sesiones_utm: number;
-      envios_enviados: number;
+      conversion_total: number;
+      context_total: number;
+      conversion_label: string;
+      context_label: string;
       conversion_rate_pct: number;
     }>;
     templates?: Array<{
       value: string;
       label: string;
       canal?: string | null;
-      sesiones_utm: number;
-      envios_enviados: number;
+      conversion_total: number;
+      context_total: number;
+      conversion_label: string;
+      context_label: string;
       conversion_rate_pct: number;
     }>;
   };

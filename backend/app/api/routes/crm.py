@@ -40400,6 +40400,7 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
+            "schema_version": "resumen-v2-attribution-rankings-v1",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -40575,6 +40576,7 @@ async def demografia_resumen_v2(
         elif campana_tipo_value and campaign_ids_for_type:
             campaign_ids_filter = campaign_ids_for_type
 
+        template_reference_by_campaign: dict[str, dict[str, Any]] = {}
         template_rows = await repo.list_web_sessions_template_links(
             organizacion_id=organizacion_id,
             date_from=date_from,
@@ -40635,6 +40637,17 @@ async def demografia_resumen_v2(
             if not batch_template_id:
                 continue
             template_totals[batch_template_id] = template_totals.get(batch_template_id, 0) + 1
+            if batch_campaign_id:
+                template_candidate = {
+                    "template_id": batch_template_id,
+                    "template_slug": None,
+                    "template_nombre": None,
+                    "twilio_content_sid": None,
+                    "_rank": template_totals.get(batch_template_id, 0),
+                }
+                current_template = template_reference_by_campaign.get(batch_campaign_id)
+                if current_template is None or int(template_candidate["_rank"]) > int(current_template.get("_rank") or 0):
+                    template_reference_by_campaign[batch_campaign_id] = template_candidate
 
         template_labels: dict[str, str] = {}
         if template_totals:
@@ -40701,6 +40714,52 @@ async def demografia_resumen_v2(
                 if str(row.get("template_id") or "").strip() == template_uuid_str
             ]
 
+        for row in campaign_conversion_rows:
+            campana_id_value = str(row.get("campana_id") or "").strip()
+            if not campana_id_value:
+                continue
+            template_candidate = {
+                "template_id": _clean_text(row.get("template_id")) or None,
+                "template_slug": _clean_text(row.get("template_slug")) or None,
+                "template_nombre": _clean_text(row.get("template_nombre")) or None,
+                "twilio_content_sid": _clean_text(row.get("twilio_content_sid")) or None,
+                "_rank": int(row.get("envios_totales") or 0),
+            }
+            if any(template_candidate[key] for key in ("template_id", "template_slug", "template_nombre", "twilio_content_sid")):
+                current_template = template_reference_by_campaign.get(campana_id_value)
+                if current_template is None or int(template_candidate["_rank"]) > int(current_template.get("_rank") or 0):
+                    template_reference_by_campaign[campana_id_value] = template_candidate
+
+        whatsapp_conversion_rows: list[dict[str, Any]] = []
+        try:
+            whatsapp_page_size = 500
+            whatsapp_offset = 0
+            while True:
+                page_rows = await repo.get_prospeccion_campana_whatsapp_metricas_rango(
+                    usuario_token=effective_user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_uuid_value,
+                    date_from_iso=date_from.isoformat() if date_from else None,
+                    date_to_iso=date_to.isoformat() if date_to else None,
+                    limit=whatsapp_page_size,
+                    offset=whatsapp_offset,
+                )
+                if not page_rows:
+                    break
+                whatsapp_conversion_rows.extend(page_rows)
+                if len(page_rows) < whatsapp_page_size:
+                    break
+                whatsapp_offset += len(page_rows)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        if campana_tipo_value:
+            whatsapp_conversion_rows = [
+                row
+                for row in whatsapp_conversion_rows
+                if _clean_text(row.get("canal")).lower() == campana_tipo_value
+            ]
+
         campaign_conversion_rank: dict[str, dict[str, Any]] = {}
         template_conversion_rank: dict[str, dict[str, Any]] = {}
         for row in campaign_conversion_rows:
@@ -40718,50 +40777,103 @@ async def demografia_resumen_v2(
             envios_enviados_total = int(row.get("envios_enviados") or 0)
 
             if campana_id_key or campana_nombre_value:
-                campaign_key = campana_id_key or f"nombre:{campana_nombre_value}"
+                campaign_key = f"correo::{campana_id_key or f'nombre:{campana_nombre_value}'}"
                 campaign_bucket = campaign_conversion_rank.setdefault(
                     campaign_key,
                     {
                         "value": campana_id_key or campaign_key,
                         "label": campana_nombre_value or "Sin campaña",
                         "canal": canal_value,
-                        "sesiones_utm": 0,
-                        "envios_enviados": 0,
+                        "conversion_total": 0,
+                        "context_total": 0,
+                        "conversion_label": "Sesiones UTM",
+                        "context_label": "Enviados",
                     },
                 )
-                campaign_bucket["sesiones_utm"] += sesiones_utm_total
-                campaign_bucket["envios_enviados"] += envios_enviados_total
+                campaign_bucket["conversion_total"] += sesiones_utm_total
+                campaign_bucket["context_total"] += envios_enviados_total
 
             if template_id_key or template_label_value:
-                template_key = template_id_key or f"label:{template_label_value}"
+                template_key = f"correo::{template_id_key or f'label:{template_label_value}'}"
                 template_bucket = template_conversion_rank.setdefault(
                     template_key,
                     {
                         "value": template_id_key or template_key,
                         "label": template_label_value or "Sin plantilla",
                         "canal": canal_value,
-                        "sesiones_utm": 0,
-                        "envios_enviados": 0,
+                        "conversion_total": 0,
+                        "context_total": 0,
+                        "conversion_label": "Sesiones UTM",
+                        "context_label": "Enviados",
                     },
                 )
-                template_bucket["sesiones_utm"] += sesiones_utm_total
-                template_bucket["envios_enviados"] += envios_enviados_total
+                template_bucket["conversion_total"] += sesiones_utm_total
+                template_bucket["context_total"] += envios_enviados_total
+
+        for row in whatsapp_conversion_rows:
+            campana_id_key = str(row.get("campana_id") or "").strip()
+            campana_nombre_value = _clean_text(row.get("campana_nombre")) or campaign_name_by_id.get(campana_id_key)
+            canal_value = _clean_text(row.get("canal")) or "whatsapp"
+            template_reference = template_reference_by_campaign.get(campana_id_key) or {}
+            template_id_key = str(template_reference.get("template_id") or "").strip()
+            template_label_value = (
+                template_labels.get(template_id_key)
+                or _clean_text(template_reference.get("template_nombre"))
+                or _clean_text(template_reference.get("template_slug"))
+                or (f"Plantilla {template_id_key[:8]}" if template_id_key else None)
+            )
+            oportunidades_total = int(row.get("oportunidades_total") or 0)
+            conversaciones_total = int(row.get("conversaciones_total") or 0)
+
+            if campana_id_key or campana_nombre_value:
+                campaign_key = f"whatsapp::{campana_id_key or f'nombre:{campana_nombre_value}'}"
+                campaign_bucket = campaign_conversion_rank.setdefault(
+                    campaign_key,
+                    {
+                        "value": campana_id_key or campaign_key,
+                        "label": campana_nombre_value or "Sin campaña",
+                        "canal": canal_value,
+                        "conversion_total": 0,
+                        "context_total": 0,
+                        "conversion_label": "Oportunidades",
+                        "context_label": "Conversaciones",
+                    },
+                )
+                campaign_bucket["conversion_total"] += oportunidades_total
+                campaign_bucket["context_total"] += conversaciones_total
+
+            if template_id_key or template_label_value:
+                template_key = f"whatsapp::{template_id_key or f'label:{template_label_value}'}"
+                template_bucket = template_conversion_rank.setdefault(
+                    template_key,
+                    {
+                        "value": template_id_key or template_key,
+                        "label": template_label_value or "Sin plantilla",
+                        "canal": canal_value,
+                        "conversion_total": 0,
+                        "context_total": 0,
+                        "conversion_label": "Oportunidades",
+                        "context_label": "Conversaciones",
+                    },
+                )
+                template_bucket["conversion_total"] += oportunidades_total
+                template_bucket["context_total"] += conversaciones_total
 
         campaign_conversion_top = sorted(
             (
                 {
                     **bucket,
                     "conversion_rate_pct": round(
-                        (bucket["sesiones_utm"] / bucket["envios_enviados"]) * 100, 2
+                        (bucket["conversion_total"] / bucket["context_total"]) * 100, 2
                     )
-                    if bucket["envios_enviados"] > 0
+                    if bucket["context_total"] > 0
                     else 0.0,
                 }
                 for bucket in campaign_conversion_rank.values()
-                if int(bucket.get("sesiones_utm") or 0) > 0
+                if int(bucket.get("conversion_total") or 0) > 0
             ),
             key=lambda item: (
-                -int(item.get("sesiones_utm") or 0),
+                -int(item.get("conversion_total") or 0),
                 -float(item.get("conversion_rate_pct") or 0),
                 str(item.get("label") or ""),
             ),
@@ -40772,16 +40884,16 @@ async def demografia_resumen_v2(
                 {
                     **bucket,
                     "conversion_rate_pct": round(
-                        (bucket["sesiones_utm"] / bucket["envios_enviados"]) * 100, 2
+                        (bucket["conversion_total"] / bucket["context_total"]) * 100, 2
                     )
-                    if bucket["envios_enviados"] > 0
+                    if bucket["context_total"] > 0
                     else 0.0,
                 }
                 for bucket in template_conversion_rank.values()
-                if int(bucket.get("sesiones_utm") or 0) > 0
+                if int(bucket.get("conversion_total") or 0) > 0
             ),
             key=lambda item: (
-                -int(item.get("sesiones_utm") or 0),
+                -int(item.get("conversion_total") or 0),
                 -float(item.get("conversion_rate_pct") or 0),
                 str(item.get("label") or ""),
             ),

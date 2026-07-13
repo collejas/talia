@@ -26,7 +26,9 @@ export type AcquisitionConversionBucket = {
   label: string;
   canal: string | null;
   total: number;
-  sent: number;
+  contextTotal: number;
+  conversionLabel: string;
+  contextLabel: string;
   rate: number;
 };
 
@@ -145,8 +147,10 @@ function aggregateConversionRows(
         value: string;
         label: string;
         canal?: string | null;
-        sesiones_utm: number;
-        envios_enviados: number;
+        conversion_total: number;
+        context_total: number;
+        conversion_label: string;
+        context_label: string;
         conversion_rate_pct: number;
       }>
     | undefined,
@@ -157,8 +161,10 @@ function aggregateConversionRows(
           value: String(row?.value || "").trim(),
           label: String(row?.label || "").trim() || "Sin dato",
           canal: typeof row?.canal === "string" && row.canal.trim() ? row.canal.trim() : null,
-          total: toNumber(row?.sesiones_utm),
-          sent: toNumber(row?.envios_enviados),
+          total: toNumber(row?.conversion_total),
+          contextTotal: toNumber(row?.context_total),
+          conversionLabel: String(row?.conversion_label || "").trim() || "Conversiones",
+          contextLabel: String(row?.context_label || "").trim() || "Base",
           rate: toNumber(row?.conversion_rate_pct),
         }))
         .filter((row) => row.total > 0)
