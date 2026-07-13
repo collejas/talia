@@ -16819,9 +16819,6 @@ class CRMRepository:
             )
             and_filters.append(f"or({or_filters})")
 
-        # Geo filters are applied in Python scan mode to support heterogeneous metadata
-        # formats and addresses (legacy rows may not keep normalized cve fields).
-
         if metadata_queries:
             unique_queries: list[str] = []
             seen_queries: set[str] = set()
@@ -16832,14 +16829,9 @@ class CRMRepository:
                 seen_queries.add(candidate)
                 unique_queries.append(candidate)
             if unique_queries:
-                return await self._list_prospectos_with_query_scan(
-                    usuario_token=usuario_token,
-                    params=params,
-                    limit=limit,
-                    offset=offset,
-                    query_filters=unique_queries,
-                    geo_estado=geo_estado,
-                    geo_municipio=geo_municipio,
+                query_in_clause = _postgrest_in_clause(sorted(unique_queries))
+                and_filters.append(
+                    f"or(query_sort.{query_in_clause},busqueda_ref.{query_in_clause})"
                 )
 
         if actividades:
@@ -16854,9 +16846,14 @@ class CRMRepository:
             if unique_activities:
                 params["actividad"] = _postgrest_in_clause(unique_activities)
 
-        # Geo filters are evaluated in backend scan mode so we can match exact
-        # normalized columns first and keep legacy fallbacks under control.
         geo_filters_pushed = False
+        geo_postgrest_filters = _build_geo_postgrest_filters(
+            geo_estado=geo_estado,
+            geo_municipio=geo_municipio,
+        )
+        if geo_postgrest_filters:
+            and_filters.extend(geo_postgrest_filters)
+            geo_filters_pushed = True
 
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
@@ -17152,49 +17149,27 @@ class CRMRepository:
                 raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (exclude direct): {data!r}")
             total = self._extract_total_count(resp.headers.get("content-range"))
             if total is None:
-                total = len(data)
+                count_params = dict(optimized_params)
+                count_params.pop("limit", None)
+                count_params.pop("offset", None)
+                exact_total = await self._count_prospectos_exact(
+                    usuario_token=usuario_token,
+                    params=count_params,
+                )
+                total = (
+                    exact_total
+                    if exact_total is not None
+                    else await self._count_prospectos_scan(
+                        usuario_token=usuario_token,
+                        params=count_params,
+                    )
+                )
             return data, total
         if not geo_estado and not geo_municipio and excluded_ids:
             base_params = dict(params)
             base_params.pop("id", None)
             base_params.pop("limit", None)
             base_params.pop("offset", None)
-
-            base_total = await self._count_prospectos_exact(
-                usuario_token=usuario_token,
-                params=base_params,
-            )
-
-            excluded_match_total = 0
-            should_compute_exact_excluded_total = len(excluded_ids) <= 500
-            if should_compute_exact_excluded_total:
-                chunk_size = 120
-                sorted_excluded = sorted(excluded_ids)
-                for start in range(0, len(sorted_excluded), chunk_size):
-                    chunk = sorted_excluded[start : start + chunk_size]
-                    chunk_params = dict(base_params)
-                    chunk_params["id"] = _postgrest_in_clause(chunk)
-                    chunk_params["limit"] = str(len(chunk))
-                    chunk_params["offset"] = "0"
-                    resp = await self._request_with_user(
-                        "GET",
-                        "/rest/v1/prospeccion_prospectos",
-                        token=usuario_token,
-                        params=chunk_params,
-                    )
-                    data = resp.json() or []
-                    if not isinstance(data, list):
-                        raise CRMRepositoryError(f"Respuesta inesperada al contar exclusiones: {data!r}")
-                    excluded_match_total += len(data)
-                effective_total = max(0, (base_total or 0) - excluded_match_total) if base_total is not None else None
-            else:
-                # Para sets de exclusión grandes evitamos conteos por chunks (muy costosos).
-                # Conservamos un total aproximado para no bloquear la lista principal.
-                effective_total = (
-                    max(0, (base_total or 0) - len(excluded_ids))
-                    if base_total is not None
-                    else None
-                )
 
             filtered_rows: list[dict[str, Any]] = []
             accepted_seen = 0
@@ -17204,8 +17179,9 @@ class CRMRepository:
             page_size = 1000
             max_scan_rows = 200_000
             target_seen = offset + limit
+            must_scan_full_for_exact_total = True
 
-            while scan_offset < max_scan_rows and len(filtered_rows) < limit:
+            while scan_offset < max_scan_rows and (must_scan_full_for_exact_total or len(filtered_rows) < limit):
                 page_params = dict(base_params)
                 page_params["limit"] = str(page_size)
                 page_params["offset"] = str(scan_offset)
@@ -17232,15 +17208,18 @@ class CRMRepository:
                         continue
                     if len(filtered_rows) < limit:
                         filtered_rows.append(row)
-                    if accepted_seen >= target_seen and len(filtered_rows) >= limit:
+                    if (
+                        not must_scan_full_for_exact_total
+                        and accepted_seen >= target_seen
+                        and len(filtered_rows) >= limit
+                    ):
                         break
 
                 scan_offset += len(data)
                 if len(data) < page_size:
                     break
 
-            if effective_total is None:
-                effective_total = accepted_seen
+            effective_total = accepted_seen
             return filtered_rows, effective_total
 
         filtered_rows: list[dict[str, Any]] = []

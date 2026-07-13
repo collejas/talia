@@ -72,7 +72,6 @@ import {
   getBrevoQuota,
   listCrmCampaigns,
   listProspectos,
-  listProspectosBootstrap,
   listProspectosQueryMetadata,
   listContactoEnviosPorProspecto,
   listContactoLogs,
@@ -234,6 +233,19 @@ function parseCountValue(value: string): number | undefined {
   if (!trimmed) return undefined
   const parsed = Number.parseInt(trimmed, 10)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function normalizeMinMaxPair(minimum?: number, maximum?: number): { min?: number; max?: number } {
+  if (
+    typeof minimum === "number" &&
+    typeof maximum === "number" &&
+    Number.isFinite(minimum) &&
+    Number.isFinite(maximum) &&
+    minimum > maximum
+  ) {
+    return { min: maximum, max: minimum }
+  }
+  return { min: minimum, max: maximum }
 }
 
 function composeProspectoDisplayName(values: {
@@ -507,9 +519,29 @@ const CONTACT_FILTER_LABELS: Record<ContactPresenceFilter, string> = CONTACT_FIL
 )
 
 const CONTACT_FILTER_ORDER = CONTACT_FILTER_OPTIONS.map((option) => option.value)
+const CONTACT_FILTER_OPPOSITES: Partial<Record<ContactPresenceFilter, ContactPresenceFilter>> = {
+  phone_has: "phone_missing",
+  phone_missing: "phone_has",
+  email_has: "email_missing",
+  email_missing: "email_has",
+  website_has: "website_missing",
+  website_missing: "website_has",
+}
 const CONTACT_FILTER_PLACEHOLDER = "Teléfono, correo o sitio web"
 const QUERY_FILTER_PLACEHOLDER = "Todas las consultas"
 const ACTIVITY_FILTER_PLACEHOLDER = "Todas las actividades"
+
+function normalizeContactFiltersSelection(filters: Iterable<ContactPresenceFilter>): ContactPresenceFilter[] {
+  const next = new Set<ContactPresenceFilter>()
+  for (const value of filters) {
+    const opposite = CONTACT_FILTER_OPPOSITES[value]
+    if (opposite) {
+      next.delete(opposite)
+    }
+    next.add(value)
+  }
+  return CONTACT_FILTER_ORDER.filter((filter) => next.has(filter))
+}
 
 const resolvePresenceFlag = (present: boolean, missing: boolean): boolean | undefined => {
   if (present && !missing) return true
@@ -577,6 +609,9 @@ const getDateRangeFromFilters = (
     case "custom": {
       const from = customFrom?.trim()
       const to = customTo?.trim()
+      if (from && to && from > to) {
+        return { from: to, to: from }
+      }
       return { from: from || undefined, to: to || undefined }
     }
     default:
@@ -807,14 +842,16 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["carrierType"]
         : "",
     contactFilters: Array.isArray(filtersObj["contactFilters"])
-      ? (filtersObj["contactFilters"] as unknown[]).filter(
-          (value): value is ContactPresenceFilter =>
-            value === "phone_has" ||
-            value === "phone_missing" ||
-            value === "email_has" ||
-            value === "email_missing" ||
-            value === "website_has" ||
-            value === "website_missing"
+      ? normalizeContactFiltersSelection(
+          (filtersObj["contactFilters"] as unknown[]).filter(
+            (value): value is ContactPresenceFilter =>
+              value === "phone_has" ||
+              value === "phone_missing" ||
+              value === "email_has" ||
+              value === "email_missing" ||
+              value === "website_has" ||
+              value === "website_missing"
+          )
         )
       : [],
     queryFilters: Array.isArray(filtersObj["queryFilters"])
@@ -1082,6 +1119,9 @@ function ProspectosView() {
   const queryFiltersInitialEffect = useRef(true)
   const lastQueryScopeRef = useRef("")
   const lastActivitiesScopeRef = useRef("")
+  const prospectosRequestSeqRef = useRef(0)
+  const queryMetadataRequestSeqRef = useRef(0)
+  const activityMetadataRequestSeqRef = useRef(0)
   const baseActivityOptionsRef = useRef<string[]>([])
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
   const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1198,21 +1238,56 @@ function ProspectosView() {
     }
     return Array.from(byLabel.values())
   }, [queryOptions])
+  const metadataCountsAreScoped = useMemo(
+    () =>
+      !filters.search.trim() &&
+      !filters.lookupStatus &&
+      !filters.emailLookupStatus &&
+      !filters.websiteLookupStatus &&
+      !filters.emailDomainRelation &&
+      !filters.campanaId &&
+      !filters.conEnvioModo &&
+      filters.conEnvioCanales.length === 0 &&
+      !filters.enviosCorreoMin &&
+      !filters.enviosCorreoMax &&
+      !filters.enviosWhatsappMin &&
+      !filters.enviosWhatsappMax &&
+      !filters.enviosVozMin &&
+      !filters.enviosVozMax &&
+      !filters.conScraper &&
+      !filters.segmento &&
+      !filters.geoEstado &&
+      !filters.geoMunicipio &&
+      !filters.minRating &&
+      !filters.estratoGroup &&
+      !filters.carrierType &&
+      filters.contactFilters.length === 0 &&
+      filters.actividadFilters.length === 0 &&
+      filters.queryFilters.length === 0,
+    [filters]
+  )
+  const scopedConsolidatedQueryOptions = useMemo(
+    () =>
+      metadataCountsAreScoped
+        ? consolidatedQueryOptions
+        : consolidatedQueryOptions.map((option) => ({ ...option, count: undefined })),
+    [consolidatedQueryOptions, metadataCountsAreScoped]
+  )
   const queryLabelMap = useMemo(() => {
     const map = new Map<string, string>()
-    for (const option of consolidatedQueryOptions) {
+    for (const option of scopedConsolidatedQueryOptions) {
       for (const value of option.values) {
         map.set(value, option.label)
       }
     }
     return map
-  }, [consolidatedQueryOptions])
+  }, [scopedConsolidatedQueryOptions])
   const effectiveMetadataQueries = useMemo(() => {
     if (openedQueryScope) return filters.queryFilters.length ? filters.queryFilters : [openedQueryScope]
     return filters.queryFilters.length ? filters.queryFilters : undefined
   }, [filters.queryFilters, openedQueryScope])
   const groupedQueryOptions = useMemo<ConsolidatedQueryOption[]>(() => {
-    const rows = [...consolidatedQueryOptions]
+    const rows = [...scopedConsolidatedQueryOptions]
     rows.sort((a, b) => {
       let base = 0
       if (groupSort.key === "query") {
@@ -1234,7 +1309,7 @@ function ProspectosView() {
       return groupSort.direction === "asc" ? base : -base
     })
     return rows
-  }, [consolidatedQueryOptions, groupSort.direction, groupSort.key])
+  }, [groupSort.direction, groupSort.key, scopedConsolidatedQueryOptions])
   const selectedGroupQueryValues = useMemo(() => {
     if (!selectedGroupValues.length) {
       return [] as string[]
@@ -1639,28 +1714,29 @@ function ProspectosView() {
   }, [campaignLabelMap, filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
+      const requestSeq = ++prospectosRequestSeqRef.current
       setLoading(true)
       setError(null)
-    try {
-      const phonePresent = resolvePresenceFlag(
-        filters.contactFilters.includes("phone_has"),
-        filters.contactFilters.includes("phone_missing")
-      )
-      const emailPresent = resolvePresenceFlag(
-        filters.contactFilters.includes("email_has"),
-        filters.contactFilters.includes("email_missing")
-      )
-      const websitePresent = resolvePresenceFlag(
-        filters.contactFilters.includes("website_has"),
-        filters.contactFilters.includes("website_missing")
-      )
-      const envioCountFilters = buildEnvioCountFilters(filters)
-      const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
-        filters.dateOption,
-        filters.customDateFrom,
-        filters.customDateTo
-      )
-        const response = await listProspectosBootstrap({
+      try {
+        const phonePresent = resolvePresenceFlag(
+          filters.contactFilters.includes("phone_has"),
+          filters.contactFilters.includes("phone_missing")
+        )
+        const emailPresent = resolvePresenceFlag(
+          filters.contactFilters.includes("email_has"),
+          filters.contactFilters.includes("email_missing")
+        )
+        const websitePresent = resolvePresenceFlag(
+          filters.contactFilters.includes("website_has"),
+          filters.contactFilters.includes("website_missing")
+        )
+        const envioCountFilters = buildEnvioCountFilters(filters)
+        const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+          filters.dateOption,
+          filters.customDateFrom,
+          filters.customDateTo
+        )
+        const response = await listProspectos({
           limit,
           offset: nextOffset,
           search: filters.search || undefined,
@@ -1688,54 +1764,20 @@ function ProspectosView() {
           ...envioCountFilters,
           metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
-          queryFilters: filters.queryFilters.length ? filters.queryFilters : undefined,
           dateFrom,
           dateTo,
         })
-        const rows = response.prospectos?.items ?? []
-        setItems(rows)
-        setTotal(
-          typeof response.prospectos?.total === "number"
-            ? response.prospectos.total
-            : rows.length
-        )
-        setOffset(nextOffset)
-        const scopeKey = JSON.stringify({
-          fuente: filters.fuente || "",
-          dateFrom: dateFrom || "",
-          dateTo: dateTo || "",
-        })
-        const metadata = response.metadata
-        if (metadata?.ok) {
-          const queries = metadata.queries ?? []
-          const activities = metadata.activities ?? []
-          const segmentos = metadata.segmentos ?? []
-          setQueryOptions(queries)
-          baseActivityOptionsRef.current = activities
-          setActivityOptions(activities)
-          setSegmentoOptions(segmentos)
-          const queryValues = new Set(queries.map((item) => item.value))
-          const segmentoValues = new Set(segmentos)
-          setFilters((prev) => {
-            const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
-            const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
-            const nextSegmento = prev.segmento && segmentoValues.has(prev.segmento) ? prev.segmento : ""
-            if (
-              arraysEqual(nextQueryFilters, prev.queryFilters) &&
-              arraysEqual(nextActividadFilters, prev.actividadFilters) &&
-              nextSegmento === prev.segmento
-            ) {
-              return prev
-            }
-            return {
-              ...prev,
-              queryFilters: nextQueryFilters,
-              actividadFilters: nextActividadFilters,
-              segmento: nextSegmento,
-            }
-          })
-          lastQueryScopeRef.current = scopeKey
+        if (requestSeq !== prospectosRequestSeqRef.current) {
+          return
         }
+        const rows = response.items ?? []
+        setItems(rows)
+        const nextTotal =
+          typeof response.total === "number"
+            ? Math.max(response.total, nextOffset + rows.length)
+            : nextOffset + rows.length
+        setTotal(nextTotal)
+        setOffset(nextOffset)
         setSelected((prev) => {
           if (!rows.length) return new Set<string>()
           const allowed = new Set<string>()
@@ -1747,10 +1789,15 @@ function ProspectosView() {
           return allowed
         })
       } catch (err) {
+        if (requestSeq !== prospectosRequestSeqRef.current) {
+          return
+        }
         const message = err instanceof Error ? err.message : "No se pudieron cargar los prospectos."
         setError(message)
       } finally {
-        setLoading(false)
+        if (requestSeq === prospectosRequestSeqRef.current) {
+          setLoading(false)
+        }
       }
     },
     [effectiveMetadataQueries, filters, limit]
@@ -1814,7 +1861,9 @@ function ProspectosView() {
           setItems((prev) => [...prev, ...rows])
         }
         if (typeof response.total === "number") {
-          setTotal(response.total)
+          setTotal(Math.max(response.total, startOffset + rows.length))
+        } else if (rows.length) {
+          setTotal((prev) => Math.max(prev, startOffset + rows.length))
         }
       } catch {
         // Silencioso: solo relleno de huecos.
@@ -1890,6 +1939,7 @@ function ProspectosView() {
   }, [filters.geoEstado])
 
   const loadQueryOptions = useCallback(async (scope: { fuente?: FuenteFilter; dateFrom?: string; dateTo?: string }) => {
+    const requestSeq = ++queryMetadataRequestSeqRef.current
     setQueryOptionsLoading(true)
     try {
       const response = await listProspectosQueryMetadata({
@@ -1897,6 +1947,9 @@ function ProspectosView() {
         dateFrom: scope.dateFrom,
         dateTo: scope.dateTo,
       })
+      if (requestSeq !== queryMetadataRequestSeqRef.current) {
+        return
+      }
       const queries = response.queries ?? []
       const activities = response.activities ?? []
       const segmentos = response.segmentos ?? []
@@ -1925,6 +1978,9 @@ function ProspectosView() {
         }
       })
     } catch {
+      if (requestSeq !== queryMetadataRequestSeqRef.current) {
+        return
+      }
       setQueryOptions([])
       setActivityOptions([])
       setSegmentoOptions([])
@@ -1940,12 +1996,15 @@ function ProspectosView() {
         }
       })
     } finally {
-      setQueryOptionsLoading(false)
+      if (requestSeq === queryMetadataRequestSeqRef.current) {
+        setQueryOptionsLoading(false)
+      }
     }
   }, [])
 
   const loadActivitiesForQueries = useCallback(
     async (selectedQueries: string[]) => {
+      const requestSeq = ++activityMetadataRequestSeqRef.current
       setActivityOptionsLoading(true)
       try {
         const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
@@ -1959,7 +2018,10 @@ function ProspectosView() {
           dateFrom,
           dateTo,
         })
-      const activities = response.activities ?? []
+        if (requestSeq !== activityMetadataRequestSeqRef.current) {
+          return
+        }
+        const activities = response.activities ?? []
         setActivityOptions(activities)
         setFilters((prev) => {
           const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
@@ -1972,6 +2034,9 @@ function ProspectosView() {
           }
         })
       } catch {
+        if (requestSeq !== activityMetadataRequestSeqRef.current) {
+          return
+        }
         setActivityOptions([])
         setFilters((prev) => {
           if (!prev.actividadFilters.length) {
@@ -1983,7 +2048,9 @@ function ProspectosView() {
           }
         })
       } finally {
-        setActivityOptionsLoading(false)
+        if (requestSeq === activityMetadataRequestSeqRef.current) {
+          setActivityOptionsLoading(false)
+        }
       }
     },
     [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente]
@@ -2514,18 +2581,11 @@ function ProspectosView() {
   }, [currentIds, prospectosViewMode, selectedIds])
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
   const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
-  const activeQueryGroupCount =
-    activeQueryGroup && prospectosViewMode === "prospectos"
-      ? queryOptions.find((option) => option.value === activeQueryGroup)?.count
-      : undefined
   const allGroupsSelected =
     groupedQueryOptions.length > 0 && groupedQueryOptions.every((group) => selectedGroups.has(group.value))
   const someGroupsSelected =
     !allGroupsSelected && groupedQueryOptions.some((group) => selectedGroups.has(group.value))
-  const effectiveTotal =
-    typeof activeQueryGroupCount === "number" && activeQueryGroupCount > 0 && total <= limit
-      ? Math.max(total, activeQueryGroupCount)
-      : total
+  const effectiveTotal = total
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(effectiveTotal / limit) : 1
@@ -2701,13 +2761,17 @@ function ProspectosView() {
     setFilters((prev) => {
       const next = new Set(prev.contactFilters)
       if (enabled) {
+        const opposite = CONTACT_FILTER_OPPOSITES[value]
+        if (opposite) {
+          next.delete(opposite)
+        }
         next.add(value)
       } else {
         next.delete(value)
       }
       return {
         ...prev,
-        contactFilters: CONTACT_FILTER_ORDER.filter((filter) => next.has(filter)),
+        contactFilters: normalizeContactFiltersSelection(next),
       }
     })
   }
@@ -4442,8 +4506,8 @@ function ProspectosView() {
                 <DropdownMenuContent align="start" className="w-[260px]">
                 {queryOptionsLoading ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
-                ) : consolidatedQueryOptions.length ? (
-                  consolidatedQueryOptions.map((option) => (
+                ) : scopedConsolidatedQueryOptions.length ? (
+                  scopedConsolidatedQueryOptions.map((option) => (
                     <DropdownMenuCheckboxItem
                       key={option.value}
                       checked={
@@ -4929,7 +4993,7 @@ function ProspectosView() {
               <p className="text-xs text-muted-foreground">
                 {prospectosViewMode === "grupos"
                   ? `${groupedQueryOptions.length} grupos de búsqueda`
-                  : `${showingFrom}-${Math.max(showingFrom, showingTo)} de ${effectiveTotal} registros · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
+                  : `Total: ${effectiveTotal} registros · Mostrando ${showingFrom}-${Math.max(showingFrom, showingTo)} · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
                 {activeQueryGroupLabel && prospectosViewMode === "prospectos"
                   ? ` · Grupo: ${activeQueryGroupLabel}`
                   : ""}
@@ -5165,7 +5229,7 @@ function ProspectosView() {
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            {(group.count ?? 0).toLocaleString("es-MX")}
+                            {typeof group.count === "number" ? group.count.toLocaleString("es-MX") : "—"}
                           </TableCell>
                           <TableCell className="text-right">
                             {formatDate(group.created_at || null)}
@@ -6336,13 +6400,25 @@ function resolveConEnvio(
 }
 
 function buildEnvioCountFilters(filters: Filters) {
+  const correo = normalizeMinMaxPair(
+    parseCountValue(filters.enviosCorreoMin),
+    parseCountValue(filters.enviosCorreoMax)
+  )
+  const whatsapp = normalizeMinMaxPair(
+    parseCountValue(filters.enviosWhatsappMin),
+    parseCountValue(filters.enviosWhatsappMax)
+  )
+  const voz = normalizeMinMaxPair(
+    parseCountValue(filters.enviosVozMin),
+    parseCountValue(filters.enviosVozMax)
+  )
   return {
-    enviosCorreoMin: parseCountValue(filters.enviosCorreoMin),
-    enviosCorreoMax: parseCountValue(filters.enviosCorreoMax),
-    enviosWhatsappMin: parseCountValue(filters.enviosWhatsappMin),
-    enviosWhatsappMax: parseCountValue(filters.enviosWhatsappMax),
-    enviosVozMin: parseCountValue(filters.enviosVozMin),
-    enviosVozMax: parseCountValue(filters.enviosVozMax),
+    enviosCorreoMin: correo.min,
+    enviosCorreoMax: correo.max,
+    enviosWhatsappMin: whatsapp.min,
+    enviosWhatsappMax: whatsapp.max,
+    enviosVozMin: voz.min,
+    enviosVozMax: voz.max,
   }
 }
 
