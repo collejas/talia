@@ -179,6 +179,7 @@ function EmailCampaignPieCard({
   description,
   emptyMessage,
   metricLabel,
+  legendSide = "right",
 }: {
   data: ConversionRankingRow[];
   colorMap: Map<string, string>;
@@ -186,6 +187,7 @@ function EmailCampaignPieCard({
   description: string;
   emptyMessage: string;
   metricLabel: string;
+  legendSide?: "left" | "right";
 }) {
   const pieData = data.map((row) => ({
     value: row.value || row.label,
@@ -203,33 +205,20 @@ function EmailCampaignPieCard({
       <CardContent className="flex flex-col gap-4">
         {pieData.length ? (
           <>
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)] lg:items-center">
-              <ChartContainer
-                config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
-                className="h-72"
+            <div
+              className={[
+                "grid gap-4 lg:items-center",
+                legendSide === "left"
+                  ? "lg:grid-cols-[minmax(180px,0.65fr)_minmax(0,1.35fr)]"
+                  : "lg:grid-cols-[minmax(0,1.35fr)_minmax(180px,0.65fr)]",
+              ].join(" ")}
+            >
+              <div
+                className={[
+                  "grid content-start gap-2",
+                  legendSide === "left" ? "lg:order-1" : "lg:order-2",
+                ].join(" ")}
               >
-                <PieChart>
-                  <ChartTooltip
-                    content={<ChartTooltipContent hideLabel />}
-                    formatter={(value, _name, item) => [
-                      `${formatNumber(toNumber(value))} ${metricLabel.toLowerCase()}`,
-                      String(item?.payload?.label || "Campaña"),
-                    ]}
-                  />
-                  <Pie
-                    data={pieData}
-                    dataKey="total"
-                    nameKey="label"
-                    outerRadius={96}
-                    paddingAngle={0}
-                  >
-                    {pieData.map((item) => (
-                      <Cell key={item.value} fill={item.fill} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ChartContainer>
-              <div className="grid content-start gap-2">
                 {pieData.map((item) => (
                   <div key={item.value} className="flex items-center justify-between gap-3 text-sm">
                     <div className="flex min-w-0 items-center gap-2">
@@ -243,6 +232,38 @@ function EmailCampaignPieCard({
                     </Badge>
                   </div>
                 ))}
+              </div>
+              <div
+                className={[
+                  "flex items-center justify-center",
+                  legendSide === "left" ? "lg:order-2" : "lg:order-1",
+                ].join(" ")}
+              >
+                <ChartContainer
+                  config={{ total: { label: metricLabel, color: "var(--chart-1)" } }}
+                  className="h-72 w-full max-w-[420px]"
+                >
+                  <PieChart>
+                    <ChartTooltip
+                      content={<ChartTooltipContent hideLabel />}
+                      formatter={(value, _name, item) => [
+                        `${formatNumber(toNumber(value))} ${metricLabel.toLowerCase()}`,
+                        String(item?.payload?.label || "Campaña"),
+                      ]}
+                    />
+                    <Pie
+                      data={pieData}
+                      dataKey="total"
+                      nameKey="label"
+                      outerRadius={96}
+                      paddingAngle={0}
+                    >
+                      {pieData.map((item) => (
+                        <Cell key={item.value} fill={item.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
               </div>
             </div>
           </>
@@ -790,6 +811,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
           description="Distribución real de sesiones web atribuidas por campaña de correo."
           emptyMessage="No hay campañas de correo con sesiones web atribuidas en este filtro."
           metricLabel="Sesiones web"
+          legendSide="right"
         />
         <EmailTemplateAttributionCard
           data={correoTemplateConversionRows}
@@ -809,6 +831,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
           description="Distribución real de oportunidades generadas por campaña de WhatsApp."
           emptyMessage="No hay campañas WhatsApp con conversión atribuida en este filtro."
           metricLabel="Oportunidades"
+          legendSide="left"
         />
         <EmailTemplateAttributionCard
           data={whatsappTemplateConversionRows}
