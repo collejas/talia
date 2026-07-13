@@ -219,9 +219,8 @@ function EmailCampaignPieCard({
                   data={pieData}
                   dataKey="total"
                   nameKey="label"
-                  innerRadius={54}
-                  outerRadius={92}
-                  paddingAngle={2}
+                  outerRadius={96}
+                  paddingAngle={0}
                 >
                   {pieData.map((item) => (
                     <Cell key={item.value} fill={item.fill} />
