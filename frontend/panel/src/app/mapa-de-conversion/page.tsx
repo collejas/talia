@@ -655,7 +655,7 @@ export default async function Page({
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Contactos generados</span>
+                              <span className="text-xs text-muted-foreground">Conversaciones registradas</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(
                                   mapKpisData.sesionesWebchatTotales +
@@ -784,6 +784,12 @@ export default async function Page({
                   rango,
                   desde,
                   hasta,
+                }}
+                summaryCounts={{
+                  webchat: sesionesWebchatTotales,
+                  whatsapp: conversacionesWhatsapp,
+                  voz: conversacionesVoz,
+                  correo: conversacionesCorreo,
                 }}
               />
             </div>

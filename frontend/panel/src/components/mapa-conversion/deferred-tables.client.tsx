@@ -25,6 +25,12 @@ type DeferredTablesFilters = {
 
 type Props = {
   filters: DeferredTablesFilters;
+  summaryCounts?: {
+    webchat: number;
+    whatsapp: number;
+    voz: number;
+    correo: number;
+  };
   enabled?: boolean;
 };
 
@@ -61,7 +67,7 @@ function buildParams(filters: DeferredTablesFilters) {
   return params;
 }
 
-export function DeferredConversionTables({ filters, enabled = true }: Props) {
+export function DeferredConversionTables({ filters, summaryCounts, enabled = true }: Props) {
   const [visits, setVisits] = React.useState<SectionState>({
     data: null,
     error: null,
@@ -120,6 +126,15 @@ export function DeferredConversionTables({ filters, enabled = true }: Props) {
 
   if (!enabled) return null;
 
+  const webchatConversationRows = (conversations.data ?? []).filter(
+    (row) => row.raw?.canal === "webchat",
+  );
+  const whatsappConversationRows = (conversations.data ?? []).filter(
+    (row) => row.raw?.canal === "whatsapp",
+  );
+  const vozCount = summaryCounts?.voz ?? 0;
+  const correoCount = summaryCounts?.correo ?? 0;
+
   return (
     <>
       <div className="px-4 lg:px-6">
@@ -144,7 +159,7 @@ export function DeferredConversionTables({ filters, enabled = true }: Props) {
       </div>
       <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Conversaciones
+          Conversaciones webchat
         </div>
         {conversations.error ? (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
@@ -154,13 +169,54 @@ export function DeferredConversionTables({ filters, enabled = true }: Props) {
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             Cargando conversaciones...
           </div>
-        ) : conversations.data?.length ? (
-          <VisitsDataTable data={conversations.data} />
+        ) : webchatConversationRows.length ? (
+          <VisitsDataTable data={webchatConversationRows} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            No hay conversaciones para mostrar.
+            No hay conversaciones de webchat para mostrar.
           </div>
         )}
+      </div>
+      <div className="px-4 lg:px-6">
+        <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          WhatsApp atribuido
+        </div>
+        {conversations.error ? (
+          <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+            {conversations.error}
+          </div>
+        ) : conversations.loading ? (
+          <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+            Cargando conversaciones atribuidas de WhatsApp...
+          </div>
+        ) : whatsappConversationRows.length ? (
+          <VisitsDataTable data={whatsappConversationRows} />
+        ) : (
+          <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+            No hay conversaciones atribuidas de WhatsApp para mostrar.
+          </div>
+        )}
+      </div>
+      <div className="px-4 lg:px-6">
+        <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Canales sin detalle fila por fila
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-dashed px-4 py-5 text-sm">
+            <div className="font-medium">Voz</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{vozCount}</div>
+            <p className="mt-2 text-muted-foreground">
+              Este bloque hoy solo existe como conteo agregado en el mapa. No hay tabla detallada equivalente a webchat/WhatsApp.
+            </p>
+          </div>
+          <div className="rounded-lg border border-dashed px-4 py-5 text-sm">
+            <div className="font-medium">Correo</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{correoCount}</div>
+            <p className="mt-2 text-muted-foreground">
+              Este bloque hoy solo existe como conteo agregado en el mapa. No hay tabla detallada equivalente a webchat/WhatsApp.
+            </p>
+          </div>
+        </div>
       </div>
     </>
   );

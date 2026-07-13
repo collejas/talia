@@ -73,7 +73,7 @@ export function MapKpis({
     {
       title: "WhatsApp atribuido",
       value: formatDisplayNumber(whatsappCampaignsTotal),
-      helper: `Conversaciones de WhatsApp vinculadas a atribución, no campañas de envío`,
+      helper: `Conversaciones de WhatsApp atribuibles a canal o campaña publicitaria; no mide envíos de campaña`,
       icon: IconRoute,
     },
     {
@@ -85,7 +85,7 @@ export function MapKpis({
       icon: IconRoute,
     },
     {
-      title: "Conversaciones",
+      title: "Conversaciones registradas",
       value: formatDisplayNumber(
         sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz + conversacionesCorreo,
       ),
