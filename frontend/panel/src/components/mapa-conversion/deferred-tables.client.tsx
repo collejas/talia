@@ -47,6 +47,30 @@ type SectionState = {
   loading: boolean;
 };
 
+const VISITS_WEB_COLUMN_LABELS = {
+  header: "Visita / sesion",
+  type: "Origen / ubicacion",
+  status: "Interaccion",
+  target: "Visitas",
+  reviewer: "Identificador",
+} as const;
+
+const WEBCHAT_COLUMN_LABELS = {
+  header: "Contacto / sesion",
+  type: "Origen / ubicacion",
+  status: "Estado de conversacion",
+  target: "Sesiones",
+  reviewer: "Identificador",
+} as const;
+
+const WHATSAPP_COLUMN_LABELS = {
+  header: "Conversacion / persona",
+  type: "Ubicacion WhatsApp",
+  status: "Estado de conversacion",
+  target: "Conversaciones",
+  reviewer: "Identificador",
+} as const;
+
 function buildParams(filters: DeferredTablesFilters) {
   const params = new URLSearchParams();
   if (filters.canales.length) params.set("canales", filters.canales.join(","));
@@ -155,7 +179,7 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             Cargando visitas...
           </div>
         ) : visits.data?.length ? (
-          <VisitsDataTable data={visits.data} />
+          <VisitsDataTable data={visits.data} columnLabels={VISITS_WEB_COLUMN_LABELS} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay visitas para mostrar.
@@ -175,7 +199,7 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             Cargando conversaciones...
           </div>
         ) : webchatConversationRows.length ? (
-          <VisitsDataTable data={webchatConversationRows} />
+          <VisitsDataTable data={webchatConversationRows} columnLabels={WEBCHAT_COLUMN_LABELS} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay conversaciones de webchat para mostrar.
@@ -195,7 +219,7 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             Cargando conversaciones atribuidas de WhatsApp...
           </div>
         ) : whatsappConversationRows.length ? (
-          <VisitsDataTable data={whatsappConversationRows} />
+          <VisitsDataTable data={whatsappConversationRows} columnLabels={WHATSAPP_COLUMN_LABELS} />
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay conversaciones atribuidas de WhatsApp para mostrar.

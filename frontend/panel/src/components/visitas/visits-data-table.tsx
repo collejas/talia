@@ -6,6 +6,7 @@ import { z } from "zod";
 import { IconChevronDown, IconChevronUp, IconArrowsUpDown } from "@tabler/icons-react";
 
 import { DataTable, schema } from "@/components/data-table";
+import type { DataTableColumnLabels } from "@/components/data-table";
 import type { VisitDetailRaw, VisitTableRow } from "@/lib/visitas/data";
 import { formatWaLabel } from "@/lib/visitas/formatting";
 import { getActiveTimeZone } from "@/lib/timezone";
@@ -255,20 +256,34 @@ const visitColumnVisibility: VisibilityState = VISIT_FIELDS.reduce<VisibilitySta
   {}
 );
 
-export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
-  const [mounted, setMounted] = React.useState(false)
+const DEFAULT_COLUMN_LABELS: DataTableColumnLabels = {
+  header: "Persona",
+  type: "Origen persona",
+  status: "Estado del chat",
+  target: "Visitas registradas",
+  reviewer: "Persona asignada",
+};
+
+export function VisitsDataTable({
+  data,
+  columnLabels,
+}: {
+  data: VisitTableRow[];
+  columnLabels?: DataTableColumnLabels;
+}) {
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
-    const frame = requestAnimationFrame(() => setMounted(true))
-    return () => cancelAnimationFrame(frame)
-  }, [])
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   if (!mounted) {
     return (
       <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
         Preparando tabla de visitas...
       </div>
-    )
+    );
   }
 
   return (
@@ -277,13 +292,7 @@ export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
       extraColumns={visitExtraColumns}
       initialVisibility={visitColumnVisibility}
       storageKey="visits-table-column-order"
-      columnLabels={{
-        header: "Persona",
-        type: "Origen persona",
-        status: "Estado del chat",
-        target: "Visitas registradas",
-        reviewer: "Persona asignada",
-      }}
+      columnLabels={{ ...DEFAULT_COLUMN_LABELS, ...(columnLabels ?? {}) }}
     />
   );
 }
