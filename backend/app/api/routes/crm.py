@@ -40663,6 +40663,130 @@ async def demografia_resumen_v2(
             key=lambda item: (-int(item.get("total") or 0), str(item.get("label") or "")),
         )
 
+        campaign_conversion_rows: list[dict[str, Any]] = []
+        try:
+            conversion_page_size = 500
+            conversion_offset = 0
+            while True:
+                page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
+                    usuario_token=effective_user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_uuid_value,
+                    date_from_iso=date_from.isoformat() if date_from else None,
+                    date_to_iso=date_to.isoformat() if date_to else None,
+                    limit=conversion_page_size,
+                    offset=conversion_offset,
+                )
+                if not page_rows:
+                    break
+                campaign_conversion_rows.extend(page_rows)
+                if len(page_rows) < conversion_page_size:
+                    break
+                conversion_offset += len(page_rows)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        if campana_tipo_value:
+            campaign_conversion_rows = [
+                row
+                for row in campaign_conversion_rows
+                if _clean_text(row.get("canal")).lower() == campana_tipo_value
+            ]
+
+        if template_uuid_value:
+            template_uuid_str = str(template_uuid_value)
+            campaign_conversion_rows = [
+                row
+                for row in campaign_conversion_rows
+                if str(row.get("template_id") or "").strip() == template_uuid_str
+            ]
+
+        campaign_conversion_rank: dict[str, dict[str, Any]] = {}
+        template_conversion_rank: dict[str, dict[str, Any]] = {}
+        for row in campaign_conversion_rows:
+            campana_id_key = str(row.get("campana_id") or "").strip()
+            campana_nombre_value = _clean_text(row.get("campana_nombre")) or campaign_name_by_id.get(campana_id_key)
+            canal_value = _clean_text(row.get("canal")) or None
+            template_id_key = str(row.get("template_id") or "").strip()
+            template_label_value = (
+                template_labels.get(template_id_key)
+                or _clean_text(row.get("template_nombre"))
+                or _clean_text(row.get("template_slug"))
+                or (f"Plantilla {template_id_key[:8]}" if template_id_key else None)
+            )
+            sesiones_utm_total = int(row.get("sesiones_utm") or 0)
+            envios_enviados_total = int(row.get("envios_enviados") or 0)
+
+            if campana_id_key or campana_nombre_value:
+                campaign_key = campana_id_key or f"nombre:{campana_nombre_value}"
+                campaign_bucket = campaign_conversion_rank.setdefault(
+                    campaign_key,
+                    {
+                        "value": campana_id_key or campaign_key,
+                        "label": campana_nombre_value or "Sin campaña",
+                        "canal": canal_value,
+                        "sesiones_utm": 0,
+                        "envios_enviados": 0,
+                    },
+                )
+                campaign_bucket["sesiones_utm"] += sesiones_utm_total
+                campaign_bucket["envios_enviados"] += envios_enviados_total
+
+            if template_id_key or template_label_value:
+                template_key = template_id_key or f"label:{template_label_value}"
+                template_bucket = template_conversion_rank.setdefault(
+                    template_key,
+                    {
+                        "value": template_id_key or template_key,
+                        "label": template_label_value or "Sin plantilla",
+                        "canal": canal_value,
+                        "sesiones_utm": 0,
+                        "envios_enviados": 0,
+                    },
+                )
+                template_bucket["sesiones_utm"] += sesiones_utm_total
+                template_bucket["envios_enviados"] += envios_enviados_total
+
+        campaign_conversion_top = sorted(
+            (
+                {
+                    **bucket,
+                    "conversion_rate_pct": round(
+                        (bucket["sesiones_utm"] / bucket["envios_enviados"]) * 100, 2
+                    )
+                    if bucket["envios_enviados"] > 0
+                    else 0.0,
+                }
+                for bucket in campaign_conversion_rank.values()
+                if int(bucket.get("sesiones_utm") or 0) > 0
+            ),
+            key=lambda item: (
+                -int(item.get("sesiones_utm") or 0),
+                -float(item.get("conversion_rate_pct") or 0),
+                str(item.get("label") or ""),
+            ),
+        )[:6]
+
+        template_conversion_top = sorted(
+            (
+                {
+                    **bucket,
+                    "conversion_rate_pct": round(
+                        (bucket["sesiones_utm"] / bucket["envios_enviados"]) * 100, 2
+                    )
+                    if bucket["envios_enviados"] > 0
+                    else 0.0,
+                }
+                for bucket in template_conversion_rank.values()
+                if int(bucket.get("sesiones_utm") or 0) > 0
+            ),
+            key=lambda item: (
+                -int(item.get("sesiones_utm") or 0),
+                -float(item.get("conversion_rate_pct") or 0),
+                str(item.get("label") or ""),
+            ),
+        )[:6]
+
         wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
             usuario_token=effective_user_token,
             limit=500,
@@ -40740,6 +40864,10 @@ async def demografia_resumen_v2(
             "wa_canal_options": wa_canal_options,
             "wa_campana_options": wa_campana_options,
             "wa_regla_options": wa_regla_options,
+        },
+        "attribution_rankings": {
+            "campaigns": campaign_conversion_top,
+            "templates": template_conversion_top,
         },
         "leads": leads_payload,
         "visitantes": visitantes_payload,

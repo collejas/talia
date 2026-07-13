@@ -124,6 +124,24 @@ export type DemografiaSummaryResponse = {
       campana_publicitaria?: string | null;
     }>;
   };
+  attribution_rankings?: {
+    campaigns?: Array<{
+      value: string;
+      label: string;
+      canal?: string | null;
+      sesiones_utm: number;
+      envios_enviados: number;
+      conversion_rate_pct: number;
+    }>;
+    templates?: Array<{
+      value: string;
+      label: string;
+      canal?: string | null;
+      sesiones_utm: number;
+      envios_enviados: number;
+      conversion_rate_pct: number;
+    }>;
+  };
   leads: {
     rows: DemografiaLeadsRow[];
     captado_orden: number;
@@ -393,6 +411,14 @@ function normalizeDemografiaSummaryResponse(
 
   return {
     ...summary,
+    attribution_rankings: {
+      campaigns: Array.isArray(summary.attribution_rankings?.campaigns)
+        ? summary.attribution_rankings?.campaigns
+        : [],
+      templates: Array.isArray(summary.attribution_rankings?.templates)
+        ? summary.attribution_rankings?.templates
+        : [],
+    },
     visitantes: {
       ...visitantes,
       items: normalizedItems,

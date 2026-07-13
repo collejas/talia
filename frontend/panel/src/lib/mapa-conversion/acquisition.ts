@@ -21,6 +21,15 @@ export type AcquisitionUtmBucket = {
   total: number;
 };
 
+export type AcquisitionConversionBucket = {
+  value: string;
+  label: string;
+  canal: string | null;
+  total: number;
+  sent: number;
+  rate: number;
+};
+
 export type AcquisitionMetrics = {
   totalSessions: number;
   convertedSessions: number;
@@ -29,6 +38,8 @@ export type AcquisitionMetrics = {
   referrerRows: AcquisitionHostBucket[];
   topUtmRows: AcquisitionUtmBucket[];
   whatsappChannelRows: AcquisitionSourceBucket[];
+  campaignConversionRows: AcquisitionConversionBucket[];
+  templateConversionRows: AcquisitionConversionBucket[];
   topSource: AcquisitionSourceBucket | null;
 };
 
@@ -126,6 +137,34 @@ function aggregateWhatsappChannels(summary: DemografiaSummaryResponse | null): A
   return Array.from(totals.values())
     .sort((a, b) => b.total - a.total || a.source.localeCompare(b.source))
     .slice(0, 6);
+}
+
+function aggregateConversionRows(
+  rows:
+    | Array<{
+        value: string;
+        label: string;
+        canal?: string | null;
+        sesiones_utm: number;
+        envios_enviados: number;
+        conversion_rate_pct: number;
+      }>
+    | undefined,
+): AcquisitionConversionBucket[] {
+  return Array.isArray(rows)
+    ? rows
+        .map((row) => ({
+          value: String(row?.value || "").trim(),
+          label: String(row?.label || "").trim() || "Sin dato",
+          canal: typeof row?.canal === "string" && row.canal.trim() ? row.canal.trim() : null,
+          total: toNumber(row?.sesiones_utm),
+          sent: toNumber(row?.envios_enviados),
+          rate: toNumber(row?.conversion_rate_pct),
+        }))
+        .filter((row) => row.total > 0)
+        .sort((a, b) => b.total - a.total || b.rate - a.rate || a.label.localeCompare(b.label))
+        .slice(0, 6)
+    : [];
 }
 
 function aggregateSourceClassesFromSummary(
@@ -249,9 +288,6 @@ export function buildAcquisitionMetrics(
   }
 
   const sessionsFromVisits = visitsPayload?.cards?.totalVisits ? toNumber(visitsPayload.cards.totalVisits) : 0;
-  const convertedFromVisits = visitsPayload?.cards
-    ? toNumber(visitsPayload.cards.conChat) + toNumber(visitsPayload.cards.whatsapp)
-    : 0;
   const sessionsFromSummary =
     toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
     items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
@@ -283,6 +319,8 @@ export function buildAcquisitionMetrics(
     referrerRows,
     topUtmRows: aggregateTopUtm(summary),
     whatsappChannelRows: aggregateWhatsappChannels(summary),
+    campaignConversionRows: aggregateConversionRows(summary?.attribution_rankings?.campaigns),
+    templateConversionRows: aggregateConversionRows(summary?.attribution_rankings?.templates),
     topSource,
   };
 }

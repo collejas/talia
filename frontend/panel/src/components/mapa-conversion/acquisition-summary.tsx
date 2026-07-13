@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bar, BarChart, Cell, LabelList, Pie, PieChart, CartesianGrid, XAxis } from "recharts";
+import { Bar, BarChart, Cell, LabelList, Pie, PieChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,6 +53,10 @@ const SOURCE_CLASS_CONFIG: ChartConfig = {
   converted: { label: "Convertidas", color: "var(--chart-2)" },
 };
 
+const CONVERSION_RANKING_CONFIG: ChartConfig = {
+  total: { label: "Sesiones atribuidas", color: "var(--chart-3)" },
+};
+
 const WHATSAPP_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -102,6 +106,12 @@ function formatNumber(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
+}
+
+function truncateLabel(value: string, max = 26): string {
+  if (!value) return "Sin dato";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
 }
 
 function normalizeLookupKey(value: string): string {
@@ -268,6 +278,8 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
     conversionRate,
     topUtmRows,
     whatsappChannelRows,
+    campaignConversionRows,
+    templateConversionRows,
   } =
     React.useMemo(
       () => buildAcquisitionMetrics(summary, loadedVisitsPayload),
@@ -530,6 +542,144 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
               </>
             ) : (
               <p className="text-muted-foreground text-sm">No hay atribución de WhatsApp en este filtro.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Campañas que sí convierten</CardTitle>
+            <CardDescription>
+              Ranking por sesiones atribuidas generadas desde campañas de prospección.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {campaignConversionRows.length ? (
+              <ChartContainer config={CONVERSION_RANKING_CONFIG} className="!h-[300px] w-full">
+                <BarChart data={campaignConversionRows} margin={{ left: 12, right: 16 }} barSize={22} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" hide domain={[0, "auto"]} />
+                  <YAxis
+                    dataKey="label"
+                    type="category"
+                    width={168}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value: string) => truncateLabel(value)}
+                  />
+                  <ChartTooltip
+                    cursor={{ fill: "hsl(var(--muted))" }}
+                    content={<ChartTooltipContent />}
+                    formatter={(value, _name, item) => {
+                      const payload = item.payload as {
+                        sent: number;
+                        rate: number;
+                        canal: string | null;
+                      };
+                      const details = [
+                        `${formatNumber(Number(value ?? 0))} sesiones`,
+                        payload.sent > 0 ? `${formatNumber(payload.sent)} enviados` : null,
+                        payload.rate > 0 ? `${payload.rate.toFixed(1)}%` : null,
+                        payload.canal ? payload.canal : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return [details, "Conversión"];
+                    }}
+                    labelFormatter={(_, payload) => {
+                      const item = payload?.[0]?.payload as { label?: string } | undefined;
+                      return item?.label || "Campaña";
+                    }}
+                  />
+                  <Bar
+                    dataKey="total"
+                    name="Sesiones atribuidas"
+                    fill="var(--color-total)"
+                    radius={[0, 4, 4, 0]}
+                  >
+                    <LabelList
+                      dataKey="rate"
+                      position="right"
+                      formatter={(value: number) => `${Number(value ?? 0).toFixed(1)}%`}
+                      className="fill-muted-foreground text-[11px]"
+                    />
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No hay campañas con sesiones atribuidas en este filtro.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Plantillas que sí convierten</CardTitle>
+            <CardDescription>
+              Ranking por sesiones atribuidas generadas desde plantillas de prospección.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {templateConversionRows.length ? (
+              <ChartContainer config={CONVERSION_RANKING_CONFIG} className="!h-[300px] w-full">
+                <BarChart data={templateConversionRows} margin={{ left: 12, right: 16 }} barSize={22} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" hide domain={[0, "auto"]} />
+                  <YAxis
+                    dataKey="label"
+                    type="category"
+                    width={168}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value: string) => truncateLabel(value)}
+                  />
+                  <ChartTooltip
+                    cursor={{ fill: "hsl(var(--muted))" }}
+                    content={<ChartTooltipContent />}
+                    formatter={(value, _name, item) => {
+                      const payload = item.payload as {
+                        sent: number;
+                        rate: number;
+                        canal: string | null;
+                      };
+                      const details = [
+                        `${formatNumber(Number(value ?? 0))} sesiones`,
+                        payload.sent > 0 ? `${formatNumber(payload.sent)} enviados` : null,
+                        payload.rate > 0 ? `${payload.rate.toFixed(1)}%` : null,
+                        payload.canal ? payload.canal : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return [details, "Conversión"];
+                    }}
+                    labelFormatter={(_, payload) => {
+                      const item = payload?.[0]?.payload as { label?: string } | undefined;
+                      return item?.label || "Plantilla";
+                    }}
+                  />
+                  <Bar
+                    dataKey="total"
+                    name="Sesiones atribuidas"
+                    fill="var(--color-total)"
+                    radius={[0, 4, 4, 0]}
+                  >
+                    <LabelList
+                      dataKey="rate"
+                      position="right"
+                      formatter={(value: number) => `${Number(value ?? 0).toFixed(1)}%`}
+                      className="fill-muted-foreground text-[11px]"
+                    />
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No hay plantillas con sesiones atribuidas en este filtro.
+              </p>
             )}
           </CardContent>
         </Card>
