@@ -40400,7 +40400,7 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
-            "schema_version": "resumen-v2-attribution-rankings-v3",
+            "schema_version": "resumen-v2-attribution-rankings-v4",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -40801,6 +40801,8 @@ async def demografia_resumen_v2(
                         "value": template_id_key or template_key,
                         "label": template_label_value or "Sin plantilla",
                         "canal": canal_value,
+                        "parent_campaign_value": campana_id_key or None,
+                        "parent_campaign_label": campana_nombre_value or "Sin campaña",
                         "conversion_total": 0,
                         "context_total": 0,
                         "conversion_label": "Sesiones UTM",
@@ -40850,6 +40852,8 @@ async def demografia_resumen_v2(
                         "value": template_id_key or template_key,
                         "label": template_label_value or "Sin plantilla",
                         "canal": canal_value,
+                        "parent_campaign_value": campana_id_key or None,
+                        "parent_campaign_label": campana_nombre_value or "Sin campaña",
                         "conversion_total": 0,
                         "context_total": 0,
                         "conversion_label": "Oportunidades",

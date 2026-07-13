@@ -65,6 +65,19 @@ const WHATSAPP_COLORS = [
   "var(--chart-5)",
 ];
 
+const EMAIL_CAMPAIGN_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "#0f766e",
+  "#b45309",
+  "#be123c",
+  "#4338ca",
+  "#475569",
+];
+
 const SOURCE_CLASS_COLORS: Record<string, string> = {
   ai_referral: "var(--chart-1)",
   campaign: "var(--chart-3)",
@@ -115,14 +128,36 @@ function truncateLabel(value: string, max = 26): string {
 }
 
 type ConversionRankingRow = {
+  value: string;
   label: string;
   canal: string | null;
+  parentCampaignValue: string | null;
+  parentCampaignLabel: string | null;
   total: number;
   contextTotal: number;
   conversionLabel: string;
   contextLabel: string;
   rate: number;
 };
+
+type EmailCampaignPieRow = {
+  value: string;
+  label: string;
+  total: number;
+  fill: string;
+};
+
+function buildCampaignColorMap(rows: ConversionRankingRow[]) {
+  const colorMap = new Map<string, string>();
+  let colorIndex = 0;
+  for (const row of rows) {
+    const key = row.value || row.label;
+    if (!key || colorMap.has(key)) continue;
+    colorMap.set(key, EMAIL_CAMPAIGN_COLORS[colorIndex % EMAIL_CAMPAIGN_COLORS.length]);
+    colorIndex += 1;
+  }
+  return colorMap;
+}
 
 function ConversionRankingCard({
   title,
@@ -193,6 +228,162 @@ function ConversionRankingCard({
           </ChartContainer>
         ) : (
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmailCampaignPieCard({
+  data,
+  colorMap,
+}: {
+  data: ConversionRankingRow[];
+  colorMap: Map<string, string>;
+}) {
+  const pieData = data.map((row) => ({
+    value: row.value || row.label,
+    label: row.label,
+    total: row.total,
+    fill: colorMap.get(row.value || row.label) || EMAIL_CAMPAIGN_COLORS[0],
+  })) satisfies EmailCampaignPieRow[];
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Correo · campañas que generaron visitas al sitio</CardTitle>
+        <CardDescription>
+          Distribución real de sesiones web atribuidas por campaña de correo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {pieData.length ? (
+          <>
+            <ChartContainer
+              config={{ total: { label: "Sesiones web", color: "var(--chart-1)" } }}
+              className="h-72"
+            >
+              <PieChart>
+                <ChartTooltip
+                  content={<ChartTooltipContent hideLabel />}
+                  formatter={(value, _name, item) => [
+                    `${formatNumber(toNumber(value))} sesiones`,
+                    String(item?.payload?.label || "Campaña"),
+                  ]}
+                />
+                <Pie
+                  data={pieData}
+                  dataKey="total"
+                  nameKey="label"
+                  innerRadius={54}
+                  outerRadius={92}
+                  paddingAngle={2}
+                >
+                  {pieData.map((item) => (
+                    <Cell key={item.value} fill={item.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <div className="grid gap-2">
+              {pieData.map((item) => (
+                <div key={item.value} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                    <span className="min-w-0 truncate" title={item.label}>
+                      {item.label}
+                    </span>
+                  </div>
+                  <Badge className="shrink-0" variant="outline">
+                    {formatNumber(item.total)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No hay campañas de correo con sesiones web atribuidas en este filtro.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmailTemplateAttributionCard({
+  data,
+  colorMap,
+}: {
+  data: ConversionRankingRow[];
+  colorMap: Map<string, string>;
+}) {
+  const chartHeight = Math.max(320, data.length * 48);
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Correo · plantillas que generaron visitas al sitio</CardTitle>
+        <CardDescription>
+          Cada plantilla hereda el color de su campaña madre para mostrar qué piezas aportaron el resultado.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {data.length ? (
+          <ChartContainer
+            config={{ total: { label: "Sesiones web", color: "var(--chart-1)" } }}
+            className="w-full"
+            style={{ height: `${chartHeight}px` }}
+          >
+            <BarChart data={data} margin={{ left: 12, right: 16 }} barSize={22} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" hide domain={[0, "auto"]} />
+              <YAxis
+                dataKey="label"
+                type="category"
+                width={200}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value: string) => truncateLabel(value, 30)}
+              />
+              <ChartTooltip
+                cursor={{ fill: "hsl(var(--muted))" }}
+                content={<ChartTooltipContent />}
+                formatter={(value, _name, item) => {
+                  const payload = item.payload as ConversionRankingRow;
+                  return [
+                    `${formatNumber(Number(value ?? 0))} sesiones · Campaña ${payload.parentCampaignLabel || "Sin campaña"}`,
+                    "Sesiones web",
+                  ];
+                }}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload as ConversionRankingRow | undefined;
+                  return item?.label || "Plantilla";
+                }}
+              />
+              <Bar dataKey="total" name="Sesiones web" radius={[0, 4, 4, 0]}>
+                {data.map((item) => (
+                  <Cell
+                    key={`${item.parentCampaignValue || item.parentCampaignLabel || "sin-campana"}::${item.value}`}
+                    fill={
+                      colorMap.get(item.parentCampaignValue || item.parentCampaignLabel || "") ||
+                      EMAIL_CAMPAIGN_COLORS[0]
+                    }
+                  />
+                ))}
+                <LabelList
+                  dataKey="total"
+                  position="right"
+                  formatter={(value: number) => `${Number(value ?? 0)}`}
+                  className="fill-muted-foreground text-[11px]"
+                />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No hay plantillas de correo con sesiones web atribuidas en este filtro.
+          </p>
         )}
       </CardContent>
     </Card>
@@ -370,18 +561,14 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
       () => buildAcquisitionMetrics(summary, loadedVisitsPayload),
       [summary, loadedVisitsPayload],
     );
-  const correoCampaignConversionRows = campaignConversionRows
-    .filter((item) => item.canal === "correo")
-    .slice(0, 6);
-  const correoTemplateConversionRows = templateConversionRows
-    .filter((item) => item.canal === "correo")
-    .slice(0, 6);
-  const whatsappCampaignConversionRows = campaignConversionRows
-    .filter((item) => item.canal === "whatsapp")
-    .slice(0, 6);
-  const whatsappTemplateConversionRows = templateConversionRows
-    .filter((item) => item.canal === "whatsapp")
-    .slice(0, 6);
+  const correoCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "correo");
+  const correoTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "correo");
+  const whatsappCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "whatsapp");
+  const whatsappTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "whatsapp");
+  const correoCampaignColorMap = React.useMemo(
+    () => buildCampaignColorMap(correoCampaignConversionRows),
+    [correoCampaignConversionRows],
+  );
   return (
     <section className={cn("grid gap-4", className)}>
       {loadingVisitsPayload ? (
@@ -645,19 +832,13 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <ConversionRankingCard
-          title="Correo · campañas que generaron visitas al sitio"
-          description="Ranking de campañas de correo por sesiones web atribuidas desde trazabilidad UTM."
-          emptyMessage="No hay campañas de correo con sesiones web atribuidas en este filtro."
-          metricName="Sesiones web"
+        <EmailCampaignPieCard
           data={correoCampaignConversionRows}
+          colorMap={correoCampaignColorMap}
         />
-        <ConversionRankingCard
-          title="Correo · plantillas que generaron visitas al sitio"
-          description="Ranking de plantillas de correo por sesiones web atribuidas desde trazabilidad UTM."
-          emptyMessage="No hay plantillas de correo con sesiones web atribuidas en este filtro."
-          metricName="Sesiones web"
+        <EmailTemplateAttributionCard
           data={correoTemplateConversionRows}
+          colorMap={correoCampaignColorMap}
         />
       </div>
 

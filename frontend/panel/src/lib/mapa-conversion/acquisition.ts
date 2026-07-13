@@ -25,6 +25,8 @@ export type AcquisitionConversionBucket = {
   value: string;
   label: string;
   canal: string | null;
+  parentCampaignValue: string | null;
+  parentCampaignLabel: string | null;
   total: number;
   contextTotal: number;
   conversionLabel: string;
@@ -147,6 +149,8 @@ function aggregateConversionRows(
         value: string;
         label: string;
         canal?: string | null;
+        parent_campaign_value?: string | null;
+        parent_campaign_label?: string | null;
         conversion_total: number;
         context_total: number;
         conversion_label: string;
@@ -161,6 +165,14 @@ function aggregateConversionRows(
           value: String(row?.value || "").trim(),
           label: String(row?.label || "").trim() || "Sin dato",
           canal: typeof row?.canal === "string" && row.canal.trim() ? row.canal.trim() : null,
+          parentCampaignValue:
+            typeof row?.parent_campaign_value === "string" && row.parent_campaign_value.trim()
+              ? row.parent_campaign_value.trim()
+              : null,
+          parentCampaignLabel:
+            typeof row?.parent_campaign_label === "string" && row.parent_campaign_label.trim()
+              ? row.parent_campaign_label.trim()
+              : null,
           total: toNumber(row?.conversion_total),
           contextTotal: toNumber(row?.context_total),
           conversionLabel: String(row?.conversion_label || "").trim() || "Conversiones",

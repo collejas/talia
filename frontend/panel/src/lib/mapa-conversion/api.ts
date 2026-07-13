@@ -139,6 +139,8 @@ export type DemografiaSummaryResponse = {
       value: string;
       label: string;
       canal?: string | null;
+      parent_campaign_value?: string | null;
+      parent_campaign_label?: string | null;
       conversion_total: number;
       context_total: number;
       conversion_label: string;
