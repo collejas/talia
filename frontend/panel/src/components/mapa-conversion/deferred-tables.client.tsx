@@ -138,6 +138,11 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
   return (
     <>
       <div className="px-4 lg:px-6">
+        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          El detalle inferior del mapa solo desglosa fuentes que hoy tienen trazabilidad fila por fila en esta vista: visitas web, conversaciones webchat y WhatsApp atribuido. Voz y correo siguen siendo agregados.
+        </div>
+      </div>
+      <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Visitas web
         </div>

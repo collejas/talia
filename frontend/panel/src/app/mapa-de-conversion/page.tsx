@@ -619,7 +619,7 @@ export default async function Page({
                     <div className="min-h-0 flex-1 overflow-y-auto p-4">
                       <div className="flex flex-col gap-4 text-sm">
                         <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                          El mapa separa tráfico web, conversaciones, atribución WhatsApp y conversiones.
+                          El mapa separa tráfico web, conversaciones por canal, atribución WhatsApp y etapas de conversión. No mide envíos ni entregas de campañas.
                         </div>
 
                         <div className="flex flex-col gap-1">
@@ -633,7 +633,7 @@ export default async function Page({
 
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Visitas y contactos
+                            Tráfico y atribución
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-3">
@@ -643,13 +643,13 @@ export default async function Page({
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Visitas con chat</span>
+                              <span className="text-xs text-muted-foreground">Sesiones webchat</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.sesionesWebchatTotales)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Atribución WhatsApp</span>
+                              <span className="text-xs text-muted-foreground">WhatsApp atribuido</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.whatsappCampaignsTotal)}
                               </span>
@@ -671,6 +671,9 @@ export default async function Page({
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Canales de contacto
+                          </div>
+                          <div className="rounded-md border border-dashed px-2 py-2 text-[11px] text-muted-foreground">
+                            Webchat y WhatsApp sí tienen detalle fila por fila abajo. Voz y correo hoy se muestran como conteo agregado.
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-3">
