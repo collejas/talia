@@ -75,6 +75,25 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se cerró `A.5` confirmando que no habrá rollback del refactor de personas/contactos y que no hace falta un backfill nuevo para esta fase porque la compatibilidad temporal y el snapshot existente ya sostienen la historia.
 - Se cerró `B.1` dejando la respuesta de `prospeccion/metricas` separada en `campanas`, `campanas_whatsapp` y `frases_whatsapp`; las oportunidades quedan dentro del bloque de atribución de frases y no como ledger independiente.
 
+## 2026-07-13
+
+- Se auditó el backlog maestro contra el estado real de backend, frontend y BD para evitar seguir trabajando sobre checklists desactualizados.
+- Se confirmó que `B.2` ya está cubierto por implementación:
+  - la agregación por batch vive en la RPC operativa de campañas WhatsApp;
+  - respuestas y oportunidades se resuelven por conversación;
+  - la capa de frases/atribución sigue usando `prospeccion_whatsapp_atribucion_eventos` con `persona_id` como llave principal.
+- Se validó con datos reales del tenant `00000000-0000-0000-0000-000000000001` que siguen existiendo campañas y lotes WhatsApp activos para el plan:
+  - `2` campañas `whatsapp/prospeccion`;
+  - `227` lotes con canal WhatsApp;
+  - `62` conversaciones, `205` mensajes salientes históricos, `20` entrantes y `61` oportunidades en el cruce operativo de la campaña principal.
+- Se dejó explícito en el backlog que la serie diaria ya está separada por semántica:
+  - campañas toma la ejecución diaria desde envíos/lotes/logs;
+  - frases WhatsApp toma la atribución diaria desde eventos.
+- Se confirmó que `B.3`, `B.4`, `C.2` y `C.3` ya estaban implementados en código, exportaciones y adaptadores, y se actualizó el backlog para reflejarlo.
+- Se corrigió `frontend/panel/src/components/dashboard/marketing-lazy-section.tsx` para que el dashboard lazy vuelva a pedir:
+  - resumen WhatsApp real en lugar de dejar `campanas_whatsapp` vacío por `include_whatsapp_channels=false`;
+  - series reales de campañas/frases en lugar de pedir un payload `lite` que nunca devolvía `timeseries`.
+
 ## 2026-06-27
 
 - Se corrigió la sección `WhatsApp por canal`, que estaba vacía porque no se persistían eventos de atribución.

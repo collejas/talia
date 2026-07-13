@@ -105,8 +105,10 @@ function MarketingTimeseriesLazy({
       const params = new URLSearchParams();
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
+      params.set("include_campaign_timeseries", "true");
+      params.set("include_whatsapp_timeseries", "true");
       params.set("include_whatsapp_channels", "false");
-      params.set("lite", "true");
+      params.set("lite", "false");
       const suffix = params.toString() ? `?${params.toString()}` : "";
 
       fetch(`/api/prospeccion/metricas${suffix}`, {
@@ -166,7 +168,7 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
       if (dateTo) params.set("date_to", dateTo);
       params.set("include_campaign_timeseries", "false");
       params.set("include_whatsapp_timeseries", "false");
-      params.set("include_whatsapp_channels", "false");
+      params.set("include_whatsapp_channels", "true");
       params.set("lite", "true");
       const suffix = params.toString() ? `?${params.toString()}` : "";
 

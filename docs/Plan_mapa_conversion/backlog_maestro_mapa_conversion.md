@@ -193,12 +193,24 @@ Objetivo:
 
 Tareas:
 
-- [ ] Agregar agregacion por batch.
-- [ ] Agregar respuesta y oportunidad por conversacion.
-- [ ] Usar `prospeccion_whatsapp_atribucion_eventos`.
-- [ ] Respetar `persona_id` como llave operativa.
-- [ ] Confirmar si la serie diaria sale de mensajes, batches o ambos.
-- [ ] Validar con datos reales del tenant activo.
+- [x] Agregar agregacion por batch.
+- [x] Agregar respuesta y oportunidad por conversacion.
+- [x] Usar `prospeccion_whatsapp_atribucion_eventos`.
+- [x] Respetar `persona_id` como llave operativa.
+- [x] Confirmar si la serie diaria sale de mensajes, batches o ambos.
+- [x] Validar con datos reales del tenant activo.
+
+Hallazgo:
+
+- `campanas_whatsapp` ya sale de la RPC operativa por campaña con `batches_total`, `prospectos_total`, `mensajes_salientes`, respuestas, oportunidades y desglose de entrega.
+- La parte de atribución y frases sigue separada y sí usa `prospeccion_whatsapp_atribucion_eventos`, con `persona_id` como llave principal y `contacto_id` como compatibilidad temporal.
+- La serie diaria no sale de una sola fuente:
+  - campañas usa envíos por lote/logs para la serie de ejecución;
+  - frases WhatsApp usa eventos de atribución para la serie de conversaciones y oportunidades.
+- Validación real del tenant `00000000-0000-0000-0000-000000000001`:
+  - existen `2` campañas `whatsapp/prospeccion`;
+  - existen `227` lotes con canal WhatsApp;
+  - el cruce operativo por conversaciones devuelve `62` conversaciones, `205` mensajes salientes históricos, `20` entrantes y `61` oportunidades para la campaña principal.
 
 ### B.3 Mantener compatibilidad
 
@@ -208,11 +220,17 @@ Objetivo:
 
 Tareas:
 
-- [ ] Conservar la forma actual del bloque de correo mientras se migra.
-- [ ] Conservar `contacto_id` donde el contrato viejo lo siga requiriendo.
-- [ ] No cambiar contratos de front hasta que el backend nuevo exista.
-- [ ] Mantener compatibilidad en exportaciones.
+- [x] Conservar la forma actual del bloque de correo mientras se migra.
+- [x] Conservar `contacto_id` donde el contrato viejo lo siga requiriendo.
+- [x] No cambiar contratos de front hasta que el backend nuevo exista.
+- [x] Mantener compatibilidad en exportaciones.
 - [x] Validar que `prospeccion/prospectos` sigue funcionando como vista operativa de lotes, envíos y estados por lote.
+
+Hallazgo:
+
+- El bloque `campanas` de correo se conserva sin mezclar la semántica de WhatsApp.
+- La compatibilidad temporal con contratos viejos se mantiene en backend y frontend usando fallbacks de `contacto_id`, `template_id`, `template_slug`, `template_nombre` y `twilio_content_sid`.
+- La exportación XLSX de `prospeccion/metricas` ya incluye los bloques separados y el detalle ampliado de `CampanasWhatsApp`.
 
 ### B.4 Alinear mapa de conversion
 
@@ -222,25 +240,31 @@ Objetivo:
 
 Tareas:
 
-- [ ] Conservar `traffic_web`.
-- [ ] Conservar `conversation_channels`.
-- [ ] Conservar `whatsapp_atribucion`.
-- [ ] Revisar si hace falta exponer una pequeña capa de resumen adicional para campañas ejecutadas.
-- [ ] Mantener filtros y cache keys estables.
-- [ ] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
-- [ ] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
+- [x] Conservar `traffic_web`.
+- [x] Conservar `conversation_channels`.
+- [x] Conservar `whatsapp_atribucion`.
+- [x] Revisar si hace falta exponer una pequeña capa de resumen adicional para campañas ejecutadas.
+- [x] Mantener filtros y cache keys estables.
+- [x] Separar trafico web, conversaciones WhatsApp de prospeccion y oportunidades en bloques distintos.
+- [x] Evitar que el mapa infiera WhatsApp desde el ledger de correo.
 - [x] Confirmar que el mapa de conversion sigue siendo lectura de trafico/atribucion/conversion y no de ejecucion de campañas.
 - [x] Normalizar el contrato frontend para usar `whatsapp_atribucion_total` como nombre canónico y exponer `whatsapp_atribucion.top`.
 - [x] Definir el contrato final de `mapa-de-conversion v2` como entrega principal del plan.
 - [x] Implementar el agregado v2 de mapa con sus bloques y exportación.
 - [x] Implementar la UI final del mapa con los nuevos filtros y dimensiones.
 
+Hallazgo:
+
+- `build_map_v2_dataset` ya anexa explícitamente `traffic_web`, `conversation_channels`, `whatsapp_atribucion` y `whatsapp_atribucion_top`.
+- `demografia/mapa-v2` mantiene cache key estable por filtros y reutiliza el mismo agregado para respuesta y exportaciones.
+- No fue necesario agregar un bloque extra de campañas ejecutadas dentro del mapa; la separación se mantiene entre ejecución (`prospeccion/metricas`) y atribución/conversión (`mapa-de-conversion`).
+
 ### B.4 Archivos objetivo
 
-- [ ] `backend/app/api/routes/crm.py`
-- [ ] `backend/app/services/demografia_service.py`
+- [x] `backend/app/api/routes/crm.py`
+- [x] `backend/app/services/demografia_service.py`
 - [ ] `backend/app/repositories/crm.py`
-- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts` solo cuando exista contrato nuevo
+- [x] `frontend/panel/src/lib/mapa-conversion/api.ts` solo cuando exista contrato nuevo
 
 ## 5) Epic C · Frontend
 
@@ -252,10 +276,10 @@ Objetivo:
 
 Tareas:
 
-- [ ] Dividir cards y tablas por bloque.
-- [ ] Evitar que `campanas` signifique dos cosas distintas.
-- [ ] Mostrar estados vacios y de carga por bloque.
-- [ ] Ajustar copy para que correo y WhatsApp no se confundan.
+- [x] Dividir cards y tablas por bloque.
+- [x] Evitar que `campanas` signifique dos cosas distintas.
+- [x] Mostrar estados vacios y de carga por bloque.
+- [x] Ajustar copy para que correo y WhatsApp no se confundan.
 
 Avance aplicado:
 
@@ -264,12 +288,13 @@ Avance aplicado:
 - [x] Se alineó el bloque global para que WhatsApp se derive de `campanas_whatsapp` cuando no exista en el ledger principal de campañas.
 - [x] Se agregó el desglose de entrega WhatsApp en `Campañas WhatsApp` con entregados, leídos, fallidos y sin traza.
 - [x] Se amplió el detalle/tablas y export CSV de `Campañas WhatsApp` con el mismo desglose.
+- [x] Se corrigió el bloque lazy de marketing del dashboard para volver a pedir resumen WhatsApp y series reales en lugar de un payload `lite` sin esos datos.
 
 ### C.1 Archivos objetivo
 
-- [ ] `frontend/panel/src/app/prospeccion/metricas/page.client.tsx`
-- [ ] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
-- [ ] `frontend/panel/src/components/dashboard/*` si comparte componentes
+- [x] `frontend/panel/src/app/prospeccion/metricas/page.client.tsx`
+- [x] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- [x] `frontend/panel/src/components/dashboard/*` si comparte componentes
 
 ### C.2 Mantener `mapa-de-conversion`
 
@@ -279,18 +304,18 @@ Objetivo:
 
 Tareas:
 
-- [ ] Seguir mostrando trafico web.
-- [ ] Seguir mostrando conversaciones.
-- [ ] Seguir mostrando atribucion WhatsApp.
+- [x] Seguir mostrando trafico web.
+- [x] Seguir mostrando conversaciones.
+- [x] Seguir mostrando atribucion WhatsApp.
 - [x] Reforzar etiquetas y explicaciones de lectura.
-- [ ] Mantener la semantica de `traffic_web`, `conversation_channels` y `whatsapp_atribucion`.
+- [x] Mantener la semantica de `traffic_web`, `conversation_channels` y `whatsapp_atribucion`.
 
 ### C.2 Archivos objetivo
 
-- [ ] `frontend/panel/src/app/mapa-de-conversion/page.tsx`
-- [ ] `frontend/panel/src/components/mapa-conversion/acquisition-summary.tsx`
-- [ ] `frontend/panel/src/components/mapa-conversion/row-detail.tsx`
-- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts`
+- [x] `frontend/panel/src/app/mapa-de-conversion/page.tsx`
+- [x] `frontend/panel/src/components/mapa-conversion/acquisition-summary.tsx`
+- [x] `frontend/panel/src/components/mapa-conversion/row-detail.tsx`
+- [x] `frontend/panel/src/lib/mapa-conversion/api.ts`
 
 ### C.3 Validar exportaciones
 
@@ -300,16 +325,16 @@ Objetivo:
 
 Tareas:
 
-- [ ] Revisar export de metricas.
-- [ ] Revisar export del mapa.
-- [ ] Asegurar consistencia con los nuevos bloques.
-- [ ] Verificar que los nombres de hojas y columnas sigan siendo entendibles.
+- [x] Revisar export de metricas.
+- [x] Revisar export del mapa.
+- [x] Asegurar consistencia con los nuevos bloques.
+- [x] Verificar que los nombres de hojas y columnas sigan siendo entendibles.
 
 ### C.3 Archivos objetivo
 
-- [ ] `backend/app/api/routes/crm.py`
-- [ ] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
-- [ ] `frontend/panel/src/lib/mapa-conversion/api.ts`
+- [x] `backend/app/api/routes/crm.py`
+- [x] `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- [x] `frontend/panel/src/lib/mapa-conversion/api.ts`
 
 ## 6) Prioridad de entrega
 
