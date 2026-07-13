@@ -302,6 +302,26 @@ export default function ProspeccionMetricasPageClient() {
   const summaryCampaign = data?.campanas.summary
   const summaryWhatsappCampaigns = data?.campanas_whatsapp?.summary
   const summaryPhrases = data?.frases_whatsapp.summary
+  const activeViewMeta: Record<
+    "campanas" | "campanas_whatsapp" | "frases",
+    { title: string; description: string; badge: string }
+  > = {
+    campanas: {
+      title: "Campañas",
+      description: "Ejecución general de campañas por canal: correo, WhatsApp y voz.",
+      badge: number.format(summaryCampaign?.envios_totales ?? 0),
+    },
+    campanas_whatsapp: {
+      title: "Campañas WhatsApp",
+      description: "Lotes, mensajes, entrega, respuestas y oportunidades del canal WhatsApp.",
+      badge: number.format(summaryWhatsappCampaigns?.mensajes_salientes ?? 0),
+    },
+    frases: {
+      title: "Frases WhatsApp",
+      description: "Atribución por regla, canal publicitario y oportunidades generadas.",
+      badge: number.format(summaryPhrases?.conversaciones_atribuidas ?? 0),
+    },
+  }
   const campaignChartData = useMemo(
     () =>
       (campaignTimeseries ?? []).map((item) => ({
@@ -1014,6 +1034,62 @@ export default function ProspeccionMetricasPageClient() {
         </CardContent>
       </Card>
 
+      <Card className="border-slate-200 bg-gradient-to-r from-slate-50 via-white to-emerald-50/40">
+        <CardHeader className="gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Vistas de métricas
+              </p>
+              <CardTitle className="text-xl">{activeViewMeta[activeTab].title}</CardTitle>
+              <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={exportActiveCsv}
+                disabled={Boolean(!hydrated || loading || !data)}
+              >
+                <IconDownload className="mr-2 h-4 w-4" />
+                Exportar CSV
+              </Button>
+              <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
+                <IconFileSpreadsheet className="mr-2 h-4 w-4" />
+                Exportar XLSX
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {(Object.entries(activeViewMeta) as Array<
+            ["campanas" | "campanas_whatsapp" | "frases", (typeof activeViewMeta)["campanas"]]
+          >).map(([key, meta]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`rounded-xl border p-4 text-left transition ${
+                activeTab === key
+                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className={`text-sm font-semibold ${activeTab === key ? "text-white" : "text-slate-900"}`}>
+                    {meta.title}
+                  </p>
+                  <p className={`mt-1 text-sm ${activeTab === key ? "text-slate-200" : "text-muted-foreground"}`}>
+                    {meta.description}
+                  </p>
+                </div>
+                <Badge variant={activeTab === key ? "secondary" : "outline"}>{meta.badge}</Badge>
+              </div>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {topCards.map((card) => (
           <Card key={card.title}>
@@ -1464,25 +1540,6 @@ export default function ProspeccionMetricasPageClient() {
           )}
         </CardContent>
       </Card>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant={activeTab === "campanas" ? "default" : "outline"} onClick={() => setActiveTab("campanas")}>Campañas</Button>
-        <Button variant={activeTab === "campanas_whatsapp" ? "default" : "outline"} onClick={() => setActiveTab("campanas_whatsapp")}>Campañas WhatsApp</Button>
-        <Button variant={activeTab === "frases" ? "default" : "outline"} onClick={() => setActiveTab("frases")}>Frases WhatsApp</Button>
-        <Button
-          variant="outline"
-          onClick={exportActiveCsv}
-          disabled={Boolean(!hydrated || loading || !data)}
-          className="ml-auto"
-        >
-          <IconDownload className="mr-2 h-4 w-4" />
-          Exportar CSV ({activeTab === "campanas" ? "campañas" : activeTab === "campanas_whatsapp" ? "campañas WhatsApp" : "frases"})
-        </Button>
-        <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
-          <IconFileSpreadsheet className="mr-2 h-4 w-4" />
-          Exportar XLSX
-        </Button>
-      </div>
 
       {error ? (
         <Card>
