@@ -80,33 +80,53 @@ async def app_lifespan(_: FastAPI):
     try:
         yield
     finally:
-        await _shutdown_with_timeout(
-            name="activity_reminder_jobs_runner", coro=activity_reminder_jobs_runner.shutdown()
+        shutdown_coroutines = (
+            _shutdown_with_timeout(
+                name="activity_reminder_jobs_runner",
+                coro=activity_reminder_jobs_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="deleted_busquedas_purge_runner",
+                coro=deleted_busquedas_purge_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="sales_notification_jobs_runner",
+                coro=sales_notification_jobs_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="high_demand_mode_runner",
+                coro=high_demand_mode_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="inbox_snapshot_refresh_runner",
+                coro=inbox_snapshot_refresh_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="inbox_threads_metrics_snapshot_runner",
+                coro=inbox_threads_metrics_snapshot_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="webchat_closure_rescue_runner",
+                coro=webchat_closure_rescue_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="webchat_followup_runner",
+                coro=webchat_followup_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="whatsapp_followup_runner",
+                coro=whatsapp_followup_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="email_inbound_reader",
+                coro=email_inbound_reader.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="contact_sender",
+                coro=contact_sender.shutdown(),
+            ),
         )
-        await _shutdown_with_timeout(
-            name="deleted_busquedas_purge_runner",
-            coro=deleted_busquedas_purge_runner.shutdown(),
-        )
-        await _shutdown_with_timeout(
-            name="sales_notification_jobs_runner", coro=sales_notification_jobs_runner.shutdown()
-        )
-        await _shutdown_with_timeout(name="high_demand_mode_runner", coro=high_demand_mode_runner.shutdown())
-        await _shutdown_with_timeout(
-            name="inbox_snapshot_refresh_runner", coro=inbox_snapshot_refresh_runner.shutdown()
-        )
-        await _shutdown_with_timeout(
-            name="inbox_threads_metrics_snapshot_runner",
-            coro=inbox_threads_metrics_snapshot_runner.shutdown(),
-        )
-        await _shutdown_with_timeout(
-            name="webchat_closure_rescue_runner", coro=webchat_closure_rescue_runner.shutdown()
-        )
-        await _shutdown_with_timeout(name="webchat_followup_runner", coro=webchat_followup_runner.shutdown())
-        await _shutdown_with_timeout(
-            name="whatsapp_followup_runner", coro=whatsapp_followup_runner.shutdown()
-        )
-        await _shutdown_with_timeout(name="email_inbound_reader", coro=email_inbound_reader.shutdown())
-        await _shutdown_with_timeout(name="contact_sender", coro=contact_sender.shutdown())
+        await asyncio.gather(*shutdown_coroutines)
 
 
 def create_app() -> FastAPI:

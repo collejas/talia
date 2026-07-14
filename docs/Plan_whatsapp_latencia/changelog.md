@@ -170,3 +170,25 @@
 - Operación:
   - `talia-api.service` se reinició,
   - healthcheck local validado en `http://127.0.0.1:8004/api/health`.
+
+## 2026-07-14 00:41 UTC
+
+- Hallazgo operativo:
+  - el backend quedó en `deactivating` después de reiniciar,
+  - `systemd` sí envió `SIGTERM`, pero Uvicorn siguió esperando a que cerraran runners internos,
+  - el cierre del lifespan estaba ejecutando los `shutdown()` de cada runner en serie.
+
+- Impacto:
+  - aunque cada runner tenga timeout propio de `12s`, el apagado total podía acumular más de `1 min`,
+  - durante ese tramo el puerto `8004` quedaba abajo y WhatsApp no respondía.
+
+- Corrección aplicada:
+  - el `shutdown` del lifespan ahora corre en paralelo con `asyncio.gather(...)`,
+  - se mantiene el timeout individual por runner, pero deja de sumarse uno detrás de otro.
+
+- Archivo tocado:
+  - `backend/app/main.py`
+
+- Resultado esperado:
+  - reinicios sensiblemente más cortos,
+  - menor ventana de caída al desplegar o reiniciar el servicio.

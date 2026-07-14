@@ -2118,6 +2118,13 @@ async def handle_incoming_message(
         else "general_whatsapp"
     )
     is_prospeccion_mode = is_prospeccion_context or bool(publicidad_atribucion_event)
+    simple_greeting_fast_path = _is_simple_greeting_message(
+        message.body,
+        has_attachments=bool(attachment_content_items),
+        previous_response_id=str(openai_conversation_id or "").strip() or None,
+        openai_conversation_id=str(openai_conversation_id or "").strip() or None,
+        prospeccion_mode=is_prospeccion_mode,
+    )
     if origin_type == "general_whatsapp":
         try:
             await storage.merge_conversation_inbox_context(
@@ -2137,7 +2144,7 @@ async def handle_incoming_message(
     opportunity_ref: str | None = None
     ensure_persona_id = persona_id
     ensure_opportunity_started: float | None = None
-    if repo:
+    if repo and not simple_greeting_fast_path:
         ensure_opportunity_started = time.perf_counter()
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
             repo=repo,
@@ -2175,31 +2182,32 @@ async def handle_incoming_message(
                         persona_id=prospect_persona_id,
                         inbound_persona_id=persona_id,
                     )
-    try:
-        ensure_payload = await storage.ensure_persona_conversation_opportunity(
-            conversation_id=conversation_id,
-            persona_id=ensure_persona_id,
-            channel="whatsapp",
-            include_restart_metadata=True,
-        )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.ensure_opportunity_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-    else:
-        if isinstance(ensure_payload, dict):
-            restart_context = ensure_payload
-            opportunity_ref = str(ensure_payload.get("oportunidad_id") or "").strip() or None
+    if not simple_greeting_fast_path:
+        try:
+            ensure_payload = await storage.ensure_persona_conversation_opportunity(
+                conversation_id=conversation_id,
+                persona_id=ensure_persona_id,
+                channel="whatsapp",
+                include_restart_metadata=True,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.ensure_opportunity_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
         else:
-            opportunity_ref = str(ensure_payload or "").strip() or None
-            restart_context = {
-                "oportunidad_id": ensure_payload,
-                "restart_created": False,
-                "restart_sequence": 1,
-            }
-        if ensure_opportunity_started is not None:
-            _record_stage_timing(stage_timings, "ensure_opportunity_ms", ensure_opportunity_started)
+            if isinstance(ensure_payload, dict):
+                restart_context = ensure_payload
+                opportunity_ref = str(ensure_payload.get("oportunidad_id") or "").strip() or None
+            else:
+                opportunity_ref = str(ensure_payload or "").strip() or None
+                restart_context = {
+                    "oportunidad_id": ensure_payload,
+                    "restart_created": False,
+                    "restart_sequence": 1,
+                }
+            if ensure_opportunity_started is not None:
+                _record_stage_timing(stage_timings, "ensure_opportunity_ms", ensure_opportunity_started)
     if repo and opportunity_ref and publicidad_atribucion_event:
         await _mark_opportunity_as_prospeccion_whatsapp(
             repo=repo,
@@ -2260,14 +2268,6 @@ async def handle_incoming_message(
     previous_response_id = conversation_meta.get("last_response_id")
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
-
-    simple_greeting_fast_path = _is_simple_greeting_message(
-        message.body,
-        has_attachments=bool(attachment_content_items),
-        previous_response_id=str(previous_response_id or "").strip() or None,
-        openai_conversation_id=str(openai_conversation_id or "").strip() or None,
-        prospeccion_mode=is_prospeccion_mode,
-    )
 
     catalog_inmobiliario_enabled = True
     catalog_no_inmobiliario_enabled = True

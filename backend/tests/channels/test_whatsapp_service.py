@@ -141,6 +141,7 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
     monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
     monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
 
     register_calls: list[dict[str, object]] = []
 
@@ -432,6 +433,7 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
     monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
     monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
 
     async def fake_register(**_: object):
         return {
