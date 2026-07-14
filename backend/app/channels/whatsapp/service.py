@@ -37,6 +37,7 @@ from app.channels.whatsapp.routing import resolve_whatsapp_organizacion_by_phone
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import conversation_summary, leads_geo, storage
 from app.services import assistant_document_delivery
 from app.services import openai as openai_service
@@ -110,6 +111,15 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
     "comparación",
     "cotización",
     "cotizacion",
+)
+_SIMPLE_GREETING_PREFIXES: tuple[str, ...] = (
+    "hola",
+    "buenos dias",
+    "buenas dias",
+    "buen dia",
+    "buen día",
+    "buenas tardes",
+    "buenas noches",
 )
 _DEFAULT_WHATSAPP_MAX_CHARS = 500
 _MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
@@ -339,6 +349,133 @@ def _summarize_openai_response_payload(payload: Mapping[str, Any] | None) -> dic
 def _normalize_whatsapp_provider(value: Any) -> str:
     provider = str(value or "").strip().lower()
     return provider if provider in {"twilio", "meta"} else "twilio"
+
+
+def _normalize_fast_path_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    text = re.sub(r"[^\w\sáéíóúüñ]+", " ", text, flags=re.IGNORECASE)
+    return " ".join(text.split())
+
+
+def _is_simple_greeting_message(
+    body: str | None,
+    *,
+    has_attachments: bool,
+    previous_response_id: str | None,
+    openai_conversation_id: str | None,
+    prospeccion_mode: bool,
+) -> bool:
+    if has_attachments or prospeccion_mode:
+        return False
+    if str(previous_response_id or "").strip() or str(openai_conversation_id or "").strip():
+        return False
+    normalized = _normalize_fast_path_text(body)
+    if not normalized:
+        return False
+    words = normalized.split()
+    if len(words) > 4:
+        return False
+    return any(normalized.startswith(prefix) for prefix in _SIMPLE_GREETING_PREFIXES)
+
+
+async def _resolve_whatsapp_brand_name(organizacion_id: UUID | None) -> str | None:
+    if organizacion_id is None:
+        return None
+    try:
+        repo = PlatformRepository()
+        tenant = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+    except PlatformRepositoryError:
+        return None
+    if not isinstance(tenant, dict):
+        return None
+    for key in ("nombre_comercial", "nombre", "razon_social"):
+        value = str(tenant.get(key) or "").strip()
+        if value:
+            return value
+    return None
+
+
+async def _build_simple_greeting_reply(organizacion_id: UUID | None) -> str:
+    brand_name = await _resolve_whatsapp_brand_name(organizacion_id)
+    if brand_name:
+        return f"Hola, soy Tal-IA de {brand_name}. ¿En qué te puedo ayudar?"
+    return "Hola, soy Tal-IA. ¿En qué te puedo ayudar?"
+
+
+async def _run_post_send_tasks(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    conversation_meta: Mapping[str, Any],
+    message: schemas.WhatsAppIncomingMessage,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+    organizacion_id: UUID | None,
+    resolved_persona_org: str | None,
+    inbound_message_id: str | None,
+    welcome_document_sent_by_tool: bool,
+    ensure_opportunity: bool,
+) -> None:
+    if ensure_opportunity:
+        try:
+            await storage.ensure_persona_conversation_opportunity(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                channel="whatsapp",
+                include_restart_metadata=True,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fast_path.ensure_opportunity_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
+    try:
+        from app.services import whatsapp_followups as whatsapp_followup_jobs
+
+        await whatsapp_followup_jobs.schedule_customer_followup(
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            organizacion_id=str(resolved_persona_org) if resolved_persona_org else None,
+            reason="assistant_reply",
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.followup.schedule_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    if welcome_document_sent_by_tool:
+        log_event(
+            logger,
+            "whatsapp.welcome_document_skipped_after_tool",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+        )
+        return
+
+    try:
+        welcome_sent = await _send_welcome_document_for_conversation(
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            message=message,
+            whatsapp_settings=whatsapp_settings,
+            organizacion_id=organizacion_id,
+            conversation_meta=conversation_meta,
+        )
+        if welcome_sent:
+            log_event(
+                logger,
+                "whatsapp.welcome_document_sent",
+                conversation_id=conversation_id,
+                inbound_message_id=inbound_message_id,
+            )
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.warning(
+            "whatsapp.welcome_document_flow_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
 
 
 def _conversation_inbox_context(conversation_meta: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -2124,9 +2261,17 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
+    simple_greeting_fast_path = _is_simple_greeting_message(
+        message.body,
+        has_attachments=bool(attachment_content_items),
+        previous_response_id=str(previous_response_id or "").strip() or None,
+        openai_conversation_id=str(openai_conversation_id or "").strip() or None,
+        prospeccion_mode=is_prospeccion_mode,
+    )
+
     catalog_inmobiliario_enabled = True
     catalog_no_inmobiliario_enabled = True
-    if org_uuid:
+    if org_uuid and not simple_greeting_fast_path:
         try:
             catalog_toggle_started = time.perf_counter()
             catalog_inmobiliario_enabled = await tenant_runtime.is_catalog_inmobiliario_enabled(
@@ -2151,7 +2296,12 @@ async def handle_incoming_message(
             )
     inventory_context_text = None
     location_request = is_location_request(message.body or "")
-    if catalog_inmobiliario_enabled and not location_request and should_autoload_inventory_context(message.body or ""):
+    if (
+        not simple_greeting_fast_path
+        and catalog_inmobiliario_enabled
+        and not location_request
+        and should_autoload_inventory_context(message.body or "")
+    ):
         inventory_context_started = time.perf_counter()
         try:
             inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
@@ -2163,7 +2313,12 @@ async def handle_incoming_message(
         _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
 
     catalog_context = None
-    if (catalog_inmobiliario_enabled or catalog_no_inmobiliario_enabled) and settings.catalog_context_autoload and not location_request:
+    if (
+        not simple_greeting_fast_path
+        and (catalog_inmobiliario_enabled or catalog_no_inmobiliario_enabled)
+        and settings.catalog_context_autoload
+        and not location_request
+    ):
         catalog_context_started = time.perf_counter()
         catalog_domain = "any"
         if catalog_inmobiliario_enabled and not catalog_no_inmobiliario_enabled:
@@ -2186,24 +2341,25 @@ async def handle_incoming_message(
     elif catalog_context:
         catalog_context_text = catalog_context.text
     booking_context_text = None
-    try:
-        booking_context_started = time.perf_counter()
-        booking_context_text = await build_booking_context_message(
-            persona_id=persona_id,
-            conversation_id=conversation_id,
-            channel="whatsapp",
-            persona=persona_record,
-        )
-        _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
-    except Exception as exc:
-        logger.warning(
-            "whatsapp.booking_context_failed",
-            extra={
-                "conversation_id": conversation_id,
-                "persona_id": persona_id,
-                "error": str(exc),
-            },
-        )
+    if not simple_greeting_fast_path:
+        try:
+            booking_context_started = time.perf_counter()
+            booking_context_text = await build_booking_context_message(
+                persona_id=persona_id,
+                conversation_id=conversation_id,
+                channel="whatsapp",
+                persona=persona_record,
+            )
+            _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.booking_context_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "persona_id": persona_id,
+                    "error": str(exc),
+                },
+            )
 
     # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
     read_indicator_started = time.perf_counter()
@@ -2224,88 +2380,106 @@ async def handle_incoming_message(
     _record_stage_timing(stage_timings, "read_indicator_ms", read_indicator_started)
     _record_stage_timing(stage_timings, "typing_indicator_ms", typing_indicator_started)
 
-    try:
+    if simple_greeting_fast_path:
         assistant_generation_started = time.perf_counter()
-        _log_trace_stage(
-            stage="assistant_generation_started",
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            inbound_message_id=inbound_message_id,
-            extra={
-                "previous_response_id": _trim_text(previous_response_id),
-                "openai_conversation_id": _trim_text(openai_conversation_id),
-            },
-        )
-        assistant_reply = await _generate_assistant_reply(
-            message=message,
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            openai_conversation_id=openai_conversation_id,
-            previous_response_id=previous_response_id,
-            catalog_context=catalog_context_text,
-            booking_context=booking_context_text,
-            whatsapp_settings=whatsapp_settings,
-            organizacion_id=org_uuid,
-            catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
-            catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
-            prospeccion_mode=is_prospeccion_mode,
-            origin_type=origin_type,
-            inbound_message_id=inbound_message_id,
-            attachment_content_items=attachment_content_items
-            + (
-                [
-                    {
-                        "type": "input_text",
-                        "text": (
-                            "Nota interna: Algunos adjuntos no pudieron procesarse. "
-                            + " ".join(attachment_warnings)
-                        ).strip(),
-                    }
-                ]
-                if attachment_warnings
-                else []
-            ),
-        )
-        _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
-        if assistant_reply.debug_timings:
-            stage_timings["assistant_generation_substages"] = assistant_reply.debug_timings  # type: ignore[assignment]
-        log_event(
-            logger,
-            "whatsapp.reply_generated",
-            conversation_id=conversation_id,
-            response_id=assistant_reply.response_id,
-            openai_conversation_id=assistant_reply.openai_conversation_id,
-            inbound_message_id=inbound_message_id,
-        )
-        _log_trace_stage(
-            stage="assistant_generated",
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            inbound_message_id=inbound_message_id,
-            extra={
-                "response_id": _trim_text(assistant_reply.response_id),
-                "openai_conversation_id": _trim_text(assistant_reply.openai_conversation_id),
-            },
-        )
-    except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
-        error_meta = classify_runtime_error(exc)
-        logger.exception(
-            "whatsapp.generate_reply_failed",
-            extra={
-                "conversation_id": conversation_id,
-                "error": str(exc),
-                "error_type": error_meta.get("error_type"),
-                "status_code": error_meta.get("status_code"),
-                "retryable": bool(error_meta.get("retryable")),
-                "inbound_message_id": inbound_message_id,
-            },
-        )
+        fast_reply_text = await _build_simple_greeting_reply(org_uuid)
         assistant_reply = AssistantReply(
-            text=DEFAULT_FALLBACK,
+            text=fast_reply_text,
             openai_conversation_id=openai_conversation_id,
             response_id=previous_response_id,
             tools_called=[],
         )
+        _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
+        stage_timings["assistant_fast_path"] = 1.0
+        log_event(
+            logger,
+            "whatsapp.reply_generated_fast_path",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+        )
+    else:
+        try:
+            assistant_generation_started = time.perf_counter()
+            _log_trace_stage(
+                stage="assistant_generation_started",
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                inbound_message_id=inbound_message_id,
+                extra={
+                    "previous_response_id": _trim_text(previous_response_id),
+                    "openai_conversation_id": _trim_text(openai_conversation_id),
+                },
+            )
+            assistant_reply = await _generate_assistant_reply(
+                message=message,
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                openai_conversation_id=openai_conversation_id,
+                previous_response_id=previous_response_id,
+                catalog_context=catalog_context_text,
+                booking_context=booking_context_text,
+                whatsapp_settings=whatsapp_settings,
+                organizacion_id=org_uuid,
+                catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
+                catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+                prospeccion_mode=is_prospeccion_mode,
+                origin_type=origin_type,
+                inbound_message_id=inbound_message_id,
+                attachment_content_items=attachment_content_items
+                + (
+                    [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Nota interna: Algunos adjuntos no pudieron procesarse. "
+                                + " ".join(attachment_warnings)
+                            ).strip(),
+                        }
+                    ]
+                    if attachment_warnings
+                    else []
+                ),
+            )
+            _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
+            if assistant_reply.debug_timings:
+                stage_timings["assistant_generation_substages"] = assistant_reply.debug_timings  # type: ignore[assignment]
+            log_event(
+                logger,
+                "whatsapp.reply_generated",
+                conversation_id=conversation_id,
+                response_id=assistant_reply.response_id,
+                openai_conversation_id=assistant_reply.openai_conversation_id,
+                inbound_message_id=inbound_message_id,
+            )
+            _log_trace_stage(
+                stage="assistant_generated",
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                inbound_message_id=inbound_message_id,
+                extra={
+                    "response_id": _trim_text(assistant_reply.response_id),
+                    "openai_conversation_id": _trim_text(assistant_reply.openai_conversation_id),
+                },
+            )
+        except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
+            error_meta = classify_runtime_error(exc)
+            logger.exception(
+                "whatsapp.generate_reply_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "error": str(exc),
+                    "error_type": error_meta.get("error_type"),
+                    "status_code": error_meta.get("status_code"),
+                    "retryable": bool(error_meta.get("retryable")),
+                    "inbound_message_id": inbound_message_id,
+                },
+            )
+            assistant_reply = AssistantReply(
+                text=DEFAULT_FALLBACK,
+                openai_conversation_id=openai_conversation_id,
+                response_id=previous_response_id,
+                tools_called=[],
+            )
 
     welcome_document_sent_by_tool = bool(
         assistant_reply.tools_called and "send_information_package" in assistant_reply.tools_called
@@ -2583,49 +2757,20 @@ async def handle_incoming_message(
             inbound_message_id=inbound_message_id,
             outbound_message_id=outgoing_registration.get("message_id"),
         )
-        try:
-            from app.services import whatsapp_followups as whatsapp_followup_jobs
-
-            await whatsapp_followup_jobs.schedule_customer_followup(
+        _schedule_background_coroutine(
+            _run_post_send_tasks(
                 conversation_id=conversation_id,
                 persona_id=persona_id,
-                organizacion_id=str(resolved_persona_org) if resolved_persona_org else None,
-                reason="assistant_reply",
+                conversation_meta=conversation_meta,
+                message=message,
+                whatsapp_settings=whatsapp_settings,
+                organizacion_id=org_uuid,
+                resolved_persona_org=resolved_persona_org,
+                inbound_message_id=inbound_message_id,
+                welcome_document_sent_by_tool=welcome_document_sent_by_tool,
+                ensure_opportunity=simple_greeting_fast_path,
             )
-        except Exception as exc:
-            logger.warning(
-                "whatsapp.followup.schedule_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
-        try:
-            if welcome_document_sent_by_tool:
-                log_event(
-                    logger,
-                    "whatsapp.welcome_document_skipped_after_tool",
-                    conversation_id=conversation_id,
-                    inbound_message_id=inbound_message_id,
-                )
-            else:
-                welcome_sent = await _send_welcome_document_for_conversation(
-                    conversation_id=conversation_id,
-                    persona_id=persona_id,
-                    message=message,
-                    whatsapp_settings=whatsapp_settings,
-                    organizacion_id=org_uuid,
-                    conversation_meta=conversation_meta,
-                )
-                if welcome_sent:
-                    log_event(
-                        logger,
-                        "whatsapp.welcome_document_sent",
-                        conversation_id=conversation_id,
-                        inbound_message_id=inbound_message_id,
-                    )
-        except Exception as exc:  # pragma: no cover - defensivo
-            logger.warning(
-                "whatsapp.welcome_document_flow_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
+        )
         _log_trace_stage(
             stage="assistant_persisted",
             conversation_id=conversation_id,
@@ -3410,8 +3555,6 @@ async def _generate_assistant_reply(
     }
 
     prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
-    if location_href:
-        prompt_variables["location_href"] = location_href
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:

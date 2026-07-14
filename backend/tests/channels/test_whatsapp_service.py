@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -32,6 +33,10 @@ async def _async_none(*_: object, **__: object) -> None:
 
 async def _async_false(*_: object, **__: object) -> bool:
     return False
+
+
+def _close_background_coroutine(coro: Any) -> None:
+    coro.close()
 
 
 def _async_return(value: Any):
@@ -134,6 +139,8 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
     monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
+    monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
 
     register_calls: list[dict[str, object]] = []
 
@@ -205,6 +212,8 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
     monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
+    monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
 
     register_calls: list[dict] = []
 
@@ -286,6 +295,15 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
     monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
     monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service, "_send_whatsapp_read_indicator", _async_false)
+    monkeypatch.setattr(service, "_send_whatsapp_typing_indicator", _async_false)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
+    background_tasks: list[asyncio.Task[Any]] = []
+
+    def run_background_now(coro: Any) -> None:
+        background_tasks.append(asyncio.create_task(coro))
+
+    monkeypatch.setattr(service, "_schedule_background_coroutine", run_background_now)
     monkeypatch.setattr(
         service.tenant_runtime,
         "get_whatsapp_runtime_settings",
@@ -386,6 +404,8 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
     monkeypatch.setattr(service.assistant_document_delivery, "resolve_documents_for_context", fake_resolve_docs)
 
     await service.handle_incoming_message(message)
+    if background_tasks:
+        await asyncio.gather(*background_tasks)
 
     assert len(send_calls) == 2
     assert send_calls[0]["body"] == "¡Hola! Gracias por contactar con Gran Peñón."
@@ -411,6 +431,7 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
     monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
     monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
+    monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
 
     async def fake_register(**_: object):
         return {
@@ -470,6 +491,74 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
 
     assert notify_calls["trigger"] == "restart_conversation"
     assert notify_calls["extra"]["restart_sequence"] == 3
+
+
+@pytest.mark.asyncio
+async def test_handle_incoming_message_fast_paths_simple_greeting(monkeypatch) -> None:
+    message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
+    monkeypatch.setattr(service, "_resolve_whatsapp_brand_name", _async_return("Gran Peñón"))
+    monkeypatch.setattr(service, "_send_whatsapp_read_indicator", _async_false)
+    monkeypatch.setattr(service, "_send_whatsapp_typing_indicator", _async_false)
+
+    background_tasks: list[asyncio.Task[Any]] = []
+
+    def run_background_now(coro: Any) -> None:
+        background_tasks.append(asyncio.create_task(coro))
+
+    monkeypatch.setattr(service, "_schedule_background_coroutine", run_background_now)
+
+    register_calls: list[dict[str, Any]] = []
+    post_send_calls: list[dict[str, Any]] = []
+
+    async def fake_register(**kwargs):
+        register_calls.append(kwargs)
+        return {
+            "conversation_id": "conv-1",
+            "contact_id": "contact-1",
+            "openai_conversation_id": kwargs.get("metadata", {}).get("openai_conversation_id"),
+        }
+
+    async def fake_fetch_conversation(conversation_id: str):
+        return {
+            "id": conversation_id,
+            "contact_id": "contact-1",
+            "manual_override": False,
+            "openai_conversation_id": None,
+            "last_response_id": None,
+            "inbox_context": {},
+        }
+
+    async def fake_send(**kwargs):
+        return service.TwilioSendResult(sid="SM-out", status="sent")
+
+    async def fail_generate(**kwargs):
+        raise AssertionError("El saludo simple no debe invocar OpenAI")
+
+    async def fake_post_send_tasks(**kwargs):
+        post_send_calls.append(kwargs)
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service, "_generate_assistant_reply", fail_generate)
+    monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
+    monkeypatch.setattr(service, "_run_post_send_tasks", fake_post_send_tasks)
+
+    await service.handle_incoming_message(message)
+    if background_tasks:
+        await asyncio.gather(*background_tasks)
+
+    assert len(register_calls) == 2
+    assert register_calls[1]["direction"] == "saliente"
+    assert register_calls[1]["body"] == "Hola, soy Tal-IA de Gran Peñón. ¿En qué te puedo ayudar?"
+    assert post_send_calls
+    assert post_send_calls[0]["ensure_opportunity"] is True
 
 
 @pytest.mark.asyncio
@@ -921,6 +1010,65 @@ async def test_generate_assistant_reply_retries_without_previous_response_id(mon
     assert calls == ["resp-stale", None]
     assert reply.text == "Respuesta final"
     assert reply.response_id == "resp-new"
+
+
+@pytest.mark.asyncio
+async def test_generate_assistant_reply_prompt_omits_location_href_variable(monkeypatch) -> None:
+    message = _build_sample_message()
+    assistant_cfg = service.AssistantConfig(
+        assistant_id=None,
+        prompt_id="pmpt_test",
+        prompt_version="32",
+        project_id="proj-test",
+    )
+
+    monkeypatch.setattr(service, "_build_assistant_from_runtime", lambda *args, **kwargs: assistant_cfg)
+    monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: object())
+    monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
+    monkeypatch.setattr(service.storage, "fetch_persona_context", _async_none)
+    monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
+    monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
+    monkeypatch.setattr(service, "_extract_text_from_response", lambda _response: "Respuesta final")
+
+    captured_variables: dict[str, Any] = {}
+
+    def fake_build_prompt_payload(_assistant, variables):
+        captured_variables.update(variables)
+        return {"prompt": "test", "variables": variables}
+
+    async def fake_run_tool_loop(*, initial_request=None, **_: object):
+        return SimpleNamespace(
+            response={"output": []},
+            conversation_id="conv-new",
+            response_id="resp-new",
+            tools_called=[],
+            side_effects={},
+        )
+
+    monkeypatch.setattr(service, "build_prompt_payload", fake_build_prompt_payload)
+    monkeypatch.setattr(service, "run_tool_loop", fake_run_tool_loop)
+
+    reply = await service._generate_assistant_reply(
+        message=message,
+        conversation_id="conv-1",
+        persona_id="contact-1",
+        openai_conversation_id=None,
+        previous_response_id=None,
+        catalog_context=None,
+        booking_context=None,
+        whatsapp_settings=SimpleNamespace(
+            voice_api_key="api-key",
+            project_id="proj-test",
+            location_href="https://geoactiv.com/landing",
+        ),
+        organizacion_id=None,
+        prospeccion_mode=False,
+        origin_type="general_whatsapp",
+        inbound_message_id="inbound-1",
+    )
+
+    assert reply.text == "Respuesta final"
+    assert captured_variables == {"conversacion_id": "conv-1"}
 
 
 @pytest.mark.asyncio

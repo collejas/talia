@@ -145,3 +145,28 @@
   - perfilar y recortar `register_whatsapp_message`,
   - revisar por qué `ensure_persona_conversation_opportunity` sigue creando un costo de ~`3.1s`,
   - eliminar el retry evitable de prompt variables en el flujo de `assistant_generation`.
+
+## 2026-07-14 00:22 UTC
+
+- Paquete aplicado:
+  - se eliminó el retry evitable por `location_href` duplicado en `prompt_variables`,
+  - se agregaron tareas en background para notificaciones y followups post-registro,
+  - se creó un `fast-path` para saludos simples de primera interacción en WhatsApp.
+
+- Comportamiento nuevo del `fast-path`:
+  - para mensajes como `hola`, `buen día`, `buenas tardes` y variantes cortas sin adjuntos,
+  - si todavía no existe hilo OpenAI previo,
+  - el backend responde directo con saludo de `Tal-IA` y el nombre comercial del tenant,
+  - y deja `ensure_opportunity`, followup y documento de bienvenida en background después del dispatch.
+
+- Objetivo de este paquete:
+  - bajar el primer reply visible al rango de `~7s` cuando el usuario solo manda un saludo simple,
+  - evitar gastar CRM, booking y OpenAI para un turno que no lo necesita.
+
+- Validación:
+  - `poetry run pytest tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py tests/services/test_storage_channels.py -q`
+  - resultado: `31 passed`
+
+- Operación:
+  - `talia-api.service` se reinició,
+  - healthcheck local validado en `http://127.0.0.1:8004/api/health`.

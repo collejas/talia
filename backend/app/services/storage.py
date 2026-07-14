@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import unicodedata
@@ -35,6 +36,21 @@ DEFAULT_CALENDAR_SETTINGS_SLUG = "default"
 
 class StorageError(RuntimeError):
     """Errores de persistencia para servicios externos."""
+
+
+def _schedule_background_coroutine(coro: Any, *, label: str) -> None:
+    task = asyncio.create_task(coro)
+
+    def _log_task_failure(done_task: asyncio.Task) -> None:
+        try:
+            done_task.result()
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.warning(
+                "storage.background_task_failed",
+                extra={"label": label, "error": str(exc)},
+            )
+
+    task.add_done_callback(_log_task_failure)
 
 
 async def _publish_inbox_realtime_event(
@@ -1573,16 +1589,48 @@ async def register_whatsapp_message(
         if resolved_persona_id:
             persona_row = await repo.get_persona_by_id(persona_id=resolved_persona_id)
         else:
+            lookup_coroutines: list[tuple[str, Any]] = []
             if wa_id:
-                persona_row = await repo.get_persona_by_whatsapp_id(
-                    wa_id=wa_id,
-                    organizacion_id=org_uuid,
+                lookup_coroutines.append(
+                    (
+                        "wa_id",
+                        repo.get_persona_by_whatsapp_id(
+                            wa_id=wa_id,
+                            organizacion_id=org_uuid,
+                        ),
+                    )
                 )
-            if not persona_row and normalized_phone:
-                persona_row = await repo.get_persona_by_phone_e164(
-                    phone_e164=normalized_phone,
-                    organizacion_id=org_uuid,
+            if normalized_phone:
+                lookup_coroutines.append(
+                    (
+                        "phone_e164",
+                        repo.get_persona_by_phone_e164(
+                            phone_e164=normalized_phone,
+                            organizacion_id=org_uuid,
+                        ),
+                    )
                 )
+            if lookup_coroutines:
+                lookup_results = await asyncio.gather(
+                    *(coro for _, coro in lookup_coroutines),
+                    return_exceptions=True,
+                )
+                for (lookup_label, _), lookup_result in zip(lookup_coroutines, lookup_results):
+                    if isinstance(lookup_result, Exception):
+                        logger.warning(
+                            "storage.register_whatsapp_message.persona_lookup_failed",
+                            extra={
+                                "lookup": lookup_label,
+                                "wa_id": wa_id,
+                                "phone_e164": normalized_phone,
+                                "organizacion_id": organizacion_id,
+                                "error": str(lookup_result),
+                            },
+                        )
+                        continue
+                    if isinstance(lookup_result, dict) and lookup_result.get("id"):
+                        persona_row = lookup_result
+                        break
 
         if persona_row:
             persona_id_value = persona_row.get("id")
@@ -1638,35 +1686,35 @@ async def register_whatsapp_message(
             )
 
     if direction == "entrante" and conversation_id:
-        try:
-            from app.services import whatsapp_followups as whatsapp_followup_jobs
+        from app.services import whatsapp_followups as whatsapp_followup_jobs
 
-            await whatsapp_followup_jobs.cancel_followup_jobs_for_inbound(
+        _schedule_background_coroutine(
+            whatsapp_followup_jobs.cancel_followup_jobs_for_inbound(
                 conversation_id=str(conversation_id),
                 reason="customer_replied",
-            )
-        except Exception as exc:
-            logger.warning(
-                "storage.whatsapp_followup_cancel_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
+            ),
+            label="cancel_whatsapp_followups_for_inbound",
+        )
 
     try:
         persona_id_value = str(result.get("persona_id") or "")
-        await _publish_inbox_realtime_event(
-            organizacion_id=str(
-                result.get("organizacion_id")
-                or organizacion_id
-                or metadata_payload.get("resolved_organizacion_id")
-                or ""
+        _schedule_background_coroutine(
+            _publish_inbox_realtime_event(
+                organizacion_id=str(
+                    result.get("organizacion_id")
+                    or organizacion_id
+                    or metadata_payload.get("resolved_organizacion_id")
+                    or ""
+                ),
+                event_type="inbox_message_created",
+                payload={
+                    "channel": "whatsapp",
+                    "conversation_id": str(result.get("conversation_id") or ""),
+                    "persona_id": str(result.get("persona_id") or persona_id_value),
+                    "direction": str(direction),
+                },
             ),
-            event_type="inbox_message_created",
-            payload={
-                "channel": "whatsapp",
-                "conversation_id": str(result.get("conversation_id") or ""),
-                "persona_id": str(result.get("persona_id") or persona_id_value),
-                "direction": str(direction),
-            },
+            label="publish_whatsapp_inbox_realtime_event",
         )
     except Exception:
         pass
@@ -1674,15 +1722,18 @@ async def register_whatsapp_message(
         org_value = _safe_uuid(
             result.get("organizacion_id") or organizacion_id or metadata_payload.get("resolved_organizacion_id")
         )
-        await _notify_inbox_message(
-            repo=repo,
-            organizacion_id=org_value,
-            conversation_id=str(result.get("conversation_id") or ""),
-            persona_id=persona_id_value,
-            channel="whatsapp",
-            direction=str(direction),
-            message_text=body,
-            message_id=str(result.get("message_id") or ""),
+        _schedule_background_coroutine(
+            _notify_inbox_message(
+                repo=repo,
+                organizacion_id=org_value,
+                conversation_id=str(result.get("conversation_id") or ""),
+                persona_id=persona_id_value,
+                channel="whatsapp",
+                direction=str(direction),
+                message_text=body,
+                message_id=str(result.get("message_id") or ""),
+            ),
+            label="notify_whatsapp_inbox_message",
         )
     except Exception:
         pass
