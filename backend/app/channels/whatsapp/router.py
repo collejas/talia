@@ -69,16 +69,21 @@ async def whatsapp_meta_verify_webhook(
 
 @router.post("/meta/{organizacion_id}/webhook", summary="Webhook de recepción WhatsApp Cloud API")
 async def whatsapp_meta_webhook(
+    background_tasks: BackgroundTasks,
     organizacion_id: UUID,
     payload: dict = Depends(verify_meta_signature),
 ) -> dict[str, str]:
     """Procesa mensajes entrantes y estados desde WhatsApp Cloud API."""
     background_payloads = schemas.MetaWhatsAppIncomingMessage.from_webhook_payload(payload)
     for message in background_payloads:
-        await service.handle_incoming_message(message, "meta_webhook")
+        background_tasks.add_task(
+            service.handle_incoming_message,
+            message,
+            "meta_webhook",
+        )
 
     status_callbacks = schemas.MetaWhatsAppStatusCallback.from_webhook_payload(payload)
     for callback in status_callbacks:
-        await service.handle_status_callback(callback, provider="meta")
+        background_tasks.add_task(service.handle_status_callback, callback, provider="meta")
 
     return {"status": "accepted"}

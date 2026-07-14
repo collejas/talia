@@ -48,3 +48,100 @@
   - perfilar y reducir `register_whatsapp_message`,
   - perfilar `fetch_persona_context` y el camino real de `assistant_generation_ms`,
   - medir nuevamente con evidencia real después de cada ajuste.
+
+## 2026-07-13 23:55 UTC
+
+- Acción ejecutada:
+  - primer paquete de reducción de latencia en el camino crítico del canal.
+
+- Cambios aplicados:
+  - `Meta webhook` pasó de procesamiento síncrono a `BackgroundTasks`,
+  - `read` y `typing` dejaron de bloquear el flujo principal y ahora se disparan en background,
+  - se eliminó un `force_refresh=True` remanente en `read_indicator`,
+  - el debounce de burst dejó de esperar para mensajes demasiado cortos de una sola palabra.
+
+- Intención de este paquete:
+  - bajar latencia total percibida sin cambiar la respuesta funcional del asistente,
+  - evitar que el webhook Meta se quede abierto mientras corre todo el pipeline,
+  - quitar tiempo muerto no esencial antes de invocar OpenAI o enviar la respuesta.
+
+- Archivos tocados:
+  - `backend/app/channels/whatsapp/router.py`
+  - `backend/app/channels/whatsapp/service.py`
+
+- Validación local:
+  - `poetry run pytest tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py -q`
+  - resultado: `23 passed`
+
+- Resultado esperado en producción:
+  - menor latencia visible en mensajes Meta,
+  - eliminación del costo de `read_indicator_ms` y `typing_indicator_ms` dentro del camino crítico,
+  - menor castigo por debounce cuando el usuario manda un mensaje corto aislado.
+
+- Pendiente inmediato:
+  - medir nuevamente `whatsapp.turn_timing` tras deploy,
+  - confirmar si el siguiente cuello dominante queda en `register_inbound_ms`, `ensure_opportunity_ms` o `assistant_generation_ms`.
+
+## 2026-07-13 23:56 UTC
+
+- Incidente observado:
+  - mensaje enviado por el usuario a las `17:50` del `2026-07-13` sin respuesta visible.
+
+- Evidencia confirmada:
+  - el inbound sí entró a las `2026-07-13 23:50:52 UTC`,
+  - el backend sí generó y despachó respuesta a las `2026-07-13 23:51:12 UTC`,
+  - Meta registró el outbound como `fallido` a las `2026-07-13 23:51:13 UTC` con código `131047`.
+
+- Causa raíz:
+  - el `hola` entró por `phone_number_id = 1139218909270276` / `display_phone_number = 5214443891655`,
+  - la respuesta salió intentando usar el `phone_number_id` default del tenant `1230608700141056` / `display_phone_number = 5214442222728`,
+  - para tenants con más de una línea Meta, el canal estaba respondiendo con la línea equivocada,
+  - esto también explica el `read_indicator_not_sent` con `Message ID does not exist`.
+
+- Corrección aplicada:
+  - el webhook Meta ya no fuerza el `organizacion_id` del path dentro del procesamiento en background,
+  - el flujo guarda en `inbox_context` el `meta_phone_number_id` y el número destino real del inbound,
+  - `read_indicator` y el reply Meta ahora usan el `phone_number_id` del mensaje entrante cuando existe.
+
+- Validación local:
+  - `poetry run pytest tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py -q`
+  - resultado esperado tras ajuste: suite verde.
+
+- Pendiente inmediato:
+  - desplegar,
+  - reenviar un `hola` al número `5214443891655`,
+  - validar en `logs/whatsapp.log` que el reply salga con el mismo `phone_number_id` del inbound y que desaparezca el error `131047`.
+
+## 2026-07-14 00:10 UTC
+
+- Prueba validada:
+  - mensaje `hola` enviado a las `2026-07-14 00:09:54 UTC` (`18:09` local del `2026-07-13`),
+  - respuesta visible entregada por Meta a las `2026-07-14 00:10:17 UTC`.
+
+- Resultado:
+  - la corrección de línea Meta sí funcionó,
+  - ya no apareció `131047`,
+  - el reply salió y fue marcado como `enviado`, `entregado` y `leido`.
+
+- Latencia real observada:
+  - `total_ms`: `25364.83`
+  - `reply_dispatched`: `2026-07-14 00:10:15 UTC`
+  - tiempo desde inbound recibido hasta dispatch: ~`21.3s`
+
+- Cuellos dominantes del turno:
+  - `register_inbound_ms`: `5888.27`
+  - `ensure_opportunity_ms`: `3171.74`
+  - `assistant_generation_ms`: `8430.11`
+  - dentro de assistant:
+    - `fetch_persona_context_ms`: `692.97`
+    - `tool_loop_retry_ms`: `4896.33`
+
+- Lectura operativa:
+  - el problema principal ya no está en `read/typing` ni en la línea Meta equivocada,
+  - el mayor costo actual está repartido entre persistencia inicial, oportunidad CRM y generación OpenAI,
+  - el prompt activo cambió a `prompt_version = 32` y además hubo `prompt_variables_retry_without_variables`, lo que indica un reintento adicional dentro del tramo de generación.
+
+- Siguiente foco técnico:
+  - perfilar y recortar `register_whatsapp_message`,
+  - revisar por qué `ensure_persona_conversation_opportunity` sigue creando un costo de ~`3.1s`,
+  - eliminar el retry evitable de prompt variables en el flujo de `assistant_generation`.

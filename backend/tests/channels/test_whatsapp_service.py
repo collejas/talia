@@ -512,6 +512,7 @@ async def test_handle_incoming_message_prefers_phone_number_id_over_display_numb
     )
 
     register_calls: list[dict[str, Any]] = []
+    inbox_context_calls: list[tuple[str, dict[str, Any]]] = []
 
     async def fake_register(**kwargs):
         register_calls.append(kwargs)
@@ -524,8 +525,12 @@ async def test_handle_incoming_message_prefers_phone_number_id_over_display_numb
     async def fake_coalesce(*_: object, **__: object):
         return False, message.body or "", {}
 
+    async def fake_merge_inbox_context(conversation_id: str, patch: dict[str, Any]) -> None:
+        inbox_context_calls.append((conversation_id, patch))
+
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", fake_merge_inbox_context)
     monkeypatch.setattr(service, "_coalesce_inbound_burst", fake_coalesce)
 
     await service.handle_incoming_message(message, "meta_webhook")
@@ -533,6 +538,15 @@ async def test_handle_incoming_message_prefers_phone_number_id_over_display_numb
     assert len(register_calls) == 1
     assert register_calls[0]["organizacion_id"] == "org-phone-id"
     assert register_calls[0]["webhook_payload"] == message.raw_payload
+    assert inbox_context_calls == [
+        (
+            "conv-meta",
+            {
+                "meta_phone_number_id": "1139218909270276",
+                "meta_display_phone_number": "+5214443891655",
+            },
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -639,6 +653,56 @@ async def test_send_meta_whatsapp_reply_falls_back_to_text(monkeypatch) -> None:
     assert result.sid == "wamid.text.1"
     assert captured["json"]["type"] == "text"
     assert captured["json"]["text"]["body"] == "Mensaje libre"
+
+
+@pytest.mark.asyncio
+async def test_send_meta_whatsapp_reply_prefers_inbound_phone_number_id(monkeypatch) -> None:
+    runtime = SimpleNamespace(
+        provider="meta",
+        meta_phone_number_id="1230608700141056",
+        meta_page_access_token="meta-token",
+        meta_graph_api_version="v21.0",
+    )
+    monkeypatch.setattr(service.tenant_runtime, "get_whatsapp_runtime_settings", _async_return(runtime))
+
+    captured: dict[str, Any] = {}
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict[str, Any]:
+            return {"messages": [{"id": "wamid.text.2"}]}
+
+    class FakeClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeClient)
+
+    result = await service._send_meta_whatsapp_reply(
+        to_number="+5214443891655",
+        body="Mensaje libre",
+        organizacion_id=UUID("39e32c05-bfc2-4794-8aab-225873f2bf19"),
+        meta_phone_number_id="1139218909270276",
+    )
+
+    assert result.provider == "meta"
+    assert result.sid == "wamid.text.2"
+    assert result.from_number == "1139218909270276"
+    assert "/1139218909270276/messages" in captured["url"]
 
 
 @pytest.mark.asyncio

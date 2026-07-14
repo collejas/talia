@@ -244,6 +244,18 @@ def _log_turn_timing(
     log_event(logger, "whatsapp.turn_timing", **payload)
 
 
+def _schedule_background_coroutine(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+
+    def _log_task_failure(done_task: asyncio.Task) -> None:
+        try:
+            done_task.result()
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.info("whatsapp.background_task_failed", extra={"error": str(exc)})
+
+    task.add_done_callback(_log_task_failure)
+
+
 @dataclass(slots=True)
 class AssistantReply:
     """Respuesta del asistente junto con metadatos para persistencia."""
@@ -1603,11 +1615,14 @@ def _should_wait_for_inbound_burst(text: str | None) -> bool:
     normalized = " ".join(str(text or "").split())
     if not normalized:
         return False
+    words = normalized.split()
+    if len(words) < 2:
+        return False
     if any(punct in normalized for punct in ".!?"):
         return False
     return (
         len(normalized) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS
-        and len(normalized.split()) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS
+        and len(words) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS
     )
 
 
@@ -1761,12 +1776,12 @@ async def handle_incoming_message(
 
     normalized_from = _normalize_phone_number(message.from_number)
     recipient_number = _normalize_phone_number(message.to_number)
+    inbound_meta_phone_number_id = _trim_text(getattr(message, "phone_number_id", None))
     if org_uuid is None:
         resolve_org_started = time.perf_counter()
-        phone_number_id = getattr(message, "phone_number_id", None)
-        if phone_number_id:
+        if inbound_meta_phone_number_id:
             organizacion_hint = await resolve_whatsapp_organizacion_by_phone_number_id(
-                phone_number_id=phone_number_id
+                phone_number_id=inbound_meta_phone_number_id
             )
         else:
             organizacion_hint = None
@@ -1867,6 +1882,20 @@ async def handle_incoming_message(
                 "whatsapp.conversation_reopen_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+        if source == "meta_webhook" and (inbound_meta_phone_number_id or recipient_number):
+            try:
+                await storage.merge_conversation_inbox_context(
+                    conversation_id,
+                    {
+                        "meta_phone_number_id": inbound_meta_phone_number_id,
+                        "meta_display_phone_number": recipient_number,
+                    },
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.meta_inbox_context_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
 
     if not conversation_id or not persona_id:
         logger.error(
@@ -2179,16 +2208,18 @@ async def handle_incoming_message(
     # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
     read_indicator_started = time.perf_counter()
     typing_indicator_started = time.perf_counter()
-    await asyncio.gather(
+    _schedule_background_coroutine(
         _send_whatsapp_read_indicator(
             incoming_message_sid=message.message_sid,
             organizacion_id=org_uuid,
-        ),
+            meta_phone_number_id=inbound_meta_phone_number_id,
+        )
+    )
+    _schedule_background_coroutine(
         _send_whatsapp_typing_indicator(
             incoming_message_sid=message.message_sid,
             organizacion_id=org_uuid,
-        ),
-        return_exceptions=True,
+        )
     )
     _record_stage_timing(stage_timings, "read_indicator_ms", read_indicator_started)
     _record_stage_timing(stage_timings, "typing_indicator_ms", typing_indicator_started)
@@ -2393,6 +2424,7 @@ async def handle_incoming_message(
             body=final_reply_text,
             attachments=reply_attachments or None,
             organizacion_id=org_uuid,
+            meta_phone_number_id=inbound_meta_phone_number_id,
         )
         _record_stage_timing(stage_timings, "twilio_send_ms", twilio_send_started)
     except asyncio.CancelledError:
@@ -2511,6 +2543,8 @@ async def handle_incoming_message(
     }
     if send_result.error:
         metadata["delivery_error"] = send_result.error
+    if inbound_meta_phone_number_id:
+        metadata["meta_phone_number_id"] = inbound_meta_phone_number_id
 
     resolved_persona_org = await resolve_whatsapp_organizacion(contact=persona_record) or organizacion_hint
     try:
@@ -3686,13 +3720,15 @@ async def _send_meta_whatsapp_reply(
     template_language: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
+    meta_phone_number_id: str | None = None,
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando WhatsApp Cloud API."""
 
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
     )
-    if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+    resolved_meta_phone_number_id = _trim_text(meta_phone_number_id) or runtime.meta_phone_number_id
+    if not resolved_meta_phone_number_id or not runtime.meta_page_access_token:
         logger.warning("whatsapp.meta_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="meta_not_configured", provider="meta")
 
@@ -3725,7 +3761,7 @@ async def _send_meta_whatsapp_reply(
         return TwilioSendResult(sid=None, status="skipped", error="invalid_recipient", provider="meta")
 
     graph_version = runtime.meta_graph_api_version or "v21.0"
-    messages_url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
+    messages_url = f"https://graph.facebook.com/{graph_version}/{resolved_meta_phone_number_id}/messages"
     if normalized_template_name and normalized_template_language:
         payload = {
             "messaging_product": "whatsapp",
@@ -3844,7 +3880,7 @@ async def _send_meta_whatsapp_reply(
         sid=message_id,
         status="sent",
         error=None,
-        from_number=runtime.meta_phone_number_id,
+        from_number=resolved_meta_phone_number_id,
         provider="meta",
     )
 
@@ -3909,6 +3945,7 @@ async def _send_whatsapp_reply(
     template_language: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
+    meta_phone_number_id: str | None = None,
 ) -> TwilioSendResult:
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
@@ -3924,6 +3961,7 @@ async def _send_whatsapp_reply(
             template_language=template_language,
             attachments=attachments,
             organizacion_id=organizacion_id,
+            meta_phone_number_id=meta_phone_number_id,
         )
     return await _send_twilio_whatsapp_reply(
         to_number=to_number,
@@ -3993,6 +4031,7 @@ async def _send_whatsapp_read_indicator(
     *,
     incoming_message_sid: str | None,
     organizacion_id: UUID | None,
+    meta_phone_number_id: str | None = None,
 ) -> bool:
     """Marca como leído el mensaje entrante vía Twilio (best-effort)."""
 
@@ -4004,14 +4043,14 @@ async def _send_whatsapp_read_indicator(
 
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=organizacion_id,
-        force_refresh=True,
     )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":
-        if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+        resolved_meta_phone_number_id = _trim_text(meta_phone_number_id) or runtime.meta_phone_number_id
+        if not resolved_meta_phone_number_id or not runtime.meta_page_access_token:
             return False
         graph_version = runtime.meta_graph_api_version or "v21.0"
-        url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
+        url = f"https://graph.facebook.com/{graph_version}/{resolved_meta_phone_number_id}/messages"
         payload = {
             "messaging_product": "whatsapp",
             "status": "read",
