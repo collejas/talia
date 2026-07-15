@@ -238,6 +238,28 @@
   - `backend/app/repositories/crm.py`,
   - `backend/tests/repositories/test_crm_sales_assignment.py`.
 
+## 2026-07-15 15:26 UTC
+
+- Hallazgo de fondo en `webchat`:
+  - los `9` renglones visibles en Inbox no eran conversaciones humanas nuevas,
+  - eran reenganches automáticos montados sobre `personas` históricas,
+  - el runner estaba aceptando conversaciones `webchat` abiertas/pendientes aunque su actividad humana real fuera vieja o inexistente.
+
+- Causa confirmada:
+  - `webchat_followups` tomaba cualquier conversación con `ultimo_saliente_en` vencido,
+  - si la `persona` aún conservaba `session_id`, enviaba un nuevo followup,
+  - ese envío podía abrir una conversación nueva por inactividad aun cuando el visitante original llevaba meses sin interactuar.
+
+- Corrección aplicada:
+  - se bloqueó el reenganche cuando la conversación no tiene `ultimo_entrante_en`,
+  - se bloqueó el reenganche cuando la última entrada humana ya está fuera de la ventana útil del flujo,
+  - ambos casos ahora marcan `stop_reason` y salen del circuito automático.
+
+- Validación:
+  - `poetry run pytest tests/services/test_webchat_followups.py -q`
+  - resultado: `7 passed`
+  - tras reiniciar `talia-api.service`, el worker empezó a registrar `webchat.followup.skipped_stale_human_inbound` en lugar de seguir enviando followups a sesiones históricas.
+
 - Siguiente foco recomendado:
   - corregir `registrar_mensaje_webchat` para alinearlo al modelo vigente,
   - o, si el flujo correcto ya no debe crear en `contactos`, redirigirlo completamente a `personas` / flujo actual.

@@ -193,6 +193,79 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_run_followups_stops_conversation_without_human_inbound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    convo = {
+        "id": "conv-no-inbound",
+        "contacto_id": "contact-1",
+        "organizacion_id": "org-1",
+        "estado": "abierta",
+        "ultimo_saliente_en": (now - timedelta(minutes=40)).isoformat(),
+        "ultimo_entrante_en": None,
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo([convo])
+
+    stop_reasons: list[str] = []
+    sent_messages: list[dict] = []
+
+    async def fake_mark_stop_reason(*, conversation_id: str, persona_id: str, reason: str):
+        stop_reasons.append(reason)
+
+    async def fake_register_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(webchat_followups, "mark_stop_reason", fake_mark_stop_reason)
+    monkeypatch.setattr(webchat_followups.storage, "register_webchat_message", fake_register_message)
+
+    await webchat_followups.run_followups(now=now)
+
+    assert stop_reasons == ["no_human_inbound"]
+    assert not sent_messages
+
+
+@pytest.mark.asyncio
+async def test_run_followups_stops_stale_historical_webchat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    convo = {
+        "id": "conv-stale",
+        "contacto_id": "contact-1",
+        "organizacion_id": "org-1",
+        "estado": "abierta",
+        "ultimo_saliente_en": (now - timedelta(days=30)).isoformat(),
+        "ultimo_entrante_en": (now - timedelta(days=30, minutes=5)).isoformat(),
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo([convo])
+
+    stop_reasons: list[str] = []
+    sent_messages: list[dict] = []
+
+    async def fake_mark_stop_reason(*, conversation_id: str, persona_id: str, reason: str):
+        stop_reasons.append(reason)
+
+    async def fake_register_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(webchat_followups, "mark_stop_reason", fake_mark_stop_reason)
+    monkeypatch.setattr(webchat_followups.storage, "register_webchat_message", fake_register_message)
+    monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_minutes", 30)
+    monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_max_attempts", 2)
+    monkeypatch.setattr(webchat_followups.settings, "webchat_escalate_minutes", 0)
+
+    await webchat_followups.run_followups(now=now)
+
+    assert stop_reasons == ["stale_human_inbound"]
+    assert not sent_messages
+
+
+@pytest.mark.asyncio
 async def test_run_followups_escalates_when_attempts_exhausted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

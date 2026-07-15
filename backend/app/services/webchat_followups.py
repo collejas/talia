@@ -359,6 +359,14 @@ def _parse_ts(value: Any) -> datetime | None:
     return None
 
 
+def _followup_stale_window() -> timedelta:
+    reengage_minutes = max(1, int(settings.webchat_reengage_minutes or 1))
+    max_attempts = max(1, int(settings.webchat_reengage_max_attempts or 1))
+    escalate_minutes = max(0, int(settings.webchat_escalate_minutes or 0))
+    total_minutes = (reengage_minutes * (max_attempts + 1)) + escalate_minutes + 30
+    return timedelta(minutes=max(120, total_minutes))
+
+
 def _should_stop(state: dict[str, Any]) -> bool:
     if not state:
         return False
@@ -686,6 +694,34 @@ async def _process_conversation(
         return
     last_in = _parse_ts(conversation.get("ultimo_entrante_en"))
     if last_in and last_in > last_out:
+        return
+    if not last_in:
+        await mark_stop_reason(
+            conversation_id=conversation_id,
+            persona_id=persona_id_str,
+            reason="no_human_inbound",
+        )
+        log_event(
+            logger,
+            "webchat.followup.skipped_no_human_inbound",
+            conversation_id=conversation_id,
+            persona_id=persona_id_str,
+        )
+        return
+    if (reference_time - last_in) > _followup_stale_window():
+        await mark_stop_reason(
+            conversation_id=conversation_id,
+            persona_id=persona_id_str,
+            reason="stale_human_inbound",
+        )
+        log_event(
+            logger,
+            "webchat.followup.skipped_stale_human_inbound",
+            conversation_id=conversation_id,
+            persona_id=persona_id_str,
+            last_in=last_in.isoformat(),
+            stale_window_minutes=int(_followup_stale_window().total_seconds() // 60),
+        )
         return
 
     try:
