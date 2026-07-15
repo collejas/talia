@@ -636,6 +636,135 @@ async def test_handle_incoming_message_fast_paths_simple_greeting(monkeypatch) -
 
 
 @pytest.mark.asyncio
+async def test_structured_fast_path_company_name_returns_slots(monkeypatch) -> None:
+    recent_messages = [
+        {"id": "m1", "direccion": "saliente", "texto": "Gracias, Antonia. ¿Me confirmas el nombre de tu empresa?"},
+    ]
+    merged_context: list[dict[str, Any]] = []
+
+    async def fake_fetch_recent_messages(*_: object, **__: object):
+        return recent_messages
+
+    async def fake_update_persona(*_: object, **__: object):
+        return None
+
+    async def fake_merge_conversation_inbox_context(conversation_id: str, patch: dict[str, Any]) -> None:
+        assert conversation_id == "conv-1"
+        merged_context.append(patch)
+
+    async def fake_list_demo_slots(arguments: dict[str, Any], context: Any) -> dict[str, Any]:
+        assert arguments == {}
+        assert context.conversation_id == "conv-1"
+        return {
+            "slots": [
+                {
+                    "slot_id": "slot-1",
+                    "start_at": "2026-07-16T15:00:00+00:00",
+                    "timezone": "UTC",
+                },
+                {
+                    "slot_id": "slot-2",
+                    "start_at": "2026-07-16T17:00:00+00:00",
+                    "timezone": "UTC",
+                },
+            ]
+        }
+
+    scheduled_coroutines: list[Any] = []
+
+    monkeypatch.setattr(service.storage, "fetch_recent_messages", fake_fetch_recent_messages)
+    monkeypatch.setattr(service.storage, "update_persona", fake_update_persona)
+    monkeypatch.setattr(
+        service.storage,
+        "merge_conversation_inbox_context",
+        fake_merge_conversation_inbox_context,
+    )
+    monkeypatch.setattr(service.whatsapp_tools, "_handle_list_demo_slots", fake_list_demo_slots)
+    monkeypatch.setattr(
+        service.whatsapp_tools,
+        "_refresh_opportunity_context_from_persona",
+        _async_none,
+    )
+    monkeypatch.setattr(service, "_schedule_background_coroutine", lambda coro: scheduled_coroutines.append(coro))
+
+    reply = await service._maybe_build_structured_fast_reply(
+        conversation_id="conv-1",
+        persona_id="persona-1",
+        persona_record={"id": "persona-1", "nombre_completo": "Antonia Urdueña"},
+        conversation_meta={"last_response_id": "resp-1", "inbox_context": {}},
+        message=schemas.WhatsAppIncomingMessage(
+            message_sid="SM-company",
+            from_number="whatsapp:+521111111111",
+            to_number="whatsapp:+521000000000",
+            body="Amix manufacturing",
+            wa_id="521111111111",
+            profile_name="Antonia",
+            num_media=0,
+            media=[],
+            raw_payload={},
+        ),
+        organizacion_id=None,
+    )
+
+    for coro in scheduled_coroutines:
+        coro.close()
+
+    assert reply is not None
+    assert reply.tools_called == ["set_company_name", "list_demo_slots"]
+    assert "Tengo cita de diagnostico" in (reply.text or "")
+    assert merged_context
+    assert merged_context[0]["pending_booking_slots"][0]["slot_id"] == "slot-1"
+
+
+@pytest.mark.asyncio
+async def test_structured_fast_path_information_email_schedules_background_send(monkeypatch) -> None:
+    recent_messages = [
+        {"id": "m1", "direccion": "saliente", "texto": "Perfecto, Antonia. ¿Hay algo más en lo que te pueda ayudar?"},
+    ]
+    scheduled_coroutines: list[Any] = []
+
+    async def fake_fetch_recent_messages(*_: object, **__: object):
+        return recent_messages
+
+    monkeypatch.setattr(service.storage, "fetch_recent_messages", fake_fetch_recent_messages)
+    monkeypatch.setattr(service, "_schedule_background_coroutine", lambda coro: scheduled_coroutines.append(coro))
+
+    reply = await service._maybe_build_structured_fast_reply(
+        conversation_id="conv-2",
+        persona_id="persona-2",
+        persona_record={
+            "id": "persona-2",
+            "nombre_completo": "Antonia Urdueña",
+            "correo_principal": "collejas1@gmail.com",
+        },
+        conversation_meta={
+            "last_response_id": "resp-2",
+            "inbox_context": {"welcome_document_sent": True},
+        },
+        message=schemas.WhatsAppIncomingMessage(
+            message_sid="SM-email",
+            from_number="whatsapp:+521111111111",
+            to_number="whatsapp:+521000000000",
+            body="Me puedes enviar la información que me enviaste al inicio, pero a mi correo?",
+            wa_id="521111111111",
+            profile_name="Antonia",
+            num_media=0,
+            media=[],
+            raw_payload={},
+        ),
+        organizacion_id=None,
+    )
+
+    for coro in scheduled_coroutines:
+        coro.close()
+
+    assert reply is not None
+    assert reply.tools_called == ["send_information_email"]
+    assert "Te la envío al correo" in (reply.text or "")
+    assert len(scheduled_coroutines) == 1
+
+
+@pytest.mark.asyncio
 async def test_handle_incoming_message_prefers_phone_number_id_over_display_number(monkeypatch) -> None:
     """El inbound Meta debe resolver el tenant por `phone_number_id` primero."""
     message = schemas.MetaWhatsAppIncomingMessage(

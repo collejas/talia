@@ -1,5 +1,49 @@
 # Changelog · Latencia WhatsApp
 
+## 2026-07-15 22:05 UTC
+
+- Nuevo paquete de reducción de latencia en pasos determinísticos del flujo WhatsApp.
+
+- Hallazgo base:
+  - la latencia seguía dominada por `assistant_generation_ms` incluso en pasos muy estructurados:
+    - captura de nombre,
+    - captura de correo,
+    - captura de empresa,
+    - selección de horario,
+    - reenvío de información por correo.
+  - en esos casos el modelo estaba haciendo vueltas innecesarias aunque el backend ya tenía suficiente contexto para actuar.
+
+- Ajuste aplicado:
+  - se agregó un fast path estructurado en `backend/app/channels/whatsapp/service.py` para evitar invocar el loop largo del asistente cuando el turno cae en alguno de estos estados:
+    - si el último mensaje saliente pidió nombre completo y el usuario responde con su nombre:
+      - se guarda el nombre,
+      - se responde directo pidiendo correo.
+    - si el último mensaje saliente pidió correo y el usuario responde con un email:
+      - se guarda el correo,
+      - se responde directo pidiendo empresa.
+    - si el último mensaje saliente pidió empresa y el usuario responde con el nombre de su empresa:
+      - se guarda la empresa,
+      - se consultan horarios disponibles,
+      - se responde directo con opciones de cita,
+      - se persisten `pending_booking_slots` en `inbox_context`.
+    - si ya hay `pending_booking_slots` y el usuario responde con uno de esos horarios:
+      - se agenda directo,
+      - se limpia `pending_booking_slots`,
+      - se responde con confirmación de cita.
+    - si el usuario pide reenviar por correo la información inicial y ya existe correo del contacto:
+      - se responde directo por WhatsApp,
+      - el envío de correo se dispara en background.
+
+- Intención de este paquete:
+  - bajar de forma consistente la latencia de los pasos repetitivos de captura/agendamiento,
+  - evitar que nombre/correo/empresa/horario y reenvío por correo dependan del loop largo del modelo,
+  - conservar el comportamiento comercial sin hardcodear respuestas globales fuera del contexto actual.
+
+- Validación local:
+  - `python3 -m py_compile backend/app/channels/whatsapp/service.py`
+  - `cd backend && poetry run pytest tests/channels/test_whatsapp_service.py -q`
+  - resultado: `30 passed`
+
 ## 2026-07-15 21:33 UTC
 
 - Revisión posterior al redeploy y prueba manual en el tenant `a2f79c76-340a-4fe7-b05a-6ff4dd532325`.

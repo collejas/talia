@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import HTTPException
@@ -159,6 +160,7 @@ MAX_WHATSAPP_ATTACHMENT_BYTES = 8 * 1024 * 1024
 MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS = 12000
 MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE = 4
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+_EMAIL_RE = re.compile(r"([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})", re.IGNORECASE)
 
 
 def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -380,6 +382,207 @@ def _normalize_fast_path_text(value: Any) -> str:
     return " ".join(text.split())
 
 
+def _extract_email_from_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = _EMAIL_RE.search(text)
+    if not match:
+        return None
+    return match.group(1).strip().lower()
+
+
+def _recent_message_text(row: Mapping[str, Any] | None) -> str:
+    if not isinstance(row, Mapping):
+        return ""
+    for key in ("texto", "body", "text"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _looks_like_information_email_request(body: str | None) -> bool:
+    normalized = _normalize_fast_path_text(body)
+    if not normalized:
+        return False
+    has_email_intent = any(
+        token in normalized
+        for token in (
+            "enviar por correo",
+            "mandar por correo",
+            "reenviar por correo",
+            "a mi correo",
+            "al correo",
+        )
+    )
+    has_information_reference = any(
+        token in normalized
+        for token in (
+            "informacion que me enviaste al inicio",
+            "informacion que me enviaste",
+            "información que me enviaste al inicio",
+            "información que me enviaste",
+            "info que me enviaste al inicio",
+            "info que me enviaste",
+        )
+    )
+    return has_email_intent and has_information_reference
+
+
+def _looks_like_company_name_answer(body: str | None) -> bool:
+    normalized = _normalize_fast_path_text(body)
+    if not normalized:
+        return False
+    if len(normalized) > 80 or "?" in str(body or ""):
+        return False
+    if _extract_email_from_text(body):
+        return False
+    return len(normalized.split()) <= 6
+
+
+def _recent_last_outbound_message(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for row in reversed(messages):
+        if str(row.get("direccion") or "").strip().lower() == "saliente":
+            return row
+    return None
+
+
+def _build_pending_slot_choices(slots: list[dict[str, Any]]) -> list[dict[str, str]]:
+    choices: list[dict[str, str]] = []
+    for slot in slots[:6]:
+        start_at = _trim_text(slot.get("start_at"))
+        slot_id = _trim_text(slot.get("slot_id"))
+        timezone_name = _trim_text(slot.get("timezone")) or "UTC"
+        if not start_at or not slot_id:
+            continue
+        parsed = _parse_iso_datetime(start_at)
+        if parsed is None:
+            continue
+        try:
+            zone = ZoneInfo(timezone_name)
+        except Exception:
+            zone = timezone.utc
+        local_start = parsed.astimezone(zone)
+        choices.append(
+            {
+                "slot_id": slot_id,
+                "start_at": parsed.isoformat(),
+                "timezone": timezone_name,
+                "local_date": local_start.date().isoformat(),
+                "local_time": local_start.strftime("%I:%M %p").lstrip("0").lower(),
+            }
+        )
+    return choices
+
+
+def _format_pending_slots_reply(*, full_name: str | None, slots: list[dict[str, str]]) -> str:
+    if not slots:
+        prefix = f"Perfecto, {full_name}." if full_name else "Perfecto."
+        return f"{prefix} Ya tengo tus datos. ¿Qué horario te acomoda mejor para la cita?"
+    timezone_name = slots[0].get("timezone") or "UTC"
+    try:
+        zone = ZoneInfo(timezone_name)
+    except Exception:
+        zone = timezone.utc
+    today = datetime.now(zone).date()
+    labels: list[str] = []
+    for slot in slots[:3]:
+        local_date_raw = slot.get("local_date")
+        local_time = str(slot.get("local_time") or "").strip() or "horario disponible"
+        day_label = "ese horario"
+        try:
+            local_date = datetime.fromisoformat(str(local_date_raw)).date()
+        except Exception:
+            local_date = None
+        if local_date is not None:
+            if local_date == today:
+                day_label = "hoy"
+            elif local_date == today + timedelta(days=1):
+                day_label = "mañana"
+            else:
+                weekdays = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
+                day_label = weekdays[local_date.weekday()]
+        labels.append(f"{day_label} a las {local_time}")
+    prefix = f"Perfecto, {full_name}." if full_name else "Perfecto."
+    if len(labels) == 1:
+        options_text = labels[0]
+    elif len(labels) == 2:
+        options_text = f"{labels[0]} o {labels[1]}"
+    else:
+        options_text = f"{labels[0]}, {labels[1]} y {labels[2]}"
+    return f"{prefix} Tengo cita de diagnostico {options_text}. ¿Cual te acomoda mas?"
+
+
+def _match_pending_slot_choice(body: str | None, pending_slots: list[dict[str, str]]) -> dict[str, str] | None:
+    normalized = _normalize_fast_path_text(body)
+    if not normalized or not pending_slots:
+        return None
+    target_day: str | None = None
+    if "mañana" in normalized or "manana" in normalized:
+        target_day = "tomorrow"
+    elif "hoy" in normalized:
+        target_day = "today"
+
+    best_match: dict[str, str] | None = None
+    for slot in pending_slots:
+        local_time = _normalize_fast_path_text(slot.get("local_time"))
+        local_date_raw = slot.get("local_date")
+        if local_time and local_time in normalized:
+            if target_day is None:
+                return slot
+            try:
+                local_date = datetime.fromisoformat(str(local_date_raw)).date()
+            except Exception:
+                local_date = None
+            timezone_name = slot.get("timezone") or "UTC"
+            try:
+                zone = ZoneInfo(timezone_name)
+            except Exception:
+                zone = timezone.utc
+            today = datetime.now(zone).date()
+            if target_day == "today" and local_date == today:
+                return slot
+            if target_day == "tomorrow" and local_date == today + timedelta(days=1):
+                return slot
+            best_match = best_match or slot
+    return best_match
+
+
+def _build_booking_confirmation_fast_reply(
+    *,
+    full_name: str | None,
+    email: str | None,
+    start_at_iso: str,
+    timezone_name: str | None,
+) -> str:
+    parsed = _parse_iso_datetime(start_at_iso)
+    if parsed is None:
+        prefix = f"Listo, {full_name}." if full_name else "Listo."
+        return f"{prefix} Tu cita quedó agendada. Te llegará la invitación al correo que me compartiste."
+    try:
+        zone = ZoneInfo(str(timezone_name or "UTC"))
+    except Exception:
+        zone = timezone.utc
+    local_start = parsed.astimezone(zone)
+    today = datetime.now(zone).date()
+    if local_start.date() == today:
+        day_label = "hoy"
+    elif local_start.date() == today + timedelta(days=1):
+        day_label = "mañana"
+    else:
+        weekdays = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
+        day_label = weekdays[local_start.weekday()]
+    time_label = local_start.strftime("%I:%M %p").lstrip("0").lower()
+    prefix = f"Listo, {full_name}." if full_name else "Listo."
+    email_line = (
+        " Te llegará la invitación al correo que me compartiste."
+        if email
+        else " Te comparto la invitación enseguida."
+    )
+    return f"{prefix} Tu cita quedó agendada para {day_label} a las {time_label}.{email_line}"
+
+
 def _is_simple_greeting_message(
     body: str | None,
     *,
@@ -423,6 +626,208 @@ async def _build_simple_greeting_reply(organizacion_id: UUID | None) -> str:
     if brand_name:
         return f"Hola, soy Tal-IA de {brand_name}. ¿En qué te puedo ayudar?"
     return "Hola, soy Tal-IA. ¿En qué te puedo ayudar?"
+
+
+async def _run_information_email_fast_path(
+    *,
+    context: ToolRuntimeContext,
+    email: str,
+) -> None:
+    try:
+        await whatsapp_tools.lead_tools._handle_information_email({"email": email}, context)
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.warning(
+            "whatsapp.fast_path.information_email_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+
+
+async def _maybe_build_structured_fast_reply(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    persona_record: Mapping[str, Any] | None,
+    conversation_meta: Mapping[str, Any] | None,
+    message: schemas.WhatsAppIncomingMessage,
+    organizacion_id: UUID | None,
+) -> AssistantReply | None:
+    body = str(message.body or "").strip()
+    normalized_body = _normalize_fast_path_text(body)
+    if not normalized_body:
+        return None
+    try:
+        recent_messages = await storage.fetch_recent_messages(conversation_id=conversation_id, limit=8)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.fast_path.recent_messages_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+    last_outbound = _recent_last_outbound_message(recent_messages)
+    last_outbound_text = _normalize_fast_path_text(_recent_message_text(last_outbound))
+    inbox_context = _conversation_inbox_context(conversation_meta)
+    context = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        channel="whatsapp",
+        organizacion_id=str(organizacion_id) if organizacion_id else None,
+    )
+    full_name = _resolve_context_full_name({"persona": dict(persona_record or {})})
+    email_value = _contact_email_value(persona_record)
+
+    if (
+        inbox_context.get("welcome_document_sent")
+        and email_value
+        and _looks_like_information_email_request(body)
+    ):
+        _schedule_background_coroutine(
+            _run_information_email_fast_path(context=context, email=email_value)
+        )
+        return AssistantReply(
+            text=(
+                f"Claro, {full_name.split()[0]}. Te la envío al correo que me compartiste."
+                if full_name
+                else "Claro, te la envío al correo que me compartiste."
+            ),
+            openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+            response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+            tools_called=["send_information_email"],
+        )
+
+    if "nombre completo" in last_outbound_text:
+        declared_name = _resolve_declared_full_name(body)
+        if declared_name:
+            if str((persona_record or {}).get("nombre_completo") or "").strip() != declared_name:
+                try:
+                    await storage.update_persona(persona_id, {"nombre_completo": declared_name})
+                except StorageError as exc:
+                    logger.warning(
+                        "whatsapp.fast_path.full_name_update_failed",
+                        extra={"conversation_id": conversation_id, "error": str(exc)},
+                    )
+            _schedule_background_coroutine(
+                whatsapp_tools._refresh_opportunity_context_from_persona(
+                    context,
+                    reason="fast_path_full_name",
+                    ensure_capture=True,
+                )
+            )
+            first_name = declared_name.split()[0]
+            return AssistantReply(
+                text=f"Gracias, {first_name}. ¿Cuál es el mejor correo para enviarte la invitación?",
+                openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+                response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+                tools_called=["set_full_name"],
+            )
+
+    if "mejor correo" in last_outbound_text or "enviarte la invitacion" in last_outbound_text:
+        extracted_email = _extract_email_from_text(body)
+        if extracted_email:
+            try:
+                await storage.update_persona(persona_id, {"correo_principal": extracted_email})
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.fast_path.email_update_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
+            _schedule_background_coroutine(
+                whatsapp_tools._refresh_opportunity_context_from_persona(
+                    context,
+                    reason="fast_path_email",
+                    ensure_capture=True,
+                )
+            )
+            first_name = (full_name or "").split()[0] if full_name else None
+            return AssistantReply(
+                text=(
+                    f"Gracias, {first_name}. ¿Me confirmas el nombre de tu empresa?"
+                    if first_name
+                    else "Gracias. ¿Me confirmas el nombre de tu empresa?"
+                ),
+                openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+                response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+                tools_called=["set_email"],
+            )
+
+    if "nombre de tu empresa" in last_outbound_text and _looks_like_company_name_answer(body):
+        try:
+            await storage.update_persona(persona_id, {"company_name": body})
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fast_path.company_update_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        _schedule_background_coroutine(
+            whatsapp_tools._refresh_opportunity_context_from_persona(
+                context,
+                reason="fast_path_company_name",
+                ensure_capture=True,
+            )
+        )
+        availability_result = await whatsapp_tools._handle_list_demo_slots({}, context)
+        slot_choices = _build_pending_slot_choices(
+            [slot for slot in (availability_result.get("slots") or []) if isinstance(slot, dict)]
+        )
+        if slot_choices:
+            try:
+                await storage.merge_conversation_inbox_context(
+                    conversation_id,
+                    {
+                        "pending_booking_slots": slot_choices,
+                        "pending_booking_slots_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.fast_path.pending_slots_context_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
+        return AssistantReply(
+            text=_format_pending_slots_reply(full_name=full_name, slots=slot_choices),
+            openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+            response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+            tools_called=["set_company_name", "list_demo_slots"],
+        )
+
+    pending_slots_raw = inbox_context.get("pending_booking_slots")
+    pending_slots = [
+        item for item in pending_slots_raw if isinstance(item, dict)
+    ] if isinstance(pending_slots_raw, list) else []
+    matched_slot = _match_pending_slot_choice(body, pending_slots)
+    if matched_slot:
+        booking_result = await whatsapp_tools._handle_schedule_demo(
+            {
+                "slot_id": matched_slot.get("slot_id"),
+                "start_at": matched_slot.get("start_at"),
+            },
+            context,
+        )
+        try:
+            await storage.merge_conversation_inbox_context(
+                conversation_id,
+                {
+                    "pending_booking_slots": None,
+                    "pending_booking_slots_at": None,
+                },
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fast_path.pending_slots_clear_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        return AssistantReply(
+            text=_build_booking_confirmation_fast_reply(
+                full_name=full_name,
+                email=email_value,
+                start_at_iso=str(booking_result.get("start_at") or matched_slot.get("start_at") or ""),
+                timezone_name=str(booking_result.get("timezone") or matched_slot.get("timezone") or "UTC"),
+            ),
+            openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+            response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+            tools_called=["schedule_demo"],
+        )
+
+    return None
 
 
 async def _run_post_send_tasks(
@@ -2426,6 +2831,25 @@ async def handle_incoming_message(
                 },
             )
 
+    structured_fast_reply: AssistantReply | None = None
+    structured_fast_path_started: float | None = None
+    if not simple_greeting_fast_path:
+        try:
+            structured_fast_path_started = time.perf_counter()
+            structured_fast_reply = await _maybe_build_structured_fast_reply(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                persona_record=persona_record,
+                conversation_meta=conversation_meta,
+                message=message,
+                organizacion_id=org_uuid,
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.structured_fast_path_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
     # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
     read_indicator_started = time.perf_counter()
     typing_indicator_started = time.perf_counter()
@@ -2461,6 +2885,20 @@ async def handle_incoming_message(
             "whatsapp.reply_generated_fast_path",
             conversation_id=conversation_id,
             inbound_message_id=inbound_message_id,
+        )
+    elif structured_fast_reply is not None:
+        assistant_reply = structured_fast_reply
+        if structured_fast_path_started is not None:
+            _record_stage_timing(stage_timings, "assistant_generation_ms", structured_fast_path_started)
+        else:
+            stage_timings["assistant_generation_ms"] = 0.0
+        stage_timings["assistant_fast_path"] = 1.0
+        log_event(
+            logger,
+            "whatsapp.reply_generated_structured_fast_path",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            tools_called=assistant_reply.tools_called or [],
         )
     else:
         try:
