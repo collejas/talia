@@ -327,3 +327,19 @@
     - `backend/app/repositories/crm.py`: la RPC ahora siempre manda `p_organizacion_id`, aunque venga `None`, para forzar la firma de 3 argumentos.
     - `backend/app/api/routes/crm.py`: las vistas que ya conocen `organizacion_id` ahora lo propagan explicitamente en la llamada al repositorio.
   - Objetivo: eliminar el `300` en vistas de prospeccion/inbox y mantener aislamiento tenant-aware en los lookups por telefono.
+- 2026-07-15 16:23 UTC
+  - Se retomo el plan de latencia en el camino critico de `register_inbound_ms`.
+  - Hallazgo confirmado:
+    - `storage.register_whatsapp_message(...)` hacia trabajo previo que la RPC `registrar_mensaje_whatsapp(...)` ya resuelve sola:
+      lookup de persona por `wa_id` / telefono,
+      busqueda de ultima conversacion WhatsApp,
+      y un `PATCH` extra para volver a marcar `canal='whatsapp'`.
+  - Impacto esperado:
+    - menos roundtrips a Supabase antes del primer reply,
+    - menos costo fijo en mensajes entrantes cortos,
+    - menor variabilidad en `register_inbound_ms`.
+  - Ajuste aplicado:
+    - `backend/app/services/storage.py`: se elimino la preresolucion duplicada en Python y el `update_conversation(..., {"canal": "whatsapp"})` redundante.
+    - la RPC queda como fuente unica para resolver persona, conversacion e insercion del mensaje.
+  - Validacion local pendiente:
+    - correr suite focalizada del canal WhatsApp y volver a medir tiempos reales en `whatsapp.turn_timing`.

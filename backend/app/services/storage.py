@@ -1574,84 +1574,10 @@ async def register_whatsapp_message(
         metadata_payload["resolved_organizacion_id"] = organizacion_id
     resolved_persona_id = persona_id or contact_id
     resolved_conversation_id = conversation_id
-
-    # Reusar conversación activa del mismo contacto para evitar abrir hilos
-    # separados cuando no hay una oportunidad nueva.
-    if not resolved_conversation_id:
-        org_uuid: UUID | None = None
-        if organizacion_id:
-            try:
-                org_uuid = UUID(str(organizacion_id))
-            except (TypeError, ValueError):
-                org_uuid = None
-
-        persona_row: dict[str, Any] | None = None
-        if resolved_persona_id:
-            persona_row = await repo.get_persona_by_id(persona_id=resolved_persona_id)
-        else:
-            lookup_coroutines: list[tuple[str, Any]] = []
-            if wa_id:
-                lookup_coroutines.append(
-                    (
-                        "wa_id",
-                        repo.get_persona_by_whatsapp_id(
-                            wa_id=wa_id,
-                            organizacion_id=org_uuid,
-                        ),
-                    )
-                )
-            if normalized_phone:
-                lookup_coroutines.append(
-                    (
-                        "phone_e164",
-                        repo.get_persona_by_phone_e164(
-                            phone_e164=normalized_phone,
-                            organizacion_id=org_uuid,
-                        ),
-                    )
-                )
-            if lookup_coroutines:
-                lookup_results = await asyncio.gather(
-                    *(coro for _, coro in lookup_coroutines),
-                    return_exceptions=True,
-                )
-                for (lookup_label, _), lookup_result in zip(lookup_coroutines, lookup_results):
-                    if isinstance(lookup_result, Exception):
-                        logger.warning(
-                            "storage.register_whatsapp_message.persona_lookup_failed",
-                            extra={
-                                "lookup": lookup_label,
-                                "wa_id": wa_id,
-                                "phone_e164": normalized_phone,
-                                "organizacion_id": organizacion_id,
-                                "error": str(lookup_result),
-                            },
-                        )
-                        continue
-                    if isinstance(lookup_result, dict) and lookup_result.get("id"):
-                        persona_row = lookup_result
-                        break
-
-        if persona_row:
-            persona_id_value = persona_row.get("id")
-            if persona_id_value:
-                resolved_persona_id = str(persona_id_value)
-                latest_conversation = await repo.get_latest_whatsapp_conversation(
-                    persona_id=resolved_persona_id
-                )
-                if latest_conversation and latest_conversation.get("id"):
-                    resolved_conversation_id = str(latest_conversation.get("id"))
-
-    # Si ya resolvimos una conversación activa, no apliques timeout corto de inactividad:
-    # la RPC corta hilos entrantes cuando excede p_inactivity_minutes.
     effective_inactivity_minutes = (
-        None
-        if resolved_conversation_id
-        else (
-            inactivity_minutes
-            if inactivity_minutes is not None
-            else (inactivity_hours * 60 if inactivity_hours is not None else None)
-        )
+        inactivity_minutes
+        if inactivity_minutes is not None
+        else (inactivity_hours * 60 if inactivity_hours is not None else None)
     )
 
     try:
@@ -1674,16 +1600,6 @@ async def register_whatsapp_message(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     conversation_id = result.get("conversation_id")
-    if conversation_id:
-        try:
-            await repo.update_conversation(
-                conversation_id=conversation_id, patch={"canal": "whatsapp"}
-            )
-        except CRMRepositoryError as exc:
-            logger.warning(
-                "storage.whatsapp_channel_patch_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
 
     if direction == "entrante" and conversation_id:
         from app.services import whatsapp_followups as whatsapp_followup_jobs

@@ -34,26 +34,7 @@ class FakeWebchatRepository:
 
 
 class FakeWhatsappRepository:
-    """Repositorio simulado para validar el parcheo de canal WhatsApp."""
-
-    def __init__(self) -> None:
-        """Inicializa el registro de actualizaciones."""
-        self.update_calls: list[dict[str, Any]] = []
-
-    async def get_persona_by_whatsapp_id(self, **_: Any) -> dict[str, Any] | None:
-        return None
-
-    async def get_persona_by_phone_e164(self, **_: Any) -> dict[str, Any] | None:
-        return None
-
-    async def get_latest_whatsapp_conversation(self, **_: Any) -> dict[str, Any] | None:
-        return None
-
-    async def get_contact_by_whatsapp_id(self, **_: Any) -> dict[str, Any] | None:
-        return None
-
-    async def get_contact_by_phone_e164(self, **_: Any) -> dict[str, Any] | None:
-        return None
+    """Repositorio simulado para validar el registro mínimo de WhatsApp."""
 
     async def register_whatsapp_message(self, **_: Any) -> dict[str, Any]:
         """Devuelve identificadores de conversación y contacto."""
@@ -63,13 +44,6 @@ class FakeWhatsappRepository:
             "contact_id": "contact-whatsapp",
             "openai_conversation_id": None,
         }
-
-    async def update_conversation(
-        self, *, conversation_id: str, patch: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Registra la solicitud de actualización del canal."""
-        self.update_calls.append({"conversation_id": conversation_id, "patch": patch})
-        return {"id": conversation_id, **patch}
 
 
 class FakeAttachmentRepository:
@@ -270,7 +244,7 @@ async def test_register_webchat_message_sets_channel(
 async def test_register_whatsapp_message_sets_channel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """El registro WhatsApp debe actualizar el campo `canal` de la conversación."""
+    """El registro WhatsApp debe resolver la conversación sin PATCH extra."""
     fake_repo = FakeWhatsappRepository()
     monkeypatch.setattr(storage, "CRMRepository", lambda: fake_repo)
 
@@ -291,9 +265,6 @@ async def test_register_whatsapp_message_sets_channel(
     )
 
     assert result["conversation_id"] == "conv-whatsapp"
-    assert fake_repo.update_calls == [
-        {"conversation_id": "conv-whatsapp", "patch": {"canal": "whatsapp"}}
-    ]
 
 
 @pytest.mark.asyncio
