@@ -1460,6 +1460,151 @@ async def _run_schedule_demo_post_booking_tasks(
             )
 
 
+async def _run_close_lead_post_tasks(
+    *,
+    context: ToolRuntimeContext,
+    persona_id: str,
+    persona: dict[str, Any] | None,
+    tarjeta_id: str | None,
+    notes: str,
+    necesidad: str,
+    siguiente_accion: str | None,
+    scoring_answers: dict[str, Any],
+    scoring_events: dict[str, Any],
+    profiling_statuses: dict[str, Any] | None,
+    profiling_reprompt_counts: dict[str, Any] | None,
+    profiling_enabled_for_channel: bool,
+) -> None:
+    if tarjeta_id:
+        try:
+            await storage.sync_persona_opportunity_context(
+                conversation_id=context.conversation_id,
+                persona_id=persona_id,
+                opportunity_id=str(tarjeta_id),
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.opportunity_sync_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+
+        if profiling_enabled_for_channel:
+            try:
+                await storage.apply_persona_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    persona_id=persona_id,
+                    opportunity_id=str(tarjeta_id),
+                    answers=scoring_answers,
+                    events=scoring_events,
+                    profiling_statuses=profiling_statuses,
+                    profiling_reprompt_counts=profiling_reprompt_counts,
+                    source="close_lead",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.close_lead.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_promote_prequalified_from_persona(
+                    conversation_id=context.conversation_id,
+                    persona_id=persona_id,
+                    opportunity_id=str(tarjeta_id),
+                    channel=context.channel or "whatsapp",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.close_lead.prequalified_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "whatsapp.close_lead.skip_scoring_profiling_disabled",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "channel": context.channel or "whatsapp",
+                },
+            )
+
+    try:
+        await storage.upsert_conversation_insights(
+            conversation_id=context.conversation_id,
+            resumen=notes,
+            intencion=necesidad,
+            siguiente_accion=siguiente_accion,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.close_lead.insights_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+
+    if tarjeta_id:
+        try:
+            await storage.maybe_auto_name_persona_opportunity(
+                conversation_id=context.conversation_id,
+                persona_id=persona_id,
+                opportunity_id=str(tarjeta_id),
+                intent=necesidad,
+                summary=notes,
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+
+    if tarjeta_id:
+        notify_persona = persona
+        try:
+            notify_persona = await _resolve_persona(persona_id)
+        except Exception:
+            notify_persona = persona
+        try:
+            if isinstance(notify_persona, dict):
+                org_uuid_text = webchat_service._resolve_org_uuid(
+                    webchat_service._extract_persona_org(notify_persona)
+                )
+                if org_uuid_text:
+                    await enqueue_webchat_sales_notification(
+                        conversation_id=context.conversation_id,
+                        persona_id=persona_id,
+                        trigger="close_lead",
+                        channel=context.channel or "whatsapp",
+                        organizacion_id=UUID(org_uuid_text),
+                        contact=notify_persona,
+                        opportunity_id=str(tarjeta_id),
+                        resumen=necesidad,
+                        notes=notes,
+                        email=webchat_service._extract_persona_email(notify_persona),
+                        extra={"siguiente_accion": siguiente_accion},
+                    )
+                    return
+            await _notify_sales_rep(
+                context=context,
+                trigger="close_lead",
+                persona=notify_persona,
+                opportunity_id=tarjeta_id,
+                resumen=necesidad,
+                notes=notes,
+                email=webchat_service._extract_persona_email(notify_persona),
+                extra={"siguiente_accion": siguiente_accion},
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.close_lead.notify_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "persona_id": persona_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "error": str(exc),
+                },
+            )
+
+
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
     arguments: dict[str, Any],
@@ -2264,152 +2409,101 @@ async def _handle_close_lead(
             "whatsapp.close_lead.persona_update_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
-    if tarjeta_id:
-        try:
-            await storage.sync_persona_opportunity_context(
-                conversation_id=context.conversation_id,
-                persona_id=persona_id,
-                opportunity_id=str(tarjeta_id),
-                channel=context.channel or "whatsapp",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.close_lead.opportunity_sync_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-        channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
-        profiling_enabled_for_channel = True
-        persona_org = webchat_service._extract_persona_org(persona)
-        persona_org_uuid = webchat_service._resolve_org_uuid(persona_org)
-        if persona_org_uuid and channel_value in {"whatsapp", "webchat"}:
-            profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
-                organizacion_id=UUID(persona_org_uuid),
-                channel=channel_value,
-            )
+    channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
+    profiling_enabled_for_channel = True
+    persona_org = webchat_service._extract_persona_org(persona)
+    persona_org_uuid = webchat_service._resolve_org_uuid(persona_org)
+    if persona_org_uuid and channel_value in {"whatsapp", "webchat"}:
+        profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+            organizacion_id=UUID(persona_org_uuid),
+            channel=channel_value,
+        )
 
-        scoring_answers = {
-            key: arguments.get(key)
-            for key in (
-                "financing_type",
-                "credit_preapproved",
-                "budget_range",
-                "down_payment_ready",
-                "purchase_timeline",
-                "hard_deadline",
-                "requirements_defined",
-                "comparison_mode",
-                "visited_properties",
-                "decision_authority",
-                "buyer_type",
-            )
-            if key in arguments
-        }
-        user_signals: Mapping[str, bool] = {}
-        try:
-            recent_messages = await storage.fetch_recent_messages(
-                conversation_id=context.conversation_id,
-                limit=24,
-            )
-            user_signals = _extract_user_prefilter_signals(recent_messages)
-            scoring_answers = _sanitize_scoring_answers_from_user_messages(
-                scoring_answers=scoring_answers,
-                user_signals=user_signals,
-            )
-        except StorageError:
-            # Si no se pudo leer historial, se conserva el payload recibido.
-            pass
-        action_text = (siguiente_accion or "").lower()
-        requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
-        appointment_requested = _optional_bool_argument(arguments, "appointment_requested")
-        accepted_questions = _optional_bool_argument(
-            arguments, "accepted_answering_questions"
+    scoring_answers = {
+        key: arguments.get(key)
+        for key in (
+            "financing_type",
+            "credit_preapproved",
+            "budget_range",
+            "down_payment_ready",
+            "purchase_timeline",
+            "hard_deadline",
+            "requirements_defined",
+            "comparison_mode",
+            "visited_properties",
+            "decision_authority",
+            "buyer_type",
         )
-        evasive_count = _optional_int_argument(arguments, "evasive_answers_count")
-        response_time_bucket_raw = str(arguments.get("response_time_bucket") or "").strip().lower()
-        response_time_bucket = (
-            response_time_bucket_raw
-            if response_time_bucket_raw in {"fast", "medium", "slow"}
-            else None
+        if key in arguments
+    }
+    user_signals: Mapping[str, bool] = {}
+    try:
+        recent_messages = await storage.fetch_recent_messages(
+            conversation_id=context.conversation_id,
+            limit=24,
         )
-        scoring_events: dict[str, Any] = {
-            "channel": context.channel or "whatsapp",
-            "appointment_requested": (
-                appointment_requested if appointment_requested is not None else requested
-            ),
-            "accepted_answering_questions": (
-                accepted_questions
-                if accepted_questions is not None
-                else bool(scoring_answers)
-            ),
-        }
-        if evasive_count is not None:
-            scoring_events["evasive_answers_count"] = evasive_count
-        if response_time_bucket is not None:
-            scoring_events["response_time_bucket"] = response_time_bucket
-        profiling_statuses_raw = (
-            arguments.get("profiling_statuses")
-            if isinstance(arguments.get("profiling_statuses"), dict)
-            else arguments.get("perfilamiento_estados")
-        )
-        profiling_reprompt_counts_raw = (
-            arguments.get("profiling_reprompt_counts")
-            if isinstance(arguments.get("profiling_reprompt_counts"), dict)
-            else arguments.get("perfilamiento_repregunta_counts")
-        )
-        profiling_statuses = (
-            profiling_statuses_raw if isinstance(profiling_statuses_raw, dict) else None
-        )
-        profiling_reprompt_counts = (
-            profiling_reprompt_counts_raw
-            if isinstance(profiling_reprompt_counts_raw, dict)
-            else None
-        )
-        profiling_statuses = _sanitize_profiling_statuses_from_user_messages(
-            profiling_statuses=profiling_statuses,
+        user_signals = _extract_user_prefilter_signals(recent_messages)
+        scoring_answers = _sanitize_scoring_answers_from_user_messages(
+            scoring_answers=scoring_answers,
             user_signals=user_signals,
         )
-        profiling_reprompt_counts = _sanitize_profiling_reprompt_counts(
-            profiling_counts=profiling_reprompt_counts,
-            profiling_statuses=profiling_statuses,
-        )
-        if profiling_enabled_for_channel:
-            try:
-                await storage.apply_persona_lead_scoring(
-                    conversation_id=context.conversation_id,
-                    persona_id=persona_id,
-                    opportunity_id=str(tarjeta_id),
-                    answers=scoring_answers,
-                    events=scoring_events,
-                    profiling_statuses=profiling_statuses,
-                    profiling_reprompt_counts=profiling_reprompt_counts,
-                    source="close_lead",
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "whatsapp.close_lead.scoring_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                )
-            try:
-                await storage.maybe_promote_prequalified_from_persona(
-                    conversation_id=context.conversation_id,
-                    persona_id=persona_id,
-                    opportunity_id=str(tarjeta_id),
-                    channel=context.channel or "whatsapp",
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "whatsapp.close_lead.prequalified_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                )
-        else:
-            logger.info(
-                "whatsapp.close_lead.skip_scoring_profiling_disabled",
-                extra={
-                    "conversation_id": context.conversation_id,
-                    "opportunity_id": str(tarjeta_id),
-                    "channel": channel_value,
-                },
-            )
+    except StorageError:
+        pass
+
+    action_text = (siguiente_accion or "").lower()
+    requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
+    appointment_requested = _optional_bool_argument(arguments, "appointment_requested")
+    accepted_questions = _optional_bool_argument(
+        arguments, "accepted_answering_questions"
+    )
+    evasive_count = _optional_int_argument(arguments, "evasive_answers_count")
+    response_time_bucket_raw = str(arguments.get("response_time_bucket") or "").strip().lower()
+    response_time_bucket = (
+        response_time_bucket_raw
+        if response_time_bucket_raw in {"fast", "medium", "slow"}
+        else None
+    )
+    scoring_events: dict[str, Any] = {
+        "channel": context.channel or "whatsapp",
+        "appointment_requested": (
+            appointment_requested if appointment_requested is not None else requested
+        ),
+        "accepted_answering_questions": (
+            accepted_questions
+            if accepted_questions is not None
+            else bool(scoring_answers)
+        ),
+    }
+    if evasive_count is not None:
+        scoring_events["evasive_answers_count"] = evasive_count
+    if response_time_bucket is not None:
+        scoring_events["response_time_bucket"] = response_time_bucket
+    profiling_statuses_raw = (
+        arguments.get("profiling_statuses")
+        if isinstance(arguments.get("profiling_statuses"), dict)
+        else arguments.get("perfilamiento_estados")
+    )
+    profiling_reprompt_counts_raw = (
+        arguments.get("profiling_reprompt_counts")
+        if isinstance(arguments.get("profiling_reprompt_counts"), dict)
+        else arguments.get("perfilamiento_repregunta_counts")
+    )
+    profiling_statuses = (
+        profiling_statuses_raw if isinstance(profiling_statuses_raw, dict) else None
+    )
+    profiling_reprompt_counts = (
+        profiling_reprompt_counts_raw
+        if isinstance(profiling_reprompt_counts_raw, dict)
+        else None
+    )
+    profiling_statuses = _sanitize_profiling_statuses_from_user_messages(
+        profiling_statuses=profiling_statuses,
+        user_signals=user_signals,
+    )
+    profiling_reprompt_counts = _sanitize_profiling_reprompt_counts(
+        profiling_counts=profiling_reprompt_counts,
+        profiling_statuses=profiling_statuses,
+    )
     try:
         # Mantener hilo único en inbox: en WhatsApp el cierre operativo del lead
         # no debe forzar una nueva conversación técnica al siguiente mensaje.
@@ -2419,60 +2513,22 @@ async def _handle_close_lead(
             "whatsapp.close_lead.conversation_update_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
-    try:
-        await storage.upsert_conversation_insights(
-            conversation_id=context.conversation_id,
-            resumen=notes,
-            intencion=necesidad,
+    _schedule_background_coroutine(
+        _run_close_lead_post_tasks(
+            context=context,
+            persona_id=persona_id,
+            persona=persona,
+            tarjeta_id=str(tarjeta_id) if tarjeta_id else None,
+            notes=notes,
+            necesidad=necesidad,
             siguiente_accion=siguiente_accion,
+            scoring_answers=scoring_answers,
+            scoring_events=scoring_events,
+            profiling_statuses=profiling_statuses,
+            profiling_reprompt_counts=profiling_reprompt_counts,
+            profiling_enabled_for_channel=profiling_enabled_for_channel,
         )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.close_lead.insights_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-    if tarjeta_id:
-        try:
-            await storage.maybe_auto_name_persona_opportunity(
-                conversation_id=context.conversation_id,
-                persona_id=persona_id,
-                opportunity_id=str(tarjeta_id),
-                intent=necesidad,
-                summary=notes,
-                channel=context.channel or "whatsapp",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.close_lead.auto_name_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-    if tarjeta_id:
-        notify_persona = persona
-        try:
-            notify_persona = await _resolve_persona(persona_id)
-        except Exception:
-            notify_persona = persona
-        try:
-            await _notify_sales_rep(
-                context=context,
-                trigger="close_lead",
-                persona=notify_persona,
-                opportunity_id=tarjeta_id,
-                resumen=necesidad,
-                notes=notes,
-                email=webchat_service._extract_persona_email(notify_persona),
-                extra={"siguiente_accion": siguiente_accion},
-            )
-        except Exception as exc:
-            logger.warning(
-                "whatsapp.close_lead.notify_failed",
-                extra={
-                    "conversation_id": context.conversation_id,
-                    "persona_id": persona_id,
-                    "opportunity_id": str(tarjeta_id),
-                    "error": str(exc),
-                },
-            )
+    )
 
     return {
         "status": "ok",

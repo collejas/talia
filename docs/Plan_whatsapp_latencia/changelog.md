@@ -36,6 +36,41 @@
   - prueba unitaria para confirmar que `set_company_name` agenda el refresh en background,
   - prueba unitaria para confirmar que `schedule_demo` ya no ejecuta inline el post-procesamiento pesado.
 
+## 2026-07-15 19:55 UTC
+
+- Revisión posterior al deploy anterior:
+  - sí bajó el costo de `set_company_name`, `set_email` y `schedule_demo`,
+  - pero el nuevo cuello dominante quedó en `close_lead` y en iteraciones largas del modelo después de tools ligeras.
+
+- Evidencia revisada:
+  - `set_company_name` bajó de ~`13.00s` a ~`1.31s`,
+  - `schedule_demo` quedó alrededor de ~`1.11s`,
+  - aun así hubo turnos de `26s` a `28s` con:
+    - `close_lead` ~`7.04s`,
+    - `list_demo_slots` < `1s`,
+    - y el verdadero peso restante en `assistant_generation_ms` / `tool_loop_ms`.
+
+- Ajuste aplicado:
+  - `close_lead` ahora deja inline solo:
+    - `ensure_persona_conversation_opportunity`,
+    - persistencia básica de `notes` y `necesidad_proposito`,
+    - `update_conversation` para mantener el hilo operativo,
+  - y mueve a background:
+    - `sync_persona_opportunity_context`,
+    - scoring y promoción a precalificado,
+    - `upsert_conversation_insights`,
+    - auto-name,
+    - notificación comercial,
+  - para la notificación comercial de `close_lead` se reutiliza la cola persistente `sales_notification_jobs` cuando la organización es resoluble.
+
+- Archivos tocados:
+  - `backend/app/channels/whatsapp/tools.py`
+  - `backend/tests/channels/test_whatsapp_tools.py`
+
+- Validación local:
+  - `poetry run pytest tests/channels/test_whatsapp_tools.py -q`
+  - resultado: `14 passed`
+
 ## 2026-07-13 23:40 UTC
 
 - Síntoma:

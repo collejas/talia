@@ -599,6 +599,12 @@ async def test_handle_close_lead_triggers_notification(
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_update_contact)
     monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
     monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_recent_messages)
+    scheduled: list[Any] = []
+
+    def fake_schedule(coro: Any) -> None:
+        scheduled.append(coro)
+
+    monkeypatch.setattr(tools, "_schedule_background_coroutine", fake_schedule)
     scored: dict[str, Any] = {}
     promoted: dict[str, Any] = {}
 
@@ -623,12 +629,13 @@ async def test_handle_close_lead_triggers_notification(
         fake_promote_prequalified,
     )
 
-    notified: list[str] = []
+    enqueued: list[str] = []
 
-    async def fake_notify(**kwargs: object) -> None:
-        notified.append(kwargs["trigger"])
+    async def fake_enqueue(**kwargs: Any) -> dict[str, Any]:
+        enqueued.append(kwargs["trigger"])
+        return {"id": "job-1"}
 
-    monkeypatch.setattr(tools, "_notify_sales_rep", fake_notify)
+    monkeypatch.setattr(tools, "enqueue_webchat_sales_notification", fake_enqueue)
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
@@ -651,7 +658,9 @@ async def test_handle_close_lead_triggers_notification(
 
     result = await tools._handle_close_lead(arguments, context)
     assert result["status"] == "ok"
-    assert notified == ["close_lead"]
+    assert len(scheduled) == 1
+    await scheduled[0]
+    assert enqueued == ["close_lead"]
     assert scored.get("called") is True
     assert scored["payload"]["profiling_statuses"]["purchase_timeline"] == "unknown"
     assert scored["payload"]["profiling_reprompt_counts"]["financing_type"] == 1
@@ -694,11 +703,17 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
     monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_noop)
     monkeypatch.setattr(tools.storage, "apply_lead_scoring", fake_apply_lead_scoring)
     monkeypatch.setattr(tools.storage, "maybe_promote_prequalified_from_scoring", fake_promote_prequalified)
+    scheduled: list[Any] = []
+
+    def fake_schedule(coro: Any) -> None:
+        scheduled.append(coro)
+
+    monkeypatch.setattr(tools, "_schedule_background_coroutine", fake_schedule)
     async def fake_recent_messages(*_, **__):
         return []
 
     monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_recent_messages)
-    monkeypatch.setattr(tools, "_notify_sales_rep", fake_noop)
+    monkeypatch.setattr(tools, "enqueue_webchat_sales_notification", fake_noop)
 
     context = ToolRuntimeContext(
         conversation_id="conv-evasive",
@@ -718,6 +733,8 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
     result = await tools._handle_close_lead(arguments, context)
 
     assert result["status"] == "ok"
+    assert len(scheduled) == 1
+    await scheduled[0]
     assert scored["payload"]["answers"]["financing_type"] == "refused"
     assert scored["payload"]["answers"]["budget_range"] == "unknown"
     assert scored["payload"]["answers"]["purchase_timeline"] == "unknown"
