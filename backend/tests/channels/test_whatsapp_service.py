@@ -73,6 +73,65 @@ def test_inbound_burst_debounce_skips_complete_sentence_with_punctuation() -> No
     assert service._resolve_inbound_burst_debounce_seconds("me interesa un terreno.") == 0.0
 
 
+def test_resolve_declared_full_name_accepts_direct_name_message() -> None:
+    assert service._resolve_declared_full_name("Luis Perez") == "Luis Perez"
+
+
+def test_build_openai_input_avoids_redundant_crm_lines_when_summary_exists() -> None:
+    message = schemas.WhatsAppIncomingMessage(
+        message_sid="SM-name",
+        from_number="whatsapp:+521111111111",
+        to_number="whatsapp:+521000000000",
+        body="Luis Perez",
+        wa_id="521111111111",
+        profile_name="Visitante",
+        num_media=0,
+        media=[],
+        raw_payload={},
+    )
+    repeated_summary = (
+        "El cliente está interesado en adquirir terrenos, lo que indica una necesidad principal "
+        "de inversión en bienes raíces."
+    )
+    payload = service._build_openai_input(
+        message,
+        context_data={
+            "contact": {
+                "nombre_completo": "Luis Perez",
+                "telefono_principal_e164": "+5214441302811",
+                "estado": "activo",
+                "necesidad_proposito": repeated_summary,
+                "notes": "Resumen inferido por inactividad: " + repeated_summary,
+                "persona_datos": {
+                    "ubicacion": {
+                        "nom_ent": "San Luis Potosí",
+                        "nom_mun": "San Luis Potosí",
+                        "lada": "444",
+                    }
+                },
+            },
+            "opportunity": {
+                "titulo": repeated_summary,
+                "estado": "abierta",
+                "etapa": {"nombre": "Captado", "codigo": "captado", "categoria": "abierta"},
+                "descripcion": repeated_summary,
+                "metadata": {"project_name": repeated_summary},
+            },
+            "conversation": {"inbox_context": {"welcome_document_sent": True}},
+        },
+        summary_text=repeated_summary,
+        summary_created_en="2026-07-15T17:20:45.690444+00:00",
+    )
+
+    text = payload[-1]["content"][0]["text"]
+    assert "- Notas puntuales:" not in text
+    assert "- Necesidad principal:" not in text
+    assert "- Título:" not in text
+    assert "- Descripción:" not in text
+    assert "- Proyecto:" not in text
+    assert "Resumen previo (2026-07-15T17:20:45.690444+00:00):" in text
+
+
 @pytest.mark.asyncio
 async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
     """Los acuses del botón de vendedor no deben disparar al asistente."""

@@ -1807,9 +1807,19 @@ def _resolve_context_full_name(context_payload: dict[str, Any] | None) -> str | 
         record = context_payload.get(key)
         if not isinstance(record, dict):
             continue
-        candidate = " ".join(str(record.get("nombre_completo") or "").split()).strip()
-        if candidate and not whatsapp_tools.lead_tools._is_placeholder_full_name(candidate):
+        candidate = _resolve_declared_full_name(record.get("nombre_completo"))
+        if candidate:
             return candidate
+    return None
+
+
+def _resolve_declared_full_name(text: Any) -> str | None:
+    extracted = whatsapp_tools.lead_tools._extract_name_from_message_text(text)
+    if extracted and not whatsapp_tools.lead_tools._is_placeholder_full_name(extracted):
+        return extracted
+    sanitized = whatsapp_tools.lead_tools._sanitize_extracted_person_name(text)
+    if sanitized and not whatsapp_tools.lead_tools._is_placeholder_full_name(sanitized):
+        return sanitized
     return None
 
 
@@ -2113,8 +2123,8 @@ async def handle_incoming_message(
         return
     message.body = merged_body
 
-    declared_name = whatsapp_tools.lead_tools._extract_name_from_message_text(message.body)
-    if declared_name and not whatsapp_tools.lead_tools._is_placeholder_full_name(declared_name):
+    declared_name = _resolve_declared_full_name(message.body)
+    if declared_name:
         try:
             await storage.update_persona(persona_id, {"nombre_completo": declared_name})
             logger.info(
@@ -4367,7 +4377,7 @@ def _build_openai_input(
     if not text_parts:
         text_parts.append("(mensaje sin texto)")
 
-    context_lines = build_crm_context_lines(context_data)
+    context_lines = build_crm_context_lines(context_data, summary_text=summary_text)
     if context_lines:
         text_parts.append("")
         text_parts.extend(context_lines)

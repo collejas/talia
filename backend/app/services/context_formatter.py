@@ -27,13 +27,17 @@ def _persona_datos(contact: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
+def build_crm_context_lines(
+    context_data: dict[str, Any] | None,
+    *,
+    summary_text: str | None = None,
+) -> list[str]:
     """Devuelve las líneas del bloque 'Contexto CRM' dado el contacto y oportunidad."""
     contact = context_data.get("contact") if context_data else None
     opportunity = context_data.get("opportunity") if context_data else None
     conversation = context_data.get("conversation") if context_data else None
-    contact_lines = _build_contact_context_lines(contact)
-    opportunity_lines = _build_opportunity_context_lines(opportunity)
+    contact_lines = _build_contact_context_lines(contact, summary_text=summary_text)
+    opportunity_lines = _build_opportunity_context_lines(opportunity, summary_text=summary_text)
     booking_context = context_data.get("booking_context") if context_data else None
     inbox_context = _ensure_dict(conversation.get("inbox_context")) if isinstance(conversation, dict) else {}
     welcome_document_sent = bool(inbox_context.get("welcome_document_sent"))
@@ -75,7 +79,11 @@ def build_location_context_lines(location_href: str | None) -> list[str]:
     ]
 
 
-def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
+def _build_contact_context_lines(
+    contact: dict[str, Any] | None,
+    *,
+    summary_text: str | None = None,
+) -> list[str]:
     if not isinstance(contact, dict):
         return []
     lines: list[str] = []
@@ -99,10 +107,10 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     lines.append(f"- Teléfono: {telefono}")
     lines.append(f"- Empresa: {_safe_text(contact.get('company_name'))}")
     necesidad = contact.get("necesidad_proposito")
-    if necesidad:
+    if necesidad and not _is_redundant_text(necesidad, summary_text):
         lines.append(f"- Necesidad principal: {_safe_text(necesidad)}")
     notes = contact.get("notes")
-    if notes:
+    if notes and not _is_redundant_text(notes, summary_text):
         lines.append(f"- Notas puntuales: {_safe_text(notes)}")
     estado = contact.get("estado")
     if estado:
@@ -128,11 +136,19 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     return lines
 
 
-def _build_opportunity_context_lines(opportunity: dict[str, Any] | None) -> list[str]:
+def _build_opportunity_context_lines(
+    opportunity: dict[str, Any] | None,
+    *,
+    summary_text: str | None = None,
+) -> list[str]:
     if not isinstance(opportunity, dict):
         return []
     lines: list[str] = []
-    lines.append(f"- Título: {_safe_text(opportunity.get('titulo'))}")
+    seen_details: list[str] = []
+    title = opportunity.get("titulo")
+    if title and not _is_redundant_text(title, summary_text):
+        lines.append(f"- Título: {_safe_text(title)}")
+        seen_details.append(str(title))
     lines.append(f"- Estado: {_safe_text(opportunity.get('estado'))}")
     etapa = opportunity.get("etapa") or {}
     stage_name = etapa.get("nombre")
@@ -157,11 +173,12 @@ def _build_opportunity_context_lines(opportunity: dict[str, Any] | None) -> list
         prob_text = f"{probabilidad}%"
         lines.append(f"- Probabilidad: {_safe_text(prob_text)}")
     descripcion = opportunity.get("descripcion")
-    if descripcion:
+    if descripcion and not _is_redundant_text(descripcion, summary_text, *seen_details):
         lines.append(f"- Descripción: {_safe_text(descripcion)}")
+        seen_details.append(str(descripcion))
     metadata = _ensure_dict(opportunity.get("metadata"))
     project = metadata.get("project_name")
-    if project:
+    if project and not _is_redundant_text(project, summary_text, *seen_details):
         lines.append(f"- Proyecto: {_safe_text(project)}")
     auto_stage = metadata.get("auto_stage")
     if isinstance(auto_stage, dict):
@@ -176,6 +193,26 @@ def _safe_text(value: Any) -> str:
         return "—"
     text = str(value).strip()
     return text if text else "—"
+
+
+def _normalize_compare_text(value: Any) -> str:
+    text = " ".join(str(value or "").split()).strip().casefold()
+    return text[:400]
+
+
+def _is_redundant_text(value: Any, *others: Any) -> bool:
+    candidate = _normalize_compare_text(value)
+    if len(candidate) < 12:
+        return False
+    for other in others:
+        normalized_other = _normalize_compare_text(other)
+        if len(normalized_other) < 12:
+            continue
+        if candidate == normalized_other:
+            return True
+        if candidate in normalized_other or normalized_other in candidate:
+            return True
+    return False
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:

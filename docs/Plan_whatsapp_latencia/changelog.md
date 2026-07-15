@@ -237,6 +237,32 @@
   - se agregó prueba de regresión en `backend/tests/channels/test_whatsapp_service.py`
   - para asegurar que `set_full_name` se omita solo cuando el contexto ya trae nombre válido.
 
+## 2026-07-15 17:45 UTC
+
+- Paquete aplicado:
+  - se endureció la detección de nombre declarado para mensajes directos como `Luis Perez`,
+  - y se recortó contexto CRM redundante antes de construir el payload a OpenAI.
+
+- Cambio en backend:
+  - `backend/app/channels/whatsapp/service.py` ahora resuelve nombre usando:
+    - patrones declarativos como antes,
+    - y saneo directo del texto cuando el mensaje en sí ya es un nombre válido.
+  - `backend/app/services/context_formatter.py` ahora evita repetir en el payload:
+    - `necesidad_proposito`,
+    - `notes`,
+    - `titulo`,
+    - `descripcion`,
+    - `project_name`,
+    cuando ya están cubiertos por el `summary_text` o por otro campo equivalente.
+
+- Motivo:
+  - en la conversación `5f0d7960-9ced-4b5c-beb9-59bed7040bb2`, el turno `Luis Perez` seguía disparando `set_full_name`
+    y además el payload enviaba la misma intención comercial varias veces dentro de CRM y resumen.
+
+- Cobertura:
+  - prueba para nombre directo en `backend/tests/channels/test_whatsapp_service.py`
+  - prueba para validar que `_build_openai_input(...)` ya no incluya líneas redundantes cuando existe resumen previo.
+
 ## 2026-07-15 15:20 UTC
 
 - Revisión de continuidad:
