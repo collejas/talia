@@ -1807,8 +1807,8 @@ def _resolve_context_full_name(context_payload: dict[str, Any] | None) -> str | 
         record = context_payload.get(key)
         if not isinstance(record, dict):
             continue
-        candidate = _resolve_declared_full_name(record.get("nombre_completo"))
-        if candidate:
+        candidate = " ".join(str(record.get("nombre_completo") or "").split()).strip()
+        if candidate and not whatsapp_tools.lead_tools._is_placeholder_full_name(candidate):
             return candidate
     return None
 
@@ -1817,9 +1817,6 @@ def _resolve_declared_full_name(text: Any) -> str | None:
     extracted = whatsapp_tools.lead_tools._extract_name_from_message_text(text)
     if extracted and not whatsapp_tools.lead_tools._is_placeholder_full_name(extracted):
         return extracted
-    sanitized = whatsapp_tools.lead_tools._sanitize_extracted_person_name(text)
-    if sanitized and not whatsapp_tools.lead_tools._is_placeholder_full_name(sanitized):
-        return sanitized
     return None
 
 

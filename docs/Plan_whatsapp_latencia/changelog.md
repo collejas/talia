@@ -263,6 +263,26 @@
   - prueba para nombre directo en `backend/tests/channels/test_whatsapp_service.py`
   - prueba para validar que `_build_openai_input(...)` ya no incluya líneas redundantes cuando existe resumen previo.
 
+## 2026-07-15 17:55 UTC
+
+- Corrección aplicada:
+  - se revirtió la ampliación de detección de nombre por texto directo en `backend/app/channels/whatsapp/service.py`.
+
+- Motivo:
+  - en producción empezó a capturar falsos positivos como:
+    - `de contado`
+    - `no`
+    - `si solo yo`
+  - eso contaminaba `nombre_completo` del lead y empeoraba la calidad del contexto.
+
+- Resultado:
+  - se conserva el recorte de payload CRM redundante,
+  - pero el nombre declarado vuelve a depender solo de los patrones explícitos ya existentes.
+
+- Validación:
+  - `poetry run pytest tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py -q`
+  - resultado: `32 passed`
+
 ## 2026-07-15 15:20 UTC
 
 - Revisión de continuidad:

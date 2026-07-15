@@ -73,10 +73,6 @@ def test_inbound_burst_debounce_skips_complete_sentence_with_punctuation() -> No
     assert service._resolve_inbound_burst_debounce_seconds("me interesa un terreno.") == 0.0
 
 
-def test_resolve_declared_full_name_accepts_direct_name_message() -> None:
-    assert service._resolve_declared_full_name("Luis Perez") == "Luis Perez"
-
-
 def test_build_openai_input_avoids_redundant_crm_lines_when_summary_exists() -> None:
     message = schemas.WhatsAppIncomingMessage(
         message_sid="SM-name",
