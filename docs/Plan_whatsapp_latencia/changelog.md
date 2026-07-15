@@ -218,6 +218,25 @@
   - también aparecieron algunos `canceling statement due to statement timeout`,
   - pero en mucho menor volumen que el error de `codigo_contacto`.
 
+## 2026-07-15 17:20 UTC
+
+- Paquete aplicado:
+  - se eliminó una vuelta evitable del `tool_loop` cuando el nombre del lead ya quedó resuelto antes de invocar OpenAI.
+
+- Cambio en backend:
+  - `backend/app/channels/whatsapp/service.py` ahora detecta `nombre_completo` ya conocido desde:
+    - el `declared_name` extraído del mensaje inbound,
+    - o el contexto persistido de `persona/contact`.
+  - si ese nombre ya existe y no es placeholder, el request al asistente sale sin la tool `set_full_name`.
+
+- Motivo:
+  - los logs reales mostraban una segunda iteración del asistente y una ejecución de `set_full_name` de ~`3s`,
+  - eso agregaba latencia sin aportar valor cuando el nombre ya había sido guardado en el flujo previo.
+
+- Cobertura:
+  - se agregó prueba de regresión en `backend/tests/channels/test_whatsapp_service.py`
+  - para asegurar que `set_full_name` se omita solo cuando el contexto ya trae nombre válido.
+
 ## 2026-07-15 15:20 UTC
 
 - Revisión de continuidad:

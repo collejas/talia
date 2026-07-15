@@ -1158,6 +1158,78 @@ async def test_generate_assistant_reply_filters_catalog_tools_when_disabled(monk
 
 
 @pytest.mark.asyncio
+async def test_generate_assistant_reply_skips_set_full_name_when_context_already_has_name(monkeypatch) -> None:
+    message = _build_sample_message()
+    assistant_cfg = service.AssistantConfig(
+        assistant_id="asst-test",
+        project_id="proj-test",
+    )
+    assistant_spec = AssistantSpec(
+        model="gpt-4o",
+        instructions="instrucciones",
+        tools=[
+            {"type": "function", "function": {"name": "set_full_name"}},
+            {"type": "function", "function": {"name": "list_catalog_modelos"}},
+        ],
+    )
+
+    monkeypatch.setattr(service, "_build_assistant_from_runtime", lambda *args, **kwargs: assistant_cfg)
+    monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: object())
+    monkeypatch.setattr(service, "resolve_assistant_spec", _async_return(assistant_spec))
+    monkeypatch.setattr(
+        service.storage,
+        "fetch_persona_context",
+        _async_return(
+            {
+                "persona": {"nombre_completo": "Jorge Torre"},
+                "contact": {"nombre_completo": "Jorge Torre"},
+            }
+        ),
+    )
+    monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
+    monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
+    monkeypatch.setattr(service, "_extract_text_from_response", lambda _response: "Respuesta final")
+    monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
+
+    captured: dict[str, object] = {}
+
+    async def fake_run_tool_loop(**kwargs):
+        captured["initial_request"] = kwargs["initial_request"]
+        return SimpleNamespace(
+            response={"output": []},
+            conversation_id="conv-new",
+            response_id="resp-new",
+            tools_called=[],
+            side_effects={},
+        )
+
+    monkeypatch.setattr(service, "run_tool_loop", fake_run_tool_loop)
+
+    reply = await service._generate_assistant_reply(
+        message=message,
+        conversation_id="conv-1",
+        persona_id="contact-1",
+        openai_conversation_id=None,
+        previous_response_id=None,
+        catalog_context=None,
+        booking_context=None,
+        whatsapp_settings=SimpleNamespace(voice_api_key="api-key", project_id="proj-test"),
+        organizacion_id=UUID("00000000-0000-0000-0000-0000000000bb"),
+        catalog_inmobiliario_enabled=True,
+        catalog_no_inmobiliario_enabled=True,
+        prospeccion_mode=False,
+        origin_type="general_whatsapp",
+        inbound_message_id="inbound-1",
+    )
+
+    tools = captured["initial_request"]["tools"]  # type: ignore[index]
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "set_full_name" not in tool_names
+    assert "list_catalog_modelos" in tool_names
+    assert reply.text == "Respuesta final"
+
+
+@pytest.mark.asyncio
 async def test_resolve_prospeccion_prospecto_id_is_org_scoped(monkeypatch) -> None:
     """La búsqueda de prospectos por teléfono no debe cruzar tenants."""
 

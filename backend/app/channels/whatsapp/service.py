@@ -22,6 +22,7 @@ from xml.etree import ElementTree as ET
 
 from app.assistants.manager import AssistantConfig
 from app.assistants.runtime import (
+    _extract_function_tool_name,
     build_prompt_payload,
     filter_assistant_tools,
     resolve_assistant_spec,
@@ -1799,6 +1800,19 @@ def _resolve_inbound_burst_debounce_seconds(text: str | None) -> float:
     return 0.0
 
 
+def _resolve_context_full_name(context_payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(context_payload, dict):
+        return None
+    for key in ("persona", "contact"):
+        record = context_payload.get(key)
+        if not isinstance(record, dict):
+            continue
+        candidate = " ".join(str(record.get("nombre_completo") or "").split()).strip()
+        if candidate and not whatsapp_tools.lead_tools._is_placeholder_full_name(candidate):
+            return candidate
+    return None
+
+
 def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
     text = str(exc or "").lower()
     return "prompt_variable_unknown" in text or "unknown prompt variables" in text
@@ -2461,6 +2475,7 @@ async def handle_incoming_message(
                 prospeccion_mode=is_prospeccion_mode,
                 origin_type=origin_type,
                 inbound_message_id=inbound_message_id,
+                resolved_full_name=declared_name,
                 attachment_content_items=attachment_content_items
                 + (
                     [
@@ -3245,6 +3260,7 @@ async def _generate_assistant_reply(
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
     attachment_content_items: list[dict[str, Any]] | None = None,
+    resolved_full_name: str | None = None,
 ) -> AssistantReply:
     debug_timings: dict[str, float] = {}
     started = time.perf_counter()
@@ -3304,6 +3320,12 @@ async def _generate_assistant_reply(
                 "error": str(exc),
             },
         )
+    known_full_name = " ".join(str(resolved_full_name or "").split()).strip() or _resolve_context_full_name(context_payload)
+    if known_full_name and filtered_assistant_tools:
+        filtered_assistant_tools = [
+            tool for tool in filtered_assistant_tools if _extract_function_tool_name(tool) != "set_full_name"
+        ]
+        debug_timings["set_full_name_tool_disabled"] = 1.0
 
     summary_record: dict[str, Any] | None = None
     summary_text: str | None = None
