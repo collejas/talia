@@ -341,5 +341,22 @@
   - Ajuste aplicado:
     - `backend/app/services/storage.py`: se elimino la preresolucion duplicada en Python y el `update_conversation(..., {"canal": "whatsapp"})` redundante.
     - la RPC queda como fuente unica para resolver persona, conversacion e insercion del mensaje.
-  - Validacion local pendiente:
-    - correr suite focalizada del canal WhatsApp y volver a medir tiempos reales en `whatsapp.turn_timing`.
+  - Validacion local:
+    - `poetry run pytest tests/services/test_storage_channels.py tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py -q`
+    - resultado: `31 passed`
+- 2026-07-15 16:48 UTC
+  - Se ajusto el debounce de burst en WhatsApp para reducir `burst_merge_ms` en mensajes aislados.
+  - Hallazgo confirmado:
+    - la heuristica anterior esperaba `1.2s` para casi cualquier texto corto sin puntuacion,
+    - eso estaba agregando costo fijo incluso en mensajes completos que no eran rafagas reales.
+  - Ajuste aplicado:
+    - `backend/app/channels/whatsapp/service.py`
+    - ahora el debounce es adaptativo:
+      - `0s` para saludos simples o mensajes con puntuacion,
+      - `0.35s` para mensajes cortos completos,
+      - `1.2s` solo para fragmentos mas claramente incompletos, por ejemplo cuando terminan en conectores como `pero`, `y`, `que`, `para`.
+  - Validacion local:
+    - `poetry run pytest tests/channels/test_whatsapp_service.py tests/channels/test_whatsapp_webhook.py -q`
+    - resultado: `30 passed`
+  - Objetivo:
+    - bajar el costo fijo de `burst_merge_ms` sin perder la capacidad de agrupar fragmentos reales.

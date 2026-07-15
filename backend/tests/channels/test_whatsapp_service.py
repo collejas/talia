@@ -56,6 +56,23 @@ def test_booking_confirmation_hint_ignores_non_booking_text() -> None:
     assert service._looks_like_booking_confirmation(text) is False
 
 
+def test_inbound_burst_debounce_skips_greeting() -> None:
+    assert service._resolve_inbound_burst_debounce_seconds("hola") == 0.0
+    assert service._resolve_inbound_burst_debounce_seconds("hola buen dia") == 0.0
+
+
+def test_inbound_burst_debounce_uses_fast_window_for_short_complete_message() -> None:
+    assert service._resolve_inbound_burst_debounce_seconds("quiero info") == 0.35
+
+
+def test_inbound_burst_debounce_keeps_long_window_for_trailing_fragment() -> None:
+    assert service._resolve_inbound_burst_debounce_seconds("me interesa pero") == 1.2
+
+
+def test_inbound_burst_debounce_skips_complete_sentence_with_punctuation() -> None:
+    assert service._resolve_inbound_burst_debounce_seconds("me interesa un terreno.") == 0.0
+
+
 @pytest.mark.asyncio
 async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
     """Los acuses del botón de vendedor no deben disparar al asistente."""

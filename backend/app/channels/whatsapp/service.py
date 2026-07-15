@@ -130,10 +130,30 @@ _WHATSAPP_READ_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Read.
 _WHATSAPP_TYPING_TIMEOUT_SECONDS = 6.0
 _WHATSAPP_READ_TIMEOUT_SECONDS = 6.0
 _WHATSAPP_INBOUND_DEBOUNCE_SECONDS = 1.2
+_WHATSAPP_INBOUND_DEBOUNCE_FAST_SECONDS = 0.35
 _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES = 4
 _WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS = 12
 _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS = 80
 _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS = 12
+_WHATSAPP_INBOUND_FRAGMENT_TRAILING_CONNECTORS: tuple[str, ...] = (
+    "y",
+    "e",
+    "o",
+    "u",
+    "pero",
+    "porque",
+    "que",
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "para",
+    "con",
+    "en",
+    "por",
+)
 MAX_WHATSAPP_ATTACHMENT_BYTES = 8 * 1024 * 1024
 MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS = 12000
 MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE = 4
@@ -1749,18 +1769,34 @@ def _compact_whatsapp_reply(text: str | None, max_chars: int = _DEFAULT_WHATSAPP
 
 
 def _should_wait_for_inbound_burst(text: str | None) -> bool:
+    return _resolve_inbound_burst_debounce_seconds(text) > 0
+
+
+def _resolve_inbound_burst_debounce_seconds(text: str | None) -> float:
     normalized = " ".join(str(text or "").split())
     if not normalized:
-        return False
+        return 0.0
+    normalized_simple = _normalize_fast_path_text(normalized)
+    if not normalized_simple:
+        return 0.0
+    if any(normalized_simple.startswith(prefix) for prefix in _SIMPLE_GREETING_PREFIXES):
+        return 0.0
     words = normalized.split()
     if len(words) < 2:
-        return False
+        return 0.0
     if any(punct in normalized for punct in ".!?"):
-        return False
-    return (
-        len(normalized) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS
-        and len(words) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS
-    )
+        return 0.0
+    simple_words = normalized_simple.split()
+    if (
+        len(normalized_simple) > _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS
+        or len(simple_words) > _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS
+    ):
+        return 0.0
+    if simple_words[-1] in _WHATSAPP_INBOUND_FRAGMENT_TRAILING_CONNECTORS:
+        return _WHATSAPP_INBOUND_DEBOUNCE_SECONDS
+    if len(simple_words) <= 3 and len(normalized_simple) <= 18:
+        return _WHATSAPP_INBOUND_DEBOUNCE_FAST_SECONDS
+    return 0.0
 
 
 def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
@@ -4634,11 +4670,11 @@ async def _coalesce_inbound_burst(
     if not conversation_id or not message_id:
         return True, fallback_text, debug_timings
 
-    should_wait_for_more = _should_wait_for_inbound_burst(fallback_text)
-    debug_timings["debounce_applied"] = 1.0 if should_wait_for_more else 0.0
-    if should_wait_for_more and _WHATSAPP_INBOUND_DEBOUNCE_SECONDS > 0:
+    debounce_seconds = _resolve_inbound_burst_debounce_seconds(fallback_text)
+    debug_timings["debounce_applied"] = 1.0 if debounce_seconds > 0 else 0.0
+    if debounce_seconds > 0:
         debounce_started = time.perf_counter()
-        await asyncio.sleep(_WHATSAPP_INBOUND_DEBOUNCE_SECONDS)
+        await asyncio.sleep(debounce_seconds)
         debug_timings["debounce_sleep_ms"] = round((time.perf_counter() - debounce_started) * 1000, 2)
 
     try:
