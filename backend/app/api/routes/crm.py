@@ -37608,7 +37608,10 @@ async def pipeline_board(
     visitors = 0
     try:
         kpis_started = time.perf_counter()
-        kpis_payload = await repo.visitas_dashboard_kpis(usuario_token=user_token)
+        kpis_payload = await repo.visitas_dashboard_kpis(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+        )
         visitors = _extract_visitas_sin_chat(kpis_payload)
         logger.info(
             "crm.pipeline_board.visitas_dashboard_kpis.done",
