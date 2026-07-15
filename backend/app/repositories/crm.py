@@ -20659,10 +20659,10 @@ class CRMRepository:
                     {
                         "p_phone_values": chunk,
                         "p_canal": rpc_canal,
-                        **(
-                            {"p_organizacion_id": str(organizacion_id)}
-                            if organizacion_id is not None
-                            else {}
+                        # Fuerza la firma RPC de 3 argumentos y evita ambiguedad
+                        # cuando existen overloads de Postgres/PostgREST.
+                        "p_organizacion_id": (
+                            str(organizacion_id) if organizacion_id is not None else None
                         ),
                     },
                 )

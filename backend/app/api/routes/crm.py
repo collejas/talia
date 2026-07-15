@@ -24994,6 +24994,7 @@ async def get_inbox_threads(
             try:
                 latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
                     phone_values=all_lookup_candidates,
+                    organizacion_id=organizacion_id,
                     canal="whatsapp",
                 )
             except CRMRepositoryError:
@@ -36418,6 +36419,7 @@ async def get_visits_whatsapp_conversations(
         if all_lookup_candidates:
             latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
                 phone_values=all_lookup_candidates,
+                organizacion_id=organizacion_id,
                 canal="whatsapp",
             )
         stage_timings["phone_lookup_ms"] = round((time.perf_counter() - phone_lookup_started) * 1000, 2)

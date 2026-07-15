@@ -320,3 +320,10 @@
     para conversaciones viejas y no reaparecieron en ese tramo
     ni el error de `contactos_codigo_contacto_formato_chk`
     ni `etapas_pipeline.tablero_id does not exist`.
+- 2026-07-15 16:12 UTC
+  - Se corrigio un nuevo `300 Multiple Choices` en Supabase para `rpc/prospeccion_latest_envios_by_phones`.
+  - Causa: coexistian dos firmas RPC (`text[], text` y `text[], text, uuid`) y algunas vistas del panel llamaban sin `organizacion_id`, dejando la resolucion ambigua.
+  - Ajuste aplicado:
+    - `backend/app/repositories/crm.py`: la RPC ahora siempre manda `p_organizacion_id`, aunque venga `None`, para forzar la firma de 3 argumentos.
+    - `backend/app/api/routes/crm.py`: las vistas que ya conocen `organizacion_id` ahora lo propagan explicitamente en la llamada al repositorio.
+  - Objetivo: eliminar el `300` en vistas de prospeccion/inbox y mantener aislamiento tenant-aware en los lookups por telefono.
