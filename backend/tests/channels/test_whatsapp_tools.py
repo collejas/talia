@@ -724,3 +724,161 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
     assert scored["payload"]["answers"]["decision_authority"] == "refused"
     assert scored["payload"]["events"]["appointment_requested"] is True
     assert promoted["payload"]["channel"] == "whatsapp"
+
+
+@pytest.mark.asyncio
+async def test_set_company_name_schedules_background_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    updated: list[dict[str, Any]] = []
+    scheduled: list[Any] = []
+
+    async def fake_update_persona(persona_id: str, payload: dict[str, Any]) -> None:
+        updated.append({"persona_id": persona_id, "payload": payload})
+
+    def fake_schedule(coro: Any) -> None:
+        scheduled.append(coro)
+
+    monkeypatch.setattr(tools.storage, "update_persona", fake_update_persona)
+    monkeypatch.setattr(tools, "_schedule_background_coroutine", fake_schedule)
+
+    context = ToolRuntimeContext(
+        conversation_id="conv-company",
+        persona_id="persona-company",
+        channel="whatsapp",
+    )
+
+    result = await tools.execute_tool(
+        "set_company_name",
+        {"company_name": "Geoactiv Demo"},
+        context,
+    )
+
+    assert result == {"status": "ok", "company_name": "Geoactiv Demo"}
+    assert updated == [
+        {
+            "persona_id": "persona-company",
+            "payload": {"company_name": "Geoactiv Demo"},
+        }
+    ]
+    assert len(scheduled) == 1
+    scheduled[0].close()
+
+
+@pytest.mark.asyncio
+async def test_schedule_demo_defers_post_booking_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduled: list[Any] = []
+
+    class CalendarStub:
+        async def hold_slot(self, **_: object) -> dict[str, Any]:
+            return {"hold_id": "hold-123"}
+
+        async def confirm_slot(self, **_: object) -> dict[str, Any]:
+            return {
+                "booking_id": "booking-123",
+                "resource_id": "resource-123",
+                "start_at": "2026-07-15T20:00:00+00:00",
+                "end_at": "2026-07-15T20:30:00+00:00",
+                "timezone": "UTC",
+                "status": "confirmed",
+            }
+
+    async def fake_resolve_conversation_metadata(_: str) -> dict[str, Any]:
+        return {"organizacion_id": "00000000-0000-0000-0000-0000000000bb"}
+
+    async def fake_get_calendar_runtime_settings_for_organizacion(_: object) -> Any:
+        return SimpleNamespace(hold_minutes=15)
+
+    async def fake_resolve_calendar_resource_id(_: object) -> str:
+        return "resource-123"
+
+    async def fake_resolve_persona(_: str) -> dict[str, Any]:
+        return {
+            "id": "persona-123",
+            "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
+            "nombre_completo": "Juan Demo",
+            "correo": "juan@example.com",
+            "company_name": "Geoactiv Demo",
+        }
+
+    async def fake_ensure_opportunity_when_persona_ready(**_: object) -> str:
+        return "00000000-0000-0000-0000-0000000000cc"
+
+    async def fake_has_prefilter_for_schedule(**_: object) -> dict[str, Any]:
+        return {"ready": True, "missing_fields": [], "questions": {}}
+
+    async def fake_is_profiling_enabled(**_: object) -> bool:
+        return True
+
+    async def fail_sync(**_: object) -> None:
+        raise AssertionError("_sync_booking_with_opportunity no debe correr inline")
+
+    async def fail_email(**_: object) -> None:
+        raise AssertionError("_send_booking_confirmation_email no debe correr inline")
+
+    def fake_schedule(coro: Any) -> None:
+        scheduled.append(coro)
+
+    monkeypatch.setattr(tools, "_schedule_background_coroutine", fake_schedule)
+    monkeypatch.setattr(tools, "_resolve_persona", fake_resolve_persona)
+    monkeypatch.setattr(tools, "_has_prefilter_for_schedule", fake_has_prefilter_for_schedule)
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "is_profiling_enabled",
+        fake_is_profiling_enabled,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "_resolve_conversation_metadata",
+        fake_resolve_conversation_metadata,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "get_calendar_runtime_settings_for_organizacion",
+        fake_get_calendar_runtime_settings_for_organizacion,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "_resolve_calendar_resource_id",
+        fake_resolve_calendar_resource_id,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "_ensure_opportunity_when_persona_ready",
+        fake_ensure_opportunity_when_persona_ready,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "_sync_booking_with_opportunity",
+        fail_sync,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "_send_booking_confirmation_email",
+        fail_email,
+    )
+    monkeypatch.setattr(
+        tools.webchat_service,
+        "calendar_service",
+        CalendarStub(),
+    )
+
+    context = ToolRuntimeContext(
+        conversation_id="conv-booking",
+        persona_id="persona-123",
+        session_id="whatsapp:conv-booking",
+        channel="whatsapp",
+    )
+
+    result = await tools._handle_schedule_demo(
+        {"slot_id": "resource-123:2026-07-15T20:00:00+00:00"},
+        context,
+    )
+
+    assert result["status"] == "confirmed"
+    assert result["booking_id"] == "booking-123"
+    assert result["_side_effects"]["booking"]["booking_id"] == "booking-123"
+    assert len(scheduled) == 1
+    scheduled[0].close()

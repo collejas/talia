@@ -1,5 +1,41 @@
 # Changelog · Latencia WhatsApp
 
+## 2026-07-15 19:35 UTC
+
+- Hallazgo en tenant `a2f79c76-340a-4fe7-b05a-6ff4dd532325`:
+  - la latencia dominante ya no estaba en `read/typing` ni en CRM básico,
+  - estaba concentrada en tools del flujo de captura/agendamiento:
+    - `set_full_name`,
+    - `set_email`,
+    - `set_company_name`,
+    - `schedule_demo`.
+
+- Evidencia revisada:
+  - turnos reales del `2026-07-15`,
+  - un caso crítico de `40.30s` total con `set_company_name` ~`13.00s`,
+  - varios turnos de `11s` a `26s` donde `schedule_demo` y el loop del asistente siguieron alargando la respuesta.
+
+- Ajuste aplicado:
+  - los setters básicos de contacto en WhatsApp ya no esperan el refresh pesado de oportunidad/contexto dentro del turno;
+    ahora guardan el dato y disparan ese refresh en background,
+  - `schedule_demo` ahora responde apenas queda confirmada la cita y mueve a background:
+    - sync de oportunidad,
+    - email de confirmación,
+    - scoring/promoción,
+    - patch de contexto,
+    - auto-name,
+    - actualización de título/descripción,
+    - notificación a vendedor,
+  - para la notificación comercial posterior a la cita se reutiliza la cola persistente existente de `sales_notification_jobs`.
+
+- Archivos tocados:
+  - `backend/app/channels/whatsapp/tools.py`
+  - `backend/tests/channels/test_whatsapp_tools.py`
+
+- Validación local prevista:
+  - prueba unitaria para confirmar que `set_company_name` agenda el refresh en background,
+  - prueba unitaria para confirmar que `schedule_demo` ya no ejecuta inline el post-procesamiento pesado.
+
 ## 2026-07-13 23:40 UTC
 
 - Síntoma:

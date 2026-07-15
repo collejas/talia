@@ -43,6 +43,7 @@ from app.services.catalog_fraccionamientos import (
 )
 from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
 from app.services.email import EmailSendError
+from app.services.sales_notification_jobs import enqueue_webchat_sales_notification
 from app.services.storage import StorageError
 
 logger = get_logger("app.channels.whatsapp.tools")
@@ -1059,6 +1060,18 @@ def _context_persona_id(context: ToolRuntimeContext) -> str | None:
     return str(persona_id)
 
 
+def _schedule_background_coroutine(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+
+    def _log_task_failure(done_task: asyncio.Task[Any]) -> None:
+        try:
+            done_task.result()
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.info("whatsapp.tools.background_task_failed", extra={"error": str(exc)})
+
+    task.add_done_callback(_log_task_failure)
+
+
 async def _refresh_opportunity_context_from_persona(
     context: ToolRuntimeContext,
     *,
@@ -1191,6 +1204,262 @@ async def _refresh_opportunity_context_from_persona(
         )
 
 
+async def _run_schedule_demo_post_booking_tasks(
+    *,
+    context: ToolRuntimeContext,
+    persona_id: str,
+    tarjeta_id: str,
+    booking_response: Any,
+    notes: str | None,
+    profiling_enabled_for_channel: bool,
+    persona_org_uuid: str | None,
+) -> None:
+    persona = await _resolve_persona(persona_id)
+    persona_record = persona
+    opportunity_persona_id = persona_id
+    channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
+    persona_org = webchat_service._extract_persona_org(persona_record)
+    if persona_org:
+        try:
+            opportunity_contact = await storage.fetch_opportunity_persona(
+                oportunidad_id=str(tarjeta_id),
+                organizacion_id=str(persona_org),
+            )
+        except StorageError:
+            opportunity_contact = None
+        if isinstance(opportunity_contact, dict):
+            resolved_persona_id = str(opportunity_contact.get("id") or "").strip()
+            if resolved_persona_id:
+                opportunity_persona_id = resolved_persona_id
+            current_email = webchat_service._extract_persona_email(persona_record)
+            fallback_email = webchat_service._extract_persona_email(opportunity_contact)
+            current_name = webchat_service._extract_persona_name(persona_record)
+            fallback_name = webchat_service._extract_persona_name(opportunity_contact)
+            should_prefer_fallback = (
+                (not current_email and fallback_email)
+                or (not current_name and fallback_name)
+                or (not persona_record)
+            )
+            if should_prefer_fallback:
+                persona_record = opportunity_contact
+
+    await webchat_service._sync_booking_with_opportunity(
+        booking=booking_response,
+        tarjeta_id=str(tarjeta_id),
+        persona=persona_record,
+        channel="whatsapp",
+    )
+    await webchat_service._send_booking_confirmation_email(
+        booking=booking_response,
+        persona_id=persona_id,
+        conversation_id=context.conversation_id,
+        tarjeta_id=str(tarjeta_id),
+        persona=persona_record,
+    )
+    if profiling_enabled_for_channel:
+        if _has_meaningful_scoring_answers(persona_record):
+            try:
+                await storage.apply_persona_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    persona_id=persona_id,
+                    opportunity_id=str(tarjeta_id),
+                    events={
+                        "channel": "whatsapp",
+                        "appointment_requested": True,
+                        "appointment_scheduled": True,
+                        "appointment_confirmed": True,
+                    },
+                    source="booking_confirmed",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.schedule_demo.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "whatsapp.schedule_demo.skip_scoring_without_answers",
+                extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
+            )
+        try:
+            await storage.maybe_promote_prequalified_from_persona(
+                conversation_id=context.conversation_id,
+                persona_id=persona_id,
+                opportunity_id=str(tarjeta_id),
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.prequalified_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+    else:
+        logger.info(
+            "whatsapp.schedule_demo.skip_scoring_profiling_disabled",
+            extra={
+                "conversation_id": context.conversation_id,
+                "opportunity_id": str(tarjeta_id),
+                "channel": channel_value,
+            },
+        )
+
+    opportunity_metadata: dict[str, Any] = {}
+    opportunity_row: dict[str, Any] | None = None
+    if persona_org_uuid:
+        try:
+            repo = CRMRepository()
+            opportunity_row = await repo.get_pipeline_opportunity(
+                organizacion_id=UUID(persona_org_uuid),
+                oportunidad_id=UUID(str(tarjeta_id)),
+            )
+        except (CRMRepositoryError, ValueError) as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.fetch_opportunity_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+            opportunity_row = None
+        if isinstance(opportunity_row, dict):
+            opportunity_metadata = _ensure_dict(opportunity_row.get("metadata"))
+    is_prospeccion = _is_prospeccion_opportunity({"metadata": opportunity_metadata})
+
+    if opportunity_persona_id != persona_id and isinstance(persona, dict):
+        merge_payload: dict[str, Any] = {}
+        if not str((persona_record or {}).get("nombre_completo") or "").strip():
+            candidate = str(persona.get("nombre_completo") or "").strip()
+            if candidate:
+                merge_payload["nombre_completo"] = candidate
+        if not _contact_email_value(persona_record):
+            candidate = _contact_email_value(persona)
+            if candidate:
+                merge_payload["correo_principal"] = candidate
+        if not str((persona_record or {}).get("company_name") or "").strip():
+            candidate = str(persona.get("company_name") or "").strip()
+            if candidate:
+                merge_payload["company_name"] = candidate
+        if merge_payload:
+            try:
+                await storage.update_persona(opportunity_persona_id, merge_payload)
+                persona_record = await _resolve_persona(opportunity_persona_id)
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.schedule_demo.contact_merge_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+
+    existing_need = str((persona_record or {}).get("necesidad_proposito") or "").strip()
+    existing_notes = str((persona_record or {}).get("notes") or "").strip()
+    booking_note = (
+        f"Demo confirmada para {booking_response.start_at.isoformat()} "
+        f"(booking {booking_response.booking_id})."
+    )
+    fallback_need = (
+        "Agendar demo de prospección por WhatsApp"
+        if is_prospeccion
+        else "Agendar demo por WhatsApp"
+    )
+    inferred_need = existing_need or fallback_need
+    inferred_notes = existing_notes or notes or booking_note
+    patch_payload: dict[str, Any] = {}
+    if not existing_need:
+        patch_payload["necesidad_proposito"] = inferred_need
+    if not existing_notes:
+        patch_payload["notes"] = inferred_notes
+    if patch_payload:
+        try:
+            await storage.update_persona(opportunity_persona_id, patch_payload)
+            persona_record = await _resolve_persona(opportunity_persona_id)
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.persona_context_patch_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+    try:
+        await storage.upsert_conversation_insights(
+            conversation_id=context.conversation_id,
+            resumen=inferred_notes,
+            intencion=inferred_need,
+            siguiente_accion="demo_agendada",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.schedule_demo.insights_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    try:
+        await storage.maybe_auto_name_persona_opportunity(
+            conversation_id=context.conversation_id,
+            persona_id=opportunity_persona_id,
+            opportunity_id=str(tarjeta_id),
+            intent=inferred_need,
+            summary=inferred_notes,
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.schedule_demo.auto_name_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    if opportunity_row and persona_org_uuid:
+        current_title = str(opportunity_row.get("titulo") or "").strip()
+        current_description = str(opportunity_row.get("descripcion") or "").strip()
+        full_name = str((persona_record or {}).get("nombre_completo") or "").strip()
+        company_name = str((persona_record or {}).get("company_name") or "").strip()
+        looks_generic = (
+            not current_title
+            or current_title.lower().startswith("conversación ")
+            or (full_name and current_title.casefold() == full_name.casefold())
+        )
+        if looks_generic or not current_description:
+            label = company_name or "Prospecto"
+            title_prefix = "Demo de prospección" if is_prospeccion else "Demo agendada"
+            desired_title = f"{title_prefix} - {label}"
+            patch_opp: dict[str, Any] = {}
+            if looks_generic:
+                patch_opp["titulo"] = desired_title[:120]
+            if not current_description:
+                patch_opp["descripcion"] = inferred_notes[:1000]
+            if patch_opp:
+                try:
+                    repo = CRMRepository()
+                    await repo.update_opportunity(
+                        organizacion_id=UUID(persona_org_uuid),
+                        oportunidad_id=UUID(str(tarjeta_id)),
+                        payload=patch_opp,
+                    )
+                except (CRMRepositoryError, ValueError) as exc:
+                    logger.warning(
+                        "whatsapp.schedule_demo.prospeccion_title_patch_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+        try:
+            await enqueue_webchat_sales_notification(
+                conversation_id=context.conversation_id,
+                persona_id=persona_id,
+                trigger="booking_confirmed",
+                channel="whatsapp",
+                organizacion_id=UUID(persona_org_uuid),
+                contact=persona_record,
+                opportunity_id=str(tarjeta_id),
+                resumen="Cita agendada",
+                notes=booking_note,
+                email=webchat_service._extract_persona_email(persona_record),
+                extra={
+                    "booking_id": booking_response.booking_id,
+                    "slot_start": booking_response.start_at.isoformat(),
+                    "slot_end": booking_response.end_at.isoformat() if booking_response.end_at else None,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.booking_notify_enqueue_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "tarjeta_id": tarjeta_id,
+                    "error": str(exc),
+                },
+            )
+
+
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
     arguments: dict[str, Any],
@@ -1274,10 +1543,12 @@ async def execute_tool(
             return {"status": "ignored", "reason": "full_name_not_resolved"}
         persona_id = _context_persona_id(context)
         await storage.update_persona(persona_id, {"nombre_completo": full_name})
-        await _refresh_opportunity_context_from_persona(
-            context,
-            reason="set_full_name",
-            ensure_capture=True,
+        _schedule_background_coroutine(
+            _refresh_opportunity_context_from_persona(
+                context,
+                reason="set_full_name",
+                ensure_capture=True,
+            )
         )
         return {"status": "ok", "full_name": full_name}
 
@@ -1285,10 +1556,12 @@ async def execute_tool(
         email = _require(arguments, "email").lower()
         persona_id = _context_persona_id(context)
         await storage.update_persona(persona_id, {"correo_principal": email})
-        await _refresh_opportunity_context_from_persona(
-            context,
-            reason="set_email",
-            ensure_capture=True,
+        _schedule_background_coroutine(
+            _refresh_opportunity_context_from_persona(
+                context,
+                reason="set_email",
+                ensure_capture=True,
+            )
         )
         return {"status": "ok", "email": email}
 
@@ -1296,10 +1569,12 @@ async def execute_tool(
         phone = _require(arguments, "phone_number")
         persona_id = _context_persona_id(context)
         await storage.update_persona(persona_id, {"telefono_principal_e164": phone})
-        await _refresh_opportunity_context_from_persona(
-            context,
-            reason="set_phone_number",
-            ensure_capture=True,
+        _schedule_background_coroutine(
+            _refresh_opportunity_context_from_persona(
+                context,
+                reason="set_phone_number",
+                ensure_capture=True,
+            )
         )
         return {"status": "ok", "phone_number": phone}
 
@@ -1307,10 +1582,12 @@ async def execute_tool(
         company = _require(arguments, "company_name")
         persona_id = _context_persona_id(context)
         await storage.update_persona(persona_id, {"company_name": company})
-        await _refresh_opportunity_context_from_persona(
-            context,
-            reason="set_company_name",
-            ensure_capture=True,
+        _schedule_background_coroutine(
+            _refresh_opportunity_context_from_persona(
+                context,
+                reason="set_company_name",
+                ensure_capture=True,
+            )
         )
         return {"status": "ok", "company_name": company}
 
@@ -2479,251 +2756,18 @@ async def _handle_schedule_demo(
         raise ValueError(str(exc)) from exc
 
     booking_response = webchat_service._build_booking_response(booking)
-    persona = await _resolve_persona(persona_id)
     booking_response.hold_id = hold.get("hold_id")
-    persona_record = persona
-    opportunity_persona_id = persona_id
-    channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
-    persona_org = webchat_service._extract_persona_org(persona_record)
-    if persona_org:
-        try:
-            opportunity_contact = await storage.fetch_opportunity_persona(
-                oportunidad_id=str(tarjeta_id),
-                organizacion_id=str(persona_org),
-            )
-        except StorageError:
-            opportunity_contact = None
-        if isinstance(opportunity_contact, dict):
-            resolved_persona_id = str(opportunity_contact.get("id") or "").strip()
-            if resolved_persona_id:
-                opportunity_persona_id = resolved_persona_id
-            current_email = webchat_service._extract_persona_email(persona_record)
-            fallback_email = webchat_service._extract_persona_email(opportunity_contact)
-            current_name = webchat_service._extract_persona_name(persona_record)
-            fallback_name = webchat_service._extract_persona_name(opportunity_contact)
-            should_prefer_fallback = (
-                (not current_email and fallback_email)
-                or (not current_name and fallback_name)
-                or (not persona_record)
-            )
-            if should_prefer_fallback:
-                persona_record = opportunity_contact
-
-    await webchat_service._sync_booking_with_opportunity(
-        booking=booking_response,
-        tarjeta_id=tarjeta_id,
-        persona=persona_record,
-        channel="whatsapp",
+    _schedule_background_coroutine(
+        _run_schedule_demo_post_booking_tasks(
+            context=context,
+            persona_id=persona_id,
+            tarjeta_id=str(tarjeta_id),
+            booking_response=booking_response,
+            notes=notes,
+            profiling_enabled_for_channel=profiling_enabled_for_channel,
+            persona_org_uuid=persona_org_uuid,
+        )
     )
-    await webchat_service._send_booking_confirmation_email(
-        booking=booking_response,
-        persona_id=persona_id,
-        conversation_id=context.conversation_id,
-        tarjeta_id=tarjeta_id,
-        persona=persona_record,
-    )
-    if profiling_enabled_for_channel:
-        if _has_meaningful_scoring_answers(persona_record):
-            try:
-                await storage.apply_persona_lead_scoring(
-                    conversation_id=context.conversation_id,
-                    persona_id=persona_id,
-                    opportunity_id=str(tarjeta_id),
-                    events={
-                        "channel": "whatsapp",
-                        "appointment_requested": True,
-                        "appointment_scheduled": True,
-                        "appointment_confirmed": True,
-                    },
-                    source="booking_confirmed",
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "whatsapp.schedule_demo.scoring_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                )
-        else:
-            logger.info(
-                "whatsapp.schedule_demo.skip_scoring_without_answers",
-                extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
-            )
-        try:
-            await storage.maybe_promote_prequalified_from_persona(
-                conversation_id=context.conversation_id,
-                persona_id=persona_id,
-                opportunity_id=str(tarjeta_id),
-                channel=context.channel or "whatsapp",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.schedule_demo.prequalified_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-    else:
-        logger.info(
-            "whatsapp.schedule_demo.skip_scoring_profiling_disabled",
-            extra={
-                "conversation_id": context.conversation_id,
-                "opportunity_id": str(tarjeta_id),
-                "channel": channel_value,
-            },
-        )
-    # En prospección, al confirmar demo dejamos contexto mínimo para insights/título.
-    opportunity_metadata: dict[str, Any] = {}
-    opportunity_row: dict[str, Any] | None = None
-    if persona_org_uuid:
-        try:
-            repo = CRMRepository()
-            opportunity_row = await repo.get_pipeline_opportunity(
-                organizacion_id=UUID(persona_org_uuid),
-                oportunidad_id=UUID(str(tarjeta_id)),
-            )
-        except (CRMRepositoryError, ValueError) as exc:
-            logger.warning(
-                "whatsapp.schedule_demo.fetch_opportunity_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-            opportunity_row = None
-        if isinstance(opportunity_row, dict):
-            opportunity_metadata = _ensure_dict(opportunity_row.get("metadata"))
-    is_prospeccion = _is_prospeccion_opportunity({"metadata": opportunity_metadata})
-    # Si el contacto de la conversación y el de la oportunidad difieren,
-    # propagamos datos capturados (nombre/correo/empresa) al contacto de oportunidad.
-    if opportunity_persona_id != persona_id and isinstance(persona, dict):
-        merge_payload: dict[str, Any] = {}
-        if not str((persona_record or {}).get("nombre_completo") or "").strip():
-            candidate = str(persona.get("nombre_completo") or "").strip()
-            if candidate:
-                merge_payload["nombre_completo"] = candidate
-        if not _contact_email_value(persona_record):
-            candidate = _contact_email_value(persona)
-            if candidate:
-                merge_payload["correo_principal"] = candidate
-        if not str((persona_record or {}).get("company_name") or "").strip():
-            candidate = str(persona.get("company_name") or "").strip()
-            if candidate:
-                merge_payload["company_name"] = candidate
-        if merge_payload:
-            try:
-                await storage.update_persona(opportunity_persona_id, merge_payload)
-                persona_record = await _resolve_persona(opportunity_persona_id)
-            except StorageError as exc:
-                logger.warning(
-                    "whatsapp.schedule_demo.contact_merge_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                )
-
-    existing_need = str((persona_record or {}).get("necesidad_proposito") or "").strip()
-    existing_notes = str((persona_record or {}).get("notes") or "").strip()
-    booking_note = (
-        f"Demo confirmada para {booking_response.start_at.isoformat()} "
-        f"(booking {booking_response.booking_id})."
-    )
-    fallback_need = (
-        "Agendar demo de prospección por WhatsApp"
-        if is_prospeccion
-        else "Agendar demo por WhatsApp"
-    )
-    inferred_need = existing_need or fallback_need
-    inferred_notes = existing_notes or notes or booking_note
-    patch_payload: dict[str, Any] = {}
-    if not existing_need:
-        patch_payload["necesidad_proposito"] = inferred_need
-    if not existing_notes:
-        patch_payload["notes"] = inferred_notes
-    if patch_payload:
-        try:
-            await storage.update_persona(opportunity_persona_id, patch_payload)
-            persona_record = await _resolve_persona(opportunity_persona_id)
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.schedule_demo.persona_context_patch_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-    try:
-        await storage.upsert_conversation_insights(
-            conversation_id=context.conversation_id,
-            resumen=inferred_notes,
-            intencion=inferred_need,
-            siguiente_accion="demo_agendada",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.schedule_demo.insights_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-    try:
-        await storage.maybe_auto_name_persona_opportunity(
-            conversation_id=context.conversation_id,
-            persona_id=opportunity_persona_id,
-            opportunity_id=str(tarjeta_id),
-            intent=inferred_need,
-            summary=inferred_notes,
-            channel=context.channel or "whatsapp",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.schedule_demo.auto_name_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-    if opportunity_row and persona_org_uuid:
-        current_title = str(opportunity_row.get("titulo") or "").strip()
-        current_description = str(opportunity_row.get("descripcion") or "").strip()
-        full_name = str((persona_record or {}).get("nombre_completo") or "").strip()
-        company_name = str((persona_record or {}).get("company_name") or "").strip()
-        looks_generic = (
-            not current_title
-            or current_title.lower().startswith("conversación ")
-            or (full_name and current_title.casefold() == full_name.casefold())
-        )
-        if looks_generic or not current_description:
-            label = company_name or "Prospecto"
-            title_prefix = "Demo de prospección" if is_prospeccion else "Demo agendada"
-            desired_title = f"{title_prefix} - {label}"
-            patch_opp: dict[str, Any] = {}
-            if looks_generic:
-                patch_opp["titulo"] = desired_title[:120]
-            if not current_description:
-                patch_opp["descripcion"] = inferred_notes[:1000]
-            if patch_opp:
-                try:
-                    repo = CRMRepository()
-                    await repo.update_opportunity(
-                        organizacion_id=UUID(persona_org_uuid),
-                        oportunidad_id=UUID(str(tarjeta_id)),
-                        payload=patch_opp,
-                    )
-                except (CRMRepositoryError, ValueError) as exc:
-                    logger.warning(
-                        "whatsapp.schedule_demo.prospeccion_title_patch_failed",
-                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                    )
-        try:
-            await _notify_sales_rep(
-                context=context,
-                trigger="booking_confirmed",
-                persona=persona_record,
-                opportunity_id=tarjeta_id,
-                resumen="Cita agendada",
-                notes=(
-                    f"Cita confirmada para {booking_response.start_at.isoformat()} "
-                    f"(booking {booking_response.booking_id})."
-                ),
-                email=webchat_service._extract_persona_email(persona_record),
-                extra={
-                    "booking_id": booking_response.booking_id,
-                    "slot_start": booking_response.start_at.isoformat(),
-                    "slot_end": booking_response.end_at.isoformat() if booking_response.end_at else None,
-                },
-            )
-        except Exception:
-            logger.warning(
-                "whatsapp.booking_notify_failed",
-                extra={
-                    "conversation_id": context.conversation_id,
-                    "persona_id": persona_id,
-                },
-            )
 
     booking_payload = {
         "booking_id": booking_response.booking_id,
