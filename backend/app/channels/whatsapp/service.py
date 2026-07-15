@@ -2325,6 +2325,14 @@ async def handle_incoming_message(
     previous_response_id = conversation_meta.get("last_response_id")
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
+    metadata_payload = _build_whatsapp_openai_metadata_payload(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        message_sid=message.message_sid,
+        inbound_message_id=inbound_message_id,
+        prospeccion_mode=is_prospeccion_mode,
+        origin_type=origin_type,
+    )
 
     catalog_inmobiliario_enabled = True
     catalog_no_inmobiliario_enabled = True

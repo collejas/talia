@@ -1,5 +1,37 @@
 # Changelog · Latencia WhatsApp
 
+## 2026-07-15 21:33 UTC
+
+- Revisión posterior al redeploy y prueba manual en el tenant `a2f79c76-340a-4fe7-b05a-6ff4dd532325`.
+
+- Resultado confirmado en logs:
+  - el fallback hardcodeado de calificación ya no apareció en la corrida nueva,
+  - ya no se registró `whatsapp.prefilter.required_fields_fallback_default` después del redeploy,
+  - `schedule_demo` ya corre sin exigir preguntas inventadas y quedó registrado `whatsapp.schedule_demo.skip_scoring_without_answers`.
+
+- Latencia observada en la conversación revisada:
+  - mínimo: `4.42s`,
+  - máximo: `17.02s`,
+  - promedio de la corrida: `12.45s`,
+  - el cuello dominante siguió siendo `assistant_generation_ms`, no las tools de agenda ni el prefilter.
+
+- Incidente nuevo detectado:
+  - cuando OpenAI devolvió una respuesta vacía, el retry de protección falló con:
+    - `whatsapp.empty_reply_retry_failed`
+    - error: `name 'metadata_payload' is not defined`
+  - eso dejaba al canal cayendo al fallback en lugar de regenerar el mensaje correctamente.
+
+- Corrección aplicada:
+  - se movió la construcción de `metadata_payload` al scope del flujo principal de WhatsApp para que el retry de respuesta vacía pueda reutilizarlo correctamente.
+
+- Archivo tocado:
+  - `backend/app/channels/whatsapp/service.py`
+
+- Validación local:
+  - `python3 -m py_compile backend/app/channels/whatsapp/service.py`
+  - reinicio limpio de `talia-api.service`
+  - healthcheck: `GET /api/health` => `{"status":"ok"}`
+
 ## 2026-07-15 19:35 UTC
 
 - Hallazgo en tenant `a2f79c76-340a-4fe7-b05a-6ff4dd532325`:
