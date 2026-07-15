@@ -288,3 +288,35 @@
 - Siguiente ajuste en curso:
   - dejar exenta la alta de `personas` con origen `webchat_runtime` del trigger `tg_personas_require_contact_methods`,
   - mantener la validacion estricta para altas normales fuera del canal webchat.
+- 2026-07-15 15:39 UTC
+  - se resolvieron los dos errores backend que seguian apareciendo en runtime:
+    `column etapas_pipeline.tablero_id does not exist` y
+    `new row for relation "contactos" violates check constraint "contactos_codigo_contacto_formato_chk"`.
+  - en `backend/app/repositories/crm.py` se quitó el `select` directo de
+    `tablero_id, tablero_slug, tablero_nombre` sobre `etapas_pipeline` dentro
+    de `_get_first_stage_row(...)`;
+    ese flujo ya se soporta leyendo `metadata`, y la columna física `tablero_id`
+    ya no existe en la tabla viva.
+  - se creó la migración
+    `supabase/migrations/20260715_040000_contactos_legacy_generator_split.sql`
+    y se aplicó en Supabase como `contactos_legacy_generator_split`.
+  - causa raíz confirmada:
+    el trigger `tg_contactos_codigo_legacy_guard()` sí corría,
+    pero llamaba a `public.gen_codigo_contacto(...)`,
+    función que hoy fue redefinida para `personas` y genera códigos `Cont-*`;
+    `public.contactos` exige `ConN`, por eso el insert de legado fallaba.
+  - corrección aplicada:
+    se separó `public.gen_codigo_contacto_legacy(uuid)` para `contactos`,
+    generando consecutivos `ConN` por organización,
+    y el trigger legacy ahora usa esa función dedicada.
+  - validación:
+    `poetry run pytest tests/repositories/test_crm_sales_assignment.py tests/services/test_webchat_followups.py -q`
+    pasó con `14 passed`.
+  - validación runtime:
+    después del reinicio de `talia-api.service`,
+    `/api/health` respondió `{"status":"ok"}` y el worker `webchat-followups`
+    volvió a ejecutar el barrido;
+    en `journalctl` ya se observan skips por `stale_human_inbound`
+    para conversaciones viejas y no reaparecieron en ese tramo
+    ni el error de `contactos_codigo_contacto_formato_chk`
+    ni `etapas_pipeline.tablero_id does not exist`.

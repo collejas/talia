@@ -6932,7 +6932,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "orden.asc",
-            "select": "id,codigo,nombre,orden,categoria,metadata,tablero_id,tablero_slug,tablero_nombre",
+            "select": "id,codigo,nombre,orden,categoria,metadata",
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
