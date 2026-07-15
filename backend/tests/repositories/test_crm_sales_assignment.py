@@ -225,7 +225,7 @@ async def test_assign_sales_rep_if_needed_sets_contact_owner_when_already_assign
 
 
 @pytest.mark.asyncio
-async def test_ensure_contact_record_for_persona_reemplaza_codigo_legacy_cont(
+async def test_ensure_contact_record_for_persona_omite_codigo_manual_y_delega_autocode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = CRMRepository()
@@ -278,13 +278,9 @@ async def test_ensure_contact_record_for_persona_reemplaza_codigo_legacy_cont(
             "contacto_datos": {},
         }
 
-    async def fake_preview_contact_code(*, organizacion_id: uuid.UUID) -> str:
-        return "Con42"
-
     monkeypatch.setattr(repo, "_request_service_role", fake_request_service_role)
     monkeypatch.setattr(repo, "get_persona", fake_get_persona)
     monkeypatch.setattr(repo, "_persona_to_contact_row", fake_persona_to_contact_row)
-    monkeypatch.setattr(repo, "preview_contact_code", fake_preview_contact_code)
 
     await repo.ensure_contact_record_for_persona(
         organizacion_id=organizacion_id,
@@ -294,5 +290,5 @@ async def test_ensure_contact_record_for_persona_reemplaza_codigo_legacy_cont(
 
     assert isinstance(captured.get("json"), dict)
     assert captured["json"]["organizacion_id"] == str(organizacion_id)
-    assert captured["json"]["codigo_contacto"] == "Con42"
+    assert "codigo_contacto" not in captured["json"]
     assert captured["json"]["estado"] == "activo"

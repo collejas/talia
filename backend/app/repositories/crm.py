@@ -9914,16 +9914,10 @@ class CRMRepository:
             persona=persona_row,
             organizacion_id=organizacion_id,
         )
-        codigo_contacto = str(contact_projection.get("codigo_contacto") or "").strip()
-        if not codigo_contacto or not re.fullmatch(r"Con\d+", codigo_contacto):
-            codigo_contacto = await self.preview_contact_code(organizacion_id=organizacion_id)
-        if not codigo_contacto or not re.fullmatch(r"Con\d+", codigo_contacto):
-            raise CRMRepositoryError("contacto_codigo_invalido_para_sync")
         created_at = contact_projection.get("creado_en") or datetime.now(timezone.utc).isoformat()
         contact_body: dict[str, Any] = {
             "id": str(persona_id),
             "organizacion_id": str(organizacion_id),
-            "codigo_contacto": codigo_contacto,
             "nombre_completo": contact_projection.get("nombre_completo") or persona_row.get("nombre_completo"),
             "correo": contact_projection.get("correo"),
             "telefono_e164": contact_projection.get("telefono_e164"),

@@ -218,6 +218,26 @@
   - también aparecieron algunos `canceling statement due to statement timeout`,
   - pero en mucho menor volumen que el error de `codigo_contacto`.
 
+## 2026-07-15 15:20 UTC
+
+- Revisión de continuidad:
+  - el error `null value in column "codigo_contacto"` dejó visible una segunda validación real del esquema,
+  - el nuevo patrón dominante pasó a `contactos_codigo_contacto_formato_chk`.
+
+- Diagnóstico final:
+  - `public.contactos` en producción no tenía triggers activos,
+  - `codigo_contacto` además exige patrón `Con[0-9]+`,
+  - cualquier código ad hoc fuera de ese patrón iba a seguir fallando.
+
+- Corrección definida:
+  - blindar `public.contactos` con un trigger que use `public.gen_codigo_contacto(organizacion_id)`,
+  - dejar el backend sin inventar `codigo_contacto` y delegar el consecutivo al generador oficial de Supabase.
+
+- Artefactos ajustados:
+  - `supabase/migrations/20260715_030000_contactos_legacy_autocode_guard.sql`,
+  - `backend/app/repositories/crm.py`,
+  - `backend/tests/repositories/test_crm_sales_assignment.py`.
+
 - Siguiente foco recomendado:
   - corregir `registrar_mensaje_webchat` para alinearlo al modelo vigente,
   - o, si el flujo correcto ya no debe crear en `contactos`, redirigirlo completamente a `personas` / flujo actual.
