@@ -198,16 +198,6 @@ async def _load_required_case_a_questions(
         if bool(row.get("required_for_case_a")) and field_key not in required_fields:
             required_fields.append(field_key)
 
-    if not required_fields:
-        logger.warning(
-            "webchat.notify_sales.required_fields_fallback_default",
-            extra={
-                "organizacion_id": str(organizacion_id),
-                "channel": channel,
-                "default_required_fields": list(_DEFAULT_REQUIRED_CASE_A_FIELDS),
-            },
-        )
-        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     return required_fields
 
 

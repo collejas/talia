@@ -577,16 +577,6 @@ async def _load_required_case_a_questions(
         question_text = str(row.get("question_text") or "").strip()
         if question_text:
             question_by_field[field_key] = question_text
-    if not required_fields:
-        logger.warning(
-            "whatsapp.prefilter.required_fields_fallback_default",
-            extra={
-                "organizacion_id": str(organizacion_id),
-                "channel": channel,
-                "default_required_fields": list(_DEFAULT_REQUIRED_CASE_A_FIELDS),
-            },
-        )
-        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     return required_fields, question_by_field
 
 
@@ -893,13 +883,9 @@ async def _has_prefilter_for_schedule(
 ) -> dict[str, Any]:
     channel = str((persona or {}).get("canal") or "whatsapp").strip().lower() or "whatsapp"
     repo = CRMRepository()
-    required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    required_fields: list[str] = []
     question_by_field: dict[str, str] = {}
     if not persona or not opportunity_id:
-        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    notes = str(persona.get("notes") or "").strip()
-    need = str(persona.get("necesidad_proposito") or "").strip()
-    if not (notes and need):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     org_value = webchat_service._extract_persona_org(persona)
     org_uuid = webchat_service._resolve_org_uuid(org_value)
@@ -915,6 +901,12 @@ async def _has_prefilter_for_schedule(
         organizacion_id=UUID(org_uuid),
         channel=channel,
     )
+    if not required_fields:
+        return {"ready": True, "missing_fields": [], "questions": {}}
+    notes = str(persona.get("notes") or "").strip()
+    need = str(persona.get("necesidad_proposito") or "").strip()
+    if not (notes and need):
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     try:
         opp_uuid = UUID(str(opportunity_id))
     except (TypeError, ValueError):

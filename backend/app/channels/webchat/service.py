@@ -1850,16 +1850,6 @@ async def _load_required_case_a_questions(
         question_text = str(row.get("question_text") or "").strip()
         if question_text:
             question_by_field[field_key] = question_text
-    if not required_fields:
-        logger.warning(
-            "webchat.prefilter.required_fields_fallback_default",
-            extra={
-                "organizacion_id": str(organizacion_id),
-                "channel": channel,
-                "default_required_fields": list(_DEFAULT_REQUIRED_CASE_A_FIELDS),
-            },
-        )
-        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     return required_fields, question_by_field
 
 
@@ -2148,12 +2138,10 @@ async def _has_prefilter_for_schedule(
     opportunity_id: str | None,
 ) -> dict[str, Any]:
     repo = CRMRepository()
-    required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    required_fields: list[str] = []
     question_by_field: dict[str, str] = {}
     channel = str((persona or {}).get("canal") or "webchat").strip().lower() or "webchat"
     if not persona or not opportunity_id:
-        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    if not _has_minimum_prefilter_data(persona):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     org_value = _extract_persona_org(persona)
     org_uuid = _resolve_org_uuid(org_value)
@@ -2169,6 +2157,10 @@ async def _has_prefilter_for_schedule(
         organizacion_id=UUID(org_uuid),
         channel=channel,
     )
+    if not required_fields:
+        return {"ready": True, "missing_fields": [], "questions": {}}
+    if not _has_minimum_prefilter_data(persona):
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     try:
         opp_uuid = UUID(str(opportunity_id))
     except (TypeError, ValueError):

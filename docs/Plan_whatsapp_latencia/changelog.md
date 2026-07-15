@@ -71,6 +71,36 @@
   - `poetry run pytest tests/channels/test_whatsapp_tools.py -q`
   - resultado: `14 passed`
 
+## 2026-07-15 20:45 UTC
+
+- Diagnóstico confirmado:
+  - el tenant `a2f79c76-340a-4fe7-b05a-6ff4dd532325` no tiene preguntas de calificación configuradas,
+  - aun así el backend estaba imponiendo un fallback hardcodeado de campos críticos:
+    - `financing_type`
+    - `budget_range`
+    - `purchase_timeline`
+    - `decision_authority`
+  - eso forzaba `prefilter_missing` y provocaba vueltas extra del modelo antes de responder.
+
+- Corrección aplicada:
+  - se eliminó el fallback hardcodeado de preguntas requeridas en:
+    - `backend/app/channels/whatsapp/tools.py`
+    - `backend/app/channels/webchat/service.py`
+    - `backend/app/channels/webchat/notifications.py`
+  - el prefilter de agenda ahora se comporta así:
+    - si perfilamiento está apagado: `ready = true`
+    - si perfilamiento está encendido pero no hay preguntas configuradas ni `critical_fields`: `ready = true`
+    - solo bloquea cuando sí existe configuración real de preguntas/campos requeridos
+
+- Resultado esperado:
+  - tenants sin configuración de calificación ya no harán preguntas inventadas,
+  - `schedule_demo` dejará de regresar `prefilter_missing` por esos 4 campos hardcodeados,
+  - menos segundas vueltas largas del modelo en agenda.
+
+- Validación local:
+  - `poetry run pytest tests/channels/test_whatsapp_tools.py -q`
+  - resultado: `15 passed`
+
 ## 2026-07-13 23:40 UTC
 
 - Síntoma:

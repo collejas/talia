@@ -425,6 +425,40 @@ async def test_has_prefilter_for_schedule_uses_contact_scoring_answers_fallback(
     assert status["missing_fields"] == []
 
 
+@pytest.mark.asyncio
+async def test_has_prefilter_for_schedule_skips_when_no_required_questions_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_is_profiling_enabled(**_: object) -> bool:
+        return True
+
+    async def fake_load_required_case_a_questions(**_: object) -> tuple[list[str], dict[str, str]]:
+        return ([], {})
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "is_profiling_enabled",
+        fake_is_profiling_enabled,
+    )
+    monkeypatch.setattr(
+        tools,
+        "_load_required_case_a_questions",
+        fake_load_required_case_a_questions,
+    )
+
+    contact = {
+        "organizacion_id": "00000000-0000-0000-0000-000000000111",
+    }
+
+    status = await tools._has_prefilter_for_schedule(
+        persona=contact,
+        opportunity_id="00000000-0000-0000-0000-000000000222",
+    )
+
+    assert status["ready"] is True
+    assert status["missing_fields"] == []
+
+
 def test_sanitize_profiling_statuses_preserves_assistant_statuses() -> None:
     statuses = {
         "financing_type": "answered",
