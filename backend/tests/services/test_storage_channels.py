@@ -19,7 +19,9 @@ class FakeWebchatRepository:
         return {
             "conversation_id": "conv-webchat",
             "message_id": "msg-webchat",
-            "contact_id": "contact-webchat",
+            "contact_id": "persona-webchat",
+            "persona_id": "persona-webchat",
+            "organizacion_id": "org-webchat",
             "openai_conversation_id": None,
         }
 
@@ -257,6 +259,8 @@ async def test_register_webchat_message_sets_channel(
     )
 
     assert result["conversation_id"] == "conv-webchat"
+    assert result["persona_id"] == "persona-webchat"
+    assert result["organizacion_id"] == "org-webchat"
     assert fake_repo.update_calls == [
         {"conversation_id": "conv-webchat", "patch": {"canal": "webchat"}}
     ]

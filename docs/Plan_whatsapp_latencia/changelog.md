@@ -192,3 +192,57 @@
 - Resultado esperado:
   - reinicios sensiblemente más cortos,
   - menor ventana de caída al desplegar o reiniciar el servicio.
+
+## 2026-07-15 00:00 UTC
+
+- Revisión de logs vía MCP Supabase:
+  - el error dominante en Postgres no es un abanico de fallas distintas;
+  - el patrón más repetido es `null value in column "codigo_contacto" of relation "contactos" violates not-null constraint`.
+
+- Diagnóstico confirmado:
+  - la RPC `public.registrar_mensaje_webchat(...)` sigue insertando en `public.contactos`,
+  - `public.contactos.codigo_contacto` es `NOT NULL` y no tiene `default`,
+  - además actualmente no existe trigger activo sobre `public.contactos` que genere ese código en automático,
+  - por eso cualquier alta implícita desde webchat/followup rompe y vuelve a ensuciar los logs.
+
+- Hallazgo estructural:
+  - el generador activo `public.gen_codigo_contacto(uuid)` hoy opera sobre `public.personas` y produce códigos tipo `Cont-*`,
+  - esto indica desalineación entre la RPC heredada de `webchat` y el modelo nuevo de contactos/personas.
+
+- Lectura operativa:
+  - parte del ruido reciente viene de `webchat.followup.reengage_send_failed`,
+  - no apunta al fast-path de WhatsApp,
+  - apunta a un flujo heredado de webchat que sigue intentando persistir con el esquema viejo.
+
+- Riesgo secundario observado:
+  - también aparecieron algunos `canceling statement due to statement timeout`,
+  - pero en mucho menor volumen que el error de `codigo_contacto`.
+
+- Siguiente foco recomendado:
+  - corregir `registrar_mensaje_webchat` para alinearlo al modelo vigente,
+  - o, si el flujo correcto ya no debe crear en `contactos`, redirigirlo completamente a `personas` / flujo actual.
+
+## 2026-07-15 14:37 UTC
+
+- Correccion aplicada en runtime:
+  - se alineo `registrar_mensaje_webchat` para operar con `personas`,
+  - la RPC ahora devuelve `persona_id` y `organizacion_id`,
+  - el mapper Python del backend ya consume esos campos nuevos.
+
+- Validacion local:
+  - `poetry run pytest tests/services/test_storage_channels.py tests/services/test_webchat_followups.py -q`
+  - resultado: `10 passed`
+
+- Operacion:
+  - se aplico la migracion en Supabase,
+  - se reinicio `talia-api.service`,
+  - `GET http://127.0.0.1:8004/api/health` regreso `{\"status\":\"ok\"}`.
+
+- Hallazgo posterior:
+  - el error de `codigo_contacto` dejo de ser el dominante,
+  - el siguiente bloqueo visible paso a ser `telefono_movil_1_required`,
+  - esto confirma que el flujo ya no esta chocando contra `public.contactos`, pero todavia hay un trigger de `personas` que no permite altas incompletas originadas por `webchat`.
+
+- Siguiente ajuste en curso:
+  - dejar exenta la alta de `personas` con origen `webchat_runtime` del trigger `tg_personas_require_contact_methods`,
+  - mantener la validacion estricta para altas normales fuera del canal webchat.

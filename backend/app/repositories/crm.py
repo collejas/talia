@@ -5539,10 +5539,13 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_webchat: {row!r}")
+        persona_id = row.get("persona_id") or row.get("contacto_id")
         return {
             "conversation_id": row.get("conversacion_id"),
             "message_id": row.get("mensaje_id"),
-            "contact_id": row.get("contacto_id"),
+            "contact_id": persona_id,
+            "persona_id": persona_id,
+            "organizacion_id": row.get("organizacion_id"),
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }
 
