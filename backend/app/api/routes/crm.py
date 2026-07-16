@@ -4190,6 +4190,57 @@ class ContactoTemplateUpdatePayload(BaseModel):
     campana_id: UUID | None = None
 
 
+class WhatsProspTemplateQuery(BaseModel):
+    """Filtros para listar plantillas Meta de Whats-Prosp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    active: bool | None = Field(default=None)
+    template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
+    meta_category: Literal["marketing", "utility", "authentication"] | None = Field(default=None)
+    search: str | None = Field(default=None, max_length=120)
+    page: int = Field(default=1, ge=1, le=1000)
+    page_size: int = Field(default=20, ge=1, le=100)
+
+
+class WhatsProspTemplateCreatePayload(BaseModel):
+    """Crea una plantilla nativa Meta para Whats-Prosp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str | None = Field(default=None, max_length=160)
+    nombre: str = Field(..., min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    template_name: str = Field(..., min_length=2, max_length=160)
+    language_code: str = Field(..., min_length=2, max_length=32)
+    meta_category: Literal["marketing", "utility", "authentication"]
+    template_status: Literal["draft", "approved", "rejected", "archived"] = Field(default="draft")
+    activo: bool = Field(default=True)
+
+
+class WhatsProspTemplateUpdatePayload(BaseModel):
+    """Campos editables de una plantilla Meta de Whats-Prosp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str | None = Field(default=None, max_length=160)
+    nombre: str | None = Field(default=None, min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    template_name: str | None = Field(default=None, min_length=2, max_length=160)
+    language_code: str | None = Field(default=None, min_length=2, max_length=32)
+    meta_category: Literal["marketing", "utility", "authentication"] | None = Field(default=None)
+    template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
+    activo: bool | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "WhatsProspTemplateUpdatePayload":
+        if not self.model_fields_set:
+            raise ValueError("whats_prosp_template_update_required")
+        return self
+
+
 class ProspeccionCampanaQuery(BaseModel):
     """Parámetros del dashboard de campañas."""
 
@@ -9679,6 +9730,26 @@ def _build_contact_template_payload(
     if metadata_requested:
         metadata_value = data.get("metadata") or {}
         payload["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
+    return payload
+
+
+def _build_whats_prosp_template_payload(
+    data: dict[str, Any],
+    *,
+    organizacion_id: UUID,
+    allow_null_keys: set[str] | None = None,
+) -> dict[str, Any]:
+    payload = _build_contact_template_payload(
+        data,
+        allow_null_keys=allow_null_keys,
+    )
+    payload["organizacion_id"] = str(organizacion_id)
+    payload["canal"] = "whatsapp"
+    payload["provider"] = "meta"
+    payload["usage_scope"] = "whats_prosp"
+    if not _clean_text(payload.get("slug")):
+        slug_base = _clean_text(payload.get("nombre")) or _clean_text(payload.get("template_name")) or "whats-prosp-meta"
+        payload["slug"] = _slugify(str(slug_base))
     return payload
 
 
@@ -32124,6 +32195,153 @@ async def prospeccion_whatsapp_readiness(
         missing=missing,
         details=details,
     )
+
+
+@router.get("/prospeccion/whatsapp/templates")
+async def listar_whats_prosp_templates(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    params: WhatsProspTemplateQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista plantillas Meta activas para Whats-Prosp desde BD."""
+
+    offset = (params.page - 1) * params.page_size
+    try:
+        items, total = await repo.list_whats_prosp_templates(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            active=params.active,
+            template_status=params.template_status,
+            meta_category=params.meta_category,
+            search=params.search,
+            limit=params.page_size,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": items,
+        "total": total,
+        "page": params.page,
+        "page_size": params.page_size,
+    }
+
+
+@router.get("/prospeccion/whatsapp/templates/{template_id}")
+async def obtener_whats_prosp_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+) -> dict[str, Any]:
+    try:
+        template = await repo.get_whats_prosp_template(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not template:
+        raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+    return {"ok": True, "template": template}
+
+
+@router.post("/prospeccion/whatsapp/templates", status_code=status.HTTP_201_CREATED)
+async def crear_whats_prosp_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: WhatsProspTemplateCreatePayload,
+) -> dict[str, Any]:
+    body = _build_whats_prosp_template_payload(
+        payload.model_dump(mode="json", exclude_none=True),
+        organizacion_id=organizacion_id,
+    )
+    try:
+        template = await repo.create_whats_prosp_template(
+            usuario_token=user_token,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "whats_prosp_template_duplicate" in str(exc):
+            raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "template": template}
+
+
+@router.patch("/prospeccion/whatsapp/templates/{template_id}")
+async def actualizar_whats_prosp_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+    payload: WhatsProspTemplateUpdatePayload,
+) -> dict[str, Any]:
+    current = await repo.get_whats_prosp_template(
+        usuario_token=user_token,
+        organizacion_id=organizacion_id,
+        template_id=template_id,
+    )
+    if not current:
+        raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+    raw_data = payload.model_dump(mode="json", exclude_unset=True)
+    body = _build_whats_prosp_template_payload(
+        raw_data,
+        organizacion_id=organizacion_id,
+        allow_null_keys={"descripcion", "cuerpo_texto"},
+    )
+    body.pop("organizacion_id", None)
+    body.pop("canal", None)
+    body.pop("provider", None)
+    body.pop("usage_scope", None)
+    try:
+        template = await repo.update_whats_prosp_template(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "whats_prosp_template_not_found" in detail:
+            raise HTTPException(status_code=404, detail="whats_prosp_template_not_found") from exc
+        if "whats_prosp_template_duplicate" in detail:
+            raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return {"ok": True, "template": template}
+
+
+@router.delete("/prospeccion/whatsapp/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_whats_prosp_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_whats_prosp_template(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+    except CRMRepositoryError as exc:
+        if "whats_prosp_template_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="whats_prosp_template_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/prospeccion/contacto/templates")

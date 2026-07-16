@@ -187,6 +187,18 @@ def _is_persona_request_id_duplicate_error(exc: Exception) -> bool:
     )
 
 
+def _is_whats_prosp_template_duplicate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "prospeccion_contacto_templates_whats_prosp_meta_unique" in message
+        or (
+            "duplicate key value violates unique constraint" in message
+            and "template_name" in message
+            and "language_code" in message
+        )
+    )
+
+
 def _is_request_id_schema_cache_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return (
@@ -18885,6 +18897,168 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_templates_invalid:{data!r}")
         return data
+
+    async def list_whats_prosp_templates(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        active: bool | None = None,
+        template_status: str | None = None,
+        meta_category: str | None = None,
+        search: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        params: dict[str, str] = {
+            "select": "*",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "canal": "eq.whatsapp",
+            "provider": "eq.meta",
+            "usage_scope": "eq.whats_prosp",
+            "order": "nombre.asc",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        if active is not None:
+            params["activo"] = f"eq.{str(active).lower()}"
+        if template_status:
+            params["template_status"] = f"eq.{template_status}"
+        if meta_category:
+            params["meta_category"] = f"eq.{meta_category}"
+        if search:
+            sanitized = search.strip()
+            for char in "(),*":
+                sanitized = sanitized.replace(char, " ")
+            pattern = f"*{sanitized}*"
+            params["or"] = (
+                f"(nombre.ilike.{pattern},slug.ilike.{pattern},descripcion.ilike.{pattern},"
+                f"template_name.ilike.{pattern},language_code.ilike.{pattern})"
+            )
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whats_prosp_templates_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
+    async def get_whats_prosp_template(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={
+                "id": f"eq.{template_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whats_prosp_template_invalid:{row!r}")
+        return row
+
+    async def create_whats_prosp_template(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_contacto_templates",
+                token=usuario_token,
+                json=[payload],
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            if _is_whats_prosp_template_duplicate_error(exc):
+                raise CRMRepositoryError("whats_prosp_template_duplicate") from exc
+            raise
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whats_prosp_template_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whats_prosp_template_create_invalid:{row!r}")
+        return row
+
+    async def update_whats_prosp_template(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            resp = await self._request_with_user(
+                "PATCH",
+                "/rest/v1/prospeccion_contacto_templates",
+                token=usuario_token,
+                params={
+                    "id": f"eq.{template_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "canal": "eq.whatsapp",
+                    "provider": "eq.meta",
+                    "usage_scope": "eq.whats_prosp",
+                },
+                json=payload,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            if _is_whats_prosp_template_duplicate_error(exc):
+                raise CRMRepositoryError("whats_prosp_template_duplicate") from exc
+            raise
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whats_prosp_template_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whats_prosp_template_update_invalid:{row!r}")
+        return row
+
+    async def delete_whats_prosp_template(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+    ) -> None:
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={
+                "id": f"eq.{template_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+            },
+        )
+        data = resp.json() or []
+        if isinstance(data, dict) and data.get("message") == "No rows deleted":
+            raise CRMRepositoryError("whats_prosp_template_not_found")
 
     async def get_contact_template(
         self,
