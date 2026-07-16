@@ -330,11 +330,6 @@ export function ProspeccionCampaignWizard({
   const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
     const template = templates.find((tpl) => tpl.slug === slug)
     if (!template) return
-    const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
-    const twilioSid =
-      metadata && typeof metadata["twilio_content_sid"] === "string"
-        ? metadata["twilio_content_sid"].trim()
-        : ""
     setChannelState((prev) => {
       const next = { ...prev }
       const current = next[canal] ?? { enabled: false }
@@ -348,7 +343,7 @@ export function ProspeccionCampaignWizard({
         next[canal].body = template.cuerpo_texto ?? current.body
         next[canal].bodyHtml = template.cuerpo_html ?? current.bodyHtml
       } else if (canal === "whatsapp") {
-        next[canal].body = twilioSid ? "" : template.cuerpo_texto ?? current.body
+        next[canal].body = template.cuerpo_texto ?? current.body
       } else if (canal === "llamada") {
         next[canal].message = template.cuerpo_texto ?? template.descripcion ?? current.message
       }

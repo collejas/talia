@@ -25,7 +25,9 @@ import { cn } from "@/lib/utils"
 import {
   createCrmCampaign,
   createContactoTemplate,
+  createWhatsProspTemplate,
   deleteContactoTemplate,
+  deleteWhatsProspTemplate,
   deleteProspeccionCampana,
   getProspeccionCampanaAtribucion,
   importBrevoContactoTemplate,
@@ -36,6 +38,7 @@ import {
   listContactoTemplates,
   listCrmCampaigns,
   listProspectos,
+  updateWhatsProspTemplate,
   updateContactoTemplate,
   updateProspeccionCampana,
   getProspeccionCampanas,
@@ -184,10 +187,10 @@ export function CampanasMetricsClient() {
     asunto: "",
     cuerpoTexto: "",
     cuerpoHtml: "",
-    twilioSid: "",
-    twilioVariable6: "",
     metaTemplateName: "",
     metaTemplateLanguage: "",
+    metaCategory: "marketing" as "marketing" | "utility" | "authentication",
+    templateStatus: "draft" as "draft" | "approved" | "rejected" | "archived",
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
@@ -644,10 +647,10 @@ export function CampanasMetricsClient() {
       asunto: "",
       cuerpoTexto: "",
       cuerpoHtml: "",
-      twilioSid: "",
-      twilioVariable6: "",
       metaTemplateName: "",
       metaTemplateLanguage: "",
+      metaCategory: "marketing",
+      templateStatus: "draft",
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
@@ -1132,7 +1135,11 @@ ${secondCellHtml}
     setTemplatesLoading(true)
     setTemplateError(null)
     try {
-      const response = await listContactoTemplates({ campana_id: campanaId })
+      const campaign = crmCampaigns.find((item) => item.id === campanaId)
+      const response = await listContactoTemplates({
+        campana_id: campaign?.canal === "whatsapp" ? undefined : campanaId,
+        canal: (campaign?.canal as "correo" | "whatsapp" | "llamada" | undefined) ?? undefined,
+      })
       setTemplatesItems(Array.isArray(response?.items) ? response.items : [])
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar las plantillas."
@@ -1141,7 +1148,7 @@ ${secondCellHtml}
     } finally {
       setTemplatesLoading(false)
     }
-  }, [])
+  }, [crmCampaigns])
 
   const loadBrevoCatalog = useCallback(async (canalOverride?: "correo" | "whatsapp" | "llamada" | null) => {
     const effectiveCanal = canalOverride ?? templatesCampanaCanal
@@ -1194,10 +1201,10 @@ ${secondCellHtml}
         asunto: "",
         cuerpoTexto: "",
         cuerpoHtml: "",
-        twilioSid: "",
-        twilioVariable6: "",
         metaTemplateName: "",
         metaTemplateLanguage: "",
+        metaCategory: "marketing",
+        templateStatus: "draft",
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
@@ -1231,23 +1238,11 @@ ${secondCellHtml}
       asunto: template.asunto ?? "",
       cuerpoTexto: template.cuerpo_texto ?? "",
       cuerpoHtml: template.cuerpo_html ?? "",
-      twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
-      twilioVariable6:
-        metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
-          ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
-          : "",
-      metaTemplateName: getTemplateMetaValue(metadata, [
-        "meta_template_name",
-        "template_name",
-        "whatsapp_template_name",
-        "template_nombre",
-      ]),
-      metaTemplateLanguage: getTemplateMetaValue(metadata, [
-        "meta_template_language",
-        "template_language",
-        "whatsapp_template_language",
-        "language_code",
-      ]),
+      metaTemplateName: template.template_name ?? getTemplateMetaValue(metadata, ["meta_template_name", "template_name"]),
+      metaTemplateLanguage:
+        template.language_code ?? getTemplateMetaValue(metadata, ["meta_template_language", "template_language", "language_code"]),
+      metaCategory: template.meta_category ?? "marketing",
+      templateStatus: template.template_status ?? "draft",
       nombreIa:
         (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
         (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
@@ -1283,23 +1278,11 @@ ${secondCellHtml}
         asunto: template.asunto ?? "",
         cuerpoTexto: template.cuerpo_texto ?? "",
         cuerpoHtml: template.cuerpo_html ?? "",
-        twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
-        twilioVariable6:
-          metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
-            ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
-            : "",
-        metaTemplateName: getTemplateMetaValue(metadata, [
-          "meta_template_name",
-          "template_name",
-          "whatsapp_template_name",
-          "template_nombre",
-        ]),
-        metaTemplateLanguage: getTemplateMetaValue(metadata, [
-          "meta_template_language",
-          "template_language",
-          "whatsapp_template_language",
-          "language_code",
-        ]),
+        metaTemplateName: template.template_name ?? getTemplateMetaValue(metadata, ["meta_template_name", "template_name"]),
+        metaTemplateLanguage:
+          template.language_code ?? getTemplateMetaValue(metadata, ["meta_template_language", "template_language", "language_code"]),
+        metaCategory: template.meta_category ?? "marketing",
+        templateStatus: template.template_status ?? "draft",
         nombreIa:
           (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
           (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
@@ -1344,16 +1327,6 @@ ${secondCellHtml}
     setTemplateSaving(true)
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
-    if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
-    if (templateForm.twilioVariable6.trim()) {
-      metadata["twilio_variables"] = { "6": templateForm.twilioVariable6.trim() }
-    }
-    if (templateForm.canal === "whatsapp") {
-      const metaTemplateName = templateForm.metaTemplateName.trim()
-      const metaTemplateLanguage = templateForm.metaTemplateLanguage.trim()
-      if (metaTemplateName) metadata["meta_template_name"] = metaTemplateName
-      if (metaTemplateLanguage) metadata["meta_template_language"] = metaTemplateLanguage
-    }
     const normalizedLogoUrl = normalizeLogoUrl(selectedLogoUrl)
     if (templateForm.canal === "correo" && normalizedLogoUrl) {
       metadata["logo_url"] = normalizedLogoUrl
@@ -1393,7 +1366,25 @@ ${secondCellHtml}
     }
     const canalToSave = templatesCampanaCanal ?? templateForm.canal
     try {
-      if (templateForm.id) {
+      if (canalToSave === "whatsapp") {
+        const whatsPayload = {
+          nombre,
+          slug,
+          descripcion: templateForm.descripcion.trim() || null,
+          cuerpo_texto: templateForm.cuerpoTexto || null,
+          template_name: templateForm.metaTemplateName.trim(),
+          language_code: templateForm.metaTemplateLanguage.trim(),
+          meta_category: templateForm.metaCategory,
+          template_status: templateForm.templateStatus,
+          activo: true,
+          metadata,
+        }
+        if (templateForm.id) {
+          await updateWhatsProspTemplate(templateForm.id, whatsPayload)
+        } else {
+          await createWhatsProspTemplate(whatsPayload)
+        }
+      } else if (templateForm.id) {
         await updateContactoTemplate(templateForm.id, {
           canal: canalToSave,
           nombre,
@@ -1455,7 +1446,12 @@ ${secondCellHtml}
       setTemplateDeletingId(templateId)
       setTemplateError(null)
       try {
-        await deleteContactoTemplate(templateId)
+        const template = templatesItems.find((item) => item.id === templateId)
+        if (template?.canal === "whatsapp") {
+          await deleteWhatsProspTemplate(templateId)
+        } else {
+          await deleteContactoTemplate(templateId)
+        }
         await loadCampaignTemplates(templatesCampanaId)
         if (templateForm.id === templateId) resetTemplateForm()
       } catch (err) {
@@ -2063,7 +2059,6 @@ ${secondCellHtml}
                                   "whatsapp_template_language",
                                   "language_code",
                                 ])
-                                const twilioSid = typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
                                 if (metaTemplateName) {
                                   return (
                                     <>
@@ -2074,13 +2069,6 @@ ${secondCellHtml}
                                           · <span className="font-medium text-foreground">{metaTemplateLanguage}</span>
                                         </>
                                       ) : null}
-                                    </>
-                                  )
-                                }
-                                if (twilioSid) {
-                                  return (
-                                    <>
-                                      Twilio: <span className="font-medium text-foreground">{twilioSid}</span>
                                     </>
                                   )
                                 }
@@ -2562,26 +2550,6 @@ ${secondCellHtml}
                         <div className="space-y-3 rounded-md border bg-background/70 p-3">
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
-                              <Label>Código de plantilla WhatsApp</Label>
-                              <Input
-                                value={templateForm.twilioSid}
-                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
-                                placeholder="HX..."
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label>Variable dinámica</Label>
-                              <Input
-                                value={templateForm.twilioVariable6}
-                                onChange={(event) =>
-                                  setTemplateForm((prev) => ({ ...prev, twilioVariable6: event.target.value }))
-                                }
-                                placeholder="Texto que se inyecta en {{6}}"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-1">
                               <Label>Meta template name</Label>
                               <Input
                                 value={templateForm.metaTemplateName}
@@ -2606,6 +2574,51 @@ ${secondCellHtml}
                               <p className="text-xs text-muted-foreground">
                                 Idioma aprobado, por ejemplo <code>es_MX</code> o <code>en_US</code>.
                               </p>
+                            </div>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label>Categoría Meta</Label>
+                              <Select
+                                value={templateForm.metaCategory}
+                                onValueChange={(value) =>
+                                  setTemplateForm((prev) => ({
+                                    ...prev,
+                                    metaCategory: value as "marketing" | "utility" | "authentication",
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona una categoría" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="marketing">Marketing</SelectItem>
+                                  <SelectItem value="utility">Utility</SelectItem>
+                                  <SelectItem value="authentication">Authentication</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Estado de plantilla</Label>
+                              <Select
+                                value={templateForm.templateStatus}
+                                onValueChange={(value) =>
+                                  setTemplateForm((prev) => ({
+                                    ...prev,
+                                    templateStatus: value as "draft" | "approved" | "rejected" | "archived",
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona un estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="draft">Draft</SelectItem>
+                                  <SelectItem value="approved">Approved</SelectItem>
+                                  <SelectItem value="rejected">Rejected</SelectItem>
+                                  <SelectItem value="archived">Archived</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                           <div className="space-y-1">

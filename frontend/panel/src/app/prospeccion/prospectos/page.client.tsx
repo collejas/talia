@@ -3305,12 +3305,6 @@ function ProspectosView() {
         }
         if (canal === "whatsapp") {
           if (template.cuerpo_texto) entry.body = template.cuerpo_texto
-          const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
-          const twilioSid =
-            metadata && typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
-          if (twilioSid) {
-            entry.metadata = { twilio_content_sid: twilioSid }
-          }
         }
         if (canal === "llamada") {
           entry.message = template.cuerpo_texto?.trim() || template.descripcion?.trim() || ""

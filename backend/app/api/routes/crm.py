@@ -4217,6 +4217,7 @@ class WhatsProspTemplateCreatePayload(BaseModel):
     meta_category: Literal["marketing", "utility", "authentication"]
     template_status: Literal["draft", "approved", "rejected", "archived"] = Field(default="draft")
     activo: bool = Field(default=True)
+    metadata: dict[str, Any] | None = Field(default=None)
 
 
 class WhatsProspTemplateUpdatePayload(BaseModel):
@@ -4233,6 +4234,7 @@ class WhatsProspTemplateUpdatePayload(BaseModel):
     meta_category: Literal["marketing", "utility", "authentication"] | None = Field(default=None)
     template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
     activo: bool | None = Field(default=None)
+    metadata: dict[str, Any] | None = Field(default=None)
 
     @model_validator(mode="after")
     def _ensure_changes(self) -> "WhatsProspTemplateUpdatePayload":
@@ -9571,6 +9573,10 @@ def _resolve_contact_channels(
                     entry_metadata.update(template_meta)
                 template_name_value = _clean_text(template_row.get("nombre"))
                 slug_value = _clean_text(template_row.get("slug"))
+                official_template_name = _clean_text(template_row.get("template_name"))
+                language_code = _clean_text(template_row.get("language_code"))
+                meta_category = _clean_text(template_row.get("meta_category"))
+                template_status = _clean_text(template_row.get("template_status"))
                 if slug_value:
                     entry_metadata.setdefault("template_slug", slug_value)
                     entry_metadata.setdefault("template_slug_snapshot", slug_value)
@@ -9583,10 +9589,34 @@ def _resolve_contact_channels(
                     entry_metadata.setdefault("template_name_snapshot", template_name_value)
                     entry_metadata.setdefault("template_label_snapshot", template_name_value)
                     entry.setdefault("template_label", template_name_value)
+                if _is_whats_prosp_meta_template_row(template_row):
+                    if official_template_name:
+                        entry["template_name"] = official_template_name
+                        entry_metadata.setdefault("meta_template_name", official_template_name)
+                        entry_metadata.setdefault("template_name_official", official_template_name)
+                        entry_metadata.setdefault("whatsapp_template_name_snapshot", official_template_name)
+                    if language_code:
+                        entry["template_language"] = language_code
+                        entry_metadata.setdefault("meta_template_language", language_code)
+                        entry_metadata.setdefault("template_language", language_code)
+                        entry_metadata.setdefault("language_code", language_code)
+                        entry_metadata.setdefault("whatsapp_language_code_snapshot", language_code)
+                    if meta_category:
+                        entry["meta_category"] = meta_category
+                        entry_metadata.setdefault("meta_category", meta_category)
+                        entry_metadata.setdefault("whatsapp_meta_category_snapshot", meta_category)
+                    if template_status:
+                        entry["template_status"] = template_status
+                        entry_metadata.setdefault("template_status", template_status)
+                    if template_name_value:
+                        entry_metadata.setdefault("whatsapp_template_display_name_snapshot", template_name_value)
             if canal_config.template_id:
                 template_id_value = str(canal_config.template_id)
                 entry_metadata.setdefault("template_id", template_id_value)
                 entry_metadata.setdefault("template_id_snapshot", template_id_value)
+                if canal == "whatsapp" and _is_whats_prosp_meta_template_row(template_row):
+                    entry["whatsapp_template_id"] = template_id_value
+                    entry_metadata.setdefault("whatsapp_template_id", template_id_value)
             if canal_config.metadata:
                 entry_metadata.update(canal_config.metadata)
             sid_value = _clean_text(entry_metadata.get("twilio_content_sid") or entry_metadata.get("template_sid"))
@@ -9616,9 +9646,20 @@ def _resolve_contact_channels(
                 if not message and template_row:
                     message = _clean_text(template_row.get("cuerpo_texto"))
                 twilio_sid = _clean_text((entry_metadata or {}).get("twilio_content_sid"))
+                meta_template_name = _clean_text(
+                    entry.get("template_name")
+                    or entry_metadata.get("meta_template_name")
+                    or entry_metadata.get("template_name")
+                )
+                meta_template_language = _clean_text(
+                    entry.get("template_language")
+                    or entry_metadata.get("meta_template_language")
+                    or entry_metadata.get("template_language")
+                    or entry_metadata.get("language_code")
+                )
                 if message:
                     entry["body"] = message
-                elif not twilio_sid:
+                elif not twilio_sid and not (meta_template_name and meta_template_language):
                     raise HTTPException(status_code=400, detail="whatsapp_payload_incompleto")
             elif canal == "llamada":
                 message = _clean_text(canal_config.message or canal_config.body) or "Llamada programada desde Tal IA."
@@ -9670,6 +9711,20 @@ async def _fetch_contact_templates(
     return template_map
 
 
+def _is_whats_prosp_meta_template_row(template_row: dict[str, Any] | None) -> bool:
+    if not isinstance(template_row, dict):
+        return False
+    return (
+        _clean_text(template_row.get("canal")) == "whatsapp"
+        and _clean_text(template_row.get("provider")) == "meta"
+        and _clean_text(template_row.get("usage_scope")) == "whats_prosp"
+    )
+
+
+def _should_enforce_template_campaign_binding(template_row: dict[str, Any] | None) -> bool:
+    return not _is_whats_prosp_meta_template_row(template_row)
+
+
 async def _apply_default_whatsapp_runtime_template(
     *,
     canales_config: dict[str, dict[str, Any]],
@@ -9701,7 +9756,18 @@ def _assert_whatsapp_template_configured(canales_config: dict[str, dict[str, Any
         return
     metadata = whatsapp_payload.get("metadata") if isinstance(whatsapp_payload.get("metadata"), dict) else {}
     template_sid = _clean_text(metadata.get("twilio_content_sid") or whatsapp_payload.get("twilio_content_sid"))
-    if not template_sid:
+    template_name = _clean_text(
+        whatsapp_payload.get("template_name")
+        or metadata.get("meta_template_name")
+        or metadata.get("template_name")
+    )
+    template_language = _clean_text(
+        whatsapp_payload.get("template_language")
+        or metadata.get("meta_template_language")
+        or metadata.get("template_language")
+        or metadata.get("language_code")
+    )
+    if not template_sid and not (template_name and template_language):
         raise HTTPException(status_code=400, detail="whatsapp_template_required")
 
 
@@ -9789,6 +9855,7 @@ def _build_contact_batch_payload(
     payload: ProspectoContactarPayload,
     usuario_id: UUID | None,
     filtros: dict[str, Any],
+    canales_config: dict[str, dict[str, Any]] | None,
     programacion: dict[str, str] | None,
     metadata_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -9820,6 +9887,38 @@ def _build_contact_batch_payload(
     if metadata_extra:
         metadata.update(metadata_extra)
     body["metadata"] = metadata
+    whatsapp_payload = (canales_config or {}).get("whatsapp")
+    if isinstance(whatsapp_payload, dict):
+        whatsapp_template_id = _clean_text(
+            whatsapp_payload.get("whatsapp_template_id")
+            or whatsapp_payload.get("template_id")
+        )
+        if whatsapp_template_id:
+            body["whatsapp_template_id"] = whatsapp_template_id
+        template_name_snapshot = _clean_text(
+            whatsapp_payload.get("template_name")
+            or whatsapp_payload.get("whatsapp_template_name_snapshot")
+        )
+        if template_name_snapshot:
+            body["whatsapp_template_name_snapshot"] = template_name_snapshot
+        language_snapshot = _clean_text(
+            whatsapp_payload.get("template_language")
+            or whatsapp_payload.get("whatsapp_language_code_snapshot")
+        )
+        if language_snapshot:
+            body["whatsapp_language_code_snapshot"] = language_snapshot
+        meta_category_snapshot = _clean_text(
+            whatsapp_payload.get("meta_category")
+            or whatsapp_payload.get("whatsapp_meta_category_snapshot")
+        )
+        if meta_category_snapshot:
+            body["whatsapp_meta_category_snapshot"] = meta_category_snapshot
+        display_name_snapshot = _clean_text(
+            whatsapp_payload.get("template_label")
+            or whatsapp_payload.get("whatsapp_template_display_name_snapshot")
+        )
+        if display_name_snapshot:
+            body["whatsapp_template_display_name_snapshot"] = display_name_snapshot
     return body
 
 
@@ -10035,6 +10134,37 @@ def _build_contact_envios_entries(
                 "payload": canal_payload,
                 "detalle": detalle,
             }
+            if canal == "whatsapp" and isinstance(canal_payload, dict):
+                whatsapp_template_id = _clean_text(
+                    canal_payload.get("whatsapp_template_id")
+                    or canal_payload.get("template_id")
+                )
+                if whatsapp_template_id:
+                    entry["whatsapp_template_id"] = whatsapp_template_id
+                template_name_snapshot = _clean_text(
+                    canal_payload.get("template_name")
+                    or canal_payload.get("whatsapp_template_name_snapshot")
+                )
+                if template_name_snapshot:
+                    entry["whatsapp_template_name_snapshot"] = template_name_snapshot
+                language_snapshot = _clean_text(
+                    canal_payload.get("template_language")
+                    or canal_payload.get("whatsapp_language_code_snapshot")
+                )
+                if language_snapshot:
+                    entry["whatsapp_language_code_snapshot"] = language_snapshot
+                meta_category_snapshot = _clean_text(
+                    canal_payload.get("meta_category")
+                    or canal_payload.get("whatsapp_meta_category_snapshot")
+                )
+                if meta_category_snapshot:
+                    entry["whatsapp_meta_category_snapshot"] = meta_category_snapshot
+                display_name_snapshot = _clean_text(
+                    canal_payload.get("template_label")
+                    or canal_payload.get("whatsapp_template_display_name_snapshot")
+                )
+                if display_name_snapshot:
+                    entry["whatsapp_template_display_name_snapshot"] = display_name_snapshot
             base_programado = _parse_programmed(programacion.get(canal) if programacion else None)
             base_dt = base_programado or base_now
             entry["programado_en"] = (base_dt + timedelta(seconds=envio_index * separacion_val)).isoformat()
@@ -33946,6 +34076,8 @@ async def prospeccion_campana_update(
             if payload.campana_id:
                 campana_key = str(payload.campana_id)
                 for template_id, template in template_map.items():
+                    if not _should_enforce_template_campaign_binding(template):
+                        continue
                     metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
                     template_campana = _clean_text(metadata.get("campana_id"))
                     if not template_campana:
@@ -33981,10 +34113,6 @@ async def prospeccion_campana_update(
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
         exclude_batch_id=batch_id,
-    )
-    await _apply_default_whatsapp_runtime_template(
-        canales_config=canales_config,
-        organizacion_id=organizacion_id,
     )
     _assert_whatsapp_template_configured(canales_config)
     if not canales_config:
@@ -34137,6 +34265,28 @@ async def prospeccion_campana_update(
         "estado": "pendiente",
         "metadata": metadata_existing,
     }
+    whatsapp_payload = canales_config.get("whatsapp") if isinstance(canales_config.get("whatsapp"), dict) else None
+    if isinstance(whatsapp_payload, dict):
+        batch_patch["whatsapp_template_id"] = _clean_text(
+            whatsapp_payload.get("whatsapp_template_id")
+            or whatsapp_payload.get("template_id")
+        )
+        batch_patch["whatsapp_template_name_snapshot"] = _clean_text(
+            whatsapp_payload.get("template_name")
+            or whatsapp_payload.get("whatsapp_template_name_snapshot")
+        )
+        batch_patch["whatsapp_language_code_snapshot"] = _clean_text(
+            whatsapp_payload.get("template_language")
+            or whatsapp_payload.get("whatsapp_language_code_snapshot")
+        )
+        batch_patch["whatsapp_meta_category_snapshot"] = _clean_text(
+            whatsapp_payload.get("meta_category")
+            or whatsapp_payload.get("whatsapp_meta_category_snapshot")
+        )
+        batch_patch["whatsapp_template_display_name_snapshot"] = _clean_text(
+            whatsapp_payload.get("template_label")
+            or whatsapp_payload.get("whatsapp_template_display_name_snapshot")
+        )
     if payload.batch_titulo is not None:
         batch_patch["titulo"] = payload.batch_titulo.strip() or None
     if payload.lista_id is not None:
@@ -35351,6 +35501,8 @@ async def contactar_prospectos_legacy(
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
             campana_key = str(payload.campana_id)
             for template_id, template in template_map.items():
+                if not _should_enforce_template_campaign_binding(template):
+                    continue
                 metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
                 template_campana = _clean_text(metadata.get("campana_id"))
                 if not template_campana:
@@ -35375,10 +35527,6 @@ async def contactar_prospectos_legacy(
         canales=set(canales_config.keys()),
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
-    )
-    await _apply_default_whatsapp_runtime_template(
-        canales_config=canales_config,
-        organizacion_id=organizacion_id,
     )
     _assert_whatsapp_template_configured(canales_config)
     if not canales_config:
@@ -35575,6 +35723,7 @@ async def contactar_prospectos_legacy(
                     payload=payload,
                     usuario_id=usuario_id,
                     filtros=selector_filtros,
+                    canales_config=canales_config,
                     programacion=programacion,
                     metadata_extra=metadata_extra,
                 ),

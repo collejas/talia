@@ -501,6 +501,25 @@ export type ContactoTemplate = {
   cuerpo_texto?: string | null
   cuerpo_html?: string | null
   activo?: boolean
+  provider?: "meta" | null
+  usage_scope?: "whats_prosp" | null
+  template_name?: string | null
+  language_code?: string | null
+  meta_category?: "marketing" | "utility" | "authentication" | null
+  template_status?: "draft" | "approved" | "rejected" | "archived" | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type WhatsProspTemplateInput = {
+  slug?: string | null
+  nombre: string
+  descripcion?: string | null
+  cuerpo_texto?: string | null
+  template_name: string
+  language_code: string
+  meta_category: "marketing" | "utility" | "authentication"
+  template_status?: "draft" | "approved" | "rejected" | "archived"
+  activo?: boolean
   metadata?: Record<string, unknown> | null
 }
 
@@ -1522,10 +1541,33 @@ export async function listContactoTemplates(params: {
   canal?: "correo" | "whatsapp" | "llamada"
   campana_id?: string
 } = {}) {
-  const url = buildClientUrl("/api/prospeccion/contacto/templates")
-  if (params.canal) url.searchParams.set("canal", params.canal)
-  if (params.campana_id?.trim()) url.searchParams.set("campana_id", params.campana_id.trim())
-  return requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString())
+  const shouldIncludeWhatsApp = !params.canal || params.canal === "whatsapp"
+  const shouldIncludeLegacy = !params.canal || params.canal === "correo" || params.canal === "llamada"
+
+  const requests: Array<Promise<{ ok: boolean; items: ContactoTemplate[] }>> = []
+  if (shouldIncludeLegacy) {
+    const url = buildClientUrl("/api/prospeccion/contacto/templates")
+    if (params.canal && params.canal !== "whatsapp") url.searchParams.set("canal", params.canal)
+    if (params.campana_id?.trim()) url.searchParams.set("campana_id", params.campana_id.trim())
+    requests.push(requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString()))
+  }
+  if (shouldIncludeWhatsApp) {
+    const url = buildClientUrl("/api/prospeccion/whatsapp/templates")
+    url.searchParams.set("page", "1")
+    url.searchParams.set("page_size", "200")
+    url.searchParams.set("active", "true")
+    requests.push(requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString()))
+  }
+  const responses = await Promise.all(requests)
+  const merged: ContactoTemplate[] = []
+  responses.forEach((response) => {
+    ;(response.items ?? []).forEach((item) => {
+      if (!item || !item.id) return
+      if (merged.some((existing) => existing.id === item.id)) return
+      merged.push(item)
+    })
+  })
+  return { ok: true, items: merged }
 }
 
 export async function createContactoTemplate(payload: {
@@ -1569,6 +1611,29 @@ export async function updateContactoTemplate(
 
 export async function deleteContactoTemplate(templateId: string) {
   await requestJson(`/api/prospeccion/contacto/templates/${templateId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function createWhatsProspTemplate(payload: WhatsProspTemplateInput) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate }>("/api/prospeccion/whatsapp/templates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateWhatsProspTemplate(
+  templateId: string,
+  payload: Partial<WhatsProspTemplateInput>,
+) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate }>(`/api/prospeccion/whatsapp/templates/${templateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteWhatsProspTemplate(templateId: string) {
+  await requestJson(`/api/prospeccion/whatsapp/templates/${templateId}`, {
     method: "DELETE",
   })
 }

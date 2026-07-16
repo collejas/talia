@@ -1085,13 +1085,11 @@ async def _run_envio_whatsapp(
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
     rendered_vars: dict[str, str] | None = None
-
-    wa_result: TwilioSendResult
-    preview_text: str | None = None
-    if template_sid:
+    body_template = _clean_text(payload.get("body")) or ""
+    if template_sid or meta_template_name:
         rendered_vars = _compose_twilio_template_variables(
             definition=variables_def,
-            body=_clean_text(payload.get("body")) or "",
+            body=body_template,
             context=context,
         )
         missing_vars = _find_blank_twilio_variables(rendered_vars)
@@ -1101,11 +1099,16 @@ async def _run_envio_whatsapp(
                 detalle={
                     "reason": "whatsapp_template_variables_incompletas",
                     "template_sid": template_sid,
+                    "template_name": meta_template_name,
                     "missing_variables": missing_vars,
                 },
                 error="whatsapp_template_variables_incompletas",
             )
-        preview_text = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
+
+    wa_result: TwilioSendResult
+    preview_text: str | None = None
+    if template_sid:
+        preview_text = _render_template_text(body_template, context).strip()
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
             body=preview_text,
@@ -1129,21 +1132,22 @@ async def _run_envio_whatsapp(
             else:
                 fallback_error = fallback_result.error
     else:
-        rendered_body = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
-        if not rendered_body:
+        rendered_body = _render_template_text(body_template, context).strip()
+        if not rendered_body and not meta_template_name:
             return ContactEnvioResult(
                 estado="error",
                 detalle={"reason": "whatsapp_payload_incompleto"},
                 error="whatsapp_payload_incompleto",
-        )
+            )
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
-            body=rendered_body,
+            body=rendered_body or None,
+            content_variables=rendered_vars,
             template_name=meta_template_name,
             template_language=meta_template_language,
             organizacion_id=organizacion_id,
         )
-        preview_text = rendered_body
+        preview_text = rendered_body or None
         fallback_used = False
         fallback_error = None
     estado = "enviado" if not wa_result.error else "error"
