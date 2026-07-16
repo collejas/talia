@@ -22,10 +22,6 @@ add_action( 'wp_enqueue_scripts', function () {
 } );
 
 add_action( 'wp_footer', function () {
-    if ( ! is_front_page() && ! is_home() ) {
-        return;
-    }
-
     $theme_uri = get_stylesheet_directory_uri();
     ?>
     <div id="talia-webchat-root">
@@ -112,4 +108,3 @@ add_action( 'wp_footer', function () {
 /*-----------------------------------------------------------------------------------*/
 require( 'auxin/auxin-include/auxin.php' );
 /*-----------------------------------------------------------------------------------*/
-

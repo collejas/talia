@@ -369,6 +369,9 @@ function bindHistoryListeners() {
 
 export function initialiseVisitTracking(options = {}) {
   config = { ...defaultConfig, ...options };
+  if (!options.browserGeoStorageKey && config.tenantAlias) {
+    config.browserGeoStorageKey = `talia-browser-geo-v1-${String(config.tenantAlias).trim().toLowerCase()}`;
+  }
   ensureSessionId();
   bindHistoryListeners();
   void sendVisit('page_load');
