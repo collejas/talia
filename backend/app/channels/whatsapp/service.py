@@ -2158,6 +2158,60 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
     return created_event
 
 
+async def _maybe_repair_duplicate_inbound_publicidad_atribucion(
+    *,
+    repo: CRMRepository,
+    message: schemas.WhatsAppIncomingMessage,
+    existing_message: Mapping[str, Any],
+) -> bool:
+    """Reintenta la atribución si un inbound duplicado ya quedó persistido sin evento."""
+
+    conversation_id = _trim_text(existing_message.get("conversacion_id"))
+    if not conversation_id:
+        return False
+
+    try:
+        existing_conversation_events = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
+            organizacion_id=UUID(str(existing_message.get("organizacion_id"))),
+            conversation_ids=[conversation_id],
+        )
+    except (CRMRepositoryError, TypeError, ValueError):
+        existing_conversation_events = []
+    if existing_conversation_events:
+        return False
+
+    try:
+        conversation_meta = await storage.fetch_conversation(conversation_id)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.duplicate_inbound_fetch_conversation_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+
+    persona_id = _trim_text(conversation_meta.get("persona_id") or conversation_meta.get("contact_id"))
+    organizacion_id_value = _trim_text(
+        conversation_meta.get("organizacion_id") or existing_message.get("organizacion_id")
+    )
+    if not persona_id or not organizacion_id_value:
+        return False
+
+    try:
+        organizacion_id = UUID(organizacion_id_value)
+    except (TypeError, ValueError):
+        return False
+
+    repaired_event = await _maybe_apply_publicidad_whatsapp_attribution(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        message_id=_trim_text(existing_message.get("id")) or None,
+        message=message,
+    )
+    return bool(repaired_event)
+
+
 async def _mark_opportunity_as_prospeccion_whatsapp(
     *,
     repo: CRMRepository,
@@ -2431,11 +2485,28 @@ async def handle_incoming_message(
             )
         else:
             if existing_message and (existing_message.get("direccion") == "entrante"):
+                repaired_attribution = False
+                try:
+                    repo = CRMRepository()
+                except CRMRepositoryError as exc:
+                    log_event(
+                        logger,
+                        "whatsapp.duplicate_incoming_repair_repo_error",
+                        message_sid=message.message_sid,
+                        error=str(exc),
+                    )
+                else:
+                    repaired_attribution = await _maybe_repair_duplicate_inbound_publicidad_atribucion(
+                        repo=repo,
+                        message=message,
+                        existing_message=existing_message,
+                    )
                 log_event(
                     logger,
                     "whatsapp.duplicate_incoming_ignored",
                     message_sid=message.message_sid,
                     source=source,
+                    repaired_attribution=repaired_attribution,
                 )
                 return
 

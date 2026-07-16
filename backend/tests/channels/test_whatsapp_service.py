@@ -944,6 +944,43 @@ async def test_handle_incoming_message_prefers_phone_number_id_over_display_numb
 
 
 @pytest.mark.asyncio
+async def test_handle_incoming_message_repairs_duplicate_inbound_attribution(monkeypatch) -> None:
+    message = _build_sample_message()
+
+    repair_calls: list[dict[str, Any]] = []
+
+    async def fake_repair(**kwargs):
+        repair_calls.append(kwargs)
+        return True
+
+    async def fail_register(**_: object):
+        raise AssertionError("register_whatsapp_message no debe ejecutarse para duplicados")
+
+    monkeypatch.setattr(
+        service.storage,
+        "fetch_message_by_twilio_sid",
+        _async_return(
+            {
+                "id": "msg-existing",
+                "conversacion_id": "conv-dup",
+                "organizacion_id": "00000000-0000-0000-0000-000000000001",
+                "direccion": "entrante",
+            }
+        ),
+    )
+    monkeypatch.setattr(service, "_maybe_handle_sales_acknowledgement", _async_false)
+    monkeypatch.setattr(service, "_maybe_repair_duplicate_inbound_publicidad_atribucion", fake_repair)
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fail_register)
+    monkeypatch.setattr(service, "CRMRepository", lambda: object())
+
+    await service.handle_incoming_message(message)
+
+    assert repair_calls
+    assert repair_calls[0]["existing_message"]["conversacion_id"] == "conv-dup"
+    assert repair_calls[0]["message"].message_sid == "SM-inbound"
+
+
+@pytest.mark.asyncio
 async def test_send_meta_whatsapp_reply_uses_template_payload(monkeypatch) -> None:
     runtime = SimpleNamespace(
         provider="meta",

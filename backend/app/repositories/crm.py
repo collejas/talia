@@ -5659,7 +5659,7 @@ class CRMRepository:
             return None
         params = {
             "twilio_message_sid": f"eq.{sid}",
-            "select": "id,direccion,twilio_message_sid,creado_en",
+            "select": "id,conversacion_id,organizacion_id,direccion,twilio_message_sid,creado_en",
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/mensajes", params=params)
