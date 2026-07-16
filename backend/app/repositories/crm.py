@@ -17744,6 +17744,27 @@ class CRMRepository:
                     )
                 }
             )
+            if normalized_query_filters is None and (fuente is None or fuente == "usuario"):
+                manual_taxonomy = await self._list_manual_prospect_taxonomy(
+                    usuario_token=usuario_token,
+                    date_from=date_from,
+                    date_to=date_to,
+                    timezone_name=timezone_name,
+                )
+                activities = sorted(
+                    {
+                        *activities,
+                        *manual_taxonomy["activities"],
+                    },
+                    key=lambda value: value.casefold(),
+                )
+                segmentos = sorted(
+                    {
+                        *segmentos,
+                        *manual_taxonomy["segmentos"],
+                    },
+                    key=lambda value: value.casefold(),
+                )
             if normalized_query_filters is not None:
                 queries = [
                     {
@@ -18037,6 +18058,80 @@ class CRMRepository:
             "queries": queries,
             "activities": sorted(activity_values),
             "segmentos": sorted(segmento_values, key=lambda value: value.casefold()),
+        }
+
+    async def _list_manual_prospect_taxonomy(
+        self,
+        *,
+        usuario_token: str,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        timezone_name: str | None = None,
+    ) -> dict[str, set[str]]:
+        zone = _resolve_timezone_zone(timezone_name)
+        params: dict[str, str] = {
+            "select": "id,actividad,segmento",
+            "fuente": "eq.usuario",
+            "order": "id.asc",
+        }
+        if date_from or date_to:
+            and_filters: list[str] = []
+            if date_from:
+                start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
+                start_utc = start_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.gte.{start_utc}")
+            if date_to:
+                end_local = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=zone)
+                end_utc = end_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.lt.{end_utc}")
+            if and_filters:
+                params["and"] = "(" + ",".join(and_filters) + ")"
+
+        activities: set[str] = set()
+        segmentos: set[str] = set()
+        seen_row_ids: set[str] = set()
+        scan_offset = 0
+        page_size = 1000
+        max_scan_rows = 200_000
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+            )
+            page = resp.json() or []
+            if not isinstance(page, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar taxonomía manual de prospectos: {page!r}")
+            if not page:
+                break
+            for row in page:
+                if not isinstance(row, dict):
+                    continue
+                row_id = str(row.get("id") or "").strip()
+                if row_id:
+                    if row_id in seen_row_ids:
+                        continue
+                    seen_row_ids.add(row_id)
+                actividad = row.get("actividad")
+                if isinstance(actividad, str):
+                    candidate = actividad.strip()
+                    if candidate:
+                        activities.add(candidate)
+                segmento = row.get("segmento")
+                if isinstance(segmento, str):
+                    candidate = segmento.strip()
+                    if candidate:
+                        segmentos.add(candidate)
+            scan_offset += len(page)
+
+        return {
+            "activities": activities,
+            "segmentos": segmentos,
         }
 
     async def get_prospeccion_user_preference(

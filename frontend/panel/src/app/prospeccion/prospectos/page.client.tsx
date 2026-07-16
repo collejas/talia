@@ -127,6 +127,8 @@ type ProspectosSortKey =
   | "tipo_linea"
   | "telefono_verificado"
   | "fuente"
+  | "actividad"
+  | "segmento"
   | "tamano_rating"
   | "campana"
   | "con_envio"
@@ -673,6 +675,8 @@ const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "correo",
   "sitio_web",
   "fuente",
+  "actividad",
+  "segmento",
   "tamano_rating",
   "campana",
   "con_envio",
@@ -694,6 +698,8 @@ const TABLE_COLUMN_META: Record<
   tipo_linea: { label: "Tipo de línea", widthClass: "w-[120px]" },
   telefono_verificado: { label: "Teléfono verificado", widthClass: "w-[130px]" },
   fuente: { label: "Fuente", widthClass: "w-[160px]" },
+  actividad: { label: "Actividad", widthClass: "w-[220px]" },
+  segmento: { label: "Segmento", widthClass: "w-[180px]" },
   tamano_rating: { label: "Tamaño/Rating", widthClass: "w-[130px]" },
   campana: { label: "Campaña", widthClass: "w-[140px]" },
   con_envio: { label: "Con envío", widthClass: "min-w-[220px]" },
@@ -730,13 +736,15 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     tipo_linea: false,
     telefono_verificado: false,
     fuente: true,
+    actividad: true,
+    segmento: true,
     tamano_rating: true,
     campana: true,
     con_envio: true,
     creado: true,
   }
   if (payload.visibility && typeof payload.visibility === "object") {
-    for (const columnId of DEFAULT_TABLE_COLUMN_ORDER) {
+    for (const columnId of Object.keys(TABLE_COLUMN_META) as ProspectTableColumnId[]) {
       const value = payload.visibility[columnId]
       if (typeof value === "boolean") {
         visibility[columnId] = value
@@ -882,6 +890,8 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     key === "tipo_linea" ||
     key === "telefono_verificado" ||
     key === "fuente" ||
+    key === "actividad" ||
+    key === "segmento" ||
     key === "tamano_rating" ||
     key === "campana" ||
     key === "con_envio" ||
@@ -982,6 +992,8 @@ function ProspectosView() {
     tipo_linea: true,
     telefono_verificado: true,
     fuente: true,
+    actividad: true,
+    segmento: true,
     tamano_rating: true,
     campana: true,
     con_envio: true,
@@ -1373,8 +1385,12 @@ function ProspectosView() {
       const bFuente = FUENTE_LABELS[b.fuente] ?? b.fuente
       const aRating = typeof a.rating === "number" ? a.rating : null
       const bRating = typeof b.rating === "number" ? b.rating : null
-      const aSize = (a.estrato || a.segmento || "").trim().toLowerCase()
-      const bSize = (b.estrato || b.segmento || "").trim().toLowerCase()
+      const aActividad = (a.actividad || "").trim().toLowerCase()
+      const bActividad = (b.actividad || "").trim().toLowerCase()
+      const aSegmento = (a.segmento || "").trim().toLowerCase()
+      const bSegmento = (b.segmento || "").trim().toLowerCase()
+      const aSize = (a.estrato || "").trim().toLowerCase()
+      const bSize = (b.estrato || "").trim().toLowerCase()
       const aCampaign = (extractProspectoCampaignName(a.metadata) || "").trim().toLowerCase()
       const bCampaign = (extractProspectoCampaignName(b.metadata) || "").trim().toLowerCase()
       const aHasEnvios = ((a.id ? contactIndicators[a.id]?.total_envios : 0) ?? 0) > 0 ? 1 : 0
@@ -1407,6 +1423,12 @@ function ProspectosView() {
           break
         case "fuente":
           base = aFuente.localeCompare(bFuente, "es", { sensitivity: "base" })
+          break
+        case "actividad":
+          base = aActividad.localeCompare(bActividad, "es", { sensitivity: "base" })
+          break
+        case "segmento":
+          base = aSegmento.localeCompare(bSegmento, "es", { sensitivity: "base" })
           break
         case "tamano_rating":
           if (aRating !== null || bRating !== null) {
@@ -5572,6 +5594,30 @@ function ProspectosView() {
                                     </Badge>
                                   </TableCell>
                                 )
+                              case "actividad":
+                                return (
+                                  <TableCell key={columnId}>
+                                    {prospecto.actividad ? (
+                                      <span className="block max-w-[220px] truncate text-[11px]" title={prospecto.actividad}>
+                                        {prospecto.actividad}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+                                )
+                              case "segmento":
+                                return (
+                                  <TableCell key={columnId}>
+                                    {prospecto.segmento ? (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {prospecto.segmento}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+                                )
                               case "tamano_rating":
                                 return (
                                   <TableCell key={columnId}>
@@ -5579,8 +5625,6 @@ function ProspectosView() {
                                       <Badge variant="secondary" className="text-[10px]">⭐ {prospecto.rating.toFixed(1)}</Badge>
                                     ) : prospecto.estrato ? (
                                       <Badge variant="outline" className="text-[10px]">{prospecto.estrato}</Badge>
-                                    ) : prospecto.segmento ? (
-                                      <Badge variant="outline" className="text-[10px]">{prospecto.segmento}</Badge>
                                     ) : (
                                       <span className="text-[11px] text-muted-foreground">—</span>
                                     )}

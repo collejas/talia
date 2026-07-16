@@ -518,6 +518,64 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
 
 
 @pytest.mark.asyncio
+async def test_list_prospecto_query_metadata_supplements_manual_import_taxonomy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        if method == "POST" and path == "/rest/v1/rpc/prospeccion_queries_resumen":
+            return DummyResponse([])
+        if method == "POST" and path == "/rest/v1/rpc/prospeccion_activities_resumen":
+            return DummyResponse([])
+        if method == "POST" and path == "/rest/v1/rpc/prospeccion_segmentos_resumen":
+            return DummyResponse([])
+        if method == "GET" and path == "/rest/v1/prospeccion_prospectos":
+            params = kwargs.get("params") or {}
+            if params.get("fuente") != "eq.usuario":
+                raise AssertionError(f"unexpected fuente filter: {params!r}")
+            offset = params.get("offset")
+            if offset == "0":
+                return DummyResponse(
+                    [
+                        {
+                            "id": "11111111-1111-1111-1111-111111111111",
+                            "actividad": "Consultoría",
+                            "segmento": "Industrial",
+                        },
+                        {
+                            "id": "22222222-2222-2222-2222-222222222222",
+                            "actividad": "Consultoría",
+                            "segmento": "Industrial",
+                        },
+                        {
+                            "id": "33333333-3333-3333-3333-333333333333",
+                            "actividad": "Servicios",
+                            "segmento": "PyME",
+                        },
+                    ]
+                )
+            if offset != "0":
+                return DummyResponse([])
+        raise AssertionError(f"unexpected request: {method} {path} {kwargs!r}")
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    payload = await repo.list_prospecto_query_metadata(
+        usuario_token="token",
+        fuente="usuario",
+    )
+
+    assert payload["queries"] == []
+    assert payload["activities"] == ["Consultoría", "Servicios"]
+    assert payload["segmentos"] == ["Industrial", "PyME"]
+
+
+@pytest.mark.asyncio
 async def test_list_prospectos_excluding_ids_scans_past_a_capped_first_page(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(settings, "supabase_service_role", "service")

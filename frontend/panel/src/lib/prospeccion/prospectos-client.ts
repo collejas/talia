@@ -87,6 +87,8 @@ export type ProspectosTableColumnPreference =
   | "tipo_linea"
   | "telefono_verificado"
   | "fuente"
+  | "actividad"
+  | "segmento"
   | "tamano_rating"
   | "campana"
   | "con_envio"

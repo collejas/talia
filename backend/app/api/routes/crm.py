@@ -1695,6 +1695,8 @@ PROSPECTOS_PREFS_COLUMNS: tuple[str, ...] = (
     "tipo_linea",
     "telefono_verificado",
     "fuente",
+    "actividad",
+    "segmento",
     "tamano_rating",
     "campana",
     "con_envio",
