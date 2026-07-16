@@ -602,3 +602,30 @@
     - resultado: `30 passed`
   - Objetivo:
     - bajar el costo fijo de `burst_merge_ms` sin perder la capacidad de agrupar fragmentos reales.
+- 2026-07-15 22:27 UTC
+  - Se reforzo el fast path de seleccion de horario en WhatsApp.
+  - Hallazgo confirmado:
+    - el saludo y el paso de empresa ya estaban entrando al fast path,
+    - pero la respuesta del usuario para escoger horario seguia cayendo al loop completo de OpenAI
+      cuando llegaba con typos o variaciones compactas de hora, por ejemplo:
+      - `manan a las 9 am`
+      - `manana a las 9 am`
+      - `9 am`
+      - `9:00 am`
+  - Ajuste aplicado:
+    - `backend/app/channels/whatsapp/service.py`
+    - `_match_pending_slot_choice(...)` ahora:
+      - detecta mejor referencias de dia como `mañana`, `manana`, `manan`, `hoy` y dias de la semana,
+      - compara horas por valor normalizado, no solo por substring exacto,
+      - acepta equivalencias como `9 am` contra slots guardados como `9:00 am`.
+  - Cobertura:
+    - `backend/tests/channels/test_whatsapp_service.py`
+    - se agrego prueba de match directo para `manan a las 9 am`,
+    - y otra prueba que valida que ese mensaje dispare `schedule_demo` por fast path.
+  - Validacion local:
+    - `python3 -m py_compile backend/app/channels/whatsapp/service.py`
+    - `poetry run pytest tests/channels/test_whatsapp_service.py -q`
+    - resultado: `32 passed`
+  - Objetivo:
+    - evitar una iteracion extra con OpenAI en el paso de agenda
+      y bajar ese turno al rango objetivo de respuesta.

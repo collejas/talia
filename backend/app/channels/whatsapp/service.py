@@ -514,38 +514,104 @@ def _format_pending_slots_reply(*, full_name: str | None, slots: list[dict[str, 
     return f"{prefix} Tengo cita de diagnostico {options_text}. ¿Cual te acomoda mas?"
 
 
+def _extract_time_candidates(value: Any) -> list[tuple[int, int]]:
+    normalized = _normalize_fast_path_text(value)
+    if not normalized:
+        return []
+    candidates: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for match in re.finditer(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", normalized):
+        hour = int(match.group(1))
+        minute = int(match.group(2) or "0")
+        meridiem = match.group(3)
+        if minute > 59:
+            continue
+        variants: list[tuple[int, int]] = []
+        if meridiem:
+            if not 1 <= hour <= 12:
+                continue
+            hour_24 = hour % 12
+            if meridiem == "pm":
+                hour_24 += 12
+            variants.append((hour_24, minute))
+        elif 0 <= hour <= 23:
+            variants.append((hour, minute))
+            if 1 <= hour <= 12:
+                variants.append((hour % 12, minute))
+                variants.append(((hour % 12) + 12, minute))
+        for variant in variants:
+            if variant not in seen:
+                seen.add(variant)
+                candidates.append(variant)
+    return candidates
+
+
+def _resolve_pending_slot_day_targets(normalized: str) -> tuple[str | None, int | None]:
+    if not normalized:
+        return None, None
+    tokens = normalized.split()
+    if any(
+        token in {"mañana", "manana", "manan"}
+        or token.startswith("mañan")
+        or token.startswith("manan")
+        for token in tokens
+    ):
+        return "tomorrow", None
+    if "hoy" in tokens:
+        return "today", None
+    weekdays = {
+        "lunes": 0,
+        "martes": 1,
+        "miercoles": 2,
+        "miércoles": 2,
+        "jueves": 3,
+        "viernes": 4,
+        "sabado": 5,
+        "sábado": 5,
+        "domingo": 6,
+    }
+    for token in tokens:
+        if token in weekdays:
+            return None, weekdays[token]
+    return None, None
+
+
 def _match_pending_slot_choice(body: str | None, pending_slots: list[dict[str, str]]) -> dict[str, str] | None:
     normalized = _normalize_fast_path_text(body)
     if not normalized or not pending_slots:
         return None
-    target_day: str | None = None
-    if "mañana" in normalized or "manana" in normalized:
-        target_day = "tomorrow"
-    elif "hoy" in normalized:
-        target_day = "today"
+    target_day, target_weekday = _resolve_pending_slot_day_targets(normalized)
+    requested_times = _extract_time_candidates(body)
 
     best_match: dict[str, str] | None = None
     for slot in pending_slots:
         local_time = _normalize_fast_path_text(slot.get("local_time"))
+        local_time_candidates = _extract_time_candidates(slot.get("local_time"))
         local_date_raw = slot.get("local_date")
-        if local_time and local_time in normalized:
-            if target_day is None:
-                return slot
-            try:
-                local_date = datetime.fromisoformat(str(local_date_raw)).date()
-            except Exception:
-                local_date = None
-            timezone_name = slot.get("timezone") or "UTC"
-            try:
-                zone = ZoneInfo(timezone_name)
-            except Exception:
-                zone = timezone.utc
-            today = datetime.now(zone).date()
-            if target_day == "today" and local_date == today:
-                return slot
-            if target_day == "tomorrow" and local_date == today + timedelta(days=1):
-                return slot
-            best_match = best_match or slot
+        time_matches = bool(local_time and local_time in normalized)
+        if requested_times and local_time_candidates:
+            time_matches = any(candidate in requested_times for candidate in local_time_candidates)
+        if not time_matches:
+            continue
+        if target_day is None and target_weekday is None:
+            return slot
+        try:
+            local_date = datetime.fromisoformat(str(local_date_raw)).date()
+        except Exception:
+            local_date = None
+        timezone_name = slot.get("timezone") or "UTC"
+        try:
+            zone = ZoneInfo(timezone_name)
+        except Exception:
+            zone = timezone.utc
+        today = datetime.now(zone).date()
+        if target_day == "today" and local_date == today:
+            return slot
+        if target_day == "tomorrow" and local_date == today + timedelta(days=1):
+            return slot
+        if target_weekday is not None and local_date is not None and local_date.weekday() == target_weekday:
+            return slot
+        best_match = best_match or slot
     return best_match
 
 

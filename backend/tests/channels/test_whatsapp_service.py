@@ -73,6 +73,31 @@ def test_inbound_burst_debounce_skips_complete_sentence_with_punctuation() -> No
     assert service._resolve_inbound_burst_debounce_seconds("me interesa un terreno.") == 0.0
 
 
+def test_match_pending_slot_choice_matches_tomorrow_typo_and_compact_time() -> None:
+    tomorrow = (service.datetime.now(service.timezone.utc).date() + service.timedelta(days=1)).isoformat()
+    pending_slots = [
+        {
+            "slot_id": "slot-9am",
+            "start_at": "2026-07-16T09:00:00+00:00",
+            "timezone": "UTC",
+            "local_date": tomorrow,
+            "local_time": "9:00 am",
+        },
+        {
+            "slot_id": "slot-11am",
+            "start_at": "2026-07-16T11:00:00+00:00",
+            "timezone": "UTC",
+            "local_date": tomorrow,
+            "local_time": "11:00 am",
+        },
+    ]
+
+    matched = service._match_pending_slot_choice("manan a las 9 am", pending_slots)
+
+    assert matched is not None
+    assert matched["slot_id"] == "slot-9am"
+
+
 def test_build_openai_input_avoids_redundant_crm_lines_when_summary_exists() -> None:
     message = schemas.WhatsAppIncomingMessage(
         message_sid="SM-name",
@@ -762,6 +787,83 @@ async def test_structured_fast_path_information_email_schedules_background_send(
     assert reply.tools_called == ["send_information_email"]
     assert "Te la envío al correo" in (reply.text or "")
     assert len(scheduled_coroutines) == 1
+
+
+@pytest.mark.asyncio
+async def test_structured_fast_path_pending_slot_selection_schedules_demo(monkeypatch) -> None:
+    tomorrow = (service.datetime.now(service.timezone.utc).date() + service.timedelta(days=1)).isoformat()
+    recent_messages = [
+        {"id": "m1", "direccion": "saliente", "texto": "Perfecto. Tengo cita de diagnostico mañana a las 9:00 am o mañana a las 11:00 am. ¿Cual te acomoda mas?"},
+    ]
+    merged_context: list[dict[str, Any]] = []
+
+    async def fake_fetch_recent_messages(*_: object, **__: object):
+        return recent_messages
+
+    async def fake_merge_conversation_inbox_context(conversation_id: str, patch: dict[str, Any]) -> None:
+        assert conversation_id == "conv-3"
+        merged_context.append(patch)
+
+    async def fake_schedule_demo(arguments: dict[str, Any], context: Any) -> dict[str, Any]:
+        assert context.conversation_id == "conv-3"
+        assert arguments["slot_id"] == "slot-9am"
+        return {"start_at": arguments["start_at"], "timezone": "UTC"}
+
+    monkeypatch.setattr(service.storage, "fetch_recent_messages", fake_fetch_recent_messages)
+    monkeypatch.setattr(
+        service.storage,
+        "merge_conversation_inbox_context",
+        fake_merge_conversation_inbox_context,
+    )
+    monkeypatch.setattr(service.whatsapp_tools, "_handle_schedule_demo", fake_schedule_demo)
+
+    reply = await service._maybe_build_structured_fast_reply(
+        conversation_id="conv-3",
+        persona_id="persona-3",
+        persona_record={
+            "id": "persona-3",
+            "nombre_completo": "Antonia Urdueña",
+            "correo_principal": "collejas1@gmail.com",
+        },
+        conversation_meta={
+            "last_response_id": "resp-3",
+            "inbox_context": {
+                "pending_booking_slots": [
+                    {
+                        "slot_id": "slot-9am",
+                        "start_at": "2026-07-16T09:00:00+00:00",
+                        "timezone": "UTC",
+                        "local_date": tomorrow,
+                        "local_time": "9:00 am",
+                    },
+                    {
+                        "slot_id": "slot-11am",
+                        "start_at": "2026-07-16T11:00:00+00:00",
+                        "timezone": "UTC",
+                        "local_date": tomorrow,
+                        "local_time": "11:00 am",
+                    },
+                ],
+            },
+        },
+        message=schemas.WhatsAppIncomingMessage(
+            message_sid="SM-slot",
+            from_number="whatsapp:+521111111111",
+            to_number="whatsapp:+521000000000",
+            body="manan a las 9 am",
+            wa_id="521111111111",
+            profile_name="Antonia",
+            num_media=0,
+            media=[],
+            raw_payload={},
+        ),
+        organizacion_id=None,
+    )
+
+    assert reply is not None
+    assert reply.tools_called == ["schedule_demo"]
+    assert "Tu cita quedó agendada" in (reply.text or "")
+    assert merged_context[-1]["pending_booking_slots"] is None
 
 
 @pytest.mark.asyncio
