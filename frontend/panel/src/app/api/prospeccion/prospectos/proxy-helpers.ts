@@ -74,6 +74,8 @@ export async function proxyProspeccionRequest(
     status: backendResponse.status,
     headers: {
       "content-type": contentType,
+      "cache-control": "no-store, no-cache, must-revalidate",
+      pragma: "no-cache",
     },
   })
 }

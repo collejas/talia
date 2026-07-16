@@ -2292,8 +2292,14 @@ function ProspectosView() {
       if (prospectosStreamRefreshInFlightRef.current) return
       prospectosStreamRefreshInFlightRef.current = true
       try {
+        const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+          filters.dateOption,
+          filters.customDateFrom,
+          filters.customDateTo
+        )
         await Promise.all([
           fetchProspectos(0),
+          loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo }),
           refreshChecklist(),
           fetchStageSummary(),
         ])
@@ -2337,7 +2343,16 @@ function ProspectosView() {
         prospectosStreamRef.current = null
       }
     }
-  }, [fetchProspectos, fetchStageSummary, refreshChecklist])
+  }, [
+    fetchProspectos,
+    fetchStageSummary,
+    filters.customDateFrom,
+    filters.customDateTo,
+    filters.dateOption,
+    filters.fuente,
+    loadQueryOptions,
+    refreshChecklist,
+  ])
 
   useEffect(() => {
     if (!formDialogOpen) {

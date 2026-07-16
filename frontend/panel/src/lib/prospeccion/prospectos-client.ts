@@ -956,7 +956,7 @@ export async function listProspectosQueryMetadata(params?: {
     >
     activities: string[]
     segmentos?: string[]
-  }>(url.toString())
+  }>(url.toString(), { cache: "no-store" })
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
       if (typeof item === "string") {
