@@ -1554,7 +1554,7 @@ export async function listContactoTemplates(params: {
   if (shouldIncludeWhatsApp) {
     const url = buildClientUrl("/api/prospeccion/whatsapp/templates")
     url.searchParams.set("page", "1")
-    url.searchParams.set("page_size", "200")
+    url.searchParams.set("page_size", "100")
     url.searchParams.set("active", "true")
     requests.push(requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString()))
   }
