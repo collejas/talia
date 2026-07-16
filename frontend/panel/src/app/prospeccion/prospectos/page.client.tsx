@@ -2127,6 +2127,28 @@ function ProspectosView() {
     }
   }, [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente, loadQueryOptions])
 
+  const refreshProspectosAndMetadata = useCallback(
+    async (nextOffset = 0) => {
+      const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+        filters.dateOption,
+        filters.customDateFrom,
+        filters.customDateTo
+      )
+      await Promise.all([
+        fetchProspectos(nextOffset),
+        loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo }),
+      ])
+    },
+    [
+      fetchProspectos,
+      filters.customDateFrom,
+      filters.customDateTo,
+      filters.dateOption,
+      filters.fuente,
+      loadQueryOptions,
+    ]
+  )
+
   useEffect(() => {
     if (queryFiltersInitialEffect.current) {
       queryFiltersInitialEffect.current = false
@@ -3708,7 +3730,7 @@ function ProspectosView() {
           type: "success",
           message: "Se creó el prospecto manual.",
         })
-        await fetchProspectos(0)
+        await refreshProspectosAndMetadata(0)
       } else {
         if (!editingId) {
           throw new Error("prospecto_missing_id")
@@ -3721,7 +3743,7 @@ function ProspectosView() {
           type: "success",
           message: "Se actualizó el prospecto.",
         })
-        await fetchProspectos(offset)
+        await refreshProspectosAndMetadata(offset)
       }
       setFormDialogOpen(false)
     } catch (err) {
@@ -3730,7 +3752,7 @@ function ProspectosView() {
     } finally {
       setFormSubmitting(false)
     }
-  }, [fetchProspectos, formMode, formValues, metadataBase, editingId, offset, editingDisplayNameBase])
+  }, [refreshProspectosAndMetadata, formMode, formValues, metadataBase, editingId, offset, editingDisplayNameBase])
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget?.id) return
@@ -3758,6 +3780,7 @@ function ProspectosView() {
         message: `${deleteTarget.display_name ?? "El prospecto"} fue eliminado.`,
       })
       setDeleteDialogOpen(false)
+      await refreshProspectosAndMetadata(offset)
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo eliminar el prospecto."
@@ -3765,7 +3788,7 @@ function ProspectosView() {
     } finally {
       setDeleteLoading(false)
     }
-  }, [appendProspectos, deleteTarget, fetchStageSummary, items, limit, offset, total])
+  }, [appendProspectos, deleteTarget, fetchStageSummary, items, limit, offset, refreshProspectosAndMetadata, total])
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!selectedIds.length) return
@@ -3794,6 +3817,7 @@ function ProspectosView() {
         message: `Se eliminaron ${selectedIds.length} prospecto${selectedIds.length === 1 ? "" : "s"}.`,
       })
       setBulkDeleteDialogOpen(false)
+      await refreshProspectosAndMetadata(offset)
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron eliminar los prospectos."
@@ -3801,7 +3825,7 @@ function ProspectosView() {
     } finally {
       setBulkDeleteLoading(false)
     }
-  }, [appendProspectos, fetchStageSummary, items, limit, offset, selectedIds, total])
+  }, [appendProspectos, fetchStageSummary, items, limit, offset, refreshProspectosAndMetadata, selectedIds, total])
 
   const handleGroupDeleteConfirm = useCallback(async () => {
     if (!selectedGroupQueryValues.length) return
@@ -3814,7 +3838,7 @@ function ProspectosView() {
       setOpenedQueryScope(null)
       setProspectosViewMode("grupos")
       setOffset(0)
-      await fetchProspectos(0)
+      await refreshProspectosAndMetadata(0)
       void fetchStageSummary()
       setBanner({
         type: "success",
@@ -3827,7 +3851,7 @@ function ProspectosView() {
     } finally {
       setGroupDeleteLoading(false)
     }
-  }, [fetchProspectos, fetchStageSummary, selectedGroupQueryValues, selectedGroupValues])
+  }, [fetchStageSummary, refreshProspectosAndMetadata, selectedGroupQueryValues, selectedGroupValues])
 
   if (!mounted) {
     return null
