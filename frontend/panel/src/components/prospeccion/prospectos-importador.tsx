@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import {
   importarProspectos,
+  type ProspectoImportOmitido,
   type ProspectoImportSummary,
   type ProspectoManualInput,
 } from "@/lib/prospeccion/prospectos-client"
@@ -239,6 +240,16 @@ function composeAddressPreview(item: ProspectoManualInput): string {
   return [street ? `${street}${interior ? ` Int. ${interior}` : ""}` : "", settlement, locality, postal ? `CP ${postal}` : ""]
     .filter(Boolean)
     .join(", ")
+}
+
+function buildSkippedProspectLabel(item: ProspectoImportOmitido): string {
+  const name = normalizeCell(item.display_name)
+  if (name) return name
+  const email = normalizeCell(item.email)
+  if (email) return email
+  const phone = normalizeCell(item.phone)
+  if (phone) return phone
+  return "Prospecto sin identificar"
 }
 
 function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | null {
@@ -537,6 +548,27 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
                 <p className="mt-1 text-xs">
                   {summary.created.toLocaleString("es-MX")} prospectos creados · {summary.skipped.toLocaleString("es-MX")} omitidos · {summary.total.toLocaleString("es-MX")} filas procesadas
                 </p>
+                {summary.omitidos?.length ? (
+                  <div className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-md border border-emerald-700/20 bg-background/70 p-3 text-xs text-foreground">
+                    <p className="font-medium text-emerald-800 dark:text-emerald-200">
+                      Prospectos omitidos ({summary.omitidos.length.toLocaleString("es-MX")})
+                    </p>
+                    {summary.omitidos.map((item, index) => {
+                      const label = buildSkippedProspectLabel(item)
+                      const contact = [normalizeCell(item.email), normalizeCell(item.phone)].filter(Boolean).join(" · ")
+                      return (
+                        <div key={`${item.row ?? "na"}-${label}-${index}`} className="rounded-md border bg-background px-3 py-2">
+                          <p className="font-medium">
+                            {item.row ? `Fila ${item.row}: ` : ""}
+                            {label}
+                          </p>
+                          {contact ? <p className="text-muted-foreground">{contact}</p> : null}
+                          <p className="text-muted-foreground">{item.detalle}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

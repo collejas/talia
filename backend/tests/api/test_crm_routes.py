@@ -1773,6 +1773,57 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert bulk_call["organizacion_id"] == org_id
 
 
+@pytest.mark.asyncio
+async def test_importar_prospectos_en_lote_reporta_omitidos_con_motivo(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    org_id = uuid.uuid4()
+    fake_repo.existing_prospectos_by_emails_result = [
+        {"id": str(uuid.uuid4()), "email": "existente@ejemplo.com"}
+    ]
+    resp = await client.post(
+        "/crm/prospeccion/prospectos/importar",
+        headers={**_headers(include_user_token=True), "X-Organizacion-Id": str(org_id)},
+        json={
+            "items": [
+                {
+                    "nombre_comercial": "Alpha SA de CV",
+                    "email": "dup@ejemplo.com",
+                    "phone": "+52 55 1234 5678",
+                },
+                {
+                    "nombre_comercial": "Alpha repetido",
+                    "email": "dup@ejemplo.com",
+                    "phone": "+52 55 9999 1111",
+                },
+                {
+                    "nombre_comercial": "Beta existente",
+                    "email": "existente@ejemplo.com",
+                },
+                {
+                    "nombre_comercial": "Gamma ok",
+                    "email": "gamma@ejemplo.com",
+                },
+            ]
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["created"] == 2
+    assert payload["skipped"] == 2
+    assert len(payload["omitidos"]) == 2
+    assert payload["omitidos"][0]["row"] == 2
+    assert payload["omitidos"][0]["motivo"] == "duplicado_en_archivo"
+    assert "Correo repetido" in payload["omitidos"][0]["detalle"]
+    assert payload["omitidos"][1]["row"] == 3
+    assert payload["omitidos"][1]["motivo"] == "ya_existia_en_tenant"
+    assert "ya existe un prospecto con ese correo" in payload["omitidos"][1]["detalle"].lower()
+    assert len(fake_repo.last_bulk_inserted_prospectos) == 2
+    assert all("__import_row" not in item for item in fake_repo.last_bulk_inserted_prospectos)
+
+
 def test_build_contact_envios_entries_includes_person_fields() -> None:
     entries, suppressed = crm_routes._build_contact_envios_entries(
         batch_id=uuid.uuid4(),

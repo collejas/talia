@@ -597,6 +597,16 @@ export type ProspectoImportSummary = {
   created: number
   skipped: number
   prospectos: ProspectoItem[]
+  omitidos?: ProspectoImportOmitido[]
+}
+
+export type ProspectoImportOmitido = {
+  row?: number | null
+  display_name?: string | null
+  email?: string | null
+  phone?: string | null
+  motivo: string
+  detalle: string
 }
 
 export const PROSPECTO_IDS_MAX_BATCH = 300

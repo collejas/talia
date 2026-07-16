@@ -7156,6 +7156,145 @@ def _filter_prospectos_against_existing_contacts(
     return filtered
 
 
+def _build_import_skip_entry(
+    item: Mapping[str, Any],
+    *,
+    motivo: str,
+    detalle: str,
+) -> dict[str, Any]:
+    display_name = _compose_prospecto_display_name(
+        display_name=item.get("display_name"),
+        nombre_comercial=item.get("nombre_comercial"),
+        nombre=item.get("nombre"),
+        primer_apellido=item.get("primer_apellido"),
+        segundo_apellido=item.get("segundo_apellido"),
+    )
+    email_value = _normalize_email(item.get("email"))
+    phone_value = _normalize_phone_e164(item.get("phone_e164") or item.get("phone")) or _clean_text(item.get("phone"))
+    row_value = item.get("__import_row")
+    row_number: int | None = None
+    try:
+        row_number = int(row_value) if row_value is not None else None
+    except (TypeError, ValueError):
+        row_number = None
+    return {
+        "row": row_number,
+        "display_name": display_name or None,
+        "email": email_value or None,
+        "phone": phone_value or None,
+        "motivo": motivo,
+        "detalle": detalle,
+    }
+
+
+def _strip_import_tracking_keys(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in item.items() if not str(key).startswith("__import_")}
+
+
+def _dedupe_import_prospectos_with_omissions(
+    items: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Dedupe por correo y telefono sin descartar prospectos sin contacto, reportando omitidos."""
+
+    deduped: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
+    seen_emails: dict[str, int] = {}
+    seen_phones_without_email: dict[str, int] = {}
+
+    for item in items:
+        normalized = dict(item)
+        email_value = _normalize_email(normalized.get("email"))
+        if email_value:
+            normalized["email"] = email_value
+
+        phone_value = normalized.get("phone_e164") or normalized.get("phone")
+        phone_e164_value = _normalize_phone_e164(phone_value)
+        if phone_e164_value:
+            normalized["phone_e164"] = phone_e164_value
+            if not normalized.get("phone"):
+                normalized["phone"] = _clean_text(phone_value)
+
+        target_index: int | None = None
+        skip_entry: dict[str, Any] | None = None
+        if email_value and email_value in seen_emails:
+            target_index = seen_emails[email_value]
+            skip_entry = _build_import_skip_entry(
+                normalized,
+                motivo="duplicado_en_archivo",
+                detalle="Correo repetido dentro del mismo archivo.",
+            )
+        elif not email_value and phone_e164_value and phone_e164_value in seen_phones_without_email:
+            target_index = seen_phones_without_email[phone_e164_value]
+            skip_entry = _build_import_skip_entry(
+                normalized,
+                motivo="duplicado_en_archivo",
+                detalle="Teléfono repetido dentro del mismo archivo.",
+            )
+
+        if target_index is None:
+            deduped.append(normalized)
+            target_index = len(deduped) - 1
+        else:
+            _merge_prospecto_payload(deduped[target_index], normalized)
+            if skip_entry:
+                omitted.append(skip_entry)
+
+        if email_value:
+            seen_emails[email_value] = target_index
+        elif phone_e164_value:
+            seen_phones_without_email[phone_e164_value] = target_index
+
+    return deduped, omitted
+
+
+def _filter_prospectos_against_existing_contacts_with_omissions(
+    items: Sequence[dict[str, Any]],
+    *,
+    existing_email_rows: Sequence[dict[str, Any]],
+    existing_phone_rows: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Elimina solo coincidencias reales y reporta cuáles se omitieron."""
+
+    existing_emails = {
+        value
+        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
+        if value
+    }
+    existing_phones = {
+        value
+        for value in (
+            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
+            for row in existing_phone_rows
+        )
+        if value
+    }
+    filtered: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
+    for item in items:
+        email_value = _normalize_email(item.get("email"))
+        phone_value = _normalize_phone_e164(item.get("phone_e164") or item.get("phone"))
+        if email_value and email_value in existing_emails:
+            omitted.append(
+                _build_import_skip_entry(
+                    item,
+                    motivo="ya_existia_en_tenant",
+                    detalle="Ya existe un prospecto con ese correo en este tenant.",
+                )
+            )
+            continue
+        if not email_value and phone_value and phone_value in existing_phones:
+            omitted.append(
+                _build_import_skip_entry(
+                    item,
+                    motivo="ya_existia_en_tenant",
+                    detalle="Ya existe un prospecto con ese teléfono en este tenant.",
+                )
+            )
+            continue
+        filtered.append(item)
+    return filtered, omitted
+
+
 def _normalize_saved_views(raw_value: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_value, dict):
         return []
@@ -34353,11 +34492,15 @@ async def importar_prospectos(
 ) -> dict[str, Any]:
     """Importa prospectos manuales en lote desde CSV o Excel ya normalizado en el panel."""
 
-    raw_items = [_build_manual_prospecto_payload(item) for item in payload.items]
+    raw_items = []
+    for index, item in enumerate(payload.items, start=1):
+        built = _build_manual_prospecto_payload(item)
+        built["__import_row"] = index
+        raw_items.append(built)
     if not raw_items:
         raise HTTPException(status_code=400, detail="prospectos_import_empty")
 
-    deduped_items = _dedupe_import_prospectos(raw_items)
+    deduped_items, dedupe_omissions = _dedupe_import_prospectos_with_omissions(raw_items)
     if not deduped_items:
         raise HTTPException(status_code=400, detail="prospectos_import_empty")
 
@@ -34386,11 +34529,12 @@ async def importar_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    filtered_items = _filter_prospectos_against_existing_contacts(
+    filtered_items, existing_omissions = _filter_prospectos_against_existing_contacts_with_omissions(
         deduped_items,
         existing_email_rows=existing_email_rows,
         existing_phone_rows=existing_phone_rows,
     )
+    omitted_items = [*dedupe_omissions, *existing_omissions]
     if not filtered_items:
         return {
             "ok": True,
@@ -34398,13 +34542,14 @@ async def importar_prospectos(
             "created": 0,
             "skipped": len(payload.items),
             "prospectos": [],
+            "omitidos": omitted_items,
         }
 
     try:
         created = await repo.bulk_insert_prospectos(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
-            items=filtered_items,
+            items=[_strip_import_tracking_keys(item) for item in filtered_items],
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -34423,8 +34568,9 @@ async def importar_prospectos(
         "ok": True,
         "total": len(payload.items),
         "created": len(created),
-        "skipped": max(0, len(payload.items) - len(created)),
+        "skipped": len(omitted_items),
         "prospectos": created,
+        "omitidos": omitted_items,
     }
 
 
