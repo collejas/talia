@@ -30845,6 +30845,7 @@ async def listar_prospectos_query_metadata(
         try:
             metadata = await repo.list_prospecto_query_metadata(
                 usuario_token=user_token,
+                organizacion_id=organizacion_id,
                 query_filters=normalized_query_filters,
                 fuente=fuente or None,
                 date_from=date_from,

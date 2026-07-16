@@ -536,6 +536,7 @@ async def test_list_prospecto_query_metadata_supplements_manual_import_taxonomy(
             return DummyResponse([])
         if method == "GET" and path == "/rest/v1/prospeccion_prospectos":
             params = kwargs.get("params") or {}
+            assert params.get("organizacion_id") == "eq.11111111-1111-1111-1111-111111111111"
             if params.get("fuente") != "eq.usuario":
                 raise AssertionError(f"unexpected fuente filter: {params!r}")
             offset = params.get("offset")
@@ -567,6 +568,7 @@ async def test_list_prospecto_query_metadata_supplements_manual_import_taxonomy(
 
     payload = await repo.list_prospecto_query_metadata(
         usuario_token="token",
+        organizacion_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
         fuente="usuario",
     )
 

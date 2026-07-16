@@ -17628,6 +17628,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         query_filters: list[str] | None = None,
         fuente: str | None = None,
         date_from: date | None = None,
@@ -17744,27 +17745,17 @@ class CRMRepository:
                     )
                 }
             )
-            if normalized_query_filters is None and (fuente is None or fuente == "usuario"):
-                manual_taxonomy = await self._list_manual_prospect_taxonomy(
+            if normalized_query_filters is None:
+                direct_taxonomy = await self._list_prospect_taxonomy(
                     usuario_token=usuario_token,
+                    organizacion_id=organizacion_id,
+                    fuente=fuente,
                     date_from=date_from,
                     date_to=date_to,
                     timezone_name=timezone_name,
                 )
-                activities = sorted(
-                    {
-                        *activities,
-                        *manual_taxonomy["activities"],
-                    },
-                    key=lambda value: value.casefold(),
-                )
-                segmentos = sorted(
-                    {
-                        *segmentos,
-                        *manual_taxonomy["segmentos"],
-                    },
-                    key=lambda value: value.casefold(),
-                )
+                activities = sorted(direct_taxonomy["activities"], key=lambda value: value.casefold())
+                segmentos = sorted(direct_taxonomy["segmentos"], key=lambda value: value.casefold())
             if normalized_query_filters is not None:
                 queries = [
                     {
@@ -17808,6 +17799,8 @@ class CRMRepository:
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
             "order": "query_sort.asc,actividad.asc,id.asc",
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         if fuente:
             params["fuente"] = f"eq.{fuente}"
         if date_from or date_to:
@@ -18060,10 +18053,12 @@ class CRMRepository:
             "segmentos": sorted(segmento_values, key=lambda value: value.casefold()),
         }
 
-    async def _list_manual_prospect_taxonomy(
+    async def _list_prospect_taxonomy(
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
+        fuente: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         timezone_name: str | None = None,
@@ -18071,9 +18066,12 @@ class CRMRepository:
         zone = _resolve_timezone_zone(timezone_name)
         params: dict[str, str] = {
             "select": "id,actividad,segmento",
-            "fuente": "eq.usuario",
             "order": "id.asc",
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        if fuente:
+            params["fuente"] = f"eq.{fuente}"
         if date_from or date_to:
             and_filters: list[str] = []
             if date_from:
@@ -18106,7 +18104,7 @@ class CRMRepository:
             )
             page = resp.json() or []
             if not isinstance(page, list):
-                raise CRMRepositoryError(f"Respuesta inesperada al listar taxonomía manual de prospectos: {page!r}")
+                raise CRMRepositoryError(f"Respuesta inesperada al listar taxonomía de prospectos: {page!r}")
             if not page:
                 break
             for row in page:
