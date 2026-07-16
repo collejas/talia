@@ -252,6 +252,17 @@ function buildSkippedProspectLabel(item: ProspectoImportOmitido): string {
   return "Prospecto sin identificar"
 }
 
+function buildSkippedReasonLabel(reason: string): string {
+  switch (reason) {
+    case "duplicado_en_archivo":
+      return "Duplicados en archivo"
+    case "ya_existia_en_tenant":
+      return "Ya existentes en tenant"
+    default:
+      return "Otros omitidos"
+  }
+}
+
 function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | null {
   const mapped: Partial<Record<ProspectoImportField, string>> = {}
   for (const [header, value] of Object.entries(row)) {
@@ -454,6 +465,18 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
   }, [])
 
   const fileLabel = useMemo(() => file?.name ?? "", [file])
+  const skippedSummary = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of summary?.omitidos ?? []) {
+      const key = normalizeCell(item.motivo) || "otros"
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return Array.from(counts.entries()).map(([motivo, total]) => ({
+      motivo,
+      total,
+      label: buildSkippedReasonLabel(motivo),
+    }))
+  }, [summary?.omitidos])
 
   return (
     <>
@@ -553,6 +576,15 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
                     <p className="font-medium text-emerald-800 dark:text-emerald-200">
                       Prospectos omitidos ({summary.omitidos.length.toLocaleString("es-MX")})
                     </p>
+                    {skippedSummary.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {skippedSummary.map((entry) => (
+                          <div key={entry.motivo} className="rounded-full border bg-muted/40 px-2.5 py-1 text-[11px]">
+                            <span className="font-medium">{entry.label}:</span> {entry.total.toLocaleString("es-MX")}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {summary.omitidos.map((item, index) => {
                       const label = buildSkippedProspectLabel(item)
                       const contact = [normalizeCell(item.email), normalizeCell(item.phone)].filter(Boolean).join(" · ")
