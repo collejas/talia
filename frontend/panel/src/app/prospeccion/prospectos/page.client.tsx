@@ -5082,10 +5082,10 @@ function ProspectosView() {
                     type: "success",
                     message: `Importación lista: ${summary.created.toLocaleString("es-MX")} prospectos creados y ${summary.skipped.toLocaleString("es-MX")} omitidos.`,
                   })
-                  void fetchProspectos(offset)
+                  void refreshProspectosAndMetadata(offset)
                 }}
               />
-              <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
+              <Button variant="ghost" size="sm" onClick={() => void refreshProspectosAndMetadata(offset)} disabled={loading}>
                 <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
                 Actualizar
               </Button>
