@@ -60,23 +60,16 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
-function parseSidList(raw: string): string[] {
-  if (!raw.trim()) return []
-  const tokens = raw
-    .split(/\r?\n|,|;/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-  const unique: string[] = []
-  const seen = new Set<string>()
-  for (const token of tokens) {
-    if (!/^HX[0-9a-zA-Z]+$/.test(token)) {
-      throw new Error(`SID inválido: ${token}. Debe iniciar con HX.`)
-    }
-    if (seen.has(token)) continue
-    seen.add(token)
-    unique.push(token)
+function removeWhatsProspLegacyTemplates(config: Record<string, unknown>): Record<string, unknown> {
+  const whatsapp = isRecord(config.whatsapp) ? { ...config.whatsapp } : {}
+  const templates = isRecord(whatsapp.templates) ? { ...whatsapp.templates } : {}
+  delete templates.prospeccion
+  if (Object.keys(templates).length) {
+    whatsapp.templates = templates
+  } else {
+    delete whatsapp.templates
   }
-  return unique
+  return { ...config, whatsapp }
 }
 
 function buildMetaTemplateValue(name: string, language: string): Record<string, string> {
@@ -795,9 +788,9 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateAppointmentMetaLanguage = getText(formData, "whatsapp_template_appointment_meta_language")
     const templateCancelMetaName = getText(formData, "whatsapp_template_cancel_meta_name")
     const templateCancelMetaLanguage = getText(formData, "whatsapp_template_cancel_meta_language")
-    const templateProspeccionRaw = getText(formData, "whatsapp_template_prospeccion_sids")
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
+    const manageWhatsProspInDb = formData.get("whatsapp_prospeccion_templates_managed_in_db") === "1"
 
     const whatsappPatch: Record<string, unknown> = {}
     if (provider === "twilio" || provider === "meta") whatsappPatch.provider = provider
@@ -819,8 +812,6 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (templateSales) templatesPatch.sales = templateSales
     if (templateAppointment) templatesPatch.appointment = templateAppointment
     if (templateCancel) templatesPatch.cancel = templateCancel
-    const templateProspeccion = parseSidList(templateProspeccionRaw)
-    if (templateProspeccion.length) templatesPatch.prospeccion = templateProspeccion
     if (Object.keys(templatesPatch).length) {
       whatsappPatch.templates = templatesPatch
     }
@@ -868,7 +859,8 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
 
     const currentConfig = getResp.data.config ?? {}
     const patch: Record<string, unknown> = { whatsapp: whatsappPatch }
-    const merged = mergeDeep({ ...currentConfig }, patch)
+    const baseConfig = manageWhatsProspInDb ? removeWhatsProspLegacyTemplates({ ...currentConfig }) : { ...currentConfig }
+    const merged = mergeDeep(baseConfig, patch)
 
     const putResp = await callCrmApi<{ ok: boolean }>("/tenant/me/config", {
       method: "PUT",

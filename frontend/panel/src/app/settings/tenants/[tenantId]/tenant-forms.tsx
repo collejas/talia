@@ -1137,7 +1137,6 @@ function buildWhatsProspSettingsKey(
   >,
 ): string {
   return JSON.stringify({
-    whatsapp_template_prospeccion_sids: initialValues.whatsapp_template_prospeccion_sids ?? "",
     whatsapp_prospeccion_prompt_id: initialValues.whatsapp_prospeccion_prompt_id ?? "",
     whatsapp_prospeccion_prompt_version: initialValues.whatsapp_prospeccion_prompt_version ?? "",
   })
@@ -2845,19 +2844,45 @@ function TenantWhatsAppProspeccionSettingsForm({
     <div className="space-y-6">
       <form action={formAction} className="space-y-4">
         <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="whatsapp_prospeccion_templates_managed_in_db" value="1" />
         <div className="space-y-2">
-          <Label htmlFor="whatsapp_template_prospeccion_sids">Plantillas Whats-Prosp (SIDs)</Label>
-          <Textarea
-            id="whatsapp_template_prospeccion_sids"
-            name="whatsapp_template_prospeccion_sids"
-            placeholder={"HX...\nHX..."}
-            defaultValue={initialValues.whatsapp_template_prospeccion_sids ?? ""}
-            className="min-h-[180px] font-mono text-xs"
-            spellCheck={false}
-          />
-          <p className="text-xs text-muted-foreground">
-            Un SID por línea. Se guarda en <code>organizaciones.config.whatsapp.templates.prospeccion</code> como arreglo.
-          </p>
+          <Label>Plantillas Whats-Prosp</Label>
+          <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+            Las plantillas de <span className="font-medium text-foreground">Whats-Prosp</span> ya no se capturan aquí.
+            Ahora se administran desde el catálogo de plantillas de prospección en BD y usan
+            <code className="mx-1">template_name</code>,
+            <code className="mx-1">language_code</code>,
+            <code className="mx-1">meta_category</code>
+            y <code className="ml-1">template_status</code>.
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_prospeccion_prompt_id">Prompt ID de prospección</Label>
+            <Input
+              id="whatsapp_prospeccion_prompt_id"
+              name="whatsapp_prospeccion_prompt_id"
+              placeholder="pmpt_..."
+              defaultValue={initialValues.whatsapp_prospeccion_prompt_id ?? ""}
+              spellCheck={false}
+            />
+            <p className="text-xs text-muted-foreground">
+              Prompt global usado por el flujo de prospección WhatsApp.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_prospeccion_prompt_version">Prompt version</Label>
+            <Input
+              id="whatsapp_prospeccion_prompt_version"
+              name="whatsapp_prospeccion_prompt_version"
+              placeholder="versión o tag"
+              defaultValue={initialValues.whatsapp_prospeccion_prompt_version ?? ""}
+              spellCheck={false}
+            />
+            <p className="text-xs text-muted-foreground">
+              Si se deja vacío, el runtime intentará resolver la versión configurada por defecto.
+            </p>
+          </div>
         </div>
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
