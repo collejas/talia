@@ -30805,41 +30805,12 @@ async def listar_prospectos_query_metadata(
             "timezone": effective_timezone,
         }
     )
-    cached_payload = await _read_prospecto_queries_cache(cache_key)
-    if cached_payload is not None:
-        cache_hit = True
-        cache_entries = await _prospecto_queries_cache_size()
-        logger.info(
-            "crm.prospectos.queries.cache_hit",
-            extra={
-                "cache_key": cache_key[:12],
-                "query_signature": query_signature,
-                "cache_entries": cache_entries,
-                "query_filters": len(normalized_query_filters),
-                "fuente": fuente or "",
-                "has_date_from": bool(date_from),
-                "has_date_to": bool(date_to),
-            },
-        )
-        duration_ms = (time.perf_counter() - request_started) * 1000
-        await _record_prospectos_process_metrics(
-            endpoint="prospeccion.prospectos.queries",
-            duration_ms=duration_ms,
-            flags={
-                "cache_hit": True,
-                "has_query_filters": bool(normalized_query_filters),
-                "has_date_filter": bool(date_from or date_to),
-                "failed": False,
-            },
-        )
-        return cached_payload
     inflight_future, is_inflight_leader = await _get_prospecto_queries_inflight_future(cache_key)
     if not is_inflight_leader:
         try:
             payload = await inflight_future
-            cache_hit = True
             logger.info(
-                "crm.prospectos.queries.singleflight_wait_hit",
+                "crm.prospectos.queries.singleflight_join",
                 extra={
                     "cache_key": cache_key[:12],
                     "query_signature": query_signature,
@@ -30860,7 +30831,7 @@ async def listar_prospectos_query_metadata(
             )
     try:
         logger.info(
-            "crm.prospectos.queries.cache_miss",
+            "crm.prospectos.queries.resolve_fresh",
             extra={
                 "cache_key": cache_key[:12],
                 "query_signature": query_signature,
@@ -30888,18 +30859,6 @@ async def listar_prospectos_query_metadata(
             "activities": metadata.get("activities", []),
             "segmentos": metadata.get("segmentos", []),
         }
-        await _write_prospecto_queries_cache(cache_key, payload)
-        logger.info(
-            "crm.prospectos.queries.cache_store",
-            extra={
-                "cache_key": cache_key[:12],
-                "query_signature": query_signature,
-                "query_filters": len(normalized_query_filters),
-                "queries_rows": len(payload.get("queries", [])),
-                "activities_rows": len(payload.get("activities", [])),
-                "segmentos_rows": len(payload.get("segmentos", [])),
-            },
-        )
         if not inflight_future.done():
             inflight_future.set_result(payload)
         return payload
