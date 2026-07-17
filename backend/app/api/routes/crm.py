@@ -10333,7 +10333,7 @@ async def _align_programacion_with_active_campaign_schedule(
             continue
         batch_ids.append(batch_uuid)
 
-    latest_by_canal: dict[str, datetime] = {}
+    scheduled_by_canal: dict[str, list[datetime]] = {}
     if batch_ids:
         offset = 0
         page = 10000
@@ -10360,9 +10360,7 @@ async def _align_programacion_with_active_campaign_schedule(
                     scheduled = scheduled.replace(tzinfo=UTC)
                 else:
                     scheduled = scheduled.astimezone(UTC)
-                current = latest_by_canal.get(canal)
-                if current is None or scheduled > current:
-                    latest_by_canal[canal] = scheduled
+                scheduled_by_canal.setdefault(canal, []).append(scheduled)
             if len(rows) < page:
                 break
             offset += len(rows)
@@ -10371,8 +10369,13 @@ async def _align_programacion_with_active_campaign_schedule(
     for canal in canales:
         requested = _parse_iso_datetime((programacion or {}).get(canal))
         requested_dt = requested.astimezone(UTC) if requested else now_utc
-        latest = latest_by_canal.get(canal)
-        floor_dt = (latest + timedelta(seconds=separacion_val)) if latest else now_utc
+        prior_schedules = [
+            scheduled
+            for scheduled in scheduled_by_canal.get(canal, [])
+            if scheduled <= requested_dt
+        ]
+        latest_prior = max(prior_schedules) if prior_schedules else None
+        floor_dt = (latest_prior + timedelta(seconds=separacion_val)) if latest_prior else now_utc
         start_dt = max(requested_dt, floor_dt)
         resolved[canal] = start_dt.isoformat()
     return resolved

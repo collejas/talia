@@ -1857,6 +1857,93 @@ def test_build_contact_envios_entries_includes_person_fields() -> None:
     assert detalle["segundo_apellido"] == "Garcia"
 
 
+class _FrozenCampaignScheduleDateTime(crm_routes.datetime):
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        base = crm_routes.datetime(2026, 7, 17, 12, 0, 0, tzinfo=crm_routes.UTC)
+        if tz is None:
+            return base.replace(tzinfo=None)
+        return base.astimezone(tz)
+
+
+@pytest.mark.asyncio
+async def test_align_programacion_keeps_requested_slot_before_future_campaign_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(crm_routes, "datetime", _FrozenCampaignScheduleDateTime)
+
+    class Repo:
+        async def list_contact_batches(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
+            return (
+                [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "estado": "pendiente",
+                    }
+                ],
+                1,
+            )
+
+        async def list_contact_envios_for_batches(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return [
+                {
+                    "estado": "pendiente",
+                    "canal": "correo",
+                    "programado_en": "2026-07-20T15:00:00+00:00",
+                }
+            ]
+
+    resolved = await crm_routes._align_programacion_with_active_campaign_schedule(
+        repo=Repo(),
+        user_token="token",
+        campana_id=uuid.uuid4(),
+        canales={"correo"},
+        programacion={"correo": "2026-07-17T12:05:00+00:00"},
+        separacion_segundos=5,
+    )
+
+    assert resolved["correo"] == "2026-07-17T12:05:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_align_programacion_moves_requested_slot_after_prior_active_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(crm_routes, "datetime", _FrozenCampaignScheduleDateTime)
+
+    class Repo:
+        async def list_contact_batches(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
+            return (
+                [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "estado": "pendiente",
+                    }
+                ],
+                1,
+            )
+
+        async def list_contact_envios_for_batches(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return [
+                {
+                    "estado": "pendiente",
+                    "canal": "correo",
+                    "programado_en": "2026-07-17T12:04:00+00:00",
+                }
+            ]
+
+    resolved = await crm_routes._align_programacion_with_active_campaign_schedule(
+        repo=Repo(),
+        user_token="token",
+        campana_id=uuid.uuid4(),
+        canales={"correo"},
+        programacion={"correo": "2026-07-17T12:04:02+00:00"},
+        separacion_segundos=5,
+    )
+
+    assert resolved["correo"] == "2026-07-17T12:04:05+00:00"
+
+
 @pytest.mark.asyncio
 async def test_actualizar_prospecto_no_resetea_verificacion_si_el_telefono_no_cambia(
     client: AsyncClient, fake_repo: DummyCRMRepository
