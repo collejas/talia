@@ -29016,6 +29016,7 @@ async def send_lead_quote(
                 ],
                 mail_settings=mail_settings,
                 provider_preference="smtp",
+                save_copy_to_sent=True,
             )
         except EmailSendError as exc:
             raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc

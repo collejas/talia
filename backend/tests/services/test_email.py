@@ -392,3 +392,135 @@ def test_send_email_smtp_retries_with_ssl_for_port_465(monkeypatch):
         ("mail.imlux.mx", 465, False),
         ("mail.imlux.mx", 465, True),
     ]
+
+
+def test_send_email_smtp_appends_copy_to_sent_folder_when_enabled(monkeypatch):
+    from app.services.tenant_runtime import MailRuntimeSettings
+
+    sent_mailboxes: list[str] = []
+    appended_payloads: list[bytes] = []
+
+    class DummySMTP:
+        def __init__(self, host, port, timeout=None):
+            self.host = host
+            self.port = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def starttls(self, context=None):
+            return None
+
+        def login(self, username, password):
+            return None
+
+        def send_message(self, message):
+            return None
+
+    class DummyIMAP:
+        def __init__(self, host, port):
+            self.host = host
+            self.port = port
+
+        def login(self, username, password):
+            return "OK", [b"logged"]
+
+        def list(self):
+            return "OK", [b'(\\HasNoChildren \\Sent) "/" "Sent Items"']
+
+        def append(self, mailbox, flags, date_time, message_bytes):
+            sent_mailboxes.append(mailbox)
+            appended_payloads.append(message_bytes)
+            return "OK", [b"APPEND completed"]
+
+        def logout(self):
+            return "BYE", [b"logout"]
+
+    monkeypatch.setattr("app.services.email.smtplib.SMTP", DummySMTP)
+    monkeypatch.setattr("app.services.email.imaplib.IMAP4_SSL", DummyIMAP)
+
+    result = _send_email_smtp(
+        message_id="<test@talia.mx>",
+        subject="Cotizacion",
+        body_text="Adjunto va tu cotizacion",
+        body_html=None,
+        recipients=["cliente@example.com"],
+        attachments=(),
+        headers={},
+        mail_settings=MailRuntimeSettings(
+            username="vendedor@talia.mx",
+            password="secret",
+            incoming_server="imap.talia.mx",
+            incoming_port_imap=993,
+            outgoing_server="smtp.talia.mx",
+            outgoing_port_smtp=587,
+            use_ssl=False,
+            use_tls=True,
+            from_name="Vendedor",
+            reply_to=None,
+        ),
+        save_copy_to_sent=True,
+    )
+
+    assert result.provider == "smtp"
+    assert sent_mailboxes == ['"Sent Items"']
+    assert appended_payloads
+    assert b"Subject: Cotizacion" in appended_payloads[0]
+
+
+def test_send_email_smtp_does_not_fail_when_sent_copy_append_fails(monkeypatch):
+    from app.services.tenant_runtime import MailRuntimeSettings
+
+    class DummySMTP:
+        def __init__(self, host, port, timeout=None):
+            self.host = host
+            self.port = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def starttls(self, context=None):
+            return None
+
+        def login(self, username, password):
+            return None
+
+        def send_message(self, message):
+            return None
+
+    monkeypatch.setattr("app.services.email.smtplib.SMTP", DummySMTP)
+    monkeypatch.setattr(
+        "app.services.email._append_message_to_sent_folder",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("imap append failed")),
+    )
+
+    result = _send_email_smtp(
+        message_id="<test@talia.mx>",
+        subject="Cotizacion",
+        body_text="Adjunto va tu cotizacion",
+        body_html=None,
+        recipients=["cliente@example.com"],
+        attachments=(),
+        headers={},
+        mail_settings=MailRuntimeSettings(
+            username="vendedor@talia.mx",
+            password="secret",
+            incoming_server="imap.talia.mx",
+            incoming_port_imap=993,
+            outgoing_server="smtp.talia.mx",
+            outgoing_port_smtp=587,
+            use_ssl=False,
+            use_tls=True,
+            from_name="Vendedor",
+            reply_to=None,
+        ),
+        save_copy_to_sent=True,
+    )
+
+    assert result.provider_message_id == "test@talia.mx"

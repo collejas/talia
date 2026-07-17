@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import base64
+import imaplib
+import re
 import smtplib
 import ssl
+import time
 from dataclasses import dataclass, replace
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
@@ -19,6 +22,17 @@ from app.services.tenant_runtime import BrevoRuntimeSettings, MailRuntimeSetting
 
 logger = get_logger("app.services.email")
 EmailProviderPreference = Literal["auto", "smtp", "brevo"]
+COMMON_SENT_MAILBOXES: tuple[str, ...] = (
+    "Sent",
+    "Sent Items",
+    "Sent Messages",
+    "INBOX.Sent",
+    "INBOX.Sent Items",
+    "INBOX/Sent",
+    "Enviados",
+    "Elementos enviados",
+    "Correo enviado",
+)
 
 
 class EmailSendError(RuntimeError):
@@ -32,6 +46,13 @@ class EmailSendResult:
     provider: str
     local_message_id: str
     provider_message_id: str
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
 
 
 def _normalize_recipients(recipients: Iterable[str]) -> list[str]:
@@ -104,6 +125,7 @@ def send_email(
     brevo_settings: BrevoRuntimeSettings | None = None,
     provider_preference: EmailProviderPreference = "auto",
     flow: str | None = None,
+    save_copy_to_sent: bool = False,
 ) -> str:
     """Envía un correo y devuelve el Message-ID utilizado."""
 
@@ -118,6 +140,7 @@ def send_email(
         brevo_settings=brevo_settings,
         provider_preference=provider_preference,
         flow=flow,
+        save_copy_to_sent=save_copy_to_sent,
     )
     return result.provider_message_id
 
@@ -134,6 +157,7 @@ def send_email_detailed(
     brevo_settings: BrevoRuntimeSettings | None = None,
     provider_preference: EmailProviderPreference = "auto",
     flow: str | None = None,
+    save_copy_to_sent: bool = False,
 ) -> EmailSendResult:
     """Envía un correo y devuelve ids local/proveedor normalizados."""
 
@@ -178,6 +202,7 @@ def send_email_detailed(
             attachments=attachments or (),
             headers=headers or {},
             mail_settings=mail_config,
+            save_copy_to_sent=save_copy_to_sent,
         )
     elif brevo_settings_resolved.api_key:
         selected_provider = "brevo"
@@ -202,6 +227,7 @@ def send_email_detailed(
             attachments=attachments or (),
             headers=headers or {},
             mail_settings=mail_config,
+            save_copy_to_sent=save_copy_to_sent,
         )
 
     logger.info(
@@ -305,6 +331,112 @@ def _build_smtp_email_message(
     return message
 
 
+def _quote_imap_mailbox(mailbox_name: str) -> str:
+    escaped = mailbox_name.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _parse_imap_list_mailbox(raw_line: bytes) -> tuple[set[str], str] | None:
+    try:
+        decoded = raw_line.decode("utf-8", errors="replace").strip()
+    except Exception:
+        return None
+    if not decoded:
+        return None
+    match = re.match(r"^\((?P<flags>[^)]*)\)\s+(?P<delimiter>NIL|\"[^\"]*\")\s+(?P<mailbox>.+)$", decoded)
+    if not match:
+        return None
+    raw_mailbox = match.group("mailbox").strip()
+    if raw_mailbox.startswith('"') and raw_mailbox.endswith('"'):
+        raw_mailbox = raw_mailbox[1:-1]
+    flags = {flag.strip().lower() for flag in match.group("flags").split() if flag.strip()}
+    mailbox = raw_mailbox.strip()
+    if not mailbox:
+        return None
+    return flags, mailbox
+
+
+def _resolve_imap_sent_mailbox(conn: imaplib.IMAP4) -> str | None:
+    status, raw_boxes = conn.list()
+    if status != "OK" or not raw_boxes:
+        return None
+
+    parsed_mailboxes: list[tuple[set[str], str]] = []
+    for raw_box in raw_boxes:
+        if not isinstance(raw_box, bytes):
+            continue
+        parsed = _parse_imap_list_mailbox(raw_box)
+        if parsed is not None:
+            parsed_mailboxes.append(parsed)
+
+    for flags, mailbox in parsed_mailboxes:
+        if "\\sent" in flags:
+            return mailbox
+
+    mailbox_lookup = {mailbox.strip().lower(): mailbox for _, mailbox in parsed_mailboxes if mailbox.strip()}
+    for candidate in COMMON_SENT_MAILBOXES:
+        direct = mailbox_lookup.get(candidate.strip().lower())
+        if direct:
+            return direct
+
+    for _, mailbox in parsed_mailboxes:
+        normalized = mailbox.strip().lower()
+        if normalized.endswith(".sent") or normalized.endswith("/sent"):
+            return mailbox
+        if normalized.endswith(".enviados") or normalized.endswith("/enviados"):
+            return mailbox
+
+    return None
+
+
+def _append_message_to_sent_folder(*, message: EmailMessage, mail_settings: MailRuntimeSettings) -> None:
+    host = _clean_optional_text(mail_settings.incoming_server)
+    username = _clean_optional_text(mail_settings.username)
+    password = mail_settings.password
+    port = int(mail_settings.incoming_port_imap or 993)
+
+    if not host or not username or not password:
+        logger.info(
+            "email.sent_copy_skipped_missing_imap",
+            extra={
+                "host": bool(host),
+                "username": bool(username),
+                "port": port,
+            },
+        )
+        return
+
+    use_ssl = port == 993 or bool(mail_settings.use_ssl)
+    conn: imaplib.IMAP4 | imaplib.IMAP4_SSL
+    if use_ssl:
+        conn = imaplib.IMAP4_SSL(host=host, port=port)
+    else:
+        conn = imaplib.IMAP4(host=host, port=port)
+
+    try:
+        conn.login(username, password)
+        sent_mailbox = _resolve_imap_sent_mailbox(conn)
+        if not sent_mailbox:
+            logger.warning(
+                "email.sent_copy_mailbox_missing",
+                extra={"host": host, "username": username, "port": port},
+            )
+            return
+        append_status, _ = conn.append(
+            _quote_imap_mailbox(sent_mailbox),
+            "(\\Seen)",
+            imaplib.Time2Internaldate(time.time()),
+            message.as_bytes(policy=policy.SMTP),
+        )
+        if append_status != "OK":
+            raise EmailSendError("IMAP APPEND rechazado por el servidor.")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
 def _smtp_delivery_variants(mail_settings: MailRuntimeSettings) -> list[MailRuntimeSettings]:
     variants = [mail_settings]
     port = mail_settings.outgoing_port_smtp
@@ -331,6 +463,7 @@ def _send_email_smtp(
     attachments: Sequence[dict[str, object]],
     headers: dict[str, str],
     mail_settings: MailRuntimeSettings,
+    save_copy_to_sent: bool = False,
 ) -> EmailSendResult:
     smtp_host = (mail_settings.outgoing_server or "").strip()
     username = (mail_settings.username or "").strip()
@@ -365,6 +498,19 @@ def _send_email_smtp(
                         server.starttls(context=context)
                     server.login(username, password)
                     server.send_message(message)
+            if save_copy_to_sent:
+                try:
+                    _append_message_to_sent_folder(message=message, mail_settings=variant)
+                except Exception as exc:  # pragma: no cover - depende del servidor IMAP
+                    logger.warning(
+                        "email.sent_copy_append_failed",
+                        extra={
+                            "smtp_host": smtp_host,
+                            "smtp_port": smtp_port,
+                            "username": username,
+                            "error": str(exc),
+                        },
+                    )
             if variant != mail_settings:
                 logger.warning(
                     "email.smtp_transport_autocorrected",
