@@ -391,8 +391,7 @@ export async function deleteGoogleBusqueda(busquedaId: string) {
   if (!busquedaId) {
     throw new Error("Falta el ID de la búsqueda.");
   }
-  const url = buildClientUrl("/api/prospeccion/google/busquedas");
-  url.searchParams.set("delete_id", busquedaId);
+  const url = buildClientUrl(`/api/prospeccion/google/busquedas/${busquedaId}`);
   return requestJson<{ ok: boolean; deleted?: number }>(url.toString(), {
     method: "DELETE",
   });

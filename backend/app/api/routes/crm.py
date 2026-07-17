@@ -30141,6 +30141,7 @@ async def listar_busquedas_google(
         "limit": str(limit),
         "offset": str(offset),
         "fuente": "eq.google_places",
+        "deleted_at": "is.null",
     }
     if search:
         params["query"] = _ilike_param(search)
@@ -30149,8 +30150,9 @@ async def listar_busquedas_google(
             usuario_token=user_token,
             params=params,
         )
-        # Fallback defensivo: si por cualquier inconsistencia histórica no existen
-        # filas en `busquedas`, reconstruimos una lista mínima desde `resultados`.
+        # Fallback defensivo: si por alguna inconsistencia histórica no existen
+        # filas en `busquedas`, reconstruimos una lista mínima desde `resultados`
+        # sin resucitar búsquedas marcadas como eliminadas.
         if not rows:
             rows, total = await _listar_busquedas_google_desde_resultados(
                 repo=repo,
@@ -30221,6 +30223,29 @@ async def _listar_busquedas_google_desde_resultados(
         if len(source_rows) < page_size:
             break
         scan_offset += page_size
+
+    if unique_rows:
+        ids = [str(row.get("id") or "").strip() for row in unique_rows]
+        ids = [value for value in ids if value]
+        visible_ids = set(ids)
+        if ids:
+            lookup_params: dict[str, str] = {
+                "select": "id,deleted_at",
+                "id": f"in.({','.join(ids)})",
+                "fuente": "eq.google_places",
+                "limit": str(len(ids)),
+            }
+            lookup_rows, _ = await repo.list_prospeccion_busquedas(
+                usuario_token=user_token,
+                params=lookup_params,
+            )
+            deleted_ids = {
+                str(item.get("id") or "").strip()
+                for item in lookup_rows
+                if isinstance(item, dict) and item.get("deleted_at")
+            }
+            visible_ids = {value for value in ids if value and value not in deleted_ids}
+        unique_rows = [row for row in unique_rows if str(row.get("id") or "").strip() in visible_ids]
 
     total = len(unique_rows)
     paged = unique_rows[offset : offset + limit]
