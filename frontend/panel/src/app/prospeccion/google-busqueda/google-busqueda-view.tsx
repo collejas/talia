@@ -199,6 +199,7 @@ export function GoogleBusquedaView() {
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
   );
+  const activeBusquedaStatus = activeBusqueda?.meta?.status ?? activeBusqueda?.status ?? null;
   const resultadosCount = resultados.length;
   const [denseMode, setDenseMode] = useState(false);
   const selectedActividadesList = useMemo(
@@ -404,37 +405,6 @@ export function GoogleBusquedaView() {
   }, [activeBusquedaId, resultadosCount]);
 
   useEffect(() => {
-    if (!activeBusquedaId) {
-      return;
-    }
-    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
-    if (!status || status === "completed" || status === "failed") {
-      return;
-    }
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      if (cancelled) {
-        return;
-      }
-      try {
-        await loadBusquedas();
-      } finally {
-        if (!cancelled) {
-          timer = setTimeout(poll, 2000);
-        }
-      }
-    };
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [activeBusquedaId, activeBusqueda?.meta?.status, loadBusquedas]);
-
-  useEffect(() => {
     if (!busquedas.length) {
       setSelectedBusquedas(new Set());
       return;
@@ -456,11 +426,10 @@ export function GoogleBusquedaView() {
     if (!activeBusquedaId) {
       return;
     }
-    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
-    if (status === "completed") {
+    if (activeBusquedaStatus === "completed") {
       void loadResultadosForBusqueda(activeBusquedaId);
     }
-  }, [activeBusquedaId, activeBusqueda?.meta?.status, activeBusqueda?.status, loadResultadosForBusqueda]);
+  }, [activeBusquedaId, activeBusquedaStatus, loadResultadosForBusqueda]);
 
   useEffect(() => {
     if (!activeBusquedaId) {
@@ -469,8 +438,7 @@ export function GoogleBusquedaView() {
     if (queuedBusquedaId !== activeBusquedaId) {
       return;
     }
-    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
-    if (status === "completed" && resultsLoadedForId === activeBusquedaId) {
+    if (activeBusquedaStatus === "completed" && resultsLoadedForId === activeBusquedaId) {
       setFeedback({
         type: "success",
         message: (() => {
@@ -486,7 +454,7 @@ export function GoogleBusquedaView() {
         })(),
       });
       setQueuedBusquedaId(null);
-    } else if (status === "failed") {
+    } else if (activeBusquedaStatus === "failed") {
       const rawError = activeBusqueda?.meta?.error;
       const detail =
         typeof rawError === "string" && rawError.trim()
@@ -500,8 +468,7 @@ export function GoogleBusquedaView() {
     }
   }, [
     activeBusquedaId,
-    activeBusqueda?.meta?.status,
-    activeBusqueda?.status,
+    activeBusquedaStatus,
     activeBusqueda?.meta?.error,
     activeBusqueda?.total_encontrados,
     resultadosCount,
@@ -604,11 +571,10 @@ export function GoogleBusquedaView() {
   ]);
 
   useEffect(() => {
-    if (!queuedBusquedaId || activeBusquedaId !== queuedBusquedaId) {
+    if (!activeBusquedaId) {
       return;
     }
-    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
-    if (status === "completed" || status === "failed") {
+    if (!activeBusquedaStatus || activeBusquedaStatus === "completed" || activeBusquedaStatus === "failed") {
       return;
     }
     let cancelled = false;
@@ -618,10 +584,10 @@ export function GoogleBusquedaView() {
       try {
         const items = await loadBusquedas();
         if (cancelled) return;
-        const latest = items.find((item) => item.id === queuedBusquedaId) ?? null;
-        const latestStatus = latest?.meta?.status ?? latest?.status;
-        if (latestStatus === "completed" || latestStatus === "failed") {
-          if (activeBusquedaId === queuedBusquedaId) {
+        const latest = items.find((item) => item.id === activeBusquedaId) ?? null;
+        const latestStatus = latest?.meta?.status ?? latest?.status ?? null;
+        if ((latestStatus === "completed" || latestStatus === "failed") && latest?.id === activeBusquedaId) {
+          if (latestStatus === "completed") {
             setResultReloadToken((current) => current + 1);
           }
           return;
@@ -639,7 +605,7 @@ export function GoogleBusquedaView() {
         clearTimeout(timer);
       }
     };
-  }, [activeBusqueda?.meta?.status, activeBusqueda?.status, activeBusquedaId, loadBusquedas, queuedBusquedaId]);
+  }, [activeBusquedaId, activeBusquedaStatus, loadBusquedas]);
 
   useEffect(() => {
     if (!activeBusquedaId || !mapViewport) {
