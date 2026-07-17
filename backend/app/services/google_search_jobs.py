@@ -91,7 +91,7 @@ class GoogleSearchJobManager:
                 language_code=job.payload.get("language_code"),
                 region_code=job.payload.get("region_code"),
                 max_results=max_results,
-                enrich_details=True,
+                enrich_details=False,
             )
         except GooglePlacesError as exc:
             await self._mark_failed(repo, job.busqueda_id, str(exc))
