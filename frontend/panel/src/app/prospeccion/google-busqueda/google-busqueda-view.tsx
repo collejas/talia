@@ -142,6 +142,7 @@ export function GoogleBusquedaView() {
   const canRunBusquedas = (context.es_admin || context.es_owner) || context.permisos.includes("busquedas.run");
   const canDeleteBusquedas = (context.es_admin || context.es_owner) || context.permisos.includes("busquedas.delete");
   const canSaveProspectos = (context.es_admin || context.es_owner) || context.permisos.includes("prospectos.create");
+  const [isHydrated, setIsHydrated] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>({
     strategy: "nearby",
     query: "",
@@ -193,6 +194,7 @@ export function GoogleBusquedaView() {
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
   const [resultsLoadedForId, setResultsLoadedForId] = useState<string | null>(null);
+  const [resultReloadToken, setResultReloadToken] = useState(0);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -206,6 +208,10 @@ export function GoogleBusquedaView() {
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  useEffect(() => {
+    setIsHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -261,6 +267,7 @@ export function GoogleBusquedaView() {
     setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
     setSelectedIds(new Set());
     setActiveBusquedaId(busquedaId);
+    setResultReloadToken((current) => current + 1);
     const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
     if (selectedBusqueda) {
       setFormValues((prev) => ({
@@ -400,7 +407,7 @@ export function GoogleBusquedaView() {
     if (!activeBusquedaId) {
       return;
     }
-    const status = activeBusqueda?.meta?.status;
+    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
     if (!status || status === "completed" || status === "failed") {
       return;
     }
@@ -449,10 +456,11 @@ export function GoogleBusquedaView() {
     if (!activeBusquedaId) {
       return;
     }
-    if (activeBusqueda?.meta?.status === "completed") {
+    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
+    if (status === "completed") {
       void loadResultadosForBusqueda(activeBusquedaId);
     }
-  }, [activeBusquedaId, activeBusqueda?.meta?.status, loadResultadosForBusqueda]);
+  }, [activeBusquedaId, activeBusqueda?.meta?.status, activeBusqueda?.status, loadResultadosForBusqueda]);
 
   useEffect(() => {
     if (!activeBusquedaId) {
@@ -461,7 +469,7 @@ export function GoogleBusquedaView() {
     if (queuedBusquedaId !== activeBusquedaId) {
       return;
     }
-    const status = activeBusqueda?.meta?.status;
+    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
     if (status === "completed" && resultsLoadedForId === activeBusquedaId) {
       setFeedback({
         type: "success",
@@ -493,6 +501,7 @@ export function GoogleBusquedaView() {
   }, [
     activeBusquedaId,
     activeBusqueda?.meta?.status,
+    activeBusqueda?.status,
     activeBusqueda?.meta?.error,
     activeBusqueda?.total_encontrados,
     resultadosCount,
@@ -590,8 +599,47 @@ export function GoogleBusquedaView() {
     fetchResultadosPage,
     resultadosPagination.limit,
     resultadosPagination.offset,
+    resultReloadToken,
     setFeedback,
   ]);
+
+  useEffect(() => {
+    if (!queuedBusquedaId || activeBusquedaId !== queuedBusquedaId) {
+      return;
+    }
+    const status = activeBusqueda?.meta?.status ?? activeBusqueda?.status;
+    if (status === "completed" || status === "failed") {
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const items = await loadBusquedas();
+        if (cancelled) return;
+        const latest = items.find((item) => item.id === queuedBusquedaId) ?? null;
+        const latestStatus = latest?.meta?.status ?? latest?.status;
+        if (latestStatus === "completed" || latestStatus === "failed") {
+          if (activeBusquedaId === queuedBusquedaId) {
+            setResultReloadToken((current) => current + 1);
+          }
+          return;
+        }
+      } finally {
+        if (!cancelled) {
+          timer = setTimeout(poll, 2000);
+        }
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [activeBusqueda?.meta?.status, activeBusqueda?.status, activeBusquedaId, loadBusquedas, queuedBusquedaId]);
 
   useEffect(() => {
     if (!activeBusquedaId || !mapViewport) {
@@ -1258,6 +1306,10 @@ export function GoogleBusquedaView() {
       setIsSavingProspectos(false);
     }
   }, [activeBusqueda?.id, activeBusqueda?.query, activeBusquedaId, collectFilteredResultadoIds, totalFiltered]);
+
+  if (!isHydrated) {
+    return <div className="space-y-6" />;
+  }
 
   return (
     <div className="space-y-6">

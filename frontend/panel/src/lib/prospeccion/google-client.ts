@@ -43,6 +43,7 @@ export type GoogleBusquedaItem = {
   radio_m: number;
   lat: number;
   lng: number;
+  status?: string | null;
   meta: Record<string, unknown> | null;
   total_encontrados: number | null;
   creado_en: string;
