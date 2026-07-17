@@ -30474,6 +30474,7 @@ async def listar_resultados_google(
             usuario_token=user_token,
             path="/rest/v1/v_google_places_contactables",
             params=params,
+            count_exact=True,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

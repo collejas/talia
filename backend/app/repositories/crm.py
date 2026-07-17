@@ -16196,13 +16196,14 @@ class CRMRepository:
         usuario_token: str,
         path: str,
         params: dict[str, str],
+        count_exact: bool = False,
     ) -> tuple[list[dict[str, Any]], int | None]:
         resp = await self._request_with_user(
             "GET",
             path,
             token=usuario_token,
             params=params,
-            prefer="count=planned",
+            prefer="count=exact" if count_exact else "count=planned",
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -16449,56 +16450,7 @@ class CRMRepository:
         if fuente == "google_places":
             path = "/rest/v1/v_google_places_contactables"
             chunk_size = 200
-            base_select = [
-                "resultado_id",
-                "busqueda_id",
-                "fuente_resultado",
-                "fuente_busqueda",
-                "external_id",
-                "display_name",
-                "name",
-                "razon_social",
-                "nombre_comercial",
-                "actividad",
-                "estrato",
-                "phone",
-                "phone_e164",
-                "correo_principal",
-                "correo_secundario",
-                "telefono_principal_e164",
-                "telefono_principal_tipo_linea",
-                "telefono_principal_extension",
-                "telefono_movil_1_e164",
-                "telefono_movil_1_tipo_linea",
-                "email",
-                "website",
-                "address",
-                "address_full",
-                "tipo_vialidad",
-                "nombre_vialidad",
-                "numero_exterior",
-                "numero_interior",
-                "colonia",
-                "codigo_postal",
-                "estado_cve",
-                "estado_nombre",
-                "municipio_cve",
-                "municipio_nombre",
-                "localidad_cve",
-                "localidad",
-                "asentamiento",
-                "entre_calles",
-                "referencia",
-                "lat",
-                "lng",
-                "distancia_m",
-                "busqueda_meta",
-                "google_primary_type",
-                "google_primary_type_display_name",
-                "google_types",
-                "rating",
-                "reviews",
-            ]
+            base_select = ["*"]
             query_builder = self._request_with_user
         elif fuente == "denue":
             path = "/rest/v1/resultados"

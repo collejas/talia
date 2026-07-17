@@ -195,6 +195,7 @@ export function GoogleBusquedaView() {
   const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
   const [resultsLoadedForId, setResultsLoadedForId] = useState<string | null>(null);
   const [resultReloadToken, setResultReloadToken] = useState(0);
+  const resultadosRequestSeq = useRef(0);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -268,6 +269,9 @@ export function GoogleBusquedaView() {
     setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
     setSelectedIds(new Set());
     setActiveBusquedaId(busquedaId);
+    setResultados([]);
+    setResultadosTotal(0);
+    setResultsLoadedForId(null);
     setResultReloadToken((current) => current + 1);
     const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
     if (selectedBusqueda) {
@@ -426,15 +430,6 @@ export function GoogleBusquedaView() {
     if (!activeBusquedaId) {
       return;
     }
-    if (activeBusquedaStatus === "completed") {
-      void loadResultadosForBusqueda(activeBusquedaId);
-    }
-  }, [activeBusquedaId, activeBusquedaStatus, loadResultadosForBusqueda]);
-
-  useEffect(() => {
-    if (!activeBusquedaId) {
-      return;
-    }
     if (queuedBusquedaId !== activeBusquedaId) {
       return;
     }
@@ -524,6 +519,8 @@ export function GoogleBusquedaView() {
         actividades?: string[];
       };
     }) => {
+      const requestSeq = resultadosRequestSeq.current + 1;
+      resultadosRequestSeq.current = requestSeq;
       setIsLoadingResultados(true);
       try {
         const response = await listGoogleResultados({
@@ -536,12 +533,31 @@ export function GoogleBusquedaView() {
           minRating: payload.filters.minRating,
           actividades: payload.filters.actividades,
         });
+        if (resultadosRequestSeq.current !== requestSeq) {
+          console.debug("[google-busqueda] stale resultados response ignored", {
+            requestSeq,
+            currentSeq: resultadosRequestSeq.current,
+            busquedaId: payload.busquedaId,
+          });
+          return;
+        }
         const rows = response.items ?? [];
+        console.debug("[google-busqueda] resultados response", {
+          requestSeq,
+          busquedaId: payload.busquedaId,
+          total: response.total,
+          rows: rows.length,
+          offset: payload.offset,
+          limit: payload.limit,
+          filters: payload.filters,
+        });
         setResultados(rows);
         setResultadosTotal(typeof response.total === "number" ? response.total : rows.length);
         setResultsLoadedForId(payload.busquedaId);
       } finally {
-        setIsLoadingResultados(false);
+        if (resultadosRequestSeq.current === requestSeq) {
+          setIsLoadingResultados(false);
+        }
       }
     },
     [],
@@ -549,6 +565,13 @@ export function GoogleBusquedaView() {
 
   useEffect(() => {
     if (!activeBusquedaId) return;
+    console.debug("[google-busqueda] fetchResultadosPage start", {
+      busquedaId: activeBusquedaId,
+      limit: resultadosPagination.limit,
+      offset: resultadosPagination.offset,
+      filters: currentResultFilters,
+      resultReloadToken,
+    });
     void fetchResultadosPage({
       busquedaId: activeBusquedaId,
       limit: resultadosPagination.limit,
