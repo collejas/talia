@@ -192,6 +192,10 @@ export function GoogleBusquedaView() {
   });
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
+  const [saveProspectosModalOpen, setSaveProspectosModalOpen] = useState(false);
+  const [saveProspectosMode, setSaveProspectosMode] = useState<"selected" | "filtered">("selected");
+  const [saveProspectosSegmento, setSaveProspectosSegmento] = useState("");
+  const [saveProspectosSegmentoError, setSaveProspectosSegmentoError] = useState<string | null>(null);
   const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
   const [resultsLoadedForId, setResultsLoadedForId] = useState<string | null>(null);
   const [resultReloadToken, setResultReloadToken] = useState(0);
@@ -1174,7 +1178,7 @@ export function GoogleBusquedaView() {
     [selectedIds.size],
   );
 
-  const handleGuardarSeleccion = useCallback(async () => {
+  const handleOpenGuardarSeleccion = useCallback(() => {
     if (!selectedIds.size) {
       setFeedback({
         type: "info",
@@ -1182,38 +1186,23 @@ export function GoogleBusquedaView() {
       });
       return;
     }
-    setIsSavingProspectos(true);
-    try {
-      let totalGuardados = 0;
-      const selectedIdsList = Array.from(selectedIds);
-      for (let start = 0; start < selectedIdsList.length; start += SAVE_PROSPECTOS_UPSERT_BATCH) {
-        const chunk = selectedIdsList.slice(start, start + SAVE_PROSPECTOS_UPSERT_BATCH);
-        const response = await guardarProspectos({
-          fuente: "google_places",
-          resultado_ids: chunk,
-          metadata: {
-            busqueda_id: activeBusqueda?.id,
-            busqueda_query: activeBusqueda?.query,
-          },
-        });
-        totalGuardados += Number(response.total ?? 0);
-      }
+    setSaveProspectosMode("selected");
+    setSaveProspectosSegmentoError(null);
+    setSaveProspectosModalOpen(true);
+  }, [selectedIds.size]);
+
+  const handleOpenGuardarFiltrados = useCallback(() => {
+    if (!activeBusquedaId || totalFiltered <= 0) {
       setFeedback({
-        type: "success",
-        message: `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos. Continúa con la verificación desde la vista Prospección.`,
+        type: "info",
+        message: "No hay resultados filtrados para guardar como prospectos.",
       });
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "No fue posible guardar los resultados como prospectos.",
-      });
-    } finally {
-      setIsSavingProspectos(false);
+      return;
     }
-  }, [activeBusqueda?.id, activeBusqueda?.query, selectedIds]);
+    setSaveProspectosMode("filtered");
+    setSaveProspectosSegmentoError(null);
+    setSaveProspectosModalOpen(true);
+  }, [activeBusquedaId, totalFiltered]);
 
   const collectFilteredResultadoIds = useCallback(async () => {
     if (!activeBusquedaId) return [] as string[];
@@ -1248,21 +1237,26 @@ export function GoogleBusquedaView() {
     return ids;
   }, [activeBusquedaId, currentResultFilters]);
 
-  const handleGuardarFiltrados = useCallback(async () => {
-    if (!activeBusquedaId || totalFiltered <= 0) {
-      setFeedback({
-        type: "info",
-        message: "No hay resultados filtrados para guardar como prospectos.",
-      });
+  const handleGuardarSeleccion = useCallback(async () => {
+    const segmento = saveProspectosSegmento.trim();
+    if (!segmento) {
+      setSaveProspectosSegmentoError("El segmento es obligatorio.");
       return;
     }
     setIsSavingProspectos(true);
+    setSaveProspectosSegmentoError(null);
     try {
-      const targetIds = await collectFilteredResultadoIds();
+      const targetIds =
+        saveProspectosMode === "filtered"
+          ? await collectFilteredResultadoIds()
+          : Array.from(selectedIds);
       if (!targetIds.length) {
         setFeedback({
           type: "info",
-          message: "No hay resultados filtrados para guardar como prospectos.",
+          message:
+            saveProspectosMode === "filtered"
+              ? "No hay resultados filtrados para guardar como prospectos."
+              : "Selecciona al menos un resultado para guardarlo como prospecto.",
         });
         return;
       }
@@ -1272,6 +1266,7 @@ export function GoogleBusquedaView() {
         const response = await guardarProspectos({
           fuente: "google_places",
           resultado_ids: chunk,
+          segmento,
           metadata: {
             busqueda_id: activeBusqueda?.id,
             busqueda_query: activeBusqueda?.query,
@@ -1279,9 +1274,14 @@ export function GoogleBusquedaView() {
         });
         totalGuardados += Number(response.total ?? 0);
       }
+      setSaveProspectosModalOpen(false);
+      setSaveProspectosSegmento("");
       setFeedback({
         type: "success",
-        message: `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde todos los resultados filtrados (${numberFormatter.format(targetIds.length)} IDs procesados).`,
+        message:
+          saveProspectosMode === "filtered"
+            ? `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde todos los resultados filtrados (${numberFormatter.format(targetIds.length)} IDs procesados).`
+            : `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos. Continúa con la verificación desde la vista Prospección.`,
       });
     } catch (error) {
       setFeedback({
@@ -1289,12 +1289,12 @@ export function GoogleBusquedaView() {
         message:
           error instanceof Error
             ? error.message
-            : "No fue posible guardar los resultados filtrados como prospectos.",
+            : "No fue posible guardar los resultados como prospectos.",
       });
     } finally {
       setIsSavingProspectos(false);
     }
-  }, [activeBusqueda?.id, activeBusqueda?.query, activeBusquedaId, collectFilteredResultadoIds, totalFiltered]);
+  }, [activeBusqueda?.id, activeBusqueda?.query, collectFilteredResultadoIds, saveProspectosMode, saveProspectosSegmento, selectedIds]);
 
   if (!isHydrated) {
     return <div className="space-y-6" />;
@@ -1750,7 +1750,7 @@ export function GoogleBusquedaView() {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={handleGuardarSeleccion}
+                  onClick={handleOpenGuardarSeleccion}
                   disabled={!selectedIds.size || isSavingProspectos}
                   className="flex items-center gap-2"
                 >
@@ -1767,7 +1767,7 @@ export function GoogleBusquedaView() {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={handleGuardarFiltrados}
+                  onClick={handleOpenGuardarFiltrados}
                   disabled={totalFiltered <= 0 || isSavingProspectos}
                   className="flex items-center gap-2"
                 >
@@ -2109,6 +2109,57 @@ export function GoogleBusquedaView() {
           )}
         </CardContent>
       </Card>
+      <Dialog
+        open={saveProspectosModalOpen}
+        onOpenChange={(open) => {
+          setSaveProspectosModalOpen(open);
+          if (!open) {
+            setSaveProspectosSegmentoError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guardar como prospectos</DialogTitle>
+            <DialogDescription>
+              {saveProspectosMode === "filtered"
+                ? "Define el segmento que se asignará a todos los resultados filtrados de esta búsqueda."
+                : "Define el segmento que se asignará a todos los resultados seleccionados."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="google-save-segmento">Segmento</Label>
+            <Input
+              id="google-save-segmento"
+              value={saveProspectosSegmento}
+              onChange={(event) => {
+                setSaveProspectosSegmento(event.target.value);
+                if (saveProspectosSegmentoError) {
+                  setSaveProspectosSegmentoError(null);
+                }
+              }}
+              placeholder="Ej. Restaurantes"
+              maxLength={120}
+            />
+            {saveProspectosSegmentoError ? (
+              <p className="text-xs text-destructive">{saveProspectosSegmentoError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSaveProspectosModalOpen(false)}
+              disabled={isSavingProspectos}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleGuardarSeleccion} disabled={isSavingProspectos}>
+              {isSavingProspectos ? "Guardando..." : "Guardar prospectos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={feedbackDialog.open}
         onOpenChange={(open) => {
