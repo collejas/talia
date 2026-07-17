@@ -89,6 +89,7 @@ from app.services import (
     leads_geo,
     lookup_phone_number_free,
     normalize_denue_place,
+    send_email,
     send_email_detailed,
     storage,
     tenant_runtime,
