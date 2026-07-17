@@ -1,7 +1,7 @@
 """Servicios compartidos disponibles para otros módulos."""
 
 from .denue import DenueClient, DenueError, normalize_denue_place
-from .email import EmailSendError, send_email
+from .email import EmailSendError, EmailSendResult, send_email, send_email_detailed
 from .google_places import (
     GooglePlacesClient,
     GooglePlacesError,
@@ -12,6 +12,7 @@ from .twilio_lookup import TwilioLookupError, lookup_phone_number, lookup_phone_
 
 __all__ = [
     "EmailSendError",
+    "EmailSendResult",
     "GooglePlacesClient",
     "GooglePlacesError",
     "DenueClient",
@@ -20,6 +21,7 @@ __all__ = [
     "normalize_denue_place",
     "normalize_place_for_result",
     "send_email",
+    "send_email_detailed",
     "lookup_phone_number",
     "lookup_phone_number_free",
     "TwilioLookupError",

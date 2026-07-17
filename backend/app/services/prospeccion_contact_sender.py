@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.high_demand_mode import high_demand_controller
-from app.services import EmailSendError, send_email, storage, tenant_runtime
+from app.services import EmailSendError, send_email_detailed, storage, tenant_runtime
 from app.services.metrics import metrics
 from app.services.phone_utils import normalize_phone
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
@@ -53,6 +53,7 @@ class ContactEnvioResult:
     detalle: dict[str, Any]
     error: str | None = None
     mensaje_id: str | None = None
+    mensaje_id_interno: str | None = None
     retryable: bool = False
 
 
@@ -1026,8 +1027,8 @@ async def _run_envio_correo(
         reply_to = _clean_text(getattr(mail_settings, "reply_to", None)) if mail_settings else None
         if reply_to:
             headers = {"Reply-To": reply_to}
-        message_id = await asyncio.to_thread(
-            send_email,
+        email_result = await asyncio.to_thread(
+            send_email_detailed,
             subject=subject,
             body_text=body,
             body_html=body_html,
@@ -1051,8 +1052,12 @@ async def _run_envio_correo(
             "email": email_value,
             "tracking_url": tracking_url,
             "booking_url": booking_url,
+            "email_provider": email_result.provider,
+            "provider_message_id": email_result.provider_message_id,
+            "local_message_id": email_result.local_message_id,
         },
-        mensaje_id=message_id,
+        mensaje_id=email_result.provider_message_id,
+        mensaje_id_interno=email_result.local_message_id,
     )
 
 
@@ -1577,6 +1582,8 @@ class ProspeccionContactSender:
         }
         if result.mensaje_id:
             payload["mensaje_id"] = result.mensaje_id
+        if result.mensaje_id_interno:
+            payload["mensaje_id_interno"] = result.mensaje_id_interno
 
         should_retry = result.estado == "error" and result.retryable and intento < max_reintentos
         if should_retry:

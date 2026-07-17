@@ -276,6 +276,14 @@ def _should_apply_brevo_state(*, current_state: str | None, incoming_state: str)
     return True
 
 
+def _normalize_message_id(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    normalized = cleaned.strip("<> ").strip()
+    return normalized or None
+
+
 async def _ensure_email_inbox_context(
     *,
     repo: CRMRepository,
@@ -289,6 +297,11 @@ async def _ensure_email_inbox_context(
         org_uuid = None
     if org_uuid is None:
         return None
+    envio_id_raw = envio.get("id")
+    try:
+        envio_uuid = UUID(str(envio_id_raw)) if envio_id_raw else None
+    except (TypeError, ValueError):
+        envio_uuid = None
 
     sender_email = _clean_text(inbound.get("sender_email"))
     if not sender_email:
@@ -322,33 +335,87 @@ async def _ensure_email_inbox_context(
     if not persona:
         persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=org_uuid)
     if not persona:
-        persona_payload: dict[str, Any] = {
-            "nombre_completo": sender_name
-            or _clean_text((prospecto or {}).get("display_name"))
-            or sender_email.split("@")[0],
-            "correo_principal": sender_email,
-            "company_name": _clean_text((prospecto or {}).get("segmento")),
-            "persona_datos": {
-                "source": "prospeccion_email_inbound",
-                "prospeccion_canal": "correo",
-                **({"prospecto_id": str(prospecto_uuid)} if prospecto_uuid else {}),
-            },
-        }
-        persona_payload = {key: value for key, value in persona_payload.items() if value not in (None, "")}
-        persona = await repo.create_persona(organizacion_id=org_uuid, payload=persona_payload)
-    persona_id = persona.get("id")
-    try:
-        contact_uuid = UUID(str(persona_id))
-    except (TypeError, ValueError):
-        return None
+        conversation = None
+        if envio_uuid is not None:
+            conversation = await repo.get_email_conversation_by_envio_id(
+                organizacion_id=org_uuid,
+                envio_id=envio_uuid,
+                canal="correo",
+            )
+        if not conversation:
+            conversation = await repo.get_latest_unlinked_email_conversation(
+                organizacion_id=org_uuid,
+                correo_remitente=sender_email,
+                canal="correo",
+            )
+            conversation_envio_id = None
+            if isinstance(conversation, dict):
+                inbox_context = (
+                    conversation.get("inbox_context")
+                    if isinstance(conversation.get("inbox_context"), dict)
+                    else {}
+                )
+                conversation_envio_id = _clean_text(inbox_context.get("envio_id"))
+            if envio_uuid is not None and conversation_envio_id not in {None, str(envio_uuid)}:
+                conversation = None
+        if not conversation:
+            context_payload: dict[str, Any] = {
+                "source": "prospeccion",
+                "sender_email": sender_email,
+                "sender_name": sender_name
+                or _clean_text((prospecto or {}).get("display_name"))
+                or sender_email.split("@")[0],
+                "unlinked_email_inbox": True,
+                "envio_id": str(envio.get("id")) if envio.get("id") else None,
+                "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+                "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
+            }
+            context_payload = {
+                key: value for key, value in context_payload.items() if value not in (None, "")
+            }
+            conversation = await repo.create_conversation(
+                organizacion_id=org_uuid,
+                correo_remitente=sender_email,
+                nombre_remitente=str(context_payload.get("sender_name") or sender_email.split("@")[0]),
+                canal="correo",
+                estado="abierta",
+                inbox_context=context_payload,
+            )
+    else:
+        persona_id = persona.get("id")
+        try:
+            contact_uuid = UUID(str(persona_id))
+        except (TypeError, ValueError):
+            return None
 
-    conversation = await repo.get_latest_conversation_for_contact(contacto_id=contact_uuid, canal="manual")
-    if not conversation:
-        conversation = await repo.create_conversation(
-            contacto_id=contact_uuid,
-            canal="manual",
-            estado="abierta",
-        )
+        conversation = None
+        if envio_uuid is not None:
+            conversation = await repo.get_email_conversation_by_envio_id(
+                organizacion_id=org_uuid,
+                envio_id=envio_uuid,
+                canal="manual",
+            )
+        if not conversation:
+            context_payload: dict[str, Any] = {
+                "source": "prospeccion",
+                "sender_email": sender_email,
+                "sender_name": sender_name
+                or _clean_text((prospecto or {}).get("display_name"))
+                or sender_email.split("@")[0],
+                "envio_id": str(envio_uuid) if envio_uuid else None,
+                "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+                "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
+            }
+            context_payload = {
+                key: value for key, value in context_payload.items() if value not in (None, "")
+            }
+            conversation = await repo.create_conversation(
+                contacto_id=contact_uuid,
+                organizacion_id=org_uuid,
+                canal="manual",
+                estado="abierta",
+                inbox_context=context_payload,
+            )
     conversation_id = conversation.get("id")
     try:
         conversation_uuid = UUID(str(conversation_id))
@@ -371,7 +438,7 @@ async def _record_inbound_email_message(
     payload_metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     body_text = _clean_text(inbound.get("body_text")) or "(correo entrante sin texto)"
     message_ids = inbound.get("message_ids") if isinstance(inbound.get("message_ids"), list) else []
-    provider_message_id = _clean_text(message_ids[0]) if message_ids else None
+    provider_message_id = _normalize_message_id(message_ids[0]) if message_ids else None
     in_reply_to = inbound.get("in_reply_to") if isinstance(inbound.get("in_reply_to"), list) else []
     references = inbound.get("references") if isinstance(inbound.get("references"), list) else []
 
@@ -389,8 +456,8 @@ async def _record_inbound_email_message(
         "campana_id": _clean_text(payload_metadata.get("campana_id")),
         "template_id": _clean_text(payload_metadata.get("template_id")),
         "message_id": provider_message_id,
-        "in_reply_to": in_reply_to[0] if in_reply_to else None,
-        "references": references,
+        "in_reply_to": _normalize_message_id(in_reply_to[0]) if in_reply_to else None,
+        "references": [item for item in (_normalize_message_id(ref) for ref in references) if item],
     }
     message_data = {key: value for key, value in message_data.items() if value not in (None, "", [])}
     await repo.insert_inbox_message(
@@ -401,6 +468,7 @@ async def _record_inbound_email_message(
         estado="entregada",
         provider_message_id=provider_message_id,
         organizacion_id=org_uuid,
+        occurred_at=_clean_text(inbound.get("received_at")),
     )
 
 
@@ -408,6 +476,7 @@ async def process_brevo_inbound_emails(
     *,
     repo: CRMRepository,
     events: Sequence[dict[str, Any]],
+    organizacion_id: UUID | None = None,
 ) -> int:
     """Procesa payloads inbound de correo y marca envíos como respondidos."""
 
@@ -421,17 +490,30 @@ async def process_brevo_inbound_emails(
                 continue
 
             candidate_ids: list[str] = []
-            candidate_ids.extend(inbound.get("in_reply_to") or [])
-            candidate_ids.extend(inbound.get("references") or [])
+            candidate_ids.extend(
+                [item for item in (_normalize_message_id(value) for value in (inbound.get("in_reply_to") or [])) if item]
+            )
+            candidate_ids.extend(
+                [item for item in (_normalize_message_id(value) for value in (inbound.get("references") or [])) if item]
+            )
             envio: dict[str, Any] | None = None
             for message_id in candidate_ids:
-                envio = await repo.worker_get_envio_by_mensaje(mensaje_id=message_id)
+                envio = await repo.worker_get_envio_by_mensaje(
+                    mensaje_id=message_id,
+                    organizacion_id=organizacion_id,
+                )
                 if envio:
                     break
-            if not envio:
+            if not envio and organizacion_id is not None:
                 sender_email = _clean_text(inbound.get("sender_email"))
+                received_at = _clean_text(inbound.get("received_at"))
                 if sender_email:
-                    envio = await repo.worker_get_latest_envio_by_email(email=sender_email, canal="correo")
+                    envio = await repo.worker_get_latest_envio_by_email(
+                        email=sender_email,
+                        canal="correo",
+                        organizacion_id=organizacion_id,
+                        before_iso=received_at,
+                    )
             if not envio:
                 continue
 
@@ -449,8 +531,8 @@ async def process_brevo_inbound_emails(
                 "sender_name": _clean_text(inbound.get("sender_name")),
                 "subject": _clean_text(inbound.get("subject")),
                 "received_at": _clean_text(inbound.get("received_at")),
-                "message_id": (inbound.get("message_ids") or [None])[0],
-                "in_reply_to": (inbound.get("in_reply_to") or [None])[0],
+                "message_id": _normalize_message_id((inbound.get("message_ids") or [None])[0]),
+                "in_reply_to": _normalize_message_id((inbound.get("in_reply_to") or [None])[0]),
                 "preview": (_clean_text(inbound.get("body_text")) or "")[:500],
             }
             brevo_reply = {key: value for key, value in brevo_reply.items() if value not in (None, "")}
@@ -493,7 +575,7 @@ async def process_brevo_inbound_emails(
                                 "action": "reply_inbound",
                                 "subject": _clean_text(inbound.get("subject")),
                                 "sender_email": _clean_text(inbound.get("sender_email")),
-                                "message_id": (inbound.get("message_ids") or [None])[0],
+                                "message_id": _normalize_message_id((inbound.get("message_ids") or [None])[0]),
                             },
                             "error": None,
                             "batch_id": str(batch_id_value) if batch_id_value else None,

@@ -51,7 +51,8 @@ async def test_process_once_reads_tenant_assistant_mailboxes(monkeypatch: pytest
             return [{"from": "cliente@externo.com", "subject": "Hola", "text": "mensaje"}]
         return []
 
-    async def fake_process_brevo_inbound_emails(*, repo, events):
+    async def fake_process_brevo_inbound_emails(*, repo, events, organizacion_id):
+        assert organizacion_id == tenant_org_id
         return 0
 
     async def fake_record_unmatched_inbox_email(*, repo, organizacion_id: UUID, event):
@@ -107,7 +108,8 @@ async def test_process_once_skips_already_recorded_message_ids(monkeypatch: pyte
             }
         ]
 
-    async def fake_process_brevo_inbound_emails(*, repo, events):
+    async def fake_process_brevo_inbound_emails(*, repo, events, organizacion_id):
+        assert organizacion_id == inbound_reader.MASTER_ORGANIZACION_ID
         processed_events.extend(events)
         return 0
 
@@ -116,7 +118,7 @@ async def test_process_once_skips_already_recorded_message_ids(monkeypatch: pyte
 
     class DummyRepo:
         async def get_inbox_message_by_provider_message_id(self, *, provider_message_id: str, organizacion_id: UUID):
-            assert provider_message_id == "<already-recorded@example.com>"
+            assert provider_message_id == "already-recorded@example.com"
             assert organizacion_id == inbound_reader.MASTER_ORGANIZACION_ID
             return {"id": "existing"}
 

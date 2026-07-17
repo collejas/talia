@@ -89,7 +89,7 @@ from app.services import (
     leads_geo,
     lookup_phone_number_free,
     normalize_denue_place,
-            send_email,
+    send_email_detailed,
     storage,
     tenant_runtime,
 )
@@ -26889,7 +26889,7 @@ async def reply_inbox_conversation(
                 headers["Reply-To"] = reply_to_value
 
             try:
-                sent_message_id = send_email(
+                send_result = send_email_detailed(
                     subject=mail_subject,
                     body_text=content,
                     recipients=[recipient_email],
@@ -26899,6 +26899,7 @@ async def reply_inbox_conversation(
                 )
             except EmailSendError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
+            sent_message_id = send_result.provider_message_id
 
             message_metadata = {
                 "channel": "correo",
@@ -26907,6 +26908,7 @@ async def reply_inbox_conversation(
                 "subject": mail_subject,
                 "recipient_email": recipient_email,
                 "message_id": sent_message_id,
+                "local_message_id": send_result.local_message_id,
                 "in_reply_to": in_reply_to,
                 "references": references,
             }

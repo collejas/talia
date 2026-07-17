@@ -26,9 +26,16 @@ from app.services.tenant_runtime import (
 logger = get_logger("prospeccion.email_inbound_reader")
 
 DEFAULT_POLL_INTERVAL_SECONDS = 20.0
-DEFAULT_BATCH_SIZE = 25
+DEFAULT_BATCH_SIZE = 250
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalize_message_id(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    return cleaned.strip("<> ").strip() or None
 
 
 def _decode_header_text(value: str | None) -> str | None:
@@ -226,7 +233,7 @@ async def _event_already_recorded(
     organizacion_id: UUID,
     event: dict[str, Any],
 ) -> bool:
-    message_id = _clean_text(str(event.get("Message-Id") or ""))
+    message_id = _normalize_message_id(str(event.get("Message-Id") or ""))
     if not message_id:
         return False
     existing = await repo.get_inbox_message_by_provider_message_id(
@@ -319,6 +326,7 @@ async def _record_unmatched_inbox_email(
         estado="entregada",
         provider_message_id=message_id,
         organizacion_id=org_uuid,
+        occurred_at=received_at,
     )
     return True
 
@@ -427,7 +435,11 @@ class ProspeccionEmailInboundReader:
                         event=event,
                     ):
                         continue
-                    processed = await process_brevo_inbound_emails(repo=repo, events=[event])
+                    processed = await process_brevo_inbound_emails(
+                        repo=repo,
+                        events=[event],
+                        organizacion_id=organizacion_id,
+                    )
                     processed_total += int(processed or 0)
                     if not processed:
                         unmatched_saved = await _record_unmatched_inbox_email(

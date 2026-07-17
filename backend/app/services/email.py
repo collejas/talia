@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import smtplib
 import ssl
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from email import policy
@@ -23,6 +23,15 @@ EmailProviderPreference = Literal["auto", "smtp", "brevo"]
 
 class EmailSendError(RuntimeError):
     """Errores relacionados con el envío de correo."""
+
+
+@dataclass(frozen=True, slots=True)
+class EmailSendResult:
+    """Resultado normalizado de envío de correo."""
+
+    provider: str
+    local_message_id: str
+    provider_message_id: str
 
 
 def _normalize_recipients(recipients: Iterable[str]) -> list[str]:
@@ -97,6 +106,36 @@ def send_email(
     flow: str | None = None,
 ) -> str:
     """Envía un correo y devuelve el Message-ID utilizado."""
+
+    result = send_email_detailed(
+        subject=subject,
+        body_text=body_text,
+        recipients=recipients,
+        body_html=body_html,
+        attachments=attachments,
+        headers=headers,
+        mail_settings=mail_settings,
+        brevo_settings=brevo_settings,
+        provider_preference=provider_preference,
+        flow=flow,
+    )
+    return result.provider_message_id
+
+
+def send_email_detailed(
+    *,
+    subject: str,
+    body_text: str,
+    recipients: Sequence[str],
+    body_html: str | None = None,
+    attachments: Sequence[dict[str, object]] | None = None,
+    headers: dict[str, str] | None = None,
+    mail_settings: MailRuntimeSettings | None = None,
+    brevo_settings: BrevoRuntimeSettings | None = None,
+    provider_preference: EmailProviderPreference = "auto",
+    flow: str | None = None,
+) -> EmailSendResult:
+    """Envía un correo y devuelve ids local/proveedor normalizados."""
 
     to_recipients = _normalize_recipients(recipients)
     if not to_recipients:
@@ -292,7 +331,7 @@ def _send_email_smtp(
     attachments: Sequence[dict[str, object]],
     headers: dict[str, str],
     mail_settings: MailRuntimeSettings,
-) -> str:
+) -> EmailSendResult:
     smtp_host = (mail_settings.outgoing_server or "").strip()
     username = (mail_settings.username or "").strip()
     password = mail_settings.password
@@ -338,7 +377,12 @@ def _send_email_smtp(
                         "effective_use_tls": variant.use_tls,
                     },
                 )
-            return message_id.strip("<>")
+            trimmed_message_id = message_id.strip("<>")
+            return EmailSendResult(
+                provider="smtp",
+                local_message_id=trimmed_message_id,
+                provider_message_id=trimmed_message_id,
+            )
         except Exception as exc:  # pragma: no cover - errores de red reales
             last_exc = exc
 
@@ -357,7 +401,7 @@ def _send_email_brevo(
     headers: dict[str, str],
     mail_settings: MailRuntimeSettings,
     brevo_settings: BrevoRuntimeSettings,
-) -> str:
+) -> EmailSendResult:
     api_key = (brevo_settings.api_key or "").strip()
     base_url = (brevo_settings.base_url or "https://api.brevo.com/v3").strip().rstrip("/")
     sender_email = (brevo_settings.sender_email or mail_settings.username or "").strip()
@@ -449,7 +493,12 @@ def _send_email_brevo(
         message_id_value = message_id_value[0]
     if not message_id_value:
         message_id_value = response.headers.get("message-id") or message_id
-    return str(message_id_value).strip("<>")
+    trimmed_local_id = message_id.strip("<>")
+    trimmed_provider_id = str(message_id_value).strip("<>")
+    return EmailSendResult(
+        provider="brevo",
+        local_message_id=trimmed_local_id,
+        provider_message_id=trimmed_provider_id,
+    )
 
-
-__all__ = ["EmailSendError", "send_email"]
+__all__ = ["EmailSendError", "EmailSendResult", "send_email", "send_email_detailed"]

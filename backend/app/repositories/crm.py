@@ -5852,6 +5852,33 @@ class CRMRepository:
             return None
         return row
 
+    async def get_email_conversation_by_envio_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        envio_id: UUID,
+        canal: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "inbox_context->>envio_id": f"eq.{envio_id}",
+            "order": "iniciada_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
     async def create_conversation(
         self,
         *,
@@ -5907,6 +5934,7 @@ class CRMRepository:
         estado: Literal["enviada", "entregada", "leida", "fallida"] = "entregada",
         provider_message_id: str | None = None,
         organizacion_id: UUID | None = None,
+        occurred_at: str | None = None,
     ) -> dict[str, Any]:
         conversation_key = str(conversation_id)
         convo_resp = await self._request(
@@ -5914,7 +5942,7 @@ class CRMRepository:
             "/rest/v1/conversaciones",
             params={
                 "id": f"eq.{conversation_key}",
-                "select": "id,organizacion_id,no_leidos",
+                "select": "id,organizacion_id,no_leidos,ultimo_mensaje_en,ultimo_entrante_en,ultimo_saliente_en",
                 "limit": "1",
             },
         )
@@ -5923,6 +5951,29 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_not_found")
         convo_row = convo_data[0]
         org_value = organizacion_id or _safe_uuid(convo_row.get("organizacion_id"))
+        trimmed_provider_id = provider_message_id.strip() if isinstance(provider_message_id, str) else ""
+        if trimmed_provider_id:
+            existing_message = await self.get_inbox_message_by_provider_message_id(
+                provider_message_id=trimmed_provider_id,
+                organizacion_id=org_value,
+            )
+            if existing_message is not None:
+                return existing_message
+
+        event_dt: datetime
+        trimmed_occurred_at = occurred_at.strip() if isinstance(occurred_at, str) else ""
+        if trimmed_occurred_at:
+            try:
+                event_dt = datetime.fromisoformat(trimmed_occurred_at.replace("Z", "+00:00"))
+            except ValueError:
+                event_dt = datetime.now(timezone.utc)
+        else:
+            event_dt = datetime.now(timezone.utc)
+        if event_dt.tzinfo is None:
+            event_dt = event_dt.replace(tzinfo=timezone.utc)
+        else:
+            event_dt = event_dt.astimezone(timezone.utc)
+        event_iso = event_dt.isoformat()
 
         message_payload: dict[str, Any] = {
             "conversacion_id": conversation_key,
@@ -5931,9 +5982,10 @@ class CRMRepository:
             "texto": text or "",
             "datos": datos or {},
             "estado": estado,
+            "creado_en": event_iso,
         }
-        if provider_message_id:
-            message_payload["proveedor_mensaje_id"] = provider_message_id
+        if trimmed_provider_id:
+            message_payload["proveedor_mensaje_id"] = trimmed_provider_id
         if org_value:
             message_payload["organizacion_id"] = str(org_value)
         msg_resp = await self._request(
@@ -5948,25 +6000,54 @@ class CRMRepository:
         message_row = msg_data[0]
         message_id = message_row.get("id")
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        patch_payload: dict[str, Any] = {
-            "ultimo_mensaje_en": now_iso,
-            "ultimo_mensaje_id": message_id,
-        }
+        patch_payload: dict[str, Any] = {}
+        current_last_message_raw = str(convo_row.get("ultimo_mensaje_en") or "").strip()
+        current_last_message_dt: datetime | None = None
+        if current_last_message_raw:
+            try:
+                current_last_message_dt = datetime.fromisoformat(
+                    current_last_message_raw.replace("Z", "+00:00")
+                )
+            except ValueError:
+                current_last_message_dt = None
+        if current_last_message_dt is None or event_dt >= current_last_message_dt:
+            patch_payload["ultimo_mensaje_en"] = event_iso
+            patch_payload["ultimo_mensaje_id"] = message_id
         current_unread = int(convo_row.get("no_leidos") or 0)
         if direction == "entrante":
-            patch_payload["ultimo_entrante_en"] = now_iso
+            current_last_inbound_raw = str(convo_row.get("ultimo_entrante_en") or "").strip()
+            current_last_inbound_dt: datetime | None = None
+            if current_last_inbound_raw:
+                try:
+                    current_last_inbound_dt = datetime.fromisoformat(
+                        current_last_inbound_raw.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    current_last_inbound_dt = None
+            if current_last_inbound_dt is None or event_dt >= current_last_inbound_dt:
+                patch_payload["ultimo_entrante_en"] = event_iso
             patch_payload["no_leidos"] = current_unread + 1
         else:
-            patch_payload["ultimo_saliente_en"] = now_iso
+            current_last_outbound_raw = str(convo_row.get("ultimo_saliente_en") or "").strip()
+            current_last_outbound_dt: datetime | None = None
+            if current_last_outbound_raw:
+                try:
+                    current_last_outbound_dt = datetime.fromisoformat(
+                        current_last_outbound_raw.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    current_last_outbound_dt = None
+            if current_last_outbound_dt is None or event_dt >= current_last_outbound_dt:
+                patch_payload["ultimo_saliente_en"] = event_iso
 
-        await self._request(
-            "PATCH",
-            "/rest/v1/conversaciones",
-            params={"id": f"eq.{conversation_key}"},
-            json=patch_payload,
-            prefer="return=minimal",
-        )
+        if patch_payload:
+            await self._request(
+                "PATCH",
+                "/rest/v1/conversaciones",
+                params={"id": f"eq.{conversation_key}"},
+                json=patch_payload,
+                prefer="return=minimal",
+            )
         return message_row
 
     async def get_inbox_message_by_provider_message_id(
@@ -20679,27 +20760,49 @@ class CRMRepository:
         self,
         *,
         mensaje_id: str,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """Obtiene un envío buscando por su mensaje/call SID."""
 
         trimmed = mensaje_id.strip() if mensaje_id else ""
         if not trimmed:
             return None
-        resp = await self._request(
-            "GET",
-            "/rest/v1/prospeccion_contacto_envio",
-            params={
-                "mensaje_id": f"eq.{trimmed}",
-                "limit": "1",
-            },
-        )
-        data = resp.json() or []
-        if not isinstance(data, list) or not data:
-            return None
-        row = data[0]
-        if not isinstance(row, dict):
-            raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
-        return row
+        normalized = trimmed.strip("<> ").strip()
+        candidates = [trimmed]
+        if normalized and normalized != trimmed:
+            candidates.insert(0, normalized)
+        params = {
+            "limit": "1",
+        }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        for candidate in candidates:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_contacto_envio",
+                params={**params, "mensaje_id": f"eq.{candidate}"},
+            )
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                continue
+            row = data[0]
+            if not isinstance(row, dict):
+                raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
+            return row
+        for candidate in candidates:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_contacto_envio",
+                params={**params, "mensaje_id_interno": f"eq.{candidate}"},
+            )
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                continue
+            row = data[0]
+            if not isinstance(row, dict):
+                raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
+            return row
+        return None
 
     async def worker_get_envio_by_id(
         self,
@@ -21112,6 +21215,8 @@ class CRMRepository:
         *,
         email: str,
         canal: str | None = None,
+        organizacion_id: UUID | None = None,
+        before_iso: str | None = None,
     ) -> dict[str, Any] | None:
         """Obtiene el envío más reciente buscando por correo persistido en detalle->email."""
 
@@ -21123,8 +21228,13 @@ class CRMRepository:
             "order": "procesado_en.desc.nullslast,creado_en.desc",
             "limit": "1",
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         if canal:
             params["canal"] = f"eq.{canal.strip().lower()}"
+        trimmed_before = before_iso.strip() if isinstance(before_iso, str) else ""
+        if trimmed_before:
+            params["creado_en"] = f"lte.{trimmed_before}"
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_contacto_envio",

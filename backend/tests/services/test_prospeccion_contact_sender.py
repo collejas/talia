@@ -1,4 +1,6 @@
 from app.services.prospeccion_contact_sender import (
+    ContactEnvioResult,
+    ProspeccionContactSender,
     _apply_tenant_public_base_url_defaults,
     _build_booking_url,
     _build_twilio_numeric_variables_from_body,
@@ -159,3 +161,23 @@ def test_apply_tenant_public_base_url_defaults_promotes_public_domain() -> None:
     parsed = urlparse(booking_url)
     assert parsed.netloc == "pui.geoactiv.mx"
     assert parsed.path == "/demo.html"
+
+
+def test_build_envio_update_payload_persists_local_and_provider_message_ids() -> None:
+    sender = ProspeccionContactSender()
+
+    payload = sender._build_envio_update_payload(
+        envio={"detalle": {}},
+        envio_id="11111111-1111-1111-1111-111111111111",
+        result=ContactEnvioResult(
+            estado="enviado",
+            detalle={"email": "collejas1@gmail.com"},
+            mensaje_id="brevo-123@smtp-relay.sendinblue.com",
+            mensaje_id_interno="local-123@sinergialidera.com",
+        ),
+        intento=1,
+        max_reintentos=3,
+    )
+
+    assert payload["mensaje_id"] == "brevo-123@smtp-relay.sendinblue.com"
+    assert payload["mensaje_id_interno"] == "local-123@sinergialidera.com"

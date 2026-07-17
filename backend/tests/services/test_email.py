@@ -4,9 +4,11 @@ from app.core.config import settings
 from app.services.tenant_runtime import BrevoRuntimeSettings
 from app.services.email import (
     EmailSendError,
+    EmailSendResult,
     _build_smtp_email_message,
     _send_email_smtp,
     send_email,
+    send_email_detailed,
 )
 
 
@@ -61,6 +63,46 @@ def test_send_email_uses_brevo_adapter(monkeypatch):
     attachment = payload["attachment"][0]
     assert attachment["name"] == "demo.txt"
     assert base64.b64decode(attachment["content"]) == b"hola"
+
+
+def test_send_email_detailed_keeps_local_and_provider_message_ids(monkeypatch):
+    class DummyResponse:
+        status_code = 202
+        text = '{"messageId": "<brevo-456@smtp-relay.sendinblue.com>"}'
+
+        def json(self):
+            return {"messageId": "<brevo-456@smtp-relay.sendinblue.com>"}
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None, headers=None):
+            return DummyResponse()
+
+    monkeypatch.setattr("app.services.email.httpx.Client", DummyClient)
+    monkeypatch.setattr("app.services.email.make_msgid", lambda domain=None: "<local-123@sinergialidera.com>")
+    monkeypatch.setattr(settings, "brevo_api_key", "test-key", raising=False)
+    monkeypatch.setattr(settings, "mail_username", "sender@example.com", raising=False)
+
+    result = send_email_detailed(
+        subject="Hola",
+        body_text="Texto plano",
+        recipients=["usuario@example.com"],
+        provider_preference="brevo",
+    )
+
+    assert result == EmailSendResult(
+        provider="brevo",
+        local_message_id="local-123@sinergialidera.com",
+        provider_message_id="brevo-456@smtp-relay.sendinblue.com",
+    )
 
 
 def test_send_email_uses_tenant_brevo_sender_when_available(monkeypatch):
@@ -157,11 +199,19 @@ def test_send_email_forces_smtp_when_provider_preference_smtp(monkeypatch):
 
     def fake_smtp(**kwargs):
         called["smtp"] = True
-        return "smtp-123"
+        return EmailSendResult(
+            provider="smtp",
+            local_message_id="smtp-123",
+            provider_message_id="smtp-123",
+        )
 
     def fake_brevo(**kwargs):
         called["brevo"] = True
-        return "brevo-123"
+        return EmailSendResult(
+            provider="brevo",
+            local_message_id="local-brevo-123",
+            provider_message_id="brevo-123",
+        )
 
     monkeypatch.setattr("app.services.email._send_email_smtp", fake_smtp)
     monkeypatch.setattr("app.services.email._send_email_brevo", fake_brevo)
@@ -191,7 +241,11 @@ def test_send_email_uses_sender_domain_for_message_id(monkeypatch):
         return f"<test-message-id@{domain}>"
 
     def fake_smtp(**kwargs):
-        return "smtp-123"
+        return EmailSendResult(
+            provider="smtp",
+            local_message_id="smtp-123",
+            provider_message_id="smtp-123",
+        )
 
     monkeypatch.setattr("app.services.email.make_msgid", fake_make_msgid)
     monkeypatch.setattr("app.services.email._send_email_smtp", fake_smtp)
@@ -329,7 +383,11 @@ def test_send_email_smtp_retries_with_ssl_for_port_465(monkeypatch):
         ),
     )
 
-    assert message_id == "test@imlux.mx"
+    assert message_id == EmailSendResult(
+        provider="smtp",
+        local_message_id="test@imlux.mx",
+        provider_message_id="test@imlux.mx",
+    )
     assert attempts == [
         ("mail.imlux.mx", 465, False),
         ("mail.imlux.mx", 465, True),
