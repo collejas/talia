@@ -33,7 +33,7 @@ type WizardSource = "selected" | "lista" | "filters"
 
 const CHANNEL_OPTIONS: Array<{ key: "correo" | "whatsapp" | "llamada"; label: string; description: string }> = [
   { key: "correo", label: "Correo", description: "Envía correo SMTP usando la plantilla seleccionada." },
-  { key: "whatsapp", label: "WhatsApp", description: "Mensajes vía API Twilio WhatsApp al número verificado." },
+  { key: "whatsapp", label: "WhatsApp", description: "Mensajes con plantilla aprobada en Meta al número verificado." },
   { key: "llamada", label: "Llamada", description: "Dispara una llamada automatizada con mensaje sintetizado." },
 ]
 
