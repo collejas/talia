@@ -307,9 +307,9 @@ export function GoogleBusquedaView() {
 
   useEffect(() => {
     if (!resultados.length) {
-      setSelectedIds(new Set());
-      setSelectedActividades(new Set());
-      setActividadSearch("");
+      setSelectedIds((current) => (current.size ? new Set() : current));
+      setSelectedActividades((current) => (current.size ? new Set() : current));
+      setActividadSearch((current) => (current ? "" : current));
       return;
     }
     const validIds = new Set(resultados.map((item) => item.resultado_id));
