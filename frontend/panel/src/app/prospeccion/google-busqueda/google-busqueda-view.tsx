@@ -37,7 +37,7 @@ import {
   type GoogleResultadosMapItem,
   type GoogleSearchStrategy,
 } from "@/lib/prospeccion/google-client";
-import { guardarProspectos } from "@/lib/prospeccion/prospectos-client";
+import { guardarProspectos, listProspectosQueryMetadata } from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -196,6 +196,7 @@ export function GoogleBusquedaView() {
   const [saveProspectosMode, setSaveProspectosMode] = useState<"selected" | "filtered">("selected");
   const [saveProspectosSegmento, setSaveProspectosSegmento] = useState("");
   const [saveProspectosSegmentoError, setSaveProspectosSegmentoError] = useState<string | null>(null);
+  const [saveProspectosSegmentoOptions, setSaveProspectosSegmentoOptions] = useState<string[]>([]);
   const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
   const [resultsLoadedForId, setResultsLoadedForId] = useState<string | null>(null);
   const [resultReloadToken, setResultReloadToken] = useState(0);
@@ -218,6 +219,30 @@ export function GoogleBusquedaView() {
 
   useEffect(() => {
     setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listProspectosQueryMetadata()
+      .then((response) => {
+        if (cancelled) return;
+        const nextOptions = Array.from(
+          new Set(
+            (response.segmentos ?? [])
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        ).sort((a, b) => a.localeCompare(b, "es"));
+        setSaveProspectosSegmentoOptions(nextOptions);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSaveProspectosSegmentoOptions([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -2131,6 +2156,7 @@ export function GoogleBusquedaView() {
             <Label htmlFor="google-save-segmento">Segmento</Label>
             <Input
               id="google-save-segmento"
+              list="google-save-segmento-options"
               value={saveProspectosSegmento}
               onChange={(event) => {
                 setSaveProspectosSegmento(event.target.value);
@@ -2141,6 +2167,14 @@ export function GoogleBusquedaView() {
               placeholder="Ej. Restaurantes"
               maxLength={120}
             />
+            <datalist id="google-save-segmento-options">
+              {saveProspectosSegmentoOptions.map((segmento) => (
+                <option key={segmento} value={segmento} />
+              ))}
+            </datalist>
+            <p className="text-xs text-muted-foreground">
+              Puedes escribir un segmento nuevo o elegir uno existente de la lista sugerida.
+            </p>
             {saveProspectosSegmentoError ? (
               <p className="text-xs text-destructive">{saveProspectosSegmentoError}</p>
             ) : null}
