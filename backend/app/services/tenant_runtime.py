@@ -620,6 +620,12 @@ class MailRuntimeSettings:
         )
 
 
+@dataclass(slots=True)
+class TenantMailRuntimeMailbox:
+    organizacion_id: UUID
+    settings: MailRuntimeSettings
+
+
 def build_user_mail_secret_aad(*, organizacion_id: UUID, usuario_id: UUID, clave: str) -> str:
     normalized_key = clave.strip().lower()
     return f"org:{organizacion_id}:user:{usuario_id}:key:{normalized_key}"
@@ -740,6 +746,43 @@ async def get_mail_runtime_settings(
         settings_payload.password = password_secret
 
     return settings_payload
+
+
+async def list_tenant_mail_runtime_settings() -> list[TenantMailRuntimeMailbox]:
+    if not _has_supabase():
+        return []
+
+    data = await _supabase_get(
+        "/rest/v1/secretos",
+        params={
+            "select": "organizacion_id,clave",
+            "or": "(clave.eq.mail.username,clave.eq.mail.password)",
+        },
+    )
+    if not isinstance(data, list):
+        return []
+
+    required_keys_by_org: dict[UUID, set[str]] = {}
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        raw_org_id = row.get("organizacion_id")
+        clave = _coerce_str(row.get("clave"))
+        if not raw_org_id or not clave:
+            continue
+        try:
+            org_id = UUID(str(raw_org_id))
+        except (TypeError, ValueError):
+            continue
+        required_keys_by_org.setdefault(org_id, set()).add(clave)
+
+    mailboxes: list[TenantMailRuntimeMailbox] = []
+    for org_id, keys in required_keys_by_org.items():
+        if not {"mail.username", "mail.password"}.issubset(keys):
+            continue
+        settings_payload = await get_mail_runtime_settings(organizacion_id=org_id)
+        mailboxes.append(TenantMailRuntimeMailbox(organizacion_id=org_id, settings=settings_payload))
+    return mailboxes
 
 
 async def get_user_mail_runtime_settings(

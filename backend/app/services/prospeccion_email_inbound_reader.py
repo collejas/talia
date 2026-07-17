@@ -17,7 +17,11 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.brevo import process_brevo_inbound_emails
-from app.services.tenant_runtime import MASTER_ORGANIZACION_ID, get_mail_runtime_settings
+from app.services.tenant_runtime import (
+    MASTER_ORGANIZACION_ID,
+    get_mail_runtime_settings,
+    list_tenant_mail_runtime_settings,
+)
 
 logger = get_logger("prospeccion.email_inbound_reader")
 
@@ -358,60 +362,116 @@ class ProspeccionEmailInboundReader:
                 continue
 
     async def _process_once(self) -> None:
-        mail_settings = await get_mail_runtime_settings(organizacion_id=MASTER_ORGANIZACION_ID)
-        host = _clean_text(mail_settings.incoming_server)
-        username = _clean_text(mail_settings.username)
-        password = _clean_text(mail_settings.password)
-        port = int(mail_settings.incoming_port_imap or 993)
-        if not host or not username or not password:
+        repo = CRMRepository()
+
+        mailboxes = await self._list_mailboxes()
+        if not mailboxes:
+            log_event(logger, "prospeccion.email_inbound_reader_mailboxes_missing")
+            return
+
+        for organizacion_id, mail_settings in mailboxes:
+            host = _clean_text(mail_settings.incoming_server)
+            username = _clean_text(mail_settings.username)
+            password = _clean_text(mail_settings.password)
+            port = int(mail_settings.incoming_port_imap or 993)
+            mailbox_scope = {
+                "organizacion_id": str(organizacion_id),
+                "host": bool(host),
+                "username": bool(username),
+                "password": bool(password),
+            }
+            if not host or not username or not password:
+                log_event(
+                    logger,
+                    "prospeccion.email_inbound_reader_mail_config_missing",
+                    **mailbox_scope,
+                )
+                continue
+
+            try:
+                events = await asyncio.to_thread(
+                    _imap_fetch_unseen_events,
+                    host=host,
+                    port=port,
+                    username=username,
+                    password=password,
+                    use_ssl=bool(mail_settings.use_ssl),
+                    batch_size=self._batch_size,
+                )
+            except Exception as exc:  # pragma: no cover - depende del servidor IMAP
+                logger.exception(
+                    "prospeccion.email_inbound_reader_mailbox_failed",
+                    extra={**mailbox_scope, "error": str(exc)},
+                )
+                continue
+
+            if not events:
+                continue
+
+            processed_total = 0
+            for event in events:
+                try:
+                    processed = await process_brevo_inbound_emails(repo=repo, events=[event])
+                    processed_total += int(processed or 0)
+                    if not processed:
+                        unmatched_saved = await _record_unmatched_inbox_email(
+                            repo=repo,
+                            organizacion_id=organizacion_id,
+                            event=event,
+                        )
+                        if unmatched_saved:
+                            processed_total += 1
+                except CRMRepositoryError as exc:
+                    log_event(
+                        logger,
+                        "prospeccion.email_inbound_reader_repo_error",
+                        error=str(exc),
+                        **mailbox_scope,
+                    )
+                except Exception as exc:  # pragma: no cover
+                    logger.exception(
+                        "prospeccion.email_inbound_reader_event_failed",
+                        extra={**mailbox_scope, "error": str(exc), "from": event.get("from")},
+                    )
             log_event(
                 logger,
-                "prospeccion.email_inbound_reader_mail_config_missing",
-                host=bool(host),
-                username=bool(username),
-                password=bool(password),
+                "prospeccion.email_inbound_reader_cycle",
+                fetched=len(events),
+                processed=processed_total,
+                **mailbox_scope,
             )
-            return
 
-        events = await asyncio.to_thread(
-            _imap_fetch_unseen_events,
-            host=host,
-            port=port,
-            username=username,
-            password=password,
-            use_ssl=bool(mail_settings.use_ssl),
-            batch_size=self._batch_size,
-        )
-        if not events:
-            return
+    async def _list_mailboxes(self) -> list[tuple[UUID, Any]]:
+        mailboxes: list[tuple[UUID, Any]] = []
+        seen: set[tuple[str, str, int, bool]] = set()
 
-        repo = CRMRepository()
-        processed_total = 0
-        for event in events:
-            try:
-                processed = await process_brevo_inbound_emails(repo=repo, events=[event])
-                processed_total += int(processed or 0)
-                if not processed:
-                    unmatched_saved = await _record_unmatched_inbox_email(
-                        repo=repo,
-                        organizacion_id=MASTER_ORGANIZACION_ID,
-                        event=event,
-                    )
-                    if unmatched_saved:
-                        processed_total += 1
-            except CRMRepositoryError as exc:
-                log_event(logger, "prospeccion.email_inbound_reader_repo_error", error=str(exc))
-            except Exception as exc:  # pragma: no cover
-                logger.exception(
-                    "prospeccion.email_inbound_reader_event_failed",
-                    extra={"error": str(exc), "from": event.get("from")},
-                )
-        log_event(
-            logger,
-            "prospeccion.email_inbound_reader_cycle",
-            fetched=len(events),
-            processed=processed_total,
+        def _append_mailbox(*, organizacion_id: UUID, settings_payload: Any) -> None:
+            host = _clean_text(getattr(settings_payload, "incoming_server", None))
+            username = _clean_text(getattr(settings_payload, "username", None))
+            port = int(getattr(settings_payload, "incoming_port_imap", None) or 993)
+            use_ssl = bool(getattr(settings_payload, "use_ssl", False))
+            if not host or not username:
+                mailboxes.append((organizacion_id, settings_payload))
+                return
+            dedupe_key = (host.lower(), username.lower(), port, use_ssl)
+            if dedupe_key in seen:
+                return
+            seen.add(dedupe_key)
+            mailboxes.append((organizacion_id, settings_payload))
+
+        master_settings = await get_mail_runtime_settings(organizacion_id=MASTER_ORGANIZACION_ID)
+        _append_mailbox(
+            organizacion_id=MASTER_ORGANIZACION_ID,
+            settings_payload=master_settings,
         )
+
+        for mailbox in await list_tenant_mail_runtime_settings():
+            _append_mailbox(
+                organizacion_id=mailbox.organizacion_id,
+                settings_payload=mailbox.settings,
+            )
+
+        return mailboxes
 
 
 email_inbound_reader = ProspeccionEmailInboundReader()
