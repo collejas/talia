@@ -243,29 +243,25 @@ async def _ensure_general_email_inbox_context(
     sender_email: str,
     sender_name: str | None,
 ) -> tuple[UUID, UUID] | None:
-    persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=organizacion_id)
-    if not persona:
-        persona_payload: dict[str, Any] = {
-            "nombre_completo": sender_name or sender_email.split("@")[0],
-            "correo_principal": sender_email,
-            "persona_datos": {
-                "source": "inbox_email_inbound",
-                "prospeccion_canal": "correo",
-            },
-        }
-        persona = await repo.create_persona(organizacion_id=organizacion_id, payload=persona_payload)
-    persona_id = persona.get("id")
-    try:
-        contact_uuid = UUID(str(persona_id))
-    except (TypeError, ValueError):
-        return None
-
-    conversation = await repo.get_latest_conversation_for_contact(contacto_id=contact_uuid, canal="manual")
+    normalized_email = sender_email.strip().lower()
+    conversation = await repo.get_latest_unlinked_email_conversation(
+        organizacion_id=organizacion_id,
+        correo_remitente=normalized_email,
+        canal="correo",
+    )
     if not conversation:
         conversation = await repo.create_conversation(
-            contacto_id=contact_uuid,
-            canal="manual",
+            organizacion_id=organizacion_id,
+            correo_remitente=normalized_email,
+            nombre_remitente=sender_name or sender_email.split("@")[0],
+            canal="correo",
             estado="abierta",
+            inbox_context={
+                "source": "correo_general",
+                "sender_email": normalized_email,
+                "sender_name": sender_name or sender_email.split("@")[0],
+                "unlinked_email_inbox": True,
+            },
         )
     conversation_id = conversation.get("id")
     try:

@@ -5823,19 +5823,56 @@ class CRMRepository:
             return None
         return row
 
+    async def get_latest_unlinked_email_conversation(
+        self,
+        *,
+        organizacion_id: UUID,
+        correo_remitente: str,
+        canal: str = "correo",
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "contacto_id": "is.null",
+            "persona_id": "is.null",
+            "correo_remitente": f"eq.{correo_remitente.strip().lower()}",
+            "order": "iniciada_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
     async def create_conversation(
         self,
         *,
-        contacto_id: UUID,
+        contacto_id: UUID | None = None,
+        organizacion_id: UUID | None = None,
+        correo_remitente: str | None = None,
+        nombre_remitente: str | None = None,
         canal: str,
         estado: str | None = None,
         asignado_a_usuario_id: UUID | None = None,
         inbox_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "contacto_id": str(contacto_id),
-            "canal": canal,
-        }
+        body: dict[str, Any] = {"canal": canal}
+        if contacto_id:
+            body["contacto_id"] = str(contacto_id)
+        if organizacion_id:
+            body["organizacion_id"] = str(organizacion_id)
+        if correo_remitente:
+            body["correo_remitente"] = correo_remitente.strip().lower()
+        if nombre_remitente:
+            body["nombre_remitente"] = nombre_remitente.strip()
         if estado:
             body["estado"] = estado
         if asignado_a_usuario_id:

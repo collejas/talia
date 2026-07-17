@@ -15894,6 +15894,13 @@ def _apply_persisted_inbox_context(row: dict[str, Any]) -> None:
     if isinstance(source_detail, dict) and source_detail:
         row["source_detail"] = source_detail
 
+    sender_name = _clean_text(context.get("sender_name"))
+    sender_email = _clean_text(context.get("sender_email"))
+    if sender_name and not _clean_text(row.get("contacto_nombre")):
+        row["contacto_nombre"] = sender_name
+    if sender_email and not _clean_text(row.get("contacto_correo")):
+        row["contacto_correo"] = sender_email.lower()
+
     for field in (
         "batch_id",
         "batch_label",

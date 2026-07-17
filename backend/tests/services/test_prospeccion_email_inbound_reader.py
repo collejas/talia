@@ -136,3 +136,53 @@ async def test_process_once_skips_already_recorded_message_ids(monkeypatch: pyte
     await reader._process_once()
 
     assert processed_events == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_general_email_inbox_context_uses_unlinked_email_thread() -> None:
+    organizacion_id = UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325")
+    created_payloads: list[dict[str, object]] = []
+
+    class DummyRepo:
+        async def get_latest_unlinked_email_conversation(
+            self,
+            *,
+            organizacion_id: UUID,
+            correo_remitente: str,
+            canal: str = "correo",
+        ):
+            assert organizacion_id == UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325")
+            assert correo_remitente == "cliente@externo.com"
+            assert canal == "correo"
+            return None
+
+        async def create_conversation(self, **kwargs):
+            created_payloads.append(kwargs)
+            return {"id": "8cb4f4db-7f10-43a8-b8e4-1234567890ab"}
+
+    context = await inbound_reader._ensure_general_email_inbox_context(
+        repo=DummyRepo(),
+        organizacion_id=organizacion_id,
+        sender_email="cliente@externo.com",
+        sender_name="Cliente Externo",
+    )
+
+    assert context == (
+        organizacion_id,
+        UUID("8cb4f4db-7f10-43a8-b8e4-1234567890ab"),
+    )
+    assert created_payloads == [
+        {
+            "organizacion_id": organizacion_id,
+            "correo_remitente": "cliente@externo.com",
+            "nombre_remitente": "Cliente Externo",
+            "canal": "correo",
+            "estado": "abierta",
+            "inbox_context": {
+                "source": "correo_general",
+                "sender_email": "cliente@externo.com",
+                "sender_name": "Cliente Externo",
+                "unlinked_email_inbox": True,
+            },
+        }
+    ]
