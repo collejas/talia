@@ -304,7 +304,23 @@ async def _ensure_email_inbox_context(
         except (TypeError, ValueError, CRMRepositoryError):
             prospecto = None
 
-    persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=org_uuid)
+    persona = None
+    prospecto_metadata = (
+        prospecto.get("metadata") if isinstance((prospecto or {}).get("metadata"), dict) else {}
+    )
+    persona_ref_id = _clean_text(prospecto_metadata.get("crm_contacto_id"))
+    if persona_ref_id:
+        persona = await repo.get_persona_by_id(
+            persona_id=persona_ref_id,
+            organizacion_id=org_uuid,
+        )
+    if not persona and prospecto_uuid is not None:
+        persona = await repo.worker_find_persona_by_prospecto(
+            organizacion_id=org_uuid,
+            prospecto_id=prospecto_uuid,
+        )
+    if not persona:
+        persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=org_uuid)
     if not persona:
         persona_payload: dict[str, Any] = {
             "nombre_completo": sender_name

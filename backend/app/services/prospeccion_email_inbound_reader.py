@@ -172,7 +172,7 @@ def _message_to_inbound_event(message_bytes: bytes) -> dict[str, Any] | None:
     return {key: value for key, value in event.items() if value not in (None, "")}
 
 
-def _imap_fetch_unseen_events(
+def _imap_fetch_recent_events(
     *,
     host: str,
     port: int,
@@ -190,7 +190,7 @@ def _imap_fetch_unseen_events(
     try:
         conn.login(username, password)
         conn.select("INBOX")
-        status, data = conn.search(None, "UNSEEN")
+        status, data = conn.search(None, "ALL")
         if status != "OK" or not data:
             return events
         message_nums = data[0].split()[-batch_size:]
@@ -208,8 +208,6 @@ def _imap_fetch_unseen_events(
             inbound_event = _message_to_inbound_event(raw_bytes)
             if inbound_event:
                 events.append(inbound_event)
-            # Evita reprocesar el mismo correo en cada ciclo.
-            conn.store(message_num, "+FLAGS", "\\Seen")
     finally:
         try:
             conn.close()
@@ -220,6 +218,22 @@ def _imap_fetch_unseen_events(
         except Exception:
             pass
     return events
+
+
+async def _event_already_recorded(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    event: dict[str, Any],
+) -> bool:
+    message_id = _clean_text(str(event.get("Message-Id") or ""))
+    if not message_id:
+        return False
+    existing = await repo.get_inbox_message_by_provider_message_id(
+        provider_message_id=message_id,
+        organizacion_id=organizacion_id,
+    )
+    return existing is not None
 
 
 async def _ensure_general_email_inbox_context(
@@ -390,7 +404,7 @@ class ProspeccionEmailInboundReader:
 
             try:
                 events = await asyncio.to_thread(
-                    _imap_fetch_unseen_events,
+                    _imap_fetch_recent_events,
                     host=host,
                     port=port,
                     username=username,
@@ -411,6 +425,12 @@ class ProspeccionEmailInboundReader:
             processed_total = 0
             for event in events:
                 try:
+                    if await _event_already_recorded(
+                        repo=repo,
+                        organizacion_id=organizacion_id,
+                        event=event,
+                    ):
+                        continue
                     processed = await process_brevo_inbound_emails(repo=repo, events=[event])
                     processed_total += int(processed or 0)
                     if not processed:

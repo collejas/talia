@@ -5932,6 +5932,35 @@ class CRMRepository:
         )
         return message_row
 
+    async def get_inbox_message_by_provider_message_id(
+        self,
+        *,
+        provider_message_id: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        trimmed = provider_message_id.strip() if isinstance(provider_message_id, str) else ""
+        if not trimmed:
+            return None
+        params: dict[str, str] = {
+            "proveedor_mensaje_id": f"eq.{trimmed}",
+            "select": "id,organizacion_id,conversacion_id,proveedor_mensaje_id",
+            "limit": "1",
+        }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/mensajes",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"inbox_message_by_provider_id_invalid:{row!r}")
+        return row
+
     async def get_webchat_persona_id_by_session(self, *, session_id: str) -> str | None:
         session_key = session_id.strip()
         if not session_key:
