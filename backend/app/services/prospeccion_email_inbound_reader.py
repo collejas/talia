@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import email
 from email import policy
 from email.header import decode_header, make_header
@@ -10,6 +11,7 @@ from email.message import Message
 from email.utils import parseaddr, parsedate_to_datetime
 import imaplib
 import re
+from datetime import datetime, timezone
 from typing import Any, Sequence
 from uuid import UUID
 
@@ -27,6 +29,7 @@ logger = get_logger("prospeccion.email_inbound_reader")
 
 DEFAULT_POLL_INTERVAL_SECONDS = 20.0
 DEFAULT_BATCH_SIZE = 250
+DEFAULT_IMAP_FOLDERS: tuple[str, ...] = ("INBOX", "Spam", "Junk", "Junk E-mail")
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
 
@@ -53,6 +56,65 @@ def _clean_text(value: str | None) -> str | None:
         return None
     trimmed = value.strip()
     return trimmed or None
+
+
+@dataclass(slots=True)
+class ImapFolderFetchResult:
+    folder_name: str
+    selected_name: str
+    events: list[dict[str, Any]]
+    last_seen_uid: int
+
+
+def _quote_imap_folder(folder_name: str) -> str:
+    escaped = folder_name.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _parse_imap_list_mailbox(raw_line: bytes) -> str | None:
+    try:
+        decoded = raw_line.decode("utf-8", errors="replace").strip()
+    except Exception:
+        return None
+    if not decoded:
+        return None
+    match = re.search(r' "(?P<mailbox>[^"]+)"\s*$', decoded)
+    if match:
+        return match.group("mailbox").strip()
+    if " " in decoded:
+        return decoded.rsplit(" ", 1)[-1].strip().strip('"')
+    return decoded.strip('"')
+
+
+def _canonical_folder_lookup(conn: imaplib.IMAP4, folder_candidates: Sequence[str]) -> list[tuple[str, str]]:
+    status, raw_boxes = conn.list()
+    selectable: list[str] = []
+    if status == "OK" and raw_boxes:
+        for raw_box in raw_boxes:
+            if isinstance(raw_box, bytes):
+                mailbox_name = _parse_imap_list_mailbox(raw_box)
+                if mailbox_name:
+                    selectable.append(mailbox_name)
+    resolved: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for candidate in folder_candidates:
+        normalized_candidate = candidate.strip().lower()
+        if not normalized_candidate:
+            continue
+        selected_name = candidate
+        for mailbox_name in selectable:
+            mailbox_normalized = mailbox_name.strip().lower()
+            if mailbox_normalized == normalized_candidate or mailbox_normalized.endswith(
+                f".{normalized_candidate}"
+            ) or mailbox_normalized.endswith(f"/{normalized_candidate}"):
+                selected_name = mailbox_name
+                break
+        dedupe_key = selected_name.strip().lower()
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        resolved.append((candidate, selected_name))
+    return resolved
 
 
 def _extract_plain_text(msg: Message) -> str | None:
@@ -179,7 +241,7 @@ def _message_to_inbound_event(message_bytes: bytes) -> dict[str, Any] | None:
     return {key: value for key, value in event.items() if value not in (None, "")}
 
 
-def _imap_fetch_recent_events(
+def _imap_fetch_mailbox_events(
     *,
     host: str,
     port: int,
@@ -187,34 +249,82 @@ def _imap_fetch_recent_events(
     password: str,
     use_ssl: bool,
     batch_size: int,
-) -> list[dict[str, Any]]:
+    folder_names: Sequence[str],
+    last_seen_uid_by_folder: dict[str, int] | None = None,
+) -> list[ImapFolderFetchResult]:
     if use_ssl:
         conn: imaplib.IMAP4 | imaplib.IMAP4_SSL = imaplib.IMAP4_SSL(host=host, port=port)
     else:
         conn = imaplib.IMAP4(host=host, port=port)
 
-    events: list[dict[str, Any]] = []
+    folder_results: list[ImapFolderFetchResult] = []
     try:
         conn.login(username, password)
-        conn.select("INBOX")
-        status, data = conn.search(None, "ALL")
-        if status != "OK" or not data:
-            return events
-        message_nums = data[0].split()[-batch_size:]
-        for message_num in message_nums:
-            status_fetch, msg_data = conn.fetch(message_num, "(RFC822)")
-            if status_fetch != "OK" or not msg_data:
+        folder_lookup = _canonical_folder_lookup(conn, folder_names)
+        cursor_map = {
+            str(folder_name or "").strip().lower(): max(0, int(cursor or 0))
+            for folder_name, cursor in (last_seen_uid_by_folder or {}).items()
+            if str(folder_name or "").strip()
+        }
+        for requested_name, selected_name in folder_lookup:
+            status_select, _ = conn.select(_quote_imap_folder(selected_name))
+            if status_select != "OK":
                 continue
-            raw_bytes: bytes | None = None
-            for chunk in msg_data:
-                if isinstance(chunk, tuple) and len(chunk) >= 2 and isinstance(chunk[1], (bytes, bytearray)):
-                    raw_bytes = bytes(chunk[1])
-                    break
-            if not raw_bytes:
+            folder_key = requested_name.strip().lower()
+            last_seen_uid = cursor_map.get(folder_key, 0)
+            if last_seen_uid > 0:
+                search_criteria = f"UID {last_seen_uid + 1}:*"
+                status_search, data = conn.uid("search", None, search_criteria)
+            else:
+                status_search, data = conn.uid("search", None, "ALL")
+            if status_search != "OK" or not data:
+                folder_results.append(
+                    ImapFolderFetchResult(
+                        folder_name=requested_name,
+                        selected_name=selected_name,
+                        events=[],
+                        last_seen_uid=last_seen_uid,
+                    )
+                )
                 continue
-            inbound_event = _message_to_inbound_event(raw_bytes)
-            if inbound_event:
-                events.append(inbound_event)
+            uid_values = [int(value) for value in data[0].split() if value]
+            if not uid_values:
+                folder_results.append(
+                    ImapFolderFetchResult(
+                        folder_name=requested_name,
+                        selected_name=selected_name,
+                        events=[],
+                        last_seen_uid=last_seen_uid,
+                    )
+                )
+                continue
+            candidate_uids = uid_values[-batch_size:]
+            events: list[dict[str, Any]] = []
+            for uid_value in candidate_uids:
+                status_fetch, msg_data = conn.uid("fetch", str(uid_value), "(RFC822)")
+                if status_fetch != "OK" or not msg_data:
+                    continue
+                raw_bytes: bytes | None = None
+                for chunk in msg_data:
+                    if isinstance(chunk, tuple) and len(chunk) >= 2 and isinstance(chunk[1], (bytes, bytearray)):
+                        raw_bytes = bytes(chunk[1])
+                        break
+                if not raw_bytes:
+                    continue
+                inbound_event = _message_to_inbound_event(raw_bytes)
+                if inbound_event:
+                    inbound_event["__folder_name"] = requested_name
+                    inbound_event["__folder_selected_name"] = selected_name
+                    inbound_event["__message_uid"] = uid_value
+                    events.append(inbound_event)
+            folder_results.append(
+                ImapFolderFetchResult(
+                    folder_name=requested_name,
+                    selected_name=selected_name,
+                    events=events,
+                    last_seen_uid=max(candidate_uids),
+                )
+            )
     finally:
         try:
             conn.close()
@@ -224,7 +334,47 @@ def _imap_fetch_recent_events(
             conn.logout()
         except Exception:
             pass
-    return events
+    return folder_results
+
+
+def _imap_move_message_to_inbox(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    use_ssl: bool,
+    source_folder: str,
+    message_uid: int,
+) -> bool:
+    if message_uid <= 0:
+        return False
+    if use_ssl:
+        conn: imaplib.IMAP4 | imaplib.IMAP4_SSL = imaplib.IMAP4_SSL(host=host, port=port)
+    else:
+        conn = imaplib.IMAP4(host=host, port=port)
+    try:
+        conn.login(username, password)
+        status_select, _ = conn.select(_quote_imap_folder(source_folder))
+        if status_select != "OK":
+            return False
+        status_copy, _ = conn.uid("COPY", str(message_uid), _quote_imap_folder("INBOX"))
+        if status_copy != "OK":
+            return False
+        status_store, _ = conn.uid("STORE", str(message_uid), "+FLAGS", "(\\Deleted)")
+        if status_store != "OK":
+            return False
+        conn.expunge()
+        return True
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        try:
+            conn.logout()
+        except Exception:
+            pass
 
 
 async def _event_already_recorded(
@@ -241,6 +391,36 @@ async def _event_already_recorded(
         organizacion_id=organizacion_id,
     )
     return existing is not None
+
+
+def _extract_reply_message_ids(event: dict[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    in_reply_to = _normalize_message_id(_clean_text(str(event.get("In-Reply-To") or "")))
+    if in_reply_to:
+        candidates.append(in_reply_to)
+    references_raw = _clean_text(str(event.get("References") or ""))
+    if references_raw:
+        for token in references_raw.split():
+            normalized = _normalize_message_id(token)
+            if normalized and normalized not in candidates:
+                candidates.append(normalized)
+    return candidates
+
+
+async def _resolve_known_reply_envio(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    event: dict[str, Any],
+) -> dict[str, Any] | None:
+    for message_id in _extract_reply_message_ids(event):
+        envio = await repo.worker_get_envio_by_mensaje(
+            mensaje_id=message_id,
+            organizacion_id=organizacion_id,
+        )
+        if envio:
+            return envio
+    return None
 
 
 async def _ensure_general_email_inbox_context(
@@ -301,8 +481,8 @@ async def _record_unmatched_inbox_email(
     org_uuid, conversation_uuid = context
     subject = _clean_text(str(event.get("subject") or ""))
     body = _clean_text(str(event.get("text") or "")) or "(correo entrante sin texto)"
-    message_id = _clean_text(str(event.get("Message-Id") or ""))
-    in_reply_to = _clean_text(str(event.get("In-Reply-To") or ""))
+    message_id = _normalize_message_id(_clean_text(str(event.get("Message-Id") or "")))
+    in_reply_to = _normalize_message_id(_clean_text(str(event.get("In-Reply-To") or "")))
     references = _clean_text(str(event.get("References") or ""))
     received_at = _clean_text(str(event.get("Date") or ""))
     message_data: dict[str, Any] = {
@@ -345,6 +525,7 @@ class ProspeccionEmailInboundReader:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._enabled = True
+        self._folder_names = DEFAULT_IMAP_FOLDERS
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -407,14 +588,21 @@ class ProspeccionEmailInboundReader:
                 continue
 
             try:
-                events = await asyncio.to_thread(
-                    _imap_fetch_recent_events,
+                folder_cursor_map = await self._get_folder_cursor_map(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    mailbox_email=username,
+                )
+                folder_results = await asyncio.to_thread(
+                    _imap_fetch_mailbox_events,
                     host=host,
                     port=port,
                     username=username,
                     password=password,
                     use_ssl=bool(mail_settings.use_ssl),
                     batch_size=self._batch_size,
+                    folder_names=self._folder_names,
+                    last_seen_uid_by_folder=folder_cursor_map,
                 )
             except Exception as exc:  # pragma: no cover - depende del servidor IMAP
                 logger.exception(
@@ -423,51 +611,124 @@ class ProspeccionEmailInboundReader:
                 )
                 continue
 
-            if not events:
+            if not folder_results:
                 continue
 
             processed_total = 0
-            for event in events:
-                try:
-                    if await _event_already_recorded(
-                        repo=repo,
-                        organizacion_id=organizacion_id,
-                        event=event,
-                    ):
-                        continue
-                    processed = await process_brevo_inbound_emails(
-                        repo=repo,
-                        events=[event],
-                        organizacion_id=organizacion_id,
-                    )
-                    processed_total += int(processed or 0)
-                    if not processed:
-                        unmatched_saved = await _record_unmatched_inbox_email(
+            fetched_total = 0
+            for folder_result in folder_results:
+                fetched_total += len(folder_result.events)
+                last_completed_uid = folder_cursor_map.get(folder_result.folder_name.strip().lower(), 0)
+                for event in folder_result.events:
+                    try:
+                        if await _event_already_recorded(
+                            repo=repo,
+                            organizacion_id=organizacion_id,
+                            event=event,
+                        ):
+                            last_completed_uid = max(last_completed_uid, int(event.get("__message_uid") or 0))
+                            continue
+                        known_reply_envio = await _resolve_known_reply_envio(
                             repo=repo,
                             organizacion_id=organizacion_id,
                             event=event,
                         )
-                        if unmatched_saved:
-                            processed_total += 1
-                except CRMRepositoryError as exc:
-                    log_event(
-                        logger,
-                        "prospeccion.email_inbound_reader_repo_error",
-                        error=str(exc),
-                        **mailbox_scope,
-                    )
-                except Exception as exc:  # pragma: no cover
-                    logger.exception(
-                        "prospeccion.email_inbound_reader_event_failed",
-                        extra={**mailbox_scope, "error": str(exc), "from": event.get("from")},
-                    )
+                        processed = await process_brevo_inbound_emails(
+                            repo=repo,
+                            events=[event],
+                            organizacion_id=organizacion_id,
+                        )
+                        processed_total += int(processed or 0)
+                        if not processed:
+                            unmatched_saved = await _record_unmatched_inbox_email(
+                                repo=repo,
+                                organizacion_id=organizacion_id,
+                                event=event,
+                            )
+                            if unmatched_saved:
+                                processed_total += 1
+                        if (
+                            known_reply_envio
+                            and folder_result.folder_name.strip().lower() != "inbox"
+                            and int(event.get("__message_uid") or 0) > 0
+                        ):
+                            moved = await asyncio.to_thread(
+                                _imap_move_message_to_inbox,
+                                host=host,
+                                port=port,
+                                username=username,
+                                password=password,
+                                use_ssl=bool(mail_settings.use_ssl),
+                                source_folder=folder_result.selected_name,
+                                message_uid=int(event.get("__message_uid") or 0),
+                            )
+                            if moved:
+                                log_event(
+                                    logger,
+                                    "prospeccion.email_inbound_reader_message_moved_to_inbox",
+                                    organizacion_id=str(organizacion_id),
+                                    folder_name=folder_result.folder_name,
+                                    source_folder=folder_result.selected_name,
+                                    message_uid=int(event.get("__message_uid") or 0),
+                                )
+                        last_completed_uid = max(last_completed_uid, int(event.get("__message_uid") or 0))
+                    except CRMRepositoryError as exc:
+                        log_event(
+                            logger,
+                            "prospeccion.email_inbound_reader_repo_error",
+                            error=str(exc),
+                            folder_name=folder_result.folder_name,
+                            **mailbox_scope,
+                        )
+                        break
+                    except Exception as exc:  # pragma: no cover
+                        logger.exception(
+                            "prospeccion.email_inbound_reader_event_failed",
+                            extra={
+                                **mailbox_scope,
+                                "error": str(exc),
+                                "from": event.get("from"),
+                                "folder_name": folder_result.folder_name,
+                            },
+                        )
+                        break
+                await repo.upsert_email_inbound_sync_state(
+                    organizacion_id=organizacion_id,
+                    mailbox_email=username,
+                    folder_name=folder_result.folder_name,
+                    last_seen_uid=last_completed_uid,
+                    last_sync_at=datetime.now(timezone.utc).isoformat(),
+                    last_error=None,
+                )
             log_event(
                 logger,
                 "prospeccion.email_inbound_reader_cycle",
-                fetched=len(events),
+                fetched=fetched_total,
                 processed=processed_total,
                 **mailbox_scope,
             )
+
+    async def _get_folder_cursor_map(
+        self,
+        *,
+        repo: CRMRepository,
+        organizacion_id: UUID,
+        mailbox_email: str,
+    ) -> dict[str, int]:
+        cursor_map: dict[str, int] = {}
+        for folder_name in self._folder_names:
+            row = await repo.get_email_inbound_sync_state(
+                organizacion_id=organizacion_id,
+                mailbox_email=mailbox_email,
+                folder_name=folder_name,
+            )
+            if not isinstance(row, dict):
+                continue
+            try:
+                cursor_map[folder_name.strip().lower()] = max(0, int(row.get("last_seen_uid") or 0))
+            except (TypeError, ValueError):
+                continue
+        return cursor_map
 
     async def _list_mailboxes(self) -> list[tuple[UUID, Any]]:
         mailboxes: list[tuple[UUID, Any]] = []

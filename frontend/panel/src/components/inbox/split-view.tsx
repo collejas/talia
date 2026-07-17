@@ -687,6 +687,33 @@ function resolveHumanAuthorName(
 
   return candidate;
 }
+
+function isMessageSetRicher(candidate: InboxMessage[], current: InboxMessage[]): boolean {
+  if (!candidate.length) return false;
+  if (!current.length) return true;
+  if (candidate.length !== current.length) {
+    return candidate.length > current.length;
+  }
+  const candidateFingerprint = fingerprintMessages(candidate);
+  const currentFingerprint = fingerprintMessages(current);
+  if (candidateFingerprint === currentFingerprint) {
+    return false;
+  }
+  const candidateLast = candidate[candidate.length - 1]?.timestamp ?? "";
+  const currentLast = current[current.length - 1]?.timestamp ?? "";
+  if (!candidateLast || !currentLast) {
+    return true;
+  }
+  return Date.parse(candidateLast) >= Date.parse(currentLast);
+}
+
+function mergeMessageHistory(candidate: InboxMessage[], current: InboxMessage[]): InboxMessage[] {
+  if (isMessageSetRicher(candidate, current)) {
+    return candidate;
+  }
+  return current;
+}
+
 type InboxSplitViewProps = {
   threads: InboxThread[];
   batchOptions?: Array<{ value: string; label: string }>;
@@ -960,14 +987,17 @@ export function InboxSplitView({
     const initialMessages = selectedThread?.messages ?? [];
     setManualToggleError(null);
     setManualToggling(false);
-    setCurrentMessages(initialMessages);
-    lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
     const currentId = selectedThread?.id ?? null;
     if (previousSelectedIdRef.current !== currentId) {
+      setCurrentMessages(initialMessages);
+      lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
       setAutoScrollLocked(false);
+    } else if (isMessageSetRicher(initialMessages, currentMessages)) {
+      setCurrentMessages(initialMessages);
+      lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
     }
     previousSelectedIdRef.current = currentId;
-  }, [selectedThread?.id, selectedThread?.messages]);
+  }, [currentMessages, selectedThread?.id, selectedThread?.messages]);
 
   React.useEffect(() => {
     setPendingAttachments([]);
@@ -2495,7 +2525,7 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     if (!existing) {
       return thread;
     }
-    const messages = thread.messages.length ? thread.messages : existing.messages;
+    const messages = mergeMessageHistory(thread.messages, existing.messages);
     const lastMessage = messages.length ? messages[messages.length - 1]! : null;
     const incomingSourceDetail =
       thread.sourceDetail && Object.keys(thread.sourceDetail).length > 0 ? thread.sourceDetail : null;

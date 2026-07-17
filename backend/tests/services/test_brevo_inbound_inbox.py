@@ -94,6 +94,105 @@ async def test_ensure_email_inbox_context_falls_back_to_unlinked_prospect_thread
 
 
 @pytest.mark.asyncio
+async def test_ensure_email_inbox_context_reuses_existing_general_email_thread_and_adopts_it() -> None:
+    org_id = UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325")
+    prospecto_id = UUID("ce003bab-9535-4a82-9b00-f8b43172da2e")
+    update_calls: list[dict[str, object]] = []
+
+    class DummyRepo:
+        async def get_email_conversation_by_envio_id(
+            self,
+            *,
+            organizacion_id: UUID,
+            envio_id: UUID,
+            canal: str | None = None,
+        ):
+            assert organizacion_id == org_id
+            assert envio_id == UUID("b7cfea7f-eef3-4526-88ac-962c41ec847a")
+            assert canal == "correo"
+            return None
+
+        async def worker_get_prospecto(self, *, prospecto_id: UUID):
+            assert prospecto_id == UUID("ce003bab-9535-4a82-9b00-f8b43172da2e")
+            return {
+                "display_name": "Pedro Parra",
+                "segmento": "Sinergia Lidera",
+                "metadata": {},
+            }
+
+        async def worker_find_persona_by_prospecto(self, *, organizacion_id: UUID, prospecto_id: UUID):
+            assert organizacion_id == org_id
+            assert prospecto_id == UUID("ce003bab-9535-4a82-9b00-f8b43172da2e")
+            return None
+
+        async def get_persona_by_email(self, *, email: str, organizacion_id: UUID):
+            assert email == "collejas1@gmail.com"
+            assert organizacion_id == org_id
+            return None
+
+        async def get_latest_unlinked_email_conversation(
+            self,
+            *,
+            organizacion_id: UUID,
+            correo_remitente: str,
+            canal: str = "correo",
+        ):
+            assert organizacion_id == org_id
+            assert correo_remitente == "collejas1@gmail.com"
+            assert canal == "correo"
+            return {
+                "id": "b5f6aa51-f299-4a30-a744-3c45aaf6833d",
+                "inbox_context": {
+                    "source": "correo_general",
+                    "sender_email": "collejas1@gmail.com",
+                    "sender_name": "Jorge Torre Collejas",
+                    "unlinked_email_inbox": True,
+                },
+            }
+
+        async def update_conversation(self, *, conversation_id: str, patch: dict[str, object]):
+            update_calls.append({"conversation_id": conversation_id, "patch": patch})
+            return {
+                "id": conversation_id,
+                "inbox_context": patch.get("inbox_context"),
+            }
+
+    context = await brevo._ensure_email_inbox_context(
+        repo=DummyRepo(),
+        envio={
+            "id": "b7cfea7f-eef3-4526-88ac-962c41ec847a",
+            "organizacion_id": str(org_id),
+            "prospecto_id": str(prospecto_id),
+            "batch_id": "bcc40a67-8f39-4f1a-a75e-0f914c52724a",
+        },
+        inbound={
+            "sender_email": "collejas1@gmail.com",
+            "sender_name": "Pedro Parra",
+        },
+    )
+
+    assert context == (org_id, UUID("b5f6aa51-f299-4a30-a744-3c45aaf6833d"))
+    assert update_calls == [
+        {
+            "conversation_id": "b5f6aa51-f299-4a30-a744-3c45aaf6833d",
+            "patch": {
+                "nombre_remitente": "Pedro Parra",
+                "inbox_context": {
+                    "source": "prospeccion",
+                    "sender_email": "collejas1@gmail.com",
+                    "sender_name": "Pedro Parra",
+                    "unlinked_email_inbox": True,
+                    "envio_id": "b7cfea7f-eef3-4526-88ac-962c41ec847a",
+                    "batch_id": "bcc40a67-8f39-4f1a-a75e-0f914c52724a",
+                    "prospecto_id": str(prospecto_id),
+                    "source_detail": "correo_general",
+                },
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_process_brevo_inbound_emails_scopes_envio_lookup_to_mailbox_org() -> None:
     org_id = UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325")
     lookup_calls: list[tuple[str, str, str | None]] = []

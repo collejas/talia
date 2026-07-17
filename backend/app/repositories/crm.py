@@ -2427,6 +2427,76 @@ class CRMRepository:
             f"usuario_mail_config_upsert_failed:{resp.status_code}:{resp.text[:300]}"
         )
 
+    async def get_email_inbound_sync_state(
+        self,
+        *,
+        organizacion_id: UUID,
+        mailbox_email: str,
+        folder_name: str,
+    ) -> dict[str, Any] | None:
+        mailbox_value = mailbox_email.strip().lower()
+        folder_value = folder_name.strip()
+        if not mailbox_value or not folder_value:
+            return None
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/tenant_mailbox_sync_state",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "mailbox_email": f"eq.{mailbox_value}",
+                "folder_name": f"eq.{folder_value}",
+                "select": (
+                    "id,organizacion_id,mailbox_email,folder_name,last_seen_uid,"
+                    "last_sync_at,last_error,creado_en,actualizado_en"
+                ),
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def upsert_email_inbound_sync_state(
+        self,
+        *,
+        organizacion_id: UUID,
+        mailbox_email: str,
+        folder_name: str,
+        last_seen_uid: int,
+        last_sync_at: str | None = None,
+        last_error: str | None = None,
+    ) -> dict[str, Any]:
+        mailbox_value = mailbox_email.strip().lower()
+        folder_value = folder_name.strip()
+        if not mailbox_value or not folder_value:
+            raise CRMRepositoryError("email_inbound_sync_state_invalid_key")
+        body: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "mailbox_email": mailbox_value,
+            "folder_name": folder_value,
+            "last_seen_uid": max(0, int(last_seen_uid)),
+            "last_error": last_error.strip() if isinstance(last_error, str) and last_error.strip() else None,
+        }
+        if last_sync_at:
+            body["last_sync_at"] = last_sync_at
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/tenant_mailbox_sync_state",
+            params={"on_conflict": "organizacion_id,mailbox_email,folder_name"},
+            json=body,
+            prefer="resolution=merge-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError("email_inbound_sync_state_upsert_failed")
+
     async def list_users_with_primary_role_by_ids(
         self,
         *,

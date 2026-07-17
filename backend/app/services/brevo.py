@@ -284,6 +284,27 @@ def _normalize_message_id(value: str | None) -> str | None:
     return normalized or None
 
 
+def _build_prospeccion_inbox_context(
+    *,
+    envio: dict[str, Any],
+    sender_email: str,
+    sender_name: str | None,
+    prospecto: dict[str, Any] | None,
+    prospecto_uuid: UUID | None,
+) -> dict[str, Any]:
+    context_payload: dict[str, Any] = {
+        "source": "prospeccion",
+        "sender_email": sender_email,
+        "sender_name": sender_name
+        or _clean_text((prospecto or {}).get("display_name"))
+        or sender_email.split("@")[0],
+        "envio_id": str(envio.get("id")) if envio.get("id") else None,
+        "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+        "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
+    }
+    return {key: value for key, value in context_payload.items() if value not in (None, "")}
+
+
 async def _ensure_email_inbox_context(
     *,
     repo: CRMRepository,
@@ -358,20 +379,45 @@ async def _ensure_email_inbox_context(
                 conversation_envio_id = _clean_text(inbox_context.get("envio_id"))
             if envio_uuid is not None and conversation_envio_id not in {None, str(envio_uuid)}:
                 conversation = None
+            elif isinstance(conversation, dict):
+                conversation_id_value = conversation.get("id")
+                existing_context = (
+                    conversation.get("inbox_context")
+                    if isinstance(conversation.get("inbox_context"), dict)
+                    else {}
+                )
+                merged_context = {
+                    **existing_context,
+                    **_build_prospeccion_inbox_context(
+                        envio=envio,
+                        sender_email=sender_email,
+                        sender_name=sender_name,
+                        prospecto=prospecto,
+                        prospecto_uuid=prospecto_uuid,
+                    ),
+                    "unlinked_email_inbox": True,
+                    "source_detail": existing_context.get("source") or "correo_general",
+                }
+                if conversation_id_value:
+                    conversation = await repo.update_conversation(
+                        conversation_id=str(conversation_id_value),
+                        patch={
+                            "nombre_remitente": str(
+                                merged_context.get("sender_name") or sender_email.split("@")[0]
+                            ),
+                            "inbox_context": merged_context,
+                        },
+                    )
         if not conversation:
-            context_payload: dict[str, Any] = {
-                "source": "prospeccion",
-                "sender_email": sender_email,
-                "sender_name": sender_name
-                or _clean_text((prospecto or {}).get("display_name"))
-                or sender_email.split("@")[0],
-                "unlinked_email_inbox": True,
-                "envio_id": str(envio.get("id")) if envio.get("id") else None,
-                "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
-                "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
-            }
             context_payload = {
-                key: value for key, value in context_payload.items() if value not in (None, "")
+                **_build_prospeccion_inbox_context(
+                    envio=envio,
+                    sender_email=sender_email,
+                    sender_name=sender_name,
+                    prospecto=prospecto,
+                    prospecto_uuid=prospecto_uuid,
+                ),
+                "unlinked_email_inbox": True,
             }
             conversation = await repo.create_conversation(
                 organizacion_id=org_uuid,
@@ -396,19 +442,13 @@ async def _ensure_email_inbox_context(
                 canal="manual",
             )
         if not conversation:
-            context_payload: dict[str, Any] = {
-                "source": "prospeccion",
-                "sender_email": sender_email,
-                "sender_name": sender_name
-                or _clean_text((prospecto or {}).get("display_name"))
-                or sender_email.split("@")[0],
-                "envio_id": str(envio_uuid) if envio_uuid else None,
-                "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
-                "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
-            }
-            context_payload = {
-                key: value for key, value in context_payload.items() if value not in (None, "")
-            }
+            context_payload = _build_prospeccion_inbox_context(
+                envio=envio,
+                sender_email=sender_email,
+                sender_name=sender_name,
+                prospecto=prospecto,
+                prospecto_uuid=prospecto_uuid,
+            )
             conversation = await repo.create_conversation(
                 contacto_id=contact_uuid,
                 organizacion_id=org_uuid,
