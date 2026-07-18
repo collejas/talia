@@ -189,6 +189,38 @@ cleanup_git_objects_in_dir() {
     git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
     log "git gc completed in ${repo_dir}"
   fi
+
+  cleanup_git_pack_tmp_files_in_dir "${repo_dir}"
+}
+
+cleanup_git_pack_tmp_files_in_dir() {
+  local repo_dir="$1"
+  local pack_dir="${repo_dir}/.git/objects/pack"
+  [[ -d "${pack_dir}" ]] || return 0
+
+  # Delete orphaned temporary pack files left behind by interrupted repacks.
+  # These can consume gigabytes even after a successful git gc.
+  if pgrep -x pack-objects >/dev/null 2>&1; then
+    log "skip stale git pack cleanup in ${repo_dir} because pack-objects is running"
+    return 0
+  fi
+
+  local tmp_files=()
+  shopt -s nullglob
+  tmp_files=( "${pack_dir}"/tmp_pack_* )
+  shopt -u nullglob
+  (( ${#tmp_files[@]} > 0 )) || return 0
+
+  local removed_bytes=0
+  local file=""
+  for file in "${tmp_files[@]}"; do
+    if [[ -f "${file}" ]]; then
+      removed_bytes=$((removed_bytes + $(stat -c '%s' "${file}" 2>/dev/null || echo 0)))
+      run_delete_file "${file}"
+    fi
+  done
+
+  log "stale git pack temporaries removed in ${repo_dir} count=${#tmp_files[@]} bytes=${removed_bytes}"
 }
 
 cleanup_logs_in_dir() {
