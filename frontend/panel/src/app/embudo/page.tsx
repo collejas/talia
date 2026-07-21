@@ -61,9 +61,9 @@ export default async function Page() {
       <AppSidebar variant='inset' />
       <SidebarInset>
         <SiteHeader title='Embudo' />
-        <div className='flex h-[calc(100vh-var(--header-height))] flex-1 flex-col overflow-hidden'>
-          <div className='@container/main flex flex-1 flex-col gap-2'>
-            <div className='flex flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6'>
+        <div className='flex h-[calc(100vh-var(--header-height))] min-h-0 flex-1 flex-col overflow-hidden'>
+          <div className='@container/main flex min-h-0 flex-1 flex-col gap-2'>
+            <div className='flex min-h-0 flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6'>
               <EmbudoBoard
                 etapas={embudo.stages}
                 sinConversacion={embudo.sinConversacion}

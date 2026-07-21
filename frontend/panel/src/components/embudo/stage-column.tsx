@@ -64,7 +64,7 @@ export function EmbudoStageColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full min-h-[420px] flex-col rounded-xl border bg-muted/10 transition",
+        "flex h-full min-h-0 flex-col rounded-xl border bg-muted/10 transition",
         isOver && canDrop && "border-primary/60 bg-primary/10",
         isOver && !canDrop && "border-destructive/60 bg-destructive/10",
       )}
