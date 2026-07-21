@@ -17715,6 +17715,22 @@ async def list_users(
     return [CRMUserSummary.model_validate(row) for row in rows]
 
 
+@router.get("/usuarios/vendedores/organizacion", response_model=list[CRMUserSummary])
+async def list_organization_sales_reps(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMUserSummary]:
+    """Listar todos los vendedores de la organización para filtros del pipeline."""
+    try:
+        rows = await repo.list_sales_reps(organizacion_id=organizacion_id, limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMUserSummary.model_validate(row) for row in rows]
+
+
 @router.get("/usuarios/vendedores", response_model=list[CRMUserSummary])
 async def list_sales_reps(
     *,

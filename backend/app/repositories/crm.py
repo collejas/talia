@@ -583,18 +583,34 @@ def _search_row_text(row: dict[str, Any]) -> str:
             for inner in value:
                 _collect(inner)
 
+    # El buscador del embudo debe ser semántico, pero deliberadamente acotado
+    # a los campos que el usuario reconoce como datos de la oportunidad.
     for key in (
         "codigo_oportunidad",
         "titulo",
         "descripcion",
         "contacto_nombre",
-        "canal",
-        "estado",
-        "metadata",
+        "correo",
+        "proyecto_nombre",
+        "proyecto_necesidades",
     ):
         _collect(row.get(key))
-    _collect(row.get("contacto"))
-    _collect(row.get("cuenta"))
+
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("project_name", "proyecto_necesidades"):
+            _collect(metadata.get(key))
+
+    contacto = row.get("contacto")
+    if isinstance(contacto, dict):
+        for key in (
+            "nombre_completo",
+            "correo_principal",
+            "correo_secundario",
+            "correo_institucional",
+            "correo",
+        ):
+            _collect(contacto.get(key))
     return " ".join(parts)
 
 
@@ -7591,20 +7607,6 @@ class CRMRepository:
             params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
         if canal:
             params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
-        if q:
-            safe = q.replace("%", "").replace(",", " ").strip()
-            if safe:
-                opportunity_code_terms = [
-                    f"codigo_oportunidad.ilike.*{candidate}*"
-                    for candidate in _opportunity_code_search_candidates(safe)
-                ]
-                params["or"] = "(" + ",".join(
-                    [
-                        f"titulo.ilike.*{safe}*",
-                        f"contacto_nombre.ilike.*{safe}*",
-                        *opportunity_code_terms,
-                    ]
-                ) + ")"
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
         prefer = "count=exact" if count_exact else None

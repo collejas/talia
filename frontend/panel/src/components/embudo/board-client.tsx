@@ -212,39 +212,35 @@ function sortCards(cards: EmbudoCard[]): EmbudoCard[] {
   });
 }
 
-function normalizeEmailFilterValue(value: string | null | undefined): string {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
+function normalizeSemanticSearchValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
 }
 
-function extractCardEmailCandidates(card: EmbudoCard): string[] {
-  const candidates = new Set<string>();
-  const push = (value: unknown) => {
-    if (typeof value !== "string") return;
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) return;
-    candidates.add(normalized);
-  };
-
-  push(card.correo);
-  push(card.metadata?.contacto_correo);
-  push(card.metadata?.contacto_email);
-  push(card.metadata?.contact_email);
-  push(card.metadata?.correo);
-  push(card.metadata?.email);
-  push(card.metadata?.correo_principal);
-  push(card.metadata?.correo_secundario);
-  push(card.metadata?.correo_institucional);
-  push(card.metadata?.cuenta_correo_principal);
-  push(card.metadata?.cuenta_correo_secundario);
-  return [...candidates];
+function getSemanticSearchFields(card: EmbudoCard): string[] {
+  return [
+    card.correo,
+    card.nombre,
+    card.contactoProfileName,
+    card.titulo,
+    card.proyectoNombre,
+    card.proyectoNecesidades,
+    card.codigoOportunidad,
+  ]
+    .map(normalizeSemanticSearchValue)
+    .filter(Boolean);
 }
 
-function matchesEmailFilter(card: EmbudoCard, rawFilter: string): boolean {
-  const filter = normalizeEmailFilterValue(rawFilter);
-  if (!filter) return true;
-  const emails = extractCardEmailCandidates(card);
-  if (!emails.length) return false;
-  return emails.some((email) => email.startsWith(filter));
+function matchesSemanticSearch(card: EmbudoCard, rawSearch: string): boolean {
+  const terms = normalizeSemanticSearchValue(rawSearch).split(" ").filter(Boolean);
+  if (!terms.length) return true;
+  const fields = getSemanticSearchFields(card);
+  return terms.every((term) => fields.some((field) => field.includes(term)));
 }
 
 export function EmbudoBoardClient({
@@ -305,13 +301,11 @@ export function EmbudoBoardClient({
   const [appliedCanal, setAppliedCanal] = useState("");
   const [appliedEstado, setAppliedEstado] = useState("");
   const [appliedCorreo, setAppliedCorreo] = useState("");
-  const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedTieneCita, setAppliedTieneCita] = useState("");
   const [appliedEtapaIds, setAppliedEtapaIds] = useState<string[]>([]);
   const [draftDays, setDraftDays] = useState<number | null>(null);
   const [draftCanal, setDraftCanal] = useState("");
   const [draftEstado, setDraftEstado] = useState("");
-  const [draftQuery, setDraftQuery] = useState("");
   const [draftTieneCita, setDraftTieneCita] = useState("");
   const [draftEtapaIds, setDraftEtapaIds] = useState<string[]>([]);
 
@@ -516,7 +510,9 @@ export function EmbudoBoardClient({
     }
     try {
       const params = new URLSearchParams();
-      params.set("limit", "200");
+      // La búsqueda semántica se resuelve sobre los campos anidados del
+      // registro; ampliamos el lote para no perder coincidencias válidas.
+      params.set("limit", appliedCorreo.trim() ? "1000" : "200");
       if (asignadoId) {
         params.set("asignado_id", asignadoId);
       }
@@ -530,10 +526,7 @@ export function EmbudoBoardClient({
         params.set("estado", appliedEstado);
       }
       if (appliedCorreo.trim()) {
-        params.set("correo", appliedCorreo.trim());
-      }
-      if (appliedQuery.trim()) {
-        params.set("q", appliedQuery.trim());
+        params.set("q", appliedCorreo.trim());
       }
       if (appliedTieneCita) {
         params.set("tiene_cita", appliedTieneCita);
@@ -571,14 +564,14 @@ export function EmbudoBoardClient({
         }
       }
     }
-  }, [appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedQuery, appliedTieneCita, appliedEtapaIds]);
+  }, [appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds]);
 
   const fetchSupervisedVendors = useCallback(async () => {
     if (!showVendorFilter) return;
     setVendorLoading(true);
     setVendorError(null);
     try {
-      const response = await fetch("/api/embudo/supervised?limit=200", { cache: "no-store" });
+      const response = await fetch("/api/embudo/supervised?limit=500", { cache: "no-store" });
       if (!response.ok) {
         const message = await response.text().catch(() => `Error ${response.status}`);
         throw new Error(message || `Error ${response.status}`);
@@ -598,7 +591,7 @@ export function EmbudoBoardClient({
       );
     } catch (error) {
       setVendorError(
-        error instanceof Error ? error.message : "No se pudo cargar los vendedores supervisados.",
+          error instanceof Error ? error.message : "No se pudieron cargar los vendedores de la organización.",
       );
     } finally {
       setVendorLoading(false);
@@ -624,7 +617,7 @@ export function EmbudoBoardClient({
     }
     return stages.map((stage) => ({
       ...stage,
-      tarjetas: (stage.tarjetas ?? []).filter((card) => matchesEmailFilter(card, appliedCorreo)),
+      tarjetas: (stage.tarjetas ?? []).filter((card) => matchesSemanticSearch(card, appliedCorreo)),
     }));
   }, [stages, appliedCorreo]);
 
@@ -634,7 +627,7 @@ export function EmbudoBoardClient({
       return;
     }
     void fetchBoardData(selectedVendedorId || undefined);
-  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedQuery, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
+  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
 
   useEffect(() => {
     const refresh = () => {
@@ -1555,7 +1548,6 @@ export function EmbudoBoardClient({
     (appliedCanal ? 1 : 0) +
     (appliedEstado ? 1 : 0) +
     (appliedCorreo.trim() ? 1 : 0) +
-    (appliedQuery.trim() ? 1 : 0) +
     (appliedTieneCita ? 1 : 0) +
     (appliedEtapaIds.length ? 1 : 0) +
     (appliedDays !== null ? 1 : 0);
@@ -1589,12 +1581,12 @@ export function EmbudoBoardClient({
                 <Plus className="h-4 w-4" />
                 Nueva Oportunidad
                 </Button>
-              <div className="min-w-[260px] max-w-[360px] flex-1">
+              <div className="min-w-[280px] max-w-[440px] flex-1">
                 <Input
                   value={appliedCorreo}
                   onChange={(event) => setAppliedCorreo(event.target.value)}
-                  placeholder="Filtrar por correo electrónico"
-                  autoComplete="email"
+                  placeholder="Buscar por correo, nombre, proyecto, necesidades o código…"
+                  aria-label="Búsqueda semántica de oportunidades"
                 />
               </div>
               <Button
@@ -1605,7 +1597,6 @@ export function EmbudoBoardClient({
                 setDraftDays(appliedDays);
                   setDraftCanal(appliedCanal);
                   setDraftEstado(appliedEstado);
-                  setDraftQuery(appliedQuery);
                   setDraftTieneCita(appliedTieneCita);
                   setDraftEtapaIds(appliedEtapaIds);
                   setFiltersOpen(true);
@@ -1709,16 +1700,6 @@ export function EmbudoBoardClient({
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Buscar
-              </Label>
-              <Input
-                value={draftQuery}
-                onChange={(event) => setDraftQuery(event.target.value)}
-                placeholder="Nombre, correo, teléfono o título…"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Etapas
               </Label>
               <div className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border/60 bg-background/50 p-3">
@@ -1800,14 +1781,12 @@ export function EmbudoBoardClient({
                 setDraftDays(null);
                 setDraftCanal("");
                 setDraftEstado("");
-                setDraftQuery("");
                 setDraftTieneCita("");
                 setDraftEtapaIds([]);
                 setAppliedDays(null);
                 setAppliedCanal("");
                 setAppliedEstado("");
                 setAppliedCorreo("");
-                setAppliedQuery("");
                 setAppliedTieneCita("");
                 setAppliedEtapaIds([]);
                 if (showVendorFilter) setSelectedVendedorId("");
@@ -1821,7 +1800,6 @@ export function EmbudoBoardClient({
                 setAppliedDays(draftDays);
                 setAppliedCanal(draftCanal === "all" ? "" : draftCanal);
                 setAppliedEstado(draftEstado === "all" ? "" : draftEstado);
-                setAppliedQuery(draftQuery);
                 setAppliedTieneCita(draftTieneCita === "all" ? "" : draftTieneCita);
                 setAppliedEtapaIds(draftEtapaIds);
                 setFiltersOpen(false);

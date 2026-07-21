@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const limitParam = Number(url.searchParams.get("limit"))
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 200
 
-  const response = await callCrmApi("/crm/usuarios/supervisados", {
+  const response = await callCrmApi("/crm/usuarios/vendedores/organizacion", {
     searchParams: {
       limit: String(limit),
     },
