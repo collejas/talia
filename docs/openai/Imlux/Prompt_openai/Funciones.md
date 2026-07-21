@@ -244,173 +244,6 @@
 
 ---
 
-{
-  "name": "list_demo_slots",
-  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de cita dentro de WhatsApp.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa asociada al lead."
-      },
-      "timezone": {
-        "type": "string",
-        "description": "Zona horaria preferida del prospecto (ej. 'America/Mexico_City')."
-      },
-      "start_date": {
-        "type": "string",
-        "description": "Fecha inicial en formato YYYY-MM-DD. Si se omite, se usa la fecha actual."
-      },
-      "window_days": {
-        "type": "integer",
-        "description": "Cantidad de días a mostrar (máximo 60).",
-        "minimum": 1,
-        "maximum": 60
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "timezone",
-      "start_date",
-      "window_days"
-    ],
-    "additionalProperties": false
-  }
-}
-
---
-
-{
-  "name": "schedule_demo",
-  "description": "Confirma una cita en el slot seleccionado; el backend gestiona la invitación y los recordatorios.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa donde se registrará la cita."
-      },
-      "slot_id": {
-        "type": "string",
-        "description": "Identificador del slot devuelto por list_demo_slots."
-      },
-      "start_at": {
-        "type": "string",
-        "description": "Fecha y hora del slot en formato ISO 8601 (ej. '2025-03-18T16:00:00-06:00')."
-      },
-      "notes": {
-        "type": "string",
-        "description": "Notas opcionales que el prospecto haya mencionado."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "slot_id",
-      "start_at",
-      "notes"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "reschedule_demo",
-  "description": "Mueve una cita confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa relacionada a la cita."
-      },
-      "booking_id": {
-        "type": "string",
-        "description": "Identificador de la cita confirmada."
-      },
-      "start_at": {
-        "type": "string",
-        "description": "Nuevo horario en formato ISO 8601."
-      },
-      "notes": {
-        "type": "string",
-        "description": "Notas adicionales para el seguimiento."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "booking_id",
-      "start_at",
-      "notes"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "cancel_demo",
-  "description": "Cancela una cita previamente confirmada.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa relacionada a la cita."
-      },
-      "booking_id": {
-        "type": "string",
-        "description": "Identificador de la cita confirmada."
-      },
-      "reason": {
-        "type": "string",
-        "description": "Motivo opcional compartido por el prospecto."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "booking_id",
-      "reason"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "restart_conversation_cycle",
-  "description": "Registrar que un contacto abrió un nuevo tema o reinició la conversación para que se cree una oportunidad separada y el vendedor actual sea notificado.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "ID único de la conversación actual; permite ligar el reinicio al historial."
-      },
-      "reason": {
-        "type": "string",
-        "description": "Frase corta explicando por qué necesitas crear un ciclo nuevo (ej. 'Quiere evaluar Tal-IA para otra sucursal')."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "reason"
-    ],
-    "additionalProperties": false
-  },
-  "output_schema": null
-}
-
----
 
 {
   "name": "list_assistant_documents",
@@ -561,6 +394,50 @@
       "assistant_document_ids",
       "assistant_document_category",
       "assistant_document_limit"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "fetch_catalog_item_details",
+  "description": "Consulta productos, luminarias, modelos, familias, servicios o paquetes reales de IMLUX. Prioriza lookup SQL exacto en el catálogo del tenant y usa fallback semántico si no hay una coincidencia clara.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "organizacion_id": {
+        "type": "string",
+        "description": "ID de la organización actual. El backend normalmente lo resuelve desde el contexto seguro del tenant; no lo inventes."
+      },
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID de la conversación activa, si el sistema lo proporciona."
+      },
+      "query": {
+        "type": "string",
+        "description": "Nombre, código, familia, modelo, servicio o descripción del producto de IMLUX que el usuario desea consultar."
+      },
+      "detail_level": {
+        "type": "string",
+        "description": "Nivel de detalle solicitado; usa el valor 'metadata' para obtener cada campo del metadata.",
+        "enum": [
+          "metadata",
+          "overview"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Cantidad máxima de coincidencias a devolver (1-5).",
+        "minimum": 1,
+        "maximum": 5
+      }
+    },
+    "required": [
+      "query",
+      "detail_level"
     ],
     "additionalProperties": false
   }
