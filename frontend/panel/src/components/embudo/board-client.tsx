@@ -1552,6 +1552,21 @@ export function EmbudoBoardClient({
     (appliedEtapaIds.length ? 1 : 0) +
     (appliedDays !== null ? 1 : 0);
 
+  const clearFilters = () => {
+    setDraftDays(null);
+    setDraftCanal("");
+    setDraftEstado("");
+    setDraftTieneCita("");
+    setDraftEtapaIds([]);
+    setAppliedDays(null);
+    setAppliedCanal("");
+    setAppliedEstado("");
+    setAppliedCorreo("");
+    setAppliedTieneCita("");
+    setAppliedEtapaIds([]);
+    if (showVendorFilter) setSelectedVendedorId("");
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <SessionRecovery errors={boardState.errors} />
@@ -1605,6 +1620,15 @@ export function EmbudoBoardClient({
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 Filtros{activeFiltersCount ? ` (${activeFiltersCount})` : ""}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                disabled={!activeFiltersCount}
+              >
+                Limpiar filtros
               </Button>
             </div>
             {boardLoading ? (
@@ -1777,20 +1801,7 @@ export function EmbudoBoardClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setDraftDays(null);
-                setDraftCanal("");
-                setDraftEstado("");
-                setDraftTieneCita("");
-                setDraftEtapaIds([]);
-                setAppliedDays(null);
-                setAppliedCanal("");
-                setAppliedEstado("");
-                setAppliedCorreo("");
-                setAppliedTieneCita("");
-                setAppliedEtapaIds([]);
-                if (showVendorFilter) setSelectedVendedorId("");
-              }}
+              onClick={clearFilters}
             >
               Limpiar
             </Button>
