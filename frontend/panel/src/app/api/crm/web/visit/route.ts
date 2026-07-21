@@ -63,6 +63,9 @@ export async function POST(request: Request) {
         ...(request.headers.get("referer")
           ? { Referer: request.headers.get("referer") as string }
           : {}),
+        ...(request.headers.get("x-tenant-alias")
+          ? { "X-Tenant-Alias": request.headers.get("x-tenant-alias") as string }
+          : {}),
       },
       cache: "no-store",
       body: rawBody,

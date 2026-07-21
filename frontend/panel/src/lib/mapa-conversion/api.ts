@@ -102,6 +102,18 @@ export type DemografiaSummaryResponse = {
   canales: string[] | null;
   etapas: string[] | null;
   range: Record<string, unknown>;
+  web_sessions_trend?: {
+    metric: "sesiones_web";
+    base: "unique_sessions";
+    current: number;
+    previous: number;
+    delta: number;
+    delta_pct: number | null;
+    direction: "up" | "down" | "flat";
+    comparable: boolean;
+    current_range: Record<string, string | null>;
+    previous_range: Record<string, string | null>;
+  };
   attribution_catalog?: {
     utm_campaign_labels?: Record<string, string>;
     campana_options?: Array<{

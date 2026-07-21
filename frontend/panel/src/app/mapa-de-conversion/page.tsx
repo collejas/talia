@@ -509,6 +509,7 @@ export default async function Page({
     nivelLabel,
     visitasTotales: acquisitionMetrics.totalSessions,
     sesionesWebTotales: acquisitionMetrics.totalSessions,
+    webSessionsTrend: demografiaResponse?.summary.web_sessions_trend ?? null,
     sesionesWebchatTotales,
     conversacionesWhatsapp,
     conversacionesVoz,

@@ -1,4 +1,5 @@
-import { IconRocket, IconRoute, IconMessageCircle, IconWorld } from "@tabler/icons-react"
+import { IconArrowDown, IconArrowUp, IconMinus, IconRocket, IconRoute, IconMessageCircle, IconWorld } from "@tabler/icons-react"
+import { createElement } from "react"
 
 import {
   Card,
@@ -13,6 +14,13 @@ type MapKpisProps = {
   nivelLabel: string
   visitasTotales: number
   sesionesWebTotales: number
+  webSessionsTrend?: {
+    previous: number
+    delta: number
+    delta_pct: number | null
+    direction: "up" | "down" | "flat"
+    comparable: boolean
+  } | null
   sesionesWebchatTotales: number
   conversacionesWhatsapp: number
   conversacionesVoz: number
@@ -40,6 +48,7 @@ export function MapKpis({
   nivelLabel,
   visitasTotales,
   sesionesWebTotales,
+  webSessionsTrend,
   sesionesWebchatTotales,
   conversacionesWhatsapp,
   conversacionesVoz,
@@ -55,6 +64,21 @@ export function MapKpis({
   stacked = false,
   className,
 }: MapKpisProps) {
+  const trendIcon = webSessionsTrend?.direction === "up"
+    ? IconArrowUp
+    : webSessionsTrend?.direction === "down"
+      ? IconArrowDown
+      : IconMinus
+  const trendColor = webSessionsTrend?.direction === "up"
+    ? "text-emerald-600"
+    : webSessionsTrend?.direction === "down"
+      ? "text-rose-600"
+      : "text-muted-foreground"
+  const trendLabel = webSessionsTrend?.comparable
+    ? webSessionsTrend.delta_pct == null
+      ? "Sin base de comparación"
+      : `${webSessionsTrend.delta_pct >= 0 ? "+" : ""}${webSessionsTrend.delta_pct.toLocaleString("es-MX", { maximumFractionDigits: 1 })}% frente al periodo anterior`
+    : "Sin base de comparación"
   const cards = [
     {
       title: "Zona con más visitas",
@@ -67,7 +91,14 @@ export function MapKpis({
     {
       title: "Visitas al sitio",
       value: formatDisplayNumber(sesionesWebTotales),
-      helper: `Nivel ${nivelLabel} · Total registrado ${formatDisplayNumber(visitasTotales)}`,
+      helper: `Sesiones únicas · Nivel ${nivelLabel} · Total registrado ${formatDisplayNumber(visitasTotales)}`,
+      footer: (
+        <div className={cn("flex items-center gap-1 text-xs", trendColor)}>
+          {createElement(trendIcon, { className: "size-3.5" })}
+          <span>{webSessionsTrend?.comparable ? (webSessionsTrend.direction === "up" ? "Al alza" : webSessionsTrend.direction === "down" ? "A la baja" : "Estable") : "Tendencia"}</span>
+          <span className="text-muted-foreground">· {trendLabel}</span>
+        </div>
+      ),
       icon: IconWorld,
     },
     {
@@ -117,6 +148,7 @@ export function MapKpis({
               {config.value}
             </CardTitle>
           </CardHeader>
+          {config.footer ? <CardFooter>{config.footer}</CardFooter> : null}
           <CardFooter className="text-xs text-muted-foreground">{config.helper}</CardFooter>
         </Card>
       ))}

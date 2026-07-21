@@ -7081,6 +7081,64 @@ def _build_range_payload(
     }
 
 
+def _shift_datetime_year(value: datetime, years: int) -> datetime:
+    """Desplaza una fecha conservando hora/zona, incluyendo el 29 de febrero."""
+    try:
+        return value.replace(year=value.year + years)
+    except ValueError:
+        return value.replace(year=value.year + years, day=28)
+
+
+def _build_comparison_date_range(
+    *,
+    rango: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> tuple[datetime | None, datetime | None]:
+    """Devuelve el periodo anterior equivalente para comparar sesiones web."""
+    if date_from is None or date_to is None or date_to <= date_from:
+        return None, None
+    if (rango or "").strip().lower() == "ano_actual":
+        return _shift_datetime_year(date_from, -1), _shift_datetime_year(date_to, -1)
+    duration = date_to - date_from
+    return date_from - duration, date_from
+
+
+def _build_web_sessions_trend(
+    *,
+    current_payload: dict[str, Any],
+    previous_payload: dict[str, Any],
+    rango: str | None,
+    current_from: datetime | None,
+    current_to: datetime | None,
+    previous_from: datetime | None,
+    previous_to: datetime | None,
+) -> dict[str, Any]:
+    current = int((current_payload.get("totals") or {}).get("sesiones_web_total") or 0)
+    previous = int((previous_payload.get("totals") or {}).get("sesiones_web_total") or 0)
+    delta = current - previous
+    delta_pct = round(delta / previous * 100, 1) if previous > 0 else None
+    direction = "flat"
+    if previous > 0:
+        ratio = delta / previous
+        if ratio > 0.05:
+            direction = "up"
+        elif ratio < -0.05:
+            direction = "down"
+    return {
+        "metric": "sesiones_web",
+        "base": "unique_sessions",
+        "current": current,
+        "previous": previous,
+        "delta": delta,
+        "delta_pct": delta_pct,
+        "direction": direction,
+        "comparable": bool(previous_from and previous_to),
+        "current_range": _build_range_payload(rango, current_from, current_to),
+        "previous_range": _build_range_payload(None, previous_from, previous_to),
+    }
+
+
 def _ensure_state_code(value: str) -> str:
     digits = "".join(ch for ch in str(value) if ch.isdigit())
     if not digits:
@@ -36512,7 +36570,6 @@ async def get_visits_web_sessions(
         hasta,
         timezone_name=effective_timezone,
     )
-
     def _row_tracking_param(row: dict[str, Any], key: str) -> str | None:
         normalized_key = key.strip().lower()
         direct_value = _clean_text(row.get(normalized_key))
@@ -39034,13 +39091,8 @@ async def register_web_visit(
     organizacion_id: str | None = None
     if tenant_alias:
         organizacion_id = await resolve_organizacion_id(canal="webchat", clave=tenant_alias)
-    if not organizacion_id:
-        explicit_org = raw_metadata.get("organizacion_id")
-        if isinstance(explicit_org, str) and explicit_org.strip():
-            try:
-                organizacion_id = str(UUID(explicit_org.strip()))
-            except ValueError:
-                organizacion_id = None
+    # Nunca aceptamos organizacion_id desde metadata pública: sería falsificable
+    # y permitiría atribuir tráfico a otro tenant. El alias se resuelve en backend.
     if not organizacion_id:
         organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
 
@@ -40949,6 +41001,11 @@ async def demografia_resumen_v2(
         hasta,
         timezone_name=effective_timezone,
     )
+    comparison_from, comparison_to = _build_comparison_date_range(
+        rango=rango,
+        date_from=date_from,
+        date_to=date_to,
+    )
     channel_values = _parse_channels_param(canales)
     stage_values = _parse_stages_param(etapas)
 
@@ -40990,7 +41047,7 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
-            "schema_version": "resumen-v2-attribution-rankings-v4",
+            "schema_version": "resumen-v2-attribution-rankings-v5-web-sessions-trend",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -41039,7 +41096,7 @@ async def demografia_resumen_v2(
 
     try:
         parallel_started = time.perf_counter()
-        leads_payload, visitantes_payload = await asyncio.gather(
+        leads_payload, visitantes_payload, comparison_visitantes_payload = await asyncio.gather(
             demografia_service.fetch_leads_resumen(
                 nivel=nivel_normalizado,
                 channels=channel_values,
@@ -41065,6 +41122,25 @@ async def demografia_resumen_v2(
                 wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
                 jwt=effective_user_token,
             ),
+            demografia_service.fetch_visitantes_resumen_v2(
+                nivel=nivel_normalizado,
+                date_from=comparison_from,
+                date_to=comparison_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+                utm_campaign=utm_campaign_value,
+                campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
+                template_id=str(template_uuid_value) if template_uuid_value else None,
+                campaign_type=campana_tipo_value,
+                wa_canal_publicitario=wa_canal_publicitario_value,
+                wa_campana_publicitaria=wa_campana_publicitaria_value,
+                wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+                jwt=effective_user_token,
+            )
+            if comparison_from and comparison_to
+            else asyncio.sleep(0, result={"items": [], "totals": {}}),
         )
         stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
         whatsapp_locations_started = time.perf_counter()
@@ -41550,6 +41626,15 @@ async def demografia_resumen_v2(
         "canales": channel_values,
         "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
+        "web_sessions_trend": _build_web_sessions_trend(
+            current_payload=visitantes_payload,
+            previous_payload=comparison_visitantes_payload,
+            rango=rango,
+            current_from=date_from,
+            current_to=date_to,
+            previous_from=comparison_from,
+            previous_to=comparison_to,
+        ),
         "attribution_filters": {
             "source_class": source_class_value,
             "utm_source": utm_source_value,
