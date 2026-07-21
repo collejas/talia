@@ -143,6 +143,8 @@ class ActivityReminderJobsRunner:
         asunto = _clean_text(row.get("asunto")) or _clean_text(row.get("tipo")) or "Recordatorio"
         oportunidad_id = _safe_uuid(row.get("oportunidad_id"))
         contacto_id = _safe_uuid(row.get("contacto_id"))
+        persona_id = _safe_uuid(row.get("persona_id"))
+        cuenta_id = _safe_uuid(row.get("cuenta_id"))
 
         if existing:
             if not row.get("recordatorio_notificado_en"):
@@ -175,9 +177,21 @@ class ActivityReminderJobsRunner:
             category="actividades",
             entity_kind="actividad",
             entity_id=str(activity_id),
+            actividad_id=activity_id,
+            persona_id=persona_id,
+            cuenta_id=cuenta_id,
+            oportunidad_id=oportunidad_id,
             action=UserNotificationAction(
-                label="Abrir oportunidad",
-                href=f"/embudo?oportunidadId={oportunidad_id}" if oportunidad_id else "/embudo",
+                label="Abrir registro",
+                href=(
+                    f"/embudo?oportunidadId={oportunidad_id}"
+                    if oportunidad_id
+                    else f"/personas/{persona_id}"
+                    if persona_id
+                    else f"/cuentas/{cuenta_id}"
+                    if cuenta_id
+                    else "/embudo"
+                ),
             ),
             meta={
                 "actividad_id": str(activity_id),

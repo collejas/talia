@@ -16188,6 +16188,7 @@ class CRMActivity(BaseModel):
     sla_horas: int | None = None
     recordatorio_en: datetime | None = None
     cuenta_id: UUID | None = None
+    persona_id: UUID | None = None
     contacto_id: UUID | None = None
     oportunidad_id: UUID | None = None
     creado_por_usuario_id: UUID | None = None
@@ -16216,6 +16217,7 @@ class CRMActivityCreate(BaseModel):
     sla_horas: int | None = Field(default=None, ge=0)
     recordatorio_en: datetime | None = None
     cuenta_id: UUID | None = None
+    persona_id: UUID | None = None
     contacto_id: UUID | None = None
     oportunidad_id: UUID | None = None
     creado_por_usuario_id: UUID | None = None
@@ -16236,6 +16238,7 @@ class CRMActivityUpdate(BaseModel):
     sla_horas: int | None = Field(default=None, ge=0)
     recordatorio_en: datetime | None = None
     cuenta_id: UUID | None = None
+    persona_id: UUID | None = None
     contacto_id: UUID | None = None
     oportunidad_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
@@ -37287,6 +37290,7 @@ async def list_activities(
     _: str = Depends(require_permission("activities.view")),
     oportunidad_id: UUID | None = Query(default=None),
     cuenta_id: UUID | None = Query(default=None),
+    persona_id: UUID | None = Query(default=None),
     contacto_id: UUID | None = Query(default=None),
     asignado_a_usuario_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
@@ -37298,6 +37302,7 @@ async def list_activities(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
             cuenta_id=cuenta_id,
+            persona_id=persona_id,
             contacto_id=contacto_id,
             asignado_a_usuario_id=asignado_a_usuario_id,
             estado=estado,
@@ -37361,6 +37366,15 @@ async def create_activity(
     body = payload.model_dump(mode="json", exclude_unset=True)
     if "creado_por_usuario_id" not in body and usuario_id:
         body["creado_por_usuario_id"] = str(usuario_id)
+    # Las actividades independientes de una oportunidad pertenecen al usuario
+    # que las crea por defecto. Así el recordatorio no queda sin destinatario.
+    if (
+        usuario_id
+        and not body.get("asignado_a_usuario_id")
+        and not body.get("oportunidad_id")
+        and (body.get("persona_id") or body.get("cuenta_id"))
+    ):
+        body["asignado_a_usuario_id"] = str(usuario_id)
     try:
         row = await repo.create_activity(
             organizacion_id=organizacion_id,

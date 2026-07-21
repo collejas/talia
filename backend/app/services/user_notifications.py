@@ -35,6 +35,10 @@ class UserNotificationCreate:
     category: str | None = None
     entity_kind: str | None = None
     entity_id: str | None = None
+    actividad_id: UUID | None = None
+    persona_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    oportunidad_id: UUID | None = None
     action: UserNotificationAction | None = None
     meta: dict[str, Any] | None = None
     dedupe_key: str | None = None
@@ -59,6 +63,10 @@ def build_user_notification_payload(notification: UserNotificationCreate) -> dic
         payload["entity_kind"] = entity_kind
     if entity_id := _clean_text(notification.entity_id):
         payload["entity_id"] = entity_id
+    for field_name in ("actividad_id", "persona_id", "cuenta_id", "oportunidad_id"):
+        field_value = getattr(notification, field_name)
+        if field_value:
+            payload[field_name] = str(field_value)
     if dedupe_key := _clean_text(notification.dedupe_key):
         payload["dedupe_key"] = dedupe_key
     if group_key := _clean_text(notification.group_key):

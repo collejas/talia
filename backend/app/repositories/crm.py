@@ -2919,6 +2919,7 @@ class CRMRepository:
         organizacion_id: UUID,
         oportunidad_id: UUID | None = None,
         cuenta_id: UUID | None = None,
+        persona_id: UUID | None = None,
         contacto_id: UUID | None = None,
         asignado_a_usuario_id: UUID | None = None,
         estado: str | None = None,
@@ -2935,6 +2936,8 @@ class CRMRepository:
             params["oportunidad_id"] = f"eq.{oportunidad_id}"
         if cuenta_id:
             params["cuenta_id"] = f"eq.{cuenta_id}"
+        if persona_id:
+            params["persona_id"] = f"eq.{persona_id}"
         if contacto_id:
             params["contacto_id"] = f"eq.{contacto_id}"
         if asignado_a_usuario_id:

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { usePermissions } from "@/hooks/use-permissions";
 import { IconArrowLeft, IconBuilding, IconPencil, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
+import { ActivityNotesPanel } from "@/components/crm/activity-notes-panel";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1006,6 +1007,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       </div>
 
       <div className="mt-6 grid gap-6">
+        <ActivityNotesPanel entityType="cuenta" entityId={cuentaId} />
         <Card>
           <CardHeader>
             <CardTitle>Relaciones de empresa</CardTitle>

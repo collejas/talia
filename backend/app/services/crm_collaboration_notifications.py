@@ -34,9 +34,18 @@ def _truncate(value: Any, *, limit: int = 120) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
-def _opportunity_href(opportunity_id: UUID | None) -> str:
+def _entity_href(
+    *,
+    opportunity_id: UUID | None = None,
+    persona_id: UUID | None = None,
+    cuenta_id: UUID | None = None,
+) -> str:
     if opportunity_id:
         return f"/embudo?oportunidadId={opportunity_id}"
+    if persona_id:
+        return f"/personas/{persona_id}"
+    if cuenta_id:
+        return f"/cuentas/{cuenta_id}"
     return "/embudo"
 
 
@@ -53,6 +62,8 @@ async def notify_activity_created(
     asunto = _truncate(activity_row.get("asunto") or activity_row.get("tipo") or "Actividad", limit=90)
     opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
     contact_id = _safe_uuid(activity_row.get("contacto_id"))
+    persona_id = _safe_uuid(activity_row.get("persona_id"))
+    cuenta_id = _safe_uuid(activity_row.get("cuenta_id"))
     creator_id = _safe_uuid(activity_row.get("creado_por_usuario_id"))
 
     recipient_id: UUID | None = None
@@ -69,6 +80,8 @@ async def notify_activity_created(
                 opportunity_row.get("propietario_usuario_id")
             )
             contact_id = contact_id or _safe_uuid(opportunity_row.get("contacto_principal_id"))
+            persona_id = persona_id or _safe_uuid(opportunity_row.get("persona_id"))
+            cuenta_id = cuenta_id or _safe_uuid(opportunity_row.get("cuenta_id"))
 
     if recipient_id is None:
         recipient_id = _safe_uuid(activity_row.get("asignado_a_usuario_id")) or _safe_uuid(
@@ -88,14 +101,20 @@ async def notify_activity_created(
         category="crm",
         entity_kind="actividad",
         entity_id=str(activity_id),
+        actividad_id=activity_id,
+        persona_id=persona_id,
+        cuenta_id=cuenta_id,
+        oportunidad_id=opportunity_id,
         action=UserNotificationAction(
-            label="Abrir oportunidad",
-            href=_opportunity_href(opportunity_id),
+            label="Abrir registro",
+            href=_entity_href(opportunity_id=opportunity_id, persona_id=persona_id, cuenta_id=cuenta_id),
         ),
         meta={
             "actividad_id": str(activity_id),
             "oportunidad_id": str(opportunity_id) if opportunity_id else None,
             "contacto_id": str(contact_id) if contact_id else None,
+            "persona_id": str(persona_id) if persona_id else None,
+            "cuenta_id": str(cuenta_id) if cuenta_id else None,
             "asignado_a_usuario_id": str(recipient_id),
             "creado_por_usuario_id": str(creator_id) if creator_id else None,
             "asunto": asunto,
@@ -121,6 +140,8 @@ async def notify_note_created(
     recipient_id: UUID | None = None
     opportunity_id: UUID | None = None
     contact_id: UUID | None = None
+    persona_id: UUID | None = None
+    cuenta_id: UUID | None = None
     source_label = _clean_text(note_row.get("relacion_tipo")) or "oportunidad"
 
     activity_id = _safe_uuid(note_row.get("actividad_id"))
@@ -135,6 +156,8 @@ async def notify_note_created(
         if isinstance(activity_row, dict):
             opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
             contact_id = _safe_uuid(activity_row.get("contacto_id"))
+            persona_id = _safe_uuid(activity_row.get("persona_id"))
+            cuenta_id = _safe_uuid(activity_row.get("cuenta_id"))
             source_label = _clean_text(activity_row.get("asunto")) or source_label
 
     if recipient_id is None:
@@ -154,6 +177,13 @@ async def notify_note_created(
                 )
                 opportunity_id = relacion_id
                 contact_id = _safe_uuid(opportunity_row.get("contacto_principal_id"))
+                persona_id = _safe_uuid(opportunity_row.get("persona_id"))
+                cuenta_id = _safe_uuid(opportunity_row.get("cuenta_id"))
+        elif relacion_tipo in {"persona", "cuenta"} and relacion_id:
+            if relacion_tipo == "persona":
+                persona_id = relacion_id
+            else:
+                cuenta_id = relacion_id
         elif relacion_tipo == "actividad" and relacion_id:
             try:
                 activity_row = await repo.get_activity(
@@ -165,6 +195,8 @@ async def notify_note_created(
             if isinstance(activity_row, dict):
                 opportunity_id = _safe_uuid(activity_row.get("oportunidad_id"))
                 contact_id = _safe_uuid(activity_row.get("contacto_id"))
+                persona_id = _safe_uuid(activity_row.get("persona_id"))
+                cuenta_id = _safe_uuid(activity_row.get("cuenta_id"))
                 source_label = _clean_text(activity_row.get("asunto")) or source_label
                 if opportunity_id:
                     try:
@@ -192,20 +224,34 @@ async def notify_note_created(
     else:
         message = "Se agregó una nota en la oportunidad."
 
-    entity_kind = "oportunidad" if opportunity_id else "actividad" if activity_id else "nota"
+    entity_kind = (
+        "oportunidad"
+        if opportunity_id
+        else "persona"
+        if persona_id
+        else "cuenta"
+        if cuenta_id
+        else "actividad"
+        if activity_id
+        else "nota"
+    )
     notification = UserNotificationCreate(
         organizacion_id=organizacion_id,
         usuario_id=recipient_id,
         type="crm.note.created",
         level="info",
-        title="Nueva nota en tu oportunidad",
+        title="Nueva nota en tu registro",
         message=message,
         category="crm",
         entity_kind=entity_kind,
         entity_id=str(opportunity_id or activity_id or note_id),
+        actividad_id=activity_id,
+        persona_id=persona_id,
+        cuenta_id=cuenta_id,
+        oportunidad_id=opportunity_id,
         action=UserNotificationAction(
-            label="Abrir oportunidad",
-            href=_opportunity_href(opportunity_id),
+            label="Abrir registro",
+            href=_entity_href(opportunity_id=opportunity_id, persona_id=persona_id, cuenta_id=cuenta_id),
         ),
         meta={
             "nota_id": str(note_id),

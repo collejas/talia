@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
 import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
+import { ActivityNotesPanel } from "@/components/crm/activity-notes-panel";
 
 type PersonaDetail = Record<string, unknown>;
 type PersonaRelation = Record<string, unknown>;
@@ -426,6 +427,8 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
               )}
             </CardContent>
           </Card>
+
+          <ActivityNotesPanel entityType="persona" entityId={personaId} />
         </div>
 
         <div className="space-y-6">
