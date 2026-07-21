@@ -1844,9 +1844,9 @@ export function EmbudoBoardClient({
             Aún no hay etapas configuradas en tu embudo.
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-2 pr-2">
+          <div className="flex h-[calc(100vh-260px)] min-h-[420px] flex-none gap-4 overflow-x-auto pb-2 pr-2">
             <div className="w-[320px] shrink-0">
-              <section className="flex h-full min-h-[420px] flex-col rounded-xl border border-primary/60 bg-primary/5">
+              <section className="flex h-full min-h-0 flex-col rounded-xl border border-primary/60 bg-primary/5">
                 <div className="px-4 py-4">
                   <h3 className="text-sm font-semibold text-primary">Sin conversación</h3>
                   <p className="text-xs text-muted-foreground">Visitas al webchat sin iniciar chat</p>
