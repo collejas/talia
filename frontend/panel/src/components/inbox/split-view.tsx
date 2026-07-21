@@ -226,6 +226,9 @@ type PromoteOpportunityResponse = {
 };
 
 type InboxPromoteFormState = {
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno: string;
   nombre_completo: string;
   correo: string;
   telefono_e164: string;
@@ -234,6 +237,21 @@ type InboxPromoteFormState = {
   necesidad: string;
   monto_estimado: string;
 };
+
+function emptyPromoteFormState(): InboxPromoteFormState {
+  return {
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    nombre_completo: "",
+    correo: "",
+    telefono_e164: "",
+    company_name: "",
+    proyecto_nombre: "",
+    necesidad: "",
+    monto_estimado: "",
+  };
+}
 
 type PendingAttachment = InboxAttachment & { id: string };
 
@@ -445,7 +463,13 @@ function formatCountryLabel(
 
 function buildPromoteFormState(thread: InboxThread): InboxPromoteFormState {
   const baseName = thread.contactoNombre?.trim();
+  const nameParts = baseName && baseName !== "Contacto sin nombre" ? baseName.split(/\s+/) : [];
+  const nombre = nameParts.shift() ?? "";
+  const apellidoPaterno = nameParts.shift() ?? "";
   return {
+    nombre,
+    apellido_paterno: apellidoPaterno,
+    apellido_materno: nameParts.join(" "),
     nombre_completo: baseName && baseName !== "Contacto sin nombre" ? baseName : "",
     correo: thread.contactoCorreo?.trim() ?? "",
     telefono_e164: thread.contactoTelefono?.trim() ?? "",
@@ -1725,7 +1749,10 @@ export function InboxSplitView({
       setPromoteFormError("Completa el formulario para crear la oportunidad.");
       return false;
     }
-    const nombre = promoteForm.nombre_completo.trim();
+    const nombre = promoteForm.nombre.trim();
+    const apellidoPaterno = promoteForm.apellido_paterno.trim();
+    const apellidoMaterno = promoteForm.apellido_materno.trim();
+    const nombreCompleto = [nombre, apellidoPaterno, apellidoMaterno].filter(Boolean).join(" ");
     const correo = promoteForm.correo.trim();
     const telefono = promoteForm.telefono_e164.trim();
     const empresa = promoteForm.company_name.trim();
@@ -1733,7 +1760,7 @@ export function InboxSplitView({
     const necesidad = promoteForm.necesidad.trim();
     const montoRaw = promoteForm.monto_estimado.trim();
 
-    if (!nombre || !correo || !telefono || !empresa || !proyecto || !necesidad || !montoRaw) {
+    if (!nombre || !apellidoPaterno || !correo || !telefono || !empresa || !proyecto || !necesidad || !montoRaw) {
       setPromoteFormError("Completa todos los campos para crear la oportunidad.");
       return false;
     }
@@ -1752,7 +1779,10 @@ export function InboxSplitView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nombre_completo: nombre,
+          nombre,
+          apellido_paterno: apellidoPaterno,
+          apellido_materno: apellidoMaterno,
+          nombre_completo: nombreCompleto,
           correo,
           telefono_e164: telefono,
           company_name: empresa,
@@ -1786,7 +1816,7 @@ export function InboxSplitView({
             ? {
                 ...thread,
                 opportunityId,
-                contactoNombre: nombre || thread.contactoNombre,
+                contactoNombre: nombreCompleto || thread.contactoNombre,
                 contactoCorreo: correo || thread.contactoCorreo,
                 contactoTelefono: telefono || thread.contactoTelefono,
               }
@@ -2279,27 +2309,49 @@ export function InboxSplitView({
           </DialogHeader>
 
           <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="promote-nombre">Nombre</Label>
-              <Input
-                id="promote-nombre"
-                value={promoteForm?.nombre_completo ?? ""}
-                onChange={(event) =>
-                  setPromoteForm((prev) => ({
-                    ...(prev ?? {
-                      nombre_completo: "",
-                      correo: "",
-                      telefono_e164: "",
-                      company_name: "",
-                      proyecto_nombre: "",
-                      necesidad: "",
-                      monto_estimado: "",
-                    }),
-                    nombre_completo: event.target.value,
-                  }))
-                }
-                disabled={promotingOpportunity}
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="promote-nombre">Nombre</Label>
+                <Input
+                  id="promote-nombre"
+                  value={promoteForm?.nombre ?? ""}
+                  onChange={(event) =>
+                    setPromoteForm((prev) => ({
+                      ...(prev ?? emptyPromoteFormState()),
+                      nombre: event.target.value,
+                    }))
+                  }
+                  disabled={promotingOpportunity}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="promote-apellido-paterno">Apellido paterno</Label>
+                <Input
+                  id="promote-apellido-paterno"
+                  value={promoteForm?.apellido_paterno ?? ""}
+                  onChange={(event) =>
+                    setPromoteForm((prev) => ({
+                      ...(prev ?? emptyPromoteFormState()),
+                      apellido_paterno: event.target.value,
+                    }))
+                  }
+                  disabled={promotingOpportunity}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="promote-apellido-materno">Apellido materno</Label>
+                <Input
+                  id="promote-apellido-materno"
+                  value={promoteForm?.apellido_materno ?? ""}
+                  onChange={(event) =>
+                    setPromoteForm((prev) => ({
+                      ...(prev ?? emptyPromoteFormState()),
+                      apellido_materno: event.target.value,
+                    }))
+                  }
+                  disabled={promotingOpportunity}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2312,6 +2364,9 @@ export function InboxSplitView({
                   onChange={(event) =>
                     setPromoteForm((prev) => ({
                       ...(prev ?? {
+                        nombre: "",
+                        apellido_paterno: "",
+                        apellido_materno: "",
                         nombre_completo: "",
                         correo: "",
                         telefono_e164: "",
@@ -2334,6 +2389,9 @@ export function InboxSplitView({
                   onChange={(event) =>
                     setPromoteForm((prev) => ({
                       ...(prev ?? {
+                        nombre: "",
+                        apellido_paterno: "",
+                        apellido_materno: "",
                         nombre_completo: "",
                         correo: "",
                         telefono_e164: "",
@@ -2358,6 +2416,9 @@ export function InboxSplitView({
                 onChange={(event) =>
                   setPromoteForm((prev) => ({
                     ...(prev ?? {
+                      nombre: "",
+                      apellido_paterno: "",
+                      apellido_materno: "",
                       nombre_completo: "",
                       correo: "",
                       telefono_e164: "",
@@ -2381,6 +2442,9 @@ export function InboxSplitView({
                 onChange={(event) =>
                   setPromoteForm((prev) => ({
                     ...(prev ?? {
+                      nombre: "",
+                      apellido_paterno: "",
+                      apellido_materno: "",
                       nombre_completo: "",
                       correo: "",
                       telefono_e164: "",
@@ -2405,6 +2469,9 @@ export function InboxSplitView({
                 onChange={(event) =>
                   setPromoteForm((prev) => ({
                     ...(prev ?? {
+                      nombre: "",
+                      apellido_paterno: "",
+                      apellido_materno: "",
                       nombre_completo: "",
                       correo: "",
                       telefono_e164: "",
@@ -2431,6 +2498,9 @@ export function InboxSplitView({
                 onChange={(event) =>
                   setPromoteForm((prev) => ({
                     ...(prev ?? {
+                      nombre: "",
+                      apellido_paterno: "",
+                      apellido_materno: "",
                       nombre_completo: "",
                       correo: "",
                       telefono_e164: "",

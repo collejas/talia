@@ -5165,6 +5165,9 @@ class ManualOverridePayload(BaseModel):
 
 
 class InboxPromoteOpportunityPayload(BaseModel):
+    nombre: str | None = Field(default=None, max_length=120)
+    apellido_paterno: str | None = Field(default=None, max_length=120)
+    apellido_materno: str | None = Field(default=None, max_length=120)
     nombre_completo: str | None = Field(default=None, max_length=160)
     correo: str | None = Field(default=None, max_length=255)
     telefono_e164: str | None = Field(default=None, max_length=32)
@@ -26385,7 +26388,8 @@ async def set_inbox_manual_mode(
 async def promote_inbox_conversation_to_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("pipeline.view")),
+    _pipeline_permission: str = Depends(require_permission("pipeline.view")),
+    _contacts_permission: str = Depends(require_permission("contacts.write")),
     conversacion_id: UUID,
     payload: InboxPromoteOpportunityPayload | None = None,
 ) -> dict[str, Any]:
@@ -26395,19 +26399,87 @@ async def promote_inbox_conversation_to_opportunity(
         raise HTTPException(status_code=502, detail=f"conversation_lookup_failed:{exc}") from exc
 
     persona_id_value = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
-    if not persona_id_value:
-        raise HTTPException(status_code=409, detail="conversation_contact_missing")
-
-    try:
-        persona_row = await storage.fetch_persona(str(persona_id_value))
-    except StorageError as exc:
-        raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
-
-    org_value = persona_row.get("organizacion_id")
+    org_value = conversation_meta.get("organizacion_id")
     try:
         organizacion_id = UUID(str(org_value))
     except (TypeError, ValueError):
-        raise HTTPException(status_code=409, detail="contact_org_missing")
+        raise HTTPException(status_code=409, detail="conversation_org_missing")
+
+    form_nombre = _clean_text(payload.nombre) if payload else None
+    form_apellido_paterno = _clean_text(payload.apellido_paterno) if payload else None
+    form_apellido_materno = _clean_text(payload.apellido_materno) if payload else None
+    explicit_name = " ".join(
+        part for part in (form_nombre, form_apellido_paterno, form_apellido_materno) if part
+    ).strip() or None
+    form_nombre_completo = explicit_name or (_clean_text(payload.nombre_completo) if payload else None)
+    form_correo = _normalize_email(payload.correo) if payload else None
+    form_telefono = _clean_text(payload.telefono_e164) if payload else None
+    form_company = _clean_text(payload.company_name) if payload else None
+    form_proyecto = _clean_text(payload.proyecto_nombre) if payload else None
+    form_necesidad = _clean_text(payload.necesidad) if payload else None
+    form_monto = payload.monto_estimado if payload and payload.monto_estimado is not None else None
+
+    conversation_persona_missing = not persona_id_value
+    persona_row: dict[str, Any] | None = None
+    if not persona_id_value and form_correo:
+        try:
+            persona_row = await repo.get_persona_by_email(
+                email=form_correo,
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
+        if persona_row:
+            persona_id_value = persona_row.get("id")
+
+    if not persona_id_value:
+        if not form_nombre or not form_apellido_paterno or not form_correo or not form_telefono:
+            raise HTTPException(status_code=422, detail="contact_identity_required")
+        try:
+            persona_row = await repo.create_persona(
+                organizacion_id=organizacion_id,
+                payload={
+                    "nombre": form_nombre,
+                    "nombre_nombres": form_nombre,
+                    "apellido_paterno": form_apellido_paterno,
+                    "apellido_materno": form_apellido_materno,
+                    "nombre_completo": form_nombre_completo,
+                    "correo_principal": form_correo,
+                    "telefono_principal_e164": form_telefono,
+                    "company_name": form_company,
+                    "necesidad_proposito": form_necesidad,
+                    "origen": "inbox_promote_modal",
+                },
+            )
+            persona_id_value = persona_row.get("id")
+            if not persona_id_value:
+                raise CRMRepositoryError("persona_create_missing_id")
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=f"contact_create_failed:{exc}") from exc
+    else:
+        try:
+            if persona_row is None:
+                persona_row = await storage.fetch_persona(str(persona_id_value))
+        except StorageError as exc:
+            raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
+
+        if not persona_row:
+            raise HTTPException(status_code=404, detail="conversation_contact_not_found")
+        persona_org_value = persona_row.get("organizacion_id")
+        if persona_org_value and str(persona_org_value) != str(organizacion_id):
+            raise HTTPException(status_code=404, detail="conversation_contact_not_found")
+
+    if conversation_persona_missing:
+        try:
+            await repo.update_conversation(
+                conversation_id=str(conversacion_id),
+                patch={
+                    "persona_id": str(persona_id_value),
+                    "contacto_id": str(persona_id_value),
+                },
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=f"conversation_link_failed:{exc}") from exc
 
     existing = await repo.find_open_opportunity_by_conversation(
         organizacion_id=organizacion_id,
@@ -26420,21 +26492,19 @@ async def promote_inbox_conversation_to_opportunity(
     except (TypeError, ValueError):
         raise HTTPException(status_code=409, detail="conversation_contact_invalid")
 
-    form_nombre = _clean_text(payload.nombre_completo) if payload else None
-    form_correo = _normalize_email(payload.correo) if payload else None
-    form_telefono = _clean_text(payload.telefono_e164) if payload else None
-    form_company = _clean_text(payload.company_name) if payload else None
-    form_proyecto = _clean_text(payload.proyecto_nombre) if payload else None
-    form_necesidad = _clean_text(payload.necesidad) if payload else None
-    form_monto = payload.monto_estimado if payload and payload.monto_estimado is not None else None
-
     persona_patch: dict[str, Any] = {}
     if form_nombre:
-        persona_patch["nombre_completo"] = form_nombre
+        persona_patch["nombre"] = form_nombre
+    if form_apellido_paterno:
+        persona_patch["apellido_paterno"] = form_apellido_paterno
+    if form_apellido_materno is not None:
+        persona_patch["apellido_materno"] = form_apellido_materno
+    if form_nombre_completo:
+        persona_patch["nombre_completo"] = form_nombre_completo
     if form_correo is not None:
-        persona_patch["correo"] = form_correo
+        persona_patch["correo_principal"] = form_correo
     if form_telefono:
-        persona_patch["telefono_e164"] = form_telefono
+        persona_patch["telefono_principal_e164"] = form_telefono
     if form_company:
         persona_patch["company_name"] = form_company
     if form_necesidad:
@@ -26443,7 +26513,7 @@ async def promote_inbox_conversation_to_opportunity(
         try:
             persona_row = await repo.update_persona(
                 organizacion_id=organizacion_id,
-                contacto_id=contact_uuid,
+                persona_id=contact_uuid,
                 payload=persona_patch,
             )
         except CRMRepositoryError as exc:
@@ -26478,8 +26548,8 @@ async def promote_inbox_conversation_to_opportunity(
             contacto_id=contact_uuid,
             conversation_id=str(conversacion_id),
             canal=channel,
-            contacto_nombre=contact_name,
-            contacto_empresa=_clean_text(contact_row.get("company_name")),
+            contacto_nombre=persona_name,
+            contacto_empresa=_clean_text(persona_row.get("company_name")),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=f"opportunity_ensure_failed:{exc}") from exc
