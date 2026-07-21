@@ -36,7 +36,8 @@ export type AcquisitionConversionBucket = {
 
 export type AcquisitionMetrics = {
   totalSessions: number;
-  convertedSessions: number;
+  sessionsWithContact: number | null;
+  uniqueContacts: number;
   conversionRate: number;
   sourceClassRows: AcquisitionSourceBucket[];
   referrerRows: AcquisitionHostBucket[];
@@ -244,6 +245,7 @@ export function buildAcquisitionMetrics(
   const hostSessionTotals = new Map<string, number>();
   const hostConvertedTotals = new Map<string, number>();
   const seenConvertedContacts = new Set<string>();
+  let sessionsWithContactFromVisits = 0;
 
   if (visitsPayload?.table?.length) {
     for (const row of visitsPayload.table) {
@@ -262,11 +264,14 @@ export function buildAcquisitionMetrics(
       if (host) {
         hostSessionTotals.set(host, (hostSessionTotals.get(host) ?? 0) + 1);
       }
-      if (contactKey && !seenConvertedContacts.has(contactKey)) {
-        seenConvertedContacts.add(contactKey);
-        sourceConvertedTotals.set(sourceClass, (sourceConvertedTotals.get(sourceClass) ?? 0) + 1);
-        if (host) {
-          hostConvertedTotals.set(host, (hostConvertedTotals.get(host) ?? 0) + 1);
+      if (contactKey) {
+        sessionsWithContactFromVisits += 1;
+        if (!seenConvertedContacts.has(contactKey)) {
+          seenConvertedContacts.add(contactKey);
+          sourceConvertedTotals.set(sourceClass, (sourceConvertedTotals.get(sourceClass) ?? 0) + 1);
+          if (host) {
+            hostConvertedTotals.set(host, (hostConvertedTotals.get(host) ?? 0) + 1);
+          }
         }
       }
     }
@@ -314,7 +319,9 @@ export function buildAcquisitionMetrics(
 
   const sessions = sessionsFromVisits > 0 ? sessionsFromVisits : sessionsFromSummary;
   const convertedFromContacts = Array.from(sourceConvertedTotals.values()).reduce((acc, value) => acc + value, 0);
-  const converted = convertedFromContacts > 0 ? convertedFromContacts : convertedFromSummary;
+  const hasDetailedVisits = visitsPayload !== null;
+  const uniqueContacts = hasDetailedVisits ? convertedFromContacts : convertedFromSummary;
+  const sessionsWithContact = hasDetailedVisits ? sessionsWithContactFromVisits : null;
 
   const sourceClassRowsFromVisits = Array.from(sourceBuckets.values()).sort(
     (a, b) => b.total - a.total || a.source.localeCompare(b.source),
@@ -330,8 +337,9 @@ export function buildAcquisitionMetrics(
 
   return {
     totalSessions: sessions,
-    convertedSessions: converted,
-    conversionRate: sessions > 0 ? (converted / sessions) * 100 : 0,
+    sessionsWithContact,
+    uniqueContacts,
+    conversionRate: sessions > 0 ? (uniqueContacts / sessions) * 100 : 0,
     sourceClassRows,
     referrerRows,
     topUtmRows: aggregateTopUtm(summary),

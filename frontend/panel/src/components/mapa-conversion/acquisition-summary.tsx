@@ -50,7 +50,7 @@ type Props = {
 
 const SOURCE_CLASS_CONFIG: ChartConfig = {
   total: { label: "Sesiones", color: "var(--chart-1)" },
-  converted: { label: "Convertidas", color: "var(--chart-2)" },
+  converted: { label: "Contactos únicos", color: "var(--chart-2)" },
 };
 
 const WHATSAPP_COLORS = [
@@ -525,7 +525,8 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
     sourceClassRows,
     referrerRows,
     totalSessions,
-    convertedSessions,
+    sessionsWithContact,
+    uniqueContacts,
     conversionRate,
     topUtmRows,
     whatsappChannelRows,
@@ -559,7 +560,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Visitas por tipo de visita</CardTitle>
-            <CardDescription>Visitas y contactos agrupados por tipo de visita.</CardDescription>
+            <CardDescription>Sesiones y contactos únicos agrupados por origen.</CardDescription>
           </CardHeader>
           <CardContent className="flex h-full flex-col">
             {sourceClassRows.length ? (
@@ -581,7 +582,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
                         const isConverted = name === "converted";
                         const sourceName = String(item?.payload?.source || "");
                         const swatchColor = isConverted ? CONVERTED_COLOR : getSourceClassColor(sourceName);
-                        const label = isConverted ? "Convertidas" : "Sesiones";
+                        const label = isConverted ? "Contactos únicos" : "Sesiones";
                         return (
                           <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-2">
@@ -619,7 +620,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
                     style={{ backgroundColor: CONVERTED_COLOR }}
                     aria-hidden="true"
                   />
-                  <span>Verde = Vistas Convertidas</span>
+                  <span>Verde = Contactos únicos</span>
                 </div>
               </div>
             ) : (
@@ -630,24 +631,31 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>Volumen y conversión de visitas</CardTitle>
-            <CardDescription>Resumen del volumen total de visitas.</CardDescription>
+            <CardTitle>Sesiones y contactos</CardTitle>
+            <CardDescription>
+              Separación entre sesiones, sesiones con contacto y personas únicas.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <MetricTile
-              title="Visitas totales"
+              title="Sesiones totales"
               value={formatNumber(totalSessions)}
-              helper="Total de visitas registradas en el filtro"
+              helper="Sesiones web registradas en el filtro"
             />
             <MetricTile
-              title="Visitas que terminan en contacto"
-              value={formatNumber(convertedSessions)}
-              helper="Visitas con contacto vinculado"
+              title="Sesiones con contacto"
+              value={sessionsWithContact == null ? "—" : formatNumber(sessionsWithContact)}
+              helper="Sesiones vinculadas con algún contacto"
             />
             <MetricTile
-              title="Porcentaje que convierte"
+              title="Contactos únicos"
+              value={formatNumber(uniqueContacts)}
+              helper="Personas deduplicadas aunque tengan varias sesiones"
+            />
+            <MetricTile
+              title="Tasa de contacto único"
               value={formatPercent(conversionRate)}
-              helper="Proporción de visitas que terminan en contacto"
+              helper="Contactos únicos respecto a las sesiones"
             />
           </CardContent>
         </Card>
