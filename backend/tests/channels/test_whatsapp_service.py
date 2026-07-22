@@ -56,6 +56,12 @@ def test_booking_confirmation_hint_ignores_non_booking_text() -> None:
     assert service._looks_like_booking_confirmation(text) is False
 
 
+def test_compact_whatsapp_reply_preserves_line_breaks_for_lists() -> None:
+    text = "Pregunta:\n\n• Fraccionamientos\n• Naves industriales\n• Otros"
+
+    assert service._compact_whatsapp_reply(text) == text
+
+
 def test_inbound_burst_debounce_skips_greeting() -> None:
     assert service._resolve_inbound_burst_debounce_seconds("hola") == 0.0
     assert service._resolve_inbound_burst_debounce_seconds("hola buen dia") == 0.0

@@ -2294,7 +2294,22 @@ def _wants_detailed_reply(text: str | None) -> bool:
 
 
 def _compact_whatsapp_reply(text: str | None, max_chars: int = _DEFAULT_WHATSAPP_MAX_CHARS) -> str:
-    compact = " ".join(str(text or "").split())
+    # Compacta espacios dentro de cada línea, pero conserva los saltos de línea
+    # que el asistente usa para listas y mensajes legibles en WhatsApp.
+    raw_lines = str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    compact_lines: list[str] = []
+    previous_blank = False
+    for raw_line in raw_lines:
+        line = " ".join(raw_line.split())
+        if line:
+            compact_lines.append(line)
+            previous_blank = False
+        elif compact_lines and not previous_blank:
+            compact_lines.append("")
+            previous_blank = True
+    while compact_lines and compact_lines[-1] == "":
+        compact_lines.pop()
+    compact = "\n".join(compact_lines)
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 1].rstrip() + "…"
