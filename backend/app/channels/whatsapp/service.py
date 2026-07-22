@@ -690,8 +690,14 @@ async def _resolve_whatsapp_brand_name(organizacion_id: UUID | None) -> str | No
 async def _build_simple_greeting_reply(organizacion_id: UUID | None) -> str:
     brand_name = await _resolve_whatsapp_brand_name(organizacion_id)
     if brand_name:
-        return f"Hola, soy Tal-IA de {brand_name}. ¿En qué te puedo ayudar?"
-    return "Hola, soy Tal-IA. ¿En qué te puedo ayudar?"
+        return (
+            f"Hola, soy Tal-IA de {brand_name}. ¿Con quién tengo el gusto? "
+            "Por favor, compárteme tu nombre y apellido."
+        )
+    return (
+        "Hola, soy Tal-IA. ¿Con quién tengo el gusto? "
+        "Por favor, compárteme tu nombre y apellido."
+    )
 
 
 async def _run_information_email_fast_path(

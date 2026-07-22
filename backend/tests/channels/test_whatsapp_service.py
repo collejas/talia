@@ -655,7 +655,10 @@ async def test_handle_incoming_message_fast_paths_simple_greeting(monkeypatch) -
 
     assert len(register_calls) == 2
     assert register_calls[1]["direction"] == "saliente"
-    assert register_calls[1]["body"] == "Hola, soy Tal-IA de Gran Peñón. ¿En qué te puedo ayudar?"
+    assert register_calls[1]["body"] == (
+        "Hola, soy Tal-IA de Gran Peñón. ¿Con quién tengo el gusto? "
+        "Por favor, compárteme tu nombre y apellido."
+    )
     assert post_send_calls
     assert post_send_calls[0]["ensure_opportunity"] is True
 
