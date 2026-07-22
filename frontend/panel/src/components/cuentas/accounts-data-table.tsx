@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconArrowRight, IconDotsVertical, IconPencil, IconTrash } from "@tabler/icons-react";
+import { IconDotsVertical, IconPencil, IconTrash } from "@tabler/icons-react";
 import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -128,7 +128,14 @@ const ACCOUNT_COLUMNS: Array<{
     id: "account_name",
     label: "Nombre Empresa",
     sortValue: (row) => getText((row.raw as Record<string, unknown> | undefined)?.nombre),
-    accessor: (row) => <span className="font-medium">{getText((row.raw as Record<string, unknown> | undefined)?.nombre)}</span>,
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const accountId = getAccountId(row);
+      const name = getText(raw?.nombre);
+      return accountId && name !== "—" ? (
+        <Link className="font-medium text-primary underline-offset-2 hover:underline" href={`/empresas/${encodeURIComponent(accountId)}`}>{name}</Link>
+      ) : <span className="font-medium">{name}</span>;
+    },
   },
   {
     id: "account_contact_code",
@@ -144,7 +151,15 @@ const ACCOUNT_COLUMNS: Array<{
     id: "account_contact",
     label: "Nombre Contacto",
     sortValue: (row) => (canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_nombre") : ""),
-    accessor: (row) => <span>{canViewAccountSensitiveRow(row) ? getAccountField(row, "contacto_principal_nombre") : "—"}</span>,
+    accessor: (row) => {
+      if (!canViewAccountSensitiveRow(row)) return <span>—</span>;
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const personaId = getText(raw?.contacto_principal_id);
+      const name = getAccountField(row, "contacto_principal_nombre");
+      return personaId !== "—" && name !== "—" ? (
+        <Link className="text-primary underline-offset-2 hover:underline" href={`/personas/${encodeURIComponent(personaId)}`}>{name}</Link>
+      ) : <span>{name}</span>;
+    },
   },
   {
     id: "account_phone",
@@ -227,12 +242,6 @@ function AccountRowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem asChild>
-          <Link href={`/empresas/${encodeURIComponent(accountId)}`}>
-            <IconArrowRight className="mr-2 size-4" />
-            Ver ficha
-          </Link>
-        </DropdownMenuItem>
         {canEdit ? (
           <DropdownMenuItem asChild>
             <Link href={`/empresas/${encodeURIComponent(accountId)}?edit=1`}>
@@ -265,7 +274,6 @@ function AccountRowActions({
 
 function AccountRowDetails(row: DataTableRow) {
   const raw = row.raw as Record<string, unknown> | undefined;
-  const accountId = getAccountId(row);
   if (!raw) return null;
   const canViewSensitiveFields = raw.can_view_sensitive_fields === true;
 
@@ -275,7 +283,7 @@ function AccountRowDetails(row: DataTableRow) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Ficha de empresa</CardTitle>
           <CardDescription>
-            Abre la vista dedicada para ver y fusionar empresas con más contexto.
+            Usa el nombre de la empresa en la tabla para abrir su ficha completa.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
@@ -307,16 +315,6 @@ function AccountRowDetails(row: DataTableRow) {
               Los datos sensibles de la empresa están ocultos por permisos.
             </div>
           )}
-          {accountId ? (
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Button asChild size="sm">
-                <Link href={`/empresas/${encodeURIComponent(accountId)}`}>
-                  <IconArrowRight className="mr-2 size-4" />
-                  Abrir ficha
-                </Link>
-              </Button>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </div>

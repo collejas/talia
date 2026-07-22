@@ -54,6 +54,7 @@ import {
 } from "@tanstack/react-table"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { z } from "zod"
+import Link from "next/link"
 
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Badge } from '@/components/ui/badge'
@@ -296,6 +297,15 @@ function createBaseColumns(
       id: "session",
       header: ({ column }) => <SortButton column={column} label={headerLabel} />,
       cell: ({ row }) => {
+        const raw = row.original.raw as Record<string, unknown> | undefined
+        const detailHref = typeof raw?.detail_href === "string" ? raw.detail_href : ""
+        if (detailHref) {
+          return (
+            <Link href={detailHref} className="font-medium text-primary underline-offset-2 hover:underline">
+              {row.original.header}
+            </Link>
+          )
+        }
         return (
           <TableCellViewer
             item={row.original}

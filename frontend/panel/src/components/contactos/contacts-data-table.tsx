@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   IconArrowsLeftRight,
   IconAdjustmentsHorizontal,
-  IconArrowRight,
   IconBuilding,
   IconClock,
   IconDownload,
@@ -388,7 +387,12 @@ const CONTACT_COLUMNS: Array<{
     id: "contact_name",
     label: "Nombre contacto",
     sortValue: (row) => (canViewContactSensitiveRow(row) ? row.header : ""),
-    accessor: (row) => <span className="font-medium">{canViewContactSensitiveRow(row) ? row.header : "—"}</span>,
+    accessor: (row) => {
+      const raw = row.raw as Record<string, unknown> | undefined;
+      const contactId = extractFirstString(raw, ["persona_id", "id", "contacto_id"]);
+      if (!canViewContactSensitiveRow(row) || !contactId) return <span className="font-medium">{canViewContactSensitiveRow(row) ? row.header : "—"}</span>;
+      return <Link className="font-medium text-primary underline-offset-2 hover:underline" href={`/personas/${encodeURIComponent(contactId)}`}>{row.header}</Link>;
+    },
     defaultVisible: true,
   },
   {
@@ -407,7 +411,11 @@ const CONTACT_COLUMNS: Array<{
     sortValue: (row) => formatContactValue((row.raw as Record<string, unknown> | undefined)?.company_name),
     accessor: (row) => {
       const raw = row.raw as Record<string, unknown> | undefined;
-      return <span>{formatContactValue(raw?.company_name)}</span>;
+      const accountId = extractFirstString(raw, ["cuenta_id"]);
+      const company = formatContactValue(raw?.company_name);
+      return accountId && company !== "—" ? (
+        <Link className="text-primary underline-offset-2 hover:underline" href={`/empresas/${encodeURIComponent(accountId)}`}>{company}</Link>
+      ) : <span>{company}</span>;
     },
     defaultVisible: true,
   },
@@ -948,19 +956,8 @@ export function ContactsDataTable({
     const actionColumn: ColumnDef<TableRow> = {
       id: "acciones",
       header: "Acciones",
-      cell: ({ row }: { row: { original: TableRow } }) => {
-        const raw = (row.original.raw ?? {}) as Record<string, unknown>;
-        const contactId = extractFirstString(raw, ["persona_id", "id", "contacto_id"]);
-        return (
+      cell: ({ row }: { row: { original: TableRow } }) => (
         <div className="flex justify-end gap-1">
-          {contactId ? (
-            <Button asChild variant="ghost" size="icon" className="size-8">
-              <Link href={`/personas/${encodeURIComponent(contactId)}`}>
-                <IconArrowRight className="size-4" />
-                <span className="sr-only">Ver ficha</span>
-              </Link>
-            </Button>
-          ) : null}
           {canEditContactRow(row.original) ? (
             <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
               <IconPencil className="size-4" />
@@ -1002,8 +999,7 @@ export function ContactsDataTable({
             </Button>
           ) : null}
         </div>
-        );
-      },
+      ),
       enableSorting: false,
       meta: { label: "Acciones", reorderable: false },
     };
@@ -1982,7 +1978,6 @@ function ContactDetailPanel({
   const canViewSensitiveFields = raw.can_view_sensitive_fields === true;
 
   const contactName = row.header;
-  const contactId = formatContactValue(raw.id);
   const company = formatContactValue(raw.company_name);
   const origin = formatContactValue(raw.origen);
   const owner = formatContactValue(raw.propietario_nombre);
@@ -2000,16 +1995,11 @@ function ContactDetailPanel({
       <div className="rounded-xl border bg-muted/20 p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">Vista secundaria</div>
         <div className="mt-1 text-sm text-muted-foreground">
-          La ficha completa vive en su pantalla dedicada. Desde aquí solo puedes revisar lo esencial o saltar al detalle.
+          La ficha completa vive en su pantalla dedicada. Usa el nombre del contacto o de la empresa para abrirla.
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {contactId !== "—" ? (
-          <Button asChild size="sm">
-            <Link href={`/personas/${encodeURIComponent(contactId)}`}>Abrir ficha</Link>
-          </Button>
-        ) : null}
         {canEdit ? (
           <Button type="button" variant="outline" size="sm" onClick={onEdit}>
             <IconPencil className="size-4" />

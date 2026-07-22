@@ -3252,6 +3252,7 @@ class CRMAccount(BaseModel):
     propietario_nombre: str | None = None
     propietario: dict[str, Any] | None = None
     contacto_principal_codigo_contacto: str | None = None
+    contacto_principal_id: UUID | None = None
     contacto_principal_nombre: str | None = None
     contacto_principal_correo: str | None = None
     contacto_principal_telefono: str | None = None
@@ -16949,6 +16950,7 @@ async def list_accounts(
         )
         existing_owner_name = str(payload.get("propietario_nombre") or "").strip() or None
         if contact:
+            payload["contacto_principal_id"] = contact.get("id") or primary_relation.get("persona_id")
             payload["contacto_principal_codigo_contacto"] = contact.get("codigo_contacto")
             payload["contacto_principal_nombre"] = contact.get("nombre_completo")
             payload["contacto_principal_correo"] = contact.get("correo_principal")

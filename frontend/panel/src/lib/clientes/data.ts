@@ -140,6 +140,11 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
       reviewer,
       raw: {
         cliente_id: row.id,
+        detail_href: row.cuenta_id
+          ? `/empresas/${encodeURIComponent(row.cuenta_id)}`
+          : row.contacto_id
+            ? `/personas/${encodeURIComponent(row.contacto_id)}`
+            : null,
         rfc: row.rfc,
         estado: row.estado_onboarding,
         contacto_id: row.contacto_id,
