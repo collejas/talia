@@ -10727,6 +10727,28 @@ class CRMRepository:
             raise CRMRepositoryError("cuenta_personas_list_invalid_response")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_persona_account_relations_by_persona_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        unique_ids = sorted({str(persona_id) for persona_id in persona_ids if persona_id})
+        if not unique_ids:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "persona_id": f"in.({','.join(unique_ids)})",
+            "activo": "eq.true",
+            "order": "es_contacto_principal.desc,es_representante_legal.desc,creado_en.asc",
+            "select": "id,organizacion_id,cuenta_id,persona_id,es_contacto_principal,es_representante_legal,activo",
+        }
+        resp = await self._request("GET", "/rest/v1/cuenta_personas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("cuenta_personas_batch_list_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_persona_account_relation(
         self,
         *,

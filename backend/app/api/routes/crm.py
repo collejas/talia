@@ -24440,7 +24440,30 @@ async def get_personas_list_legacy(
         permission_code="contacts.view_sensitive_unowned",
     )
     payloads: list[dict[str, Any]] = []
+    persona_ids = [
+        persona_id
+        for persona_id in (_safe_uuid(row.get("contacto_id") or row.get("id")) for row in rows)
+        if persona_id
+    ]
+    relations_by_persona_id: dict[str, dict[str, Any]] = {}
+    if persona_ids:
+        try:
+            account_relations = await repo.list_persona_account_relations_by_persona_ids(
+                organizacion_id=organizacion_id,
+                persona_ids=persona_ids,
+            )
+            for relation in account_relations:
+                persona_key = str(relation.get("persona_id") or "").strip()
+                if persona_key and persona_key not in relations_by_persona_id:
+                    relations_by_persona_id[persona_key] = relation
+        except (CRMRepositoryError, AttributeError):
+            relations_by_persona_id = {}
     for row in rows:
+        normalized_row = dict(row)
+        persona_key = str(normalized_row.get("contacto_id") or normalized_row.get("id") or "").strip()
+        relation = relations_by_persona_id.get(persona_key)
+        if relation and not normalized_row.get("cuenta_id"):
+            normalized_row["cuenta_id"] = relation.get("cuenta_id")
         owner_user_id = _contact_owner_user_id(row)
         persona_id = _safe_uuid(row.get("contacto_id") or row.get("id"))
         can_view_sensitive_fields = await _can_view_contact_sensitive_fields(
@@ -24452,7 +24475,7 @@ async def get_personas_list_legacy(
         )
         payloads.append(
             _apply_contact_visibility_mask(
-                dict(row),
+                normalized_row,
                 can_view_sensitive_fields=can_view_sensitive_fields,
             )
         )
