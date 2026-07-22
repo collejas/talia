@@ -1210,6 +1210,7 @@ class CRMRepository:
             "organizacion_id",
             "codigo_oportunidad",
             "cuenta_id",
+            "persona_id",
             "contacto_principal_id",
             "contacto:personas!oportunidades_contacto_principal_org_fkey("
             "id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,notas,origen,estado,metadata,persona_datos"

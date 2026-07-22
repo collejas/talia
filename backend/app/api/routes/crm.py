@@ -37366,6 +37366,17 @@ async def create_activity(
     body = payload.model_dump(mode="json", exclude_unset=True)
     if "creado_por_usuario_id" not in body and usuario_id:
         body["creado_por_usuario_id"] = str(usuario_id)
+    if body.get("oportunidad_id") and (not body.get("persona_id") or not body.get("cuenta_id")):
+        try:
+            opportunity_row = await repo.get_opportunity(
+                organizacion_id=organizacion_id,
+                opportunity_id=UUID(str(body["oportunidad_id"])),
+            )
+        except CRMRepositoryError:
+            opportunity_row = None
+        if isinstance(opportunity_row, dict):
+            body.setdefault("persona_id", opportunity_row.get("persona_id"))
+            body.setdefault("cuenta_id", opportunity_row.get("cuenta_id"))
     # Las actividades independientes de una oportunidad pertenecen al usuario
     # que las crea por defecto. Así el recordatorio no queda sin destinatario.
     if (

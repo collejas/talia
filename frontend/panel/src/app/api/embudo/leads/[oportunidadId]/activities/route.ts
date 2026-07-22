@@ -26,6 +26,7 @@ type CrmActivityRow = {
   sla_horas: number | null;
   recordatorio_en: string | null;
   cuenta_id: string | null;
+  persona_id: string | null;
   contacto_id: string | null;
   oportunidad_id: string | null;
   creado_por_usuario_id: string | null;
@@ -167,4 +168,3 @@ export async function POST(
 
   return NextResponse.json({ data: response.data });
 }
-
