@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   IconArrowsLeftRight,
   IconAdjustmentsHorizontal,
+  IconArrowRight,
   IconBuilding,
   IconClock,
   IconDownload,
@@ -947,8 +948,19 @@ export function ContactsDataTable({
     const actionColumn: ColumnDef<TableRow> = {
       id: "acciones",
       header: "Acciones",
-      cell: ({ row }: { row: { original: TableRow } }) => (
+      cell: ({ row }: { row: { original: TableRow } }) => {
+        const raw = (row.original.raw ?? {}) as Record<string, unknown>;
+        const contactId = extractFirstString(raw, ["persona_id", "id", "contacto_id"]);
+        return (
         <div className="flex justify-end gap-1">
+          {contactId ? (
+            <Button asChild variant="ghost" size="icon" className="size-8">
+              <Link href={`/personas/${encodeURIComponent(contactId)}`}>
+                <IconArrowRight className="size-4" />
+                <span className="sr-only">Ver ficha</span>
+              </Link>
+            </Button>
+          ) : null}
           {canEditContactRow(row.original) ? (
             <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
               <IconPencil className="size-4" />
@@ -990,7 +1002,8 @@ export function ContactsDataTable({
             </Button>
           ) : null}
         </div>
-      ),
+        );
+      },
       enableSorting: false,
       meta: { label: "Acciones", reorderable: false },
     };

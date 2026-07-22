@@ -227,6 +227,12 @@ function AccountRowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem asChild>
+          <Link href={`/empresas/${encodeURIComponent(accountId)}`}>
+            <IconArrowRight className="mr-2 size-4" />
+            Ver ficha
+          </Link>
+        </DropdownMenuItem>
         {canEdit ? (
           <DropdownMenuItem asChild>
             <Link href={`/empresas/${encodeURIComponent(accountId)}?edit=1`}>
