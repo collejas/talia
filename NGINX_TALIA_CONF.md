@@ -232,6 +232,21 @@ server {
         return 301 /prospeccion/;
     }
 
+    location ^~ /personas/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /personas {
+        return 301 /personas/;
+    }
+
     location ^~ /_next/static/ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -251,7 +266,7 @@ server {
         proxy_set_header Host $host;
     }
 
-    location ~* ^/(auth|dashboard|crm|empresas|cuentas|contactos|leads|visitas|inbox|embudo|agenda|propuesta|mapa-de-conversion|vista-2|settings|ops|prospeccion|portal|clientes|oportunidades|propiedades|user)(/.*)?$ {
+    location ~* ^/(auth|dashboard|crm|empresas|cuentas|contactos|personas|leads|visitas|inbox|embudo|agenda|propuesta|mapa-de-conversion|vista-2|settings|ops|prospeccion|portal|clientes|oportunidades|propiedades|user)(/.*)?$ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
