@@ -751,21 +751,7 @@ async def test_structured_fast_path_company_name_returns_slots(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_structured_fast_path_company_name_skips_slots_when_agenda_disabled(monkeypatch) -> None:
-    recent_messages = [
-        {"id": "m1", "direccion": "saliente", "texto": "¿Me confirmas el nombre de tu empresa?"},
-    ]
-
-    async def fake_fetch_recent_messages(*_: object, **__: object):
-        return recent_messages
-
-    async def fail_list_demo_slots(*_: object, **__: object):
-        raise AssertionError("No debe consultar horarios con la agenda desactivada")
-
-    monkeypatch.setattr(service.storage, "fetch_recent_messages", fake_fetch_recent_messages)
-    monkeypatch.setattr(service.whatsapp_tools, "_handle_list_demo_slots", fail_list_demo_slots)
-    monkeypatch.setattr(service.storage, "update_persona", _async_none)
-
+async def test_structured_fast_path_is_bypassed_when_agenda_disabled(monkeypatch) -> None:
     reply = await service._maybe_build_structured_fast_reply(
         conversation_id="conv-disabled",
         persona_id="persona-disabled",
@@ -786,9 +772,7 @@ async def test_structured_fast_path_company_name_skips_slots_when_agenda_disable
         agenda_enabled=False,
     )
 
-    assert reply is not None
-    assert reply.tools_called == ["set_company_name"]
-    assert "correo" in (reply.text or "").lower()
+    assert reply is None
 
 
 @pytest.mark.asyncio

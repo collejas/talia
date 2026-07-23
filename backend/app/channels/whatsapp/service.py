@@ -728,6 +728,11 @@ async def _maybe_build_structured_fast_reply(
     normalized_body = _normalize_fast_path_text(body)
     if not normalized_body:
         return None
+    # Los fast paths históricos de WhatsApp están orientados al flujo de agenda
+    # y pueden imponer preguntas de correo/empresa. Cuando la agenda está
+    # desactivada, el prompt del tenant debe controlar toda la conversación.
+    if not agenda_enabled:
+        return None
     try:
         recent_messages = await storage.fetch_recent_messages(conversation_id=conversation_id, limit=8)
     except StorageError as exc:
