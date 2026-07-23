@@ -5096,6 +5096,12 @@ class CRMRepository:
                 persona_id=resolved_persona_id,
                 owner_id=current_assignee,
             )
+            if conversation_id:
+                await self.assign_conversation_if_unassigned(
+                    organizacion_id=organizacion_id,
+                    conversation_id=conversation_id,
+                    usuario_id=current_assignee,
+                )
             return current_assignee
         if require_contact_ready and not bool(contact_ready):
             logger.info(
@@ -5143,6 +5149,12 @@ class CRMRepository:
                             persona_id=resolved_persona_id,
                             owner_id=owner_uuid,
                         )
+                        if conversation_id:
+                            await self.assign_conversation_if_unassigned(
+                                organizacion_id=organizacion_id,
+                                conversation_id=conversation_id,
+                                usuario_id=owner_uuid,
+                            )
                         logger.info(
                             "crm.sales_assignment.completed_contact_owner",
                             extra={
@@ -5190,6 +5202,12 @@ class CRMRepository:
             persona_id=resolved_persona_id,
             owner_id=candidate["usuario_id"],
         )
+        if conversation_id:
+            await self.assign_conversation_if_unassigned(
+                organizacion_id=organizacion_id,
+                conversation_id=conversation_id,
+                usuario_id=candidate["usuario_id"],
+            )
         logger.info(
             "crm.sales_assignment.completed",
             extra={
@@ -7129,6 +7147,37 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError("conversation_not_found")
         return row
+
+    async def assign_conversation_if_unassigned(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversation_id: str,
+        usuario_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Asigna la conversación sin sobrescribir una asignación existente."""
+
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/conversaciones",
+            params={
+                "id": f"eq.{conversation_key}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "asignado_a_usuario_id": "is.null",
+                "limit": "1",
+            },
+            json={"asignado_a_usuario_id": str(usuario_id)},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        return None
 
     async def get_latest_conversation_id_by_contact(
         self,
