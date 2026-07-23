@@ -251,6 +251,10 @@ export default async function SettingsVariablesPage() {
   const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
   const whatsappInitialValues = {
     whatsapp_provider: getNestedString(whatsappConfig, "provider") as "twilio" | "meta" | undefined,
+    whatsapp_send_seller_data_to_customer: getNestedBoolean(
+      whatsappConfig,
+      "send_seller_data_to_customer",
+    ) ?? false,
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
     whatsapp_welcome_document_prompt_version: getNestedString(whatsappConfig, "welcome_document_prompt_version"),

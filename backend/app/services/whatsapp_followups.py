@@ -746,6 +746,12 @@ async def _escalate_persona_to_sales(
             email=None,
             extra={"reason": "inactivity"},
         )
+        await whatsapp_tools._notify_customer_assigned_seller(
+            context=context,
+            opportunity_id=str(opportunity.get("id") or "") or None,
+            persona=persona,
+            trigger="followup_escalate",
+        )
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "whatsapp.followup.escalate_failed",

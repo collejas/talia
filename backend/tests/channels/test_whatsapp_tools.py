@@ -142,6 +142,65 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.asyncio
+async def test_notify_customer_assigned_seller_when_tenant_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dummy_repo = DummySalesRepo()
+    monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
+    runtime = tools.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+    runtime.send_seller_data_to_customer = True
+
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return runtime
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
+    sent: dict[str, object] = {}
+
+    async def fake_send_manual_message(**kwargs: object) -> object:
+        sent.update(kwargs)
+        return SimpleNamespace(error=None, sid="CUSTOMER-MSG-1")
+
+    monkeypatch.setattr(
+        "app.channels.whatsapp.service.send_manual_message",
+        fake_send_manual_message,
+    )
+
+    async def fake_register_whatsapp_message(**kwargs: object) -> None:
+        sent["registered"] = kwargs
+
+    monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+
+    contact = {
+        "id": "contact-test",
+        "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
+        "telefono_e164": "+529991112233",
+    }
+    context = ToolRuntimeContext(
+        conversation_id="conv-customer-seller",
+        persona_id="contact-test",
+        channel="whatsapp",
+    )
+
+    result = await tools._notify_customer_assigned_seller(
+        context=context,
+        opportunity_id="00000000-0000-0000-0000-0000000000cc",
+        persona=contact,
+        trigger="close_lead",
+    )
+
+    assert result is True
+    assert sent["to_number"] == "+529991112233"
+    assert "Seller Demo" in str(sent["body"])
+    assert "+521234567890" in str(sent["body"])
+    assert sent["registered"]
+    assert dummy_repo.updated_payload["metadata"]["customer_seller_data_notifications"]["close_lead"]
+
+
+@pytest.mark.asyncio
 async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     metadata = {
         "sales_primary_notifications": {

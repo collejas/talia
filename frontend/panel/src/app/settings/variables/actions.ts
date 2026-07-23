@@ -768,6 +768,7 @@ export async function updateTwilioSettingsAction(_: CrudActionState, formData: F
 export async function updateWhatsAppSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const provider = getText(formData, "whatsapp_provider") as "twilio" | "meta" | ""
+    const sendSellerDataToCustomer = formData.has("whatsapp_send_seller_data_to_customer")
     const promptId = getText(formData, "whatsapp_prompt_id")
     const promptVersion = getText(formData, "whatsapp_prompt_version")
     const welcomeDocumentPromptVersion = getText(formData, "whatsapp_welcome_document_prompt_version")
@@ -796,6 +797,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const manageWhatsProspInDb = formData.get("whatsapp_prospeccion_templates_managed_in_db") === "1"
 
     const whatsappPatch: Record<string, unknown> = {}
+    whatsappPatch.send_seller_data_to_customer = sendSellerDataToCustomer
     if (provider === "twilio" || provider === "meta") whatsappPatch.provider = provider
     if (promptId) whatsappPatch.prompt_id = promptId
     if (promptVersion) whatsappPatch.prompt_version = promptVersion

@@ -1161,6 +1161,7 @@ def _coerce_float(value: Any, default: float) -> float:
 class WhatsappRuntimeSettings:
     provider: str
     agenda_enabled: bool
+    send_seller_data_to_customer: bool
     assistant_id: str | None
     prompt_id: str | None
     prompt_version: str | None
@@ -1203,6 +1204,7 @@ class WhatsappRuntimeSettings:
         return WhatsappRuntimeSettings(
             provider="twilio",
             agenda_enabled=True,
+            send_seller_data_to_customer=False,
             assistant_id=settings.whatsapp_assistant_id,
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
@@ -1256,6 +1258,10 @@ async def get_whatsapp_runtime_settings(
     agenda_cfg = _as_dict(features_cfg.get("agenda")) or {}
     settings_payload.agenda_enabled = _coerce_bool(agenda_cfg.get("enabled"), True)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+    settings_payload.send_seller_data_to_customer = _coerce_bool(
+        whatsapp_cfg.get("send_seller_data_to_customer"),
+        False,
+    )
     whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
     whatsapp_meta_cfg = _as_dict(whatsapp_cfg.get("meta")) or {}
     openai_cfg = _as_dict(config.get("openai")) or {}

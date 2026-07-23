@@ -1574,20 +1574,48 @@ async def _run_close_lead_post_tasks(
                         email=webchat_service._extract_persona_email(notify_persona),
                         extra={"siguiente_accion": siguiente_accion},
                     )
-                    return
-            await _notify_sales_rep(
-                context=context,
-                trigger="close_lead",
-                persona=notify_persona,
-                opportunity_id=tarjeta_id,
-                resumen=necesidad,
-                notes=notes,
-                email=webchat_service._extract_persona_email(notify_persona),
-                extra={"siguiente_accion": siguiente_accion},
-            )
+                else:
+                    await _notify_sales_rep(
+                        context=context,
+                        trigger="close_lead",
+                        persona=notify_persona,
+                        opportunity_id=tarjeta_id,
+                        resumen=necesidad,
+                        notes=notes,
+                        email=webchat_service._extract_persona_email(notify_persona),
+                        extra={"siguiente_accion": siguiente_accion},
+                    )
+            else:
+                await _notify_sales_rep(
+                    context=context,
+                    trigger="close_lead",
+                    persona=notify_persona,
+                    opportunity_id=tarjeta_id,
+                    resumen=necesidad,
+                    notes=notes,
+                    email=webchat_service._extract_persona_email(notify_persona),
+                    extra={"siguiente_accion": siguiente_accion},
+                )
         except Exception as exc:
             logger.warning(
                 "whatsapp.close_lead.notify_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "persona_id": persona_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "error": str(exc),
+                },
+            )
+        try:
+            await _notify_customer_assigned_seller(
+                context=context,
+                opportunity_id=tarjeta_id,
+                persona=notify_persona,
+                trigger="close_lead",
+            )
+        except Exception as exc:  # pragma: no cover - defensivo ante proveedor externo
+            logger.warning(
+                "whatsapp.close_lead.customer_seller_data_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "persona_id": persona_id,
@@ -3442,6 +3470,150 @@ async def _notify_sales_rep(
             "seller_id": seller_id,
         },
     )
+
+
+async def _notify_customer_assigned_seller(
+    *,
+    context: ToolRuntimeContext,
+    opportunity_id: str | UUID | None,
+    persona: dict[str, Any] | None,
+    trigger: str,
+) -> bool:
+    """Comparte con el contacto el vendedor asignado si el tenant lo habilitó."""
+    if str(context.channel or "whatsapp").strip().lower() != "whatsapp":
+        return False
+
+    persona_record = persona or await _resolve_persona(_context_persona_id(context))
+    customer_phone = _contact_phone_value(persona_record)
+    org_value = (persona_record or {}).get("organizacion_id")
+    if not customer_phone or not org_value or not opportunity_id:
+        return False
+
+    try:
+        org_uuid = UUID(str(org_value))
+        opp_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        logger.warning(
+            "whatsapp.customer_seller_data.invalid_ids",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return False
+
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=org_uuid,
+    )
+    if not getattr(whatsapp_settings, "send_seller_data_to_customer", False):
+        return False
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.fetch_opportunity_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+        return False
+    if not opportunity:
+        return False
+
+    assigned = opportunity.get("asignado") or {}
+    seller_id = str(assigned.get("id") or "").strip()
+    seller_name = str(assigned.get("nombre_completo") or "").strip()
+    seller_phone = str(assigned.get("telefono_e164") or assigned.get("telefono") or "").strip()
+    seller_email = str(assigned.get("correo") or "").strip()
+    if not seller_id or not seller_name or not (seller_phone or seller_email):
+        logger.info(
+            "whatsapp.customer_seller_data.unavailable",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return False
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    sent_by_trigger = _ensure_dict(metadata.get("customer_seller_data_notifications"))
+    if sent_by_trigger.get(trigger):
+        return True
+
+    lines = [f"Tu asesor asignado es {seller_name}."]
+    if seller_phone:
+        lines.append(f"Teléfono: {seller_phone}")
+    if seller_email:
+        lines.append(f"Correo: {seller_email}")
+    lines.append("Se pondrá en contacto contigo para dar seguimiento a tu solicitud.")
+    message_body = "\n".join(lines)
+
+    try:
+        from app.channels.whatsapp import service as whatsapp_service
+
+        send_result = await whatsapp_service.send_manual_message(
+            to_number=customer_phone,
+            body=message_body,
+            organizacion_id=org_uuid,
+        )
+    except Exception as exc:  # pragma: no cover - proveedor externo
+        logger.warning(
+            "whatsapp.customer_seller_data.send_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+        return False
+
+    send_error = getattr(send_result, "error", None) if send_result else None
+    message_sid = getattr(send_result, "sid", None) if send_result else None
+    if send_error or not message_sid:
+        logger.warning(
+            "whatsapp.customer_seller_data.send_rejected",
+            extra={
+                "conversation_id": context.conversation_id,
+                "trigger": trigger,
+                "error": send_error,
+            },
+        )
+        return False
+
+    try:
+        wa_id = customer_phone.lstrip("+")
+        await storage.register_whatsapp_message(
+            direction="saliente",
+            wa_id=wa_id,
+            phone_e164=customer_phone,
+            body=message_body,
+            message_sid=message_sid,
+            conversation_id=context.conversation_id,
+            persona_id=str(persona_record.get("id") or context.persona_id or "") or None,
+            metadata={
+                "automated": True,
+                "trigger": "assigned_seller_data",
+                "seller_id": seller_id,
+            },
+            organizacion_id=str(org_uuid),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.register_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+
+    sent_by_trigger[trigger] = {
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "message_sid": message_sid,
+        "seller_id": seller_id,
+    }
+    metadata["customer_seller_data_notifications"] = sent_by_trigger
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.metadata_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+    return True
 
 
 def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:

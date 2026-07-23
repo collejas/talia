@@ -1058,6 +1058,7 @@ type TwilioInitialValues = {
 
 export type WhatsAppInitialValues = {
   whatsapp_provider?: "twilio" | "meta"
+  whatsapp_send_seller_data_to_customer?: boolean
   whatsapp_prompt_id?: string
   whatsapp_prompt_version?: string
   whatsapp_welcome_document_prompt_version?: string
@@ -1105,6 +1106,7 @@ type OpenaiInitialValues = {
 function buildWhatsAppSettingsKey(initialValues: WhatsAppInitialValues): string {
   return JSON.stringify({
     whatsapp_provider: initialValues.whatsapp_provider ?? "twilio",
+    whatsapp_send_seller_data_to_customer: initialValues.whatsapp_send_seller_data_to_customer ?? false,
     whatsapp_prompt_id: initialValues.whatsapp_prompt_id ?? "",
     whatsapp_prompt_version: initialValues.whatsapp_prompt_version ?? "",
     whatsapp_welcome_document_prompt_version: initialValues.whatsapp_welcome_document_prompt_version ?? "",
@@ -2453,6 +2455,24 @@ function TenantWhatsAppSettingsForm({
                 min={0}
                 defaultValue={initialValues.whatsapp_escalate_minutes ?? ""}
               />
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <input
+              id="whatsapp_send_seller_data_to_customer"
+              name="whatsapp_send_seller_data_to_customer"
+              type="checkbox"
+              className="mt-1 size-4"
+              defaultChecked={Boolean(initialValues.whatsapp_send_seller_data_to_customer ?? false)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="whatsapp_send_seller_data_to_customer">
+                Enviar al cliente los datos del vendedor asignado
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Se enviarán después del cierre normal y al finalizar el seguimiento por inactividad,
+                si existe un vendedor asignado con datos disponibles.
+              </p>
             </div>
           </div>
         </div>
