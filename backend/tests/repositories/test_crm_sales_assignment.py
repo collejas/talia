@@ -31,6 +31,41 @@ async def test_assign_next_sales_rep_parses_rpc_response(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_assignment_audit_uses_persona_fk_for_canonical_person(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request(
+        method: str,
+        path: str,
+        *,
+        params: dict[str, object] | None = None,
+        json: dict[str, object] | None = None,
+        prefer: str | None = None,
+    ) -> SimpleNamespace:
+        assert method == "POST"
+        assert path == "/rest/v1/asignaciones_vendedores"
+        captured.update(json or {})
+        return SimpleNamespace(status_code=201, json=lambda: [])
+
+    monkeypatch.setattr(repo, "_request", fake_request)
+    persona_id = str(uuid.uuid4())
+    await repo.insert_sales_assignment_audit(
+        organizacion_id=uuid.uuid4(),
+        oportunidad_id=None,
+        vendedor_id=uuid.uuid4(),
+        conversation_id=str(uuid.uuid4()),
+        persona_id=persona_id,
+        contact_id=persona_id,
+        trigger="manual_reassign_contact",
+        canal="panel",
+    )
+
+    assert captured["persona_id"] == persona_id
+    assert "contacto_id" not in captured
+
+
+@pytest.mark.asyncio
 async def test_assign_sales_rep_if_needed_updates_when_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

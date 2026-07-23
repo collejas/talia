@@ -17994,7 +17994,7 @@ async def reassign_opportunity(
             oportunidad_id=oportunidad_id,
             vendedor_id=payload.asignado_usuario_id,
             conversation_id=str(conversation_id),
-            contact_id=str(persona_id) if persona_id else None,
+            persona_id=str(persona_id) if persona_id else None,
             trigger="manual_reassign",
             metadata=metadata,
             canal="panel",
@@ -24959,7 +24959,7 @@ async def reassign_persona_legacy(
             oportunidad_id=oportunidad_id,
             vendedor_id=payload.propietario_usuario_id,
             conversation_id=str(conversacion_id),
-            contact_id=str(contacto_id),
+            persona_id=str(contacto_id),
             trigger="manual_reassign_contact",
             metadata=metadata,
             canal="panel",
@@ -27829,13 +27829,25 @@ async def create_agenda_booking(
             persona=persona_data,
             channel=(payload.canal or "manual"),
         )
-    await webchat_service._send_booking_confirmation_email(
-        booking=booking_response,
-        contact_id=contact_id,
-        conversation_id=None,
-        tarjeta_id=tarjeta_id,
-        persona=persona_data,
-    )
+    if contact_id or persona_data:
+        try:
+            await webchat_service._send_booking_confirmation_email(
+                booking=booking_response,
+                persona_id=contact_id,
+                conversation_id=None,
+                tarjeta_id=tarjeta_id,
+                persona=persona_data,
+            )
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.exception(
+                "crm.agenda.booking.confirmation_email_failed",
+                extra={
+                    "booking_id": booking_response.booking_id,
+                    "persona_id": contact_id,
+                    "tarjeta_id": tarjeta_id,
+                    "error": str(exc),
+                },
+            )
     booking = booking_response
 
     return {"ok": True, "booking": booking}
@@ -40054,7 +40066,7 @@ async def public_web_booking_create(
         )
         await webchat_service._send_booking_confirmation_email(
             booking=booking_response,
-            contact_id=str(contact_uuid),
+            persona_id=str(contact_uuid),
             conversation_id=booking_context_id,
             tarjeta_id=str(opportunity_uuid),
         )

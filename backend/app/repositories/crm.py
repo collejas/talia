@@ -5316,7 +5316,8 @@ class CRMRepository:
             oportunidad_id=oportunidad_id,
             vendedor_id=vendedor_id,
             conversation_id=conversation_id,
-            persona_id=persona_id or contact_id,
+            persona_id=persona_id,
+            contact_id=contact_id,
             trigger=trigger,
             metadata=metadata,
             notification_sid=notification_sid,
@@ -5335,6 +5336,7 @@ class CRMRepository:
         metadata: dict[str, Any] | None,
         notification_sid: str | None = None,
         canal: str | None = None,
+        contact_id: str | None = None,
     ) -> None:
         channel_value = (canal or "").strip().lower() or "assistant"
         payload: dict[str, Any] = {
@@ -5349,7 +5351,9 @@ class CRMRepository:
         if conversation_id:
             payload["conversacion_id"] = str(conversation_id)
         if persona_id:
-            payload["contacto_id"] = str(persona_id)
+            payload["persona_id"] = str(persona_id)
+        elif contact_id:
+            payload["contacto_id"] = str(contact_id)
         if notification_sid:
             payload["notificacion_message_sid"] = notification_sid
         await self._request(

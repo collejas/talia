@@ -3524,8 +3524,21 @@ async def test_create_agenda_booking_can_skip_opportunity_creation(
             "tarjeta_id": None,
         }
 
-    async def fake_send_booking_confirmation_email(**kwargs: Any) -> None:
-        captured["email"] = kwargs
+    async def fake_send_booking_confirmation_email(
+        *,
+        booking: Any,
+        persona_id: str | None,
+        conversation_id: str | None,
+        tarjeta_id: str | None,
+        persona: dict[str, Any] | None,
+    ) -> None:
+        captured["email"] = {
+            "booking": booking,
+            "persona_id": persona_id,
+            "conversation_id": conversation_id,
+            "tarjeta_id": tarjeta_id,
+            "persona": persona,
+        }
 
     monkeypatch.setattr(
         crm_routes.tenant_runtime,
