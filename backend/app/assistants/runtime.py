@@ -27,6 +27,15 @@ CATALOG_BACKEND_TOOL_NAMES = frozenset(
     CATALOG_INMOBILIARIO_TOOL_NAMES | CATALOG_NO_INMOBILIARIO_TOOL_NAMES
 )
 
+AGENDA_TOOL_NAMES = frozenset(
+    {
+        "list_demo_slots",
+        "schedule_demo",
+        "reschedule_demo",
+        "cancel_demo",
+    }
+)
+
 
 @dataclass(slots=True)
 class AssistantSpec:
@@ -61,8 +70,9 @@ def filter_assistant_tools(
     *,
     catalog_inmobiliario_enabled: bool,
     catalog_no_inmobiliario_enabled: bool,
+    agenda_enabled: bool = True,
 ) -> list[dict[str, Any]]:
-    """Quita tools de catálogo cuando una capacidad del tenant está desactivada."""
+    """Quita tools de capacidades desactivadas para el tenant."""
     filtered: list[dict[str, Any]] = []
     for tool in tools:
         tool_name = _extract_function_tool_name(tool)
@@ -70,6 +80,8 @@ def filter_assistant_tools(
             if tool_name in CATALOG_INMOBILIARIO_TOOL_NAMES and not catalog_inmobiliario_enabled:
                 continue
             if tool_name in CATALOG_NO_INMOBILIARIO_TOOL_NAMES and not catalog_no_inmobiliario_enabled:
+                continue
+            if tool_name in AGENDA_TOOL_NAMES and not agenda_enabled:
                 continue
         filtered.append(tool)
     return filtered

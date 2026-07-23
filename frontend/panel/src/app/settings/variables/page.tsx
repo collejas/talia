@@ -201,8 +201,11 @@ export default async function SettingsVariablesPage() {
   const webchatFeature = features ? getNestedRecord(features, "webchat") : null
   const webchatEnabled = webchatFeature ? Boolean(getNestedBoolean(webchatFeature, "enabled")) : false
   const calendarConfig = getNestedRecord(config, "calendar") ?? {}
+  const featuresConfig = getNestedRecord(config, "features") ?? {}
+  const agendaConfig = getNestedRecord(featuresConfig, "agenda") ?? {}
   const zoomConfig = getNestedRecord(config, "zoom") ?? {}
   const calendarInitialValues = {
+    agenda_enabled: getNestedBoolean(agendaConfig, "enabled") ?? true,
     calendar_resource_id: getNestedString(webchatCalendar, "resource_id") ?? "",
     calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
     calendar_default_days: getNestedNumber(webchatCalendar, "default_days"),
@@ -380,7 +383,7 @@ export default async function SettingsVariablesPage() {
               <Tabs defaultValue="webchat">
                 <TabsList className="grid grid-cols-10">
                   <TabsTrigger value="webchat">Webchat</TabsTrigger>
-                  <TabsTrigger value="calendar">Calendario</TabsTrigger>
+                  <TabsTrigger value="calendar">Agenda</TabsTrigger>
                   <TabsTrigger value="mail">Correo</TabsTrigger>
                   <TabsTrigger value="twilio">Twilio</TabsTrigger>
                   <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>

@@ -37,6 +37,7 @@ class ToolRuntimeContext:
     feature: str | None = None
     catalog_inmobiliario_enabled: bool = True
     catalog_no_inmobiliario_enabled: bool = True
+    agenda_enabled: bool = True
 
 
 @dataclass(slots=True)

@@ -722,6 +722,7 @@ async def _maybe_build_structured_fast_reply(
     conversation_meta: Mapping[str, Any] | None,
     message: schemas.WhatsAppIncomingMessage,
     organizacion_id: UUID | None,
+    agenda_enabled: bool = True,
 ) -> AssistantReply | None:
     body = str(message.body or "").strip()
     normalized_body = _normalize_fast_path_text(body)
@@ -836,6 +837,19 @@ async def _maybe_build_structured_fast_reply(
                 ensure_capture=True,
             )
         )
+        if not agenda_enabled:
+            first_name = (full_name or "").split()[0] if full_name else None
+            return AssistantReply(
+                text=(
+                    f"Perfecto, {first_name}. ¿Cuál es el correo donde podemos contactarte?"
+                    if first_name
+                    else "Perfecto. ¿Cuál es el correo donde podemos contactarte?"
+                ),
+                openai_conversation_id=conversation_meta.get("openai_conversation_id") if conversation_meta else None,
+                response_id=conversation_meta.get("last_response_id") if conversation_meta else None,
+                tools_called=["set_company_name"],
+            )
+
         availability_result = await whatsapp_tools._handle_list_demo_slots({}, context)
         slot_choices = _build_pending_slot_choices(
             [slot for slot in (availability_result.get("slots") or []) if isinstance(slot, dict)]
@@ -3001,6 +3015,7 @@ async def handle_incoming_message(
                 conversation_meta=conversation_meta,
                 message=message,
                 organizacion_id=org_uuid,
+                agenda_enabled=getattr(whatsapp_settings, "agenda_enabled", True),
             )
         except Exception as exc:
             logger.warning(
@@ -3083,6 +3098,7 @@ async def handle_incoming_message(
                 organizacion_id=org_uuid,
                 catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
                 catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+            agenda_enabled=getattr(whatsapp_settings, "agenda_enabled", True),
                 prospeccion_mode=is_prospeccion_mode,
                 origin_type=origin_type,
                 inbound_message_id=inbound_message_id,
@@ -3867,6 +3883,7 @@ async def _generate_assistant_reply(
     organizacion_id: UUID | None,
     catalog_inmobiliario_enabled: bool = True,
     catalog_no_inmobiliario_enabled: bool = True,
+    agenda_enabled: bool = True,
     prospeccion_mode: bool = False,
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
@@ -3910,6 +3927,7 @@ async def _generate_assistant_reply(
             assistant_spec.tools,
             catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
             catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+            agenda_enabled=agenda_enabled,
         )
         if assistant_spec
         else []
@@ -4111,6 +4129,23 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    if not agenda_enabled:
+        initial_input.insert(
+            6,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Agenda desactivada para este tenant/canal: no preguntes por horarios, fechas ni disponibilidad, "
+                            "no listes slots, no agendes, reprogrames ni canceles citas. "
+                            "Captura la necesidad y los datos básicos, ejecuta close_lead y comunica que un asesor se pondrá en contacto."
+                        ),
+                    }
+                ],
+            },
+        )
     location_href = getattr(whatsapp_settings, "location_href", None)
     if location_href:
         initial_input.insert(
@@ -4138,7 +4173,7 @@ async def _generate_assistant_reply(
                 ],
             },
         )
-    if prospeccion_mode:
+    if prospeccion_mode and agenda_enabled:
         initial_input.insert(
             3,
             {

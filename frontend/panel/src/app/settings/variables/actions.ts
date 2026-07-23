@@ -378,7 +378,8 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
 
 export async function updateCalendarSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
-
+    const agendaEnabledRaw = formData.get("agenda_enabled")
+    const agendaEnabled = agendaEnabledRaw === "on" || agendaEnabledRaw === "true"
     const calendarResourceId = getText(formData, "calendar_resource_id")
     const calendarTimezone = getText(formData, "calendar_timezone")
     const calendarDefaultDaysRaw = getText(formData, "calendar_default_days")
@@ -426,8 +427,9 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     }
 
     const hasCalendarConfig = Object.keys(calendarPatch).length || Object.keys(calendarConfigPatch).length
+    const hasAgendaConfig = agendaEnabledRaw !== null
     const hasZoomSecrets = Boolean(zoomAccountId || zoomClientId || zoomClientSecret)
-    if (!hasCalendarConfig && !calendarUsername && !calendarPassword && !hasZoomSecrets) {
+    if (!hasCalendarConfig && !hasAgendaConfig && !calendarUsername && !calendarPassword && !hasZoomSecrets) {
       throw new Error("Debes completar al menos un campo del calendario.")
     }
 
@@ -451,6 +453,7 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     if (Object.keys(calendarConfigPatch).length) {
       patch.calendar = calendarConfigPatch
     }
+    patch.features = { agenda: { enabled: agendaEnabled } }
     patch.zoom = zoomConfigPatch
 
     const merged = mergeDeep({ ...currentConfig }, patch)

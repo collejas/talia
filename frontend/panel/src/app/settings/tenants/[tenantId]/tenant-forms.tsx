@@ -1017,6 +1017,7 @@ type WebchatInitialValues = {
 }
 
 type CalendarInitialValues = {
+  agenda_enabled?: boolean
   calendar_resource_id?: string
   calendar_timezone?: string
   calendar_default_days?: number
@@ -1291,7 +1292,7 @@ export function TenantWebchatSettings({
 
         </div>
         <p className="text-xs text-muted-foreground">
-          La pestaña “Calendario” administra el recurso, zona horarios y ventanas que usa el webchat para reservar citas.
+          La pestaña “Agenda” administra el recurso, zona horaria y ventanas que usa el webchat para reservar citas.
         </p>
 
         <div className="flex items-center justify-between gap-3">
@@ -1381,6 +1382,26 @@ export function TenantCalendarSettings({
     <div className="space-y-6">
       <form action={formAction} className="space-y-6">
         <input type="hidden" name="tenant_id" value={tenantId} />
+
+      <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="agenda_enabled" className="text-sm font-medium">
+              Permitir agenda por el asistente
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Si está desactivado, el asistente captura la necesidad y los datos, pero no pregunta horarios ni agenda citas.
+            </p>
+          </div>
+          <input
+            id="agenda_enabled"
+            name="agenda_enabled"
+            type="checkbox"
+            className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            defaultChecked={initialValues.agenda_enabled ?? true}
+          />
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -1612,7 +1633,7 @@ export function TenantCalendarSettings({
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
-          <SubmitButton label="Guardar Calendario" pendingLabel="Guardando..." />
+          <SubmitButton label="Guardar Agenda" pendingLabel="Guardando..." />
         </div>
       </form>
       <form action={validateAction} className="space-y-3">

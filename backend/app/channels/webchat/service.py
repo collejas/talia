@@ -1572,6 +1572,7 @@ class WebchatContext:
     session_id: str | None = None
     catalog_inmobiliario_enabled: bool = True
     catalog_no_inmobiliario_enabled: bool = True
+    agenda_enabled: bool = True
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -3199,8 +3200,9 @@ async def handle_message(
             ) from exc
     catalog_inmobiliario_enabled = True
     catalog_no_inmobiliario_enabled = True
-    if organizacion_id:
-        resolved_org = _resolve_org_uuid(organizacion_id)
+    agenda_enabled = True
+    if resolved_organizacion_id:
+        resolved_org = _resolve_org_uuid(resolved_organizacion_id)
         if resolved_org:
             try:
                 catalog_toggle_started = time.perf_counter()
@@ -3212,7 +3214,10 @@ async def handle_message(
                     organizacion_id=UUID(resolved_org),
                     channel="webchat",
                 )
-                debug_timings["catalog_toggle_ms"] = round(
+                agenda_enabled = await tenant_runtime.is_agenda_enabled(
+                    organizacion_id=UUID(resolved_org),
+                )
+                stage_timings["catalog_toggle_ms"] = round(
                     (time.perf_counter() - catalog_toggle_started) * 1000, 2
                 )
             except Exception as exc:  # pragma: no cover
@@ -3220,7 +3225,7 @@ async def handle_message(
                     "webchat.catalog_toggle_lookup_failed",
                     extra={
                         "conversation_id": str(conversation_id),
-                        "organizacion_id": organizacion_id,
+                        "organizacion_id": resolved_organizacion_id,
                         "error": str(exc),
                     },
                 )
@@ -3230,6 +3235,7 @@ async def handle_message(
         session_id=payload.session_id,
         catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
         catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+        agenda_enabled=agenda_enabled,
     )
     inventory_context_text = None
     location_request = is_location_request(payload.content or "")
@@ -3310,6 +3316,7 @@ async def handle_message(
             organizacion_id=resolved_organizacion_id,
             catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
             catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+            agenda_enabled=agenda_enabled,
             catalog_context=catalog_context,
             booking_context=booking_context_text,
             inbound_message_id=inbound_message_id,
@@ -3796,6 +3803,7 @@ async def _run_assistant_turn(
     organizacion_id: str | None = None,
     catalog_inmobiliario_enabled: bool = True,
     catalog_no_inmobiliario_enabled: bool = True,
+    agenda_enabled: bool = True,
     catalog_context: CatalogContext | None = None,
     booking_context: str | None = None,
     inbound_message_id: str | None = None,
@@ -3868,6 +3876,7 @@ async def _run_assistant_turn(
                     organizacion_id=UUID(resolved_org),
                     channel="webchat",
                 )
+
                 debug_timings["profiling_toggle_ms"] = round((time.perf_counter() - profiling_started) * 1000, 2)
             except Exception as exc:  # pragma: no cover
                 logger.warning(
@@ -3878,6 +3887,24 @@ async def _run_assistant_turn(
                         "error": str(exc),
                     },
                 )
+
+    if not agenda_enabled:
+        base_input.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Agenda desactivada para este tenant: no preguntes por horarios, fechas ni "
+                            "disponibilidad; no listes horarios y no agendes, reprogrames ni canceles citas. "
+                            "Captura únicamente la necesidad y los datos de contacto, usa close_lead cuando "
+                            "corresponda y comunica que un asesor se pondrá en contacto."
+                        ),
+                    }
+                ],
+            }
+        )
 
     base_input.append(
         {
@@ -4089,6 +4116,7 @@ async def _run_assistant_turn(
             assistant_spec.tools,
             catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
             catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+            agenda_enabled=agenda_enabled,
         )
         if include_tools and filtered_tools:
             payload["tools"] = filtered_tools
@@ -4112,6 +4140,7 @@ async def _run_assistant_turn(
         feature="sales_chat",
         catalog_inmobiliario_enabled=catalog_inmobiliario_enabled,
         catalog_no_inmobiliario_enabled=catalog_no_inmobiliario_enabled,
+        agenda_enabled=agenda_enabled,
     )
 
     tool_loop_started = time.perf_counter()
@@ -4435,6 +4464,7 @@ async def _execute_function_call(
         channel="webchat",
         catalog_inmobiliario_enabled=context.catalog_inmobiliario_enabled,
         catalog_no_inmobiliario_enabled=context.catalog_no_inmobiliario_enabled,
+        agenda_enabled=context.agenda_enabled,
     )
     lead_result = await lead_tools.try_execute_lead_tool(name, arguments, lead_context)
     if lead_result is not None:
@@ -4686,6 +4716,8 @@ async def _execute_function_call(
         }
 
     if name == "list_demo_slots":
+        if not context.agenda_enabled:
+            return {"status": "disabled", "message": "La agenda está desactivada para este tenant."}
         conversation_meta = await _resolve_conversation_metadata(context.conversation_id)
         calendar_settings = await get_calendar_runtime_settings_for_organizacion(
             conversation_meta.get("organizacion_id")
@@ -4727,6 +4759,8 @@ async def _execute_function_call(
         }
 
     if name == "schedule_demo":
+        if not context.agenda_enabled:
+            return {"status": "disabled", "message": "La agenda está desactivada para este tenant."}
         persona = await _resolve_persona(context.persona_id)
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
@@ -5057,6 +5091,8 @@ async def _execute_function_call(
         }
 
     if name == "reschedule_demo":
+        if not context.agenda_enabled:
+            return {"status": "disabled", "message": "La agenda está desactivada para este tenant."}
         booking_id = str(arguments.get("booking_id") or "").strip()
         if not booking_id:
             raise ValueError("booking_id requerido para reschedule_demo")
@@ -5106,6 +5142,8 @@ async def _execute_function_call(
         }
 
     if name == "cancel_demo":
+        if not context.agenda_enabled:
+            return {"status": "disabled", "message": "La agenda está desactivada para este tenant."}
         booking_id = str(arguments.get("booking_id") or "").strip()
         if not booking_id:
             raise ValueError("booking_id requerido para cancel_demo")

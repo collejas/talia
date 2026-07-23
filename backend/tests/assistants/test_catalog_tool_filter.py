@@ -49,3 +49,21 @@ def test_filter_assistant_tools_keeps_tools_when_enabled() -> None:
     )
 
     assert filtered == tools
+
+
+def test_filter_assistant_tools_removes_agenda_functions_when_disabled() -> None:
+    tools = [
+        {"type": "function", "function": {"name": "list_demo_slots"}},
+        {"type": "function", "function": {"name": "schedule_demo"}},
+        {"type": "function", "function": {"name": "close_lead"}},
+    ]
+
+    filtered = filter_assistant_tools(
+        tools,
+        catalog_inmobiliario_enabled=True,
+        catalog_no_inmobiliario_enabled=True,
+        agenda_enabled=False,
+    )
+
+    names = [tool.get("function", {}).get("name") for tool in filtered]
+    assert names == ["close_lead"]

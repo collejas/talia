@@ -2578,6 +2578,18 @@ async def _handle_list_demo_slots(
     arguments: dict[str, Any],
     context: ToolRuntimeContext,
 ) -> dict[str, Any]:
+    if context.organizacion_id:
+        try:
+            agenda_enabled = await tenant_runtime.is_agenda_enabled(
+                organizacion_id=UUID(context.organizacion_id),
+            )
+        except (TypeError, ValueError):
+            agenda_enabled = True
+        if not agenda_enabled:
+            return {
+                "status": "disabled",
+                "message": "La agenda está desactivada para este tenant.",
+            }
     conversation_meta = await webchat_service._resolve_conversation_metadata(context.conversation_id)
     calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
@@ -2624,6 +2636,18 @@ async def _handle_list_demo_slots(
 async def _handle_schedule_demo(
     arguments: dict[str, Any], context: ToolRuntimeContext
 ) -> dict[str, Any]:
+    if context.organizacion_id:
+        try:
+            agenda_enabled = await tenant_runtime.is_agenda_enabled(
+                organizacion_id=UUID(context.organizacion_id),
+            )
+        except (TypeError, ValueError):
+            agenda_enabled = True
+        if not agenda_enabled:
+            return {
+                "status": "disabled",
+                "message": "La agenda está desactivada para este tenant.",
+            }
     persona_id = _context_persona_id(context)
     conversation_meta = await webchat_service._resolve_conversation_metadata(context.conversation_id)
     calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(

@@ -1160,6 +1160,7 @@ def _coerce_float(value: Any, default: float) -> float:
 @dataclass(slots=True)
 class WhatsappRuntimeSettings:
     provider: str
+    agenda_enabled: bool
     assistant_id: str | None
     prompt_id: str | None
     prompt_version: str | None
@@ -1201,6 +1202,7 @@ class WhatsappRuntimeSettings:
     def from_settings() -> "WhatsappRuntimeSettings":
         return WhatsappRuntimeSettings(
             provider="twilio",
+            agenda_enabled=True,
             assistant_id=settings.whatsapp_assistant_id,
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
@@ -1250,6 +1252,9 @@ async def get_whatsapp_runtime_settings(
         return settings_payload
 
     config = await get_org_config(organizacion_id=organizacion_id, force_refresh=force_refresh)
+    features_cfg = _as_dict(config.get("features")) or {}
+    agenda_cfg = _as_dict(features_cfg.get("agenda")) or {}
+    settings_payload.agenda_enabled = _coerce_bool(agenda_cfg.get("enabled"), True)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
     whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
     whatsapp_meta_cfg = _as_dict(whatsapp_cfg.get("meta")) or {}
@@ -1613,6 +1618,25 @@ async def is_profiling_enabled(
 
     by_channel = _as_dict(scoring_cfg.get("profiling_enabled_by_channel")) or {}
     return _coerce_bool(by_channel.get(channel), global_enabled)
+
+
+async def is_agenda_enabled(
+    *,
+    organizacion_id: UUID,
+) -> bool:
+    """Resuelve si el tenant permite que los asistentes gestionen citas."""
+
+    try:
+        config = await get_org_config(organizacion_id=organizacion_id)
+    except Exception as exc:
+        logger.warning(
+            "tenant_runtime.agenda_enabled_fallback_true",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        return True
+    features_cfg = _as_dict(config.get("features")) or {}
+    agenda_cfg = _as_dict(features_cfg.get("agenda")) or {}
+    return _coerce_bool(agenda_cfg.get("enabled"), True)
 
 
 def _read_catalog_feature_enabled(config: dict[str, Any], *, key: str, fallback: bool = True) -> bool:
