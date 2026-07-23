@@ -298,25 +298,33 @@ async def _resolve_inbox_notification_users(
     if isinstance(convo, dict):
         assigned = _safe_uuid(convo.get("asignado_a_usuario_id"))
         if assigned:
-            recipients: list[UUID] = [assigned]
-            try:
-                supervisors = await repo.list_supervisor_user_ids_for_sales_rep(
+            return await _resolve_opportunity_notification_users(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                assigned_user_id=assigned,
+            )
+
+        try:
+            opportunities = await repo.list_opportunities_by_conversation_ids(
+                organizacion_id=organizacion_id,
+                conversation_ids=[str(conversation_id)],
+                limit=1,
+            )
+        except CRMRepositoryError:
+            opportunities = []
+        if opportunities:
+            opportunity = opportunities[0]
+            assigned = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+            if assigned:
+                return await _resolve_opportunity_notification_users(
+                    repo=repo,
                     organizacion_id=organizacion_id,
-                    empleado_usuario_id=assigned,
+                    assigned_user_id=assigned,
                 )
-            except CRMRepositoryError:
-                supervisors = []
-            for supervisor_id in supervisors:
-                if supervisor_id not in recipients:
-                    recipients.append(supervisor_id)
-            return recipients
-    try:
-        return await repo.list_user_ids_with_permission(
-            organizacion_id=organizacion_id,
-            codigo="ver_inbox",
-        )
-    except CRMRepositoryError:
-        return []
+
+    # No hay destinatario seguro: no se debe convertir la notificación en un
+    # broadcast a todos los usuarios con permiso de Inbox.
+    return []
 
 
 async def _resolve_opportunity_notification_users(
@@ -327,7 +335,7 @@ async def _resolve_opportunity_notification_users(
 ) -> list[UUID]:
     if not assigned_user_id:
         return []
-    recipients: list[UUID] = [assigned_user_id]
+    candidates: list[UUID] = [assigned_user_id]
     try:
         supervisors = await repo.list_supervisor_user_ids_for_sales_rep(
             organizacion_id=organizacion_id,
@@ -336,8 +344,21 @@ async def _resolve_opportunity_notification_users(
     except CRMRepositoryError:
         supervisors = []
     for supervisor_id in supervisors:
-        if supervisor_id not in recipients:
-            recipients.append(supervisor_id)
+        if supervisor_id not in candidates:
+            candidates.append(supervisor_id)
+
+    recipients: list[UUID] = []
+    for user_id in candidates:
+        try:
+            has_permission = await repo.user_has_permission(
+                organizacion_id=organizacion_id,
+                usuario_id=user_id,
+                codigo="ver_inbox",
+            )
+        except CRMRepositoryError:
+            has_permission = False
+        if has_permission:
+            recipients.append(user_id)
     return recipients
 
 

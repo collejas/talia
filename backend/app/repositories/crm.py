@@ -20187,7 +20187,7 @@ class CRMRepository:
         )
         in_clause = _postgrest_in_clause(safe_ids)
         params = {
-            "select": "id,monto_estimado,metadata,creado_en",
+            "select": "id,monto_estimado,metadata,creado_en,asignado_a_usuario_id",
             "organizacion_id": f"eq.{organizacion_id}",
             "or": f"(metadata->>conversation_id.{in_clause},metadata->>conversacion_id.{in_clause})",
             "order": "creado_en.desc",
