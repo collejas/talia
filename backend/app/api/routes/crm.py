@@ -43525,6 +43525,29 @@ async def eliminar_propiedad_unidad(
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
+    # La tabla de unidades no contiene organizacion_id; el tenant se hereda
+    # del desarrollo/capa. Validarlo antes del DELETE evita que un UUID válido
+    # de otra organización pueda eliminarse usando el service role.
+    current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    if not current_unidad:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_unit_not_found")
+    desarrollo_uuid = _safe_uuid(current_unidad.get("desarrollo_id"))
+    if desarrollo_uuid is None:
+        nivel_uuid = _safe_uuid(current_unidad.get("nivel_id"))
+        if nivel_uuid:
+            capa = await repo.get_propiedad_capa(
+                organizacion_id=organizacion_id,
+                capa_id=nivel_uuid,
+            )
+            desarrollo_uuid = _safe_uuid(capa.get("desarrollo_id")) if capa else None
+    if desarrollo_uuid is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_unit_not_found")
+    desarrollo = await repo.get_propiedad_desarrollo(
+        organizacion_id=organizacion_id,
+        desarrollo_id=desarrollo_uuid,
+    )
+    if not desarrollo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_unit_not_found")
     try:
         record = await repo.delete_propiedad_unidad(
             organizacion_id=organizacion_id,
