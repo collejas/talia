@@ -39,6 +39,15 @@ unidad,Fraccionamiento,Lote 1,FR / Macrolote Norte / Manzana A / Lote 1,disponib
     assert capa.manzanas[0].unidades[0].unidad == "1"
 
 
+def test_csv_normalizes_2d_template_polygons_to_multipolygon_z() -> None:
+    normalized = crm_routes._normalize_geometry_input(
+        "POLYGON((-109.7383 23.0022, -109.7381 23.0023, -109.7383 23.0022))"
+    )
+
+    assert normalized.startswith("SRID=4326;MULTIPOLYGON Z")
+    assert "-109.7383 23.0022 0" in normalized
+
+
 def test_uploaded_plateros_csv_preserves_expected_distribution() -> None:
     csv_path = Path("/var/www/talia/plateros3.csv")
     if not csv_path.exists():

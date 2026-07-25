@@ -806,17 +806,23 @@ export function PropertyMap() {
               if (parentKind === "desarrollo") {
                 list = featureList.filter((f) => inferFeatureKind(f) === "capa");
               } else if (parentKind === "capa") {
-                // Solo unidades cuyo nivel coincide con la capa seleccionada
-                const parentLevel = activeNodeRef.current?.properties?.nivel;
-                list = featureList.filter((f) => {
-                  if (inferFeatureKind(f) !== "unidad") return false;
-                  const unitLevel = f?.properties?.nivel;
-                  return (
-                    typeof parentLevel === "number" &&
-                    typeof unitLevel === "number" &&
-                    Number(unitLevel) === Number(parentLevel)
-                  );
-                });
+                // Una capa primero muestra sus manzanas; solo las capas legacy
+                // sin manzanas muestran directamente sus unidades.
+                const manzanas = featureList.filter((f) => inferFeatureKind(f) === "manzana");
+                if (manzanas.length) {
+                  list = manzanas;
+                } else {
+                  const parentLevel = activeNodeRef.current?.properties?.nivel;
+                  list = featureList.filter((f) => {
+                    if (inferFeatureKind(f) !== "unidad") return false;
+                    const unitLevel = f?.properties?.nivel;
+                    return (
+                      typeof parentLevel === "number" &&
+                      typeof unitLevel === "number" &&
+                      Number(unitLevel) === Number(parentLevel)
+                    );
+                  });
+                }
               }
               if (!list.length) {
                 list = featureList;
@@ -1238,32 +1244,13 @@ export function PropertyMap() {
       setActiveNode(parent ?? null);
       if (parent) {
         mapboxRootFeatureRef.current = parent;
-        const children = getChildrenForNode(parent);
-        if (children.length) {
-          sendFeaturesToMapbox(children);
-        } else {
-          sendFeatureToMapbox(parent);
-        }
+        // Drill-up vuelve a mostrar el polígono padre, no sus hijos.
+        sendFeatureToMapbox(parent, inferFeatureKind(parent), true);
         setMapboxFeature(parent);
       }
       return next;
     });
-  }, [getChildrenForNode, sendFeatureToMapbox, sendFeaturesToMapbox]);
-
-  useEffect(() => {
-    if (!activeNode || !mapboxActive) {
-      return;
-    }
-    if (!parentStack.length) {
-      return;
-    }
-    const children = getChildrenForNode(activeNode);
-    if (children.length) {
-      sendFeaturesToMapbox(children);
-    } else {
-      sendFeatureToMapbox(activeNode);
-    }
-  }, [activeNode, getChildrenForNode, mapboxActive, parentStack.length, sendFeatureToMapbox, sendFeaturesToMapbox]);
+  }, [sendFeatureToMapbox]);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -1634,12 +1621,16 @@ export function PropertyMap() {
   const mapboxProps = mapboxPanelFeature?.properties ?? null;
   const mapboxMetadata = mapboxProps?.metadata ?? {};
   const catalogItemId =
-    mapboxMetadata?.catalog_item_id ??
     mapboxProps?.catalog_item_id ??
+    mapboxMetadata?.catalog_item_id ??
     mapboxMetadata?.catalog_item ??
     mapboxProps?.metadata?.catalog_item ??
     null;
-  const unidadId = mapboxProps?.id ?? mapboxProps?.unidad_id ?? mapboxProps?.unidad ?? null;
+  const unidadId =
+    mapboxProps?.id ??
+    mapboxProps?.unidad_id ??
+    (mapboxKind === "unidad" ? mapboxPanelFeature?.id : null) ??
+    null;
   const propiedadId =
     mapboxProps?.desarrollo_id ?? mapboxProps?.propiedad_id ?? mapboxProps?.target_id ?? null;
   const mapboxUnitsSummaryLabel = useMemo(() => {
@@ -1953,7 +1944,7 @@ export function PropertyMap() {
   }, []);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
-    if (!mapboxProps?.id || !statusModalTarget) {
+    if (!unidadId || !statusModalTarget) {
       return;
     }
     if (!statusModalOpportunityId) {
@@ -1964,7 +1955,7 @@ export function PropertyMap() {
     setStatusMessage(null);
     setStatusError(null);
     try {
-      const response = await fetch(`/api/crm/propiedad-unidades/${mapboxProps.id}/status`, {
+      const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1991,7 +1982,7 @@ export function PropertyMap() {
     } finally {
       setStatusLoading(false);
     }
-  }, [mapboxProps?.id, refreshGeojson, statusModalOpportunityId, statusModalTarget]);
+  }, [refreshGeojson, statusModalOpportunityId, statusModalTarget, unidadId]);
 
   useEffect(() => {
     if (!isSaleModalOpen && !isStatusModalOpen) {
@@ -3132,7 +3123,7 @@ export function PropertyMap() {
           });
           setActiveNode(clicked);
           setMapboxFeature(clicked);
-          const children = getChildrenForNode(clicked);
+          const children = deriveDrillChildren(clicked);
           logMapboxEvent(
             {
               step: "click-drill",
@@ -3145,9 +3136,9 @@ export function PropertyMap() {
           );
           // Para desarrollo/capa seguimos usando drill-down normal.
           if (children.length) {
-            sendFeaturesToMapbox(children, parentKind);
+            sendFeaturesToMapbox(children, parentKind, true);
           } else {
-            sendFeatureToMapbox(clicked);
+            sendFeatureToMapbox(clicked, parentKind, true);
           }
         });
         applyPendingFeature();
@@ -3186,6 +3177,7 @@ export function PropertyMap() {
     mapboxToken,
     sendFeatureToMapbox,
     sendFeaturesToMapbox,
+    deriveDrillChildren,
     getChildrenForNode,
     logMapboxEvent,
     pitch,
@@ -3631,39 +3623,13 @@ export function PropertyMap() {
       if (!resolvedFeature?.geometry) {
         return;
       }
-      const children = getChildrenForNode(resolvedFeature).filter(
-        (child) => inferFeatureKind(child) === "capa",
-      );
-      pendingPayloadRef.current = null;
-      pendingMapboxParentKindRef.current = null;
-      pendingMapboxFeatureRef.current = null;
-      suppressMapboxSyncRef.current = false;
-      suppressTreeCapaFallbackRef.current = true;
-      selectedMapboxUnitIdRef.current = null;
-      hoveredMapboxIdRef.current = null;
-      mapboxRootFeatureRef.current = resolvedFeature;
-      setSelectedId(String(resolvedFeature.id ?? ""));
-      setActiveMarkerFeature(resolvedFeature);
-      mapboxFeatureRef.current = null;
-      setMapboxFeature(null);
-      setMapboxActive(true);
-      setMapboxLoading(true);
-      setActiveNode(resolvedFeature);
-      setParentStack([]);
-      zoomToFeature(resolvedFeature);
-      if (children.length) {
-        sendFeaturesToMapbox(children, "desarrollo", true);
-      }
-      if (mapboxInstanceRef.current) {
-        applyMapboxNavigationLimits(mapboxInstanceRef.current, resolvedFeature);
-      }
+      // Desde el árbol se abre el polígono padre. El drilldown hacia las
+      // capas ocurre después al hacer clic en ese polígono dentro de Mapbox.
+      openMapboxFeature(resolvedFeature);
     },
     [
-      applyMapboxNavigationLimits,
       findFeatureForDevelopment,
-      getChildrenForNode,
-      sendFeaturesToMapbox,
-      zoomToFeature,
+      openMapboxFeature,
     ],
   );
 
@@ -4267,7 +4233,7 @@ export function PropertyMap() {
                           </div>
                         )}
                       </div>
-                      {catalogItemId && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
+                      {mapboxKind === "unidad" && unidadId && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
                         <>
                           <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
                             <div className="flex flex-wrap gap-2">

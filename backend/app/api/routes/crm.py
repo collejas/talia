@@ -5639,42 +5639,39 @@ def _parse_multipolygon_body(body: str) -> list[list[list[list[float]]]]:
                 polygon = []
             elif depth == 3:
                 ring = []
-            elif depth == 4:
-                coord = []
             continue
         if char == ")":
-            if depth == 4 and coord is not None:
+            if depth == 3 and ring is not None:
                 flush_number(coord)
                 if coord:
                     ring.append(coord)
                 coord = []
-            elif depth == 3 and ring is not None:
+            elif depth == 2 and polygon is not None:
                 if ring:
                     polygon.append(ring)
                 ring = []
-            elif depth == 2 and polygon is not None:
                 if polygon:
                     polygons.append(polygon)
                 polygon = []
             depth -= 1
             continue
         if char == ",":
-            if depth == 4 and coord is not None:
+            if depth == 3 and coord is not None:
                 flush_number(coord)
                 if coord:
                     ring.append(coord)
                 coord = []
             continue
         if char.isspace():
-            if depth == 4 and coord is not None:
+            if depth == 3 and coord is not None:
                 flush_number(coord)
             continue
-        if depth >= 4 and char in number_chars:
+        if depth >= 3 and char in number_chars:
             if coord is None:
                 coord = []
             number += char
             continue
-        if depth >= 4 and coord is not None:
+        if depth >= 3 and coord is not None:
             flush_number(coord)
         number = ""
     return polygons
@@ -45238,7 +45235,10 @@ async def _ensure_catalog_item_for_unidad(
                 await repo.update_propiedad_unidad(
                     organizacion_id=organizacion_id,
                     unidad_id=unidad_uuid,
-                    payload={"metadata": unidad_metadata},
+                    payload={
+                        "catalog_item_id": str(catalog_item_id),
+                        "metadata": unidad_metadata,
+                    },
                 )
     _write_mapbox_debug_log(
         "catalog_item_sync",

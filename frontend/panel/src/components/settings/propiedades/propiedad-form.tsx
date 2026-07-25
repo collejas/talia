@@ -378,168 +378,162 @@ const PROPERTY_IMPORT_METADATA_COLUMNS = PROPERTY_IMPORT_TEMPLATE_HEADERS.filter
   column.startsWith("metadata_"),
 );
 
-const PROPERTY_IMPORT_TEMPLATE_ROWS = [
-  [
-    "desarrollo",
-    "Mirador",
-    "Mirador Azul",
-    "Mirador Azul",
-    "disponible",
-    "",
-    "",
-    "",
-    "horizontal",
-    "",
-    "Desarrollo base",
-    "POLYGON((-109.7383 23.0022, -109.7381 23.0023, -109.7377 23.0018, -109.7380 23.0016, -109.7383 23.0022))",
-    "",
-    "",
-    "",
-    "#0F766E",
-    "",
-    "",
-    "",
-    "",
-    "comercial",
-    "",
-    "MX",
-    "09",
-    "004",
-    "78398",
-    "Aguaje 2000",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ],
-  [
-    "capa",
-    "Mirador",
-    "Planta baja",
-    "Mirador Azul / Planta baja",
-    "disponible",
-    "0",
-    "",
-    "",
-    "",
-    "",
-    "Nivel principal",
-    "POLYGON((-109.7383 23.0022, -109.7380 23.0016, -109.7381 23.0018, -109.7383 23.0022))",
-    "3",
-    "0",
-    "1",
-    "#0F766E",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "MX",
-    "09",
-    "004",
-    "78398",
-    "Aguaje 2000",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ],
-  [
-    "manzana",
-    "Mirador",
-    "Manzana A",
-    "Mirador Azul / Planta baja / Manzana A",
-    "disponible",
-    "",
-    "0",
-    "",
-    "",
-    "",
-    "Manzana ejemplo",
-    "POLYGON((-109.7383 23.0022, -109.7381 23.0018, -109.7382 23.0020, -109.7383 23.0022))",
-    "",
-    "",
-    "",
-    "#F59E0B",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "MX",
-    "09",
-    "004",
-    "78398",
-    "Aguaje 2000",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ],
-  [
-    "unidad",
-    "Mirador",
-    "LOTE-1",
-    "Mirador Azul / Planta baja / LOTE-1",
-    "disponible",
-    "",
-    "0",
-    "LOTE-1",
-    "Terreno Departamental",
-    "",
-    "Unidad ejemplo",
-    "POLYGON((-109.7383 23.0022, -109.7381 23.0018, -109.7382 23.0020, -109.7383 23.0022))",
-    "3",
-    "0",
-    "1",
-    "#0F766E",
-    "3119155",
-    "479.87",
-    "manual",
-    "",
-    "comercial",
-    "",
-    "MX",
-    "09",
-    "004",
-    "78398",
-    "Aguaje 2000",
-    "2",
-    "1",
-    "1",
-    "2",
-    "85",
-    "120",
-    "8",
-    "1",
-    "1",
-    "0",
-    "1",
-  ],
-] as const;
+function templatePolygon(west: number, south: number, east: number, north: number): string {
+  const point = (longitude: number, latitude: number) =>
+    `${longitude.toFixed(6)} ${latitude.toFixed(6)}`;
+  return `POLYGON((${[
+    point(west, north),
+    point(east, north),
+    point(east, south),
+    point(west, south),
+    point(west, north),
+  ].join(", ")}))`;
+}
+
+function templateRow(values: Record<number, string>): string[] {
+  const row = Array<string>(PROPERTY_IMPORT_TEMPLATE_HEADERS.length).fill("");
+  Object.entries(values).forEach(([index, value]) => {
+    row[Number(index)] = value;
+  });
+  return row;
+}
+
+function buildPropertyImportTemplateRows(): string[][] {
+  const rows: string[][] = [];
+  const developmentName = "Mirador Azul";
+  const group = "Mirador";
+  const developmentPolygon = templatePolygon(-109.740, 23.000, -109.736, 23.004);
+
+  rows.push(
+    templateRow({
+      0: "desarrollo",
+      1: group,
+      2: developmentName,
+      3: developmentName,
+      4: "disponible",
+      8: "horizontal",
+      10: "Desarrollo de ejemplo con macrolotes, manzanas y unidades.",
+      11: developmentPolygon,
+      15: "#0F766E",
+      20: "comercial",
+      22: "MX",
+      23: "09",
+      24: "004",
+      25: "78398",
+      26: "Aguaje 2000",
+    }),
+  );
+
+  const capaBands = [
+    { name: "Macrolote Norte", south: 23.0003, north: 23.0015 },
+    { name: "Macrolote Centro", south: 23.0016, north: 23.0028 },
+    { name: "Macrolote Sur", south: 23.0029, north: 23.0037 },
+  ];
+
+  capaBands.forEach((capa, capaIndex) => {
+    const capaIdentifier = `${developmentName} / ${capa.name}`;
+    rows.push(
+      templateRow({
+        0: "capa",
+        1: group,
+        2: capa.name,
+        3: capaIdentifier,
+        4: "disponible",
+        5: String(capaIndex),
+        10: `Macrolote de ejemplo ${capaIndex + 1}`,
+        11: templatePolygon(-109.7397, capa.south, -109.7363, capa.north),
+        12: "0",
+        13: "0",
+        14: "1",
+        15: "#2563EB",
+        22: "MX",
+        23: "09",
+        24: "004",
+        25: "78398",
+        26: "Aguaje 2000",
+      }),
+    );
+
+    for (let manzanaIndex = 0; manzanaIndex < 4; manzanaIndex += 1) {
+      const manzanaName = `Manzana ${capaIndex + 1}-${String.fromCharCode(65 + manzanaIndex)}`;
+      const manzanaWest = -109.7394 + manzanaIndex * 0.0008;
+      const manzanaEast = manzanaWest + 0.00065;
+      const manzanaSouth = capa.south + 0.00012;
+      const manzanaNorth = capa.north - 0.00012;
+      const manzanaIdentifier = `${capaIdentifier} / ${manzanaName}`;
+      rows.push(
+        templateRow({
+          0: "manzana",
+          1: group,
+          2: manzanaName,
+          3: manzanaIdentifier,
+          4: "disponible",
+          6: String(capaIndex),
+          10: `Manzana de ejemplo ${manzanaName}`,
+          11: templatePolygon(manzanaWest, manzanaSouth, manzanaEast, manzanaNorth),
+          15: "#F59E0B",
+          22: "MX",
+          23: "09",
+          24: "004",
+          25: "78398",
+          26: "Aguaje 2000",
+        }),
+      );
+
+      for (let unitIndex = 0; unitIndex < 10; unitIndex += 1) {
+        const unitName = `Lote-${unitIndex + 1}`;
+        const column = unitIndex % 5;
+        const rowIndex = Math.floor(unitIndex / 5);
+        const unitWest = manzanaWest + 0.00004 + column * 0.000115;
+        const unitEast = unitWest + 0.00009;
+        const unitSouth = manzanaSouth + 0.00008 + rowIndex * 0.00048;
+        const unitNorth = unitSouth + 0.00038;
+        rows.push(
+          templateRow({
+            0: "unidad",
+            1: group,
+            2: unitName,
+            3: `${manzanaIdentifier} / ${unitName}`,
+            4: "disponible",
+            6: String(capaIndex),
+            7: unitName,
+            9: "Terreno Departamental",
+            10: `Unidad vendible de ejemplo ${unitName}`,
+            11: templatePolygon(unitWest, unitSouth, unitEast, unitNorth),
+            12: "0",
+            13: "0",
+            14: "1",
+            15: "#0F766E",
+            16: "3119155",
+            17: "100",
+            18: "manual",
+            20: "comercial",
+            22: "MX",
+            23: "09",
+            24: "004",
+            25: "78398",
+            26: "Aguaje 2000",
+            27: "2",
+            28: "1",
+            29: "1",
+            30: "2",
+            31: "85",
+            32: "120",
+            33: "8",
+            34: "1",
+            35: "1",
+            36: "0",
+            37: "1",
+          }),
+        );
+      }
+    }
+  });
+
+  return rows;
+}
+
+const PROPERTY_IMPORT_TEMPLATE_ROWS = buildPropertyImportTemplateRows();
 
 function csvCell(value: string) {
   if (value === "") {
