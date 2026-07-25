@@ -294,7 +294,7 @@ function buildHierarchy(features) {
     const tipo = dev.tipos.get(tipoKey);
     if (!tipo) continue;
 
-    if (featureKind !== "capa" && featureKind !== "unidad") {
+    if (featureKind !== "capa" && featureKind !== "manzana" && featureKind !== "unidad") {
       continue;
     }
 
@@ -314,6 +314,8 @@ function buildHierarchy(features) {
         id: featureKind === "capa" ? String(feature.id ?? capaKey) : capaKey,
         name: capaNombre,
         units: [],
+        manzanas: [],
+        manzanaLookup: new Map(),
         sortValue: resolveCapaSortValue(props),
         parentKey: capaParentKey != null ? String(capaParentKey) : null,
         feature: featureKind === "capa" ? feature : null,
@@ -342,18 +344,55 @@ function buildHierarchy(features) {
       continue;
     }
     if (!isUnit) {
+      const manzanaId = props.manzana_id ?? props.id ?? feature.id;
+      const manzanaKey = manzanaId != null ? String(manzanaId) : null;
+      if (!manzanaKey) continue;
+      let manzana = capa.manzanaLookup.get(manzanaKey) ?? null;
+      if (!manzana) {
+        manzana = {
+          id: manzanaKey,
+          name: props.nombre ?? props.manzana_nombre ?? `Manzana ${manzanaKey.slice(0, 6)}`,
+          units: [],
+          sortValue: resolveCapaSortValue(props),
+          feature: featureKind === "manzana" ? feature : null,
+        };
+        capa.manzanaLookup.set(manzanaKey, manzana);
+        capa.manzanas.push(manzana);
+      } else if (featureKind === "manzana" && !manzana.feature) {
+        manzana.feature = feature;
+        manzana.name = props.nombre ?? manzana.name;
+      }
       continue;
     }
 
     const status = (props.status ?? "").toLowerCase();
     const statusColor = props.status_color ?? STATUS_COLORS[status] ?? STATUS_COLORS.disponible;
-    capa.units.push({
+    const manzanaId = props.manzana_id ?? null;
+    const unit = {
       id: feature.id,
       name: props.nombre ?? props.unidad ?? "Unidad",
       feature,
       color: statusColor,
       sortValue: resolveUnitSortValue(props),
-    });
+    };
+    if (manzanaId != null) {
+      const manzanaKey = String(manzanaId);
+      let manzana = capa.manzanaLookup.get(manzanaKey) ?? null;
+      if (!manzana) {
+        manzana = {
+          id: manzanaKey,
+          name: props.manzana_nombre ?? `Manzana ${manzanaKey.slice(0, 6)}`,
+          units: [],
+          sortValue: Number.POSITIVE_INFINITY,
+          feature: null,
+        };
+        capa.manzanaLookup.set(manzanaKey, manzana);
+        capa.manzanas.push(manzana);
+      }
+      manzana.units.push(unit);
+    } else {
+      capa.units.push(unit);
+    }
   }
   return Array.from(devMap.values())
     .map((dev) => ({
@@ -362,7 +401,13 @@ function buildHierarchy(features) {
       tipoSummary: Array.from(dev.tipoLabels).filter(Boolean),
       unitCount: Array.from(dev.tipos.values()).reduce(
         (total, tipo) =>
-          total + Array.from(tipo.capas.values()).reduce((capaTotal, capa) => capaTotal + capa.units.length, 0),
+          total + Array.from(tipo.capas.values()).reduce(
+            (capaTotal, capa) =>
+              capaTotal +
+              capa.units.length +
+              (capa.manzanas ?? []).reduce((manzanaTotal, manzana) => manzanaTotal + manzana.units.length, 0),
+            0,
+          ),
         0,
       ),
       capas: Array.from(dev.capas.values())
@@ -373,7 +418,13 @@ function buildHierarchy(features) {
             return aValue - bValue;
           }
           return (a.name ?? "").localeCompare(b.name ?? "");
-        }),
+        })
+        .map((capa) => ({
+          ...capa,
+          manzanas: [...(capa.manzanas ?? [])].sort((a, b) =>
+            (a.name ?? "").localeCompare(b.name ?? ""),
+          ),
+        })),
     }))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
@@ -1134,7 +1185,7 @@ export function PropertyMap() {
       if (kind === "unidad") {
         return;
       }
-      if (kind === "desarrollo" || kind === "capa") {
+      if (kind === "desarrollo" || kind === "capa" || kind === "manzana") {
         try {
           const bounds = layerInstance?.getBounds?.();
           if (bounds?.isValid?.() && mapInstanceRef.current) {
@@ -1656,6 +1707,12 @@ export function PropertyMap() {
       unitTotal = children.length;
       return `Unidades: ${unitTotal}`;
     }
+    if (mapboxKind === "manzana") {
+      const children = getChildrenForNode(mapboxPanelFeature ?? null).filter(
+        (child) => inferFeatureKind(child) === "unidad",
+      );
+      return `Unidades: ${children.length}`;
+    }
     return null;
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
   const mapboxSalesSummary = useMemo(() => {
@@ -1727,6 +1784,10 @@ export function PropertyMap() {
     };
     const units =
       mapboxKind === "capa"
+        ? getChildrenForNode(mapboxPanelFeature ?? null).filter(
+            (child) => inferFeatureKind(child) === "unidad",
+          )
+        : mapboxKind === "manzana"
         ? getChildrenForNode(mapboxPanelFeature ?? null).filter(
             (child) => inferFeatureKind(child) === "unidad",
           )
@@ -3503,9 +3564,16 @@ export function PropertyMap() {
         }
         return (a.name ?? "").localeCompare(b.name ?? "");
       });
-      let unitFeatures = orderedUnits.map((unit) => unit?.feature).filter(Boolean);
-      if (!unitFeatures.length && typeof getChildrenForNode === "function") {
-        unitFeatures = getChildrenForNode(feature).filter((child) => inferFeatureKind(child) === "unidad");
+      const featureKind = inferFeatureKind(feature);
+      let nextFeatures = featureKind === "capa"
+        ? (capa?.manzanas ?? []).map((manzana) => manzana?.feature).filter(Boolean)
+        : orderedUnits.map((unit) => unit?.feature).filter(Boolean);
+      if (!nextFeatures.length && typeof getChildrenForNode === "function") {
+        nextFeatures = getChildrenForNode(feature).filter((child) =>
+          featureKind === "capa"
+            ? inferFeatureKind(child) === "manzana"
+            : inferFeatureKind(child) === "unidad",
+        );
       }
       pendingPayloadRef.current = null;
       pendingMapboxParentKindRef.current = null;
@@ -3524,10 +3592,22 @@ export function PropertyMap() {
       setActiveNode(feature);
       const developmentId = feature.properties?.desarrollo_id ?? null;
       const developmentFeature = developmentId ? findFeatureForDevelopment(developmentId) : null;
-      setParentStack(developmentFeature ? [developmentFeature] : []);
+      const parentId = feature.properties?.parent_id ?? feature.properties?.capa_id ?? feature.properties?.nivel_id ?? null;
+      const parentCapaFeature = featureKind === "manzana" && parentId
+        ? (featuresRef.current ?? []).find((candidate) =>
+            inferFeatureKind(candidate) === "capa" && getFeatureId(candidate) === String(parentId),
+          )
+        : null;
+      setParentStack(
+        parentCapaFeature
+          ? [developmentFeature, parentCapaFeature].filter(Boolean)
+          : developmentFeature
+            ? [developmentFeature]
+            : [],
+      );
       zoomToFeature(feature);
-      if (unitFeatures.length) {
-        sendFeaturesToMapbox(unitFeatures, "capa", true);
+      if (nextFeatures.length) {
+        sendFeaturesToMapbox(nextFeatures, featureKind, true);
       }
       if (mapboxInstanceRef.current) {
         applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
@@ -3614,6 +3694,44 @@ export function PropertyMap() {
     </div>
   );
 
+  const renderManzanaNode = (manzana) => {
+    const orderedUnits = [...(manzana.units ?? [])].sort((a, b) => {
+      const aValue = Number.isFinite(a.sortValue) ? a.sortValue : Number.POSITIVE_INFINITY;
+      const bValue = Number.isFinite(b.sortValue) ? b.sortValue : Number.POSITIVE_INFINITY;
+      return aValue === bValue
+        ? (a.name ?? "").localeCompare(b.name ?? "")
+        : aValue - bValue;
+    });
+    return (
+      <div key={manzana.id} className="space-y-2 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
+        <div className="flex items-center justify-between gap-3 text-[0.75rem]">
+          <div className="flex items-center gap-2">
+            <IconLayersSelected className="size-4 text-amber-500" />
+            <span className="font-semibold">{manzana.name || "Manzana"}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleCapaSelect({
+              id: manzana.feature?.id ?? manzana.id,
+              name: manzana.name,
+              feature: manzana.feature,
+              units: manzana.units,
+            })}
+            disabled={!manzana.feature?.geometry}
+            className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 transition hover:border-slate-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Ver
+          </button>
+        </div>
+        <div className="ml-5 border-l border-dashed border-slate-200 pl-3">
+          {orderedUnits.length ? orderedUnits.map((unit) => renderUnidadNode(unit)) : (
+            <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderCapaNode = (desarrollo, capa) => {
     const capaExpanded = expandedCapas.has(capa.id);
     const orderedUnits = [...(capa.units ?? [])].sort((a, b) => {
@@ -3624,6 +3742,7 @@ export function PropertyMap() {
       }
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
+    const orderedManzanas = [...(capa.manzanas ?? [])];
     return (
       <div key={capa.id} className="space-y-2 border-b border-dashed border-slate-200 pb-3 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.75rem]">
@@ -3666,8 +3785,11 @@ export function PropertyMap() {
         {capaExpanded && (
           <PolygonContainer geom={capa.geom}>
             <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
-              {orderedUnits.length ? (
-                orderedUnits.map((unit) => renderUnidadNode(unit))
+              {orderedManzanas.length || orderedUnits.length ? (
+                <>
+                  {orderedManzanas.map((manzana) => renderManzanaNode(manzana))}
+                  {orderedUnits.map((unit) => renderUnidadNode(unit))}
+                </>
               ) : (
                 <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
               )}
@@ -3970,7 +4092,7 @@ export function PropertyMap() {
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-lg font-semibold text-white">
-                          {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
+                          {mapboxProps?.nombre ?? mapboxProps?.unidad ?? mapboxProps?.desarrollo_nombre ?? "Propiedad"}
                         </div>
                         <span
                           className="h-4 w-4 rounded-full border border-slate-500"
