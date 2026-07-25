@@ -1146,13 +1146,15 @@ export function PropertyMap() {
 
   const ascendLeaflet = useCallback(() => {
     const nextStack = [...leafletParentStack];
-    const parent = nextStack.pop() ?? null;
+    const poppedNode = nextStack.pop() ?? null;
+    const targetNode = nextStack[nextStack.length - 1] ?? poppedNode;
+    const canonicalTarget = getCanonicalFeature(targetNode);
     setLeafletParentStack(nextStack);
-    setLeafletActiveNode(parent);
+    setLeafletActiveNode(canonicalTarget);
 
-    if (parent) {
-      const children = deriveDrillChildren(parent);
-      fitLeafletToFeatures(children.length ? children : [parent]);
+    if (canonicalTarget) {
+      const children = nextStack.length ? deriveDrillChildren(canonicalTarget) : [];
+      fitLeafletToFeatures(children.length ? children : [canonicalTarget]);
       return;
     }
 
@@ -1174,6 +1176,7 @@ export function PropertyMap() {
   }, [
     deriveDrillChildren,
     fitLeafletToFeatures,
+    getCanonicalFeature,
     leafletParentStack,
     mapLevel,
   ]);
@@ -1214,18 +1217,12 @@ export function PropertyMap() {
         } catch {
           /* ignore */
         }
-        setLeafletParentStack((prev) => {
-          const next = [...prev];
-          const current = leafletActiveNodeRef.current;
-          if (current) {
-            next.push(current);
-          }
-          return next;
-        });
-        setLeafletActiveNode(feature);
+        const drillNode = getCanonicalFeature(feature) ?? feature;
+        setLeafletParentStack((prev) => [...prev, drillNode]);
+        setLeafletActiveNode(drillNode);
       }
     },
-    [],
+    [getCanonicalFeature],
   );
 
   // Recentrar cuando cambia el nodo activo del drill-down Leaflet.
@@ -1337,12 +1334,16 @@ export function PropertyMap() {
       }
       return filteredFeatures;
     }
+    if (leafletParentStack.length === 0) {
+      return [leafletActiveNode];
+    }
     const children = deriveDrillChildren(leafletActiveNode);
     return children.length ? children : [leafletActiveNode];
   }, [
     deriveDrillChildren,
     filteredFeatures,
     leafletActiveNode,
+    leafletParentStack.length,
     mapLevel,
     mapboxActive,
     selectedMunicipioGeoKey,
@@ -2826,6 +2827,14 @@ export function PropertyMap() {
     layer.addData(payload);
     if (typeof layer.bringToFront === "function") {
       layer.bringToFront();
+    }
+    try {
+      const developmentBounds = leaflet.geoJSON(payload).getBounds();
+      if (developmentBounds.isValid()) {
+        map.fitBounds(developmentBounds, { padding: [35, 35], maxZoom: 17 });
+      }
+    } catch {
+      // Ignora geometrías municipales inválidas sin bloquear el mapa.
     }
   }, [leaflet, mapLevel, municipioDevelopmentFeatures, leafletActiveNode]);
 
