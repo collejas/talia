@@ -2362,6 +2362,72 @@ async def test_reject_previous_quotes_for_opportunity_marks_prior_quotes_rejecte
     )
 
 
+def test_parse_quote_items_uses_catalog_item_description_as_fallback() -> None:
+    quote_id = uuid.uuid4()
+    catalog_item_id = uuid.uuid4()
+
+    items = crm_routes._parse_quote_items(
+        [
+            {
+                "id": str(uuid.uuid4()),
+                "cotizacion_id": str(quote_id),
+                "catalog_item_id": str(catalog_item_id),
+                "titulo": None,
+                "descripcion": None,
+                "unidad": "unidad",
+                "cantidad": 1,
+                "precio_unitario": 1500,
+                "descuento": None,
+                "subtotal": 1500,
+                "impuestos": None,
+                "total": 1740,
+                "moneda": "MXN",
+                "orden": 1,
+                "metadata": {},
+                "catalog_item": {
+                    "id": str(catalog_item_id),
+                    "slug": "servicio-demo",
+                    "nombre": "Servicio demo",
+                    "tipo": "servicio",
+                    "descripcion": "Descripción larga del producto",
+                    "descripcion_corta": "Descripción breve",
+                    "descripcion_larga": "Descripción larga del producto",
+                    "unidad": "unidad",
+                    "precio_base": 1500,
+                    "moneda": "MXN",
+                    "impuestos": [],
+                    "activo": True,
+                    "requiere_factura": False,
+                    "clave_sat": None,
+                    "unidad_sat": None,
+                    "metadatos": {},
+                    "maneja_inventario": False,
+                    "unidad_inventario": "unidad",
+                    "stock_minimo": None,
+                    "stock_objetivo": None,
+                    "costo_ultimo": None,
+                    "costo_promedio": None,
+                    "requiere_lote": False,
+                    "requiere_serie": False,
+                    "proveedor_principal_id": None,
+                    "activo_compra": True,
+                    "created_by": None,
+                    "updated_by": None,
+                    "creado_en": "2024-01-01T00:00:00Z",
+                    "actualizado_en": "2024-01-01T00:00:00Z",
+                    "linea_id": None,
+                    "familia_id": None,
+                    "modelo_id": None,
+                },
+            }
+        ]
+    )
+
+    assert len(items) == 1
+    assert items[0].descripcion == "Descripción larga del producto"
+    assert items[0].titulo == "Servicio demo"
+
+
 
 @pytest.mark.asyncio
 async def test_actualizar_status_propiedad_unidad_crea_movimiento(

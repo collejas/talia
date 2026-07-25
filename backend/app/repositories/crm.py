@@ -72,7 +72,7 @@ def _align_postgrest_bulk_items(items: Sequence[dict[str, Any]]) -> list[dict[st
     return normalized_items
 
 
-QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,maneja_inventario))"
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,descripcion_larga,maneja_inventario))"
 
 PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS = 30.0
 PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS = 30.0
@@ -3959,7 +3959,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo,descripcion))",
             "items.order": "id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -3978,7 +3978,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{quote_id}",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo,descripcion))",
             "items.order": "id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -11197,7 +11197,7 @@ class CRMRepository:
                 sanitized = pattern.replace("%", "").replace("*", "")
                 params["or"] = (
                     f"(nombre.ilike.*{sanitized}*,slug.ilike.*{sanitized}*,"
-                    f"descripcion.ilike.*{sanitized}*,descripcion_corta.ilike.*{sanitized}*)"
+                    f"descripcion.ilike.*{sanitized}*,descripcion_corta.ilike.*{sanitized}*,descripcion_larga.ilike.*{sanitized}*)"
                 )
         resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
         data = resp.json()

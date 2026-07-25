@@ -6175,11 +6175,13 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
     id,
     nombre: typeof row.nombre === "string" ? row.nombre : "Producto sin nombre",
     descripcion:
-      typeof row.descripcion_corta === "string"
-        ? row.descripcion_corta
-        : typeof row.descripcion === "string"
-          ? row.descripcion
-          : "",
+      typeof row.descripcion_larga === "string"
+        ? row.descripcion_larga
+        : typeof row.descripcion_corta === "string"
+          ? row.descripcion_corta
+          : typeof row.descripcion === "string"
+            ? row.descripcion
+            : "",
     unidad: typeof row.unidad === "string" && row.unidad.trim() ? row.unidad : "unidad",
     precioBase: toNumber(row.precio_base ?? row.precioBase),
     moneda: (typeof row.moneda === "string" && row.moneda.trim()) ? row.moneda.toUpperCase() : "MXN",

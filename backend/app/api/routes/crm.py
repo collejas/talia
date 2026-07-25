@@ -1679,7 +1679,7 @@ def _is_pytest_runtime() -> bool:
     return bool(os.getenv("PYTEST_CURRENT_TEST"))
 DEFAULT_CONTACTS_LIMIT = 200
 DEFAULT_PORTAL_TOKEN_DAYS = 14
-QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta))"
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,descripcion_larga))"
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
@@ -8431,8 +8431,19 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
                     extra={
                         "error": str(exc),
                         "catalog": catalog,
-                    },
+                },
                 )
+        catalog_description = None
+        catalog_name = None
+        catalog_unit = None
+        if catalog_item is not None:
+            catalog_description = (
+                catalog_item.descripcion_larga
+                or catalog_item.descripcion_corta
+                or catalog_item.descripcion
+            )
+            catalog_name = catalog_item.nombre
+            catalog_unit = catalog_item.unidad
         metadata = entry.get("metadata")
         metadata_dict = metadata if isinstance(metadata, dict) else {}
         catalog_item_id = (
@@ -8448,9 +8459,14 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
                 catalog_item=catalog_item,
                 titulo=metadata_dict.get("titulo")
                 or entry.get("titulo")
-                or entry.get("descripcion"),
-                descripcion=metadata_dict.get("descripcion") or entry.get("descripcion"),
-                unidad=metadata_dict.get("unidad") or entry.get("unidad"),
+                or entry.get("descripcion")
+                or catalog_name,
+                descripcion=metadata_dict.get("descripcion")
+                or entry.get("descripcion")
+                or catalog_description,
+                unidad=metadata_dict.get("unidad")
+                or entry.get("unidad")
+                or catalog_unit,
                 cantidad=_as_number(entry.get("cantidad")),
                 precio_unitario=_as_number(entry.get("precio_unitario")),
                 descuento=_as_number(metadata_dict.get("descuento") or entry.get("descuento")),
