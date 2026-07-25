@@ -246,6 +246,26 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function buildPropertyTooltipContent(feature) {
+  const props = feature?.properties ?? {};
+  const kind = inferFeatureKind(feature);
+  const labels = {
+    desarrollo: "Desarrollo",
+    capa: "Capa",
+    manzana: "Manzana",
+    unidad: "Unidad",
+  };
+  const title = props.nombre ?? props.unidad ?? props.desarrollo_nombre ?? "Propiedad";
+  const details = [
+    props.status ? `Status: ${props.status}` : null,
+    props.tipo ? `Tipo: ${props.tipo}` : null,
+    props.precio != null ? `Precio: ${props.precio}` : null,
+  ].filter(Boolean);
+  return `<div class="property-tooltip-content"><strong>${escapeHtml(
+    labels[kind] ?? "Propiedad",
+  )}: ${escapeHtml(title)}</strong>${details.length ? `<br>${details.map(escapeHtml).join("<br>")}` : ""}</div>`;
+}
+
 function buildHierarchy(features) {
   const devMap = new Map();
   for (const feature of features) {
@@ -1327,10 +1347,9 @@ export function PropertyMap() {
     }
     if (!leafletActiveNode) {
       if (mapLevel === "municipio" && selectedMunicipioGeoKey) {
-        const municipioUnits = filteredFeatures.filter(
-          (feature) => inferFeatureKind(feature) === "unidad",
-        );
-        return municipioUnits.length ? municipioUnits : filteredFeatures;
+        // El overview municipal lo pinta municipalPolygonLayerRef con los
+        // desarrollos. No cargues aquí unidades/capas/manzanas por debajo.
+        return [];
       }
       return filteredFeatures;
     }
@@ -2479,6 +2498,11 @@ export function PropertyMap() {
         fillOpacity: 0.45,
       }),
       onEachFeature: (feature, layerInstance) => {
+        layerInstance.bindTooltip?.(buildPropertyTooltipContent(feature), {
+          sticky: true,
+          direction: "top",
+          className: "property-tooltip",
+        });
         layerInstance.on("click", () => {
           handleLeafletFeatureClickRef.current?.(feature, layerInstance);
         });
@@ -2527,6 +2551,11 @@ export function PropertyMap() {
     const municipalPolygonLayer = leaflet.geoJSON([], {
       style: getDevelopmentPolygonStyle,
       onEachFeature: (feature, layerInstance) => {
+        layerInstance.bindTooltip?.(buildPropertyTooltipContent(feature), {
+          sticky: true,
+          direction: "top",
+          className: "property-tooltip",
+        });
         layerInstance.on("click", () => handleLeafletFeatureClickRef.current?.(feature, layerInstance));
         layerInstance.on("mouseover", () => {
           const highlightWeight = (layerInstance.options?.weight ?? 3) + 2;
