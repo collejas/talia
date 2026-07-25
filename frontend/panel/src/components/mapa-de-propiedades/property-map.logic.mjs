@@ -61,13 +61,13 @@ export function getFeatureId(feature) {
 
 export function inferFeatureKind(feature) {
   const directLayer = (feature?.layer ?? feature?.properties?.layer ?? "").toString().toLowerCase().trim();
-  if (["desarrollo", "mix", "capa", "unidad"].includes(directLayer)) {
+  if (["desarrollo", "mix", "capa", "manzana", "unidad"].includes(directLayer)) {
     return directLayer;
   }
   const props = feature?.properties ?? {};
   const rawTipo = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
   const normalized = rawTipo.trim();
-  if (["desarrollo", "mix", "capa", "unidad"].includes(normalized)) {
+  if (["desarrollo", "mix", "capa", "manzana", "unidad"].includes(normalized)) {
     return normalized;
   }
 
@@ -89,6 +89,7 @@ export function inferFeatureKind(feature) {
   if (props.unidad != null || props.tipo_id != null || props.precio != null || props.area_m2 != null) {
     return "unidad";
   }
+  if (props.manzana_id != null || props.manzana_nombre != null) return "manzana";
   if (props.nivel != null || props.capa_nombre != null || props.altura != null) return "capa";
   if (props.desarrollo_tipo || props.desarrollo_status) return "desarrollo";
   return "unknown";

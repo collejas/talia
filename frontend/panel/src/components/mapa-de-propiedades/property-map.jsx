@@ -1028,11 +1028,16 @@ export function PropertyMap() {
               : false;
           return (
             (sameDesarrollo &&
-              ((parentId && (props.nivel_id === parentId || props.capa_id === parentId)) ||
-                props.parent_id === parentId ||
-                props.target_parent_id === parentId ||
+              ((parentId && kind === "manzana" &&
+                (props.parent_id === parentId || props.capa_id === parentId || props.nivel_id === parentId)) ||
+                (parentId && kind === "unidad" &&
+                  (props.capa_id === parentId || props.nivel_id === parentId ||
+                    props.parent_id === parentId || props.target_parent_id === parentId)) ||
                 (parentNombre && unitCapaNombre && parentNombre === unitCapaNombre)))
           );
+        }
+        if (parentKind === "manzana") {
+          return props.manzana_id === parentId || props.parent_id === parentId || props.target_parent_id === parentId;
         }
         if (parentKind === "unidad") {
           if (parentId) {
@@ -1058,6 +1063,8 @@ export function PropertyMap() {
         return capas.length ? capas : children;
       }
       if (parentKind === "capa") {
+        const manzanas = children.filter((child) => inferFeatureKind(child) === "manzana");
+        if (manzanas.length) return manzanas;
         const unidades = children.filter((child) => inferFeatureKind(child) === "unidad");
         return unidades.length ? unidades : children;
       }
@@ -1179,6 +1186,7 @@ export function PropertyMap() {
       const parent = next.pop();
       setActiveNode(parent ?? null);
       if (parent) {
+        mapboxRootFeatureRef.current = parent;
         const children = getChildrenForNode(parent);
         if (children.length) {
           sendFeaturesToMapbox(children);
@@ -3514,7 +3522,9 @@ export function PropertyMap() {
       setMapboxActive(true);
       setMapboxLoading(true);
       setActiveNode(feature);
-      setParentStack([]);
+      const developmentId = feature.properties?.desarrollo_id ?? null;
+      const developmentFeature = developmentId ? findFeatureForDevelopment(developmentId) : null;
+      setParentStack(developmentFeature ? [developmentFeature] : []);
       zoomToFeature(feature);
       if (unitFeatures.length) {
         sendFeaturesToMapbox(unitFeatures, "capa", true);
@@ -3523,7 +3533,13 @@ export function PropertyMap() {
         applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
       }
     },
-    [applyMapboxNavigationLimits, getChildrenForNode, sendFeaturesToMapbox, zoomToFeature],
+    [
+      applyMapboxNavigationLimits,
+      findFeatureForDevelopment,
+      getChildrenForNode,
+      sendFeaturesToMapbox,
+      zoomToFeature,
+    ],
   );
 
   const handleDevelopmentSelect = useCallback(

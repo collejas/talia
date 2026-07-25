@@ -1956,6 +1956,10 @@ def _build_propiedad_unidad_payload(
         "precio_tipo": precio_tipo,
         "metadata": _normalize_metadata_value(payload.metadata) or {},
     }
+    if payload.manzana_id:
+        body["manzana_id"] = str(payload.manzana_id)
+    elif current_row.get("manzana_id") is not None:
+        body["manzana_id"] = str(current_row["manzana_id"])
     if payload.descripcion is not None:
         body["descripcion"] = payload.descripcion.strip() or None
     if precio_value is not None:
@@ -5339,6 +5343,7 @@ class PropiedadDesarrolloTipo(str, Enum):
 class PropiedadPoligonoTarget(str, Enum):
     desarrollo = "desarrollo"
     capa = "capa"
+    manzana = "manzana"
     unidad = "unidad"
     mix = "mix"
 
@@ -5395,6 +5400,7 @@ class PropiedadUnidadCreateRequest(BaseModel):
     nombre: str | None = None
     tipo_id: UUID
     nivel_id: UUID
+    manzana_id: UUID | None = None
     desarrollo_id: UUID | None = None
     status: PropiedadStatus = PropiedadStatus.disponible
     destino_inventario: PropiedadDestinoInventario = PropiedadDestinoInventario.comercial
@@ -5482,6 +5488,23 @@ class PropiedadCapaUpdateRequest(BaseModel):
     nivel: int | None = None
     status: PropiedadStatus | None = None
     altura: Decimal | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class PropiedadManzanaCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    macrolote_id: UUID
+    nombre: str = Field(..., min_length=1)
+    descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class PropiedadManzanaUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str | None = None
+    descripcion: str | None = None
+    status: PropiedadStatus | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 
@@ -5774,6 +5797,16 @@ class ImportUnidad(BaseModel):
     poligono: str | dict[str, Any] | None = None
 
 
+class ImportManzana(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    poligono: str | dict[str, Any] | None = None
+    unidades: list[ImportUnidad] | None = None
+
+
 class ImportCapa(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nivel: int = Field(..., ge=0)
@@ -5783,6 +5816,7 @@ class ImportCapa(BaseModel):
     status: PropiedadStatus = PropiedadStatus.disponible
     metadata: dict[str, Any] | None = Field(default_factory=dict)
     poligono: str | dict[str, Any] | None = None
+    manzanas: list[ImportManzana] | None = None
     unidades: list[ImportUnidad] | None = None
 
 
@@ -43122,6 +43156,80 @@ async def eliminar_propiedad_capa(
     return {"ok": True, "capa": record}
 
 
+@router.post("/propiedad-manzanas")
+async def crear_propiedad_manzana(
+    *,
+    payload: PropiedadManzanaCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("settings.manage")),
+) -> dict[str, Any]:
+    body = {
+        "macrolote_id": str(payload.macrolote_id),
+        "nombre": payload.nombre.strip(),
+        "descripcion": payload.descripcion.strip() if payload.descripcion else None,
+        "status": payload.status.value,
+        "metadata": _normalize_metadata_value(payload.metadata) or {},
+    }
+    try:
+        record = await repo.create_propiedad_manzana(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "manzana": record}
+
+
+@router.patch("/propiedad-manzanas/{manzana_id}")
+async def editar_propiedad_manzana(
+    *,
+    manzana_id: UUID,
+    payload: PropiedadManzanaUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("settings.manage")),
+) -> dict[str, Any]:
+    if not any(getattr(payload, field) is not None for field in ("nombre", "descripcion", "status", "metadata")):
+        raise HTTPException(status_code=400, detail="at_least_one_field_required")
+    body: dict[str, Any] = {}
+    if payload.nombre is not None:
+        body["nombre"] = payload.nombre.strip()
+    if payload.descripcion is not None:
+        body["descripcion"] = payload.descripcion.strip() or None
+    if payload.status is not None:
+        body["status"] = payload.status.value
+    if payload.metadata is not None:
+        body["metadata"] = _normalize_metadata_value(payload.metadata) or {}
+    try:
+        record = await repo.update_propiedad_manzana(
+            organizacion_id=organizacion_id,
+            manzana_id=manzana_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "manzana": record}
+
+
+@router.delete("/propiedad-manzanas/{manzana_id}")
+async def eliminar_propiedad_manzana(
+    *,
+    manzana_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("settings.manage")),
+) -> dict[str, Any]:
+    try:
+        record = await repo.delete_propiedad_manzana(
+            organizacion_id=organizacion_id,
+            manzana_id=manzana_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "manzana": record}
+
+
 @router.post("/propiedad-poligonos")
 async def crear_propiedad_poligono(
     *,
@@ -44057,12 +44165,59 @@ ENTITY_DESCRIPTION_COLUMNS: dict[str, tuple[str, ...]] = {
     "unidad": ("descripcion_unidad", "descripcion"),
 }
 
+
 def _resolve_entity_description(row: dict[str, Any], entidad: str) -> str | None:
     for key in ENTITY_DESCRIPTION_COLUMNS.get(entidad, ("descripcion",)):
         value = _strip_value(row.get(key))
         if value:
             return value
     return None
+
+
+def _resolve_import_capa_from_identifier(
+    *,
+    group: dict[str, Any],
+    identifier: Any,
+) -> ImportCapa | None:
+    """Resolve a unit's capa using the stable hierarchy encoded in identificador.
+
+    Horizontal developments commonly reuse nivel=0 for every capa. In that
+    case the numeric level is not enough to identify the parent; the exported
+    identifier ("grupo / capa / unidad") is the canonical fallback.
+    """
+    identifier_key = _normalize_column_value(_strip_value(identifier))
+    if not identifier_key:
+        return None
+    capas = [capa for capa in group.get("capas", []) if isinstance(capa, ImportCapa) and capa.nombre]
+    capas.sort(key=lambda capa: len(_normalize_column_value(capa.nombre)), reverse=True)
+    for capa in capas:
+        capa_key = _normalize_column_value(capa.nombre)
+        # The export may use the development identifier (for example GPR)
+        # instead of the display name (Gran Peñón Residencial).
+        if f" / {capa_key} / " in identifier_key:
+            return capa
+    return None
+
+
+def _resolve_import_manzana_from_identifier(
+    *,
+    group: dict[str, Any],
+    identifier: Any,
+) -> tuple[ImportCapa, ImportManzana] | None:
+    identifier_key = _normalize_column_value(_strip_value(identifier))
+    if not identifier_key:
+        return None
+    candidates: list[tuple[ImportCapa, ImportManzana]] = []
+    for capa in group.get("capas", []):
+        if not isinstance(capa, ImportCapa):
+            continue
+        for manzana in capa.manzanas or []:
+            if f" / {_normalize_column_value(manzana.nombre)} / " in identifier_key:
+                candidates.append((capa, manzana))
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
 
 def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
     reader = csv.DictReader(io.StringIO(content), skipinitialspace=True)
@@ -44083,7 +44238,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
         if not entidad:
             continue
         entidad = entidad.lower()
-        if entidad not in {"desarrollo", "capa", "unidad"}:
+        if entidad not in {"desarrollo", "capa", "manzana", "unidad"}:
             raise ValueError(f"La entidad '{entidad}' en la línea {line} no es válida.")
         raw_group = _strip_value(row.get("grupo"))
 
@@ -44168,13 +44323,44 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 group["capas_lookup"][(group_key, capa.nombre.strip().lower())] = capa
             continue
 
-        if entidad == "unidad":
+        if entidad == "manzana":
             capa_nivel = _parse_integer(row.get("capa_nivel"), "capa_nivel", line)
             capa = _resolve_import_capa_from_identifier(
                 group=group,
-                group_key=group_key,
                 identifier=row.get("identificador"),
             )
+            if capa is None:
+                capas_for_level = group["capas_by_nivel"].get(capa_nivel, [])
+                if len(capas_for_level) == 1:
+                    capa = capas_for_level[0]
+                else:
+                    raise ValueError(
+                        f"La manzana en la línea {line} no identifica un macrolote de forma unívoca. "
+                        "Usa el prefijo del macrolote en 'identificador'."
+                    )
+            manzana = ImportManzana(
+                nombre=_require_value(row.get("nombre"), "nombre", line),
+                descripcion=_resolve_entity_description(row, "capa"),
+                status=_parse_status_value(row.get("status")),
+                metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
+                poligono=_parse_geometry_value(row.get("poligono")),
+            )
+            capa.manzanas = capa.manzanas or []
+            capa.manzanas.append(manzana)
+            continue
+
+        if entidad == "unidad":
+            capa_nivel = _parse_integer(row.get("capa_nivel"), "capa_nivel", line)
+            manzana_parent = _resolve_import_manzana_from_identifier(
+                group=group,
+                identifier=row.get("identificador"),
+            )
+            capa = _resolve_import_capa_from_identifier(
+                group=group,
+                identifier=row.get("identificador"),
+            )
+            if manzana_parent:
+                capa = manzana_parent[0]
             if capa is None:
                 capas_for_level = group["capas_by_nivel"].get(capa_nivel, [])
                 if len(capas_for_level) == 1:
@@ -44220,8 +44406,12 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 metadata_extra=_collect_metadata_extra_from_row(row),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
-            capa.unidades = capa.unidades or []
-            capa.unidades.append(unidad)
+            if manzana_parent:
+                manzana_parent[1].unidades = manzana_parent[1].unidades or []
+                manzana_parent[1].unidades.append(unidad)
+            else:
+                capa.unidades = capa.unidades or []
+                capa.unidades.append(unidad)
             continue
 
     desarrollos = []
@@ -44655,9 +44845,44 @@ async def _import_desarrollo_tree(
             if capa_poligono:
                 capa_summary["poligono_id"] = capa_poligono["id"]
 
-            if capa.unidades:
+            unit_entries: list[tuple[ImportUnidad, dict[str, Any] | None]] = [
+                (unidad, None) for unidad in (capa.unidades or [])
+            ]
+            if capa.manzanas:
+                capa_summary["manzanas"] = []
+                for manzana in capa.manzanas:
+                    manzana_record = await repo.create_propiedad_manzana(
+                        organizacion_id=organizacion_id,
+                        payload={
+                            "macrolote_id": capa_record["id"],
+                            "nombre": manzana.nombre.strip(),
+                            "descripcion": manzana.descripcion.strip() if manzana.descripcion else None,
+                            "status": manzana.status.value,
+                            "metadata": _coerce_metadata(manzana.metadata) or {},
+                        },
+                    )
+                    manzana_summary: dict[str, Any] = {
+                        "id": manzana_record["id"],
+                        "nombre": manzana_record["nombre"],
+                        "unidades": [],
+                    }
+                    manzana_poligono = await _create_poligono_if_present(
+                        repo,
+                        organizacion_id,
+                        PropiedadPoligonoTarget.manzana,
+                        manzana_record["id"],
+                        manzana.poligono,
+                        manzana.status,
+                        manzana.metadata,
+                    )
+                    if manzana_poligono:
+                        manzana_summary["poligono_id"] = manzana_poligono["id"]
+                    unit_entries.extend((unidad, manzana_record) for unidad in (manzana.unidades or []))
+                    capa_summary["manzanas"].append(manzana_summary)
+
+            if unit_entries:
                 capa_summary["unidades"] = []
-                for unidad in capa.unidades:
+                for unidad, manzana_record in unit_entries:
                     tipo_id = _resolve_tipo_id(unidad.tipo_id, unidad.tipo_nombre, tipo_lookup)
                     unidad_payload: dict[str, Any] = {
                         "unidad": unidad.unidad.strip(),
@@ -44667,6 +44892,8 @@ async def _import_desarrollo_tree(
                         "desarrollo_id": record["id"],
                         "status": unidad.status.value,
                     }
+                    if manzana_record:
+                        unidad_payload["manzana_id"] = manzana_record["id"]
                     unidad_metadata = _coerce_metadata(unidad.metadata)
                     unidad_metadata, _ = _split_poligono_volume_metadata(unidad_metadata)
                     unidad_payload["metadata"] = unidad_metadata or {}

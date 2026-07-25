@@ -82,6 +82,17 @@ type UnidadNode = {
   descripcion?: string | null;
 };
 
+type ManzanaNode = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  status: string | null;
+  metadata: Record<string, unknown>;
+  poligono_id?: string | null;
+  geom: { type: string; coordinates: unknown };
+  unidades: UnidadNode[];
+};
+
 type CapaNode = {
   id: string;
   nombre: string | null;
@@ -91,6 +102,7 @@ type CapaNode = {
   metadata: Record<string, unknown>;
   poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
+  manzanas?: ManzanaNode[];
   unidades: UnidadNode[];
   descripcion?: string | null;
 };
@@ -141,6 +153,7 @@ type UnidadFormState = {
 type GeometryTarget =
   | { type: "desarrollo"; id: string; label: string; poligonoId?: string | null }
   | { type: "capa"; id: string; label: string; desarrolloId: string; nivel: number | null; poligonoId?: string | null }
+  | { type: "manzana"; id: string; label: string; desarrolloId: string; capaId: string; nivel: number | null; poligonoId?: string | null }
   | { type: "unidad"; id: string; label: string; desarrolloId: string; capaId: string; nivel: number | null; poligonoId?: string | null };
 
 type GeoFeature = {
@@ -784,7 +797,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
   const [unidadForm, setUnidadForm] = useState<UnidadFormState>(createUnidadFormDefaults);
   const [isUnidadModalOpen, setIsUnidadModalOpen] = useState(false);
-  const [creatingUnidadFor, setCreatingUnidadFor] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
+  const [creatingUnidadFor, setCreatingUnidadFor] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode; manzana?: ManzanaNode } | null>(null);
   const [unidadFormError, setUnidadFormError] = useState<string | null>(null);
   const [isSubmittingUnidad, setIsSubmittingUnidad] = useState(false);
   const [editingUnidad, setEditingUnidad] = useState<UnidadNode | null>(null);
@@ -794,6 +807,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [editingCapa, setEditingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
   const [capaFormError, setCapaFormError] = useState<string | null>(null);
+  const [isManzanaModalOpen, setIsManzanaModalOpen] = useState(false);
+  const [creatingManzanaFor, setCreatingManzanaFor] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
+  const [editingManzana, setEditingManzana] = useState<ManzanaNode | null>(null);
+  const [manzanaForm, setManzanaForm] = useState({ nombre: "", descripcion: "", status: "disponible" as CapaStatus, metadata: "" });
+  const [manzanaFormError, setManzanaFormError] = useState<string | null>(null);
+  const [isSubmittingManzana, setIsSubmittingManzana] = useState(false);
   const handleGeometryChange = useCallback((value?: string) => {
     setFormValues((prev) => ({ ...prev, geom: value ?? "" }));
   }, []);
@@ -956,7 +975,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const handleDeleteNode = useCallback(
     async (target: {
-      type: "desarrollo" | "capa" | "unidad";
+      type: "desarrollo" | "capa" | "manzana" | "unidad";
       id: string;
       label: string;
       poligonoId?: string | null;
@@ -964,7 +983,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (!target.id) {
         return;
       }
-      const typeLabel = target.type === "unidad" ? "unidad" : target.type === "capa" ? "capa" : "desarrollo";
+      const typeLabel = target.type === "unidad" ? "unidad" : target.type === "manzana" ? "manzana" : target.type === "capa" ? "macrolote" : "desarrollo";
       const confirmMessage = `Eliminarás el ${typeLabel} "${target.label}" y sus datos asociados. ¿Quieres continuar?`;
       if (!window.confirm(confirmMessage)) {
         return;
@@ -987,6 +1006,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             ? `/api/crm/propiedad-desarrollos/${target.id}`
             : target.type === "capa"
               ? `/api/crm/propiedad-capas/${target.id}`
+              : target.type === "manzana"
+                ? `/api/crm/propiedad-manzanas/${target.id}`
               : `/api/crm/propiedad-unidades/${target.id}`;
         const response = await fetch(endpoint, { method: "DELETE" });
         if (!response.ok) {
@@ -1188,8 +1209,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
 
   const openUnidadModal = useCallback(
-    (desarrollo: DesarrolloNode, capa: CapaNode) => {
-      setCreatingUnidadFor({ desarrollo, capa });
+    (desarrollo: DesarrolloNode, capa: CapaNode, manzana?: ManzanaNode) => {
+      setCreatingUnidadFor({ desarrollo, capa, manzana });
       resetUnidadForm();
       setIsUnidadModalOpen(true);
     },
@@ -1251,6 +1272,19 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     },
     [],
   );
+
+  const openManzanaModal = useCallback((desarrollo: DesarrolloNode, capa: CapaNode, manzana?: ManzanaNode) => {
+    setCreatingManzanaFor({ desarrollo, capa });
+    setEditingManzana(manzana ?? null);
+    setManzanaForm({
+      nombre: manzana?.nombre || "",
+      descripcion: manzana?.descripcion || "",
+      status: (manzana?.status || "disponible") as CapaStatus,
+      metadata: stringifyMetadata(manzana?.metadata),
+    });
+    setManzanaFormError(null);
+    setIsManzanaModalOpen(true);
+  }, []);
 
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   type TreeActionTarget =
@@ -2017,6 +2051,45 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     resetCapaForm,
   ]);
 
+  const handleCreateManzana = useCallback(async () => {
+    if (!creatingManzanaFor || !manzanaForm.nombre.trim()) {
+      setManzanaFormError("Define el nombre de la manzana.");
+      return;
+    }
+    setIsSubmittingManzana(true);
+    setManzanaFormError(null);
+    try {
+      const metadata = parseMetadataText(manzanaForm.metadata);
+      const payload: Record<string, unknown> = {
+        nombre: manzanaForm.nombre.trim(),
+        status: manzanaForm.status,
+      };
+      if (!editingManzana) payload.macrolote_id = creatingManzanaFor.capa.id;
+      if (manzanaForm.descripcion.trim()) payload.descripcion = manzanaForm.descripcion.trim();
+      if (metadata) payload.metadata = metadata;
+      const response = await fetch(
+        editingManzana ? `/api/crm/propiedad-manzanas/${editingManzana.id}` : "/api/crm/propiedad-manzanas",
+        {
+          method: editingManzana ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.error || "No se pudo guardar la manzana.");
+      handleNodeAction(editingManzana ? "Manzana actualizada con éxito." : "Manzana creada con éxito.");
+      setIsManzanaModalOpen(false);
+      setCreatingManzanaFor(null);
+      setEditingManzana(null);
+      setManzanaForm({ nombre: "", descripcion: "", status: "disponible", metadata: "" });
+      await loadHierarchy();
+    } catch (error) {
+      setManzanaFormError(error instanceof Error ? error.message : "Error desconocido al guardar la manzana.");
+    } finally {
+      setIsSubmittingManzana(false);
+    }
+  }, [creatingManzanaFor, editingManzana, handleNodeAction, loadHierarchy, manzanaForm]);
+
   const handleCreateUnidad = useCallback(async () => {
     if (!creatingUnidadFor) {
       setUnidadFormError("Selecciona el nivel donde registrar la unidad.");
@@ -2042,6 +2115,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       destino_inventario: unidadForm.destinoInventario,
       precio_tipo: unidadForm.precioTipo,
     };
+    if (creatingUnidadFor.manzana) payload.manzana_id = creatingUnidadFor.manzana.id;
     if (unidadForm.descripcion.trim()) {
       payload.descripcion = unidadForm.descripcion.trim();
     }
@@ -2454,6 +2528,32 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     );
   };
 
+  const renderManzanaNode = (desarrollo: DesarrolloNode, capa: CapaNode, manzana: ManzanaNode) => {
+    const isExpanded = expandedNodes[manzana.id] ?? false;
+    return (
+      <div key={manzana.id} className="space-y-2 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
+        <div className="flex items-center justify-between gap-2 text-[0.72rem]">
+          <div className="flex flex-1 items-center gap-2">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleNodeExpansion(manzana.id)} aria-label={isExpanded ? "Ocultar unidades" : "Mostrar unidades"}>
+              {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+            </Button>
+            <button type="button" className="flex flex-1 items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-slate-100/80" onClick={() => handleSelectGeometryTarget({ type: "manzana", id: manzana.id, label: manzana.nombre, desarrolloId: desarrollo.id, capaId: capa.id, nivel: capa.nivel ?? null, poligonoId: manzana.poligono_id ?? null }, manzana.geom)}>
+              <IconLayersSelected className="size-4 text-amber-500" />
+              <span className="font-semibold">{manzana.nombre}</span>
+              <span className="text-[0.58rem] uppercase tracking-[0.16em] text-slate-400">manzana</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => openUnidadModal(desarrollo, capa, manzana)} aria-label="Agregar unidad a la manzana"><IconPlus className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => openManzanaModal(desarrollo, capa, manzana)} aria-label="Editar manzana"><IconPencil className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleDeleteNode({ type: "manzana", id: manzana.id, label: manzana.nombre, poligonoId: manzana.poligono_id ?? null })} aria-label="Eliminar manzana" disabled={isDeletingNode}><IconMinus className="size-4" /></Button>
+          </div>
+        </div>
+        {isExpanded && <div className="ml-8 border-l border-dashed border-slate-200 pl-3">{manzana.unidades?.length ? manzana.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad)) : <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>}</div>}
+      </div>
+    );
+  };
+
   const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
     const isExpanded = expandedNodes[capa.id] ?? false;
     const capaLabel = capa.nombre || `Nivel ${capa.nivel ?? "?"}`;
@@ -2489,7 +2589,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     isSelected ? "text-orange-700" : "text-slate-400"
                   }`}
                 >
-                  capa
+                  macrolote
                 </span>
               </div>
             </button>
@@ -2503,6 +2603,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               aria-label="Agregar características o polígono"
             >
               <IconPlus className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openManzanaModal(desarrollo, capa)}
+              aria-label="Agregar manzana"
+            >
+              <IconLayersSelected className="size-4 text-amber-500" />
             </Button>
             <Button
               type="button"
@@ -2535,7 +2644,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         {isExpanded && (
           <PolygonContainer geom={capa.geom}>
             <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
-              {capa.unidades?.length ? (
+              {capa.manzanas?.length ? (
+                <div className="space-y-2">
+                  {capa.manzanas.map((manzana) => renderManzanaNode(desarrollo, capa, manzana))}
+                  {capa.unidades?.length ? capa.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad)) : null}
+                </div>
+              ) : capa.unidades?.length ? (
                 capa.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad))
               ) : (
                 <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
@@ -3486,6 +3600,48 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                   ? "Actualizar capa"
                   : "Guardar capa"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isManzanaModalOpen}
+        onOpenChange={(open) => {
+          setIsManzanaModalOpen(open);
+          if (!open) {
+            setCreatingManzanaFor(null);
+            setEditingManzana(null);
+            setManzanaFormError(null);
+          }
+        }}
+      >
+        <DialogContent className={PROPERTY_MODAL_WIDTH_CLASS}>
+          <DialogHeader>
+            <DialogTitle>{editingManzana ? "Editar manzana" : "Crear manzana"}</DialogTitle>
+            <DialogDescription>
+              La manzana pertenece al macrolote {creatingManzanaFor ? `"${creatingManzanaFor.capa.nombre || "sin nombre"}"` : "seleccionado"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className={PROPERTY_MODAL_BODY_CLASS}>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Nombre de la manzana</Label>
+              <Input value={manzanaForm.nombre} onChange={(event) => setManzanaForm((prev) => ({ ...prev, nombre: event.target.value }))} placeholder="Ej. Manzana A" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Estado</Label>
+              <Select value={manzanaForm.status} onValueChange={(value) => setManzanaForm((prev) => ({ ...prev, status: value as CapaStatus }))}>
+                <SelectTrigger size="sm"><SelectValue placeholder="Selecciona un estado" /></SelectTrigger>
+                <SelectContent>{CAPA_STATUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Descripción</Label>
+              <Textarea value={manzanaForm.descripcion} onChange={(event) => setManzanaForm((prev) => ({ ...prev, descripcion: event.target.value }))} />
+            </div>
+            {manzanaFormError && <p className="text-xs text-rose-500">{manzanaFormError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsManzanaModalOpen(false)}>Cancelar</Button>
+            <Button size="sm" onClick={handleCreateManzana} disabled={isSubmittingManzana}>{isSubmittingManzana ? "Guardando…" : editingManzana ? "Actualizar manzana" : "Guardar manzana"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
