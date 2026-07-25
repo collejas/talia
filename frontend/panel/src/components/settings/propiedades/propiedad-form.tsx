@@ -460,6 +460,46 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "",
   ],
   [
+    "manzana",
+    "Mirador",
+    "Manzana A",
+    "Mirador Azul / Planta baja / Manzana A",
+    "disponible",
+    "",
+    "0",
+    "",
+    "",
+    "",
+    "Manzana ejemplo",
+    "POLYGON((-109.7383 23.0022, -109.7381 23.0018, -109.7382 23.0020, -109.7383 23.0022))",
+    "",
+    "",
+    "",
+    "#F59E0B",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "MX",
+    "09",
+    "004",
+    "78398",
+    "Aguaje 2000",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ],
+  [
     "unidad",
     "Mirador",
     "LOTE-1",
@@ -670,18 +710,14 @@ function buildPropertyExportCsv(
         ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(capa.metadata, column.slice(9))),
       ]);
 
-      capa.unidades?.forEach((unidad) => {
+      const appendUnidadRow = (unidad: UnidadNode, hierarchyParts: string[]) => {
         const unidadProps = getFeatureProps("unidad", unidad.id);
         const unidadGeometry = geojsonFeatures.find((feature) => String(feature.id) === unidad.id)?.geometry;
         rows.push([
           "unidad",
           desarrollo.nombre,
           csvField(unidad.nombre || unidad.unidad),
-          buildHierarchyIdentifier([
-            buildInitials(desarrollo.nombre) || desarrollo.nombre,
-            capa.nombre || `Nivel ${capa.nivel ?? ""}`,
-            unidad.nombre || unidad.unidad,
-          ]),
+          buildHierarchyIdentifier(hierarchyParts),
           stringFromProps(unidadProps, ["status"]) || csvField(unidad.status || "disponible"),
           "",
           stringFromProps(unidadProps, ["nivel"]) || csvField(capa.nivel ?? ""),
@@ -708,6 +744,61 @@ function buildPropertyExportCsv(
           geo.codigo_postal,
           geo.colonia,
           ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(unidad.metadata, column.slice(9))),
+        ]);
+      };
+
+      capa.manzanas?.forEach((manzana) => {
+        const manzanaProps = getFeatureProps("manzana", manzana.id);
+        const manzanaGeometry = geojsonFeatures.find((feature) => String(feature.id) === manzana.id)?.geometry;
+        rows.push([
+          "manzana",
+          desarrollo.nombre,
+          csvField(manzana.nombre),
+          buildHierarchyIdentifier([
+            buildInitials(desarrollo.nombre) || desarrollo.nombre,
+            capa.nombre || `Nivel ${capa.nivel ?? ""}`,
+            manzana.nombre,
+          ]),
+          stringFromProps(manzanaProps, ["status"]) || csvField(manzana.status || "disponible"),
+          "",
+          csvField(capa.nivel ?? ""),
+          "",
+          "",
+          "",
+          stringFromProps(manzanaProps, ["descripcion"]) || csvField(manzana.descripcion || ""),
+          csvField(safeGeoJsonToMultiPolygonZWkt(manzanaGeometry || manzana.geom)),
+          stringFromProps(manzanaProps, ["height"]) || "",
+          stringFromProps(manzanaProps, ["min_height"]) || "",
+          stringFromProps(manzanaProps, ["levels"]) || "",
+          stringFromProps(manzanaProps, ["color"]) || "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          geo.pais_codigo,
+          geo.estado_cve,
+          geo.municipio_cve,
+          geo.codigo_postal,
+          geo.colonia,
+          ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(manzana.metadata, column.slice(9))),
+        ]);
+        manzana.unidades?.forEach((unidad) => {
+          appendUnidadRow(unidad, [
+            buildInitials(desarrollo.nombre) || desarrollo.nombre,
+            capa.nombre || `Nivel ${capa.nivel ?? ""}`,
+            manzana.nombre,
+            unidad.nombre || unidad.unidad,
+          ]);
+        });
+      });
+
+      capa.unidades?.forEach((unidad) => {
+        appendUnidadRow(unidad, [
+          buildInitials(desarrollo.nombre) || desarrollo.nombre,
+          capa.nombre || `Nivel ${capa.nivel ?? ""}`,
+          unidad.nombre || unidad.unidad,
         ]);
       });
     });
@@ -2965,6 +3056,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <span className="font-semibold text-slate-700">
             entidad, grupo, nombre, status y poligono
           </span>;
+          Usa <code>entidad=manzana</code> entre la fila de <code>capa</code> (macrolote) y las
+          filas de <code>unidad</code> cuando el desarrollo tenga esa clasificación.
           el tipo de desarrollo vive en <code>tipo_desarrollo</code> y el tipo de unidad en
           <code>tipo_unidad_nombre</code>. Para unidades, <code>area_m2</code> es opcional. Puedes usar
           <code>identificador</code> como columna auxiliar para ubicar cada fila. Los extras no
