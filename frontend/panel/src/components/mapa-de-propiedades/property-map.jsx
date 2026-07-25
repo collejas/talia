@@ -1130,6 +1130,20 @@ export function PropertyMap() {
     [getChildrenForNode],
   );
 
+  const getCanonicalFeature = useCallback(
+    (node) => {
+      if (!node) return null;
+      const nodeId = getFeatureId(node);
+      if (!nodeId) return node;
+      return (
+        (featuresRef.current ?? []).find(
+          (candidate) => getFeatureId(candidate) === nodeId && candidate?.geometry,
+        ) ?? node
+      );
+    },
+    [featuresRef],
+  );
+
   const ascendLeaflet = useCallback(() => {
     const nextStack = [...leafletParentStack];
     const parent = nextStack.pop() ?? null;
@@ -1240,17 +1254,25 @@ export function PropertyMap() {
     setParentStack((prev) => {
       if (!prev.length) return prev;
       const next = [...prev];
-      const parent = next.pop();
-      setActiveNode(parent ?? null);
-      if (parent) {
-        mapboxRootFeatureRef.current = parent;
-        // Drill-up vuelve a mostrar el polígono padre, no sus hijos.
-        sendFeatureToMapbox(parent, inferFeatureKind(parent), true);
-        setMapboxFeature(parent);
+      const poppedNode = next.pop();
+      // El nivel destino es el último nodo que permanece en el stack. Si ya
+      // no queda ninguno, regresamos al desarrollo raíz que acabamos de sacar.
+      const targetNode = next[next.length - 1] ?? poppedNode;
+      const canonicalTarget = getCanonicalFeature(targetNode);
+      setActiveNode(canonicalTarget ?? null);
+      if (canonicalTarget) {
+        mapboxRootFeatureRef.current = canonicalTarget;
+        const targetChildren = next.length ? deriveDrillChildren(canonicalTarget) : [];
+        if (targetChildren.length) {
+          sendFeaturesToMapbox(targetChildren, inferFeatureKind(canonicalTarget), true);
+        } else {
+          sendFeatureToMapbox(canonicalTarget, inferFeatureKind(canonicalTarget), true);
+        }
+        setMapboxFeature(canonicalTarget);
       }
       return next;
     });
-  }, [sendFeatureToMapbox]);
+  }, [deriveDrillChildren, getCanonicalFeature, sendFeatureToMapbox, sendFeaturesToMapbox]);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -3111,19 +3133,14 @@ export function PropertyMap() {
           if (selectedMapboxUnitIdRef.current) {
             clearIsolation();
           }
+          const clickedNode = getCanonicalFeature(clicked);
+          const drillNode = clickedNode ?? clicked;
           suppressTreeCapaFallbackRef.current = false;
           suppressMapboxSyncRef.current = false;
-          setParentStack((prev) => {
-            const next = [...prev];
-            const current = activeNodeRef.current;
-            if (current) {
-              next.push(current);
-            }
-            return next;
-          });
-          setActiveNode(clicked);
-          setMapboxFeature(clicked);
-          const children = deriveDrillChildren(clicked);
+          setParentStack((prev) => [...prev, drillNode]);
+          setActiveNode(drillNode);
+          setMapboxFeature(drillNode);
+          const children = deriveDrillChildren(drillNode);
           logMapboxEvent(
             {
               step: "click-drill",
@@ -3138,7 +3155,7 @@ export function PropertyMap() {
           if (children.length) {
             sendFeaturesToMapbox(children, parentKind, true);
           } else {
-            sendFeatureToMapbox(clicked, parentKind, true);
+            sendFeatureToMapbox(drillNode, parentKind, true);
           }
         });
         applyPendingFeature();
@@ -3178,6 +3195,7 @@ export function PropertyMap() {
     sendFeatureToMapbox,
     sendFeaturesToMapbox,
     deriveDrillChildren,
+    getCanonicalFeature,
     getChildrenForNode,
     logMapboxEvent,
     pitch,
@@ -3590,13 +3608,13 @@ export function PropertyMap() {
             inferFeatureKind(candidate) === "capa" && getFeatureId(candidate) === String(parentId),
           )
         : null;
-      setParentStack(
-        parentCapaFeature
-          ? [developmentFeature, parentCapaFeature].filter(Boolean)
-          : developmentFeature
-            ? [developmentFeature]
-            : [],
-      );
+      const navigationStack =
+        featureKind === "manzana"
+          ? [developmentFeature, parentCapaFeature, feature]
+          : featureKind === "capa"
+            ? [developmentFeature, feature]
+            : [developmentFeature, feature];
+      setParentStack(navigationStack.filter(Boolean));
       zoomToFeature(feature);
       if (nextFeatures.length) {
         sendFeaturesToMapbox(nextFeatures, featureKind, true);
