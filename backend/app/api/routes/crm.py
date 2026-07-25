@@ -44105,6 +44105,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                     "desarrollo": None,
                     "capas": [],
                     "capas_lookup": {},
+                    "capas_by_nivel": {},
                 },
             )
             if raw_group:
@@ -44162,16 +44163,31 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
             group["capas"].append(capa)
-            group["capas_lookup"][(group_key, nivel)] = capa
+            group["capas_by_nivel"].setdefault(nivel, []).append(capa)
             if capa.nombre:
                 group["capas_lookup"][(group_key, capa.nombre.strip().lower())] = capa
             continue
 
         if entidad == "unidad":
             capa_nivel = _parse_integer(row.get("capa_nivel"), "capa_nivel", line)
-            capa = group["capas_lookup"].get((group_key, capa_nivel))
+            capa = _resolve_import_capa_from_identifier(
+                group=group,
+                group_key=group_key,
+                identifier=row.get("identificador"),
+            )
             if capa is None:
-                raise ValueError(f"No se encontró la capa de nivel {capa_nivel} para la unidad en la línea {line}.")
+                capas_for_level = group["capas_by_nivel"].get(capa_nivel, [])
+                if len(capas_for_level) == 1:
+                    capa = capas_for_level[0]
+                elif not capas_for_level:
+                    raise ValueError(
+                        f"No se encontró la capa de nivel {capa_nivel} para la unidad en la línea {line}."
+                    )
+                else:
+                    raise ValueError(
+                        f"La unidad en la línea {line} no identifica una capa de forma unívoca. "
+                        "Usa el prefijo de capa en 'identificador'."
+                    )
             linea_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["linea"])
             familia_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["familia"])
             modelo_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["modelo"])
