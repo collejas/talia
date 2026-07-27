@@ -1521,6 +1521,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_unidad_invalid_response:{row!r}")
         return row
 
+    async def list_propiedad_unidades_by_capa(
+        self,
+        *,
+        organizacion_id: UUID,
+        capa_id: UUID,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_unidades",
+            params={
+                "nivel_id": f"eq.{capa_id}",
+                "select": "id,unidad,manzana_id",
+                "limit": "5000",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_unidades_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_propiedad_unidad_movimiento(
         self,
         *,
@@ -1591,6 +1612,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_capa_invalid_response:{row!r}")
         return row
 
+    async def list_propiedad_capas_by_desarrollo(
+        self,
+        *,
+        organizacion_id: UUID,
+        desarrollo_id: UUID,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_capas",
+            params={
+                "desarrollo_id": f"eq.{desarrollo_id}",
+                "select": "id,nombre,nivel",
+                "limit": "1000",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_capas_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_propiedad_desarrollo(
         self,
         *,
@@ -1647,6 +1689,26 @@ class CRMRepository:
                 continue
             desarrollos.append(row)
         return desarrollos
+
+    async def list_propiedad_desarrollos(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_desarrollos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "id,nombre,tipo,status",
+                "limit": "1000",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_desarrollos_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
 
     async def delete_propiedad_capa(
         self,
@@ -1711,6 +1773,27 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"propiedad_manzana_invalid_update_response:{row!r}")
         return row
+
+    async def list_propiedad_manzanas_by_capa(
+        self,
+        *,
+        organizacion_id: UUID,
+        capa_id: UUID,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_manzanas",
+            params={
+                "macrolote_id": f"eq.{capa_id}",
+                "select": "id,nombre",
+                "limit": "1000",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_manzanas_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
 
     async def delete_propiedad_manzana(
         self,

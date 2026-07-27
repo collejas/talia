@@ -44777,6 +44777,21 @@ async def _import_desarrollo_tree(
     tipo_lookup: dict[str, str],
     catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
+    # El CSV puede ser una carga incremental. Se consultan primero los niveles
+    # existentes y se mantienen en memoria durante esta importación para que
+    # cada fila reutilice la misma jerarquía en lugar de crear otra.
+    desarrollo_nombre = _normalize_column_value(desarrollo.nombre)
+    desarrollos_existentes = await repo.list_propiedad_desarrollos(
+        organizacion_id=organizacion_id,
+    )
+    record = next(
+        (
+            item
+            for item in desarrollos_existentes
+            if _normalize_column_value(str(item.get("nombre") or "")) == desarrollo_nombre
+        ),
+        None,
+    )
     desarrollo_metadata = _coerce_metadata(desarrollo.metadata)
     desarrollo_metadata = _strip_metadata_keys(
         desarrollo_metadata,
@@ -44802,7 +44817,12 @@ async def _import_desarrollo_tree(
     if desarrollo.colonia:
         payload["colonia"] = desarrollo.colonia.strip()
 
-    record = await repo.create_propiedad_desarrollo(organizacion_id=organizacion_id, payload=payload)
+    if record is None:
+        record = await repo.create_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
+        desarrollos_existentes.append(record)
     summary: dict[str, Any] = {"id": record["id"], "nombre": record["nombre"], "tipo": record["tipo"]}
 
     desarrollo_poligono = await _create_poligono_if_present(
@@ -44819,6 +44839,12 @@ async def _import_desarrollo_tree(
 
     if desarrollo.capas:
         summary["capas"] = []
+        capas_existentes = await repo.list_propiedad_capas_by_desarrollo(
+            organizacion_id=organizacion_id,
+            desarrollo_id=UUID(str(record["id"])),
+        )
+        unidades_por_capa: dict[str, list[dict[str, Any]]] = {}
+        manzanas_por_capa: dict[str, list[dict[str, Any]]] = {}
         for capa in desarrollo.capas:
             capa_payload: dict[str, Any] = {
                 "desarrollo_id": record["id"],
@@ -44836,10 +44862,29 @@ async def _import_desarrollo_tree(
             if capa.altura is not None:
                 capa_payload["altura"] = _decimal_to_number(capa.altura)
 
-            capa_record = await repo.create_propiedad_capa(
-                organizacion_id=organizacion_id,
-                payload=capa_payload,
+            capa_nombre = _normalize_column_value(capa.nombre or "")
+            capa_record = next(
+                (
+                    item
+                    for item in capas_existentes
+                    if (
+                        capa_nombre
+                        and _normalize_column_value(str(item.get("nombre") or "")) == capa_nombre
+                        and item.get("nivel") == capa.nivel
+                    )
+                    or (
+                        not capa_nombre
+                        and item.get("nivel") == capa.nivel
+                    )
+                ),
+                None,
             )
+            if capa_record is None:
+                capa_record = await repo.create_propiedad_capa(
+                    organizacion_id=organizacion_id,
+                    payload=capa_payload,
+                )
+                capas_existentes.append(capa_record)
             capa_summary: dict[str, Any] = {
                 "id": capa_record["id"],
                 "nivel": capa_record.get("nivel"),
@@ -44863,17 +44908,36 @@ async def _import_desarrollo_tree(
             ]
             if capa.manzanas:
                 capa_summary["manzanas"] = []
-                for manzana in capa.manzanas:
-                    manzana_record = await repo.create_propiedad_manzana(
+                capa_id_key = str(capa_record["id"])
+                manzanas_existentes = manzanas_por_capa.get(capa_id_key)
+                if manzanas_existentes is None:
+                    manzanas_existentes = await repo.list_propiedad_manzanas_by_capa(
                         organizacion_id=organizacion_id,
-                        payload={
-                            "macrolote_id": capa_record["id"],
-                            "nombre": manzana.nombre.strip(),
-                            "descripcion": manzana.descripcion.strip() if manzana.descripcion else None,
-                            "status": manzana.status.value,
-                            "metadata": _coerce_metadata(manzana.metadata) or {},
-                        },
+                        capa_id=UUID(capa_id_key),
                     )
+                    manzanas_por_capa[capa_id_key] = manzanas_existentes
+                for manzana in capa.manzanas:
+                    manzana_nombre = _normalize_column_value(manzana.nombre)
+                    manzana_record = next(
+                        (
+                            item
+                            for item in manzanas_existentes
+                            if _normalize_column_value(str(item.get("nombre") or "")) == manzana_nombre
+                        ),
+                        None,
+                    )
+                    if manzana_record is None:
+                        manzana_record = await repo.create_propiedad_manzana(
+                            organizacion_id=organizacion_id,
+                            payload={
+                                "macrolote_id": capa_record["id"],
+                                "nombre": manzana.nombre.strip(),
+                                "descripcion": manzana.descripcion.strip() if manzana.descripcion else None,
+                                "status": manzana.status.value,
+                                "metadata": _coerce_metadata(manzana.metadata) or {},
+                            },
+                        )
+                        manzanas_existentes.append(manzana_record)
                     manzana_summary: dict[str, Any] = {
                         "id": manzana_record["id"],
                         "nombre": manzana_record["nombre"],
@@ -44944,10 +45008,33 @@ async def _import_desarrollo_tree(
                     if resolved_modelo_id:
                         unidad_payload["modelo_id"] = str(resolved_modelo_id)
 
-                    unidad_record = await repo.create_propiedad_unidad(
-                        organizacion_id=organizacion_id,
-                        payload=unidad_payload,
+                    capa_id_key = str(capa_record["id"])
+                    unidades_existentes = unidades_por_capa.get(capa_id_key)
+                    if unidades_existentes is None:
+                        unidades_existentes = await repo.list_propiedad_unidades_by_capa(
+                            organizacion_id=organizacion_id,
+                            capa_id=UUID(capa_id_key),
+                        )
+                        unidades_por_capa[capa_id_key] = unidades_existentes
+                    unidad_nombre = _normalize_column_value(unidad.unidad)
+                    manzana_id = str(manzana_record["id"]) if manzana_record else None
+                    unidad_record = next(
+                        (
+                            item
+                            for item in unidades_existentes
+                            if (
+                                _normalize_column_value(str(item.get("unidad") or "")) == unidad_nombre
+                                and str(item.get("manzana_id")) == manzana_id
+                            )
+                        ),
+                        None,
                     )
+                    if unidad_record is None:
+                        unidad_record = await repo.create_propiedad_unidad(
+                            organizacion_id=organizacion_id,
+                            payload=unidad_payload,
+                        )
+                        unidades_existentes.append(unidad_record)
                     await _ensure_catalog_item_for_unidad(
                         repo=repo,
                         organizacion_id=organizacion_id,
@@ -45330,7 +45417,22 @@ async def _create_poligono_if_present(
     }
     if volume_fields:
         payload.update(volume_fields)
-    record = await repo.create_propiedad_poligono(organizacion_id=organizacion_id, payload=payload)
+    existing = await repo.get_propiedad_poligono(
+        organizacion_id=organizacion_id,
+        target_type=target_type.value,
+        target_id=UUID(str(target_id)),
+    )
+    if existing:
+        record = await repo.update_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            poligono_id=UUID(str(existing["id"])),
+            payload=payload,
+        )
+    else:
+        record = await repo.create_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
     import_debug_logger.info(
         "poligono.create.finished",
         extra={
