@@ -1498,53 +1498,105 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const hierarchyFeatures = useMemo(() => {
     const features: GeoFeature[] = [];
-    hierarchy.forEach((desarrollo) => {
-      if (desarrollo.geom?.type && desarrollo.geom?.coordinates) {
-        features.push({
-          id: desarrollo.id,
-          geometry: desarrollo.geom,
-          properties: {
-            nombre: desarrollo.nombre,
-            tipo: desarrollo.tipo,
-            layerType: "desarrollo",
-          },
-        });
+    const addFeature = (
+      id: string,
+      geometry: { type: string; coordinates: unknown } | null | undefined,
+      properties: Record<string, unknown>,
+    ) => {
+      if (!geometry?.type || !geometry.coordinates) {
+        return;
       }
+      features.push({ id, geometry, properties });
+    };
+
+    hierarchy.forEach((desarrollo) => {
+      addFeature(desarrollo.id, desarrollo.geom, {
+        nombre: desarrollo.nombre,
+        tipo: desarrollo.tipo,
+        layerType: "desarrollo",
+      });
       desarrollo.capas?.forEach((capa) => {
-        if (!capa.geom?.type || !capa.geom?.coordinates) {
-          return;
-        }
-        features.push({
-          id: capa.id,
-          geometry: capa.geom,
-          properties: {
-            nombre: capa.nombre || `Nivel ${capa.nivel ?? "?"}`,
-            layerType: "capa",
+        addFeature(capa.id, capa.geom, {
+          nombre: capa.nombre || `Nivel ${capa.nivel ?? "?"}`,
+          layerType: "capa",
+          nivel: capa.nivel,
+          desarrolloId: desarrollo.id,
+        });
+
+        capa.manzanas?.forEach((manzana) => {
+          addFeature(manzana.id, manzana.geom, {
+            nombre: manzana.nombre,
+            layerType: "manzana",
             nivel: capa.nivel,
             desarrolloId: desarrollo.id,
-          },
-        });
-        capa.unidades?.forEach((unidad) => {
-          if (!unidad.geom?.type || !unidad.geom?.coordinates) {
-            return;
-          }
-          features.push({
-            id: unidad.id,
-            geometry: unidad.geom,
-            properties: {
+            capaId: capa.id,
+          });
+          manzana.unidades?.forEach((unidad) => {
+            addFeature(unidad.id, unidad.geom, {
               nombre: unidad.unidad || "Unidad",
               layerType: "unidad",
               nivel: capa.nivel,
               desarrolloId: desarrollo.id,
               capaId: capa.id,
+              manzanaId: manzana.id,
               status: unidad.status,
-            },
+            });
+          });
+        });
+
+        capa.unidades?.forEach((unidad) => {
+          addFeature(unidad.id, unidad.geom, {
+            nombre: unidad.unidad || "Unidad",
+            layerType: "unidad",
+            nivel: capa.nivel,
+            desarrolloId: desarrollo.id,
+            capaId: capa.id,
+            status: unidad.status,
           });
         });
       });
     });
     return features;
   }, [hierarchy]);
+
+  const visibleHierarchyFeatures = useMemo(() => {
+    if (!geometryTarget) {
+      return hierarchyFeatures.filter(
+        (feature) => feature.properties?.layerType === "desarrollo",
+      );
+    }
+
+    return hierarchyFeatures.filter((feature) => {
+      if (feature.id === geometryTarget.id) {
+        return true;
+      }
+      const layerType = feature.properties?.layerType;
+      if (geometryTarget.type === "desarrollo") {
+        return layerType === "capa" && feature.properties?.desarrolloId === geometryTarget.id;
+      }
+      if (geometryTarget.type === "capa") {
+        const hasManzanas = hierarchyFeatures.some(
+          (candidate) =>
+            candidate.properties?.layerType === "manzana" &&
+            candidate.properties?.capaId === geometryTarget.id,
+        );
+        return (
+          (layerType === "manzana" &&
+            feature.properties?.capaId === geometryTarget.id) ||
+          (!hasManzanas &&
+            layerType === "unidad" &&
+            feature.properties?.capaId === geometryTarget.id)
+        );
+      }
+      if (geometryTarget.type === "manzana") {
+        return (
+          layerType === "unidad" &&
+          feature.properties?.manzanaId === geometryTarget.id
+        );
+      }
+      return false;
+    });
+  }, [geometryTarget, hierarchyFeatures]);
 
   const applyImportFile = useCallback((file: File | null) => {
     if (!file) {
@@ -2927,7 +2979,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             <PropiedadGeomEditor
               value={formValues.geom}
               onGeometryChange={handleGeometryChange}
-              features={hierarchyFeatures}
+              features={visibleHierarchyFeatures}
               highlightId={geometryTarget?.id ?? undefined}
             />
         <div className="space-y-2">

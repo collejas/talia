@@ -166,6 +166,8 @@ export function PropiedadGeomEditor({
       const colorScheme =
         layerType === "capa"
           ? { base: "#f97316", highlight: "#d97706" }
+          : layerType === "manzana"
+            ? { base: "#f59e0b", highlight: "#d97706" }
           : layerType === "unidad"
             ? { base: "#0ea5e9", highlight: "#06b6d4" }
             : { base: "#8b5cf6", highlight: "#2563eb" };

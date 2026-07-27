@@ -2259,8 +2259,13 @@ export function PropertyMap() {
   );
 
   const openMapboxFeature = useCallback(
-    (feature) => {
+    (feature, navigationStack = null) => {
       if (!feature) return;
+      // Nunca reutilices un payload pendiente de otro nivel: al abrir desde el
+      // panel la primera vista debe contener únicamente el nodo seleccionado.
+      pendingPayloadRef.current = null;
+      suppressMapboxSyncRef.current = false;
+      suppressTreeCapaFallbackRef.current = false;
       pendingMapboxParentKindRef.current = inferFeatureKind(feature);
       const next = createMapboxOpenedState(feature);
       mapboxRootFeatureRef.current = feature;
@@ -2271,7 +2276,7 @@ export function PropertyMap() {
       setMapboxActive(next.mapboxActive);
       setMapboxLoading(next.mapboxLoading);
       setActiveNode(next.activeNode);
-      setParentStack(next.parentStack);
+      setParentStack(Array.isArray(navigationStack) ? navigationStack.filter(Boolean) : next.parentStack);
       if (mapboxInstanceRef.current) {
         applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
       }
@@ -2308,20 +2313,14 @@ export function PropertyMap() {
             props.fraccionamiento ??
             props.fraccionamiento_nombre,
         );
-        return Boolean(candidateName && normalizedName && candidateName === normalizedName);
-      });
-      if (byName) return byName;
-      const fallback = list.find((f) => {
-        const props = f?.properties ?? {};
-        const kind = inferFeatureKind(f);
-        const featureDevId = props.target_id ?? props.desarrollo_id ?? props.id ?? f.id ?? null;
-        return (
-          featureDevId &&
-          String(featureDevId) === normalized &&
-          ["desarrollo", "mix", "capa", "unidad"].includes(kind)
+        return Boolean(
+          candidateName &&
+            normalizedName &&
+            candidateName === normalizedName &&
+            ["desarrollo", "mix"].includes(inferFeatureKind(f)),
         );
       });
-      if (fallback) return fallback;
+      if (byName) return byName;
       return null;
     },
     [],
@@ -3590,12 +3589,29 @@ export function PropertyMap() {
       if (!unit?.feature) {
         return;
       }
-      const id = String(unit.feature.id ?? "");
+      const feature = unit.feature;
+      const props = feature.properties ?? {};
+      const id = String(feature.id ?? "");
       setSelectedId(id);
-      zoomToFeature(unit.feature);
-      openMapboxFeature(unit.feature);
+      zoomToFeature(feature);
+      const capaId = props.capa_id ?? props.nivel_id ?? null;
+      const manzanaId = props.manzana_id ?? null;
+      const capaFeature = capaId
+        ? (featuresRef.current ?? []).find(
+            (candidate) => inferFeatureKind(candidate) === "capa" && getFeatureId(candidate) === String(capaId),
+          )
+        : null;
+      const manzanaFeature = manzanaId
+        ? (featuresRef.current ?? []).find(
+            (candidate) => inferFeatureKind(candidate) === "manzana" && getFeatureId(candidate) === String(manzanaId),
+          )
+        : null;
+      const developmentFeature = props.desarrollo_id
+        ? findFeatureForDevelopment(props.desarrollo_id)
+        : null;
+      openMapboxFeature(feature, [developmentFeature, capaFeature, manzanaFeature, feature]);
     },
-    [openMapboxFeature, zoomToFeature],
+    [findFeatureForDevelopment, openMapboxFeature, zoomToFeature],
   );
 
   const handleCapaSelect = useCallback(
@@ -3604,40 +3620,7 @@ export function PropertyMap() {
       if (!feature?.geometry) {
         return;
       }
-      const orderedUnits = [...(capa?.units ?? [])].sort((a, b) => {
-        const aValue = Number.isFinite(a.sortValue) ? a.sortValue : Number.POSITIVE_INFINITY;
-        const bValue = Number.isFinite(b.sortValue) ? b.sortValue : Number.POSITIVE_INFINITY;
-        if (aValue !== bValue) {
-          return aValue - bValue;
-        }
-        return (a.name ?? "").localeCompare(b.name ?? "");
-      });
       const featureKind = inferFeatureKind(feature);
-      let nextFeatures = featureKind === "capa"
-        ? (capa?.manzanas ?? []).map((manzana) => manzana?.feature).filter(Boolean)
-        : orderedUnits.map((unit) => unit?.feature).filter(Boolean);
-      if (!nextFeatures.length && typeof getChildrenForNode === "function") {
-        nextFeatures = getChildrenForNode(feature).filter((child) =>
-          featureKind === "capa"
-            ? inferFeatureKind(child) === "manzana"
-            : inferFeatureKind(child) === "unidad",
-        );
-      }
-      pendingPayloadRef.current = null;
-      pendingMapboxParentKindRef.current = null;
-      pendingMapboxFeatureRef.current = null;
-      suppressMapboxSyncRef.current = false;
-      suppressTreeCapaFallbackRef.current = true;
-      selectedMapboxUnitIdRef.current = null;
-      hoveredMapboxIdRef.current = null;
-      mapboxRootFeatureRef.current = feature;
-      setSelectedId(String(feature.id ?? ""));
-      setActiveMarkerFeature(feature);
-      mapboxFeatureRef.current = null;
-      setMapboxFeature(null);
-      setMapboxActive(true);
-      setMapboxLoading(true);
-      setActiveNode(feature);
       const developmentId = feature.properties?.desarrollo_id ?? null;
       const developmentFeature = developmentId ? findFeatureForDevelopment(developmentId) : null;
       const parentId = feature.properties?.parent_id ?? feature.properties?.capa_id ?? feature.properties?.nivel_id ?? null;
@@ -3652,21 +3635,13 @@ export function PropertyMap() {
           : featureKind === "capa"
             ? [developmentFeature, feature]
             : [developmentFeature, feature];
-      setParentStack(navigationStack.filter(Boolean));
-      zoomToFeature(feature);
-      if (nextFeatures.length) {
-        sendFeaturesToMapbox(nextFeatures, featureKind, true);
-      }
-      if (mapboxInstanceRef.current) {
-        applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
-      }
+      // El boton "Ver" enfoca el nivel seleccionado. El drilldown al
+      // siguiente nivel ocurre al hacer clic en el poligono del mapa.
+      openMapboxFeature(feature, navigationStack);
     },
     [
-      applyMapboxNavigationLimits,
       findFeatureForDevelopment,
-      getChildrenForNode,
-      sendFeaturesToMapbox,
-      zoomToFeature,
+      openMapboxFeature,
     ],
   );
 
@@ -3701,9 +3676,13 @@ export function PropertyMap() {
   const renderUnidadNode = (unit) => (
     <div key={unit.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
       <div className="flex items-center justify-between gap-3 text-[0.75rem]">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold">{unit.name || "Unidad sin clave"}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => handleUnitSelect(unit)}
+          className="text-left font-semibold hover:text-slate-950"
+        >
+          {unit.name || "Unidad sin clave"}
+        </button>
         <button
           type="button"
           onClick={() => handleUnitSelect(unit)}
@@ -3727,10 +3706,20 @@ export function PropertyMap() {
     return (
       <div key={manzana.id} className="space-y-2 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.75rem]">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleCapaSelect({
+              id: manzana.feature?.id ?? manzana.id,
+              name: manzana.name,
+              feature: manzana.feature,
+              units: manzana.units,
+            })}
+            disabled={!manzana.feature?.geometry}
+            className="flex items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <IconLayersSelected className="size-4 text-amber-500" />
             <span className="font-semibold">{manzana.name || "Manzana"}</span>
-          </div>
+          </button>
           <button
             type="button"
             onClick={() => handleCapaSelect({
@@ -3788,10 +3777,15 @@ export function PropertyMap() {
             >
               {capaExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
             </Button>
-            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleCapaSelect(capa)}
+              disabled={!capa?.feature?.geometry && !capa?.geom}
+              className="flex items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <IconLayersSelected className="size-4 text-slate-400" />
               <span className="font-semibold">{capa.name || `Nivel ${capa.nivel ?? "?"}`}</span>
-            </div>
+            </button>
           </div>
           <div className="flex items-center gap-1 text-slate-500">
             <button
