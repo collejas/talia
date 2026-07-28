@@ -1,8 +1,46 @@
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
 from app.api.routes import crm as crm_routes
+
+
+class _PropertyTypesRepo:
+    def __init__(self) -> None:
+        self.created_payload = None
+
+    async def list_propiedad_tipos(self, *, organizacion_id: UUID):
+        return []
+
+    async def create_propiedad_tipo(self, *, organizacion_id: UUID, payload: dict):
+        self.created_payload = (organizacion_id, payload)
+        return {"id": "tipo-lote-residencial", **payload}
+
+
+@pytest.mark.asyncio
+async def test_import_creates_custom_tipo_for_new_tenant() -> None:
+    repo = _PropertyTypesRepo()
+    organizacion_id = UUID("7608c713-a9fb-460e-8b00-5878591b90d7")
+
+    lookup = await crm_routes._build_tipo_lookup(repo, organizacion_id)
+    tipo_id = await crm_routes._resolve_tipo_id(
+        repo,
+        organizacion_id,
+        None,
+        "Lote residencial",
+        lookup,
+    )
+
+    assert tipo_id == "tipo-lote-residencial"
+    assert repo.created_payload == (
+        organizacion_id,
+        {
+            "nombre": "Lote residencial",
+            "descripcion": "Creado desde importación de propiedades.",
+            "color": "#0F766E",
+        },
+    )
 
 
 def test_csv_resolves_horizontal_capas_by_identifier() -> None:

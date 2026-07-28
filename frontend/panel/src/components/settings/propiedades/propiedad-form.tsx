@@ -377,6 +377,7 @@ const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
 const PROPERTY_IMPORT_METADATA_COLUMNS = PROPERTY_IMPORT_TEMPLATE_HEADERS.filter((column) =>
   column.startsWith("metadata_"),
 );
+const DEFAULT_IMPORT_PROPERTY_TYPE_NAME = "Lote";
 
 function templatePolygon(west: number, south: number, east: number, north: number): string {
   const point = (longitude: number, latitude: number) =>
@@ -398,7 +399,7 @@ function templateRow(values: Record<number, string>): string[] {
   return row;
 }
 
-function buildPropertyImportTemplateRows(): string[][] {
+function buildPropertyImportTemplateRows(tipoUnidadNombre = DEFAULT_IMPORT_PROPERTY_TYPE_NAME): string[][] {
   const rows: string[][] = [];
   const developmentName = "Mirador Azul";
   const group = "Mirador";
@@ -497,7 +498,7 @@ function buildPropertyImportTemplateRows(): string[][] {
             4: "disponible",
             6: String(capaIndex),
             7: unitName,
-            9: "Terreno Departamental",
+            9: tipoUnidadNombre,
             10: `Unidad vendible de ejemplo ${unitName}`,
             11: templatePolygon(unitWest, unitSouth, unitEast, unitNorth),
             12: "0",
@@ -533,8 +534,6 @@ function buildPropertyImportTemplateRows(): string[][] {
   return rows;
 }
 
-const PROPERTY_IMPORT_TEMPLATE_ROWS = buildPropertyImportTemplateRows();
-
 function csvCell(value: string) {
   if (value === "") {
     return "";
@@ -545,8 +544,8 @@ function csvCell(value: string) {
   return value;
 }
 
-function buildPropertyImportTemplateCsv() {
-  const rows = [PROPERTY_IMPORT_TEMPLATE_HEADERS, ...PROPERTY_IMPORT_TEMPLATE_ROWS];
+function buildPropertyImportTemplateCsv(tipoUnidadNombre = DEFAULT_IMPORT_PROPERTY_TYPE_NAME) {
+  const rows = [PROPERTY_IMPORT_TEMPLATE_HEADERS, ...buildPropertyImportTemplateRows(tipoUnidadNombre)];
   return `${rows.map((row) => row.map(csvCell).join(",")).join("\n")}\n`;
 }
 

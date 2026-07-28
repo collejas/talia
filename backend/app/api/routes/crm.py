@@ -44960,7 +44960,13 @@ async def _import_desarrollo_tree(
             if unit_entries:
                 capa_summary["unidades"] = []
                 for unidad, manzana_record in unit_entries:
-                    tipo_id = _resolve_tipo_id(unidad.tipo_id, unidad.tipo_nombre, tipo_lookup)
+                    tipo_id = await _resolve_tipo_id(
+                        repo,
+                        organizacion_id,
+                        unidad.tipo_id,
+                        unidad.tipo_nombre,
+                        tipo_lookup,
+                    )
                     unidad_payload: dict[str, Any] = {
                         "unidad": unidad.unidad.strip(),
                         "nombre": (unidad.nombre or unidad.unidad).strip(),
@@ -45444,7 +45450,9 @@ async def _create_poligono_if_present(
     return record
 
 
-def _resolve_tipo_id(
+async def _resolve_tipo_id(
+    repo: CRMRepository,
+    organizacion_id: UUID,
     tipo_id: UUID | None,
     tipo_nombre: str | None,
     lookup: dict[str, str],
@@ -45456,11 +45464,24 @@ def _resolve_tipo_id(
         if not key:
             raise ValueError("El nombre del tipo no puede estar vacío.")
         match = lookup.get(key)
-        if not match:
-            match = _find_tipo_alias(key, lookup)
-        if not match:
-            raise ValueError(f"No existe el tipo de propiedad '{tipo_nombre}'.")
-        return match
+        if match:
+            return match
+
+        # El CSV es también un mecanismo de alta: si el tipo escrito no existe,
+        # se crea dentro del tenant y queda disponible para las siguientes filas.
+        created = await repo.create_propiedad_tipo(
+            organizacion_id=organizacion_id,
+            payload={
+                "nombre": tipo_nombre.strip(),
+                "descripcion": "Creado desde importación de propiedades.",
+                "color": "#0F766E",
+            },
+        )
+        created_id = str(created.get("id") or "")
+        if not created_id:
+            raise ValueError(f"No se pudo crear el tipo de propiedad '{tipo_nombre}'.")
+        lookup[key] = created_id
+        return created_id
     raise ValueError("Cada unidad requiere un tipo_id o tipo_nombre.")
 
 

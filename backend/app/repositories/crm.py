@@ -2091,6 +2091,28 @@ class CRMRepository:
             if isinstance(row, dict)
         ]
 
+    async def create_propiedad_tipo(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/propiedad_tipos",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_tipo_creation_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_tipo_invalid_response:{row!r}")
+        return row
+
     async def create_account(
         self,
         *,
