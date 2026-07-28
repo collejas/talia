@@ -481,14 +481,30 @@ function buildPropertyImportTemplateRows(tipoUnidadNombre = DEFAULT_IMPORT_PROPE
         }),
       );
 
+      // Distribuir las unidades con base en las dimensiones reales de la
+      // manzana evita que las últimas filas se salgan en macrolotes más bajos,
+      // como Macrolote Sur.
+      const unitColumns = 5;
+      const unitRows = 2;
+      const unitGapX = 0.000025;
+      const unitGapY = 0.00004;
+      const unitMarginX = 0.00004;
+      const unitMarginY = 0.00004;
+      const unitWidth =
+        (manzanaEast - manzanaWest - unitMarginX * 2 - unitGapX * (unitColumns - 1)) /
+        unitColumns;
+      const unitHeight =
+        (manzanaNorth - manzanaSouth - unitMarginY * 2 - unitGapY * (unitRows - 1)) /
+        unitRows;
+
       for (let unitIndex = 0; unitIndex < 10; unitIndex += 1) {
         const unitName = `Lote-${unitIndex + 1}`;
         const column = unitIndex % 5;
         const rowIndex = Math.floor(unitIndex / 5);
-        const unitWest = manzanaWest + 0.00004 + column * 0.000115;
-        const unitEast = unitWest + 0.00009;
-        const unitSouth = manzanaSouth + 0.00008 + rowIndex * 0.00048;
-        const unitNorth = unitSouth + 0.00038;
+        const unitWest = manzanaWest + unitMarginX + column * (unitWidth + unitGapX);
+        const unitEast = unitWest + unitWidth;
+        const unitSouth = manzanaSouth + unitMarginY + rowIndex * (unitHeight + unitGapY);
+        const unitNorth = unitSouth + unitHeight;
         rows.push(
           templateRow({
             0: "unidad",
