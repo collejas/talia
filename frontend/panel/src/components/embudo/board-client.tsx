@@ -138,7 +138,6 @@ type SalesRepOption = {
   label: string;
 };
 
-const PRECALIFICADO_STAGE_CODE = "precalificado";
 const DEMO_STAGE_CODE = "demo";
 const DEMO_FORMAT_OPTIONS = [
   { value: "virtual", label: "Virtual" },
@@ -1495,9 +1494,8 @@ export function EmbudoBoardClient({
       }
     }
 
-    const movingFromPrecalificado = matchesStageCode(normalizeStageCode(activeDragStage), PRECALIFICADO_STAGE_CODE);
     const movingToDemo = matchesStageCode(normalizeStageCode(destinationStage), DEMO_STAGE_CODE);
-    if (movingFromPrecalificado && movingToDemo) {
+    if (movingToDemo) {
       openScheduleDialog({
         card: activeDragCard,
         originStage: activeDragStage,
