@@ -7572,6 +7572,41 @@ class CRMRepository:
         self._stage_code_cache[cache_key] = stage_payload
         return stage_payload
 
+    async def get_active_stage_by_legacy_code(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+    ) -> dict[str, Any] | None:
+        """Resolve a legacy stage code to the stage attached to an active board."""
+
+        normalized = (codigo or "").strip().lower()
+        if not normalized:
+            return None
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,codigo,nombre,orden,categoria,metadata",
+            "metadata->>legacy_codigo": f"eq.{normalized}",
+            "metadata->>tablero_id": "not.is.null",
+            "order": "orden.asc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        return {
+            "id": _coerce_uuid(row.get("id"), field="etapa_id"),
+            "codigo": row.get("codigo"),
+            "nombre": row.get("nombre"),
+            "orden": row.get("orden"),
+            "categoria": row.get("categoria"),
+            "metadata": row.get("metadata"),
+        }
+
     async def create_lead_event(
         self,
         *,

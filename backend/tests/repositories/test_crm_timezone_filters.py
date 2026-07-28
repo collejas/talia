@@ -22,6 +22,53 @@ class DummyResponse:
 
 
 @pytest.mark.asyncio
+async def test_get_active_stage_by_legacy_code_requires_board_stage() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    stage_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        return DummyResponse(
+            [
+                {
+                    "id": str(stage_id),
+                    "codigo": "general_captado",
+                    "nombre": "Captado",
+                    "orden": 2,
+                    "categoria": "abierta",
+                    "metadata": {
+                        "legacy_codigo": "captado",
+                        "tablero_id": str(uuid.uuid4()),
+                    },
+                }
+            ]
+        )
+
+    repo._request = AsyncMock(side_effect=fake_request)
+
+    stage = await repo.get_active_stage_by_legacy_code(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        codigo="captado",
+    )
+
+    assert stage is not None
+    assert stage["id"] == stage_id
+    assert stage["codigo"] == "general_captado"
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rest/v1/etapas_pipeline"
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params["metadata->>legacy_codigo"] == "eq.captado"
+    assert params["metadata->>tablero_id"] == "not.is.null"
+
+
+@pytest.mark.asyncio
 async def test_list_opportunities_builds_combined_and_filters() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"

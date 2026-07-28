@@ -3930,10 +3930,15 @@ async def promote_opportunity_stage(
         "channel": channel,
     }
     try:
-        stage = await repo.get_stage_by_code(
+        stage = await repo.get_active_stage_by_legacy_code(
             organizacion_id=org_uuid,
             codigo=normalized_code,
         )
+        if not stage:
+            stage = await repo.get_stage_by_code(
+                organizacion_id=org_uuid,
+                codigo=normalized_code,
+            )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 

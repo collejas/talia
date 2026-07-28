@@ -775,7 +775,29 @@ export function PropertyMap() {
 
   const applyMapboxNavigationLimits = useCallback((map, feature) => {
     if (!map || !feature?.geometry) return false;
-    const bounds = getGeometryBounds(feature.geometry);
+    const rootProps = feature.properties ?? {};
+    const rootId = String(
+      rootProps.desarrollo_id ?? rootProps.target_id ?? feature.id ?? "",
+    );
+    const relatedFeatures = (featuresRef.current ?? []).filter((candidate) => {
+      if (!candidate?.geometry) return false;
+      if (getFeatureId(candidate) === getFeatureId(feature)) return true;
+      const candidateProps = candidate.properties ?? {};
+      const candidateDevelopmentId =
+        candidateProps.desarrollo_id ?? candidateProps.target_id ?? "";
+      return Boolean(rootId && String(candidateDevelopmentId) === rootId);
+    });
+    const bounds = [feature, ...relatedFeatures].reduce((aggregate, candidate) => {
+      const candidateBounds = getGeometryBounds(candidate.geometry);
+      if (!candidateBounds) return aggregate;
+      if (!aggregate) return { ...candidateBounds };
+      return {
+        minLng: Math.min(aggregate.minLng, candidateBounds.minLng),
+        minLat: Math.min(aggregate.minLat, candidateBounds.minLat),
+        maxLng: Math.max(aggregate.maxLng, candidateBounds.maxLng),
+        maxLat: Math.max(aggregate.maxLat, candidateBounds.maxLat),
+      };
+    }, null);
     const constrainedBounds = expandBoundsLike(bounds, 0.22, 0.015);
     if (!constrainedBounds) return false;
     try {
@@ -1278,7 +1300,6 @@ export function PropertyMap() {
       const canonicalTarget = getCanonicalFeature(targetNode);
       setActiveNode(canonicalTarget ?? null);
       if (canonicalTarget) {
-        mapboxRootFeatureRef.current = canonicalTarget;
         const targetChildren = next.length ? deriveDrillChildren(canonicalTarget) : [];
         if (targetChildren.length) {
           sendFeaturesToMapbox(targetChildren, inferFeatureKind(canonicalTarget), true);
