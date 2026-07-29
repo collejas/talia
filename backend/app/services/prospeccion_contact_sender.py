@@ -965,6 +965,30 @@ async def _run_envio_correo(
             )
             public_base_url = None
         effective_payload = _apply_tenant_public_base_url_defaults(payload, public_base_url)
+        template_id_raw = _clean_text(effective_payload.get("template_id"))
+        if template_id_raw:
+            try:
+                image_context = await CRMRepository().list_contact_template_image_context(
+                    organizacion_id=organizacion_id,
+                    template_id=UUID(template_id_raw),
+                )
+            except (CRMRepositoryError, TypeError, ValueError) as exc:
+                log_event(
+                    logger,
+                    "prospeccion.sender_template_images_unavailable",
+                    organizacion_id=str(organizacion_id),
+                    template_id=template_id_raw,
+                    error=str(exc),
+                )
+            else:
+                if image_context:
+                    merged_metadata = (
+                        dict(effective_payload.get("metadata"))
+                        if isinstance(effective_payload.get("metadata"), dict)
+                        else {}
+                    )
+                    merged_metadata.update(image_context)
+                    effective_payload = {**effective_payload, "metadata": merged_metadata}
     context = _build_placeholder_context(envio, effective_payload, effective_payload.get("metadata"))
     tracking_url = _build_email_tracking_url(
         context=context,

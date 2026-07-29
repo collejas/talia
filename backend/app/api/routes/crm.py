@@ -4124,7 +4124,7 @@ class ProspeccionCanalConfig(BaseModel):
     template_id: UUID | None = None
     subject: str | None = Field(default=None, max_length=200)
     body: str | None = Field(default=None, max_length=4000)
-    body_html: str | None = Field(default=None, max_length=8000)
+    body_html: str | None = Field(default=None, max_length=32_000)
     message: str | None = Field(default=None, max_length=1000)
     programado_en: datetime | None = None
     metadata: dict[str, Any] | None = Field(default=None)
@@ -4162,6 +4162,26 @@ class ProspeccionListaQuery(BaseModel):
     search: str | None = Field(default=None, max_length=120)
 
 
+TemplateImageVariable = Literal[
+    "logo_url",
+    "hero_image_url",
+    "product_image_1_url",
+    "product_image_2_url",
+    "product_image_3_url",
+    "product_image_4_url",
+    "warranty_image_url",
+]
+
+
+class ContactoTemplateImagenPayload(BaseModel):
+    """Recurso gráfico asignado a una posición explícita de la plantilla."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    variable_clave: TemplateImageVariable
+    logo_id: UUID
+
+
 class ContactoTemplatePayload(BaseModel):
     """Crea una plantilla multicanal para prospección."""
 
@@ -4173,10 +4193,11 @@ class ContactoTemplatePayload(BaseModel):
     descripcion: str | None = Field(default=None, max_length=400)
     asunto: str | None = Field(default=None, max_length=200)
     cuerpo_texto: str | None = Field(default=None, max_length=4000)
-    cuerpo_html: str | None = Field(default=None, max_length=8000)
+    cuerpo_html: str | None = Field(default=None, max_length=32_000)
     metadata: dict[str, Any] | None = Field(default=None)
     activo: bool = Field(default=True)
     campana_id: UUID | None = None
+    imagenes: list[ContactoTemplateImagenPayload] = Field(default_factory=list, max_length=7)
 
 
 class ContactoTemplateUpdatePayload(BaseModel):
@@ -4190,10 +4211,11 @@ class ContactoTemplateUpdatePayload(BaseModel):
     descripcion: str | None = Field(default=None, max_length=400)
     asunto: str | None = Field(default=None, max_length=200)
     cuerpo_texto: str | None = Field(default=None, max_length=4000)
-    cuerpo_html: str | None = Field(default=None, max_length=8000)
+    cuerpo_html: str | None = Field(default=None, max_length=32_000)
     metadata: dict[str, Any] | None = Field(default=None)
     activo: bool | None = None
     campana_id: UUID | None = None
+    imagenes: list[ContactoTemplateImagenPayload] | None = Field(default=None, max_length=7)
 
 
 class WhatsProspTemplateQuery(BaseModel):
@@ -9907,6 +9929,56 @@ def _build_contact_template_payload(
         metadata_value = data.get("metadata") or {}
         payload["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
     return payload
+
+
+def _attach_contact_template_images(
+    items: list[dict[str, Any]],
+    image_rows: list[dict[str, Any]],
+) -> None:
+    by_template: dict[str, list[dict[str, Any]]] = {}
+    for row in image_rows:
+        template_id = _clean_text(row.get("template_id"))
+        logo = row.get("logo") if isinstance(row.get("logo"), dict) else {}
+        if not template_id or not logo:
+            continue
+        by_template.setdefault(template_id, []).append(
+            {
+                "id": row.get("id"),
+                "variable_clave": row.get("variable_clave"),
+                "logo_id": row.get("logo_id"),
+                "nombre": logo.get("nombre"),
+                "file_url": logo.get("file_url"),
+            }
+        )
+    for item in items:
+        item["imagenes"] = by_template.get(_clean_text(item.get("id")) or "", [])
+
+
+async def _replace_contact_template_images(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    organizacion_id: UUID,
+    template_id: UUID,
+    images: list[ContactoTemplateImagenPayload],
+) -> list[dict[str, Any]]:
+    variable_keys = [image.variable_clave for image in images]
+    if len(variable_keys) != len(set(variable_keys)):
+        raise HTTPException(status_code=422, detail="template_image_variable_duplicated")
+    rows = [
+        {
+            "organizacion_id": str(organizacion_id),
+            "template_id": str(template_id),
+            "logo_id": str(image.logo_id),
+            "variable_clave": image.variable_clave,
+        }
+        for image in images
+    ]
+    return await repo.replace_contact_template_images(
+        usuario_token=user_token,
+        template_id=template_id,
+        images=rows,
+    )
 
 
 def _build_whats_prosp_template_payload(
@@ -23897,9 +23969,10 @@ async def list_settings_logos(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("settings.view")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> CRMLogoAssetList:
     try:
-        rows = await repo.list_logos()
+        rows = await repo.list_logos(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -32328,6 +32401,19 @@ async def listar_templates_prospeccion_contacto_legacy(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    persisted_items = [
+        item for item in items
+        if isinstance(item, dict) and _clean_text(item.get("id")) and not str(item.get("id")).startswith("runtime:")
+    ]
+    if persisted_items:
+        try:
+            image_rows = await repo.list_contact_template_images(
+                usuario_token=user_token,
+                template_ids=[str(item["id"]) for item in persisted_items],
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        _attach_contact_template_images(persisted_items, image_rows)
     if params.campana_id:
         campana_key = str(params.campana_id)
         filtered_items: list[dict[str, Any]] = []
@@ -32764,6 +32850,8 @@ async def crear_template_prospeccion_contacto_legacy(
         if payload.canal != campana_canal:
             raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
     raw = payload.model_dump()
+    images = payload.imagenes
+    raw.pop("imagenes", None)
     metadata = _ensure_dict(raw.get("metadata"), default={})
     if payload.campana_id:
         metadata["campana_id"] = str(payload.campana_id)
@@ -32772,8 +32860,20 @@ async def crear_template_prospeccion_contacto_legacy(
     body = _build_contact_template_payload(raw, include_metadata=True)
     try:
         template = await repo.create_contact_template(usuario_token=user_token, payload=body)
+        await _replace_contact_template_images(
+            repo=repo,
+            user_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=UUID(str(template["id"])),
+            images=images,
+        )
+        image_rows = await repo.list_contact_template_images(
+            usuario_token=user_token,
+            template_ids=[str(template["id"])],
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _attach_contact_template_images([template], image_rows)
     return {"ok": True, "template": template}
 
 
@@ -32793,6 +32893,7 @@ async def actualizar_template_prospeccion_contacto_legacy(
     raw_data = payload.model_dump(exclude_unset=True)
     if not raw_data:
         raise HTTPException(status_code=400, detail="empty_update")
+    images = raw_data.pop("imagenes", None)
     current_metadata = _ensure_dict(current.get("metadata"), default={})
     current_campana_id = _clean_text(current_metadata.get("campana_id"))
     effective_campana_id = str(raw_data["campana_id"]) if "campana_id" in raw_data and raw_data.get("campana_id") else current_campana_id
@@ -32828,6 +32929,20 @@ async def actualizar_template_prospeccion_contacto_legacy(
             template_id=template_id,
             payload=body,
         )
+        if images is not None:
+            parsed_images = [ContactoTemplateImagenPayload.model_validate(image) for image in images]
+            image_rows = await _replace_contact_template_images(
+                repo=repo,
+                user_token=user_token,
+                organizacion_id=organizacion_id,
+                template_id=template_id,
+                images=parsed_images,
+            )
+            image_rows = await repo.list_contact_template_images(
+                usuario_token=user_token,
+                template_ids=[str(template_id)],
+            )
+            _attach_contact_template_images([template], image_rows)
     except CRMRepositoryError as exc:
         if "contact_template_not_found" in str(exc):
             raise HTTPException(status_code=404, detail="contact_template_not_found") from exc

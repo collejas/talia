@@ -508,6 +508,24 @@ export type ContactoTemplate = {
   meta_category?: "marketing" | "utility" | "authentication" | null
   template_status?: "draft" | "approved" | "rejected" | "archived" | null
   metadata?: Record<string, unknown> | null
+  imagenes?: ContactoTemplateImagen[]
+}
+
+export type ContactoTemplateImagenVariable =
+  | "logo_url"
+  | "hero_image_url"
+  | "product_image_1_url"
+  | "product_image_2_url"
+  | "product_image_3_url"
+  | "product_image_4_url"
+  | "warranty_image_url"
+
+export type ContactoTemplateImagen = {
+  id?: string | null
+  variable_clave: ContactoTemplateImagenVariable
+  logo_id: string
+  nombre?: string | null
+  file_url?: string | null
 }
 
 export type WhatsProspTemplateInput = {
@@ -1581,6 +1599,7 @@ export async function createContactoTemplate(payload: {
   metadata?: Record<string, unknown>
   activo?: boolean
   campana_id?: string | null
+  imagenes?: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }>
 }) {
   return requestJson<{ ok: boolean; template: ContactoTemplate }>("/api/prospeccion/contacto/templates", {
     method: "POST",
@@ -1601,6 +1620,7 @@ export async function updateContactoTemplate(
     metadata?: Record<string, unknown>
     activo?: boolean
     campana_id?: string | null
+    imagenes?: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }>
   },
 ) {
   return requestJson<{ ok: boolean; template: ContactoTemplate }>(`/api/prospeccion/contacto/templates/${templateId}`, {

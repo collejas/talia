@@ -3915,9 +3915,10 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear producto: {row!r}")
         return row
 
-    async def list_logos(self) -> list[dict[str, Any]]:
+    async def list_logos(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,nombre,descripcion,file_path,file_url,metadata,uploaded_by,created_at,updated_at",
+            "organizacion_id": f"eq.{organizacion_id}",
             "order": "created_at.desc",
         }
         resp = await self._request("GET", "/rest/v1/logos", params=params)
@@ -19351,6 +19352,122 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_templates_invalid:{data!r}")
         return data
+
+    async def list_contact_template_images(
+        self,
+        *,
+        usuario_token: str,
+        template_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Lista asignaciones explícitas de imágenes para plantillas."""
+
+        normalized_ids = [str(value).strip() for value in template_ids if str(value).strip()]
+        if not normalized_ids:
+            return []
+        params = {
+            "select": (
+                "id,organizacion_id,template_id,logo_id,variable_clave,"
+                "logo:logos!prospeccion_contacto_template_imagenes_logo_fkey(id,nombre,file_url)"
+            ),
+            "template_id": f"in.({','.join(normalized_ids)})",
+            "order": "variable_clave.asc",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_template_imagenes",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_images_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def replace_contact_template_images(
+        self,
+        *,
+        usuario_token: str,
+        template_id: UUID,
+        images: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Reemplaza las posiciones de imagen de una plantilla."""
+
+        requested_logo_ids = {
+            str(row.get("logo_id") or "").strip()
+            for row in images
+            if str(row.get("logo_id") or "").strip()
+        }
+        if requested_logo_ids:
+            validation_resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/logos",
+                token=usuario_token,
+                params={
+                    "select": "id",
+                    "id": f"in.({','.join(sorted(requested_logo_ids))})",
+                },
+            )
+            validation_data = validation_resp.json() or []
+            visible_logo_ids = {
+                str(row.get("id") or "").strip()
+                for row in validation_data
+                if isinstance(row, dict)
+            }
+            if visible_logo_ids != requested_logo_ids:
+                raise CRMRepositoryError("contact_template_image_not_available")
+        await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_contacto_template_imagenes",
+            token=usuario_token,
+            params={"template_id": f"eq.{template_id}"},
+        )
+        if not images:
+            return []
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_template_imagenes",
+            token=usuario_token,
+            json=list(images),
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_images_replace_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_contact_template_image_context(
+        self,
+        *,
+        organizacion_id: UUID,
+        template_id: UUID,
+    ) -> dict[str, str]:
+        """Resuelve variables de imagen para el worker de correo."""
+
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_template_imagenes",
+            params={
+                "select": (
+                    "variable_clave,"
+                    "logo:logos!prospeccion_contacto_template_imagenes_logo_fkey(file_url)"
+                ),
+                "organizacion_id": f"eq.{organizacion_id}",
+                "template_id": f"eq.{template_id}",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_image_context_invalid:{data!r}")
+        context: dict[str, str] = {}
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("variable_clave") or "").strip()
+            logo = row.get("logo") if isinstance(row.get("logo"), dict) else {}
+            url = str(logo.get("file_url") or "").strip()
+            if key and url:
+                context[key] = url
+        return context
 
     async def list_whats_prosp_templates(
         self,

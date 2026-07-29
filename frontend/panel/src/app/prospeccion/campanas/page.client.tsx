@@ -45,6 +45,7 @@ import {
   type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
+  type ContactoTemplateImagenVariable,
   type ContactoEnvio,
   type ContactoLog,
   type WhatsAppAtribucionRule,
@@ -81,11 +82,29 @@ const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
   { token: "{{segmento}}", label: "Segmento" },
   { token: "{{canal_origen}}", label: "Canal origen" },
   { token: "{{logo_url}}", label: "Logo URL" },
+  { token: "{{hero_image_url}}", label: "Imagen principal" },
+  { token: "{{product_image_1_url}}", label: "Producto 1" },
+  { token: "{{product_image_2_url}}", label: "Producto 2" },
+  { token: "{{product_image_3_url}}", label: "Producto 3" },
+  { token: "{{product_image_4_url}}", label: "Producto 4" },
+  { token: "{{warranty_image_url}}", label: "Imagen de garantía" },
   { token: "{{tracking_url}}", label: "Tracking URL" },
   { token: "{{website_url}}", label: "Website URL" },
   { token: "{{booking_url}}", label: "Booking URL" },
   { token: "{{booking_link_text}}", label: "Texto link agenda" },
 ]
+
+const EMAIL_IMAGE_SLOTS: Array<{ key: ContactoTemplateImagenVariable; label: string }> = [
+  { key: "logo_url", label: "Logo" },
+  { key: "hero_image_url", label: "Imagen principal" },
+  { key: "product_image_1_url", label: "Producto 1" },
+  { key: "product_image_2_url", label: "Producto 2" },
+  { key: "product_image_3_url", label: "Producto 3" },
+  { key: "product_image_4_url", label: "Producto 4" },
+  { key: "warranty_image_url", label: "Garantía" },
+]
+
+const EMAIL_HTML_MAX_LENGTH = 32_000
 
 type HierarchyTemplateNode = {
   key: string
@@ -170,6 +189,7 @@ export function CampanasMetricsClient() {
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
+  const [templateImageIds, setTemplateImageIds] = useState<Partial<Record<ContactoTemplateImagenVariable, string>>>({})
   const [previewProspecto, setPreviewProspecto] = useState<ProspectoItem | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -638,6 +658,7 @@ export function CampanasMetricsClient() {
 
   const resetTemplateForm = useCallback(() => {
     setSelectedLogoUrl("")
+    setTemplateImageIds({})
     setTemplateForm({
       id: "",
       canal: templatesCampanaCanal ?? "correo",
@@ -1039,6 +1060,14 @@ ${secondCellHtml}
     } catch {
       bookingUrl = websiteUrl
     }
+    const imageContext = Object.fromEntries(
+      EMAIL_IMAGE_SLOTS.map(({ key }) => {
+        const logoId = templateImageIds[key]
+        const asset = logos.find((logo) => logo.id === logoId)
+        const fallback = key === "logo_url" ? selectedLogoUrl : ""
+        return [key, normalizeLogoUrl(asset?.file_url ?? fallback)]
+      })
+    )
     return {
       display_name: displayName,
       nombre,
@@ -1055,17 +1084,20 @@ ${secondCellHtml}
       website_url: websiteUrl,
       booking_url: bookingUrl,
       booking_link_text: bookingLinkLabel,
+      ...imageContext,
     }
   }, [
     bookingLinkLabel,
     normalizeLogoUrl,
     normalizeWebBaseUrl,
     previewProspecto,
+    logos,
     resolvePreviewCanalOrigen,
     selectedLogoUrl,
     effectiveTemplateSlug,
     templateForm.ctaBaseUrl,
     templateForm.nombreEmpresa,
+    templateImageIds,
     tenantBaseUrl,
   ])
 
@@ -1192,6 +1224,7 @@ ${secondCellHtml}
       setTemplatesCampanaNombre(campanaNombre?.trim() || "Campaña")
       setTemplatesCampanaCanal(canal)
       setSelectedLogoUrl("")
+      setTemplateImageIds({})
       setTemplateForm({
         id: "",
         canal: canal ?? "correo",
@@ -1217,18 +1250,21 @@ ${secondCellHtml}
       await loadWaRules()
       await loadCampaignTemplates(campanaId)
       if (canal === "correo") {
-        await loadBrevoCatalog(canal)
+        await Promise.all([loadBrevoCatalog(canal), loadLogos()])
       } else {
         setBrevoCatalog([])
       }
     },
-    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates, loadWaRules]
+    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates, loadLogos, loadWaRules]
   )
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
     const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
+    const imageIds = Object.fromEntries((template.imagenes ?? []).map((image) => [image.variable_clave, image.logo_id]))
+    const boundLogo = template.imagenes?.find((image) => image.variable_clave === "logo_url")
     const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
-    setSelectedLogoUrl(logoFromMetadata)
+    setTemplateImageIds(imageIds)
+    setSelectedLogoUrl(boundLogo?.file_url?.trim() || logoFromMetadata)
     setTemplateForm({
       id: template.id,
       canal: template.canal,
@@ -1268,7 +1304,10 @@ ${secondCellHtml}
       const baseName = (template.nombre ?? "").trim() || "Plantilla"
       const baseSlug = buildSafeTemplateSlug((template.slug ?? "").trim() || baseName, template.canal, baseName)
       const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
-      setSelectedLogoUrl(logoFromMetadata)
+      const imageIds = Object.fromEntries((template.imagenes ?? []).map((image) => [image.variable_clave, image.logo_id]))
+      const boundLogo = template.imagenes?.find((image) => image.variable_clave === "logo_url")
+      setTemplateImageIds(imageIds)
+      setSelectedLogoUrl(boundLogo?.file_url?.trim() || logoFromMetadata)
       setTemplateForm({
         id: "",
         canal: template.canal,
@@ -1324,6 +1363,10 @@ ${secondCellHtml}
       setTemplateError("El identificador interno no pudo generarse correctamente.")
       return
     }
+    if (templateForm.cuerpoHtml.length > EMAIL_HTML_MAX_LENGTH) {
+      setTemplateError(`El HTML supera el límite de ${EMAIL_HTML_MAX_LENGTH.toLocaleString("es-MX")} caracteres.`)
+      return
+    }
     setTemplateSaving(true)
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
@@ -1365,6 +1408,10 @@ ${secondCellHtml}
       metadata["empresa"] = templateForm.nombreEmpresa.trim()
     }
     const canalToSave = templatesCampanaCanal ?? templateForm.canal
+    const imagenes = EMAIL_IMAGE_SLOTS.flatMap(({ key }) => {
+      const logoId = templateImageIds[key]
+      return logoId ? [{ variable_clave: key, logo_id: logoId }] : []
+    })
     try {
       if (canalToSave === "whatsapp") {
         const whatsPayload = {
@@ -1395,6 +1442,7 @@ ${secondCellHtml}
           cuerpo_html: templateForm.cuerpoHtml || null,
           metadata,
           campana_id: templatesCampanaId,
+          imagenes,
         })
       } else {
         await createContactoTemplate({
@@ -1408,6 +1456,7 @@ ${secondCellHtml}
           metadata,
           activo: true,
           campana_id: templatesCampanaId,
+          imagenes,
         })
       }
       await loadCampaignTemplates(templatesCampanaId)
@@ -1430,6 +1479,7 @@ ${secondCellHtml}
     resetTemplateForm,
     selectedLogoUrl,
     templateForm,
+    templateImageIds,
     templatesCampanaCanal,
     templatesCampanaId,
     tenantBaseUrl,
@@ -2668,6 +2718,46 @@ ${secondCellHtml}
                           </div>
                         ) : null}
 
+                        {templateForm.canal === "correo" ? (
+                          <div className="rounded-md border bg-background/70 p-3">
+                            <div className="mb-3">
+                              <p className="text-sm font-medium text-foreground">Imágenes de la plantilla</p>
+                              <p className="text-xs text-muted-foreground">
+                                Asigna recursos cargados a variables reutilizables. Cada imagen queda aislada por tenant.
+                              </p>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {EMAIL_IMAGE_SLOTS.map((slot) => (
+                                <div key={slot.key} className="space-y-1">
+                                  <Label>{slot.label}</Label>
+                                  <Select
+                                    value={templateImageIds[slot.key] || "__none__"}
+                                    onValueChange={(value) => {
+                                      const nextId = value === "__none__" ? "" : value
+                                      setTemplateImageIds((prev) => ({ ...prev, [slot.key]: nextId || undefined }))
+                                      if (slot.key === "logo_url") {
+                                        const asset = logos.find((logo) => logo.id === nextId)
+                                        setSelectedLogoUrl(asset?.file_url ?? "")
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">Sin imagen</SelectItem>
+                                      {logos.map((logo) => (
+                                        <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="font-mono text-[11px] text-muted-foreground">{`{{${slot.key}}}`}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="rounded-md border bg-muted/20 p-3">
                           <div className="mb-3">
                             <p className="text-sm font-medium text-foreground">Imagen o logo</p>
@@ -2775,6 +2865,7 @@ ${secondCellHtml}
                               <Textarea
                                 ref={correoHtmlRef}
                                 rows={6}
+                                maxLength={EMAIL_HTML_MAX_LENGTH}
                                 value={templateForm.cuerpoHtml}
                                 onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
                                 onFocus={() => {
@@ -2782,6 +2873,14 @@ ${secondCellHtml}
                                 }}
                                 placeholder="<p>Hola {{nombre}}</p>"
                               />
+                              <p className={cn(
+                                "text-right text-xs",
+                                templateForm.cuerpoHtml.length > EMAIL_HTML_MAX_LENGTH * 0.9
+                                  ? "text-amber-600"
+                                  : "text-muted-foreground"
+                              )}>
+                                {templateForm.cuerpoHtml.length.toLocaleString("es-MX")} / {EMAIL_HTML_MAX_LENGTH.toLocaleString("es-MX")} caracteres
+                              </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <Button type="button" variant="outline" size="sm" onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}>
