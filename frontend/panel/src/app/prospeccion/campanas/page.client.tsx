@@ -2618,6 +2618,56 @@ ${secondCellHtml}
                         </div>
                       </summary>
                       <div className="mt-4 space-y-4">
+                        {templateForm.canal === "correo" ? (
+                          <div className="space-y-1 rounded-md border bg-background/70 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <Label>Frase de WhatsApp para captación</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  Selecciona una frase para generar el enlace de WhatsApp dentro del correo.
+                                </p>
+                              </div>
+                              <Button type="button" variant="outline" size="sm" asChild>
+                                <a href="/prospeccion/whatsapp-atribucion" target="_blank" rel="noreferrer">
+                                  Ir a frases
+                                </a>
+                              </Button>
+                            </div>
+                            <Select
+                              value={templateForm.waRuleId || "__none__"}
+                              onValueChange={(value) => {
+                                if (value === "__none__") {
+                                  setTemplateForm((prev) => ({ ...prev, waRuleId: "", waPhrase: "" }))
+                                  return
+                                }
+                                const selected = waRules.find((rule) => rule.id === value)
+                                setTemplateForm((prev) => ({
+                                  ...prev,
+                                  waRuleId: value,
+                                  waPhrase: selected?.frase_objetivo ?? prev.waPhrase,
+                                }))
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={waRulesLoading ? "Cargando frases..." : "Selecciona una frase"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sin frase</SelectItem>
+                                {waRules.map((rule) => (
+                                  <SelectItem key={rule.id} value={rule.id}>
+                                    {(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {!waRulesLoading && !waRules.length ? (
+                              <p className="text-xs text-amber-600">
+                                No hay frases activas para este tenant. Crea una en la pantalla de atribución.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
                         <div className="rounded-md border bg-muted/20 p-3">
                           <div className="mb-3">
                             <p className="text-sm font-medium text-foreground">Imagen o logo</p>
