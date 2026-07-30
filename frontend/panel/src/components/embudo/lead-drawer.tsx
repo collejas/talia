@@ -2230,7 +2230,6 @@ export function LeadDrawer({
               if (typeof draft.quoteTotal === "string") setQuoteTotal(draft.quoteTotal);
               if (typeof draft.quoteMoneda === "string") setQuoteMoneda(draft.quoteMoneda);
               if (typeof draft.quoteValidoHasta === "string") setQuoteValidoHasta(draft.quoteValidoHasta);
-              if (typeof draft.quoteFolio === "string") setQuoteFolio(draft.quoteFolio);
               if (isRecord(draft.quoteVendorSettings)) {
                 setQuoteVendorSettings(extractQuoteVendorSettings(draft.quoteVendorSettings));
               }
@@ -2377,7 +2376,6 @@ export function LeadDrawer({
       quoteTotal,
       quoteMoneda,
       quoteValidoHasta,
-      quoteFolio,
       quoteItems,
       quoteVendorSettings,
     };
@@ -2674,6 +2672,9 @@ export function LeadDrawer({
           return;
         }
         setQuoteDialogOpen(false);
+        if (quoteDraftStorageKey && typeof window !== "undefined") {
+          window.localStorage.removeItem(quoteDraftStorageKey);
+        }
         setQuoteError(null);
         setQuoteSuccess("Cotización creada sin envío.");
         await fetchQuotes();
@@ -2753,6 +2754,9 @@ export function LeadDrawer({
           return;
         }
         setQuoteDialogOpen(false);
+        if (quoteDraftStorageKey && typeof window !== "undefined") {
+          window.localStorage.removeItem(quoteDraftStorageKey);
+        }
         setQuoteError(null);
         setQuoteSuccess("Cotización enviada correctamente.");
         await fetchQuotes();

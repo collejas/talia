@@ -25,6 +25,29 @@ def test_lead_quote_item_rejects_unbounded_description() -> None:
         crm_routes.LeadQuoteItemPayload(descripcion=description)
 
 
+@pytest.mark.asyncio
+async def test_resolve_available_quote_folio_replaces_duplicate() -> None:
+    repo = AsyncMock()
+    repo.quote_folio_exists.return_value = True
+    repo.reserve_quote_folio.return_value = {
+        "folio": "Cot-RS-300726-0008",
+        "secuencia": 8,
+        "fecha": "2026-07-30",
+        "iniciales": "RS",
+    }
+
+    folio = await crm_routes._resolve_available_quote_folio(
+        repo=repo,
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        vendor_context={"vendor_assessor_name": "Roberto Silva"},
+        requested_folio="Cot-RS-300726-0007",
+    )
+
+    assert folio == "Cot-RS-300726-0008"
+    repo.quote_folio_exists.assert_awaited_once()
+    repo.reserve_quote_folio.assert_awaited_once()
+
+
 class DummyCRMRepository(CRMRepository):
     """Repo falso que permite inyectar respuestas predecibles."""
 
@@ -917,6 +940,19 @@ class DummyCRMRepository(CRMRepository):
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
             "items": kwargs.get("items") or [],
+        }
+
+    async def quote_folio_exists(self, **kwargs: Any) -> bool:
+        self.calls.append(("quote_folio_exists", kwargs))
+        return False
+
+    async def reserve_quote_folio(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("reserve_quote_folio", kwargs))
+        return {
+            "folio": "Cot-TEST-010124-0001",
+            "secuencia": 1,
+            "fecha": "2024-01-01",
+            "iniciales": "TEST",
         }
 
     async def mark_quote_entry(self, **kwargs: Any) -> dict[str, Any]:

@@ -3994,6 +3994,29 @@ class CRMRepository:
             return result[0]
         raise CRMRepositoryError(f"Respuesta invalida al reservar folio de cotizacion: {result!r}")
 
+    async def quote_folio_exists(
+        self,
+        *,
+        organizacion_id: UUID,
+        folio: str,
+    ) -> bool:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/cotizaciones",
+            params={
+                "select": "id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "folio": f"eq.{_postgrest_eq_literal(folio)}",
+                "limit": "1",
+            },
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al validar folio de cotizacion: {data!r}"
+            )
+        return bool(data)
+
     async def create_quote(
         self,
         *,

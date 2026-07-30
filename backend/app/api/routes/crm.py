@@ -2554,6 +2554,30 @@ async def _reserve_quote_folio_for_opportunity(
     return folio_row
 
 
+async def _resolve_available_quote_folio(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    vendor_context: Mapping[str, Any],
+    requested_folio: Any,
+) -> str:
+    quote_folio = _normalize_quote_folio_value(requested_folio)
+    if quote_folio and not await repo.quote_folio_exists(
+        organizacion_id=organizacion_id,
+        folio=quote_folio,
+    ):
+        return quote_folio
+    return str(
+        (
+            await _reserve_quote_folio_for_opportunity(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                vendor_context=vendor_context,
+            )
+        )["folio"]
+    )
+
+
 async def _resolve_quote_display_timezone_name(
     *,
     repo: CRMRepository,
@@ -28819,17 +28843,12 @@ async def create_lead_quote(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
-    quote_folio = _normalize_quote_folio_value(body.get("folio"))
-    if not quote_folio:
-        quote_folio = str(
-            (
-                await _reserve_quote_folio_for_opportunity(
-                    repo=repo,
-                    organizacion_id=organizacion_id,
-                    vendor_context=vendor_context,
-                )
-            )["folio"]
-        )
+    quote_folio = await _resolve_available_quote_folio(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        vendor_context=vendor_context,
+        requested_folio=body.get("folio"),
+    )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -28977,17 +28996,12 @@ async def preview_lead_quote_pdf(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
-    quote_folio = _normalize_quote_folio_value(base_payload.folio)
-    if not quote_folio:
-        quote_folio = str(
-            (
-                await _reserve_quote_folio_for_opportunity(
-                    repo=repo,
-                    organizacion_id=organizacion_id,
-                    vendor_context=vendor_context,
-                )
-            )["folio"]
-        )
+    quote_folio = await _resolve_available_quote_folio(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        vendor_context=vendor_context,
+        requested_folio=base_payload.folio,
+    )
 
     issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
     issuer_email = mail_settings.username
@@ -29168,17 +29182,12 @@ async def send_lead_quote(
         oportunidad_metadata.get("proyecto_necesidades") or contact.get("necesidad_proposito")
     )
     logo_url = await _resolve_quote_logo_url(organizacion_id=organizacion_id)
-    quote_folio = _normalize_quote_folio_value(base_payload.folio)
-    if not quote_folio:
-        quote_folio = str(
-            (
-                await _reserve_quote_folio_for_opportunity(
-                    repo=repo,
-                    organizacion_id=organizacion_id,
-                    vendor_context=vendor_context,
-                )
-            )["folio"]
-        )
+    quote_folio = await _resolve_available_quote_folio(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        vendor_context=vendor_context,
+        requested_folio=base_payload.folio,
+    )
 
     attachment_payloads: list[dict[str, object]] = []
     attachment_total_bytes = 0

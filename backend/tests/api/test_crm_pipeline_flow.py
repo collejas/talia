@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, AsyncIterator
 
 import pytest
@@ -286,6 +286,7 @@ class InMemoryPipelineRepository(CRMRepository):
         oportunidad_id: uuid.UUID,
         cuenta_id: uuid.UUID | None,
         contacto_id: uuid.UUID | None,
+        folio: str | None,
         estatus: str,
         total: float | None,
         moneda: str,
@@ -306,6 +307,7 @@ class InMemoryPipelineRepository(CRMRepository):
         row = {
             "id": str(quote_id),
             "oportunidad_id": str(oportunidad_id),
+            "folio": folio,
             "estatus": estatus,
             "total": total,
             "moneda": moneda,
@@ -317,6 +319,29 @@ class InMemoryPipelineRepository(CRMRepository):
         }
         self.quotes[str(quote_id)] = row
         return row
+
+    async def quote_folio_exists(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        folio: str,
+    ) -> bool:
+        return any(quote.get("folio") == folio for quote in self.quotes.values())
+
+    async def reserve_quote_folio(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        vendedor_nombre: str,
+        fecha: date | None = None,
+    ) -> dict[str, Any]:
+        sequence = len(self.quotes) + 1
+        return {
+            "folio": f"Cot-TEST-010124-{sequence:04d}",
+            "secuencia": sequence,
+            "fecha": fecha or date(2024, 1, 1),
+            "iniciales": "TEST",
+        }
 
     async def mark_quote_entry(
         self,
@@ -445,6 +470,9 @@ class InMemoryPipelineRepository(CRMRepository):
             "roles": ["admin"],
             "permisos": [],
         }
+
+    async def fetch_user_profile(self, *, usuario_id: uuid.UUID) -> dict[str, Any] | None:
+        return {"id": str(usuario_id), "timezone": None}
 
 
 @pytest.fixture()
