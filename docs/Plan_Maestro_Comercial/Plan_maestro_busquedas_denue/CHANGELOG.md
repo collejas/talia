@@ -89,6 +89,43 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-30 · Búsquedas DENUE en segundo plano y upsert optimizado
+
+**Estado:** Migrado
+
+### Alcance
+
+- Las búsquedas radiales y avanzadas del panel se envían al worker en segundo plano.
+- El modal deja de bloquearse en `Procesando solicitud` y confirma que el usuario puede seguir navegando.
+- Los errores visibles ya no exponen la respuesta interna completa de Supabase.
+
+### Base de datos
+
+- Migración local y remota: `supabase/migrations/20280730_150000_optimize_upsert_resultados_lote.sql`.
+- `upsert_resultados_lote` cambió de un bucle con un `INSERT` por registro a un único `INSERT ... SELECT` por chunk.
+- La función valida que la búsqueda, fuente y organización correspondan al mismo tenant.
+- Conserva `SECURITY INVOKER`; `anon` no puede ejecutarla.
+
+### Diagnóstico verificado
+
+- Supabase registró `57014 canceling statement due to statement timeout` en los dos intentos del tenant Sinergia Lidera.
+- La función desplegada procesaba fila por fila una tabla con aproximadamente 240,748 resultados.
+- Los intentos fallidos dejaron dos búsquedas vacías, sin resultados insertados.
+
+### Pruebas y validación
+
+- Benchmark remoto de 200 resultados dentro de una transacción revertida: sin timeout.
+- `poetry run pytest -q tests/services/test_denue.py tests/api/test_crm_routes.py -k 'denue or prospeccion'`: 16 pruebas aprobadas.
+- `npx tsc --noEmit`: aprobado.
+- React Doctor: 100/100, sin hallazgos.
+
+### Operación
+
+- La migración de Supabase está aplicada.
+- El panel requiere despliegue para activar el nuevo comportamiento del modal y `async_mode=true`.
+
+---
+
 ## 2026-07-30 · Límites por plan y excepciones por tenant
 
 **Estado:** Migrado

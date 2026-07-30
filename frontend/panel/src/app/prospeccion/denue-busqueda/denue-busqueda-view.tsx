@@ -664,7 +664,7 @@ export function DenueBusquedaView() {
         setScianLookups(buildScianLookups(response.scian));
         setScianCatalogs(response.scian);
         setGeoStatesCatalog(response.geo.states ?? []);
-      } catch {
+      } catch (error) {
         // Sin catálogos: mostrar códigos como fallback.
         if (cancelled) return;
         setGeoLookups(null);
@@ -1685,12 +1685,6 @@ export function DenueBusquedaView() {
   const runBusqueda = useCallback(
     async (options?: { filters?: DenueAdvancedFilters | null; forceStandard?: boolean }) => {
       setFeedback(null);
-    setFeedbackDialog({
-      open: true,
-      status: "loading",
-      title: "Procesando solicitud",
-      message: "Procesando solicitud...",
-    });
       const activeAdvanced = options?.forceStandard
         ? null
         : options && "filters" in options
@@ -1720,9 +1714,15 @@ export function DenueBusquedaView() {
         meta: {
           source: "panel",
         },
-        async_mode: isAdvanced,
+        async_mode: true,
         ...(advancedPayload ?? {}),
       };
+      setFeedbackDialog({
+        open: true,
+        status: "loading",
+        title: "Iniciando búsqueda",
+        message: "Estamos creando la búsqueda para procesarla en segundo plano.",
+      });
       setIsSearching(true);
       try {
         setActiveDenueJobId(null);
@@ -1736,6 +1736,13 @@ export function DenueBusquedaView() {
           setFeedback({
             type: "info",
             message: "Búsqueda DENUE en cola. Puedes seguir navegando; se actualizará automáticamente al terminar.",
+          });
+          setFeedbackDialog({
+            open: true,
+            status: "info",
+            title: "Búsqueda iniciada",
+            message:
+              "La búsqueda se ejecutará en segundo plano. Puedes cerrar este aviso y seguir usando el sistema.",
           });
           await loadBusquedas();
           await loadResultadosForBusqueda(response.busqueda_id);
@@ -1778,12 +1785,24 @@ export function DenueBusquedaView() {
           type: "success",
           message: `Se guardaron ${response.upserted ?? 0} resultados desde DENUE (${response.denue_results ?? response.upserted ?? 0} encontrados).`,
         });
+        setFeedbackDialog({
+          open: true,
+          status: "success",
+          title: "Búsqueda completada",
+          message: "La búsqueda terminó correctamente.",
+        });
         await loadBusquedas();
         await loadResultadosForBusqueda(response.busqueda_id);
-      } catch (error) {
+      } catch {
         setFeedback({
           type: "error",
-          message: error instanceof Error ? error.message : "No fue posible ejecutar la búsqueda.",
+          message: "No fue posible iniciar la búsqueda DENUE. Intenta nuevamente.",
+        });
+        setFeedbackDialog({
+          open: true,
+          status: "error",
+          title: "No se pudo iniciar la búsqueda",
+          message: "La solicitud no pudo ponerse en cola. Intenta nuevamente en unos instantes.",
         });
       } finally {
         setIsSearching(false);
