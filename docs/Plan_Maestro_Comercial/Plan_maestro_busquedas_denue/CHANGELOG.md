@@ -89,6 +89,155 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-30 · Fundación de base de datos para créditos DENUE
+
+**Estado:** Migrado
+
+### Alcance
+
+- Se implementó la fase inicial de base de datos para políticas, periodos, operaciones idempotentes y ledger de créditos.
+- Se aplicaron las migraciones en la base Supabase conectada.
+- Esta fase todavía no activa enforcement en backend ni modifica el frontend.
+
+### Base de datos
+
+Migraciones creadas:
+
+- `supabase/migrations/20280730_120000_prospeccion_credits_foundation.sql`;
+- `supabase/migrations/20280730_121000_prospeccion_credits_least_privilege.sql`.
+
+Migraciones remotas registradas:
+
+- `prospeccion_credits_foundation`;
+- `prospeccion_credits_least_privilege`.
+
+Tablas creadas:
+
+- `tenant_prospeccion_policies`;
+- `tenant_prospeccion_usage_periods`;
+- `tenant_prospeccion_credit_operations`;
+- `tenant_prospeccion_credit_ledger`.
+
+### Política por tenant
+
+- Se agregó `required_contact_mode` como columna explícita.
+- Valores permitidos:
+  - `any`;
+  - `phone`;
+  - `email`;
+  - `both`.
+- Se aplicó default `any`.
+- Se crearon políticas para los 7 tenants existentes.
+- No se utilizó `organizaciones.config`, metadata ni JSONB para esta regla.
+
+### Periodos y límites
+
+- Se agregaron snapshots explícitos de:
+  - límite de créditos;
+  - créditos consumidos;
+  - límite de resultados crudos;
+  - resultados crudos consumidos.
+- Se agregaron checks para impedir valores negativos y consumo mayor al límite.
+- Se agregó una exclusión GiST para impedir periodos solapados del mismo tenant.
+- Se agregaron FKs e índices tenant-scoped.
+
+### Operaciones e idempotencia
+
+- Se agregó una cabecera por `operation_id`.
+- Se agregó `request_hash` para detectar reutilización del mismo ID con un payload diferente.
+- Se modelaron en columnas explícitas:
+  - solicitados;
+  - elegibles;
+  - sin contacto requerido;
+  - duplicados de lote;
+  - duplicados del tenant;
+  - guardados;
+  - créditos consumidos;
+  - omitidos por límite;
+  - saldo final.
+- Se restringió la fuente inicial a `denue`.
+
+### Ledger
+
+- Se habilitaron movimientos `consume` y `reversal`.
+- Un consumo equivale exactamente a `1` crédito.
+- Una reversa equivale exactamente a `-1` crédito.
+- Se agregaron índices únicos para impedir:
+  - doble consumo del mismo prospecto;
+  - doble consumo del mismo resultado dentro de una operación;
+  - doble consumo del mismo identificador externo DENUE;
+  - más de una reversa del mismo movimiento.
+- Se conservarán referencias auditables a periodo, operación, prospecto, resultado y búsqueda.
+
+### Entitlements
+
+Se configuraron para Starter:
+
+```text
+limit.prospeccion.credits_month = 9000
+limit.prospeccion.denue_raw_results_month = 50000
+```
+
+Configuración:
+
+- `value_type = integer`;
+- `scope = tenant_month`;
+- unidades `credits` y `raw_results`.
+
+También se agregó unicidad para:
+
+```text
+(plan_id, entitlement_key)
+```
+
+### RLS y privilegios
+
+- Las cuatro tablas tienen RLS habilitado.
+- Sólo existe política directa para `service_role`.
+- `anon` y `authenticated` no tienen privilegios directos.
+- Políticas, periodos y operaciones permiten a `service_role`:
+  - `SELECT`;
+  - `INSERT`;
+  - `UPDATE`;
+  - `DELETE`.
+- El ledger inmutable permite a `service_role` únicamente:
+  - `SELECT`;
+  - `INSERT`.
+- Se agregó una segunda migración correctiva porque los privilegios por defecto de Supabase habían concedido permisos más amplios al crear las tablas.
+
+### Validación remota
+
+- Se confirmaron las cuatro tablas y todas tienen RLS activo.
+- Se confirmaron:
+  - 7 políticas con modo `any`;
+  - 0 periodos iniciales;
+  - 0 operaciones iniciales;
+  - 0 movimientos iniciales.
+- Se verificaron constraints, FKs, índices parciales y exclusión de periodos.
+- Se verificaron los dos entitlements de Starter.
+- Se verificaron los privilegios finales del ledger: `{INSERT, SELECT}`.
+- `git diff --check` no reportó errores antes de aplicar.
+
+### Seguridad
+
+- El tenant queda ligado mediante FKs explícitas.
+- Periodos y operaciones usan FKs compuestas `(tenant_id, id)` para evitar cruces entre tenants.
+- El ledger no puede actualizarse ni eliminarse mediante `service_role`.
+- El enforcement transaccional todavía debe implementarse mediante una RPC controlada.
+- Hallazgo preexistente fuera de esta migración: `tenant_mailbox_sync_state` continúa con RLS deshabilitado y requiere una revisión separada de políticas antes de corregirse.
+
+### Pendientes
+
+- Implementar resolución runtime de plan, override, política y periodo.
+- Crear la RPC transaccional de guardado.
+- Integrar backend.
+- Agregar administración en `/settings/tenants/[tenantId]`.
+- Agregar resumen y estimación en `prospeccion/denue-busqueda`.
+- Definir entitlements para Growth, Pro, Business y Enterprise.
+- Definir cuándo comienza el primer periodo según billing de Stripe o tenant interno.
+
+---
+
 ## 2026-07-30 · Definición del plan de implementación
 
 **Estado:** Planificado
