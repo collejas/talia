@@ -8460,8 +8460,8 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
         catalog_unit = None
         if catalog_item is not None:
             catalog_description = (
-                catalog_item.descripcion_larga
-                or catalog_item.descripcion_corta
+                catalog_item.descripcion_corta
+                or catalog_item.descripcion_larga
                 or catalog_item.descripcion
             )
             catalog_name = catalog_item.nombre
@@ -15281,10 +15281,16 @@ class CRMCatalogFraccionamiento(BaseModel):
 
 
 
+LEAD_QUOTE_ITEM_DESCRIPTION_MAX_LENGTH = 20_000
+
+
 class LeadQuoteItemPayload(BaseModel):
     catalog_item_id: UUID | None = None
     titulo: str | None = Field(default=None, max_length=200)
-    descripcion: str | None = Field(default=None, max_length=2000)
+    descripcion: str | None = Field(
+        default=None,
+        max_length=LEAD_QUOTE_ITEM_DESCRIPTION_MAX_LENGTH,
+    )
     unidad: str | None = Field(default=None, max_length=60)
     cantidad: float | None = Field(default=None, gt=0)
     precio_unitario: float | None = Field(default=None, ge=0)

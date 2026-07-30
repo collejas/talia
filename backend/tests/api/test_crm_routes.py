@@ -10,6 +10,21 @@ from app.api.routes import crm as crm_routes
 from app.repositories.crm import CRMRepository, _build_search_clause, _make_json_serializable, _matches_search_query
 
 
+def test_lead_quote_item_accepts_long_catalog_description() -> None:
+    description = "Descripción comercial extensa. " * 150
+
+    item = crm_routes.LeadQuoteItemPayload(descripcion=description)
+
+    assert item.descripcion == description
+
+
+def test_lead_quote_item_rejects_unbounded_description() -> None:
+    description = "x" * (crm_routes.LEAD_QUOTE_ITEM_DESCRIPTION_MAX_LENGTH + 1)
+
+    with pytest.raises(ValueError):
+        crm_routes.LeadQuoteItemPayload(descripcion=description)
+
+
 class DummyCRMRepository(CRMRepository):
     """Repo falso que permite inyectar respuestas predecibles."""
 
@@ -2424,7 +2439,7 @@ def test_parse_quote_items_uses_catalog_item_description_as_fallback() -> None:
     )
 
     assert len(items) == 1
-    assert items[0].descripcion == "Descripción larga del producto"
+    assert items[0].descripcion == "Descripción breve"
     assert items[0].titulo == "Servicio demo"
 
 

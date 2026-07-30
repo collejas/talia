@@ -2389,15 +2389,14 @@ export function LeadDrawer({
   const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
-  const quoteLatestEntry = quotesState.data[0] ?? null;
   const quotePreviewItems = quoteItems.filter((item) => !isBlankQuoteItem(item));
   const quotePreviewPdfReady = Boolean(quotePreviewPdfUrl);
   const opportunityAssigneeId = card?.asignadoId ?? selectedVendorId ?? "";
   const quoteAssignedVendor =
     vendorOptions.find((vendor) => vendor.id === selectedVendorId || vendor.id === card?.asignadoId) ?? null;
   const quoteDraftStorageKey = card ? `talia.embudo.quoteDraft.${card.oportunidadId}` : null;
-  const quoteCurrentStatus = quoteLatestEntry?.status ?? "Borrador";
-  const quoteCurrentFolio = quoteFolio.trim() || (quoteDialogOpen ? "Reservando folio..." : quoteLatestEntry?.folio?.trim() || "COT-00000");
+  const quoteCurrentStatus = "Borrador";
+  const quoteCurrentFolio = quoteFolio.trim() || (quoteDialogOpen ? "Reservando folio..." : "COT-00000");
   const quoteClientName = card?.empresa?.trim() || card?.contactoProfileName?.trim() || card?.nombre?.trim() || "Sin cliente";
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
@@ -6166,6 +6165,10 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
   if (!row) return null;
   const id = typeof row.id === "string" ? row.id : null;
   if (!id) return null;
+  const shortDescription =
+    typeof row.descripcion_corta === "string" ? row.descripcion_corta.trim() : "";
+  const detailedDescription =
+    typeof row.descripcion_larga === "string" ? row.descripcion_larga.trim() : "";
   const metadataCandidate = isRecord(row.metadatos)
     ? row.metadatos
     : isRecord(row.metadata)
@@ -6174,14 +6177,7 @@ function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
   return {
     id,
     nombre: typeof row.nombre === "string" ? row.nombre : "Producto sin nombre",
-    descripcion:
-      typeof row.descripcion_larga === "string"
-        ? row.descripcion_larga
-        : typeof row.descripcion_corta === "string"
-          ? row.descripcion_corta
-          : typeof row.descripcion === "string"
-            ? row.descripcion
-            : "",
+    descripcion: shortDescription || detailedDescription,
     unidad: typeof row.unidad === "string" && row.unidad.trim() ? row.unidad : "unidad",
     precioBase: toNumber(row.precio_base ?? row.precioBase),
     moneda: (typeof row.moneda === "string" && row.moneda.trim()) ? row.moneda.toUpperCase() : "MXN",
