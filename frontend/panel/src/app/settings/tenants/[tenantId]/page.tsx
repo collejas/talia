@@ -9,6 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
 import { activateTenantContextAndRedirectAction } from "./actions"
+import {
+  TenantProspeccionLimitsCard,
+  type TenantProspeccionLimits,
+} from "./tenant-prospeccion-limits-card"
 
 import {
   TenantCalendarSettings,
@@ -145,6 +149,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     organizacionId: null,
     withUserToken: true,
   })
+  const isPlatformAdmin = Boolean(platformAdminResp.ok && platformAdminResp.data?.is_platform_admin)
+  const prospeccionResp = isPlatformAdmin
+    ? await callCrmApi<TenantProspeccionLimits>(`/admin/tenants/${tenantId}/prospeccion-limits`, {
+        organizacionId: null,
+        withUserToken: true,
+      })
+    : null
 
   const errors: string[] = []
   if (!configResp.ok) errors.push(configResp.error)
@@ -152,13 +163,14 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   if (!routesResp.ok) errors.push(routesResp.error)
   if (!plansResp.ok) errors.push(plansResp.error)
   if (!infoResp.ok) errors.push(infoResp.error)
+  if (prospeccionResp && !prospeccionResp.ok) errors.push(prospeccionResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
   const commercialPlans = plansResp.ok ? plansResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
   const tenantInfo: TenantOrganizationInfo | null = infoResp.ok ? infoResp.data.tenant : null
-  const isPlatformAdmin = Boolean(platformAdminResp.ok && platformAdminResp.data?.is_platform_admin)
+  const prospeccionSettings = prospeccionResp?.ok ? prospeccionResp.data : null
   const webchatConfig = getNestedRecord(config, "webchat") ?? {}
   const webchatCalendar = getNestedRecord(webchatConfig, "calendar") ?? {}
   const webchatRoute = routes.find((r) => r.canal === "webchat")?.clave ?? ""
@@ -333,6 +345,10 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
           </CardContent>
         </Card>
+
+        {isPlatformAdmin && prospeccionSettings ? (
+          <TenantProspeccionLimitsCard tenantId={tenantId} settings={prospeccionSettings} />
+        ) : null}
 
         {isPlatformAdmin ? (
           <Card>

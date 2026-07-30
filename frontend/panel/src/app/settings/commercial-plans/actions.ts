@@ -461,3 +461,40 @@ export async function archiveCommercialPlanAction(
     return failure(error, "No se pudo desactivar el plan.")
   }
 }
+
+export async function updateProspeccionPlanLimitsAction(
+  _: CommercialPlanActionState,
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const planId = requirePlanId(formData)
+    const creditsMonth = getNumber(formData, "credits_month")
+    const rawResultsMonth = getNumber(formData, "denue_raw_results_month")
+    if (creditsMonth === undefined || !Number.isInteger(creditsMonth) || creditsMonth < 0) {
+      throw new Error("Los créditos mensuales deben ser un entero mayor o igual a cero.")
+    }
+    if (rawResultsMonth === undefined || !Number.isInteger(rawResultsMonth) || rawResultsMonth < 0) {
+      throw new Error("Los resultados crudos mensuales deben ser un entero mayor o igual a cero.")
+    }
+
+    const response = await callCrmApi<{ ok: boolean }>(
+      `/admin/commercial-plans/${planId}/prospeccion-limits`,
+      {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: {
+          credits_month: creditsMonth,
+          denue_raw_results_month: rawResultsMonth,
+        },
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/tenants")
+    return success("Límites de prospección actualizados.")
+  } catch (error) {
+    return failure(error, "No se pudieron actualizar los límites de prospección.")
+  }
+}

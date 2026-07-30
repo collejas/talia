@@ -125,6 +125,56 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
+function parseOptionalNonNegativeInteger(formData: FormData, key: string): number | null {
+  const raw = getText(formData, key)
+  if (!raw) return null
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${key} debe ser un entero mayor o igual a cero.`)
+  }
+  return value
+}
+
+export async function updateTenantProspeccionLimitsAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const requiredContactMode = getText(formData, "required_contact_mode")
+    if (!["any", "phone", "email", "both"].includes(requiredContactMode)) {
+      throw new Error("El criterio de contacto no es válido.")
+    }
+    const creditsOverride = parseOptionalNonNegativeInteger(formData, "credits_month_override")
+    const rawOverride = parseOptionalNonNegativeInteger(formData, "denue_raw_results_month_override")
+    const reason = getText(formData, "reason") || null
+    if ((creditsOverride !== null || rawOverride !== null) && !reason) {
+      throw new Error("Indica el motivo comercial de la excepción.")
+    }
+
+    const response = await callCrmApi<{ ok: boolean }>(
+      `/admin/tenants/${tenantId}/prospeccion-limits`,
+      {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: {
+          required_contact_mode: requiredContactMode,
+          credits_month_override: creditsOverride,
+          denue_raw_results_month_override: rawOverride,
+          reason,
+        },
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de prospección actualizada.")
+  } catch (error) {
+    return failure(error, "No se pudo actualizar la configuración de prospección.")
+  }
+}
+
 function removeWhatsProspLegacyTemplates(config: Record<string, unknown>): Record<string, unknown> {
   const whatsapp = isRecord(config.whatsapp) ? { ...config.whatsapp } : {}
   const templates = isRecord(whatsapp.templates) ? { ...whatsapp.templates } : {}

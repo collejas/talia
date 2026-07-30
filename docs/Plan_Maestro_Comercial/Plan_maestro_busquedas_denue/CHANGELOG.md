@@ -89,6 +89,61 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-30 · Límites por plan y excepciones por tenant
+
+**Estado:** Migrado
+
+### Alcance
+
+- Se agregó administración dedicada para los límites mensuales de prospección por plan.
+- El tenant maestro puede establecer una excepción individual y volver a heredar el plan.
+- El criterio de contacto `any`, `phone`, `email` o `both` se administra por tenant; todos consumen 1 crédito por prospecto nuevo guardado.
+
+### Base de datos
+
+- Migración local y remota: `supabase/migrations/20280730_140000_prospeccion_admin_limits.sql`.
+- RPC `admin_set_prospeccion_plan_limits` para actualizar los dos entitlements base del plan.
+- RPC `admin_set_tenant_prospeccion_limits` para política, overrides y periodo mensual activo.
+- Los overrides sustituidos se cierran con `ends_at`; no se elimina el historial.
+- Se rechaza bajar un límite efectivo por debajo del consumo del periodo activo.
+- Sólo `service_role` puede ejecutar las RPC y cada función valida que el actor exista en `platform_admins`.
+
+### Backend
+
+- `GET/PUT /admin/commercial-plans/{plan_id}/prospeccion-limits`.
+- `GET/PUT /admin/tenants/{organizacion_id}/prospeccion-limits`.
+- Contratos tipados, enteros no negativos, motivo obligatorio para excepciones y errores de negocio controlados.
+
+### Frontend
+
+- `/settings/commercial-plans`: tarjeta para editar créditos y resultados crudos mensuales por plan.
+- `/settings/tenants/[tenantId]`: tarjeta `Prospección DENUE` con criterio de contacto, herencia, excepciones y consumo actual.
+- Los controles sólo se consultan y muestran al administrador maestro.
+
+### Pruebas y validación
+
+- `poetry run pytest -q tests/api/test_admin_prospeccion_limits.py tests/api/test_admin_tenant_flow.py tests/services/test_prospeccion_usage.py tests/repositories/test_crm_prospeccion_credits.py`: 13 pruebas aprobadas.
+- `npx tsc --noEmit`: aprobado.
+- `npx -y react-doctor@latest . --verbose --diff`: 100/100, sin hallazgos.
+- Prueba remota transaccional con rollback de ambas RPC: aprobada.
+- Grants remotos confirmados: `anon=false`, `authenticated=false`, `service_role=true`.
+
+### Operación
+
+- La migración de Supabase está aplicada.
+- Backend y panel de esta fase requieren un nuevo despliegue.
+
+### Archivos principales
+
+- `supabase/migrations/20280730_140000_prospeccion_admin_limits.sql`
+- `backend/app/api/routes/admin.py`
+- `backend/app/repositories/platform_admin.py`
+- `backend/tests/api/test_admin_prospeccion_limits.py`
+- `frontend/panel/src/app/settings/commercial-plans/prospeccion-plan-limits.client.tsx`
+- `frontend/panel/src/app/settings/tenants/[tenantId]/tenant-prospeccion-limits-card.tsx`
+
+---
+
 ## 2026-07-30 · Guardado DENUE transaccional e idempotente
 
 **Estado:** Migrado

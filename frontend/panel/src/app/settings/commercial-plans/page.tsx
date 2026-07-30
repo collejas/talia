@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { callCrmApi } from "@/lib/api/crm"
 
 import { CommercialPlansManager } from "./commercial-plans-manager.client"
+import { ProspeccionPlanLimits } from "./prospeccion-plan-limits.client"
 
 export const metadata: Metadata = {
   title: "Commercial Plans · Settings",
@@ -113,6 +114,8 @@ export default async function CommercialPlansSettingsPage() {
         </div>
 
         <SettingsErrorCallout title="No se pudo recuperar el catálogo" messages={errors} />
+
+        <ProspeccionPlanLimits plans={items} entitlements={entitlements} />
 
         <CommercialPlansManager plans={items} prices={prices} entitlements={entitlements} defaults={defaults} />
 

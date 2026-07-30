@@ -4,36 +4,42 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
 
 from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
-from app.services import channel_routing
-from app.services import tenant_runtime
-from app.services.stripe_billing import (
-    StripeApiError,
-    create_stripe_checkout_session,
-    create_stripe_customer,
-    create_stripe_portal_session,
-)
+from app.services import channel_routing, tenant_runtime
 from app.services.role_permissions_sync import (
     RolePermissionPlan,
     compute_matrix_hash,
     parse_role_permissions_matrix,
     sync_role_permissions,
 )
-from app.services.supabase_admin import SupabaseAdminError, create_supabase_user, is_email_registered
+from app.services.stripe_billing import (
+    StripeApiError,
+    create_stripe_checkout_session,
+    create_stripe_customer,
+    create_stripe_portal_session,
+)
+from app.services.supabase_admin import (
+    SupabaseAdminError,
+    create_supabase_user,
+    is_email_registered,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = get_logger("app.api.admin")
+
+PROSPECCION_CREDITS_KEY = "limit.prospeccion.credits_month"
+PROSPECCION_RAW_RESULTS_KEY = "limit.prospeccion.denue_raw_results_month"
 
 
 class AdminDebugRowsResponse(BaseModel):
@@ -424,6 +430,183 @@ class CommercialPlansResponse(BaseModel):
 class CommercialPlanResponse(BaseModel):
     ok: bool = True
     plan: CommercialPlanSummary
+
+
+class ProspeccionPlanLimitsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    credits_month: int = Field(..., ge=0)
+    denue_raw_results_month: int = Field(..., ge=0)
+
+
+class ProspeccionPlanLimitsResponse(BaseModel):
+    ok: bool = True
+    plan_id: UUID
+    credits_month: int
+    denue_raw_results_month: int
+
+
+class TenantProspeccionLimitsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required_contact_mode: Literal["any", "phone", "email", "both"]
+    credits_month_override: int | None = Field(default=None, ge=0)
+    denue_raw_results_month_override: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _normalize_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+    @model_validator(mode="after")
+    def _require_override_reason(self) -> TenantProspeccionLimitsUpdate:
+        if (
+            self.credits_month_override is not None
+            or self.denue_raw_results_month_override is not None
+        ) and not self.reason:
+            raise ValueError("prospeccion_override_reason_required")
+        return self
+
+
+class TenantProspeccionPlanSummary(BaseModel):
+    id: UUID
+    code: str
+    name: str
+
+
+class TenantProspeccionUsageSummary(BaseModel):
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    credits_limit: int
+    credits_consumed: int
+    credits_remaining: int
+    raw_results_limit: int
+    raw_results_consumed: int
+    raw_results_remaining: int
+
+
+class TenantProspeccionLimitsResponse(BaseModel):
+    ok: bool = True
+    tenant_id: UUID
+    plan: TenantProspeccionPlanSummary
+    required_contact_mode: Literal["any", "phone", "email", "both"]
+    plan_credits_month: int
+    plan_denue_raw_results_month: int
+    credits_month_override: int | None = None
+    denue_raw_results_month_override: int | None = None
+    effective_credits_month: int
+    effective_denue_raw_results_month: int
+    override_reason: str | None = None
+    usage: TenantProspeccionUsageSummary
+
+
+def _required_prospeccion_integer(
+    rows: list[dict[str, Any]],
+    *,
+    key: str,
+) -> int:
+    row = next(
+        (
+            item
+            for item in rows
+            if item.get("entitlement_key") == key and item.get("enabled") is True
+        ),
+        None,
+    )
+    if row is None:
+        raise HTTPException(status_code=409, detail="prospeccion_credits_not_configured")
+    try:
+        value = int(row["limit_value"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail="prospeccion_limit_invalid") from exc
+    if value < 0 or float(row["limit_value"]) != value:
+        raise HTTPException(status_code=409, detail="prospeccion_limit_invalid")
+    return value
+
+
+def _build_tenant_prospeccion_limits_response(
+    tenant_id: UUID,
+    context: dict[str, Any],
+) -> TenantProspeccionLimitsResponse:
+    entitlements = context["entitlements"]
+    plan_credits = _required_prospeccion_integer(entitlements, key=PROSPECCION_CREDITS_KEY)
+    plan_raw = _required_prospeccion_integer(entitlements, key=PROSPECCION_RAW_RESULTS_KEY)
+    overrides_by_key = {
+        str(row.get("override_key")): row
+        for row in reversed(context["overrides"])
+        if isinstance(row, dict)
+    }
+
+    def override_value(key: str) -> int | None:
+        row = overrides_by_key.get(key)
+        if row is None:
+            return None
+        try:
+            parsed = int(row["override_value"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail="prospeccion_override_invalid") from exc
+        return parsed if parsed >= 0 else None
+
+    credits_override = override_value(PROSPECCION_CREDITS_KEY)
+    raw_override = override_value(PROSPECCION_RAW_RESULTS_KEY)
+    effective_credits = credits_override if credits_override is not None else plan_credits
+    effective_raw = raw_override if raw_override is not None else plan_raw
+    period = context.get("period") or {}
+    credits_limit = int(period.get("credits_limit", effective_credits))
+    raw_limit = int(period.get("raw_results_limit", effective_raw))
+    credits_consumed = int(period.get("credits_consumed", 0))
+    raw_consumed = int(period.get("raw_results_consumed", 0))
+    policy = context.get("policy") or {}
+    reasons = {
+        str(row.get("reason")).strip()
+        for row in overrides_by_key.values()
+        if row.get("reason")
+    }
+    plan = context["plan"]
+    return TenantProspeccionLimitsResponse(
+        tenant_id=tenant_id,
+        plan=TenantProspeccionPlanSummary.model_validate(plan),
+        required_contact_mode=policy.get("required_contact_mode", "any"),
+        plan_credits_month=plan_credits,
+        plan_denue_raw_results_month=plan_raw,
+        credits_month_override=credits_override,
+        denue_raw_results_month_override=raw_override,
+        effective_credits_month=effective_credits,
+        effective_denue_raw_results_month=effective_raw,
+        override_reason="; ".join(sorted(reasons)) or None,
+        usage=TenantProspeccionUsageSummary(
+            period_start=period.get("period_start"),
+            period_end=period.get("period_end"),
+            credits_limit=credits_limit,
+            credits_consumed=credits_consumed,
+            credits_remaining=max(credits_limit - credits_consumed, 0),
+            raw_results_limit=raw_limit,
+            raw_results_consumed=raw_consumed,
+            raw_results_remaining=max(raw_limit - raw_consumed, 0),
+        ),
+    )
+
+
+def _prospeccion_admin_error(exc: PlatformRepositoryError) -> HTTPException:
+    message = str(exc)
+    status_by_code = {
+        "commercial_plan_not_found": 404,
+        "prospeccion_plan_not_configured": 409,
+        "prospeccion_credits_not_configured": 409,
+        "prospeccion_limit_invalid": 400,
+        "prospeccion_policy_invalid": 400,
+        "prospeccion_override_reason_required": 400,
+        "prospeccion_limit_below_current_usage": 409,
+        "platform_admin_required": 403,
+    }
+    code = next((item for item in status_by_code if item in message), None)
+    if code is None:
+        logger.error("prospeccion_admin_repository_error", extra={"error": message})
+        return HTTPException(status_code=502, detail="prospeccion_admin_update_failed")
+    return HTTPException(status_code=status_by_code[code], detail=code)
 
 
 class CommercialPlanCreateRequest(BaseModel):
@@ -2005,6 +2188,59 @@ async def list_commercial_plans(
     )
 
 
+@router.get(
+    "/commercial-plans/{plan_id}/prospeccion-limits",
+    response_model=ProspeccionPlanLimitsResponse,
+)
+async def get_prospeccion_plan_limits(
+    plan_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionPlanLimitsResponse:
+    plan = await repo.get_commercial_plan(plan_id=plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="commercial_plan_not_found")
+    rows = [
+        row
+        for row in await repo.list_commercial_plan_entitlements()
+        if str(row.get("plan_id")) == str(plan_id)
+    ]
+    return ProspeccionPlanLimitsResponse(
+        plan_id=plan_id,
+        credits_month=_required_prospeccion_integer(rows, key=PROSPECCION_CREDITS_KEY),
+        denue_raw_results_month=_required_prospeccion_integer(
+            rows,
+            key=PROSPECCION_RAW_RESULTS_KEY,
+        ),
+    )
+
+
+@router.put(
+    "/commercial-plans/{plan_id}/prospeccion-limits",
+    response_model=ProspeccionPlanLimitsResponse,
+)
+async def update_prospeccion_plan_limits(
+    plan_id: UUID,
+    payload: ProspeccionPlanLimitsUpdate,
+    actor_id: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionPlanLimitsResponse:
+    try:
+        await repo.set_prospeccion_plan_limits(
+            actor_id=actor_id,
+            plan_id=plan_id,
+            credits_month=payload.credits_month,
+            denue_raw_results_month=payload.denue_raw_results_month,
+        )
+    except PlatformRepositoryError as exc:
+        raise _prospeccion_admin_error(exc) from exc
+    return ProspeccionPlanLimitsResponse(
+        plan_id=plan_id,
+        credits_month=payload.credits_month,
+        denue_raw_results_month=payload.denue_raw_results_month,
+    )
+
+
 @router.post("/commercial-plans", response_model=CommercialPlanResponse)
 async def create_commercial_plan(
     payload: CommercialPlanCreateRequest,
@@ -2734,6 +2970,47 @@ async def update_tenant_info(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return TenantDetailResponse(tenant=TenantBasicInfo.model_validate(row))
+
+
+@router.get(
+    "/tenants/{organizacion_id}/prospeccion-limits",
+    response_model=TenantProspeccionLimitsResponse,
+)
+async def get_tenant_prospeccion_limits(
+    organizacion_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantProspeccionLimitsResponse:
+    try:
+        context = await repo.get_tenant_prospeccion_settings(tenant_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        raise _prospeccion_admin_error(exc) from exc
+    return _build_tenant_prospeccion_limits_response(organizacion_id, context)
+
+
+@router.put(
+    "/tenants/{organizacion_id}/prospeccion-limits",
+    response_model=TenantProspeccionLimitsResponse,
+)
+async def update_tenant_prospeccion_limits(
+    organizacion_id: UUID,
+    payload: TenantProspeccionLimitsUpdate,
+    actor_id: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantProspeccionLimitsResponse:
+    try:
+        await repo.set_tenant_prospeccion_limits(
+            actor_id=actor_id,
+            tenant_id=organizacion_id,
+            required_contact_mode=payload.required_contact_mode,
+            credits_month_override=payload.credits_month_override,
+            denue_raw_results_month_override=payload.denue_raw_results_month_override,
+            reason=payload.reason,
+        )
+        context = await repo.get_tenant_prospeccion_settings(tenant_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        raise _prospeccion_admin_error(exc) from exc
+    return _build_tenant_prospeccion_limits_response(organizacion_id, context)
 
 
 @router.patch("/tenants/{organizacion_id}/commercial-state", response_model=TenantDetailResponse)

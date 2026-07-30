@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Literal, Sequence
 from uuid import UUID
 
@@ -298,6 +297,120 @@ class PlatformRepository:
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PlatformRepositoryError("commercial_plan_entitlement_archive_failed")
         return data[0]
+
+    async def set_prospeccion_plan_limits(
+        self,
+        *,
+        actor_id: UUID,
+        plan_id: UUID,
+        credits_month: int,
+        denue_raw_results_month: int,
+    ) -> None:
+        await self._rest(
+            "POST",
+            "/rest/v1/rpc/admin_set_prospeccion_plan_limits",
+            json={
+                "p_actor_id": str(actor_id),
+                "p_plan_id": str(plan_id),
+                "p_credits_month": credits_month,
+                "p_denue_raw_results_month": denue_raw_results_month,
+            },
+        )
+
+    async def set_tenant_prospeccion_limits(
+        self,
+        *,
+        actor_id: UUID,
+        tenant_id: UUID,
+        required_contact_mode: str,
+        credits_month_override: int | None,
+        denue_raw_results_month_override: int | None,
+        reason: str | None,
+    ) -> None:
+        await self._rest(
+            "POST",
+            "/rest/v1/rpc/admin_set_tenant_prospeccion_limits",
+            json={
+                "p_actor_id": str(actor_id),
+                "p_tenant_id": str(tenant_id),
+                "p_required_contact_mode": required_contact_mode,
+                "p_credits_month_override": credits_month_override,
+                "p_denue_raw_results_month_override": denue_raw_results_month_override,
+                "p_reason": reason,
+            },
+        )
+
+    async def get_tenant_prospeccion_settings(self, *, tenant_id: UUID) -> dict[str, Any]:
+        billing = await self.get_tenant_billing_account(tenant_id=tenant_id)
+        if billing is None:
+            raise PlatformRepositoryError("prospeccion_plan_not_configured")
+
+        plan_id = UUID(str(billing["plan_id"]))
+        plan = await self.get_commercial_plan(plan_id=plan_id)
+        if plan is None:
+            raise PlatformRepositoryError("commercial_plan_not_found")
+
+        keys = (
+            "limit.prospeccion.credits_month",
+            "limit.prospeccion.denue_raw_results_month",
+        )
+        entitlements = await self._rest(
+            "GET",
+            "/rest/v1/commercial_plan_entitlements",
+            params={
+                "select": "entitlement_key,limit_value,enabled",
+                "plan_id": f"eq.{plan_id}",
+                "entitlement_key": f"in.({','.join(keys)})",
+            },
+        )
+        overrides = await self._rest(
+            "GET",
+            "/rest/v1/tenant_plan_overrides",
+            params={
+                "select": "override_key,override_value,reason,starts_at",
+                "tenant_id": f"eq.{tenant_id}",
+                "override_key": f"in.({','.join(keys)})",
+                "ends_at": "is.null",
+                "order": "starts_at.desc",
+            },
+        )
+        policies = await self._rest(
+            "GET",
+            "/rest/v1/tenant_prospeccion_policies",
+            params={
+                "select": "required_contact_mode,effective_from,updated_at",
+                "tenant_id": f"eq.{tenant_id}",
+                "limit": "1",
+            },
+        )
+        periods = await self._rest(
+            "GET",
+            "/rest/v1/tenant_prospeccion_usage_periods",
+            params={
+                "select": "period_start,period_end,credits_limit,credits_consumed,raw_results_limit,raw_results_consumed",
+                "tenant_id": f"eq.{tenant_id}",
+                "period_start": "lte.now()",
+                "period_end": "gt.now()",
+                "limit": "1",
+            },
+        )
+        for name, value in (
+            ("prospeccion_entitlements", entitlements),
+            ("prospeccion_overrides", overrides),
+            ("prospeccion_policies", policies),
+            ("prospeccion_periods", periods),
+        ):
+            if not isinstance(value, list):
+                raise PlatformRepositoryError(f"{name}_invalid_response")
+
+        return {
+            "billing": billing,
+            "plan": plan,
+            "entitlements": entitlements,
+            "overrides": overrides,
+            "policy": policies[0] if policies else None,
+            "period": periods[0] if periods else None,
+        }
 
     async def list_commercial_plan_defaults(self) -> list[dict[str, Any]]:
         params = {
