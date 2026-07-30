@@ -125,6 +125,10 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
+from app.services.prospeccion_usage import (
+    ProspeccionUsageError,
+    resolve_prospeccion_usage,
+)
 from app.services.google_trends import (
     GoogleTrendsServiceError,
     fetch_google_trends,
@@ -29990,6 +29994,32 @@ async def crear_busqueda_google(
         "busqueda_id": str(busqueda_uuid),
         "status": "queued",
     }
+
+
+@router.get("/prospeccion/usage")
+async def obtener_uso_prospeccion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    """Devuelve límites, consumo y política comercial efectivos del tenant."""
+
+    try:
+        return await resolve_prospeccion_usage(
+            repo=repo,
+            organizacion_id=organizacion_id,
+        )
+    except ProspeccionUsageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except CRMRepositoryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="prospeccion_usage_unavailable",
+        ) from exc
 
 
 @router.post("/prospeccion/denue/busquedas")

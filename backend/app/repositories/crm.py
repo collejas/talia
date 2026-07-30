@@ -16578,6 +16578,102 @@ class CRMRepository:
 
         return rows, total
 
+    async def get_prospeccion_commercial_context(
+        self,
+        *,
+        organizacion_id: UUID,
+        now: datetime,
+    ) -> dict[str, Any]:
+        entitlement_keys = (
+            "limit.prospeccion.credits_month",
+            "limit.prospeccion.denue_raw_results_month",
+        )
+
+        async def _rows(path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+            response = await self._request_service_role(
+                "GET", path, params=params, organizacion_id=organizacion_id
+            )
+            data = response.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError("prospeccion_commercial_context_invalid")
+            return [row for row in data if isinstance(row, dict)]
+
+        billing_rows = await _rows(
+            "/rest/v1/tenant_billing_accounts",
+            {"tenant_id": f"eq.{organizacion_id}", "select": "*", "limit": "1"},
+        )
+        billing = billing_rows[0] if billing_rows else None
+        plan = None
+        entitlements: list[dict[str, Any]] = []
+        if billing and billing.get("plan_id"):
+            plan_rows = await _rows(
+                "/rest/v1/commercial_plans",
+                {"id": f"eq.{billing['plan_id']}", "select": "id,code,name,active", "limit": "1"},
+            )
+            plan = plan_rows[0] if plan_rows else None
+            entitlements = await _rows(
+                "/rest/v1/commercial_plan_entitlements",
+                {
+                    "plan_id": f"eq.{billing['plan_id']}",
+                    "entitlement_key": f"in.({','.join(entitlement_keys)})",
+                    "select": "entitlement_key,enabled,limit_value,limit_unit,scope",
+                },
+            )
+        policy_rows = await _rows(
+            "/rest/v1/tenant_prospeccion_policies",
+            {"tenant_id": f"eq.{organizacion_id}", "select": "required_contact_mode", "limit": "1"},
+        )
+        now_iso = now.isoformat()
+        overrides = await _rows(
+            "/rest/v1/tenant_plan_overrides",
+            {
+                "tenant_id": f"eq.{organizacion_id}",
+                "override_key": f"in.({','.join(entitlement_keys)})",
+                "select": "override_key,override_value,value_type,starts_at,ends_at,created_at",
+                "order": "created_at.desc",
+            },
+        )
+
+        def _active_override(row: dict[str, Any]) -> bool:
+            try:
+                starts_at = (
+                    datetime.fromisoformat(str(row["starts_at"]).replace("Z", "+00:00"))
+                    if row.get("starts_at")
+                    else None
+                )
+                ends_at = (
+                    datetime.fromisoformat(str(row["ends_at"]).replace("Z", "+00:00"))
+                    if row.get("ends_at")
+                    else None
+                )
+            except ValueError as exc:
+                raise CRMRepositoryError("prospeccion_override_datetime_invalid") from exc
+            if starts_at and starts_at.tzinfo is None:
+                starts_at = starts_at.replace(tzinfo=timezone.utc)
+            if ends_at and ends_at.tzinfo is None:
+                ends_at = ends_at.replace(tzinfo=timezone.utc)
+            return (starts_at is None or starts_at <= now) and (ends_at is None or now < ends_at)
+
+        overrides = [row for row in overrides if _active_override(row)]
+        period_rows = await _rows(
+            "/rest/v1/tenant_prospeccion_usage_periods",
+            {
+                "tenant_id": f"eq.{organizacion_id}",
+                "period_start": f"lte.{now_iso}",
+                "period_end": f"gt.{now_iso}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        return {
+            "billing": billing,
+            "plan": plan,
+            "entitlements": entitlements,
+            "policy": policy_rows[0] if policy_rows else None,
+            "overrides": overrides,
+            "usage_period": period_rows[0] if period_rows else None,
+        }
+
     async def denue_resultados_map(
         self,
         *,

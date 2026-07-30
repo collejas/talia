@@ -89,6 +89,77 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-30 · Resolución runtime de cuota comercial
+
+**Estado:** Implementado localmente
+
+### Alcance
+
+- Se implementó la lectura tenant-scoped del plan, entitlements, overrides vigentes, política de contacto y periodo actual.
+- Se agregó un resumen de consumo para que backend y frontend utilicen una única resolución comercial.
+- Esta fase es informativa: todavía no reserva, descuenta ni bloquea créditos.
+
+### Backend
+
+- Nuevo servicio `app/services/prospeccion_usage.py`.
+- Nuevo método de repositorio `get_prospeccion_commercial_context`.
+- Nuevo endpoint `GET /crm/prospeccion/usage`, protegido por:
+  - contexto autenticado del tenant mediante `X-Organizacion-Id`;
+  - permiso `busquedas.view`.
+- El límite efectivo aplica esta precedencia:
+  1. override vigente del tenant;
+  2. entitlement activo del plan.
+- El periodo usa:
+  - periodo de billing cuando contiene la fecha actual;
+  - mes calendario UTC para tenants internos o manuales.
+- La respuesta incluye plan, estado de acceso, periodo, política, límites, consumo, saldo y porcentaje utilizado.
+- Los límites y contadores deben ser enteros no negativos; no se acepta punto flotante.
+- Los errores del repositorio se transforman en una respuesta segura sin exponer detalles internos.
+
+### Validación de datos remotos
+
+- Se verificó mediante una consulta de sólo lectura que las 7 organizaciones tienen política de prospección.
+- Los tenants `5CC INMOBILIARIA`, `Sinergia Lidera` y `GEOACTIV` tienen Starter con acceso `internal_free`.
+- Cuatro tenants todavía no tienen cuenta comercial ni plan asignado; el endpoint responderá `409 prospeccion_plan_not_configured` hasta que se configure explícitamente su plan.
+- No se alteraron datos remotos durante esta fase.
+
+### Pruebas y validación
+
+- `poetry run pytest tests/services/test_prospeccion_usage.py -q`: 4 pruebas aprobadas.
+- Casos cubiertos:
+  - periodo de billing y consumo persistido;
+  - fallback a mes calendario UTC;
+  - precedencia de override;
+  - tenant sin plan;
+  - rechazo de límites fraccionarios.
+- `python -m compileall` y `git diff --check`: sin errores.
+- La suite existente `tests/api/test_crm_routes.py` conserva un fallo no relacionado en `test_list_accounts`: el doble `DummyCRMRepository` intenta usar `_base_url`.
+
+### Seguridad
+
+- El tenant no se acepta como parámetro libre de consulta; se resuelve con la dependencia tenant-aware existente.
+- Las lecturas comerciales se ejecutan server-side y se filtran por `tenant_id`.
+- No se registran correos, teléfonos, tokens ni resultados DENUE.
+- No se habilitaron escrituras directas desde el cliente.
+
+### Archivos modificados
+
+- `backend/app/services/prospeccion_usage.py`.
+- `backend/app/repositories/crm.py`.
+- `backend/app/api/routes/crm.py`.
+- `backend/tests/services/test_prospeccion_usage.py`.
+- `docs/Plan_Maestro_Comercial/Plan_maestro_busquedas_denue/CHANGELOG.md`.
+
+### Pendientes
+
+- Asignar explícitamente plan a los cuatro tenants que aún no tienen cuenta comercial.
+- Crear el periodo al iniciar el primer consumo, dentro de la futura RPC transaccional.
+- Implementar estimación y guardado transaccional idempotente.
+- Integrar el endpoint en las vistas de administración y búsqueda DENUE.
+- Desplegar y validar el endpoint contra el servicio activo.
+
+---
+
 ## 2026-07-30 · Fundación de base de datos para créditos DENUE
 
 **Estado:** Migrado
