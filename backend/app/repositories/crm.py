@@ -16674,6 +16674,58 @@ class CRMRepository:
             "usage_period": period_rows[0] if period_rows else None,
         }
 
+    async def save_denue_prospectos_transactional(
+        self,
+        *,
+        organizacion_id: UUID,
+        created_by: UUID | None,
+        operation_id: UUID,
+        resultado_ids: list[UUID],
+        segmento: str | None,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Guarda un lote DENUE y consume créditos mediante una única RPC."""
+
+        payload = {
+            "p_tenant_id": str(organizacion_id),
+            "p_created_by": str(created_by) if created_by else None,
+            "p_operation_id": str(operation_id),
+            "p_resultado_ids": [str(value) for value in resultado_ids],
+            "p_segmento": segmento,
+            "p_metadata": metadata,
+        }
+        try:
+            response = await self._request_service_role(
+                "POST",
+                "/rest/v1/rpc/prospeccion_guardar_denue_transaccional",
+                json=payload,
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raw_error = str(exc)
+            known_codes = (
+                "prospeccion_access_blocked",
+                "prospeccion_actor_not_allowed",
+                "prospeccion_credits_not_configured",
+                "prospeccion_metadata_invalid",
+                "prospeccion_operation_incomplete",
+                "prospeccion_operation_payload_conflict",
+                "prospeccion_plan_not_configured",
+                "prospeccion_request_invalid",
+                "prospeccion_result_ids_invalid",
+                "prospeccion_results_not_owned",
+                "prospeccion_segment_invalid",
+                "prospeccion_usage_period_invalid",
+            )
+            for code in known_codes:
+                if code in raw_error:
+                    raise CRMRepositoryError(code) from exc
+            raise CRMRepositoryError("prospeccion_transaction_failed") from exc
+        data = response.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError("prospeccion_transaction_invalid_response")
+        return data
+
     async def denue_resultados_map(
         self,
         *,

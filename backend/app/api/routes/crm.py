@@ -3880,6 +3880,10 @@ class ProspectoSeleccionPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     fuente: Literal["google_places", "denue"]
+    operation_id: UUID | None = Field(
+        default=None,
+        description="Identificador idempotente del guardado; el backend lo genera durante la transición.",
+    )
     resultado_ids: list[UUID] = Field(
         ..., min_length=1, max_length=5000, description="Resultados a preservar."
     )
@@ -35106,6 +35110,61 @@ async def guardar_prospectos(
     payload: ProspectoSeleccionPayload,
 ) -> dict[str, Any]:
     """Persiste IDs seleccionados de búsquedas en la tabla de prospectos."""
+
+    if payload.fuente == "denue" and settings.prospeccion_credits_enforcement_enabled:
+        user_sub = _jwt_verify_and_sub(user_token)
+        try:
+            created_by = UUID(user_sub) if user_sub else None
+        except ValueError:
+            created_by = None
+        try:
+            result = await repo.save_denue_prospectos_transactional(
+                organizacion_id=organizacion_id,
+                created_by=created_by,
+                operation_id=payload.operation_id or uuid4(),
+                resultado_ids=payload.resultado_ids,
+                segmento=payload.segmento,
+                metadata=payload.metadata or {},
+            )
+        except CRMRepositoryError as exc:
+            error_code = str(exc)
+            if error_code == "prospeccion_actor_not_allowed":
+                raise HTTPException(status_code=403, detail=error_code) from exc
+            if error_code in {
+                "prospeccion_access_blocked",
+                "prospeccion_credits_not_configured",
+                "prospeccion_operation_incomplete",
+                "prospeccion_operation_payload_conflict",
+                "prospeccion_plan_not_configured",
+                "prospeccion_usage_period_invalid",
+            }:
+                raise HTTPException(status_code=409, detail=error_code) from exc
+            if error_code in {
+                "prospeccion_metadata_invalid",
+                "prospeccion_request_invalid",
+                "prospeccion_result_ids_invalid",
+                "prospeccion_results_not_owned",
+                "prospeccion_segment_invalid",
+            }:
+                raise HTTPException(status_code=400, detail=error_code) from exc
+            raise HTTPException(status_code=502, detail="prospeccion_transaction_failed") from exc
+
+        prospectos = result.get("prospectos")
+        saved_total = int(result.get("nuevos_guardados") or 0)
+        try:
+            await repo.refresh_prospeccion_query_daily_mv()
+        except CRMRepositoryError as exc:  # pragma: no cover - no bloquea guardado
+            logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
+        await _clear_prospecto_queries_cache()
+        await _publish_prospectos_ui_event(
+            organizacion_id=organizacion_id,
+            event_type="prospectos_saved",
+            payload={"total": saved_total, "fuente": payload.fuente},
+        )
+        return {
+            **result,
+            "prospectos": prospectos if isinstance(prospectos, list) else [],
+        }
 
     try:
         contactables = await repo.list_contactables_by_ids(

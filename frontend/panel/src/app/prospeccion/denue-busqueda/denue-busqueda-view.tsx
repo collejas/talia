@@ -1917,6 +1917,7 @@ export function DenueBusquedaView() {
         const chunk = targetIds.slice(start, start + SAVE_PROSPECTOS_UPSERT_BATCH);
         const response = await guardarProspectos({
           fuente: "denue",
+          operation_id: crypto.randomUUID(),
           resultado_ids: chunk,
           segmento,
           metadata: {

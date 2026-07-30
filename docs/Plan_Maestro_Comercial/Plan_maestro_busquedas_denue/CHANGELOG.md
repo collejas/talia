@@ -89,6 +89,146 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-30 · Guardado DENUE transaccional e idempotente
+
+**Estado:** Migrado
+
+### Alcance
+
+- Se implementó la RPC que guarda prospectos DENUE, deduplica y consume créditos dentro de una sola transacción.
+- Se integró el backend y el cliente del panel detrás de un feature flag desactivado.
+- La migración está aplicada en Supabase, pero el enforcement productivo todavía no está habilitado.
+
+### Base de datos
+
+Migración creada y aplicada:
+
+- `supabase/migrations/20280730_130000_prospeccion_guardar_denue_transaccional.sql`;
+- migración remota `prospeccion_guardar_denue_transaccional`.
+
+RPC:
+
+```text
+prospeccion_guardar_denue_transaccional(
+  p_tenant_id,
+  p_created_by,
+  p_operation_id,
+  p_resultado_ids,
+  p_segmento,
+  p_metadata
+)
+```
+
+La transacción:
+
+1. valida tenant, actor, lote y acceso comercial;
+2. calcula un hash canónico del payload;
+3. serializa guardados mediante advisory lock tenant-scoped;
+4. resuelve plan, override, política y periodo;
+5. crea y bloquea el periodo mensual;
+6. valida ownership de todos los resultados;
+7. aplica el criterio `any`, `phone`, `email` o `both`;
+8. deduplica dentro del lote;
+9. deduplica contra el tenant;
+10. limita candidatos al saldo disponible;
+11. inserta prospectos;
+12. registra operación y ledger;
+13. actualiza el contador del periodo;
+14. devuelve el desglose comercial.
+
+Se permite guardado parcial cuando el saldo no alcanza para todo el lote.
+
+### Idempotencia y concurrencia
+
+- El mismo `operation_id` y payload devuelve la respuesta persistida con `replayed=true`.
+- El mismo `operation_id` con otro payload devuelve `prospeccion_operation_payload_conflict`.
+- Los locks se adquieren siempre por tenant antes de crear o bloquear el periodo.
+- El contador rápido y el ledger se actualizan dentro de la misma transacción.
+- Un error revierte prospectos, operación, ledger y contador.
+
+### Backend
+
+- Se agregó `save_denue_prospectos_transactional` al repositorio CRM.
+- `POST /crm/prospeccion/prospectos` acepta `operation_id`.
+- Si el feature flag está habilitado y la fuente es DENUE, el endpoint invoca la RPC.
+- Google Places conserva temporalmente el flujo anterior.
+- Los errores SQL desconocidos se ocultan detrás de `prospeccion_transaction_failed`.
+- Los códigos de negocio conocidos se transforman en respuestas `400`, `403` o `409`.
+
+Feature flag:
+
+```text
+TALIA_PROSPECCION_CREDITS_ENFORCEMENT_ENABLED=false
+```
+
+El valor por defecto es `false`.
+
+### Frontend
+
+- Cada lote DENUE genera un `operation_id` con `crypto.randomUUID()`.
+- Los reintentos HTTP reutilizan el mismo ID porque forma parte del cuerpo de la solicitud.
+- El cliente acepta el nuevo desglose comercial sin romper el contrato anterior basado en `total` y `prospectos`.
+- Todavía no se muestran saldo, estimación ni advertencias en la interfaz.
+
+### Pruebas y validación
+
+- Prueba remota con rollback:
+  - 5 solicitados;
+  - 5 elegibles;
+  - 2 duplicados del tenant;
+  - 3 prospectos que habrían sido guardados;
+  - 3 créditos que habrían sido consumidos;
+  - saldo resultante de 8,997.
+- Se confirmó después del rollback:
+  - 0 operaciones de prueba;
+  - 0 periodos de prueba;
+  - 0 prospectos de prueba.
+- Se comprobó replay idempotente con mismo total y saldo.
+- Se comprobó rechazo del mismo `operation_id` con payload diferente.
+- `poetry run pytest tests/services/test_prospeccion_usage.py tests/repositories/test_crm_prospeccion_credits.py -q`: 7 pruebas aprobadas.
+- `npx tsc --noEmit`: aprobado.
+- `react-doctor --verbose --diff`: aprobado sin diagnósticos.
+- `python -m compileall` y `git diff --check`: aprobados.
+
+### Seguridad
+
+- La RPC es `SECURITY DEFINER` con `search_path` fijo y referencias calificadas.
+- `anon` y `authenticated` no pueden ejecutarla.
+- Sólo `service_role` tiene `EXECUTE`.
+- El endpoint mantiene autenticación, permiso `ejecutar_busquedas` y resolución tenant-aware.
+- La RPC verifica que el actor pertenezca al tenant.
+- Todos los resultados deben pertenecer al tenant y ser fuente DENUE.
+- No se exponen mensajes SQL o stack traces al frontend.
+
+El advisor de Supabase no reportó un hallazgo nuevo sobre esta función. Permanecen hallazgos preexistentes fuera del alcance:
+
+- RLS deshabilitado en `tenant_mailbox_sync_state` y `spatial_ref_sys`;
+- funciones antiguas con privilegios amplios o `search_path` mutable;
+- protección de contraseñas filtradas deshabilitada.
+
+### Archivos modificados
+
+- `supabase/migrations/20280730_130000_prospeccion_guardar_denue_transaccional.sql`.
+- `backend/app/core/config.py`.
+- `backend/app/repositories/crm.py`.
+- `backend/app/api/routes/crm.py`.
+- `backend/.env.staging.example`.
+- `backend/tests/repositories/test_crm_prospeccion_credits.py`.
+- `frontend/panel/src/lib/prospeccion/prospectos-client.ts`.
+- `frontend/panel/src/app/prospeccion/denue-busqueda/denue-busqueda-view.tsx`.
+- `docs/Plan_Maestro_Comercial/Plan_maestro_busquedas_denue/CHANGELOG.md`.
+
+### Pendientes
+
+- Probar concurrencia real con solicitudes simultáneas en un entorno aislado.
+- Implementar endpoint de estimación.
+- Mostrar cuota, criterio y advertencias en DENUE.
+- Configurar los cuatro tenants que todavía no tienen plan.
+- Desplegar backend y panel.
+- Activar el feature flag sólo después de validación end-to-end.
+
+---
+
 ## 2026-07-30 · Resolución runtime de cuota comercial
 
 **Estado:** Implementado localmente

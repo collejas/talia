@@ -394,6 +394,17 @@ class Settings(BaseSettings):
         ge=0,
         description="Cantidad máxima de lotes consecutivos que descargamos (0 = sin límite práctico).",
     )
+    prospeccion_credits_enforcement_enabled: bool = Field(
+        default=False,
+        description=(
+            "Activa el guardado DENUE transaccional con consumo y enforcement de créditos. "
+            "Debe permanecer desactivado hasta completar la medición y validación operativa."
+        ),
+        validation_alias=AliasChoices(
+            "PROSPECCION_CREDITS_ENFORCEMENT_ENABLED",
+            "TALIA_PROSPECCION_CREDITS_ENFORCEMENT_ENABLED",
+        ),
+    )
     prospeccion_sender_batch_size: int = Field(
         default=25,
         ge=1,

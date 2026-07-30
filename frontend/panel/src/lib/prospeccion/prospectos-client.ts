@@ -256,6 +256,20 @@ export type ProspectoGuardarResponse = {
   ok: boolean
   total: number
   prospectos: ProspectoItem[]
+  operation_id?: string
+  replayed?: boolean
+  solicitados?: number
+  cumplen_criterio_contacto?: number
+  sin_contacto_requerido?: number
+  duplicados_lote?: number
+  duplicados_tenant?: number
+  nuevos_guardados?: number
+  creditos_consumidos?: number
+  creditos_restantes?: number
+  omitidos_por_limite?: number
+  required_contact_mode?: "any" | "phone" | "email" | "both"
+  period_start?: string
+  period_end?: string
 }
 
 export type ProspectoLookupResponse = {
@@ -1028,6 +1042,7 @@ export async function listProspectosQueryMetadata(params?: {
  */
 export async function guardarProspectos(payload: {
   fuente: "google_places" | "denue"
+  operation_id?: string
   resultado_ids: string[]
   segmento?: string
   metadata?: Record<string, unknown>
