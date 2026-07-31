@@ -2044,91 +2044,45 @@ ${secondCellHtml}
               </p>
             </DialogHeader>
 
-            <div className="grid flex-1 min-h-0 gap-0 lg:grid-cols-[260px_minmax(0,0.9fr)_minmax(440px,1.1fr)] xl:grid-cols-[280px_minmax(0,0.82fr)_minmax(560px,1.18fr)]">
-              <aside className="min-h-0 border-b bg-muted/10 p-3 lg:border-b-0 lg:border-r lg:overflow-y-auto">
-                <div className="mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Plantillas guardadas</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+            <div className="grid flex-1 min-h-0 gap-0 lg:grid-cols-[220px_minmax(0,0.94fr)_minmax(440px,1.14fr)] xl:grid-cols-[236px_minmax(0,0.86fr)_minmax(560px,1.2fr)]">
+              <aside className="min-h-0 border-b bg-muted/10 p-2.5 lg:border-b-0 lg:border-r lg:overflow-y-auto [&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px] [&_p.text-muted-foreground]:text-[10px]">
+                <div className="mb-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Plantillas guardadas</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
                     Estos mensajes ya están listos para usarse después desde la vista de Prospectos.
                   </p>
                 </div>
 
-                <div className="mb-3 flex flex-wrap gap-2">
+                <div className="mb-2.5 flex flex-wrap gap-1.5">
                   <Button type="button" size="sm" onClick={resetTemplateForm}>
                     + Nueva plantilla
                   </Button>
-                  {templatesCampanaCanal === "correo" ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()}>
-                      Importar desde Brevo
-                    </Button>
-                  ) : null}
                 </div>
 
-                {templatesCampanaCanal === "correo" ? (
-                  <div className="mb-3 rounded-lg border bg-background/80 p-2.5">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide">Importar desde Brevo</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Trae un borrador de Brevo y luego revísalo antes de guardarlo.
-                        </p>
-                      </div>
-                      <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()} disabled={brevoLoading}>
-                        {brevoLoading ? "Cargando..." : "Actualizar"}
-                      </Button>
-                    </div>
-                    {!brevoCatalog.length ? (
-                      <p className="text-xs text-muted-foreground">Sin plantillas Brevo disponibles o sin configuración.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {brevoCatalog.slice(0, 8).map((item) => (
-                          <div key={item.id} className="rounded-md border bg-background p-2">
-                            <p className="text-xs font-semibold text-foreground">{item.name}</p>
-                            <p className="truncate text-[11px] text-muted-foreground">{item.subject || "Sin asunto"}</p>
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <Badge variant="outline">{item.is_active ? "Activa" : "Inactiva"}</Badge>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={brevoImportingId === item.id}
-                                onClick={() => void handleImportBrevoTemplate(item.id)}
-                              >
-                                {brevoImportingId === item.id ? "Importando..." : "Usar esta plantilla"}
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
                 {templatesLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <IconLoader className="size-3.5 animate-spin" /> Cargando plantillas...
                   </div>
                 ) : null}
 
                 {!templatesLoading && !templatesItems.length ? (
-                  <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                    <p className="font-medium text-foreground">Aún no hay mensajes guardados para esta campaña.</p>
+                  <div className="rounded-lg border border-dashed p-2.5 text-[10px] text-muted-foreground">
+                    <p className="text-[11px] font-medium text-foreground">Aún no hay mensajes guardados para esta campaña.</p>
                     <p className="mt-1">Crea una plantilla para reutilizarla después en tus envíos.</p>
                   </div>
                 ) : null}
 
-                <div className="space-y-1.5">
+                <div className="overflow-hidden rounded-md border bg-background">
                   {templatesItems.map((template) => (
-                    <div key={template.id} className="rounded-lg border bg-background p-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-foreground">{template.nombre}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {template.canal === "correo" ? "Correo" : template.canal === "whatsapp" ? "WhatsApp" : "Llamada"}{" "}
-                            · {template.descripcion || "Sin descripción"}
-                          </p>
+                    <div
+                      key={template.id}
+                      className="border-b px-2 py-1 last:border-b-0"
+                    >
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] font-semibold text-foreground">{template.nombre}</p>
                           {template.canal === "whatsapp" ? (
-                            <p className="mt-1 text-[11px] text-muted-foreground">
+                            <p className="truncate text-[10px] leading-4 text-muted-foreground">
                               {(() => {
                                 const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
                                 const metaTemplateName = getTemplateMetaValue(metadata, [
@@ -2161,29 +2115,41 @@ ${secondCellHtml}
                             </p>
                           ) : null}
                         </div>
-                        <Badge variant="outline" className="shrink-0">
+                        <Badge variant="outline" className="mt-0.5 h-4.5 shrink-0 px-1 text-[9px]">
                           Activa
                         </Badge>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateEdit(template)}>
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1 text-[10px]"
+                          onClick={() => handleTemplateEdit(template)}
+                        >
                           Editar
                         </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateDuplicate(template)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1 text-[10px]"
+                          onClick={() => handleTemplateDuplicate(template)}
+                        >
                           Duplicar
                         </Button>
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          className="text-destructive"
+                          className="h-5 px-1 text-destructive"
                           disabled={templateDeletingId === template.id}
                           onClick={() => void handleTemplateDelete(template.id)}
                         >
                           {templateDeletingId === template.id ? (
-                            <IconLoader className="size-4 animate-spin" />
+                            <IconLoader className="size-2.5 animate-spin" />
                           ) : (
-                            <IconX className="size-4" />
+                            <IconX className="size-2.5" />
                           )}
                         </Button>
                       </div>
@@ -2192,8 +2158,8 @@ ${secondCellHtml}
                 </div>
               </aside>
 
-              <section className="min-h-0 border-b p-3 lg:border-b-0 lg:border-r lg:overflow-y-auto [&_[data-slot=input]]:h-8 [&_[data-slot=input]]:text-sm [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:w-full [&_[data-slot=select-trigger]]:text-sm [&_button]:text-xs [&_label]:text-[11px] [&_label]:font-medium [&_textarea]:text-sm [&_textarea]:leading-5">
-                <div className="mb-3">
+              <section className="min-h-0 border-b p-2.5 lg:border-b-0 lg:border-r lg:overflow-y-auto [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:px-2.5 [&_[data-slot=input]]:text-[12px] [&_[data-slot=select-trigger]]:h-7 [&_[data-slot=select-trigger]]:w-full [&_[data-slot=select-trigger]]:px-2.5 [&_[data-slot=select-trigger]]:text-[12px] [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-[12px] [&_button]:h-7 [&_button]:px-2.5 [&_button]:text-[11px] [&_label]:text-[10px] [&_label]:font-medium [&_p.text-muted-foreground]:text-[11px] [&_textarea]:px-2.5 [&_textarea]:py-2 [&_textarea]:text-[12px] [&_textarea]:leading-5">
+                <div className="mb-2.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Editor de plantilla</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {templateForm.canal === "whatsapp"
@@ -2212,13 +2178,13 @@ ${secondCellHtml}
                   <div className="space-y-3">
                     <section className="rounded-xl border border-sky-200 bg-sky-50/80 p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-sky-950">Registro local de plantilla Meta</p>
-                      <p className="mt-1 text-xs leading-5 text-sky-900">
+                      <p className="mt-1 text-[11px] leading-4.5 text-sky-900">
                         Esta pantalla no crea plantillas en Meta. Aquí solo guardas la referencia aprobada para usarla en campañas de prospección.
                       </p>
-                      <div className="mt-3 grid gap-2 text-xs text-sky-900 sm:grid-cols-3">
-                        <div className="rounded-md border border-sky-200 bg-white/80 px-3 py-2">1. Identifica la plantilla en Tal-IA.</div>
-                        <div className="rounded-md border border-sky-200 bg-white/80 px-3 py-2">2. Vincúlala con nombre, idioma y categoría de Meta.</div>
-                        <div className="rounded-md border border-sky-200 bg-white/80 px-3 py-2">3. Guarda el texto de referencia para preview y validaciones.</div>
+                      <div className="mt-2 grid gap-1.5 text-[11px] text-sky-900 sm:grid-cols-3">
+                        <div className="rounded-md border border-sky-200 bg-white/80 px-2.5 py-1.5">1. Identifica la plantilla en Tal-IA.</div>
+                        <div className="rounded-md border border-sky-200 bg-white/80 px-2.5 py-1.5">2. Vincúlala con nombre, idioma y categoría de Meta.</div>
+                        <div className="rounded-md border border-sky-200 bg-white/80 px-2.5 py-1.5">3. Guarda el texto de referencia para preview y validaciones.</div>
                       </div>
                     </section>
 
@@ -2229,7 +2195,7 @@ ${secondCellHtml}
                           Estos datos ayudan a tu equipo a reconocer la plantilla dentro de la app.
                         </p>
                       </div>
-                      <div className="grid gap-3">
+                      <div className="grid gap-2.5">
                         <div className="space-y-1">
                           <Label>Nombre visible en Tal-IA</Label>
                           <Input
@@ -2252,7 +2218,7 @@ ${secondCellHtml}
                             placeholder="Uso comercial para primer contacto"
                           />
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2.5 sm:grid-cols-2">
                           <div className="space-y-1">
                             <Label>Canal</Label>
                             <Select
@@ -2295,7 +2261,7 @@ ${secondCellHtml}
                           Estos campos deben coincidir con la plantilla ya creada y aprobada en WhatsApp Manager.
                         </p>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label>Nombre técnico en Meta</Label>
                           <Input
@@ -2313,7 +2279,7 @@ ${secondCellHtml}
                           />
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label>Categoría Meta</Label>
                           <Select
@@ -2367,7 +2333,7 @@ ${secondCellHtml}
                           Guarda aquí una copia útil del texto aprobado en Meta. La app la usa para selección, vista previa y validación de variables.
                         </p>
                       </div>
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         <div className="space-y-1">
                           <Label>Cuerpo de referencia</Label>
                           <Textarea
@@ -2378,8 +2344,8 @@ ${secondCellHtml}
                           />
                         </div>
                         <div>
-                          <p className="mb-2 text-xs text-muted-foreground">Variables de referencia</p>
-                          <div className="flex flex-wrap gap-2">
+                          <p className="mb-1.5 text-[11px] text-muted-foreground">Variables de referencia</p>
+                          <div className="flex flex-wrap gap-1.5">
                             {EMAIL_TEMPLATE_VARIABLES.map((variable) => (
                               <Button
                                 key={variable.token}
@@ -2403,7 +2369,7 @@ ${secondCellHtml}
                           Ajustes que usa Tal-IA para generar enlaces, atribución y presentación interna.
                         </p>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label>Texto del botón o enlace</Label>
                           <Input
@@ -2448,7 +2414,7 @@ ${secondCellHtml}
                           ) : null}
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label>URL base de tracking</Label>
                           <Input
@@ -2469,7 +2435,7 @@ ${secondCellHtml}
                     </section>
 
                     <section className="rounded-lg border bg-background p-3">
-                      <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="mb-2 flex items-center justify-between gap-2">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Recursos opcionales</p>
                           <p className="text-xs text-muted-foreground">
@@ -2489,7 +2455,7 @@ ${secondCellHtml}
                         className="hidden"
                         onChange={(event) => void handleLogoFileChange(event)}
                       />
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <Button
                           type="button"
                           variant="outline"
@@ -2531,7 +2497,7 @@ ${secondCellHtml}
                     </section>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     <section className="rounded-lg border bg-background p-3">
                       <div className="mb-2">
                         <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Datos de la plantilla</p>
@@ -2539,7 +2505,7 @@ ${secondCellHtml}
                           Ponle un nombre fácil de reconocer. Este nombre solo lo verá tu equipo.
                         </p>
                       </div>
-                      <div className="grid gap-3">
+                      <div className="grid gap-2.5">
                         <div className="space-y-1">
                           <Label>Nombre de la plantilla</Label>
                           <Input
@@ -2562,7 +2528,7 @@ ${secondCellHtml}
                             placeholder="Resumen corto para el equipo"
                           />
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2.5 sm:grid-cols-2">
                           <div className="space-y-1">
                             <Label>Canal</Label>
                             <Select
@@ -2607,7 +2573,7 @@ ${secondCellHtml}
                       </div>
 
                       {templateForm.canal === "correo" ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2.5">
                           <div className="space-y-1">
                             <Label>Asunto del correo</Label>
                             <Input
@@ -2622,7 +2588,7 @@ ${secondCellHtml}
                           </div>
                           <div className="space-y-1">
                             <Label>Mensaje en texto</Label>
-                            <div className="mb-2 flex flex-wrap gap-2">
+                            <div className="mb-1.5 flex flex-wrap gap-1.5">
                               <Button type="button" variant="outline" size="sm" onClick={() => appendTemplateToken("cuerpoTexto", "\n")}>
                                 Salto de línea
                               </Button>
@@ -2677,7 +2643,7 @@ ${secondCellHtml}
                           Puedes insertar datos del prospecto para que cada mensaje se vea personalizado.
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {EMAIL_TEMPLATE_VARIABLES.map((variable) => (
                           <Button
                             key={variable.token}
@@ -2701,9 +2667,9 @@ ${secondCellHtml}
                           </p>
                         </div>
                       </summary>
-                      <div className="mt-3 space-y-3">
+                      <div className="mt-2.5 space-y-2.5">
                         {templateForm.canal === "correo" ? (
-                          <div className="space-y-1 rounded-md border bg-background/70 p-2.5">
+                          <div className="space-y-1 rounded-md border bg-background/70 p-2">
                             <div className="flex items-center justify-between gap-2">
                               <div>
                                 <Label>Frase de WhatsApp para captación</Label>
@@ -2753,14 +2719,14 @@ ${secondCellHtml}
                         ) : null}
 
                         {templateForm.canal === "correo" ? (
-                          <div className="rounded-md border bg-background/70 p-2.5">
+                          <div className="rounded-md border bg-background/70 p-2">
                             <div className="mb-2">
                               <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Imágenes de la plantilla</p>
                               <p className="text-xs text-muted-foreground">
                                 Asigna recursos cargados a variables reutilizables. Cada imagen queda aislada por tenant.
                               </p>
                             </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-1.5 sm:grid-cols-2">
                               {EMAIL_IMAGE_SLOTS.map((slot) => {
                                 const currentAsset =
                                   logos.find((logo) => logo.id === templateImageIds[slot.key]) ?? templateImageAssets[slot.key] ?? null
@@ -2797,7 +2763,7 @@ ${secondCellHtml}
                                         ))}
                                       </SelectContent>
                                     </Select>
-                                    <p className="font-mono text-[11px] text-muted-foreground">{`{{${slot.key}}}`}</p>
+                                    <p className="font-mono text-[10px] text-muted-foreground">{`{{${slot.key}}}`}</p>
                                   </div>
                                 )
                               })}
@@ -2805,7 +2771,7 @@ ${secondCellHtml}
                           </div>
                         ) : null}
 
-                          <div className="rounded-md border bg-muted/20 p-2.5">
+                          <div className="rounded-md border bg-muted/20 p-2">
                             <div className="mb-2">
                               <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Imagen o logo</p>
                             <p className="text-xs text-muted-foreground">Se usará en correo o WhatsApp según el canal.</p>
@@ -2817,7 +2783,7 @@ ${secondCellHtml}
                             className="hidden"
                             onChange={(event) => void handleLogoFileChange(event)}
                           />
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <Button
                               type="button"
                               variant="outline"
@@ -2841,33 +2807,35 @@ ${secondCellHtml}
                             </Button>
                           </div>
                           {logos.length ? (
-                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                            <div className="mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-4">
                               {logos.map((logo) => (
                                 <button
                                   key={logo.id}
                                   type="button"
                                   className={cn(
-                                    "rounded border p-1 text-left transition-colors",
+                                    "overflow-hidden rounded border p-1 text-left transition-colors",
                                     selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
                                   )}
                                   onClick={() => setSelectedLogoUrl(logo.file_url)}
                                 >
-                                  <Image
-                                    src={logo.file_url}
-                                    alt={logo.nombre}
-                                    width={160}
-                                    height={48}
-                                    unoptimized
-                                    className="h-10 w-full rounded object-contain"
-                                  />
-                                  <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
+                                  <div className="flex h-8 w-full items-center justify-center overflow-hidden rounded bg-background">
+                                    <Image
+                                      src={logo.file_url}
+                                      alt={logo.nombre}
+                                      width={160}
+                                      height={48}
+                                      unoptimized
+                                      className="max-h-8 w-auto max-w-full object-contain"
+                                    />
+                                  </div>
+                                  <p className="mt-1 truncate text-[9px] text-muted-foreground">{logo.nombre}</p>
                                 </button>
                               ))}
                             </div>
                           ) : null}
                         </div>
 
-                        <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-2.5 lg:grid-cols-2">
                           <div className="space-y-1">
                             <Label>Texto del link de agenda</Label>
                             <Input
@@ -2886,7 +2854,7 @@ ${secondCellHtml}
                           </div>
                         </div>
 
-                        <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-2.5 lg:grid-cols-2">
                           <div className="space-y-1">
                             <Label>Nombre IA</Label>
                             <Input
@@ -2906,7 +2874,7 @@ ${secondCellHtml}
                         </div>
 
                         {templateForm.canal === "correo" ? (
-                          <div className="space-y-3 rounded-md border bg-background/70 p-2.5">
+                          <div className="space-y-2.5 rounded-md border bg-background/70 p-2">
                             <div className="space-y-1">
                               <Label>Diseño HTML avanzado</Label>
                               <Textarea
@@ -2921,7 +2889,7 @@ ${secondCellHtml}
                                 placeholder="<p>Hola {{nombre}}</p>"
                               />
                               <p className={cn(
-                                "text-right text-xs",
+                                "text-right text-[11px]",
                                 templateForm.cuerpoHtml.length > EMAIL_HTML_MAX_LENGTH * 0.9
                                   ? "text-amber-600"
                                   : "text-muted-foreground"
@@ -2929,7 +2897,7 @@ ${secondCellHtml}
                                 {templateForm.cuerpoHtml.length.toLocaleString("es-MX")} / {EMAIL_HTML_MAX_LENGTH.toLocaleString("es-MX")} caracteres
                               </p>
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap gap-1">
                               <Button type="button" variant="outline" size="sm" onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}>
                                 Negrita
                               </Button>
@@ -2981,7 +2949,7 @@ ${secondCellHtml}
                                 Insertar enlace WhatsApp
                               </Button>
                             </div>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[11px] text-muted-foreground">
                               Variables: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
                             </p>
                           </div>
