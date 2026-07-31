@@ -2204,7 +2204,9 @@ ${secondCellHtml}
                               setTemplateForm((prev) => ({
                                 ...prev,
                                 nombre: event.target.value,
-                                slug: prev.slug ? prev.slug : buildSafeTemplateSlug(event.target.value, prev.canal, event.target.value),
+                                slug: prev.id
+                                  ? prev.slug
+                                  : buildSafeTemplateSlug(event.target.value, prev.canal, event.target.value),
                               }))
                             }
                             placeholder="Seguimiento inicial WhatsApp"
@@ -2514,7 +2516,9 @@ ${secondCellHtml}
                               setTemplateForm((prev) => ({
                                 ...prev,
                                 nombre: event.target.value,
-                                slug: prev.slug ? prev.slug : buildSafeTemplateSlug(event.target.value, prev.canal, event.target.value),
+                                slug: prev.id
+                                  ? prev.slug
+                                  : buildSafeTemplateSlug(event.target.value, prev.canal, event.target.value),
                               }))
                             }
                             placeholder="Seguimiento inicial"
