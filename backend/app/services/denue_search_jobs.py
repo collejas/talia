@@ -497,6 +497,11 @@ class DenueSearchJobManager:
             busqueda_id=job.busqueda_id,
             payload={"total_encontrados": upserted_total},
         )
+        if settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None:
+            await repo.record_denue_raw_results(
+                organizacion_id=organizacion_id,
+                busqueda_id=job.busqueda_id,
+            )
         await repo.worker_update_denue_job(
             job_id=job.job_id,
             payload={"total": upserted_total, "stats": {"upserted": upserted_total, "batches": processed_batches}},

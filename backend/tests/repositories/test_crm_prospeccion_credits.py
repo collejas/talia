@@ -11,6 +11,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 TENANT_ID = UUID("cc0b0c64-ef9c-4dbd-bf6a-faeb401922b8")
 OPERATION_ID = UUID("ae24bec3-0497-4df0-9078-a3e3f7f26eeb")
 RESULT_ID = UUID("a653300c-0150-4d31-8e04-e5a857bb23ec")
+BUSQUEDA_ID = UUID("9d33ce45-cf49-47c3-9662-2a6f34feea3d")
 
 
 class FakeTransactionalRepository(CRMRepository):
@@ -100,4 +101,46 @@ async def test_transactional_save_hides_unknown_database_error() -> None:
             resultado_ids=[RESULT_ID],
             segmento=None,
             metadata={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_raw_results_calls_tenant_scoped_rpc() -> None:
+    repo = FakeTransactionalRepository(
+        response={
+            "ok": True,
+            "replayed": False,
+            "busqueda_id": str(BUSQUEDA_ID),
+            "raw_results_consumed": 125,
+            "raw_results_remaining": 49_875,
+        }
+    )
+
+    result = await repo.record_denue_raw_results(
+        organizacion_id=TENANT_ID,
+        busqueda_id=BUSQUEDA_ID,
+    )
+
+    assert result["raw_results_consumed"] == 125
+    assert repo.calls == [
+        {
+            "method": "POST",
+            "path": "/rest/v1/rpc/prospeccion_registrar_resultados_denue",
+            "json": {
+                "p_tenant_id": str(TENANT_ID),
+                "p_busqueda_id": str(BUSQUEDA_ID),
+            },
+            "organizacion_id": TENANT_ID,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_record_raw_results_hides_unknown_database_error() -> None:
+    repo = FakeTransactionalRepository(error="relation private_table does not exist")
+
+    with pytest.raises(CRMRepositoryError, match="^prospeccion_raw_usage_failed$"):
+        await repo.record_denue_raw_results(
+            organizacion_id=TENANT_ID,
+            busqueda_id=BUSQUEDA_ID,
         )

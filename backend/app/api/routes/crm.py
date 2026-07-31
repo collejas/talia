@@ -30467,6 +30467,22 @@ async def crear_busqueda_denue(
         busqueda_id=busqueda_uuid,
         total_encontrados=total_records,
     )
+    if settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None:
+        try:
+            await repo.record_denue_raw_results(
+                organizacion_id=organizacion_id,
+                busqueda_id=busqueda_uuid,
+            )
+        except CRMRepositoryError as exc:
+            error_code = str(exc)
+            if error_code in {
+                "prospeccion_access_blocked",
+                "prospeccion_credits_not_configured",
+                "prospeccion_plan_not_configured",
+                "prospeccion_usage_period_invalid",
+            }:
+                raise HTTPException(status_code=409, detail=error_code) from exc
+            raise HTTPException(status_code=502, detail="prospeccion_raw_usage_failed") from exc
 
     preview = [_result_preview(item) for item in preview_items[: min(10, len(preview_items))]]
     return {

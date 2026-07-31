@@ -16726,6 +16726,43 @@ class CRMRepository:
             raise CRMRepositoryError("prospeccion_transaction_invalid_response")
         return data
 
+    async def record_denue_raw_results(
+        self,
+        *,
+        organizacion_id: UUID,
+        busqueda_id: UUID,
+    ) -> dict[str, Any]:
+        """Contabiliza una sola vez los resultados persistidos de una búsqueda DENUE."""
+
+        try:
+            response = await self._request_service_role(
+                "POST",
+                "/rest/v1/rpc/prospeccion_registrar_resultados_denue",
+                json={
+                    "p_tenant_id": str(organizacion_id),
+                    "p_busqueda_id": str(busqueda_id),
+                },
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raw_error = str(exc)
+            known_codes = (
+                "prospeccion_access_blocked",
+                "prospeccion_credits_not_configured",
+                "prospeccion_plan_not_configured",
+                "prospeccion_request_invalid",
+                "prospeccion_search_not_owned",
+                "prospeccion_usage_period_invalid",
+            )
+            for code in known_codes:
+                if code in raw_error:
+                    raise CRMRepositoryError(code) from exc
+            raise CRMRepositoryError("prospeccion_raw_usage_failed") from exc
+        data = response.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError("prospeccion_raw_usage_invalid_response")
+        return data
+
     async def denue_resultados_map(
         self,
         *,

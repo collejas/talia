@@ -272,6 +272,33 @@ export type ProspectoGuardarResponse = {
   period_end?: string
 }
 
+export type ProspeccionUsageResponse = {
+  ok: boolean
+  plan: {
+    code?: string | null
+    name?: string | null
+  }
+  access_status?: string | null
+  period: {
+    start: string
+    end: string
+    source: "billing" | "calendar_utc"
+    persisted: boolean
+  }
+  credits: {
+    limit: number
+    consumed: number
+    remaining: number
+    usage_percentage: number
+  }
+  raw_results: {
+    limit: number
+    consumed: number
+    remaining: number
+  }
+  required_contact_mode: "any" | "phone" | "email" | "both"
+}
+
 export type ProspectoLookupResponse = {
   ok: boolean
   procesados: number
@@ -1051,6 +1078,10 @@ export async function guardarProspectos(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export async function getProspeccionUsage(): Promise<ProspeccionUsageResponse> {
+  return requestJson<ProspeccionUsageResponse>("/api/prospeccion/usage")
 }
 
 /**

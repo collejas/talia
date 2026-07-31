@@ -46,7 +46,12 @@ import {
   type DenueResultadoItem,
 } from "@/lib/prospeccion/denue-client";
 import type { GoogleResultadoItem } from "@/lib/prospeccion/google-client";
-import { guardarProspectos, listProspectosQueryMetadata } from "@/lib/prospeccion/prospectos-client";
+import {
+  getProspeccionUsage,
+  guardarProspectos,
+  listProspectosQueryMetadata,
+  type ProspeccionUsageResponse,
+} from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -84,6 +89,7 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { ProspeccionUsageSummary } from "./prospeccion-usage-summary";
 import {
   Table,
   TableBody,
@@ -415,6 +421,9 @@ export function DenueBusquedaView() {
     message: "",
   });
   const [isSearching, setIsSearching] = useState(false);
+  const [prospeccionUsage, setProspeccionUsage] = useState<ProspeccionUsageResponse | null>(null);
+  const [isLoadingProspeccionUsage, setIsLoadingProspeccionUsage] = useState(true);
+  const [prospeccionUsageError, setProspeccionUsageError] = useState<string | null>(null);
   const [activeDenueJobId, setActiveDenueJobId] = useState<string | null>(null);
   const [activeDenueJobStatus, setActiveDenueJobStatus] = useState<string | null>(null);
   const denueJobPollTokenRef = useRef(0);
@@ -445,8 +454,6 @@ export function DenueBusquedaView() {
     key: "fecha",
     direction: "desc",
   });
-  const [busquedaRegistrosMin, setBusquedaRegistrosMin] = useState("");
-  const [busquedaRegistrosMax, setBusquedaRegistrosMax] = useState("");
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [saveProspectosModalOpen, setSaveProspectosModalOpen] = useState(false);
@@ -592,6 +599,25 @@ export function DenueBusquedaView() {
       message: feedback.message,
     });
   }, [feedback]);
+
+  const loadProspeccionUsage = useCallback(async () => {
+    setIsLoadingProspeccionUsage(true);
+    setProspeccionUsageError(null);
+    try {
+      const response = await getProspeccionUsage();
+      setProspeccionUsage(response);
+    } catch (error) {
+      setProspeccionUsageError(
+        error instanceof Error ? error.message : "No fue posible consultar el uso mensual de prospección.",
+      );
+    } finally {
+      setIsLoadingProspeccionUsage(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProspeccionUsage();
+  }, [loadProspeccionUsage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1356,19 +1382,8 @@ export function DenueBusquedaView() {
       setSelectedBusquedas(new Set());
       return;
     }
-    const minValue = busquedaRegistrosMin.trim() ? Number(busquedaRegistrosMin) : null;
-    const maxValue = busquedaRegistrosMax.trim() ? Number(busquedaRegistrosMax) : null;
-    const hasMin = typeof minValue === "number" && Number.isFinite(minValue);
-    const hasMax = typeof maxValue === "number" && Number.isFinite(maxValue);
-    const visibleIds = busquedas.filter((item) => {
-      const registros = typeof item.total_encontrados === "number" ? item.total_encontrados : null;
-      if (registros === null) return false;
-      if (hasMin && registros < (minValue as number)) return false;
-      if (hasMax && registros > (maxValue as number)) return false;
-      return true;
-    });
-    setSelectedBusquedas(new Set(visibleIds.map((item) => item.id)));
-  }, [busquedaRegistrosMax, busquedaRegistrosMin, busquedas]);
+    setSelectedBusquedas(new Set(busquedas.map((item) => item.id)));
+  }, [busquedas]);
 
   const handleDeleteSelectedBusquedas = useCallback(async () => {
     const ids = Array.from(selectedBusquedas);
@@ -1470,29 +1485,7 @@ export function DenueBusquedaView() {
   }, [activeBusquedaId, loadBusquedas, refreshResultados, selectedIds, setFeedback]);
 
   const selectedBusquedasCount = selectedBusquedas.size;
-  const busquedasFiltradas = useMemo(() => {
-    const minValue = busquedaRegistrosMin.trim() ? Number(busquedaRegistrosMin) : null;
-    const maxValue = busquedaRegistrosMax.trim() ? Number(busquedaRegistrosMax) : null;
-    const hasMin = typeof minValue === "number" && Number.isFinite(minValue);
-    const hasMax = typeof maxValue === "number" && Number.isFinite(maxValue);
-    if (!hasMin && !hasMax) {
-      return busquedas;
-    }
-    return busquedas.filter((item) => {
-      const registros = typeof item.total_encontrados === "number" ? item.total_encontrados : null;
-      if (registros === null) {
-        return false;
-      }
-      if (hasMin && registros < (minValue as number)) {
-        return false;
-      }
-      if (hasMax && registros > (maxValue as number)) {
-        return false;
-      }
-      return true;
-    });
-  }, [busquedaRegistrosMax, busquedaRegistrosMin, busquedas]);
-  const allBusquedasSelected = busquedasFiltradas.length > 0 && busquedasFiltradas.every((item) => selectedBusquedas.has(item.id));
+  const allBusquedasSelected = busquedas.length > 0 && busquedas.every((item) => selectedBusquedas.has(item.id));
 
   const toggleBusquedasSort = useCallback((key: BusquedasSortKey) => {
     setBusquedasSort((current) => {
@@ -1507,7 +1500,7 @@ export function DenueBusquedaView() {
   }, []);
 
   const sortedBusquedas = useMemo(() => {
-    const rows = [...busquedasFiltradas];
+    const rows = [...busquedas];
     rows.sort((a, b) => {
       const busquedaA = buildBusquedaLabelParts(a);
       const busquedaB = buildBusquedaLabelParts(b);
@@ -1549,7 +1542,7 @@ export function DenueBusquedaView() {
       return busquedasSort.direction === "asc" ? base : -base;
     });
     return rows;
-  }, [buildBusquedaLabelParts, busquedasFiltradas, busquedasSort.direction, busquedasSort.key]);
+  }, [buildBusquedaLabelParts, busquedas, busquedasSort.direction, busquedasSort.key]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -1770,6 +1763,7 @@ export function DenueBusquedaView() {
                   }
                   await loadBusquedas();
                   await loadResultadosForBusqueda(jobResp.job.busqueda_id);
+                  await loadProspeccionUsage();
                   break;
                 }
               } catch {
@@ -1793,6 +1787,7 @@ export function DenueBusquedaView() {
         });
         await loadBusquedas();
         await loadResultadosForBusqueda(response.busqueda_id);
+        await loadProspeccionUsage();
       } catch {
         setFeedback({
           type: "error",
@@ -1808,7 +1803,15 @@ export function DenueBusquedaView() {
         setIsSearching(false);
       }
     },
-    [formValues, loadBusquedas, loadResultadosForBusqueda, buildAdvancedPayload, advancedFilters, buildAdvancedQueryLabel],
+    [
+      formValues,
+      loadBusquedas,
+      loadResultadosForBusqueda,
+      loadProspeccionUsage,
+      buildAdvancedPayload,
+      advancedFilters,
+      buildAdvancedQueryLabel,
+    ],
   );
 
   const handleStandardSearch = useCallback(() => {
@@ -1946,6 +1949,7 @@ export function DenueBusquedaView() {
         });
         totalGuardados += Number(response.total ?? 0);
       }
+      await loadProspeccionUsage();
       setSaveProspectosModalOpen(false);
       setSaveProspectosSegmento("");
       setFeedback({
@@ -1966,10 +1970,26 @@ export function DenueBusquedaView() {
     } finally {
       setIsSavingProspectos(false);
     }
-  }, [activeBusqueda, collectFilteredResultadoIds, resolveBusquedaLabel, saveProspectosMode, saveProspectosSegmento, selectedIds]);
+  }, [
+    activeBusqueda,
+    collectFilteredResultadoIds,
+    loadProspeccionUsage,
+    resolveBusquedaLabel,
+    saveProspectosMode,
+    saveProspectosSegmento,
+    selectedIds,
+  ]);
 
   return (
     <div className="space-y-6">
+      <ProspeccionUsageSummary
+        usage={prospeccionUsage}
+        loading={isLoadingProspeccionUsage}
+        error={prospeccionUsageError}
+        onRefresh={() => {
+          void loadProspeccionUsage();
+        }}
+      />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -2700,12 +2720,7 @@ export function DenueBusquedaView() {
         <CardHeader>
           <CardTitle className="text-base">Búsquedas recientes</CardTitle>
           <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
-          <div className="flex items-center justify-between gap-3 pt-2">
-            <span className="text-xs text-muted-foreground">
-              {busquedasFiltradas.length !== busquedas.length
-                ? `Mostrando ${numberFormatter.format(busquedasFiltradas.length)} de ${numberFormatter.format(busquedas.length)} · Seleccionadas: ${numberFormatter.format(selectedBusquedasCount)}`
-                : `Seleccionadas: ${numberFormatter.format(selectedBusquedasCount)}`}
-            </span>
+          <div className="flex items-center justify-end gap-3 pt-2">
             {canDeleteBusquedas ? (
               <Button
                 type="button"
@@ -2724,55 +2739,11 @@ export function DenueBusquedaView() {
               </Button>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-normal" htmlFor="busqueda-registros-min">
-                Registros min.
-              </Label>
-              <Input
-                id="busqueda-registros-min"
-                type="number"
-                min="0"
-                step="1"
-                value={busquedaRegistrosMin}
-                onChange={(event) => setBusquedaRegistrosMin(event.target.value)}
-                placeholder="0"
-                className="h-8 w-28 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-normal" htmlFor="busqueda-registros-max">
-                Registros max.
-              </Label>
-              <Input
-                id="busqueda-registros-max"
-                type="number"
-                min="0"
-                step="1"
-                value={busquedaRegistrosMax}
-                onChange={(event) => setBusquedaRegistrosMax(event.target.value)}
-                placeholder="9999"
-                className="h-8 w-28 text-sm"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setBusquedaRegistrosMin("");
-                setBusquedaRegistrosMax("");
-              }}
-              disabled={!busquedaRegistrosMin && !busquedaRegistrosMax}
-            >
-              Limpiar filtro
-            </Button>
-          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoadingBusquedas ? (
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
-          ) : busquedasFiltradas.length ? (
+          ) : busquedas.length ? (
             <ScrollArea className="h-[360px] rounded-lg border border-border/60">
               <div className="min-w-[860px]">
                 <Table>
