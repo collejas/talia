@@ -35,14 +35,14 @@ El plan Starter incluirá:
 
 Un crédito permite guardar un prospecto que:
 
-1. cumple el criterio de contacto efectivo del tenant;
+1. tiene al menos correo o teléfono;
 2. no está duplicado dentro del lote;
 3. no existe previamente para el tenant;
 4. se inserta correctamente en `prospeccion_prospectos`.
 
 La comunicación comercial recomendada es:
 
-> **Hasta 9,000 prospectos nuevos y únicos al mes, según el criterio de contacto seleccionado.**
+> **Hasta 9,000 prospectos nuevos y únicos al mes.**
 
 También puede mostrarse:
 
@@ -50,31 +50,27 @@ También puede mostrarse:
 
 ### 1.2 Regla de consumo
 
-Todos los modos consumen **1 crédito por prospecto nuevo guardado**.
+Cada prospecto nuevo guardado consume **1 crédito**.
 
-El modo de contacto determina qué registros son elegibles, no un precio diferente:
+La calidad del lote la determina cada usuario mediante los filtros de DENUE:
 
-| Modo | Requisito mínimo | Sólo teléfono | Sólo correo | Correo y teléfono | Consumo |
-|---|---|---:|---:|---:|---:|
-| `any` | Correo o teléfono | Sí | Sí | Sí | 1 crédito |
-| `phone` | Teléfono obligatorio | Sí | No | Sí | 1 crédito |
-| `email` | Correo obligatorio | No | Sí | Sí | 1 crédito |
-| `both` | Correo y teléfono obligatorios | No | No | Sí | 1 crédito |
+- teléfono presente;
+- correo presente;
+- correo y teléfono;
+- combinaciones adicionales con sitio web, actividad, ubicación y estrato.
 
-### 1.3 Por qué `both` no consume 1.5 créditos
+El backend conserva una única protección mínima: no guarda registros que carezcan tanto de correo como de teléfono.
+Ya no existe un criterio obligatorio configurable por tenant.
 
-Un registro con correo y teléfono cumple los cuatro modos. Si el costo dependiera del selector:
+### 1.3 Filtros y consumo
 
-- costaría 1 crédito en `any`, `phone` o `email`;
-- costaría 1.5 créditos en `both`;
-- el tenant podría seleccionar otro modo y aplicar manualmente ambos filtros para recibir el mismo registro a menor precio.
+Aplicar un filtro más estricto no cambia el costo. Un prospecto nuevo consume un crédito tanto si tiene:
 
-Por lo tanto:
+- sólo teléfono;
+- sólo correo;
+- correo y teléfono.
 
-- `both` es una regla de elegibilidad más estricta;
-- no representa por sí mismo un proceso técnico adicional;
-- no debe modificar el costo del prospecto;
-- cualquier costo adicional debe corresponder a validación o enriquecimiento real.
+La validación o enriquecimiento posterior continúa en cuotas independientes.
 
 ### 1.4 Acciones que consumen cero créditos
 
@@ -83,7 +79,7 @@ No consumen créditos:
 - ejecutar una búsqueda DENUE;
 - consultar o visualizar resultados;
 - aplicar filtros;
-- resultados sin el contacto requerido;
+- resultados sin correo y sin teléfono;
 - resultados no seleccionados;
 - resultados no guardados;
 - duplicados dentro del lote;
@@ -127,9 +123,8 @@ El frontend ya distingue entre:
 - IDs procesados;
 - prospectos guardados.
 
-Sin embargo, todavía no muestra:
+Sin embargo, el plan original todavía no contemplaba:
 
-- criterio de contacto efectivo del tenant;
 - límite mensual;
 - consumo;
 - saldo;
@@ -241,18 +236,18 @@ Reglas:
 
 ---
 
-## 4. Política de contacto por tenant
+## 4. Protección mínima de contacto
 
-### 4.1 Valores permitidos
+### 4.1 Regla vigente
+
+La calidad no se configura por tenant. El usuario selecciona el nivel de información mediante los filtros de cada
+búsqueda. Internamente se conserva `any` como valor técnico para mantener compatibilidad con el ledger existente:
 
 ```text
-any
-phone
-email
-both
+correo o teléfono
 ```
 
-### 4.2 Modelo recomendado
+### 4.2 Modelo compatible
 
 Crear una tabla específica:
 
@@ -265,7 +260,7 @@ Columnas:
 | Columna | Tipo sugerido | Regla |
 |---|---|---|
 | `tenant_id` | `uuid` | PK y FK a `organizaciones.id` |
-| `required_contact_mode` | `text` | NOT NULL con CHECK |
+| `required_contact_mode` | `text` | NOT NULL, valor técnico fijo `any` |
 | `effective_from` | `timestamptz` | NOT NULL |
 | `updated_at` | `timestamptz` | NOT NULL |
 | `updated_by` | `uuid` | FK al usuario administrativo, nullable para sistema |
@@ -273,7 +268,7 @@ Columnas:
 Constraint:
 
 ```text
-required_contact_mode IN ('any', 'phone', 'email', 'both')
+required_contact_mode = 'any'
 ```
 
 Índices:
@@ -281,17 +276,15 @@ required_contact_mode IN ('any', 'phone', 'email', 'both')
 - primary key en `tenant_id`;
 - índice en `updated_by` si se audita frecuentemente.
 
-### 4.3 Default
+### 4.3 Valor técnico
 
-El valor inicial recomendado es:
+El único valor permitido es:
 
 ```text
 any
 ```
 
-Mantiene compatibilidad con el comportamiento actual de guardar registros con correo o teléfono.
-
-### 4.4 Cambios de criterio
+Mantiene compatibilidad con operaciones y ledger históricos. No se muestra ni se edita en el panel.
 
 Como todos los modos consumen 1 crédito, el tenant puede cambiar el criterio sin alterar el precio de registros equivalentes.
 
@@ -365,7 +358,7 @@ Columnas:
 | `busqueda_id` | `uuid` | FK a la búsqueda |
 | `movement_type` | `text` | `consume` o `reversal` |
 | `credits_delta` | `integer` | `1` o `-1` |
-| `required_contact_mode` | `text` | Snapshot de política |
+| `required_contact_mode` | `text` | Snapshot técnico fijo `any` para compatibilidad |
 | `created_at` | `timestamptz` | Auditoría |
 | `created_by` | `uuid` | Usuario ejecutor |
 | `reversal_of_id` | `uuid` | FK nullable al movimiento revertido |
@@ -436,7 +429,7 @@ La operación debe:
 3. bloquear la fila del periodo con `SELECT ... FOR UPDATE`;
 4. obtener los resultados solicitados que pertenecen al tenant;
 5. normalizar correo y teléfono;
-6. aplicar `required_contact_mode`;
+6. exigir al menos correo o teléfono;
 7. deduplicar el lote;
 8. deduplicar contra prospectos existentes;
 9. ordenar determinísticamente los candidatos;
@@ -515,7 +508,7 @@ Los nombres finales deben adaptarse a la estructura real, evitando ampliar más 
 Responsabilidades:
 
 - resolver entitlement efectivo;
-- resolver política de contacto;
+- aplicar la protección mínima de correo o teléfono;
 - calcular periodo;
 - invocar RPC transaccional;
 - mapear errores internos a respuestas seguras;
@@ -549,7 +542,7 @@ Respuesta sugerida:
     "remaining": 2580,
     "usage_percentage": 71.33
   },
-  "required_contact_mode": "both",
+  "required_contact_mode": "any",
   "raw_results": {
     "limit": 50000,
     "consumed": 28750,
@@ -588,7 +581,7 @@ Respuesta:
   "creditos_estimados": 740,
   "creditos_disponibles": 700,
   "omitidos_por_limite_estimados": 40,
-  "required_contact_mode": "both",
+  "required_contact_mode": "any",
   "estimate_expires_at": "2026-07-30T12:05:00Z"
 }
 ```
@@ -633,7 +626,7 @@ Respuesta mínima:
   "creditos_consumidos": 700,
   "creditos_restantes": 0,
   "omitidos_por_limite": 40,
-  "required_contact_mode": "both",
+  "required_contact_mode": "any",
   "period_start": "2026-07-01T00:00:00Z",
   "period_end": "2026-08-01T00:00:00Z",
   "prospectos": []
@@ -650,7 +643,6 @@ Errores sugeridos:
 prospeccion_plan_not_configured
 prospeccion_credits_not_configured
 prospeccion_credits_exhausted
-prospeccion_policy_not_configured
 prospeccion_operation_payload_conflict
 prospeccion_results_not_owned
 prospeccion_usage_period_invalid
@@ -667,7 +659,7 @@ Los errores:
 
 Durante la transición:
 
-- tenants sin política reciben `any`;
+- todas las políticas se normalizan a `any`;
 - tenants internos deben recibir un entitlement explícito;
 - el endpoint anterior puede aceptar temporalmente payloads sin `operation_id`, generándolo server-side;
 - antes de enforcement estricto se recomienda una fase de medición en sombra.
@@ -698,37 +690,19 @@ Contenido:
 - créditos utilizados;
 - créditos disponibles;
 - periodo actual;
-- criterio obligatorio de contacto;
 - límite técnico DENUE;
 - estado de validaciones.
 
-### 8.2 Selector de criterio
+### 8.2 Calidad del lote
 
-Opciones:
+No existe selector de criterio por tenant. La vista administrativa explica que:
 
-- **Correo o teléfono**: acepta registros que tengan al menos uno.
-- **Teléfono obligatorio**: exige teléfono; el correo es opcional.
-- **Correo obligatorio**: exige correo; el teléfono es opcional.
-- **Correo y teléfono obligatorios**: exige ambos datos.
-
-Texto común:
-
-> Cada prospecto nuevo y único que cumpla el criterio consume 1 crédito. Los duplicados y registros no guardados no consumen créditos.
-
-Para `both`:
-
-> Sólo se guardarán resultados que tengan correo y teléfono. Cada prospecto nuevo guardado consume 1 crédito.
-
-No debe mostrarse el mensaje anterior de 1.5 créditos ni equivalencia de 6,000 prospectos.
+> Cada usuario define la calidad del lote con los filtros de DENUE. Sólo se guardan registros con al menos correo o teléfono.
 
 ### 8.3 Permisos
 
-El selector:
-
-- sólo es editable por plataforma/admin autorizado;
-- es sólo lectura para usuarios sin permiso;
-- no depende de ocultar el control en frontend;
-- debe ser validado nuevamente en backend.
+Los límites y overrides sólo son editables por plataforma/admin autorizado. La protección mínima se valida en backend
+y no depende de controles visibles en frontend.
 
 ### 8.4 Estados UI
 
@@ -755,7 +729,6 @@ En `prospeccion/denue-busqueda`, mostrar una tarjeta compacta:
 Prospección mensual
 6,420 de 9,000 créditos utilizados
 2,580 disponibles
-Criterio: correo y teléfono obligatorios
 ```
 
 La tarjeta debe:
@@ -766,23 +739,17 @@ La tarjeta debe:
 - actualizarse después de guardar;
 - mostrar periodo actual.
 
-### 9.2 Filtros alineados
+### 9.2 Calidad definida por el usuario
 
 Al abrir una búsqueda:
 
-- preconfigurar los filtros visuales según `required_contact_mode`;
-- impedir que “Guardar filtrados” incluya filas que no cumplen el criterio;
-- permitir filtros más estrictos adicionales;
-- explicar que el backend volverá a validar el criterio.
+- no imponer filtros de contacto automáticamente;
+- permitir que el usuario elija teléfono, correo o ambos;
+- aplicar los filtros también al flujo “Guardar filtrados”;
+- permitir filtros adicionales de sitio web, actividad, ubicación y estrato;
+- volver a validar en backend que cada registro tenga al menos correo o teléfono.
 
-Ejemplos:
-
-- `any`: teléfono o correo;
-- `phone`: teléfono presente;
-- `email`: correo presente;
-- `both`: teléfono y correo presentes.
-
-El usuario puede explorar todos los resultados, pero sólo puede guardar los elegibles.
+El usuario puede explorar todos los resultados y decide la calidad del lote antes de guardarlo.
 
 ### 9.3 Estimación antes de guardar
 
@@ -878,7 +845,7 @@ El rendimiento de contacto cambia por giro y región. Antes de bloquear estricta
 - medir rendimiento por tenant;
 - medir porcentaje contactable;
 - medir porcentaje deduplicado;
-- evaluar si `both` requiere un margen técnico mayor;
+- evaluar qué combinaciones de filtros usan los tenants y su impacto técnico;
 - considerar advertencia o soft limit antes de hard limit.
 
 ---
@@ -1089,16 +1056,14 @@ Si hay diferencia:
 
 ## 15. Estrategia de pruebas
 
-### 15.1 Matriz de criterio
+### 15.1 Matriz de contacto
 
-Para cada modo probar:
-
-| Datos | `any` | `phone` | `email` | `both` |
-|---|---:|---:|---:|---:|
-| Sólo teléfono | guarda | guarda | omite | omite |
-| Sólo correo | guarda | omite | guarda | omite |
-| Ambos | guarda | guarda | guarda | guarda |
-| Ninguno | omite | omite | omite | omite |
+| Datos | Resultado backend |
+|---|---:|
+| Sólo teléfono | guarda |
+| Sólo correo | guarda |
+| Ambos | guarda |
+| Ninguno | omite |
 
 Cada fila guardada consume exactamente 1 crédito.
 

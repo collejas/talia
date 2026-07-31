@@ -449,7 +449,7 @@ class ProspeccionPlanLimitsResponse(BaseModel):
 class TenantProspeccionLimitsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    required_contact_mode: Literal["any", "phone", "email", "both"]
+    required_contact_mode: Literal["any"] = "any"
     credits_month_override: int | None = Field(default=None, ge=0)
     denue_raw_results_month_override: int | None = Field(default=None, ge=0)
     reason: str | None = Field(default=None, max_length=500)
@@ -492,7 +492,7 @@ class TenantProspeccionLimitsResponse(BaseModel):
     ok: bool = True
     tenant_id: UUID
     plan: TenantProspeccionPlanSummary
-    required_contact_mode: Literal["any", "phone", "email", "both"]
+    required_contact_mode: Literal["any"]
     plan_credits_month: int
     plan_denue_raw_results_month: int
     credits_month_override: int | None = None

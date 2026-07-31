@@ -14,7 +14,7 @@ import { updateTenantProspeccionLimitsAction, type CrudActionState } from "./act
 export type TenantProspeccionLimits = {
   tenant_id: string
   plan: { id: string; code: string; name: string }
-  required_contact_mode: "any" | "phone" | "email" | "both"
+  required_contact_mode: "any"
   plan_credits_month: number
   plan_denue_raw_results_month: number
   credits_month_override?: number | null
@@ -89,23 +89,10 @@ export function TenantProspeccionLimitsCard({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="required_contact_mode">Contacto mínimo para guardar</Label>
-            <select
-              id="required_contact_mode"
-              name="required_contact_mode"
-              defaultValue={settings.required_contact_mode}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <option value="any">Correo o teléfono</option>
-              <option value="phone">Teléfono obligatorio</option>
-              <option value="email">Correo obligatorio</option>
-              <option value="both">Correo y teléfono obligatorios</option>
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Cada prospecto nuevo guardado consume 1 crédito. El criterio sólo determina qué registros califican.
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Cada usuario define la calidad del lote con los filtros de DENUE. Sólo se guardan registros que tengan
+            al menos correo o teléfono, y cada prospecto nuevo consume 1 crédito.
+          </p>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">

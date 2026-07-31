@@ -73,7 +73,7 @@ async def test_resolves_billing_period_and_persisted_usage() -> None:
     )
 
     assert result["plan"]["code"] == "starter"
-    assert result["required_contact_mode"] == "both"
+    assert result["required_contact_mode"] == "any"
     assert result["period"] == {
         "start": "2026-07-05T00:00:00+00:00",
         "end": "2026-08-05T00:00:00+00:00",

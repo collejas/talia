@@ -10,7 +10,6 @@ from uuid import UUID
 
 CREDITS_KEY = "limit.prospeccion.credits_month"
 RAW_RESULTS_KEY = "limit.prospeccion.denue_raw_results_month"
-CONTACT_MODES = {"any", "phone", "email", "both"}
 
 
 class ProspeccionUsageError(RuntimeError):
@@ -91,10 +90,9 @@ async def resolve_prospeccion_usage(
     if not isinstance(plan, dict) or plan.get("active") is not True:
         raise ProspeccionUsageError("prospeccion_plan_not_configured")
 
-    policy = context.get("policy") if isinstance(context.get("policy"), dict) else {}
-    contact_mode = str(policy.get("required_contact_mode") or "any").strip().lower()
-    if contact_mode not in CONTACT_MODES:
-        raise ProspeccionUsageError("prospeccion_policy_invalid")
+    # La calidad del lote la decide cada usuario con los filtros DENUE.
+    # `any` permanece como protección mínima para no guardar filas sin contacto.
+    contact_mode = "any"
 
     entitlements = [row for row in context.get("entitlements", []) if isinstance(row, dict)]
     overrides = [row for row in context.get("overrides", []) if isinstance(row, dict)]

@@ -267,7 +267,7 @@ export type ProspectoGuardarResponse = {
   creditos_consumidos?: number
   creditos_restantes?: number
   omitidos_por_limite?: number
-  required_contact_mode?: "any" | "phone" | "email" | "both"
+  required_contact_mode?: "any"
   period_start?: string
   period_end?: string
 }
@@ -296,7 +296,7 @@ export type ProspeccionUsageResponse = {
     consumed: number
     remaining: number
   }
-  required_contact_mode: "any" | "phone" | "email" | "both"
+  required_contact_mode: "any"
 }
 
 export type ProspectoLookupResponse = {

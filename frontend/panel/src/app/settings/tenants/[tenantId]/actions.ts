@@ -141,10 +141,6 @@ export async function updateTenantProspeccionLimitsAction(
 ): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)
-    const requiredContactMode = getText(formData, "required_contact_mode")
-    if (!["any", "phone", "email", "both"].includes(requiredContactMode)) {
-      throw new Error("El criterio de contacto no es válido.")
-    }
     const creditsOverride = parseOptionalNonNegativeInteger(formData, "credits_month_override")
     const rawOverride = parseOptionalNonNegativeInteger(formData, "denue_raw_results_month_override")
     const reason = getText(formData, "reason") || null
@@ -159,7 +155,7 @@ export async function updateTenantProspeccionLimitsAction(
         organizacionId: null,
         withUserToken: true,
         body: {
-          required_contact_mode: requiredContactMode,
+          required_contact_mode: "any",
           credits_month_override: creditsOverride,
           denue_raw_results_month_override: rawOverride,
           reason,

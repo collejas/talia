@@ -9,13 +9,6 @@ import { cn } from "@/lib/utils"
 
 const numberFormatter = new Intl.NumberFormat("es-MX")
 
-const contactModeLabels: Record<ProspeccionUsageResponse["required_contact_mode"], string> = {
-  any: "Correo o teléfono",
-  phone: "Teléfono obligatorio",
-  email: "Correo obligatorio",
-  both: "Correo y teléfono obligatorios",
-}
-
 function percentage(consumed: number, limit: number): number {
   if (limit <= 0) return 100
   return Math.min(Math.max((consumed / limit) * 100, 0), 100)
@@ -137,10 +130,6 @@ export function ProspeccionUsageSummary({
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
               <span>
                 Plan: <strong className="font-medium text-foreground">{usage.plan.name || usage.plan.code || "Sin nombre"}</strong>
-              </span>
-              <span>
-                Contacto requerido:{" "}
-                <strong className="font-medium text-foreground">{contactModeLabels[usage.required_contact_mode]}</strong>
               </span>
               <span>
                 Periodo:{" "}

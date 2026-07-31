@@ -57,7 +57,7 @@ class ProspeccionAdminRepo:
             "plan": await self.get_commercial_plan(plan_id=self.plan_id),
             "entitlements": await self.list_commercial_plan_entitlements(),
             "overrides": [],
-            "policy": {"required_contact_mode": "both"},
+            "policy": {"required_contact_mode": "any"},
             "period": {
                 "period_start": datetime(2026, 7, 1, tzinfo=UTC).isoformat(),
                 "period_end": datetime(2026, 8, 1, tzinfo=UTC).isoformat(),
@@ -106,7 +106,7 @@ async def test_update_tenant_prospeccion_override_requires_reason(
     response = await async_client.put(
         f"/admin/tenants/{prospeccion_repo.tenant_id}/prospeccion-limits",
         json={
-            "required_contact_mode": "email",
+            "required_contact_mode": "any",
             "credits_month_override": 12000,
             "denue_raw_results_month_override": None,
             "reason": None,
@@ -125,7 +125,7 @@ async def test_update_tenant_prospeccion_limits_returns_usage(
     response = await async_client.put(
         f"/admin/tenants/{prospeccion_repo.tenant_id}/prospeccion-limits",
         json={
-            "required_contact_mode": "both",
+            "required_contact_mode": "any",
             "credits_month_override": None,
             "denue_raw_results_month_override": None,
             "reason": None,
@@ -134,6 +134,6 @@ async def test_update_tenant_prospeccion_limits_returns_usage(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["required_contact_mode"] == "both"
+    assert payload["required_contact_mode"] == "any"
     assert payload["usage"]["credits_remaining"] == 8875
     assert prospeccion_repo.tenant_payload is not None

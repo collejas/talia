@@ -89,6 +89,44 @@ Registro cronológico de la implementación definida en:
 
 ---
 
+## 2026-07-31 · Calidad del lote definida mediante filtros DENUE
+
+**Estado:** Implementado localmente
+
+### Alcance
+
+- Cada usuario determina la calidad del lote con los filtros de correo, teléfono o ambos.
+- Se elimina el criterio obligatorio configurable por tenant.
+- Se mantiene una protección técnica mínima: no guardar registros sin correo y sin teléfono.
+- Todos los prospectos nuevos guardados consumen 1 crédito.
+
+### Base de datos
+
+- Migración local: `supabase/migrations/20280731_000000_prospeccion_filters_define_quality.sql`.
+- Normaliza las políticas existentes a `any`.
+- Restringe `required_contact_mode` al único valor técnico compatible `any`.
+- No elimina historial ni movimientos existentes.
+
+### Backend
+
+- La respuesta de uso resuelve siempre la protección mínima `any`.
+- La actualización administrativa sólo admite el valor técnico `any`.
+- El guardado transaccional conserva deduplicación, tenant scope e idempotencia.
+
+### Frontend
+
+- Se retiró el selector de contacto obligatorio en `/settings/tenants/[tenantId]`.
+- Se retiró “Contacto requerido” del medidor de `/prospeccion/denue-busqueda`.
+- Los filtros DENUE permanecen como la herramienta para definir la calidad del lote.
+
+### Operación
+
+- El cambio está preparado localmente.
+- El usuario realizará el despliegue.
+- La migración debe aplicarse antes o junto con el backend.
+
+---
+
 ## 2026-07-30 · Búsquedas DENUE en segundo plano y upsert optimizado
 
 **Estado:** Migrado
