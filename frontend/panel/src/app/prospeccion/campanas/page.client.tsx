@@ -2034,26 +2034,26 @@ ${secondCellHtml}
       </Dialog>
 
       <Dialog open={templatesDialogOpen} onOpenChange={setTemplatesDialogOpen}>
-        <DialogContent className="w-[98vw] max-w-[92rem] overflow-hidden p-0">
-          <div className="flex max-h-[92vh] min-h-[82vh] flex-col">
-            <DialogHeader className="border-b px-4 py-4 sm:px-6">
-              <DialogTitle className="text-base">Plantillas para {templatesCampanaNombre || "Campaña"}</DialogTitle>
-              <p className="text-sm text-muted-foreground">
+        <DialogContent className="w-[99vw] max-w-[96rem] overflow-hidden p-0">
+          <div className="flex max-h-[94vh] min-h-[84vh] flex-col">
+            <DialogHeader className="border-b px-4 py-3 sm:px-5">
+              <DialogTitle className="text-sm font-semibold">Plantillas para {templatesCampanaNombre || "Campaña"}</DialogTitle>
+              <p className="text-xs text-muted-foreground">
                 Este espacio solo sirve para preparar el mensaje base. Después se usará desde Prospectos para enviar
                 automáticamente.
               </p>
             </DialogHeader>
 
-            <div className="grid flex-1 min-h-0 gap-0 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
-              <aside className="min-h-0 border-b p-4 lg:border-b-0 lg:border-r lg:overflow-y-auto">
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-foreground">Plantillas guardadas</p>
+            <div className="grid flex-1 min-h-0 gap-0 lg:grid-cols-[260px_minmax(0,0.9fr)_minmax(440px,1.1fr)] xl:grid-cols-[280px_minmax(0,0.82fr)_minmax(560px,1.18fr)]">
+              <aside className="min-h-0 border-b bg-muted/10 p-3 lg:border-b-0 lg:border-r lg:overflow-y-auto">
+                <div className="mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Plantillas guardadas</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Estos mensajes ya están listos para usarse después desde la vista de Prospectos.
                   </p>
                 </div>
 
-                <div className="mb-4 flex flex-wrap gap-2">
+                <div className="mb-3 flex flex-wrap gap-2">
                   <Button type="button" size="sm" onClick={resetTemplateForm}>
                     + Nueva plantilla
                   </Button>
@@ -2065,7 +2065,7 @@ ${secondCellHtml}
                 </div>
 
                 {templatesCampanaCanal === "correo" ? (
-                  <div className="mb-4 rounded-lg border bg-muted/20 p-3">
+                  <div className="mb-3 rounded-lg border bg-background/80 p-2.5">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide">Importar desde Brevo</p>
@@ -2080,10 +2080,10 @@ ${secondCellHtml}
                     {!brevoCatalog.length ? (
                       <p className="text-xs text-muted-foreground">Sin plantillas Brevo disponibles o sin configuración.</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {brevoCatalog.slice(0, 8).map((item) => (
                           <div key={item.id} className="rounded-md border bg-background p-2">
-                            <p className="text-sm font-medium">{item.name}</p>
+                            <p className="text-xs font-semibold text-foreground">{item.name}</p>
                             <p className="truncate text-[11px] text-muted-foreground">{item.subject || "Sin asunto"}</p>
                             <div className="mt-2 flex items-center justify-between gap-2">
                               <Badge variant="outline">{item.is_active ? "Activa" : "Inactiva"}</Badge>
@@ -2111,19 +2111,19 @@ ${secondCellHtml}
                 ) : null}
 
                 {!templatesLoading && !templatesItems.length ? (
-                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">Aún no hay mensajes guardados para esta campaña.</p>
                     <p className="mt-1">Crea una plantilla para reutilizarla después en tus envíos.</p>
                   </div>
                 ) : null}
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {templatesItems.map((template) => (
-                    <div key={template.id} className="rounded-lg border p-3">
+                    <div key={template.id} className="rounded-lg border bg-background p-2.5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{template.nombre}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="truncate text-xs font-semibold text-foreground">{template.nombre}</p>
+                          <p className="text-[11px] text-muted-foreground">
                             {template.canal === "correo" ? "Correo" : template.canal === "whatsapp" ? "WhatsApp" : "Llamada"}{" "}
                             · {template.descripcion || "Sin descripción"}
                           </p>
@@ -2165,7 +2165,7 @@ ${secondCellHtml}
                           Activa
                         </Badge>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-1.5">
                         <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateEdit(template)}>
                           Editar
                         </Button>
@@ -2192,9 +2192,9 @@ ${secondCellHtml}
                 </div>
               </aside>
 
-              <section className="min-h-0 border-b p-4 lg:border-b-0 lg:border-r lg:overflow-y-auto">
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-foreground">Editor de plantilla</p>
+              <section className="min-h-0 border-b p-3 lg:border-b-0 lg:border-r lg:overflow-y-auto [&_[data-slot=input]]:h-8 [&_[data-slot=input]]:text-sm [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:w-full [&_[data-slot=select-trigger]]:text-sm [&_button]:text-xs [&_label]:text-[11px] [&_label]:font-medium [&_textarea]:text-sm [&_textarea]:leading-5">
+                <div className="mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Editor de plantilla</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {templateForm.canal === "whatsapp"
                       ? "Aquí registras en la app una plantilla que ya existe y fue aprobada en Meta. La creación real no se hace en este panel."
@@ -2203,15 +2203,15 @@ ${secondCellHtml}
                 </div>
 
                 {templateError ? (
-                  <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <div className="mb-3 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {templateError}
                   </div>
                 ) : null}
 
                 {templateForm.canal === "whatsapp" ? (
-                  <div className="space-y-4">
-                    <section className="rounded-xl border border-sky-200 bg-sky-50/80 p-4">
-                      <p className="text-sm font-semibold text-sky-950">Registro local de plantilla Meta</p>
+                  <div className="space-y-3">
+                    <section className="rounded-xl border border-sky-200 bg-sky-50/80 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-950">Registro local de plantilla Meta</p>
                       <p className="mt-1 text-xs leading-5 text-sky-900">
                         Esta pantalla no crea plantillas en Meta. Aquí solo guardas la referencia aprobada para usarla en campañas de prospección.
                       </p>
@@ -2222,9 +2222,9 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Identidad interna</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Identidad interna</p>
                         <p className="text-xs text-muted-foreground">
                           Estos datos ayudan a tu equipo a reconocer la plantilla dentro de la app.
                         </p>
@@ -2288,9 +2288,9 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Vinculación con Meta</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Vinculación con Meta</p>
                         <p className="text-xs text-muted-foreground">
                           Estos campos deben coincidir con la plantilla ya creada y aprobada en WhatsApp Manager.
                         </p>
@@ -2360,9 +2360,9 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Contenido de referencia</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Contenido de referencia</p>
                         <p className="text-xs text-muted-foreground">
                           Guarda aquí una copia útil del texto aprobado en Meta. La app la usa para selección, vista previa y validación de variables.
                         </p>
@@ -2396,9 +2396,9 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Operación en prospección</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Operación en prospección</p>
                         <p className="text-xs text-muted-foreground">
                           Ajustes que usa Tal-IA para generar enlaces, atribución y presentación interna.
                         </p>
@@ -2468,10 +2468,10 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
+                    <section className="rounded-lg border bg-background p-3">
                       <div className="mb-3 flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">Recursos opcionales</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Recursos opcionales</p>
                           <p className="text-xs text-muted-foreground">
                             Logo o imagen de apoyo para la referencia visual interna.
                           </p>
@@ -2531,10 +2531,10 @@ ${secondCellHtml}
                     </section>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Datos de la plantilla</p>
+                  <div className="space-y-3">
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Datos de la plantilla</p>
                         <p className="text-xs text-muted-foreground">
                           Ponle un nombre fácil de reconocer. Este nombre solo lo verá tu equipo.
                         </p>
@@ -2598,16 +2598,16 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Contenido del mensaje</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Contenido del mensaje</p>
                         <p className="text-xs text-muted-foreground">
                           Escribe el mensaje que recibirá el prospecto cuando uses esta plantilla.
                         </p>
                       </div>
 
                       {templateForm.canal === "correo" ? (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           <div className="space-y-1">
                             <Label>Asunto del correo</Label>
                             <Input
@@ -2670,9 +2670,9 @@ ${secondCellHtml}
                       ) : null}
                     </section>
 
-                    <section className="rounded-lg border p-4">
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-foreground">Personalización automática</p>
+                    <section className="rounded-lg border bg-background p-3">
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Personalización automática</p>
                         <p className="text-xs text-muted-foreground">
                           Puedes insertar datos del prospecto para que cada mensaje se vea personalizado.
                         </p>
@@ -2692,18 +2692,18 @@ ${secondCellHtml}
                       </div>
                     </section>
 
-                    <details className="rounded-lg border p-4">
+                    <details className="rounded-lg border bg-background p-3">
                       <summary className="cursor-pointer list-none">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">Configuración avanzada</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Configuración avanzada</p>
                           <p className="text-xs text-muted-foreground">
                             Lo avanzado debe existir, pero no debe estorbarle al usuario normal.
                           </p>
                         </div>
                       </summary>
-                      <div className="mt-4 space-y-4">
+                      <div className="mt-3 space-y-3">
                         {templateForm.canal === "correo" ? (
-                          <div className="space-y-1 rounded-md border bg-background/70 p-3">
+                          <div className="space-y-1 rounded-md border bg-background/70 p-2.5">
                             <div className="flex items-center justify-between gap-2">
                               <div>
                                 <Label>Frase de WhatsApp para captación</Label>
@@ -2753,14 +2753,14 @@ ${secondCellHtml}
                         ) : null}
 
                         {templateForm.canal === "correo" ? (
-                          <div className="rounded-md border bg-background/70 p-3">
-                            <div className="mb-3">
-                              <p className="text-sm font-medium text-foreground">Imágenes de la plantilla</p>
+                          <div className="rounded-md border bg-background/70 p-2.5">
+                            <div className="mb-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Imágenes de la plantilla</p>
                               <p className="text-xs text-muted-foreground">
                                 Asigna recursos cargados a variables reutilizables. Cada imagen queda aislada por tenant.
                               </p>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-2 sm:grid-cols-2">
                               {EMAIL_IMAGE_SLOTS.map((slot) => {
                                 const currentAsset =
                                   logos.find((logo) => logo.id === templateImageIds[slot.key]) ?? templateImageAssets[slot.key] ?? null
@@ -2780,9 +2780,12 @@ ${secondCellHtml}
                                       }}
                                     >
                                       <SelectTrigger>
-                                        <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"}>
-                                          {currentAsset?.nombre || undefined}
-                                        </SelectValue>
+                                        <SelectValue
+                                          placeholder={
+                                            currentAsset?.nombre ||
+                                            (logosLoading ? "Cargando imágenes..." : "Selecciona una imagen")
+                                          }
+                                        />
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="__none__">Sin imagen</SelectItem>
@@ -2802,9 +2805,9 @@ ${secondCellHtml}
                           </div>
                         ) : null}
 
-                        <div className="rounded-md border bg-muted/20 p-3">
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-foreground">Imagen o logo</p>
+                          <div className="rounded-md border bg-muted/20 p-2.5">
+                            <div className="mb-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Imagen o logo</p>
                             <p className="text-xs text-muted-foreground">Se usará en correo o WhatsApp según el canal.</p>
                           </div>
                           <input
@@ -2838,13 +2841,13 @@ ${secondCellHtml}
                             </Button>
                           </div>
                           {logos.length ? (
-                            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
                               {logos.map((logo) => (
                                 <button
                                   key={logo.id}
                                   type="button"
                                   className={cn(
-                                    "rounded border p-1 text-left",
+                                    "rounded border p-1 text-left transition-colors",
                                     selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
                                   )}
                                   onClick={() => setSelectedLogoUrl(logo.file_url)}
@@ -2855,7 +2858,7 @@ ${secondCellHtml}
                                     width={160}
                                     height={48}
                                     unoptimized
-                                    className="h-12 w-full rounded object-contain"
+                                    className="h-10 w-full rounded object-contain"
                                   />
                                   <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
                                 </button>
@@ -2903,7 +2906,7 @@ ${secondCellHtml}
                         </div>
 
                         {templateForm.canal === "correo" ? (
-                          <div className="space-y-4 rounded-md border bg-background/70 p-3">
+                          <div className="space-y-3 rounded-md border bg-background/70 p-2.5">
                             <div className="space-y-1">
                               <Label>Diseño HTML avanzado</Label>
                               <Textarea
@@ -2926,7 +2929,7 @@ ${secondCellHtml}
                                 {templateForm.cuerpoHtml.length.toLocaleString("es-MX")} / {EMAIL_HTML_MAX_LENGTH.toLocaleString("es-MX")} caracteres
                               </p>
                             </div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5">
                               <Button type="button" variant="outline" size="sm" onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}>
                                 Negrita
                               </Button>
@@ -2989,14 +2992,14 @@ ${secondCellHtml}
                 )}
               </section>
 
-              <section className="min-h-0 p-4 lg:overflow-y-auto bg-muted/20">
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-foreground">Vista previa</p>
+              <section className="min-h-0 bg-muted/10 p-3 lg:overflow-y-auto">
+                <div className="mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Vista previa</p>
                   <p className="mt-1 text-xs text-muted-foreground">Así verá el mensaje un prospecto.</p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="rounded-lg border bg-background p-4">
+                <div className="space-y-3">
+                  <div className="rounded-xl border bg-background p-3 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Ejemplo renderizado</p>
@@ -3017,7 +3020,7 @@ ${secondCellHtml}
                     {previewError ? <p className="mt-3 text-xs text-destructive">{previewError}</p> : null}
 
                     {templateForm.canal === "correo" ? (
-                      <div className="mt-4 space-y-3 rounded-2xl border bg-slate-50 p-4">
+                      <div className="mt-3 space-y-3 rounded-2xl border bg-slate-50 p-4">
                         <div className="text-xs text-muted-foreground">Para: prospecto@ejemplo.com</div>
                         <div className="text-sm font-medium text-foreground">Asunto: {previewSubject || "Sin asunto"}</div>
                         <div className="rounded-xl border bg-white p-3 text-sm leading-6 text-foreground">
@@ -3027,7 +3030,7 @@ ${secondCellHtml}
                             <span className="text-muted-foreground">Sin contenido</span>
                           )}
                         </div>
-                        <div className="rounded-xl border bg-white p-3 text-sm leading-6 text-foreground">
+                        <div className="min-h-[28rem] rounded-xl border bg-white p-4 text-sm leading-6 text-foreground">
                           {previewBodyHtml ? (
                             <div dangerouslySetInnerHTML={{ __html: previewBodyHtml }} />
                           ) : (
@@ -3038,9 +3041,9 @@ ${secondCellHtml}
                     ) : null}
 
                     {templateForm.canal === "whatsapp" ? (
-                      <div className="mt-4 rounded-2xl border bg-emerald-50 p-4">
+                      <div className="mt-3 rounded-2xl border bg-emerald-50 p-4">
                         <div className="mb-2 text-xs text-muted-foreground">WhatsApp</div>
-                        <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-foreground shadow-sm">
+                        <div className="max-w-[92%] min-h-[18rem] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-foreground shadow-sm">
                           {previewBodyText || "Sin contenido"}
                         </div>
                         {templateForm.waLinkLabel ? (
@@ -3052,7 +3055,7 @@ ${secondCellHtml}
                     ) : null}
 
                     {templateForm.canal === "llamada" ? (
-                      <div className="mt-4 rounded-2xl border bg-background p-4">
+                      <div className="mt-3 min-h-[20rem] rounded-2xl border bg-background p-4">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Guion</p>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{previewBodyText || "Sin contenido"}</p>
                       </div>
