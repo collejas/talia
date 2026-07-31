@@ -67,6 +67,8 @@ type LogoAsset = {
   file_url: string
 }
 
+type TemplateImageAssetMap = Partial<Record<ContactoTemplateImagenVariable, LogoAsset>>
+
 const EMAIL_IMAGE_MAX_WIDTH_LANDSCAPE = 600
 const EMAIL_IMAGE_MAX_WIDTH_PORTRAIT = 420
 const EMAIL_TEMPLATE_PLACEHOLDER_PATTERN = /{{\s*([\w.-]+)\s*}}/g
@@ -190,6 +192,7 @@ export function CampanasMetricsClient() {
   const [logoUploading, setLogoUploading] = useState(false)
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
   const [templateImageIds, setTemplateImageIds] = useState<Partial<Record<ContactoTemplateImagenVariable, string>>>({})
+  const [templateImageAssets, setTemplateImageAssets] = useState<TemplateImageAssetMap>({})
   const [previewProspecto, setPreviewProspecto] = useState<ProspectoItem | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -925,7 +928,7 @@ ${secondCellHtml}
         throw new Error(typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.")
       }
       const items = Array.isArray(payload?.logos) ? payload.logos : []
-      const normalized = items
+      const normalized: LogoAsset[] = items
         .map((item: unknown) => {
           if (!item || typeof item !== "object") return null
           const row = item as Record<string, unknown>
@@ -939,7 +942,15 @@ ${secondCellHtml}
         })
         .filter((item: LogoAsset | null): item is LogoAsset => item != null)
       setLogos(normalized)
-      if (normalized.length) setSelectedLogoUrl(normalized[0].file_url)
+      setTemplateImageAssets((prev) => {
+        const next = { ...prev }
+        for (const slot of EMAIL_IMAGE_SLOTS) {
+          const matched = normalized.find((logo) => logo.id === next[slot.key]?.id)
+          if (matched) next[slot.key] = matched
+        }
+        return next
+      })
+      setSelectedLogoUrl((current) => current || normalized[0]?.file_url || "")
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar los logos."
       setTemplateError(message)
@@ -1225,6 +1236,7 @@ ${secondCellHtml}
       setTemplatesCampanaCanal(canal)
       setSelectedLogoUrl("")
       setTemplateImageIds({})
+      setTemplateImageAssets({})
       setTemplateForm({
         id: "",
         canal: canal ?? "correo",
@@ -1261,9 +1273,20 @@ ${secondCellHtml}
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
     const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
     const imageIds = Object.fromEntries((template.imagenes ?? []).map((image) => [image.variable_clave, image.logo_id]))
+    const imageAssets = Object.fromEntries(
+      (template.imagenes ?? []).map((image) => [
+        image.variable_clave,
+        {
+          id: image.logo_id,
+          nombre: (image.nombre ?? "").trim() || "Imagen",
+          file_url: (image.file_url ?? "").trim(),
+        },
+      ])
+    ) as TemplateImageAssetMap
     const boundLogo = template.imagenes?.find((image) => image.variable_clave === "logo_url")
     const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
     setTemplateImageIds(imageIds)
+    setTemplateImageAssets(imageAssets)
     setSelectedLogoUrl(boundLogo?.file_url?.trim() || logoFromMetadata)
     setTemplateForm({
       id: template.id,
@@ -1305,8 +1328,19 @@ ${secondCellHtml}
       const baseSlug = buildSafeTemplateSlug((template.slug ?? "").trim() || baseName, template.canal, baseName)
       const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
       const imageIds = Object.fromEntries((template.imagenes ?? []).map((image) => [image.variable_clave, image.logo_id]))
+      const imageAssets = Object.fromEntries(
+        (template.imagenes ?? []).map((image) => [
+          image.variable_clave,
+          {
+            id: image.logo_id,
+            nombre: (image.nombre ?? "").trim() || "Imagen",
+            file_url: (image.file_url ?? "").trim(),
+          },
+        ])
+      ) as TemplateImageAssetMap
       const boundLogo = template.imagenes?.find((image) => image.variable_clave === "logo_url")
       setTemplateImageIds(imageIds)
+      setTemplateImageAssets(imageAssets)
       setSelectedLogoUrl(boundLogo?.file_url?.trim() || logoFromMetadata)
       setTemplateForm({
         id: "",
@@ -2727,33 +2761,43 @@ ${secondCellHtml}
                               </p>
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2">
-                              {EMAIL_IMAGE_SLOTS.map((slot) => (
-                                <div key={slot.key} className="space-y-1">
-                                  <Label>{slot.label}</Label>
-                                  <Select
-                                    value={templateImageIds[slot.key] || "__none__"}
-                                    onValueChange={(value) => {
-                                      const nextId = value === "__none__" ? "" : value
-                                      setTemplateImageIds((prev) => ({ ...prev, [slot.key]: nextId || undefined }))
-                                      if (slot.key === "logo_url") {
-                                        const asset = logos.find((logo) => logo.id === nextId)
-                                        setSelectedLogoUrl(asset?.file_url ?? "")
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">Sin imagen</SelectItem>
-                                      {logos.map((logo) => (
-                                        <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <p className="font-mono text-[11px] text-muted-foreground">{`{{${slot.key}}}`}</p>
-                                </div>
-                              ))}
+                              {EMAIL_IMAGE_SLOTS.map((slot) => {
+                                const currentAsset =
+                                  logos.find((logo) => logo.id === templateImageIds[slot.key]) ?? templateImageAssets[slot.key] ?? null
+                                return (
+                                  <div key={slot.key} className="space-y-1">
+                                    <Label>{slot.label}</Label>
+                                    <Select
+                                      value={templateImageIds[slot.key] || "__none__"}
+                                      onValueChange={(value) => {
+                                        const nextId = value === "__none__" ? "" : value
+                                        const asset = logos.find((logo) => logo.id === nextId) ?? null
+                                        setTemplateImageIds((prev) => ({ ...prev, [slot.key]: nextId || undefined }))
+                                        setTemplateImageAssets((prev) => ({ ...prev, [slot.key]: asset || undefined }))
+                                        if (slot.key === "logo_url") {
+                                          setSelectedLogoUrl(asset?.file_url ?? "")
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"}>
+                                          {currentAsset?.nombre || undefined}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">Sin imagen</SelectItem>
+                                        {currentAsset && !logos.some((logo) => logo.id === currentAsset.id) ? (
+                                          <SelectItem value={currentAsset.id}>{currentAsset.nombre}</SelectItem>
+                                        ) : null}
+                                        {logos.map((logo) => (
+                                          <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="font-mono text-[11px] text-muted-foreground">{`{{${slot.key}}}`}</p>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
                         ) : null}
