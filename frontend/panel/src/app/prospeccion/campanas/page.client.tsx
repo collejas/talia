@@ -976,6 +976,12 @@ ${secondCellHtml}
     }
   }, [effectiveTemplateSlug, normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templatesCampanaId])
 
+  const whatsappPreviewImageUrl = useMemo(() => normalizeLogoUrl(selectedLogoUrl), [normalizeLogoUrl, selectedLogoUrl])
+  const whatsappPreviewImageLabel = useMemo(() => {
+    const asset = templateImageAssets.logo_url
+    return (asset?.nombre || "").trim() || "Imagen de la plantilla"
+  }, [templateImageAssets.logo_url])
+
   const whatsappCtaUrl = useMemo(() => {
     const base = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim()
     if (!base) return ""
@@ -1136,6 +1142,25 @@ ${secondCellHtml}
     () => renderWithPreviewContext(templateForm.cuerpoHtml || ""),
     [renderWithPreviewContext, templateForm.cuerpoHtml]
   )
+
+  const whatsappPreviewMessageText = useMemo(() => {
+    const raw = (previewBodyText || "").replace(/\r\n/g, "\n").trim()
+    if (!raw) return ""
+    if (!whatsappPreviewImageUrl) return raw
+    const lines = raw
+      .split("\n")
+      .filter((line) => line.trim() !== whatsappPreviewImageUrl.trim())
+    return lines.join("\n").trim()
+  }, [previewBodyText, whatsappPreviewImageUrl])
+
+  const whatsappPreviewMessageParagraphs = useMemo(() => {
+    const raw = whatsappPreviewMessageText
+    if (!raw) return []
+    return raw
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.split("\n"))
+      .filter((paragraph) => paragraph.some((line) => line.trim().length > 0))
+  }, [whatsappPreviewMessageText])
 
   const handleLogoFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -3016,8 +3041,44 @@ ${secondCellHtml}
                     {templateForm.canal === "whatsapp" ? (
                       <div className="mt-3 rounded-2xl border bg-emerald-50 p-4">
                         <div className="mb-2 text-xs text-muted-foreground">WhatsApp</div>
-                        <div className="max-w-[92%] min-h-[18rem] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-foreground shadow-sm">
-                          {previewBodyText || "Sin contenido"}
+                        <div className="max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-white text-sm leading-6 text-foreground shadow-sm">
+                          {whatsappPreviewImageUrl ? (
+                            <div className="border-b bg-muted/20">
+                              <img
+                                src={whatsappPreviewImageUrl}
+                                alt={whatsappPreviewImageLabel}
+                                className="h-48 w-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : null}
+                          <div className="space-y-2 px-4 py-3">
+                            {whatsappPreviewMessageParagraphs.length ? (
+                              <div className="space-y-2">
+                                {whatsappPreviewMessageParagraphs.map((paragraph, paragraphIndex) => (
+                                  <div key={`wa-preview-paragraph-${paragraphIndex}`} className="space-y-0.5">
+                                    {paragraph.map((line, lineIndex) => {
+                                      const content = line.trim()
+                                      const isBullet = /^(\u2022|-|\*|\d+\.)\s+/.test(content)
+                                      return (
+                                        <div
+                                          key={`wa-preview-line-${paragraphIndex}-${lineIndex}`}
+                                          className={cn(
+                                            "whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground",
+                                            isBullet ? "pl-4" : ""
+                                          )}
+                                        >
+                                          {content ? line : "\u00A0"}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[15px] leading-6 text-muted-foreground">Sin contenido</p>
+                            )}
+                          </div>
                         </div>
                         {templateForm.waLinkLabel ? (
                           <div className="mt-3 inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-900">
