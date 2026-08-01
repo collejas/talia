@@ -4278,6 +4278,7 @@ class WhatsProspTemplateCreatePayload(BaseModel):
     template_status: Literal["draft", "approved", "rejected", "archived"] = Field(default="draft")
     activo: bool = Field(default=True)
     metadata: dict[str, Any] | None = Field(default=None)
+    imagenes: list[ContactoTemplateImagenPayload] = Field(default_factory=list, max_length=7)
 
 
 class WhatsProspTemplateUpdatePayload(BaseModel):
@@ -4295,6 +4296,7 @@ class WhatsProspTemplateUpdatePayload(BaseModel):
     template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
     activo: bool | None = Field(default=None)
     metadata: dict[str, Any] | None = Field(default=None)
+    imagenes: list[ContactoTemplateImagenPayload] | None = Field(default=None, max_length=7)
 
     @model_validator(mode="after")
     def _ensure_changes(self) -> "WhatsProspTemplateUpdatePayload":
@@ -32774,6 +32776,15 @@ async def listar_whats_prosp_templates(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if items:
+        try:
+            image_rows = await repo.list_contact_template_images(
+                usuario_token=user_token,
+                template_ids=[str(item["id"]) for item in items if isinstance(item, dict) and _clean_text(item.get("id"))],
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        _attach_contact_template_images(items, image_rows)
     return {
         "ok": True,
         "items": items,
@@ -32802,6 +32813,14 @@ async def obtener_whats_prosp_template(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not template:
         raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+    try:
+        image_rows = await repo.list_contact_template_images(
+            usuario_token=user_token,
+            template_ids=[str(template["id"])],
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _attach_contact_template_images([template], image_rows)
     return {"ok": True, "template": template}
 
 
@@ -32814,8 +32833,10 @@ async def crear_whats_prosp_template(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: WhatsProspTemplateCreatePayload,
 ) -> dict[str, Any]:
+    raw = payload.model_dump(mode="json", exclude_none=True)
+    images = raw.pop("imagenes", [])
     body = _build_whats_prosp_template_payload(
-        payload.model_dump(mode="json", exclude_none=True),
+        raw,
         organizacion_id=organizacion_id,
     )
     try:
@@ -32823,10 +32844,24 @@ async def crear_whats_prosp_template(
             usuario_token=user_token,
             payload=body,
         )
+        if images:
+            parsed_images = [ContactoTemplateImagenPayload.model_validate(image) for image in images]
+            await _replace_contact_template_images(
+                repo=repo,
+                user_token=user_token,
+                organizacion_id=organizacion_id,
+                template_id=UUID(str(template["id"])),
+                images=parsed_images,
+            )
+        image_rows = await repo.list_contact_template_images(
+            usuario_token=user_token,
+            template_ids=[str(template["id"])],
+        )
     except CRMRepositoryError as exc:
         if "whats_prosp_template_duplicate" in str(exc):
             raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _attach_contact_template_images([template], image_rows)
     return {"ok": True, "template": template}
 
 
@@ -32848,6 +32883,7 @@ async def actualizar_whats_prosp_template(
     if not current:
         raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
     raw_data = payload.model_dump(mode="json", exclude_unset=True)
+    images = raw_data.pop("imagenes", None)
     body = _build_whats_prosp_template_payload(
         raw_data,
         organizacion_id=organizacion_id,
@@ -32864,6 +32900,19 @@ async def actualizar_whats_prosp_template(
             template_id=template_id,
             payload=body,
         )
+        if images is not None:
+            parsed_images = [ContactoTemplateImagenPayload.model_validate(image) for image in images]
+            await _replace_contact_template_images(
+                repo=repo,
+                user_token=user_token,
+                organizacion_id=organizacion_id,
+                template_id=template_id,
+                images=parsed_images,
+            )
+        image_rows = await repo.list_contact_template_images(
+            usuario_token=user_token,
+            template_ids=[str(template_id)],
+        )
     except CRMRepositoryError as exc:
         detail = str(exc)
         if "whats_prosp_template_not_found" in detail:
@@ -32871,6 +32920,7 @@ async def actualizar_whats_prosp_template(
         if "whats_prosp_template_duplicate" in detail:
             raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
         raise HTTPException(status_code=502, detail=detail) from exc
+    _attach_contact_template_images([template], image_rows)
     return {"ok": True, "template": template}
 
 

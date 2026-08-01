@@ -916,6 +916,7 @@ async def _send_whatsapp_message(
     content_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    header_image_url: str | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     if not body and not content_sid and not template_name:
@@ -927,6 +928,7 @@ async def _send_whatsapp_message(
         content_variables=content_variables,
         template_name=template_name,
         template_language=template_language,
+        header_image_url=header_image_url,
         organizacion_id=organizacion_id,
     )
 
@@ -1113,6 +1115,43 @@ async def _run_envio_whatsapp(
     )
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
+    image_context: dict[str, str] = {}
+    if organizacion_id:
+        template_id_raw = _clean_text(payload.get("template_id"))
+        if template_id_raw:
+            try:
+                image_context = await CRMRepository().list_contact_template_image_context(
+                    organizacion_id=organizacion_id,
+                    template_id=UUID(template_id_raw),
+                )
+            except (CRMRepositoryError, TypeError, ValueError) as exc:
+                log_event(
+                    logger,
+                    "prospeccion.sender_template_images_unavailable",
+                    organizacion_id=str(organizacion_id),
+                    template_id=template_id_raw,
+                    error=str(exc),
+                )
+            else:
+                if image_context:
+                    merged_metadata = (
+                        dict(metadata)
+                        if isinstance(metadata, dict)
+                        else {}
+                    )
+                    merged_metadata.update(image_context)
+                    metadata = merged_metadata
+                    context = _build_placeholder_context(detalle, metadata, payload)
+    header_image_url = _clean_text(
+        image_context.get("logo_url")
+        or image_context.get("hero_image_url")
+        or image_context.get("image_url")
+    )
+    if not header_image_url and image_context:
+        for value in image_context.values():
+            header_image_url = _clean_text(value)
+            if header_image_url:
+                break
     rendered_vars: dict[str, str] | None = None
     body_template = _clean_text(payload.get("body")) or ""
     if template_sid or meta_template_name:
@@ -1145,6 +1184,7 @@ async def _run_envio_whatsapp(
             content_variables=rendered_vars,
             template_name=meta_template_name,
             template_language=meta_template_language,
+            header_image_url=header_image_url,
             organizacion_id=organizacion_id,
         )
         fallback_used = False
@@ -1174,6 +1214,7 @@ async def _run_envio_whatsapp(
             content_variables=rendered_vars,
             template_name=meta_template_name,
             template_language=meta_template_language,
+            header_image_url=header_image_url,
             organizacion_id=organizacion_id,
         )
         preview_text = rendered_body or None

@@ -1459,6 +1459,7 @@ ${secondCellHtml}
           template_status: templateForm.templateStatus,
           activo: true,
           metadata,
+          imagenes,
         }
         if (templateForm.id) {
           await updateWhatsProspTemplate(templateForm.id, whatsPayload)

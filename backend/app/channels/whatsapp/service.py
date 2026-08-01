@@ -1592,9 +1592,25 @@ def _normalize_meta_template_name(value: Any) -> str | None:
 
 def _build_meta_template_components(
     content_variables: dict[str, str] | None,
+    *,
+    header_image_url: str | None = None,
 ) -> list[dict[str, Any]] | None:
+    components: list[dict[str, Any]] = []
+    normalized_header_image_url = _trim_text(header_image_url)
+    if normalized_header_image_url:
+        components.append(
+            {
+                "type": "header",
+                "parameters": [
+                    {
+                        "type": "image",
+                        "image": {"link": normalized_header_image_url},
+                    }
+                ],
+            }
+        )
     if not content_variables:
-        return None
+        return components or None
 
     def _sort_key(item: tuple[str, str]) -> tuple[int, int | str]:
         key = str(item[0]).strip()
@@ -1607,8 +1623,9 @@ def _build_meta_template_components(
         text_value = str(value or "")
         parameters.append({"type": "text", "text": text_value})
     if not parameters:
-        return None
-    return [{"type": "body", "parameters": parameters}]
+        return components or None
+    components.append({"type": "body", "parameters": parameters})
+    return components
 
 
 def _build_meta_template_payload(
@@ -1616,6 +1633,7 @@ def _build_meta_template_payload(
     template_name: str,
     template_language: str,
     content_variables: dict[str, str] | None = None,
+    header_image_url: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "template",
@@ -1627,7 +1645,10 @@ def _build_meta_template_payload(
             },
         },
     }
-    components = _build_meta_template_components(content_variables)
+    components = _build_meta_template_components(
+        content_variables,
+        header_image_url=header_image_url,
+    )
     if components:
         payload["template"]["components"] = components
     return payload
@@ -4570,6 +4591,7 @@ async def _send_meta_whatsapp_reply(
     content_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    header_image_url: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
     meta_phone_number_id: str | None = None,
@@ -4622,6 +4644,7 @@ async def _send_meta_whatsapp_reply(
                 template_name=normalized_template_name,
                 template_language=normalized_template_language,
                 content_variables=content_variables,
+                header_image_url=header_image_url,
             ),
         }
     else:
@@ -4795,6 +4818,7 @@ async def _send_whatsapp_reply(
     content_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    header_image_url: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
     meta_phone_number_id: str | None = None,
@@ -4811,6 +4835,7 @@ async def _send_whatsapp_reply(
             content_variables=content_variables,
             template_name=template_name,
             template_language=template_language,
+            header_image_url=header_image_url,
             attachments=attachments,
             organizacion_id=organizacion_id,
             meta_phone_number_id=meta_phone_number_id,

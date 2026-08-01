@@ -580,6 +580,7 @@ export type WhatsProspTemplateInput = {
   template_status?: "draft" | "approved" | "rejected" | "archived"
   activo?: boolean
   metadata?: Record<string, unknown> | null
+  imagenes?: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }>
 }
 
 export type WhatsAppAtribucionTipoMatch = "exacta" | "contiene" | "regex"
