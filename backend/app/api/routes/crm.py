@@ -9988,6 +9988,62 @@ def _attach_contact_template_images(
         item["imagenes"] = by_template.get(_clean_text(item.get("id")) or "", [])
 
 
+def _normalize_template_media_url(value: Any) -> str:
+    raw = _clean_text(value)
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+    return raw.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+
+
+async def _maybe_auto_bind_whats_prosp_template_images(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    raw_payload: dict[str, Any],
+    images: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if any(_clean_text(image.get("variable_clave")) == "logo_url" for image in images):
+        return images
+    metadata = raw_payload.get("metadata") if isinstance(raw_payload.get("metadata"), dict) else {}
+    candidate_urls = [
+        _clean_text(metadata.get("media_url_base")),
+        _clean_text(metadata.get("media_url_tracked")),
+        _clean_text(metadata.get("logo_url")),
+    ]
+    candidate_urls = [url for url in candidate_urls if url]
+    if not candidate_urls:
+        return images
+    try:
+        logos = await repo.list_logos(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "prospeccion.whatsapp_template_logo_lookup_failed",
+            organizacion_id=str(organizacion_id),
+            error=str(exc),
+        )
+        return images
+    logo_by_url: dict[str, str] = {}
+    for row in logos:
+        if not isinstance(row, dict):
+            continue
+        logo_id = _clean_text(row.get("id"))
+        file_url = _normalize_template_media_url(row.get("file_url"))
+        if logo_id and file_url:
+            logo_by_url.setdefault(file_url, logo_id)
+    resolved_logo_id = ""
+    for candidate in candidate_urls:
+        resolved_logo_id = logo_by_url.get(_normalize_template_media_url(candidate)) or ""
+        if resolved_logo_id:
+            break
+    if not resolved_logo_id:
+        return images
+    return [{"variable_clave": "logo_url", "logo_id": resolved_logo_id}, *images]
+
+
 async def _replace_contact_template_images(
     *,
     repo: CRMRepository,
@@ -32835,6 +32891,12 @@ async def crear_whats_prosp_template(
 ) -> dict[str, Any]:
     raw = payload.model_dump(mode="json", exclude_none=True)
     images = raw.pop("imagenes", [])
+    images = await _maybe_auto_bind_whats_prosp_template_images(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        raw_payload=raw,
+        images=images,
+    )
     body = _build_whats_prosp_template_payload(
         raw,
         organizacion_id=organizacion_id,
@@ -32884,6 +32946,13 @@ async def actualizar_whats_prosp_template(
         raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
     raw_data = payload.model_dump(mode="json", exclude_unset=True)
     images = raw_data.pop("imagenes", None)
+    if images is not None:
+        images = await _maybe_auto_bind_whats_prosp_template_images(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            raw_payload=raw_data,
+            images=images,
+        )
     body = _build_whats_prosp_template_payload(
         raw_data,
         organizacion_id=organizacion_id,

@@ -975,11 +975,19 @@ ${secondCellHtml}
     }
   }, [effectiveTemplateSlug, normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templatesCampanaId])
 
-  const whatsappPreviewImageUrl = useMemo(() => normalizeLogoUrl(selectedLogoUrl), [normalizeLogoUrl, selectedLogoUrl])
+  const whatsappUsesHeaderImage = useMemo(
+    () => /{{\s*logo_url\s*}}/i.test(templateForm.cuerpoTexto || ""),
+    [templateForm.cuerpoTexto]
+  )
+  const whatsappPreviewImageUrl = useMemo(
+    () => (whatsappUsesHeaderImage ? normalizeLogoUrl(selectedLogoUrl) : ""),
+    [normalizeLogoUrl, selectedLogoUrl, whatsappUsesHeaderImage]
+  )
   const whatsappPreviewImageLabel = useMemo(() => {
+    if (!whatsappUsesHeaderImage) return ""
     const asset = templateImageAssets.logo_url
     return (asset?.nombre || "").trim() || "Imagen de la plantilla"
-  }, [templateImageAssets.logo_url])
+  }, [templateImageAssets.logo_url, whatsappUsesHeaderImage])
 
   const whatsappCtaUrl = useMemo(() => {
     const base = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim()
@@ -1490,7 +1498,7 @@ ${secondCellHtml}
       metadata["wa_rule_name"] = selectedWaRule.nombre_regla ?? null
     }
     if (waMeUrl) metadata["wa_me_url"] = waMeUrl
-    if (templateForm.canal === "whatsapp" && normalizedLogoUrl) {
+    if (templateForm.canal === "whatsapp" && whatsappUsesHeaderImage && normalizedLogoUrl) {
       metadata["media_url_base"] = normalizedLogoUrl
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
     }
@@ -1513,10 +1521,24 @@ ${secondCellHtml}
       metadata["empresa"] = templateForm.nombreEmpresa.trim()
     }
     const canalToSave = templatesCampanaCanal ?? templateForm.canal
-    const imagenes = EMAIL_IMAGE_SLOTS.flatMap(({ key }) => {
+    const emailImagenes: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }> = []
+    for (const { key } of EMAIL_IMAGE_SLOTS) {
       const logoId = templateImageIds[key]
-      return logoId ? [{ variable_clave: key, logo_id: logoId }] : []
-    })
+      if (logoId) {
+        emailImagenes.push({ variable_clave: key, logo_id: logoId })
+      }
+    }
+    const whatsappLogoId =
+      templateForm.canal === "whatsapp" && whatsappUsesHeaderImage
+        ? templateImageIds.logo_url ||
+          logos.find((logo) => logo.file_url === normalizedLogoUrl)?.id ||
+          logos.find((logo) => logo.file_url === whatsappMediaUrl)?.id ||
+          undefined
+        : undefined
+    const whatsappImagenes: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }> = whatsappLogoId
+      ? [{ variable_clave: "logo_url", logo_id: whatsappLogoId }]
+      : []
+    const imagenes = canalToSave === "whatsapp" ? whatsappImagenes : emailImagenes
     try {
       if (canalToSave === "whatsapp") {
         const whatsPayload = {

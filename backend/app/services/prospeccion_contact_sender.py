@@ -39,6 +39,15 @@ BACKPRESSURE_TWILIO_ERROR_CODES = {"63024", "63049", "63032"}
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
+WHATSAPP_IMAGE_PLACEHOLDER_KEYS = {
+    "logo_url",
+    "hero_image_url",
+    "product_image_1_url",
+    "product_image_2_url",
+    "product_image_3_url",
+    "product_image_4_url",
+    "warranty_image_url",
+}
 EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 ANCHOR_HREF_PATTERN = re.compile(r'(<a\b[^>]*\bhref=")([^"]+)(")', re.IGNORECASE)
@@ -173,6 +182,31 @@ def _render_template_text(template: str, context: dict[str, Any]) -> str:
         return "" if value is None else str(value)
 
     return PLACEHOLDER_PATTERN.sub(_replace, template)
+
+
+def _build_whatsapp_meta_template_variables(*, body: str | None, context: dict[str, Any]) -> dict[str, str] | None:
+    if not body:
+        return None
+    rendered: dict[str, str] = {}
+    seen_tokens: set[str] = set()
+    index = 1
+    for match in PLACEHOLDER_PATTERN.finditer(body):
+        token = _clean_text(match.group(1))
+        if not token or token in seen_tokens or token in WHATSAPP_IMAGE_PLACEHOLDER_KEYS:
+            continue
+        seen_tokens.add(token)
+        rendered[str(index)] = _resolve_twilio_variable_value(token, key=token, context=context)
+        index += 1
+    return rendered or None
+
+
+def _render_whatsapp_template_preview(*, body: str | None, context: dict[str, Any]) -> str:
+    if not body:
+        return ""
+    preview_context = dict(context)
+    for key in WHATSAPP_IMAGE_PLACEHOLDER_KEYS:
+        preview_context[key] = ""
+    return _render_template_text(body, preview_context)
 
 
 def _normalize_email_html_template(template: str) -> str:
@@ -1146,6 +1180,9 @@ async def _run_envio_whatsapp(
         image_context.get("logo_url")
         or image_context.get("hero_image_url")
         or image_context.get("image_url")
+        or (metadata.get("media_url_base") if isinstance(metadata, dict) else None)
+        or (metadata.get("media_url_tracked") if isinstance(metadata, dict) else None)
+        or (metadata.get("logo_url") if isinstance(metadata, dict) else None)
     )
     if not header_image_url and image_context:
         for value in image_context.values():
@@ -1154,12 +1191,15 @@ async def _run_envio_whatsapp(
                 break
     rendered_vars: dict[str, str] | None = None
     body_template = _clean_text(payload.get("body")) or ""
+    whatsapp_meta_variables = _build_whatsapp_meta_template_variables(body=body_template, context=context)
     if template_sid or meta_template_name:
         rendered_vars = _compose_twilio_template_variables(
             definition=variables_def,
             body=body_template,
             context=context,
         )
+        if meta_template_name and not rendered_vars:
+            rendered_vars = whatsapp_meta_variables
         missing_vars = _find_blank_twilio_variables(rendered_vars)
         if missing_vars:
             return ContactEnvioResult(
@@ -1201,7 +1241,7 @@ async def _run_envio_whatsapp(
             else:
                 fallback_error = fallback_result.error
     else:
-        rendered_body = _render_template_text(body_template, context).strip()
+        rendered_body = _render_whatsapp_template_preview(body=body_template, context=context).strip()
         if not rendered_body and not meta_template_name:
             return ContactEnvioResult(
                 estado="error",
