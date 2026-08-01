@@ -654,7 +654,6 @@ export function CampanasMetricsClient() {
       setPreviewError(null)
       return
     }
-    if (templateForm.canal !== "correo") return
     if (previewProspecto || previewLoading) return
     void loadPreviewProspecto()
   }, [loadPreviewProspecto, previewLoading, previewProspecto, templateForm.canal, templatesDialogOpen])
@@ -1143,15 +1142,62 @@ ${secondCellHtml}
     [renderWithPreviewContext, templateForm.cuerpoHtml]
   )
 
+  const whatsappPreviewVariableValues = useMemo(
+    () =>
+      [
+        previewTemplateContext?.display_name ?? "",
+        previewTemplateContext?.nombre ?? "",
+        previewTemplateContext?.titulo ?? "",
+        previewTemplateContext?.primer_apellido ?? "",
+        previewTemplateContext?.segundo_apellido ?? "",
+        previewTemplateContext?.empresa ?? "",
+        previewTemplateContext?.email ?? "",
+        previewTemplateContext?.telefono ?? "",
+        previewTemplateContext?.segmento ?? "",
+        previewTemplateContext?.canal_origen ?? "",
+        previewTemplateContext?.website_url ?? "",
+        previewTemplateContext?.booking_url ?? "",
+        previewTemplateContext?.booking_link_text ?? "",
+        previewTemplateContext?.tracking_url ?? "",
+      ]
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0),
+    [previewTemplateContext]
+  )
+
+  const renderWhatsAppPreviewContext = useCallback(
+    (template: string) => {
+      if (!template) return ""
+      if (!previewTemplateContext) return template
+      const imageVariables = new Set([
+        "logo_url",
+        "hero_image_url",
+        "product_image_1_url",
+        "product_image_2_url",
+        "product_image_3_url",
+        "product_image_4_url",
+        "warranty_image_url",
+      ])
+      return template.replace(EMAIL_TEMPLATE_PLACEHOLDER_PATTERN, (match, key: string) => {
+        const normalizedKey = String(key || "").trim()
+        if (!normalizedKey) return match
+        if (/^\d+$/.test(normalizedKey)) {
+          const index = Number.parseInt(normalizedKey, 10) - 1
+          return whatsappPreviewVariableValues[index] ?? ""
+        }
+        if (imageVariables.has(normalizedKey)) {
+          return ""
+        }
+        const value = previewTemplateContext[normalizedKey as keyof typeof previewTemplateContext]
+        return value == null ? match : String(value)
+      })
+    },
+    [previewTemplateContext, whatsappPreviewVariableValues]
+  )
+
   const whatsappPreviewMessageText = useMemo(() => {
-    const raw = (previewBodyText || "").replace(/\r\n/g, "\n").trim()
-    if (!raw) return ""
-    if (!whatsappPreviewImageUrl) return raw
-    const lines = raw
-      .split("\n")
-      .filter((line) => line.trim() !== whatsappPreviewImageUrl.trim())
-    return lines.join("\n").trim()
-  }, [previewBodyText, whatsappPreviewImageUrl])
+    return renderWhatsAppPreviewContext(templateForm.cuerpoTexto || "").replace(/\r\n/g, "\n").trim()
+  }, [renderWhatsAppPreviewContext, templateForm.cuerpoTexto])
 
   const whatsappPreviewMessageParagraphs = useMemo(() => {
     const raw = whatsappPreviewMessageText
