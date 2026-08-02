@@ -1825,6 +1825,34 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
 
 
 @pytest.mark.asyncio
+async def test_importar_prospectos_en_lote_acepta_solo_telefono(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    org_id = uuid.uuid4()
+    resp = await client.post(
+        "/crm/prospeccion/prospectos/importar",
+        headers={**_headers(include_user_token=True), "X-Organizacion-Id": str(org_id)},
+        json={
+            "items": [
+                {
+                    "phone": "+52 55 5555 1212",
+                },
+            ]
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["created"] == 1
+    assert payload["skipped"] == 0
+    assert len(payload["prospectos"]) == 1
+    assert payload["prospectos"][0]["display_name"] == "+52 55 5555 1212"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["display_name"] == "+52 55 5555 1212"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["phone"] == "+52 55 5555 1212"
+
+
+@pytest.mark.asyncio
 async def test_importar_prospectos_en_lote_reporta_omitidos_con_motivo(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

@@ -4481,7 +4481,7 @@ class ProspectoManualPayload(BaseModel):
     def _ensure_name_source(self) -> "ProspectoManualPayload":
         if self.display_name:
             return self
-        if any((self.nombre_comercial, self.nombre, self.primer_apellido, self.segundo_apellido)):
+        if any((self.nombre_comercial, self.nombre, self.primer_apellido, self.segundo_apellido, self.phone)):
             return self
         raise ValueError("display_name_required")
 
@@ -9264,6 +9264,7 @@ def _compose_prospecto_display_name(
     nombre: Any = None,
     primer_apellido: Any = None,
     segundo_apellido: Any = None,
+    phone: Any = None,
 ) -> str:
     """Construye un nombre visible estable para prospectos importados o manuales."""
 
@@ -9283,6 +9284,10 @@ def _compose_prospecto_display_name(
     person_name = " ".join(part for part in person_parts if part)
     if person_name:
         return person_name
+
+    phone_value = _clean_text(phone)
+    if phone_value:
+        return phone_value
     return "Prospecto"
 
 
@@ -9362,6 +9367,7 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         nombre=raw.get("nombre"),
         primer_apellido=raw.get("primer_apellido"),
         segundo_apellido=raw.get("segundo_apellido"),
+        phone=raw.get("phone"),
     )
     data: dict[str, Any] = {
         "fuente": "usuario",

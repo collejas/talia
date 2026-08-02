@@ -220,6 +220,8 @@ function composeDisplayName(item: ProspectoManualInput): string {
     .filter(Boolean)
     .join(" ")
   if (person) return person
+  const phone = normalizeCell(item.phone)
+  if (phone) return phone
   return ""
 }
 
@@ -355,7 +357,7 @@ async function parseImportedFile(file: File): Promise<{
     if (!item) {
       errors.push({
         row: index + 2,
-        message: "La fila no tiene nombre visible, empresa o nombre de persona.",
+        message: "La fila no tiene nombre visible, empresa, nombre de persona o teléfono.",
       })
       return
     }
