@@ -529,6 +529,8 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
     uniqueContacts,
     conversionRate,
     topUtmRows,
+    correoCampaignRows,
+    correoTemplateRows,
     whatsappChannelRows,
     campaignConversionRows,
     templateConversionRows,
@@ -537,13 +539,11 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
       () => buildAcquisitionMetrics(summary, loadedVisitsPayload),
       [summary, loadedVisitsPayload],
     );
-  const correoCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "correo");
-  const correoTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "correo");
   const whatsappCampaignConversionRows = campaignConversionRows.filter((item) => item.canal === "whatsapp");
   const whatsappTemplateConversionRows = templateConversionRows.filter((item) => item.canal === "whatsapp");
   const correoCampaignColorMap = React.useMemo(
-    () => buildCampaignColorMap(correoCampaignConversionRows),
-    [correoCampaignConversionRows],
+    () => buildCampaignColorMap(correoCampaignRows),
+    [correoCampaignRows],
   );
   const whatsappCampaignColorMap = React.useMemo(
     () => buildCampaignColorMapWithPalette(whatsappCampaignConversionRows, WHATSAPP_CAMPAIGN_COLORS),
@@ -820,19 +820,19 @@ export function AcquisitionSummary({ summary, visitsPayload = null, filters = nu
 
       <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
-          data={correoCampaignConversionRows}
+          data={correoCampaignRows}
           colorMap={correoCampaignColorMap}
           title="Correo · campañas que generaron visitas al sitio"
-          description="Distribución real de sesiones web atribuidas por campaña de correo."
+          description="Distribución real de sesiones web observadas por campaña de correo."
           emptyMessage="No hay campañas de correo con sesiones web atribuidas en este filtro."
           metricLabel="Sesiones web"
           legendSide="right"
         />
         <EmailTemplateAttributionCard
-          data={correoTemplateConversionRows}
+          data={correoTemplateRows}
           colorMap={correoCampaignColorMap}
           title="Correo · plantillas que generaron visitas al sitio"
-          description="Cada plantilla hereda el color de su campaña madre para mostrar qué piezas aportaron el resultado."
+          description="Cada plantilla hereda el color de su campaña madre para mostrar qué piezas participaron en las visitas."
           emptyMessage="No hay plantillas de correo con sesiones web atribuidas en este filtro."
           metricLabel="Sesiones web"
         />

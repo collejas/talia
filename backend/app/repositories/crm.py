@@ -4334,9 +4334,9 @@ class CRMRepository:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": (
-                "session_id,contacto_id,first_seen_at,last_seen_at,visit_count,ip,"
+                "session_id,persona_id,contacto_id,first_seen_at,last_seen_at,visit_count,ip,"
                 "device_type,country_code,country_name,cve_ent,nom_ent,cve_mun,nom_mun,cvegeo,"
-                "referrer,referrer_host,landing_url,utm_source,utm_medium,utm_campaign,eid,tid,source_class,metadata"
+                "referrer,referrer_host,landing_url,utm_source,utm_medium,utm_campaign,eid,cid,tid,source_class,metadata"
             ),
             "order": "last_seen_at.desc,first_seen_at.desc",
             "limit": str(max(1, min(limit, 5000))),

@@ -37236,7 +37236,7 @@ async def get_visits_web_sessions(
             else None
         ) or _row_tracking_param(row, "pid") or _row_tracking_param(row, "prospecto_id")
         prospecto_row = prospectos_map.get(prospecto_id_value) if prospecto_id_value else None
-        contact_id_value = str(row.get("contacto_id") or "").strip() or None
+        contact_id_value = str(row.get("persona_id") or row.get("contacto_id") or "").strip() or None
         template_id_value = _row_tracking_param(row, "tid")
         contact_row = contacts_map.get(contact_id_value) if contact_id_value else None
         template_row = templates_map.get(template_id_value) if template_id_value else None
@@ -37348,6 +37348,7 @@ async def get_visits_web_sessions(
                 "utm_campaign": row.get("utm_campaign"),
                 "source_class": row.get("source_class"),
                 "eid": envio_id_value,
+                "cid": _row_tracking_param(row, "cid"),
                 "template_id": template_id_value,
                 "template_slug": template_slug,
                 "template_nombre": template_name,

@@ -42,6 +42,8 @@ export type AcquisitionMetrics = {
   sourceClassRows: AcquisitionSourceBucket[];
   referrerRows: AcquisitionHostBucket[];
   topUtmRows: AcquisitionUtmBucket[];
+  correoCampaignRows: AcquisitionConversionBucket[];
+  correoTemplateRows: AcquisitionConversionBucket[];
   whatsappChannelRows: AcquisitionSourceBucket[];
   campaignConversionRows: AcquisitionConversionBucket[];
   templateConversionRows: AcquisitionConversionBucket[];
@@ -185,6 +187,130 @@ function aggregateConversionRows(
     : [];
 }
 
+function normalizeLookupKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function buildCampaignLabelLookup(summary: DemografiaSummaryResponse | null): Map<string, string> {
+  const labels = new Map<string, string>();
+  const catalog = summary?.attribution_catalog;
+  for (const [key, label] of Object.entries(catalog?.utm_campaign_labels ?? {})) {
+    const normalizedKey = normalizeLookupKey(String(key || ""));
+    const normalizedLabel = String(label || "").trim();
+    if (!normalizedKey || !normalizedLabel) continue;
+    labels.set(normalizedKey, normalizedLabel);
+    labels.set(String(key || "").trim().toLowerCase(), normalizedLabel);
+    labels.set(String(key || "").trim(), normalizedLabel);
+  }
+  for (const option of catalog?.campana_options ?? []) {
+    const value = String(option?.value || "").trim();
+    const label = String(option?.label || "").trim();
+    if (!value || !label) continue;
+    labels.set(normalizeLookupKey(value), label);
+    labels.set(value.toLowerCase(), label);
+    labels.set(value, label);
+  }
+  return labels;
+}
+
+function buildTemplateLabelLookup(summary: DemografiaSummaryResponse | null): Map<string, string> {
+  const labels = new Map<string, string>();
+  const catalog = summary?.attribution_catalog;
+  for (const option of catalog?.template_options ?? []) {
+    const value = String(option?.value || "").trim();
+    const label = String(option?.label || "").trim();
+    if (!value || !label) continue;
+    labels.set(normalizeLookupKey(value), label);
+    labels.set(value.toLowerCase(), label);
+    labels.set(value, label);
+  }
+  return labels;
+}
+
+function aggregateEmailTrafficRows(
+  summary: DemografiaSummaryResponse | null,
+  visitsPayload: VisitsPayload | null,
+): {
+  correoCampaignRows: AcquisitionConversionBucket[];
+  correoTemplateRows: AcquisitionConversionBucket[];
+} {
+  const campaignLabelLookup = buildCampaignLabelLookup(summary);
+  const templateLabelLookup = buildTemplateLabelLookup(summary);
+  const campaignTotals = new Map<string, AcquisitionConversionBucket>();
+  const templateTotals = new Map<string, AcquisitionConversionBucket>();
+  const rows = Array.isArray(visitsPayload?.table) ? visitsPayload.table : [];
+
+  for (const row of rows) {
+    const raw = row?.raw;
+    if (!raw || typeof raw !== "object") continue;
+
+    const utmMedium = normalizeText(typeof raw.utm_medium === "string" ? raw.utm_medium : "");
+    const utmCampaign = normalizeText(typeof raw.utm_campaign === "string" ? raw.utm_campaign : "");
+    const campaignId = normalizeText(typeof raw.cid === "string" ? raw.cid : "");
+    const campaignKey = campaignId || utmCampaign;
+    if (utmMedium === "email" && campaignKey) {
+      const campaignLabel =
+        campaignLabelLookup.get(normalizeLookupKey(campaignKey)) ??
+        campaignLabelLookup.get(campaignKey) ??
+        campaignKey.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+      const campaign = campaignTotals.get(campaignKey) ?? {
+        value: campaignKey,
+        label: campaignLabel,
+        canal: "correo",
+        parentCampaignValue: null,
+        parentCampaignLabel: null,
+        total: 0,
+        contextTotal: 0,
+        conversionLabel: "Sesiones web",
+        contextLabel: "Base",
+        rate: 0,
+      };
+      campaign.total += 1;
+      campaignTotals.set(campaignKey, campaign);
+    }
+
+    const templateId = normalizeText(typeof raw.template_id === "string" ? raw.template_id : "");
+    const templateSlug = normalizeText(typeof raw.template_slug === "string" ? raw.template_slug : "");
+    const templateNombre = normalizeText(typeof raw.template_nombre === "string" ? raw.template_nombre : "");
+    const templateKey = templateId || templateSlug || templateNombre;
+    if (utmMedium !== "email" || !templateKey) continue;
+
+    const templateLabel =
+      templateLabelLookup.get(normalizeLookupKey(templateKey)) ??
+      templateLabelLookup.get(templateKey) ??
+      templateKey.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    const parentCampaignLabel = campaignKey
+      ? campaignLabelLookup.get(normalizeLookupKey(campaignKey)) ??
+        campaignLabelLookup.get(campaignKey) ??
+        campaignKey.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
+      : "Sin campaña";
+
+    const template = templateTotals.get(templateKey) ?? {
+      value: templateKey,
+      label: templateLabel,
+      canal: "correo",
+      parentCampaignValue: campaignKey || null,
+      parentCampaignLabel,
+      total: 0,
+      contextTotal: 0,
+      conversionLabel: "Sesiones web",
+      contextLabel: "Base",
+      rate: 0,
+    };
+    template.total += 1;
+    templateTotals.set(templateKey, template);
+  }
+
+  return {
+    correoCampaignRows: Array.from(campaignTotals.values()).sort(
+      (a, b) => b.total - a.total || a.label.localeCompare(b.label),
+    ),
+    correoTemplateRows: Array.from(templateTotals.values()).sort(
+      (a, b) => b.total - a.total || a.label.localeCompare(b.label),
+    ),
+  };
+}
+
 function aggregateSourceClassesFromSummary(
   summary: DemografiaSummaryResponse | null,
 ): AcquisitionSourceBucket[] {
@@ -322,6 +448,7 @@ export function buildAcquisitionMetrics(
   const hasDetailedVisits = visitsPayload !== null;
   const uniqueContacts = hasDetailedVisits ? convertedFromContacts : convertedFromSummary;
   const sessionsWithContact = hasDetailedVisits ? sessionsWithContactFromVisits : null;
+  const emailTrafficRows = aggregateEmailTrafficRows(summary, visitsPayload);
 
   const sourceClassRowsFromVisits = Array.from(sourceBuckets.values()).sort(
     (a, b) => b.total - a.total || a.source.localeCompare(b.source),
@@ -343,6 +470,8 @@ export function buildAcquisitionMetrics(
     sourceClassRows,
     referrerRows,
     topUtmRows: aggregateTopUtm(summary),
+    correoCampaignRows: emailTrafficRows.correoCampaignRows,
+    correoTemplateRows: emailTrafficRows.correoTemplateRows,
     whatsappChannelRows: aggregateWhatsappChannels(summary),
     campaignConversionRows: aggregateConversionRows(summary?.attribution_rankings?.campaigns),
     templateConversionRows: aggregateConversionRows(summary?.attribution_rankings?.templates),

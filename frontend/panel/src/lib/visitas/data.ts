@@ -80,6 +80,7 @@ type ContactoTemplateRow = {
 type WebSessionAttributionRow = {
   session_id?: string | null;
   eid?: string | null;
+  cid?: string | null;
   persona_id?: string | null;
   contacto_id?: string | null;
   contacto_nombre?: string | null;
@@ -115,6 +116,7 @@ type WebSessionAttributionRow = {
 export type VisitDetailRaw = {
   session_id: string | null;
   eid?: string | null;
+  cid?: string | null;
   oportunidad_id: string | null;
   canal?: string | null;
   prospeccion_batch_id?: string | null;
@@ -316,12 +318,22 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
   for (const candidate of rows) {
     if (!candidate || typeof candidate !== "object") continue;
     const row = candidate as WebSessionAttributionRow;
+    const utmMedium = (row.utm_medium || "").trim().toLowerCase();
+    const promotionType =
+      utmMedium === "email"
+        ? "correo"
+        : utmMedium === "whatsapp_cta"
+          ? "whatsapp"
+          : null;
     try {
       normalized.push({
         session_id: row.session_id ?? null,
         eid: row.eid ?? null,
+        cid: row.cid ?? null,
         oportunidad_id: null,
         canal: "webchat",
+        prospeccion_campana_id: row.cid ?? null,
+        prospeccion_campana_tipo: promotionType,
         ip: row.ip ?? null,
         registrado_en: row.first_seen_at ?? null,
         primera_visita_en: row.first_seen_at ?? null,
@@ -1030,7 +1042,7 @@ function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): bool
     if (value !== campanaTipoFilter) return false;
   }
   if (campanaIdFilter) {
-    const value = (row.prospeccion_campana_id || "").trim().toLowerCase();
+    const value = (row.prospeccion_campana_id || row.cid || "").trim().toLowerCase();
     if (value !== campanaIdFilter) return false;
   }
   if (templateIdFilter) {

@@ -94,6 +94,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   - resumen WhatsApp real en lugar de dejar `campanas_whatsapp` vacío por `include_whatsapp_channels=false`;
   - series reales de campañas/frases en lugar de pedir un payload `lite` que nunca devolvía `timeseries`.
 
+## 2026-08-03
+
+- Se alineó la sección de correo de `mapa-de-conversion` para que las tarjetas y gráficas de campañas usen el universo filtrado de visitas y no el ranking de atribución de campañas.
+- La gráfica `Correo · campañas que generaron visitas al sitio` ahora se alimenta del detalle de visitas filtrado por `utm_medium=email`; agrupa por `web_sessions.cid` y usa `utm_campaign` solo como fallback, mientras las plantillas agrupan por `tid`.
+- Se conservó el bloque de WhatsApp sobre el agregado de atribución y conversiones, porque ese sí responde a otra semántica de negocio.
+
 ## 2026-06-27
 
 - Se corrigió la sección `WhatsApp por canal`, que estaba vacía porque no se persistían eventos de atribución.
