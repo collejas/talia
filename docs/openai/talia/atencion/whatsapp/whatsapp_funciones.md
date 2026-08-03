@@ -135,7 +135,7 @@
 
 {
   "name": "mark_lost_negacion",
-  "description": "Marca la oportunidad actual como cerrada (perdida) luego de que el prospecto expresa una negación definitiva. Evita que el asistente reingrese al flujo comercial.",
+  "description": "Marca la oportunidad actual como cerrada (perdida) luego de que el prospecto expresa una negación definitiva o escribe BAJA. Evita que el asistente reingrese al flujo comercial.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -146,7 +146,7 @@
       },
       "reason": {
         "type": "string",
-        "description": "Breve motivo por el cual se marcó como perdido (ej. 'no me interesa')."
+        "description": "Breve motivo por el cual se marcó como perdido (ej. 'BAJA' o 'no me interesa')."
       }
     },
     "required": [

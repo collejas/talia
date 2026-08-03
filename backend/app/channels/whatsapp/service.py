@@ -430,6 +430,35 @@ def _looks_like_information_email_request(body: str | None) -> bool:
     return has_email_intent and has_information_reference
 
 
+_NEGATION_PHRASES: tuple[str, ...] = (
+    "no gracias",
+    "no me interesa",
+    "no me interesa gracias",
+    "de momento no",
+    "por el momento no",
+    "no requerimos",
+    "no requerimos gracias",
+    "pasamos",
+    "estamos bien asi",
+    "estamos bien así",
+    "no necesitamos",
+    "no busco eso",
+    "no por ahora",
+    "gracias pero no",
+)
+
+
+def _looks_like_definitive_negation(body: str | None) -> bool:
+    normalized = _normalize_fast_path_text(body)
+    if not normalized:
+        return False
+    if normalized == "baja":
+        return True
+    if re.search(r"\b(baja|dar de baja|cancelar(?: la)?(?: campana| campaña)?|no me interesa|no gracias)\b", normalized):
+        return True
+    return any(phrase in normalized for phrase in _NEGATION_PHRASES)
+
+
 def _looks_like_company_name_answer(body: str | None) -> bool:
     normalized = _normalize_fast_path_text(body)
     if not normalized:
@@ -3461,20 +3490,24 @@ async def handle_incoming_message(
             inbound_message_id=inbound_message_id,
             outbound_message_id=outgoing_registration.get("message_id"),
         )
-        _schedule_background_coroutine(
-            _run_post_send_tasks(
-                conversation_id=conversation_id,
-                persona_id=persona_id,
-                conversation_meta=conversation_meta,
-                message=message,
-                whatsapp_settings=whatsapp_settings,
-                organizacion_id=org_uuid,
-                resolved_persona_org=resolved_persona_org,
-                inbound_message_id=inbound_message_id,
-                welcome_document_sent_by_tool=welcome_document_sent_by_tool,
-                ensure_opportunity=simple_greeting_fast_path,
-            )
+        skip_post_send_tasks = bool(
+            assistant_reply.tools_called and "mark_lost_negacion" in assistant_reply.tools_called
         )
+        if not skip_post_send_tasks:
+            _schedule_background_coroutine(
+                _run_post_send_tasks(
+                    conversation_id=conversation_id,
+                    persona_id=persona_id,
+                    conversation_meta=conversation_meta,
+                    message=message,
+                    whatsapp_settings=whatsapp_settings,
+                    organizacion_id=org_uuid,
+                    resolved_persona_org=resolved_persona_org,
+                    inbound_message_id=inbound_message_id,
+                    welcome_document_sent_by_tool=welcome_document_sent_by_tool,
+                    ensure_opportunity=simple_greeting_fast_path,
+                )
+            )
         _log_trace_stage(
             stage="assistant_persisted",
             conversation_id=conversation_id,
@@ -3981,6 +4014,36 @@ async def _generate_assistant_reply(
             tool for tool in filtered_assistant_tools if _extract_function_tool_name(tool) != "set_full_name"
         ]
         debug_timings["set_full_name_tool_disabled"] = 1.0
+
+    if prospeccion_mode and _looks_like_definitive_negation(message.body):
+        assistant_generation_started = time.perf_counter()
+        negation_context = ToolRuntimeContext(
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            channel="whatsapp",
+            organizacion_id=str(organizacion_id) if organizacion_id else None,
+        )
+        try:
+            await whatsapp_tools._handle_mark_lost_negacion(
+                {
+                    "conversacion_id": conversation_id,
+                    "reason": str(message.body or "").strip() or "Negación definitiva detectada",
+                },
+                negation_context,
+            )
+        except Exception as exc:
+            logger.warning(
+                "whatsapp.prospeccion_negation_mark_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        debug_timings["assistant_generation_ms"] = round((time.perf_counter() - assistant_generation_started) * 1000, 2)
+        debug_timings["assistant_fast_path"] = 1.0
+        return AssistantReply(
+            text="Perfecto, gracias por tu tiempo. Si en algún momento quieres explorar cómo automatizar tu atención, con gusto te ayudo. ¡Excelente día!",
+            openai_conversation_id=openai_conversation_id,
+            response_id=previous_response_id,
+            tools_called=["mark_lost_negacion"],
+        )
 
     summary_record: dict[str, Any] | None = None
     summary_text: str | None = None

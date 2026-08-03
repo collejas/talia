@@ -390,6 +390,76 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_handle_incoming_message_skips_post_send_tasks_for_negation(monkeypatch) -> None:
+    message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
+    monkeypatch.setattr(service, "_schedule_background_coroutine", _close_background_coroutine)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
+
+    register_calls: list[dict[str, Any]] = []
+    post_send_calls: list[dict[str, Any]] = []
+
+    async def fake_register(**kwargs):
+        register_calls.append(kwargs)
+        return {
+            "conversation_id": "conv-1",
+            "contact_id": "contact-1",
+            "openai_conversation_id": kwargs.get("metadata", {}).get("openai_conversation_id"),
+        }
+
+    async def fake_fetch_conversation(conversation_id: str):
+        return {
+            "id": conversation_id,
+            "contact_id": "contact-1",
+            "manual_override": False,
+            "openai_conversation_id": None,
+            "last_response_id": None,
+            "inbox_context": {},
+        }
+
+    async def fake_fetch_persona(contact_id: str):
+        return {"id": contact_id}
+
+    async def fake_fetch_persona_identities(contact_id: str):
+        return []
+
+    async def fake_generate(**kwargs):
+        return service.AssistantReply(
+            text="Perfecto, gracias por tu tiempo. Si en algún momento quieres explorar cómo automatizar tu atención, con gusto te ayudo. ¡Excelente día!",
+            openai_conversation_id="conv-openai",
+            response_id="resp-1",
+            tools_called=["mark_lost_negacion"],
+        )
+
+    async def fake_send(**kwargs):
+        return service.TwilioSendResult(sid="SM-out", status="sent")
+
+    async def fake_post_send_tasks(**kwargs):
+        post_send_calls.append(kwargs)
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
+    monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
+    monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
+    monkeypatch.setattr(service, "_run_post_send_tasks", fake_post_send_tasks)
+
+    await service.handle_incoming_message(message)
+
+    assert len(register_calls) == 2
+    assert register_calls[1]["direction"] == "saliente"
+    assert register_calls[1]["body"].startswith("Perfecto, gracias por tu tiempo")
+    assert post_send_calls == []
+
+
+@pytest.mark.asyncio
 async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monkeypatch) -> None:
     """En el primer turno con el prompt de bienvenida, el backend envía el PDF y marca contexto."""
     message = _build_sample_message()
@@ -1386,6 +1456,71 @@ async def test_generate_assistant_reply_retries_without_previous_response_id(mon
     assert calls == ["resp-stale", None]
     assert reply.text == "Respuesta final"
     assert reply.response_id == "resp-new"
+
+
+@pytest.mark.asyncio
+async def test_generate_assistant_reply_short_circuits_prospeccion_negation(monkeypatch) -> None:
+    message = schemas.WhatsAppIncomingMessage(
+        message_sid="SM-negation",
+        from_number="whatsapp:+521111111111",
+        to_number="whatsapp:+521000000000",
+        body="BAJA",
+        wa_id="521111111111",
+        profile_name="Test User",
+        num_media=0,
+        media=[],
+        raw_payload={},
+    )
+    assistant_cfg = service.AssistantConfig(
+        assistant_id=None,
+        prompt_id="pmpt_test",
+        prompt_version="1",
+        project_id="proj-test",
+    )
+
+    monkeypatch.setattr(service, "_build_assistant_from_runtime", lambda *args, **kwargs: assistant_cfg)
+    monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: object())
+    monkeypatch.setattr(
+        service.storage,
+        "fetch_persona_context",
+        _async_return({"persona": {"nombre_completo": "Betty"}}),
+    )
+    monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
+
+    called: dict[str, Any] = {}
+
+    async def fake_mark_lost(arguments, context):
+        called["arguments"] = arguments
+        called["context"] = context
+        return {"status": "ok"}
+
+    def fail_run_tool_loop(*_: object, **__: object):
+        raise AssertionError("OpenAI no debe ejecutarse en una negación explícita")
+
+    monkeypatch.setattr(service.whatsapp_tools, "_handle_mark_lost_negacion", fake_mark_lost)
+    monkeypatch.setattr(service, "run_tool_loop", fail_run_tool_loop)
+
+    reply = await service._generate_assistant_reply(
+        message=message,
+        conversation_id="conv-1",
+        persona_id="persona-1",
+        openai_conversation_id=None,
+        previous_response_id=None,
+        catalog_context=None,
+        booking_context=None,
+        whatsapp_settings=SimpleNamespace(voice_api_key="api-key", project_id="proj-test"),
+        organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+        prospeccion_mode=True,
+        origin_type="prospeccion",
+        inbound_message_id="inbound-1",
+    )
+
+    assert reply.text == (
+        "Perfecto, gracias por tu tiempo. Si en algún momento quieres explorar cómo automatizar tu atención, con gusto te ayudo. ¡Excelente día!"
+    )
+    assert reply.tools_called == ["mark_lost_negacion"]
+    assert called["arguments"]["conversacion_id"] == "conv-1"
+    assert "baja" in str(called["arguments"]["reason"]).lower()
 
 
 @pytest.mark.asyncio

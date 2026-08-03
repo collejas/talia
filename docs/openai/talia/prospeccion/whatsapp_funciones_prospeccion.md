@@ -180,7 +180,7 @@
 
 {
   "name": "mark_lost_negacion",
-  "description": "Marca la oportunidad actual como cerrada (perdida) cuando el prospecto expresa una negación definitiva desde prospección.",
+  "description": "Marca la oportunidad actual como cerrada (perdida) cuando el prospecto expresa una negación definitiva desde prospección o escribe BAJA.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -191,7 +191,7 @@
       },
       "reason": {
         "type": "string",
-        "description": "Motivo breve, por ejemplo 'la plantilla fue ignorada y el usuario dijo no me interesa.'"
+        "description": "Motivo breve, por ejemplo 'BAJA' o 'no me interesa'."
       }
     },
     "required": [
@@ -200,8 +200,6 @@
     "additionalProperties": false
   }
 }
-
----
 
 {
   "name": "list_demo_slots",
