@@ -58,6 +58,10 @@ const pageCtas = {
     label: 'Buscar contactos',
     message: 'Hola, quiero buscar contactos de empresas con Tal-IA.',
   },
+  '/prospeccion/webscraper': {
+    label: 'Ver Web Scraper',
+    message: 'Hola, quiero ver Web Scraper para prospección en Tal-IA.',
+  },
   '/campanas-marketing': {
     label: 'Ver campañas',
     message: 'Hola, quiero ver campañas y marketing con Tal-IA.',

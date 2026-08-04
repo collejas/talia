@@ -101,6 +101,13 @@ const seoPages = [
     ctaMessage: "Hola, quiero buscar contactos de empresas con Tal-IA.",
   },
   {
+    path: "/prospeccion/webscraper",
+    title: "Web Scraper para prospección | TalIA",
+    description: "TalIA usa Web Scraper para obtener teléfonos, correos, sitios web y datos visibles en páginas públicas para alimentar la prospección.",
+    ctaLabel: "Ver Web Scraper",
+    ctaMessage: "Hola, quiero ver Web Scraper para prospección en Tal-IA.",
+  },
+  {
     path: "/prospeccion-comercial",
     title: "Prospección comercial | TalIA",
     description: "Prospección comercial con IA para encontrar clientes, crear listas accionables y activar campañas útiles.",

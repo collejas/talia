@@ -181,6 +181,7 @@
         <a href="/prospeccion/google">Google</a>
         <a href="/prospeccion-comercial">Prospección comercial</a>
         <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
+        <a href="/prospeccion/webscraper">Web Scraper</a>
         <a href="/precios">Precios</a>
         <a href="/demo.html" class="nav-cta nav-cta--secondary">Demo</a>
       </div>
@@ -198,6 +199,7 @@
           <a href="/prospeccion/google">Google</a>
           <a href="/prospeccion-comercial">Prospección comercial</a>
           <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
+          <a href="/prospeccion/webscraper">Web Scraper</a>
           <a href="/precios">Precios</a>
           <div class="nav-mobile-menu__actions">
             <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
@@ -211,36 +213,39 @@
     <section class="hero hero--single">
       <div class="hero__copy">
         <div class="eyebrow">Prospección</div>
-        <h1>Encuentra empresas y crea bases útiles</h1>
-        <p><strong>La página madre de prospección explica el problema completo.</strong></p>
-        <p>TalIA reúne distintas fuentes de información para encontrar empresas, obtener datos de contacto y convertir la búsqueda en una base comercial lista para ventas, CRM e IA.</p>
-        <div class="hero__note">Esta vista no entra a detalle de Google o Gob-MX. Solo presenta el hub de prospección y cómo encaja en el flujo comercial completo.</div>
+        <h1>De dónde salen los datos para prospectar</h1>
+        <p><strong>TalIA toma datos de Google, Gob-MX y Web Scraper para construir bases comerciales útiles.</strong></p>
+        <p>La vista madre explica el origen de los datos, qué obtiene cada fuente y cómo se integran con ventas, CRM y atención con IA.</p>
+        <div class="hero__note">Aquí no se reemplazan las vistas hijas: esta página solo las ordena y muestra cómo se conectan dentro del flujo comercial.</div>
         <div class="stat-strip">
           <div class="stat" data-step="01">
             <strong style="color: var(--core-green);">Fuentes</strong>
-            <span>Google, Gob-MX y otras fuentes comerciales.</span>
+            <span>Google, Gob-MX y Web Scraper.</span>
           </div>
           <div class="stat" data-step="02">
             <strong style="color: var(--core-blue);">Datos</strong>
-            <span>Teléfonos, correos y sitios web útiles.</span>
+            <span>Empresas, ubicación, teléfonos, correos y sitios web.</span>
           </div>
           <div class="stat" data-step="03">
-            <strong style="color: var(--core-violet);">Salida</strong>
-            <span>Listas accionables para el equipo comercial.</span>
+            <strong style="color: var(--core-violet);">Integración</strong>
+            <span>Lista para CRM, marketing y seguimiento comercial.</span>
           </div>
           <div class="stat" data-step="04">
-            <strong style="color: var(--core-amber);">Integración</strong>
-            <span>Conecta con CRM, marketing e IA.</span>
+            <strong style="color: var(--core-amber);">Salida</strong>
+            <span>Bases comerciales accionables, no búsquedas sueltas.</span>
           </div>
           <div class="stat" data-step="05">
             <strong style="color: var(--core-dark);">Objetivo</strong>
-            <span>Más oportunidades y mejor inicio de venta.</span>
+            <span>Más oportunidades con mejor contexto comercial.</span>
           </div>
         </div>
         <div class="hero__actions">
+          <a class="button primary" href="/prospeccion">Prospección</a>
           <a class="button primary" href="/prospeccion/google">Ver Google</a>
+          <a class="button secondary" href="/prospeccion/gob-mx">Ver Gob-MX</a>
           <a class="button secondary" href="/prospeccion-comercial">Prospección comercial</a>
           <a class="button ghost" href="/prospeccion/buscar-contactos">Buscar contactos</a>
+          <a class="button ghost" href="/prospeccion/webscraper">Web Scraper</a>
         </div>
       </div>
 
@@ -253,60 +258,96 @@
         <div class="search-hero__card">
           <div class="eyebrow">Resultado</div>
           <h3>Más control comercial</h3>
-          <p>La búsqueda deja de ser manual y pasa a un flujo que sí alimenta la operación.</p>
+          <p>La búsqueda deja de ser manual y pasa a un flujo que sí alimenta la operación comercial.</p>
         </div>
         <div class="search-hero__card">
           <div class="eyebrow">Siguiente paso</div>
           <h3>Profundizar por fuente</h3>
-          <p>Cada fuente puede tener su propia página cuando responde una intención distinta.</p>
+          <p>Cada fuente tiene su propia vista cuando responde una intención distinta.</p>
         </div>
       </aside>
     </section>
 
     <section class="section">
       <div class="hub-section__head">
-        <h2>Qué cubre esta vista</h2>
-        <p>La página padre no compite con las vistas hijas. Solo explica el problema completo de prospección y cómo TalIA lo resuelve.</p>
+        <h2>Fuentes de datos</h2>
+        <p>La vista madre ordena las fuentes y deja claro qué aporta cada una dentro de la prospección.</p>
       </div>
 
       <div class="feature-grid">
         <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Prospección</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Fuentes</h3>
-          <p>Combina Google, Gob-MX y otras búsquedas para ampliar cobertura.</p>
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Google</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Empresas y señales</h3>
+          <p>Busca negocios en Google Maps y Google Places, con ubicación, calificaciones y contexto comercial.</p>
         </article>
         <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Prospección</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Datos</h3>
-          <p>Obtiene información útil para ventas, contacto y seguimiento.</p>
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Gob-MX</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Bases oficiales</h3>
+          <p>Usa fuentes oficiales de México como DENUE para obtener cobertura, tamaño y datos públicos útiles.</p>
         </article>
         <article class="feature-card">
-          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Prospección</div>
-          <h3 style="margin: 12px 0 0; font-size: 18px;">Integración</h3>
-          <p>Conecta el resultado con CRM, automatización y atención con IA.</p>
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Web Scraper</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Sitios web</h3>
+          <p>Extrae datos desde sitios públicos para completar teléfono, correo, dominio y otras señales de contacto.</p>
         </article>
       </div>
     </section>
 
     <section class="section">
       <div class="hub-section__head">
-        <h2>Rutas relacionadas</h2>
-        <p>Estas páginas ya responden intenciones más específicas y deben vivir debajo de este hub.</p>
+        <h2>Qué datos obtiene cada una</h2>
+        <p>La intención no es repetir información, sino mostrar qué aporta cada fuente al momento de prospectar.</p>
       </div>
 
-      <div class="grid grid--5 business-grid">
-        <a class="business-card business-card--green" href="/prospeccion/google"><span>Google</span></a>
-        <a class="business-card business-card--blue" href="/prospeccion-comercial"><span>Prospección comercial</span></a>
-        <a class="business-card business-card--violet" href="/prospeccion/buscar-contactos"><span>Buscar contactos</span></a>
-        <a class="business-card business-card--amber" href="/precios"><span>Precios</span></a>
-        <a class="business-card business-card--dark" href="/demo.html"><span>Demo</span></a>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">Google</h3>
+          <p>Nombre del negocio, ubicación, reseñas, horario y señales de presencia comercial.</p>
+        </article>
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">Gob-MX</h3>
+          <p>Razón social, cobertura, giro, tamaño y datos oficiales que ayudan a validar empresas.</p>
+        </article>
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">Web Scraper</h3>
+          <p>Teléfonos, correos, sitio web, páginas de contacto y otras señales visibles en la web pública.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="hub-section__head">
+        <h2>Cómo se integra</h2>
+        <p>El valor de la prospección no está solo en capturar datos, sino en llevarlos al siguiente paso comercial.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">CRM</h3>
+          <p>Los prospectos pasan al CRM para seguimiento, responsables, embudo y próximas acciones.</p>
+        </article>
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">Marketing</h3>
+          <p>Las listas se activan con email o WhatsApp para convertir la búsqueda en conversación.</p>
+        </article>
+        <article class="feature-card">
+          <h3 style="margin: 0; font-size: 18px;">IA</h3>
+          <p>La atención automática califica, responde y agenda sin perder el contexto del contacto.</p>
+        </article>
+      </div>
+
+      <div class="hero__actions" style="margin-top: 22px;">
+        <a class="button primary" href="/prospeccion/google">Google</a>
+        <a class="button secondary" href="/prospeccion/gob-mx">Gob-MX</a>
+        <a class="button ghost" href="/prospeccion/buscar-contactos">Buscar contactos</a>
+        <a class="button ghost" href="/prospeccion/webscraper">Web Scraper</a>
       </div>
     </section>
 
     <section class="cta-band">
       <div class="eyebrow">Siguiente paso</div>
       <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Prospección comercial con IA</h2>
-      <p>Empieza por la vista madre y luego baja a las páginas hijas cuando quieras profundizar por fuente o intención.</p>
+      <p>Empieza por la vista madre y luego baja a las páginas hijas cuando quieras profundizar por fuente.</p>
       <div class="actions">
         <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20la%20prospecci%C3%B3n%20de%20Tal-IA" target="_blank" rel="noopener noreferrer">Hablar por WhatsApp</a>
         <a class="button secondary" href="/prospeccion/google">Ver Google</a>
@@ -314,7 +355,7 @@
       <div class="footer-links">
         <a href="/">Inicio</a>
         <a href="/prospeccion/google">Google</a>
-        <a href="/prospeccion-comercial">Prospección comercial</a>
+        <a href="/prospeccion/gob-mx">Gob-MX</a>
       </div>
     </section>
   </main>

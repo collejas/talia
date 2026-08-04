@@ -93,6 +93,13 @@
   </url>
 
   <url>
+    <loc>https://talia.mx/prospeccion/webscraper</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
     <loc>https://talia.mx/prospeccion-comercial</loc>
     <lastmod>2026-08-04</lastmod>
     <changefreq>weekly</changefreq>

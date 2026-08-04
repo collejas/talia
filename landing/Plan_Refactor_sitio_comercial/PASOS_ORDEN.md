@@ -32,6 +32,7 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 - [ ] Crear `/prospeccion/google`.
 - [ ] Crear `/prospeccion/gob-mx`.
 - [ ] Crear `/prospeccion/buscar-contactos`.
+- [ ] Crear `/prospeccion/webscraper`.
 - [ ] Regenerar visualmente ambas vistas.
 - [ ] Tratar `Google` y `Gob-MX` como vistas hijas o bloques dentro de prospección.
 - [ ] Confirmar que cada página responda una intención de búsqueda distinta.

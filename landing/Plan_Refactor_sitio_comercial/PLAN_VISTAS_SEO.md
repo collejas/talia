@@ -16,6 +16,8 @@ HOME
 │   │   └── Mantener la vista que se cree en `/prospeccion/google` como hija de prospección.
 │   ├── Gob-MX
 │   │   └── Mantener la vista que se cree en `/prospeccion/gob-mx` como hija de prospección.
+│   ├── Web Scraper
+│   │   └── Mantener la vista que se cree en `/prospeccion/webscraper` como hija de prospección.
 │   ├── Prospección comercial
 │   │   └── Mantener la vista actual `/prospeccion-comercial` y regenerar su visual.
 │   └── Buscar contactos
@@ -105,6 +107,7 @@ TalIA tiene 4 productos y 1 tecnología.
 | `/automatizacion` | Explicar la automatización como capa transversal. | La automatización conecta prospección, marketing, IA y CRM. | Title y meta enfocados en automatización comercial. |
 | `/prospeccion/google` | Explicar la búsqueda de empresas en Google Maps/Google Places. | Buscar empresas en Google Maps. | Title y meta enfocados en Google para prospección. |
 | `/prospeccion/gob-mx` | Explicar la búsqueda de empresas en bases oficiales de México. | Buscar empresas en bases oficiales de México. | Title y meta enfocados en Gob-MX para prospección. |
+| `/prospeccion/webscraper` | Explicar la extracción de datos visibles desde sitios web. | Extraer teléfonos, correos y sitios web desde páginas públicas. | Title y meta enfocados en Web Scraper para prospección. |
 | `/prospeccion/buscar-contactos` | Explicar la búsqueda específica de contactos de empresas. | Tal-IA encuentra empresas y obtiene teléfonos, correos y sitios web. | Title y meta enfocados en buscar contactos. |
 | `/industrias/constructoras` | Crear la vista de constructoras. | IA para constructoras. | Title y meta enfocados en constructoras. |
 
@@ -115,6 +118,7 @@ TalIA tiene 4 productos y 1 tecnología.
 | `/que-es-talia` | Explicar qué es Tal-IA. | Qué es Tal-IA. | Regenerar visual manteniendo el enfoque base. |
 | `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de TalIA. | Regenerar visual manteniendo el SEO actual. |
 | `/buscar-contactos` | Mantener alias legado o redirección temporal si se conserva. | Buscar contactos para ventas. | Mantener solo si sigue activo como acceso legacy. |
+| `/prospeccion/webscraper` | Mostrar extracción visible desde sitios públicos. | Web Scraper para prospección. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-de-whatsapp` | Mostrar IA de WhatsApp. | IA de WhatsApp. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-para-ventas` | Mostrar IA para ventas. | IA para ventas. | Regenerar visual manteniendo el SEO actual. |
 | `/asistente-ia-empresas` | Mostrar asistente IA para empresas. | Asistente IA para empresas. | Regenerar visual manteniendo el SEO actual. |
@@ -137,6 +141,7 @@ Estas piezas viven dentro de sus vistas madre o como bloques de contenido:
 - WhatsApp IA
 - Teléfono IA
 - Web Chat IA
+- Web Scraper
 - Agenda
 - Calificación
 - Memoria

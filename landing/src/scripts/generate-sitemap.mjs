@@ -20,6 +20,7 @@ const urls = [
   { loc: "/prospeccion/google", priority: "0.96" },
   { loc: "/prospeccion/gob-mx", priority: "0.95" },
   { loc: "/prospeccion/buscar-contactos", priority: "0.95" },
+  { loc: "/prospeccion/webscraper", priority: "0.95" },
   { loc: "/prospeccion-comercial", priority: "0.96" },
   { loc: "/campanas-marketing", priority: "0.9" },
   { loc: "/video-demostracion-inmobiliarias", priority: "0.88" },
