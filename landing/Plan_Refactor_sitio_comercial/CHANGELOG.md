@@ -21,6 +21,9 @@ Registro de avances del refactor de `talia.mx`.
 - Se ajusto el subtitulo principal de la home para incluir envios masivos por correo y WhatsApp.
 - Se redujo la altura del contenedor derecho del hero y se corrigio la distribucion de las tarjetas alrededor del circulo.
 - Se unifico el header de las vistas nuevas de prospeccion con el header general de la landing.
+- Se corrigio el header de `lp/prospeccion` para que el boton `Hablar por WhatsApp` permanezca alineado en una sola linea como en la home.
+- Se ajusto el ancho del contenedor de `lp/prospeccion` para evitar que el CTA del header se parta en pantallas intermedias.
+- Se corrigio el enlace `Inicio` en las vistas de `lp/prospeccion` para que apunte al home real y no a un ancla local.
 - Se mejoraron las vistas de:
   - `/lp/prospeccion/google`
   - `/lp/prospeccion/gob-mx`

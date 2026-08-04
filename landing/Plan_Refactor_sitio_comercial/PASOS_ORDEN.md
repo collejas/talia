@@ -36,6 +36,8 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 - [x] Regenerar visualmente las vistas.
 - [x] Tratar `Google` y `Gob-MX` como vistas hijas o bloques dentro de prospección.
 - [x] Confirmar que cada página responda una intención de búsqueda distinta.
+- [x] Alinear el header de `lp/prospeccion` con la home para que el CTA `Hablar por WhatsApp` no se rompa en otra linea.
+- [x] Corregir `Inicio` en `lp/prospeccion` para que regrese al home real.
 
 ### 4. MARKETING
 
