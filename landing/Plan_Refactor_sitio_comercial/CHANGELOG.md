@@ -12,6 +12,17 @@ Registro de avances del refactor de `talia.mx`.
 
 ### Avance reciente
 
+- Se termino de alinear el header de la home, `Marketing` y toda la familia de `Prospección` para que usen la misma navegación, mismos grupos y mismo CTA que la home.
+- Se corrigieron las rutas heredadas de prospección para que ya no queden con una version simplificada del header:
+  - `/prospeccion`
+  - `/prospeccion/google`
+  - `/prospeccion/gob-mx`
+  - `/prospeccion/buscar-contactos`
+  - `/prospeccion/webscraper`
+  - `/lp/prospeccion/comercial`
+- Se mantuvo el esquema de prospección con su pagina madre `/lp/prospeccion` y sus vistas hijas, respetando los links internos y el espejo publico.
+- Se sincronizo nuevamente el espejo servido en `/var/www/talia-landing` con los cambios del source.
+- Se dejo documentado el avance para continuar despues con `Qué es Tal-IA`, `CRM`, `Industrias` y la limpieza final de rutas legacy.
 - Se reordeno la home para que el hero derecho represente correctamente los 4 modulos del flujo:
   - Prospeccion
   - Marketing

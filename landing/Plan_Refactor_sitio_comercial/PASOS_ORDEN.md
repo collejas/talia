@@ -38,6 +38,8 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 - [x] Confirmar que cada página responda una intención de búsqueda distinta.
 - [x] Alinear el header de `lp/prospeccion` con la home para que el CTA `Hablar por WhatsApp` no se rompa en otra linea.
 - [x] Corregir `Inicio` en `lp/prospeccion` para que regrese al home real.
+- [x] Alinear el header de toda la familia `lp/prospeccion/*` y `prospeccion/*` con la home.
+- [x] Verificar que `Prospección`, `Marketing` y `Agente IA` queden como dropdowns identicos en todas las vistas.
 
 ### 4. MARKETING
 
@@ -47,6 +49,7 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
   - [x] `/marketing/whatsapp`
 - [x] Separar marketing de la atención con IA.
 - [x] Confirmar que el mensaje sea campañas salientes, no prospección ni soporte conversacional.
+- [x] Alinear el header de `Marketing` con la home en `/marketing`, `/marketing/email` y `/marketing/whatsapp`.
 
 ### 5. AGENTE IA
 
