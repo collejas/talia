@@ -65,7 +65,15 @@
       <div class="nav-links nav-links--desktop">
         <a href="#inicio">Inicio</a>
         <a href="/que-es-talia">Qué es Tal-IA</a>
-        <a href="#prospeccion">Prospección</a>
+        <details class="nav-group">
+          <summary>Prospección</summary>
+          <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+            <a href="/prospeccion">Ver hub</a>
+            <a href="/prospeccion/google">Google</a>
+            <a href="/prospeccion/gob-mx">Gob-MX</a>
+            <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
+          </div>
+        </details>
         <a href="#marketing">Marketing</a>
         <a href="#agente-ia">Agente IA</a>
         <a href="#crm">CRM</a>
@@ -83,7 +91,15 @@
         <div class="nav-mobile-menu__panel">
           <a href="#inicio">Inicio</a>
           <a href="/que-es-talia">Qué es Tal-IA</a>
-          <a href="#prospeccion">Prospección</a>
+          <details class="nav-group">
+            <summary>Prospección</summary>
+            <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+              <a href="/prospeccion">Ver hub</a>
+              <a href="/prospeccion/google">Google</a>
+              <a href="/prospeccion/gob-mx">Gob-MX</a>
+              <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
+            </div>
+          </details>
           <a href="#marketing">Marketing</a>
           <a href="#agente-ia">Agente IA</a>
           <a href="#crm">CRM</a>
@@ -110,7 +126,7 @@
           <a class="button primary" data-cta-id="CTA_HERO_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20una%20demo%20comercial%20de%20Tal-IA%20para%20mi%20equipo" target="_blank" rel="noopener noreferrer">
             Hablar por WhatsApp
           </a>
-          <a class="button secondary" href="#prospeccion">Ver estructura</a>
+          <a class="button secondary" href="/prospeccion">Ir a prospección</a>
           <a class="button ghost" href="/precios">Ver precios</a>
         </div>
 
@@ -189,33 +205,39 @@
     <section class="section" id="prospeccion">
       <div class="section-head">
         <h2>Prospección</h2>
-        <p>La prospección vive para encontrar clientes. Google y Gob-MX son fuentes internas del proceso, no vistas separadas.</p>
+        <p>La vista madre vive en <a href="/prospeccion">/prospeccion</a>. Desde ahí entras a Google, Gob-MX y las demás vistas hijas.</p>
       </div>
 
       <div class="feature-grid five">
-        <article class="feature">
+        <a class="feature" href="/prospeccion">
+          <div class="feature-icon" style="background: var(--dark)">Hub</div>
+          <h3>Prospección</h3>
+          <p>Vista madre para entender el flujo completo y entrar a las rutas hijas.</p>
+        </a>
+
+        <a class="feature" href="/prospeccion/google">
           <div class="feature-icon" style="background: var(--blue)">G</div>
           <h3>Google</h3>
           <p>Busca negocios y señales útiles para abrir oportunidades comerciales.</p>
-        </article>
+        </a>
 
-        <article class="feature">
+        <a class="feature" href="/prospeccion/gob-mx">
           <div class="feature-icon" style="background: var(--violet)">M</div>
           <h3>Gob-MX</h3>
           <p>Usa fuentes públicas para enriquecer listas y contactos.</p>
-        </article>
+        </a>
 
-        <article class="feature">
+        <a class="feature" href="/prospeccion-comercial">
           <div class="feature-icon" style="background: var(--green)">↗</div>
           <h3>Prospección comercial</h3>
           <p>Vista actual regenerada visualmente para explicar cómo se construye la base comercial.</p>
-        </article>
+        </a>
 
-        <article class="feature">
+        <a class="feature" href="/prospeccion/buscar-contactos">
           <div class="feature-icon" style="background: var(--orange)">⌕</div>
           <h3>Buscar contactos</h3>
           <p>Vista actual regenerada visualmente para convertir búsquedas en listas accionables.</p>
-        </article>
+        </a>
       </div>
     </section>
 
