@@ -3,6 +3,25 @@
 Documento derivado de [PLAN LANDING.md](./PLAN%20LANDING.md).
 No reemplaza el plan base. Solo lo ordena en vistas, textos y SEO.
 
+## Estado del avance
+
+Al 2026-08-04 ya quedaron publicadas y ajustadas estas piezas:
+
+- Home con hero reorganizado para `Tal-IA Automatiza`.
+- Vistas de prospección bajo `/lp/prospeccion`:
+  - `/lp/prospeccion`
+  - `/lp/prospeccion/google`
+  - `/lp/prospeccion/gob-mx`
+  - `/lp/prospeccion/webscraper`
+  - `/lp/prospeccion/buscar-contactos`
+  - `/lp/prospeccion/comercial`
+- Header unificado en las vistas nuevas de prospección.
+- Alineación de datos por fuente:
+  - Google
+  - Gob-MX
+  - Web Scraper
+- Alineación del texto de `buscar-contactos` para usar Google y Gob-MX.
+
 ## Estructura objetivo
 
 HOME
@@ -11,17 +30,17 @@ HOME
 │   └── Mantener la vista actual `/que-es-talia` y regenerar su visual.
 
 ├── PROSPECCIÓN
-│   ├── /prospeccion
+│   ├── /lp/prospeccion
 │   ├── Google
-│   │   └── Mantener la vista que se cree en `/prospeccion/google` como hija de prospección.
+│   │   └── Mantener la vista que se cree en `/lp/prospeccion/google` como hija de prospección.
 │   ├── Gob-MX
-│   │   └── Mantener la vista que se cree en `/prospeccion/gob-mx` como hija de prospección.
+│   │   └── Mantener la vista que se cree en `/lp/prospeccion/gob-mx` como hija de prospección.
 │   ├── Web Scraper
-│   │   └── Mantener la vista que se cree en `/prospeccion/webscraper` como hija de prospección.
+│   │   └── Mantener la vista que se cree en `/lp/prospeccion/webscraper` como hija de prospección.
 │   ├── Prospección comercial
 │   │   └── Mantener la vista actual `/prospeccion-comercial` y regenerar su visual.
 │   └── Buscar contactos
-│       └── Mantener la vista que se cree en `/prospeccion/buscar-contactos` y regenerar su visual.
+│       └── Mantener la vista que se cree en `/lp/prospeccion/buscar-contactos` y regenerar su visual.
 
 ├── MARKETING
 │   ├── Email Marketing
@@ -95,9 +114,9 @@ TalIA tiene 4 productos y 1 tecnología.
 
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
-| `/prospeccion` | Presentar el módulo de prospección como vista padre. | Encuentra empresas y obtén datos de contacto con múltiples fuentes. | Title y meta enfocados en prospección comercial. |
+| `/lp/prospeccion` | Presentar el módulo de prospección como vista padre. | Encuentra empresas y obtén datos de contacto con múltiples fuentes. | Title y meta enfocados en prospección comercial. |
 | `/marketing` | Presentar el módulo de marketing como vista madre. | Contáctalos por correo y WhatsApp. | Title y meta enfocados en marketing comercial. |
-| `/atencion-con-ia` | Presentar el módulo de atención con IA como vista madre. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
+| `/agente-ia` | Presentar el módulo de atención con IA como vista madre. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
 | `/crm` | Presentar el módulo CRM como vista madre. | Organiza el seguimiento y convierte más ventas. | Title y meta enfocados en CRM comercial. |
 
 ### Vistas de soporte por crear
@@ -105,10 +124,10 @@ TalIA tiene 4 productos y 1 tecnología.
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
 | `/automatizacion` | Explicar la automatización como capa transversal. | La automatización conecta prospección, marketing, IA y CRM. | Title y meta enfocados en automatización comercial. |
-| `/prospeccion/google` | Explicar la búsqueda de empresas en Google Maps/Google Places. | Buscar empresas en Google Maps. | Title y meta enfocados en Google para prospección. |
-| `/prospeccion/gob-mx` | Explicar la búsqueda de empresas en bases oficiales de México. | Buscar empresas en bases oficiales de México. | Title y meta enfocados en Gob-MX para prospección. |
-| `/prospeccion/webscraper` | Explicar la extracción de datos visibles desde sitios web. | Extraer teléfonos, correos y sitios web desde páginas públicas. | Title y meta enfocados en Web Scraper para prospección. |
-| `/prospeccion/buscar-contactos` | Explicar la búsqueda específica de contactos de empresas. | Tal-IA encuentra empresas y obtiene teléfonos, correos y sitios web. | Title y meta enfocados en buscar contactos. |
+| `/lp/prospeccion/google` | Explicar la búsqueda de empresas en Google Maps/Google Places. | Buscar empresas en Google Maps. | Title y meta enfocados en Google para prospección. |
+| `/lp/prospeccion/gob-mx` | Explicar la búsqueda de empresas en Gob-MX y bases de datos de empresas. | Buscar empresas en Gob-MX. | Title y meta enfocados en Gob-MX para prospección. |
+| `/lp/prospeccion/webscraper` | Explicar la extracción de correo electrónico visible desde sitios web. | Obtener correo electrónico visible. | Title y meta enfocados en Web Scraper para prospección. |
+| `/lp/prospeccion/buscar-contactos` | Explicar la búsqueda específica de contactos de empresas usando Google y Gob-MX. | Buscar datos de contacto en Google y Gob-MX en una lista comercial útil. | Title y meta enfocados en buscar contactos. |
 | `/industrias/constructoras` | Crear la vista de constructoras. | IA para constructoras. | Title y meta enfocados en constructoras. |
 
 ## Vistas que se mantienen
@@ -116,9 +135,9 @@ TalIA tiene 4 productos y 1 tecnología.
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
 | `/que-es-talia` | Explicar qué es Tal-IA. | Qué es Tal-IA. | Regenerar visual manteniendo el enfoque base. |
-| `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de TalIA. | Regenerar visual manteniendo el SEO actual. |
+| `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de Tal-IA. | Regenerar visual manteniendo el SEO actual. |
 | `/buscar-contactos` | Mantener alias legado o redirección temporal si se conserva. | Buscar contactos para ventas. | Mantener solo si sigue activo como acceso legacy. |
-| `/prospeccion/webscraper` | Mostrar extracción visible desde sitios públicos. | Web Scraper para prospección. | Regenerar visual manteniendo el SEO actual. |
+| `/lp/prospeccion/webscraper` | Mostrar extracción de correo visible desde sitios públicos. | Web Scraper para prospección. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-de-whatsapp` | Mostrar IA de WhatsApp. | IA de WhatsApp. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-para-ventas` | Mostrar IA para ventas. | IA para ventas. | Regenerar visual manteniendo el SEO actual. |
 | `/asistente-ia-empresas` | Mostrar asistente IA para empresas. | Asistente IA para empresas. | Regenerar visual manteniendo el SEO actual. |
