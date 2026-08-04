@@ -26,13 +26,13 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 
 ### 3. PROSPECCIÓN
 
-- [x] Crear o consolidar `/prospeccion` como página padre.
-- [x] Mantener `/prospeccion-comercial`.
+- [x] Crear o consolidar `/lp/prospeccion` como página padre de la landing.
+- [x] Mantener `/prospeccion-comercial` como acceso legado / redirección.
 - [x] Mantener `/buscar-contactos` solo si sigue como acceso legado o redirección temporal.
-- [x] Crear `/prospeccion/google`.
-- [x] Crear `/prospeccion/gob-mx`.
-- [x] Crear `/prospeccion/buscar-contactos`.
-- [x] Crear `/prospeccion/webscraper`.
+- [x] Crear `/lp/prospeccion/google`.
+- [x] Crear `/lp/prospeccion/gob-mx`.
+- [x] Crear `/lp/prospeccion/buscar-contactos`.
+- [x] Crear `/lp/prospeccion/webscraper`.
 - [x] Regenerar visualmente las vistas.
 - [x] Tratar `Google` y `Gob-MX` como vistas hijas o bloques dentro de prospección.
 - [x] Confirmar que cada página responda una intención de búsqueda distinta.

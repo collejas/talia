@@ -135,8 +135,8 @@ TalIA tiene 4 productos y 1 tecnología.
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
 | `/que-es-talia` | Explicar qué es Tal-IA. | Qué es Tal-IA. | Regenerar visual manteniendo el enfoque base. |
-| `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de Tal-IA. | Regenerar visual manteniendo el SEO actual. |
-| `/buscar-contactos` | Mantener alias legado o redirección temporal si se conserva. | Buscar contactos para ventas. | Mantener solo si sigue activo como acceso legacy. |
+| `/prospeccion-comercial` | Mantener alias legado o redirección hacia `/lp/prospeccion/comercial`. | Prospección comercial de Tal-IA. | Mantener solo como acceso legacy. |
+| `/buscar-contactos` | Mantener alias legado o redirección hacia `/lp/prospeccion/buscar-contactos`. | Buscar contactos para ventas. | Mantener solo como acceso legacy. |
 | `/lp/prospeccion/webscraper` | Mostrar extracción de correo visible desde sitios públicos. | Web Scraper para prospección. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-de-whatsapp` | Mostrar IA de WhatsApp. | IA de WhatsApp. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-para-ventas` | Mostrar IA para ventas. | IA para ventas. | Regenerar visual manteniendo el SEO actual. |
