@@ -185,4 +185,3 @@ Precios
 Presentacion
 nota
 video-demostracion-inmobiliarias
-industrias/inmobiliarias
