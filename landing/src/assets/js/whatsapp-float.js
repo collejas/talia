@@ -163,6 +163,42 @@ function applyPageWhatsAppLinks() {
   });
 }
 
+function initialiseHeaderDropdowns() {
+  if (typeof document === 'undefined') return;
+  if (document.documentElement.dataset.taliaHeaderDropdowns === '1') return;
+  document.documentElement.dataset.taliaHeaderDropdowns = '1';
+
+  const closeAll = (except = null) => {
+    document.querySelectorAll('.nav-group[open]').forEach((group) => {
+      if (group !== except) {
+        group.removeAttribute('open');
+      }
+    });
+  };
+
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const group = target.closest('.nav-group');
+    if (!group) {
+      closeAll();
+      return;
+    }
+
+    const summary = target.closest('.nav-group > summary');
+    if (summary) {
+      window.requestAnimationFrame(() => closeAll(group));
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAll();
+    }
+  });
+}
+
 function ensureStyles() {
   if (document.getElementById('talia-whatsapp-float-styles')) return;
   const style = document.createElement('style');
@@ -329,6 +365,7 @@ function bootstrap() {
   if (typeof document === 'undefined') return;
   ensureStyles();
   mountFloat();
+  initialiseHeaderDropdowns();
   applyPageWhatsAppLinks();
   void mountWebchat();
 }
