@@ -47,6 +47,206 @@
   </script>
   <link rel="stylesheet" href="/assets/css/seo-pages.css?v=20260625a" />
   <style>
+    .page {
+      width: min(1220px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 28px 0 70px;
+      display: grid;
+      gap: 28px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 34px;
+      position: relative;
+      z-index: 20;
+    }
+
+    .nav-access {
+      position: absolute;
+      left: -18px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.82);
+      color: #334155;
+      font-size: 11px;
+      font-weight: 800;
+      text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 56px;
+      font-size: 34px;
+      font-weight: 950;
+      letter-spacing: -1.8px;
+      line-height: 1;
+      text-decoration: none;
+    }
+
+    .brand img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 760;
+      overflow: visible;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+    }
+
+    .nav-links--desktop {
+      flex-wrap: nowrap;
+    }
+
+    .nav-group {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-self: stretch;
+    }
+
+    .nav-group > summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 0 14px;
+      box-sizing: border-box;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, 0.16);
+      background: rgba(255, 255, 255, 0.82);
+      color: #1d4ed8;
+      user-select: none;
+      white-space: nowrap;
+      line-height: 1;
+      transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+    }
+
+    .nav-group > summary::after {
+      content: "▾";
+      font-size: 11px;
+      line-height: 1;
+      transform: translateY(2px);
+      transition: transform 0.18s ease;
+    }
+
+    .nav-group[open] > summary::after {
+      transform: rotate(180deg);
+    }
+
+    .nav-group > summary:hover,
+    .nav-group[open] > summary {
+      background: rgba(37, 99, 235, 0.08);
+      color: #2563eb;
+      box-shadow: 0 14px 34px rgba(37, 99, 235, 0.10);
+    }
+
+    .nav-group > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .nav-dropdown {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      width: 260px;
+      padding: 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(15, 23, 42, 0.09);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.10);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 280px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(6px);
+      transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .nav-group:hover .nav-dropdown,
+    .nav-group:focus-within .nav-dropdown,
+    .nav-group[open] .nav-dropdown {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .nav-dropdown a {
+      display: block;
+      padding: 10px 11px;
+      border-radius: 14px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .nav-dropdown a:hover {
+      background: rgba(37, 99, 235, 0.06);
+      color: #2563eb;
+    }
+
+    .nav-links a:hover {
+      color: var(--blue);
+    }
+
+    .nav-cta {
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 14px;
+      color: white;
+      background: linear-gradient(135deg, var(--blue), var(--violet));
+      font-size: 13px;
+      font-weight: 850;
+      box-shadow: 0 14px 34px rgba(79, 70, 229, 0.26);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-cta--secondary {
+      border: 1px solid rgba(59, 130, 246, 0.18);
+      background: rgba(255, 255, 255, 0.82);
+      color: #1d4ed8;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
+    }
+
+    .nav-mobile-menu {
+      display: none;
+    }
+
     .campaign-hero {
       display: grid;
       grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
@@ -352,21 +552,160 @@
       color: #0f172a;
     }
 
-    .page {
-      display: grid;
-      gap: 28px;
-    }
-
     @media (max-width: 980px) {
-      .page {
-        gap: 22px;
-      }
-
       .campaign-hero,
       .campaign-flow,
       .campaign-cards,
       .campaign-cases {
         grid-template-columns: 1fr;
+      }
+
+      .nav-access {
+        display: none;
+      }
+
+      .brand {
+        margin-left: 0;
+      }
+
+      .nav {
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .nav-links--desktop,
+      .nav > .nav-cta {
+        display: none;
+      }
+
+      .nav-mobile-menu {
+        display: block;
+        margin-left: auto;
+      }
+
+      .nav-mobile-menu > summary {
+        list-style: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: white;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+        font-size: 0;
+      }
+
+      .nav-mobile-menu > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .nav-mobile-menu > summary::before {
+        content: "☰";
+        font-size: 18px;
+        color: var(--blue);
+        line-height: 1;
+      }
+
+      .nav-mobile-menu[open] > summary::before {
+        content: "✕";
+      }
+
+      .nav-mobile-menu__panel {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 10px);
+        width: min(320px, calc(100vw - 24px));
+        padding: 12px;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 4px;
+      }
+
+      .nav-mobile-menu__panel a {
+        display: block;
+        padding: 11px 12px;
+        border-radius: 14px;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 750;
+        text-decoration: none;
+      }
+
+      .nav-mobile-menu__panel a:hover {
+        background: rgba(37, 99, 235, 0.06);
+        color: var(--blue);
+      }
+
+      .nav-mobile-menu .nav-group {
+        display: block;
+      }
+
+      .nav-mobile-menu .nav-group > summary {
+        width: 100%;
+        justify-content: space-between;
+        padding: 11px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(241, 245, 249, 0.95);
+        color: #334155;
+        box-shadow: none;
+      }
+
+      .nav-mobile-menu .nav-group > summary::after {
+        transform: translateY(1px);
+      }
+
+      .nav-mobile-menu .nav-group[open] > summary {
+        background: rgba(37, 99, 235, 0.06);
+        color: var(--blue);
+      }
+
+      .nav-mobile-menu__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .nav-mobile-menu__actions .button:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .nav-mobile-menu__actions .button {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: min(100% - 24px, 1220px);
+        padding-top: 18px;
+      }
+
+      .brand {
+        font-size: 31px;
+      }
+
+      .nav-cta {
+        padding: 10px 12px;
+      }
+
+      .nav-dropdown {
+        position: static;
+        width: 100%;
+        margin-top: 8px;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
       }
     }
   </style>
@@ -375,107 +714,80 @@
 <body>
   <noscript> <img height="1" width="1" src="https://www.facebook.com/tr?id=2211771336058217&ev=PageView&noscript=1"/></noscript>
   <main class="page">
-    
-  <nav class="nav" aria-label="Navegación principal">
-    <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-    <a class="brand" href="/" aria-label="Tal-IA">
-      <img src="/Logo8.svg" alt="" aria-hidden="true" />
-      <span>Tal-IA</span>
-    </a>
+    <nav class="nav" aria-label="Navegación principal">
+      <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
+      <a class="brand" href="/" aria-label="TalIA">
+        <img src="/Logo8.svg" alt="" aria-hidden="true" />
+        <span>Tal-IA</span>
+      </a>
 
-    <div class="nav-links nav-links--desktop">
-      <a href="/">Inicio</a>
-      <a href="/que-es-talia">Qué es Tal-IA</a>
-
-      <details class="nav-group">
-        <summary>Funciones</summary>
-        <div class="nav-dropdown">
-          <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <a href="/#automatizacion">Automatización de procesos</a>
-          <a href="/#crm">Seguimiento de ventas</a>
-          <a href="/ia-para-ventas">Ventas e inventarios</a>
-          <a href="/#crm">Agendas, cotizaciones, notas, tareas</a>
-          <a href="/lp/prospeccion/buscar-contactos">Buscar contactos Web/Google/Gob-MX</a>
-          <details class="nav-group">
-            <summary>Marketing</summary>
-            <div class="nav-dropdown">
-              <a href="/marketing">Marketing</a>
-              <a href="/marketing/email">Email Marketing</a>
-              <a href="/marketing/whatsapp">WhatsApp Marketing</a>
-            </div>
-          </details>
-          <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
-          <a href="/caracteristicas">Métricas</a>
-        </div>
-      </details>
-
-      <details class="nav-group">
-        <summary>Sectores</summary>
-        <div class="nav-dropdown">
-          <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a href="/industrias/servicios">Servicios</a>
-          <a href="/industrias/negocios-locales">Negocios locales</a>
-          <a href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a href="/industrias/turismo">Turismo</a>
-        </div>
-      </details>
-
-      <a href="/caracteristicas">Características</a>
-      <a href="/precios">Precios</a>
-      <a href="/demo.html" class="nav-cta nav-cta--secondary">Agendar demo</a>
-    </div>
-
-    <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20WhatsApp%20Marketing%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">
-      Ver WhatsApp
-    </a>
-
-    <details class="nav-mobile-menu">
-      <summary aria-label="Abrir menú">Menú</summary>
-      <div class="nav-mobile-menu__panel">
+      <div class="nav-links nav-links--desktop">
         <a href="/">Inicio</a>
         <a href="/que-es-talia">Qué es Tal-IA</a>
+        <details class="nav-group">
+          <summary>Prospección</summary>
+          <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+            <a href="/lp/prospeccion">Prospección</a>
+            <a href="/lp/prospeccion/google">Google</a>
+            <a href="/lp/prospeccion/gob-mx">Gob-MX</a>
+            <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
+            <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+          </div>
+        </details>
+        <details class="nav-group">
+          <summary>Marketing</summary>
+          <div class="nav-dropdown" role="menu" aria-label="Opciones de marketing">
+            <a href="/marketing">Marketing</a>
+            <a href="/marketing/email">Email Marketing</a>
+            <a href="/marketing/whatsapp">WhatsApp Marketing</a>
+          </div>
+        </details>
+        <a href="#agente-ia">Agente IA</a>
+        <a href="#crm">CRM</a>
+        <a href="#industrias">Industrias</a>
+        <a href="/precios">Precios</a>
+        <a href="/demo.html" class="nav-cta nav-cta--secondary">Demo</a>
+      </div>
 
-        <div class="nav-mobile-menu__group">
-          <div class="nav-mobile-menu__label">Funciones</div>
-          <a href="/crm-con-ia-para-whatsapp">CRM con IA para WhatsApp</a>
-          <a href="/asistente-ia-empresas">Asistente IA para empresas</a>
-          <a href="/#automatizacion">Automatización de procesos</a>
-          <a href="/#crm">Seguimiento de ventas</a>
-          <a href="/ia-para-ventas">Ventas e inventarios</a>
-          <a href="/#crm">Agendas, cotizaciones, notas, tareas</a>
-          <a href="/lp/prospeccion/buscar-contactos">Buscar contactos Web/Google/Gob-MX</a>
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Hablar por WhatsApp
+      </a>
+
+      <details class="nav-mobile-menu">
+        <summary aria-label="Abrir menú">Menú</summary>
+        <div class="nav-mobile-menu__panel">
+          <a href="/">Inicio</a>
+          <a href="/que-es-talia">Qué es Tal-IA</a>
+          <details class="nav-group">
+            <summary>Prospección</summary>
+            <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+              <a href="/lp/prospeccion">Prospección</a>
+              <a href="/lp/prospeccion/google">Google</a>
+              <a href="/lp/prospeccion/gob-mx">Gob-MX</a>
+              <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
+              <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+            </div>
+          </details>
           <details class="nav-group">
             <summary>Marketing</summary>
-            <div class="nav-dropdown">
+            <div class="nav-dropdown" role="menu" aria-label="Opciones de marketing">
               <a href="/marketing">Marketing</a>
               <a href="/marketing/email">Email Marketing</a>
               <a href="/marketing/whatsapp">WhatsApp Marketing</a>
             </div>
           </details>
-          <a href="/industrias/inmobiliarias">Gestión Inmobiliaria</a>
-          <a href="/caracteristicas">Métricas</a>
+          <a href="#agente-ia">Agente IA</a>
+          <a href="#crm">CRM</a>
+          <a href="#industrias">Industrias</a>
+          <a href="/precios">Precios</a>
+          <div class="nav-mobile-menu__actions">
+            <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
+            <a href="/demo.html" class="button secondary">Demo</a>
+            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+          </div>
         </div>
-
-        <div class="nav-mobile-menu__group">
-          <div class="nav-mobile-menu__label">Sectores</div>
-          <a href="/industrias/inmobiliarias">Inmobiliarias</a>
-          <a href="/industrias/servicios">Servicios</a>
-          <a href="/industrias/negocios-locales">Negocios locales</a>
-          <a href="/industrias/ventas-b2b">Ventas B2B</a>
-          <a href="/industrias/turismo">Turismo</a>
-        </div>
-
-        <a href="/caracteristicas">Características</a>
-        <a href="/precios">Precios</a>
-        <div class="nav-mobile-menu__actions">
-          <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
-          <a href="/demo.html" class="button secondary">Agendar demo</a>
-          <a href="https://wa.me/5214443354450?text=Hola%2C%20quiero%20ver%20WhatsApp%20Marketing%20de%20Tal-IA." class="button primary" target="_blank" rel="noopener noreferrer">Ver WhatsApp</a>
-        </div>
-      </div>
-    </details>
-  </nav>
+      </details>
+    </nav>
 
     <section class="campaign-hero">
       <div class="campaign-hero__copy">
