@@ -6,16 +6,16 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 
 ### 1. HOME
 
-- [ ] Revisar la vista principal.
-- [ ] Mantener el flujo de entrada hacia:
-  - [ ] Qué es Tal-IA
-  - [ ] Prospección
-  - [ ] Marketing
-  - [ ] Agente IA
-  - [ ] CRM
-  - [ ] Industrias
-  - [ ] Precios
-  - [ ] Demo
+- [x] Revisar la vista principal.
+- [x] Mantener el flujo de entrada hacia:
+  - [x] Qué es Tal-IA
+  - [x] Prospección
+  - [x] Marketing
+  - [x] Agente IA
+  - [x] CRM
+  - [x] Industrias
+  - [x] Precios
+  - [x] Demo
 
 ### 2. QUÉ ES TAL-IA
 
@@ -26,16 +26,16 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 
 ### 3. PROSPECCIÓN
 
-- [ ] Crear o consolidar `/prospeccion` como página padre.
-- [ ] Mantener `/prospeccion-comercial`.
-- [ ] Mantener `/buscar-contactos` solo si sigue como acceso legado o redirección temporal.
-- [ ] Crear `/prospeccion/google`.
-- [ ] Crear `/prospeccion/gob-mx`.
-- [ ] Crear `/prospeccion/buscar-contactos`.
-- [ ] Crear `/prospeccion/webscraper`.
-- [ ] Regenerar visualmente ambas vistas.
-- [ ] Tratar `Google` y `Gob-MX` como vistas hijas o bloques dentro de prospección.
-- [ ] Confirmar que cada página responda una intención de búsqueda distinta.
+- [x] Crear o consolidar `/prospeccion` como página padre.
+- [x] Mantener `/prospeccion-comercial`.
+- [x] Mantener `/buscar-contactos` solo si sigue como acceso legado o redirección temporal.
+- [x] Crear `/prospeccion/google`.
+- [x] Crear `/prospeccion/gob-mx`.
+- [x] Crear `/prospeccion/buscar-contactos`.
+- [x] Crear `/prospeccion/webscraper`.
+- [x] Regenerar visualmente las vistas.
+- [x] Tratar `Google` y `Gob-MX` como vistas hijas o bloques dentro de prospección.
+- [x] Confirmar que cada página responda una intención de búsqueda distinta.
 
 ### 4. MARKETING
 
