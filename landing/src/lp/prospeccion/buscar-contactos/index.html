@@ -55,34 +55,60 @@
   <main class="page-shell">
     <nav class="nav" aria-label="Navegación principal">
       <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-      <a class="brand" href="/" aria-label="TalIA"><img src="/Logo8.svg" alt="" aria-hidden="true" /><span>Tal-IA</span></a>
+      <a class="brand" href="/" aria-label="TalIA">
+        <img src="/Logo8.svg" alt="" aria-hidden="true" />
+        <span>Tal-IA</span>
+      </a>
+
       <div class="nav-links nav-links--desktop">
-        <a href="/">Inicio</a>
+        <a href="#inicio">Inicio</a>
         <a href="/que-es-talia">Qué es Tal-IA</a>
-        <a href="/lp/prospeccion">Prospección</a>
-        <a href="/lp/prospeccion/google">Google</a>
-        <a href="/lp/prospeccion/comercial">Prospección comercial</a>
-        <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
-        <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+        <details class="nav-group">
+          <summary>Prospección</summary>
+          <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+            <a href="/lp/prospeccion">Prospección</a>
+            <a href="/lp/prospeccion/google">Google</a>
+            <a href="/lp/prospeccion/gob-mx">Gob-MX</a>
+            <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
+            <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+          </div>
+        </details>
+        <a href="#marketing">Marketing</a>
+        <a href="#agente-ia">Agente IA</a>
+        <a href="#crm">CRM</a>
+        <a href="#industrias">Industrias</a>
         <a href="/precios">Precios</a>
         <a href="/demo.html" class="nav-cta nav-cta--secondary">Demo</a>
       </div>
-      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20de%20empresas%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Buscar contactos</a>
+
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Hablar por WhatsApp
+      </a>
+
       <details class="nav-mobile-menu">
         <summary aria-label="Abrir menú">Menú</summary>
         <div class="nav-mobile-menu__panel">
-          <a href="/">Inicio</a>
+          <a href="#inicio">Inicio</a>
           <a href="/que-es-talia">Qué es Tal-IA</a>
-          <a href="/lp/prospeccion">Prospección</a>
-          <a href="/lp/prospeccion/google">Google</a>
-          <a href="/lp/prospeccion/comercial">Prospección comercial</a>
-          <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
-          <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+          <details class="nav-group">
+            <summary>Prospección</summary>
+            <div class="nav-dropdown" role="menu" aria-label="Opciones de prospección">
+              <a href="/lp/prospeccion">Prospección</a>
+              <a href="/lp/prospeccion/google">Google</a>
+              <a href="/lp/prospeccion/gob-mx">Gob-MX</a>
+              <a href="/lp/prospeccion/buscar-contactos">Buscar contactos</a>
+              <a href="/lp/prospeccion/webscraper">Web Scraper</a>
+            </div>
+          </details>
+          <a href="#marketing">Marketing</a>
+          <a href="#agente-ia">Agente IA</a>
+          <a href="#crm">CRM</a>
+          <a href="#industrias">Industrias</a>
           <a href="/precios">Precios</a>
           <div class="nav-mobile-menu__actions">
             <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
             <a href="/demo.html" class="button secondary">Demo</a>
-            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20de%20empresas%20con%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">Buscar contactos</a>
+            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">WhatsApp</a>
           </div>
         </div>
       </details>
