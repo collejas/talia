@@ -48,9 +48,9 @@ Registro de avances del refactor de `talia.mx`.
   - DEMO
 - Se separaron vistas que se mantienen, vistas nuevas a crear y secciones internas sin URL propia.
 - Se identificaron vistas que salen del arbol objetivo del plan.
-- Se ajusto la arquitectura de prospeccion para incluir `/prospeccion` como pagina padre y rutas hijas para `google`, `gob-mx` y `buscar-contactos`.
-- Se dejo `/prospeccion/buscar-contactos` como ruta canónica y se saco `/buscar-contactos` del sitemap y de los enlaces internos del sitio.
-- Se agrego `/prospeccion/webscraper` como nueva ruta hija para completar la fuente Web Scraper dentro de prospección.
+- Se ajusto la arquitectura de prospeccion para incluir `/lp/prospeccion` como pagina padre de la landing y rutas hijas para `google`, `gob-mx`, `buscar-contactos` y `webscraper`.
+- Se dejo `/lp/prospeccion/buscar-contactos` como ruta canónica de la landing y se saco `/buscar-contactos` del sitemap y de los enlaces internos del sitio.
+- Se agrego `/lp/prospeccion/webscraper` como nueva ruta hija para completar la fuente Web Scraper dentro de prospección.
 
 ### Nota
 
