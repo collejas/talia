@@ -39,11 +39,12 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 
 ### 4. MARKETING
 
-- [ ] Crear la vista madre de marketing si hace falta.
-- [ ] Definir dentro de ella:
-  - [ ] Email Marketing
-  - [ ] WhatsApp Marketing
-- [ ] Confirmar que el mensaje sea contacto, no prospección.
+- [x] Crear la vista madre `/marketing`.
+- [x] Definir dentro de ella:
+  - [x] `/marketing/email`
+  - [x] `/marketing/whatsapp`
+- [x] Separar marketing de la atención con IA.
+- [x] Confirmar que el mensaje sea campañas salientes, no prospección ni soporte conversacional.
 
 ### 5. AGENTE IA
 

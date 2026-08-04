@@ -86,6 +86,27 @@
   </url>
 
   <url>
+    <loc>https://talia.mx/marketing</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.96</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/marketing/email</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/marketing/whatsapp</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
     <loc>https://talia.mx/video-demostracion-inmobiliarias</loc>
     <lastmod>2026-08-04</lastmod>
     <changefreq>weekly</changefreq>

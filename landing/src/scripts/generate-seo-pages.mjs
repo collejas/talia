@@ -94,6 +94,27 @@ const seoPages = [
     ctaMessage: "Hola, quiero ver la prospección comercial de Tal-IA.",
   },
   {
+    path: "/marketing",
+    title: "Marketing | TalIA",
+    description: "Automatiza tus campañas comerciales desde una sola plataforma utilizando correo electrónico y WhatsApp.",
+    ctaLabel: "Ver marketing",
+    ctaMessage: "Hola, quiero ver marketing comercial de Tal-IA.",
+  },
+  {
+    path: "/marketing/email",
+    title: "Email Marketing | TalIA",
+    description: "Gestiona correos masivos, correos transaccionales, newsletters y seguimiento desde una sola plataforma.",
+    ctaLabel: "Ver email",
+    ctaMessage: "Hola, quiero ver email marketing de Tal-IA.",
+  },
+  {
+    path: "/marketing/whatsapp",
+    title: "WhatsApp Marketing | TalIA",
+    description: "WhatsApp Marketing para enviar plantillas, broadcast y campañas con Meta API sin mezclarlo con la atención conversacional.",
+    ctaLabel: "Ver WhatsApp",
+    ctaMessage: "Hola, quiero ver WhatsApp Marketing de Tal-IA.",
+  },
+  {
     path: "/video-demostracion-inmobiliarias",
     title: "Video demostración inmobiliaria | TalIA",
     description: "Video del proceso inmobiliario con TalIA para mostrar cómo organiza inventario, seguimiento y operación comercial.",

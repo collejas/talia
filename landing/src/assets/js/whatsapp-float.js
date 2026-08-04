@@ -30,6 +30,18 @@ const pageCtas = {
     label: 'Quiero prospectar',
     message: 'Hola, quiero ver la prospección comercial de Tal-IA.',
   },
+  '/marketing': {
+    label: 'Ver marketing',
+    message: 'Hola, quiero ver marketing comercial de Tal-IA.',
+  },
+  '/marketing/email': {
+    label: 'Ver email',
+    message: 'Hola, quiero ver email marketing de Tal-IA.',
+  },
+  '/marketing/whatsapp': {
+    label: 'Ver WhatsApp',
+    message: 'Hola, quiero ver WhatsApp Marketing de Tal-IA.',
+  },
   '/lp/prospeccion': {
     label: 'Ver prospección',
     message: 'Hola, quiero ver la prospección de Tal-IA.',

@@ -34,6 +34,8 @@ Registro de avances del refactor de `talia.mx`.
 - Se hizo una segunda limpieza de enlaces legacy en paginas heredadas, video demostrativo y generadores internos para evitar que siguieran reapareciendo rutas retiradas.
 - Se ajustaron los `canonical` y `og:url` de las paginas legacy retiradas para que apunten al home o a la ruta vigente en el caso de `buscar-contactos`.
 - Se verifico que las paginas conservadas de prospeccion sigan canonizando hacia `/lp/prospeccion/...` y no a los aliases viejos.
+- Se creo la nueva familia de marketing con vista madre `/marketing` y vistas hijas `/marketing/email` y `/marketing/whatsapp`.
+- Se separo el mensaje de marketing saliente entre correo y WhatsApp, dejando la atención conversacional para Agente IA.
 
 ### Agregado
 

@@ -115,7 +115,9 @@ TalIA tiene 4 productos y 1 tecnología.
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
 | `/lp/prospeccion` | Presentar el módulo de prospección como vista padre. | Encuentra empresas y obtén datos de contacto con múltiples fuentes. | Title y meta enfocados en prospección comercial. |
-| `/marketing` | Presentar el módulo de marketing como vista madre. | Contáctalos por correo y WhatsApp. | Title y meta enfocados en marketing comercial. |
+| `/marketing` | Presentar el módulo de marketing como vista madre. | Automatiza tus campañas comerciales desde una sola plataforma utilizando correo electrónico y WhatsApp. | Title y meta enfocados en marketing comercial. |
+| `/marketing/email` | Presentar Email Marketing como vista hija. | Email Marketing, correos masivos y correos transaccionales. | Title y meta enfocados en email marketing. |
+| `/marketing/whatsapp` | Presentar WhatsApp Marketing como vista hija. | WhatsApp Marketing, plantillas, broadcast y métricas. | Title y meta enfocados en WhatsApp marketing. |
 | `/agente-ia` | Presentar el módulo de atención con IA como vista madre. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
 | `/crm` | Presentar el módulo CRM como vista madre. | Organiza el seguimiento y convierte más ventas. | Title y meta enfocados en CRM comercial. |
 
@@ -185,6 +187,9 @@ Estas vistas quedan fuera de esta estructura porque no forman parte del árbol o
 - `/seguimiento-ventas`
 - `/agenda-y-cotizaciones`
 - `/campanas-marketing`
+- `/marketing`
+- `/marketing/email`
+- `/marketing/whatsapp`
 
 ## Orden de lectura del sitio
 
