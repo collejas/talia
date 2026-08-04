@@ -50,19 +50,22 @@ Documento de ejecucion derivado de [PLAN_VISTAS_SEO.md](./PLAN_VISTAS_SEO.md).
 
 ### 5. AGENTE IA
 
-- [ ] Mantener y regenerar:
-  - [ ] `/ia-de-whatsapp`
-  - [ ] `/ia-para-ventas`
-  - [ ] `/asistente-ia-empresas`
-  - [ ] `/crm-con-ia-para-whatsapp`
-- [ ] Definir como secciones internas:
-  - [ ] WhatsApp IA
-  - [ ] Teléfono IA
-  - [ ] Web Chat IA
-  - [ ] Agenda
-  - [ ] Calificación
-  - [ ] Memoria
-- [ ] Confirmar que la vista explique atención, no solo automatización.
+- [x] Crear el hub `/agente-ia` como vista madre del agrupador.
+- [x] Crear vistas hero-only para:
+  - [x] `/agente-ia/whatsapp`
+  - [x] `/agente-ia/telefono`
+  - [x] `/agente-ia/web-chat`
+  - [x] `/agente-ia/agenda`
+  - [x] `/agente-ia/calificacion`
+  - [x] `/agente-ia/memoria`
+- [x] Mantener y regenerar:
+  - [x] `/ia-de-whatsapp`
+  - [x] `/ia-para-ventas`
+  - [x] `/asistente-ia-empresas`
+  - [x] `/crm-con-ia-para-whatsapp`
+- [x] Alinear el header de estas vistas con la home.
+- [x] Dejar el mensaje principal solo en el HERO.
+- [x] Confirmar que la vista explique atención, no solo automatización.
 
 ### 6. CRM
 

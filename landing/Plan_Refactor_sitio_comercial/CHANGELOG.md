@@ -24,6 +24,15 @@ Registro de avances del refactor de `talia.mx`.
 - Se corrigio el header de `lp/prospeccion` para que el boton `Hablar por WhatsApp` permanezca alineado en una sola linea como en la home.
 - Se ajusto el ancho del contenedor de `lp/prospeccion` para evitar que el CTA del header se parta en pantallas intermedias.
 - Se corrigio el enlace `Inicio` en las vistas de `lp/prospeccion` para que apunte al home real y no a un ancla local.
+- Se agrego el agrupador `Agente IA` en la home con sus vistas madre e hijas.
+- Se creo el hub `/agente-ia` con vistas hero-only para WhatsApp IA, Teléfono IA, Web Chat IA, Agenda, Calificación y Memoria.
+- Se regeneraron como vistas hero-only las paginas heredadas:
+  - `/ia-de-whatsapp`
+  - `/ia-para-ventas`
+  - `/asistente-ia-empresas`
+  - `/crm-con-ia-para-whatsapp`
+- Se actualizo el rastreo de `whatsapp-float.js` para las nuevas rutas de Agente IA.
+- Se actualizo el sitemap para incluir las nuevas rutas de Agente IA.
 - Se mejoraron las vistas de:
   - `/lp/prospeccion/google`
   - `/lp/prospeccion/gob-mx`

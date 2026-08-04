@@ -44,6 +44,55 @@
   </url>
 
   <url>
+    <loc>https://talia.mx/agente-ia</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.96</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/whatsapp</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/telefono</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/web-chat</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/agenda</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.94</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/calificacion</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.94</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/agente-ia/memoria</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.94</priority>
+  </url>
+
+  <url>
     <loc>https://talia.mx/lp/prospeccion</loc>
     <lastmod>2026-08-04</lastmod>
     <changefreq>weekly</changefreq>

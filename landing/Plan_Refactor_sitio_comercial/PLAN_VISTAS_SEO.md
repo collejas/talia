@@ -21,6 +21,19 @@ Al 2026-08-04 ya quedaron publicadas y ajustadas estas piezas:
   - Gob-MX
   - Web Scraper
 - Alineación del texto de `buscar-contactos` para usar Google y Gob-MX.
+- Hub de `Agente IA` creado en `/agente-ia`.
+- Vistas hero-only creadas para:
+  - `/agente-ia/whatsapp`
+  - `/agente-ia/telefono`
+  - `/agente-ia/web-chat`
+  - `/agente-ia/agenda`
+  - `/agente-ia/calificacion`
+  - `/agente-ia/memoria`
+- Vistas heredadas regeneradas con el mismo header:
+  - `/ia-de-whatsapp`
+  - `/ia-para-ventas`
+  - `/asistente-ia-empresas`
+  - `/crm-con-ia-para-whatsapp`
 
 ## Estructura objetivo
 
@@ -47,9 +60,10 @@ HOME
 │   └── WhatsApp Marketing
 
 ├── AGENTE IA
-│   ├── WhatsApp IA
-│   ├── Teléfono IA
-│   ├── Web Chat IA
+│   ├── /agente-ia
+│   ├── /agente-ia/whatsapp
+│   ├── /agente-ia/telefono
+│   ├── /agente-ia/web-chat
 │   ├── IA de WhatsApp
 │   │   └── Mantener la vista actual `/ia-de-whatsapp` y regenerar su visual.
 │   ├── IA para Ventas
@@ -58,9 +72,9 @@ HOME
 │   │   └── Mantener la vista actual `/asistente-ia-empresas` y regenerar su visual.
 │   ├── CRM con IA para WhatsApp
 │   │   └── Mantener la vista actual `/crm-con-ia-para-whatsapp` y regenerar su visual.
-│   ├── Agenda
-│   ├── Calificación
-│   └── Memoria
+│   ├── /agente-ia/agenda
+│   ├── /agente-ia/calificacion
+│   └── /agente-ia/memoria
 
 ├── CRM
 │   ├── Prospectos

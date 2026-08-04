@@ -18,6 +18,34 @@ const pageCtas = {
     label: 'Pedir demo',
     message: 'Hola, quiero ver el asistente IA para empresas de Tal-IA.',
   },
+  '/agente-ia': {
+    label: 'Ver Agente IA',
+    message: 'Hola, quiero ver el Agente IA de Tal-IA.',
+  },
+  '/agente-ia/whatsapp': {
+    label: 'Ver WhatsApp IA',
+    message: 'Hola, quiero ver WhatsApp IA de Tal-IA.',
+  },
+  '/agente-ia/telefono': {
+    label: 'Ver Teléfono IA',
+    message: 'Hola, quiero ver Teléfono IA de Tal-IA.',
+  },
+  '/agente-ia/web-chat': {
+    label: 'Ver Web Chat IA',
+    message: 'Hola, quiero ver Web Chat IA de Tal-IA.',
+  },
+  '/agente-ia/agenda': {
+    label: 'Ver agenda',
+    message: 'Hola, quiero ver Agenda IA de Tal-IA.',
+  },
+  '/agente-ia/calificacion': {
+    label: 'Ver calificación',
+    message: 'Hola, quiero ver Calificación IA de Tal-IA.',
+  },
+  '/agente-ia/memoria': {
+    label: 'Ver memoria',
+    message: 'Hola, quiero ver Memoria IA de Tal-IA.',
+  },
   '/ia-de-whatsapp': {
     label: 'Ver en WhatsApp',
     message: 'Hola, quiero ver la IA de WhatsApp de Tal-IA.',
