@@ -33,17 +33,172 @@
   <link rel="stylesheet" href="/assets/css/landing-core.css?v=20260629a" />
   <link rel="stylesheet" href="/assets/css/webchat.css?v=20260625a" />
   <style>
-    .search-hero { display: grid; grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr); gap: 20px; align-items: stretch; }
-    .search-hero__copy, .search-hero__visual { min-width: 0; }
-    .search-hero__copy { display: flex; flex-direction: column; justify-content: center; gap: 16px; }
-    .search-hero__copy h1 { margin: 18px 0 0; max-width: 12ch; font-size: clamp(42px, 5vw, 72px); line-height: 0.97; letter-spacing: -0.04em; font-weight: 950; }
-    .search-hero__copy p { max-width: 58ch; }
-    .search-pills { display: flex; flex-wrap: wrap; gap: 10px; }
-    .search-pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(127, 19, 236, 0.12); background: rgba(127, 19, 236, 0.08); color: #5b21b6; font-size: 13px; font-weight: 800; }
-    .search-hero__visual { border-radius: 32px; padding: 18px; background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%), linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98)); border: 1px solid rgba(15, 23, 42, 0.08); box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08); display: grid; gap: 14px; }
-    .search-hero__card { display: grid; gap: 10px; border-radius: 24px; padding: 14px; background: white; border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08); }
-    .search-hero__card h3 { margin: 0; font-size: 16px; letter-spacing: -0.02em; }
-    .search-hero__card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .search-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .search-hero__copy,
+    .search-hero__visual {
+      min-width: 0;
+    }
+
+    .search-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .search-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .search-hero__copy p {
+      max-width: 58ch;
+    }
+
+    .search-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .search-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .search-hero__visual {
+      position: relative;
+      overflow: hidden;
+      border-radius: 32px;
+      padding: 20px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 36%),
+        radial-gradient(circle at left center, rgba(168, 85, 247, 0.10), transparent 32%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.10);
+      display: grid;
+      gap: 14px;
+    }
+
+    .search-hero__card {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      border-radius: 24px;
+      padding: 16px 16px 16px 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      border: 1px solid rgba(15, 23, 42, 0.07);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    .search-hero__card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--violet), var(--blue));
+    }
+
+    .search-hero__card:nth-child(2)::before {
+      background: linear-gradient(180deg, var(--green), #0f766e);
+    }
+
+    .search-hero__card:nth-child(3)::before {
+      background: linear-gradient(180deg, var(--orange), #f97316);
+    }
+
+    .search-hero__card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-hero__card-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: rgba(127, 19, 236, 0.10);
+      color: var(--violet);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+    }
+
+    .search-hero__card:nth-child(2) .search-hero__card-badge {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+    }
+
+    .search-hero__card:nth-child(3) .search-hero__card-badge {
+      background: rgba(249, 115, 22, 0.12);
+      color: #c2410c;
+    }
+
+    .search-hero__card-eyebrow {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .search-hero__card h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+
+    .search-hero__card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .search-hero__card-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .search-hero__card-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.05);
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
   </style>
   <script type="application/ld+json">
     {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"TalIA","url":"https://talia.mx/","logo":"https://talia.mx/android-chrome-512x512.png"},{"@type":"WebSite","name":"TalIA","url":"https://talia.mx/"}]}
@@ -117,14 +272,14 @@
     <section class="search-hero">
       <div class="search-hero__copy">
         <div class="eyebrow">Prospección / Buscar contactos</div>
-        <h1>Encontrar teléfonos, correos y sitios web</h1>
-        <p><strong>Convierte una búsqueda de contacto en una lista comercial útil.</strong></p>
+        <h1>Encontrar el contacto correcto de una empresa</h1>
+        <p><strong>Busca datos de contacto en Google y Gob-MX en una lista comercial útil.</strong></p>
         <p>TalIA reúne los datos visibles de una empresa para que tu equipo pueda llamar, escribir o continuar el seguimiento con más contexto.</p>
         <div class="search-pills">
           <span class="search-pill">Teléfonos</span>
           <span class="search-pill">Correos</span>
           <span class="search-pill">Sitios web</span>
-          <span class="search-pill">Prospectos</span>
+          <span class="search-pill">Contacto correcto</span>
         </div>
         <div class="hero__actions">
           <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20buscar%20contactos%20de%20empresas%20con%20Tal-IA" target="_blank" rel="noopener noreferrer">Buscar contactos</a>
@@ -136,16 +291,49 @@
 
       <aside class="search-hero__visual">
         <div class="search-hero__card">
-          <h3>Datos</h3>
-          <p>Teléfonos, correos, sitios web y señales útiles para vender.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">01</span>
+            <span class="search-hero__card-eyebrow">Datos</span>
+          </div>
+          <h3>Obtén datos con Google y Gob-MX</h3>
+          <p>Usa nuestros dos métodos para reunir los campos clave de una empresa y continuar la conversación comercial con contexto real.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">Razón social</span>
+            <span class="search-hero__card-chip">Nombre comercial</span>
+            <span class="search-hero__card-chip">Dirección</span>
+            <span class="search-hero__card-chip">Ubicación</span>
+            <span class="search-hero__card-chip">Teléfono</span>
+            <span class="search-hero__card-chip">Correo</span>
+            <span class="search-hero__card-chip">Sitio web/Facebook</span>
+            <span class="search-hero__card-chip">Tamaño de la empresa</span>
+            <span class="search-hero__card-chip">Calificación</span>
+          </div>
         </div>
         <div class="search-hero__card">
-          <h3>Uso</h3>
-          <p>Encontrar el contacto correcto sin perder tiempo en búsquedas sueltas.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">02</span>
+            <span class="search-hero__card-eyebrow">Uso</span>
+          </div>
+          <h3>Evita búsquedas sueltas y acelera la prospección</h3>
+          <p>Encuentra el contacto correcto más rápido y enfoca el trabajo en prospectos que sí pueden avanzar.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">Contacto correcto</span>
+            <span class="search-hero__card-chip">Prospección</span>
+            <span class="search-hero__card-chip">Seguimiento</span>
+          </div>
         </div>
         <div class="search-hero__card">
-          <h3>Integración</h3>
-          <p>La lista se lleva al CRM o a campañas de seguimiento comercial.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">03</span>
+            <span class="search-hero__card-eyebrow">Integración</span>
+          </div>
+          <h3>Llévalo al CRM o a campañas</h3>
+          <p>La lista se lleva al CRM o a campañas de seguimiento comercial para seguir con contexto y orden.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">CRM</span>
+            <span class="search-hero__card-chip">Campañas</span>
+            <span class="search-hero__card-chip">Seguimiento</span>
+          </div>
         </div>
       </aside>
     </section>
