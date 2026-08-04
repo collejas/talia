@@ -26,18 +26,6 @@ const pageCtas = {
     label: 'Quiero verlo',
     message: 'Hola, quiero ver la IA para ventas de Tal-IA.',
   },
-  '/automatizacion-de-ventas': {
-    label: 'Solicitar demo',
-    message: 'Hola, quiero ver la automatización de ventas de Tal-IA.',
-  },
-  '/seguimiento-ventas': {
-    label: 'Ver seguimiento',
-    message: 'Hola, quiero ver el seguimiento de ventas de Tal-IA.',
-  },
-  '/agenda-y-cotizaciones': {
-    label: 'Ver agenda',
-    message: 'Hola, quiero ver agenda y cotizaciones de Tal-IA.',
-  },
   '/lp/prospeccion/comercial': {
     label: 'Quiero prospectar',
     message: 'Hola, quiero ver la prospección comercial de Tal-IA.',
@@ -61,10 +49,6 @@ const pageCtas = {
   '/lp/prospeccion/webscraper': {
     label: 'Ver Web Scraper',
     message: 'Hola, quiero ver Web Scraper para prospección en Tal-IA.',
-  },
-  '/campanas-marketing': {
-    label: 'Ver campañas',
-    message: 'Hola, quiero ver campañas y marketing con Tal-IA.',
   },
   '/precios': {
     label: 'Ver por WhatsApp',

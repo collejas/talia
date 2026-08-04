@@ -52,27 +52,6 @@ const seoPages = [
     ctaMessage: "Hola, quiero ver la IA para ventas de Tal-IA.",
   },
   {
-    path: "/automatizacion-de-ventas",
-    title: "Automatización de ventas | TalIA",
-    description: "Automatización de ventas para responder leads, mover pipeline y reducir trabajo manual en procesos comerciales.",
-    ctaLabel: "Solicitar demo",
-    ctaMessage: "Hola, quiero ver la automatización de ventas de Tal-IA.",
-  },
-  {
-    path: "/seguimiento-ventas",
-    title: "Seguimiento de ventas | TalIA",
-    description: "Seguimiento de ventas automatizado para no dejar prospectos en visto y mantener cada oportunidad activa.",
-    ctaLabel: "Ver seguimiento",
-    ctaMessage: "Hola, quiero ver el seguimiento de ventas de Tal-IA.",
-  },
-  {
-    path: "/agenda-y-cotizaciones",
-    title: "Agenda y cotizaciones | TalIA",
-    description: "Agenda y cotizaciones por WhatsApp con IA para convertir interés en citas y propuestas concretas.",
-    ctaLabel: "Ver agenda",
-    ctaMessage: "Hola, quiero ver agenda y cotizaciones de Tal-IA.",
-  },
-  {
     path: "/lp/prospeccion",
     title: "Prospección | TalIA",
     description: "TalIA ayuda a encontrar empresas y obtener datos de contacto usando múltiples fuentes para construir listas comerciales útiles.",
@@ -113,13 +92,6 @@ const seoPages = [
     description: "Prospección comercial con IA para encontrar clientes, crear listas accionables y activar campañas útiles.",
     ctaLabel: "Quiero prospectar",
     ctaMessage: "Hola, quiero ver la prospección comercial de Tal-IA.",
-  },
-  {
-    path: "/campanas-marketing",
-    title: "Campañas y marketing con IA | TalIA",
-    description: "Campañas y marketing con IA para activar prospectos, medir respuestas y reactivar leads fríos.",
-    ctaLabel: "Ver campañas",
-    ctaMessage: "Hola, quiero ver campañas y marketing con Tal-IA.",
   },
   {
     path: "/video-demostracion-inmobiliarias",

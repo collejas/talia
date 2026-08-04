@@ -31,6 +31,7 @@ Registro de avances del refactor de `talia.mx`.
   - Gob-MX: razon social, nombre comercial, direccion, ubicacion, telefono, correo, sitio web, tamano de la empresa y calificacion.
   - Web Scraper: correo electronico visible.
 - Se actualizo `buscar-contactos` para explicar que combina Google y Gob-MX y para reflejar los campos reales que alimentan la lista comercial.
+- Se hizo una segunda limpieza de enlaces legacy en paginas heredadas, video demostrativo y generadores internos para evitar que siguieran reapareciendo rutas retiradas.
 
 ### Agregado
 
