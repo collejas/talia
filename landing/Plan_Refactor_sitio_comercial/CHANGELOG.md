@@ -12,6 +12,11 @@ Registro de avances del refactor de `talia.mx`.
 
 ### Avance reciente
 
+- Se rehizo la vista `/que-es-talia` para que explique mejor qué es Tal-IA:
+  - se simplifico el mensaje del HERO,
+  - se removio la quinta tarjeta de automatizacion como modulo independiente,
+  - se elimino la repeticion de secciones debajo del HERO,
+  - se dejo la automatizacion como capa transversal que conecta los 4 modulos.
 - Se termino de alinear el header de la home, `Marketing` y toda la familia de `Prospección` para que usen la misma navegación, mismos grupos y mismo CTA que la home.
 - Se corrigieron las rutas heredadas de prospección para que ya no queden con una version simplificada del header:
   - `/prospeccion`
