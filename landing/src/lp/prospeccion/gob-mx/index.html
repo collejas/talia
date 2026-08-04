@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gob-MX para prospección | TalIA</title>
-  <meta name="description" content="TalIA ayuda a buscar empresas en bases oficiales de México como DENUE para convertir datos públicos en prospectos comerciales." />
+  <meta name="description" content="TalIA ayuda a buscar empresas en Gob-MX y bases de datos de empresas para convertir datos públicos en prospectos comerciales." />
   <link rel="canonical" href="https://talia.mx/lp/prospeccion/gob-mx" />
   <link rel="alternate" hreflang="es-MX" href="https://talia.mx/lp/prospeccion/gob-mx" />
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
@@ -12,12 +12,12 @@
   <meta property="og:locale" content="es_MX" />
   <meta property="og:site_name" content="TalIA" />
   <meta property="og:title" content="Gob-MX para prospección | TalIA" />
-  <meta property="og:description" content="TalIA ayuda a buscar empresas en bases oficiales de México como DENUE para convertir datos públicos en prospectos comerciales." />
+  <meta property="og:description" content="TalIA ayuda a buscar empresas en Gob-MX y bases de datos de empresas para convertir datos públicos en prospectos comerciales." />
   <meta property="og:url" content="https://talia.mx/lp/prospeccion/gob-mx" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Gob-MX para prospección | TalIA" />
-  <meta name="twitter:description" content="TalIA ayuda a buscar empresas en bases oficiales de México como DENUE para convertir datos públicos en prospectos comerciales." />
+  <meta name="twitter:description" content="TalIA ayuda a buscar empresas en Gob-MX y bases de datos de empresas para convertir datos públicos en prospectos comerciales." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="theme-color" content="#7f13ec" />
   <meta name="application-name" content="TalIA" />
@@ -33,17 +33,172 @@
   <link rel="stylesheet" href="/assets/css/landing-core.css?v=20260629a" />
   <link rel="stylesheet" href="/assets/css/webchat.css?v=20260625a" />
   <style>
-    .search-hero { display: grid; grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr); gap: 20px; align-items: stretch; }
-    .search-hero__copy, .search-hero__visual { min-width: 0; }
-    .search-hero__copy { display: flex; flex-direction: column; justify-content: center; gap: 16px; }
-    .search-hero__copy h1 { margin: 18px 0 0; max-width: 12ch; font-size: clamp(42px, 5vw, 72px); line-height: 0.97; letter-spacing: -0.04em; font-weight: 950; }
-    .search-hero__copy p { max-width: 58ch; }
-    .search-pills { display: flex; flex-wrap: wrap; gap: 10px; }
-    .search-pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(127, 19, 236, 0.12); background: rgba(127, 19, 236, 0.08); color: #5b21b6; font-size: 13px; font-weight: 800; }
-    .search-hero__visual { border-radius: 32px; padding: 18px; background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%), linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98)); border: 1px solid rgba(15, 23, 42, 0.08); box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08); display: grid; gap: 14px; }
-    .search-hero__card { display: grid; gap: 10px; border-radius: 24px; padding: 14px; background: white; border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08); }
-    .search-hero__card h3 { margin: 0; font-size: 16px; letter-spacing: -0.02em; }
-    .search-hero__card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .search-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .search-hero__copy,
+    .search-hero__visual {
+      min-width: 0;
+    }
+
+    .search-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .search-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .search-hero__copy p {
+      max-width: 58ch;
+    }
+
+    .search-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .search-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .search-hero__visual {
+      position: relative;
+      overflow: hidden;
+      border-radius: 32px;
+      padding: 20px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 36%),
+        radial-gradient(circle at left center, rgba(168, 85, 247, 0.10), transparent 32%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.10);
+      display: grid;
+      gap: 14px;
+    }
+
+    .search-hero__card {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      border-radius: 24px;
+      padding: 16px 16px 16px 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+      border: 1px solid rgba(15, 23, 42, 0.07);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    .search-hero__card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--violet), var(--blue));
+    }
+
+    .search-hero__card:nth-child(2)::before {
+      background: linear-gradient(180deg, var(--green), #0f766e);
+    }
+
+    .search-hero__card:nth-child(3)::before {
+      background: linear-gradient(180deg, var(--orange), #f97316);
+    }
+
+    .search-hero__card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-hero__card-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: rgba(127, 19, 236, 0.10);
+      color: var(--violet);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+    }
+
+    .search-hero__card:nth-child(2) .search-hero__card-badge {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+    }
+
+    .search-hero__card:nth-child(3) .search-hero__card-badge {
+      background: rgba(249, 115, 22, 0.12);
+      color: #c2410c;
+    }
+
+    .search-hero__card-eyebrow {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .search-hero__card h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+
+    .search-hero__card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .search-hero__card-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .search-hero__card-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.05);
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
   </style>
   <script type="application/ld+json">
     {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"TalIA","url":"https://talia.mx/","logo":"https://talia.mx/android-chrome-512x512.png"},{"@type":"WebSite","name":"TalIA","url":"https://talia.mx/"}]}
@@ -119,9 +274,9 @@
         <div class="eyebrow">Prospección / Gob-MX</div>
         <h1>Buscar empresas en bases oficiales de México</h1>
         <p><strong>Encuentra empresas con datos públicos y trazables para la prospección comercial.</strong></p>
-        <p>TalIA convierte fuentes como DENUE en prospectos útiles para validar cobertura, tamaño y señales de negocio antes de contactar.</p>
+        <p>TalIA convierte Gob-MX y bases de datos de empresas en prospectos útiles para validar cobertura, tamaño y señales de negocio antes de contactar.</p>
         <div class="search-pills">
-          <span class="search-pill">DENUE</span>
+          <span class="search-pill">Gob-MX</span>
           <span class="search-pill">Cobertura nacional</span>
           <span class="search-pill">Tamaño de empresa</span>
           <span class="search-pill">Datos públicos</span>
@@ -136,16 +291,44 @@
 
       <aside class="search-hero__visual">
         <div class="search-hero__card">
-          <h3>Datos</h3>
-          <p>Razón social, cobertura, giro y señales oficiales útiles para vender.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">01</span>
+            <span class="search-hero__card-eyebrow">Datos</span>
+          </div>
+          <h3>Obtén datos públicos confiables del negocio</h3>
+          <p>Obtén razón social, cobertura, giro, ubicación, contacto y señales oficiales útiles para vender mejor.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">Razón social</span>
+            <span class="search-hero__card-chip">Cobertura</span>
+            <span class="search-hero__card-chip">Giro</span>
+            <span class="search-hero__card-chip">Contacto</span>
+          </div>
         </div>
         <div class="search-hero__card">
-          <h3>Uso</h3>
-          <p>Validar empresas y priorizar oportunidades con contexto público.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">02</span>
+            <span class="search-hero__card-eyebrow">Uso</span>
+          </div>
+          <h3>Valida oportunidades antes de salir a vender</h3>
+          <p>Filtra empresas con información visible para priorizar mejor y reducir tiempo perdido en prospectos débiles.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">Validación</span>
+            <span class="search-hero__card-chip">Prioridad</span>
+            <span class="search-hero__card-chip">Cobertura nacional</span>
+          </div>
         </div>
         <div class="search-hero__card">
-          <h3>Integración</h3>
-          <p>Los registros pasan al CRM o al flujo comercial para seguimiento.</p>
+          <div class="search-hero__card-top">
+            <span class="search-hero__card-badge">03</span>
+            <span class="search-hero__card-eyebrow">Integración</span>
+          </div>
+          <h3>Llévalo al CRM o al flujo comercial</h3>
+          <p>Los registros pasan al CRM o al flujo comercial para seguimiento y siguiente acción sin perder contexto.</p>
+          <div class="search-hero__card-list">
+            <span class="search-hero__card-chip">CRM</span>
+            <span class="search-hero__card-chip">Seguimiento</span>
+            <span class="search-hero__card-chip">Flujo comercial</span>
+          </div>
         </div>
       </aside>
     </section>
