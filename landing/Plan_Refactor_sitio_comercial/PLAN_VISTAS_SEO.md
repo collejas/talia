@@ -1,7 +1,71 @@
 # Plan de vistas, textos y SEO para talia.mx
 
 Documento derivado de [PLAN LANDING.md](./PLAN%20LANDING.md).
-No reemplaza el plan base. Solo lo organiza en vistas, textos y SEO.
+No reemplaza el plan base. Solo lo ordena en vistas, textos y SEO.
+
+## Estructura objetivo
+
+HOME
+
+├── QUÉ ES TAL-IA
+│   └── Mantener la vista actual `/que-es-talia` y regenerar su visual.
+
+├── PROSPECCIÓN
+│   ├── Google
+│   ├── Gob-MX
+│   ├── Prospección comercial
+│   │   └── Mantener la vista actual `/prospeccion-comercial` y regenerar su visual.
+│   └── Buscar contactos
+│       └── Mantener la vista actual `/buscar-contactos` y regenerar su visual.
+
+├── MARKETING
+│   ├── Email Marketing
+│   └── WhatsApp Marketing
+
+├── AGENTE IA
+│   ├── WhatsApp IA
+│   ├── Teléfono IA
+│   ├── Web Chat IA
+│   ├── IA de WhatsApp
+│   │   └── Mantener la vista actual `/ia-de-whatsapp` y regenerar su visual.
+│   ├── IA para Ventas
+│   │   └── Mantener la vista actual `/ia-para-ventas` y regenerar su visual.
+│   ├── Asistente IA Empresas
+│   │   └── Mantener la vista actual `/asistente-ia-empresas` y regenerar su visual.
+│   ├── CRM con IA para WhatsApp
+│   │   └── Mantener la vista actual `/crm-con-ia-para-whatsapp` y regenerar su visual.
+│   ├── Agenda
+│   ├── Calificación
+│   └── Memoria
+
+├── CRM
+│   ├── Prospectos
+│   ├── Clientes
+│   ├── Embudo
+│   ├── Agenda
+│   ├── Reportes
+│   ├── Oportunidades
+│   ├── Cotizaciones
+│   ├── Actividades
+│   └── Usuarios
+
+├── INDUSTRIAS
+│   ├── Inmobiliarias
+│   │   └── Mantener la vista actual `/industrias/inmobiliarias` y regenerar su visual.
+│   ├── Constructoras
+│   ├── Servicios
+│   │   └── Mantener la vista actual `/industrias/servicios` y regenerar su visual.
+│   ├── Negocios locales
+│   │   └── Mantener la vista actual `/industrias/negocios-locales` y regenerar su visual.
+│   ├── Ventas B2B
+│   │   └── Mantener la vista actual `/industrias/ventas-b2b` y regenerar su visual.
+│   └── Turismo
+│       └── Mantener la vista actual `/industrias/turismo` y regenerar su visual.
+
+├── AUTOMATIZACIÓN
+├── video-demostracion-inmobiliarias
+├── PRECIOS
+└── DEMO
 
 ## Base
 
@@ -22,55 +86,77 @@ TalIA tiene 4 productos y 1 tecnología.
 
 ## Vistas a crear
 
-### Vistas madre de módulo
+### Vistas madre nuevas
 
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
-| `/prospeccion` | Presentar el módulo de prospección. | Encuentra nuevos clientes. | Title y meta enfocados en prospección comercial. |
-| `/marketing` | Presentar el módulo de marketing. | Contáctalos por correo y WhatsApp. | Title y meta enfocados en marketing comercial. |
-| `/atencion-con-ia` | Presentar el módulo de atención con IA. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
-| `/crm` | Presentar el módulo CRM. | Organiza el seguimiento y convierte más ventas. | Title y meta enfocados en CRM comercial. |
+| `/prospeccion` | Presentar el módulo de prospección como vista madre. | Encuentra nuevos clientes. | Title y meta enfocados en prospección comercial. |
+| `/marketing` | Presentar el módulo de marketing como vista madre. | Contáctalos por correo y WhatsApp. | Title y meta enfocados en marketing comercial. |
+| `/atencion-con-ia` | Presentar el módulo de atención con IA como vista madre. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
+| `/crm` | Presentar el módulo CRM como vista madre. | Organiza el seguimiento y convierte más ventas. | Title y meta enfocados en CRM comercial. |
 
-### Vistas de automatización
+### Vistas de soporte por crear
 
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
-| `/automatizacion-whatsapp` | Explicar la automatización de WhatsApp dentro del flujo comercial. | La automatización de WhatsApp responde, califica y da seguimiento sin fricción. | Title y meta enfocados en automatización de WhatsApp con IA. |
-| `/automatizacion-email` | Explicar la automatización de email dentro del flujo comercial. | La automatización de email ayuda a contactar prospectos y sostener campañas. | Title y meta enfocados en automatización de email comercial. |
-| `/automatizacion-crm` | Explicar la automatización dentro del CRM. | La automatización de CRM organiza prospectos, actividades y seguimiento. | Title y meta enfocados en automatización de CRM. |
-| `/automatizacion-prospeccion` | Explicar la automatización dentro de prospección. | La automatización de prospección ayuda a encontrar y guardar prospectos más rápido. | Title y meta enfocados en automatización de prospección. |
+| `/automatizacion` | Explicar la automatización como capa transversal. | La automatización conecta prospección, marketing, IA y CRM. | Title y meta enfocados en automatización comercial. |
+| `/industrias/constructoras` | Crear la vista de constructoras. | IA para constructoras. | Title y meta enfocados en constructoras. |
 
 ## Vistas que se mantienen
 
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
-| `/caracteristicas` | Mostrar el inventario funcional del producto. | Características de TalIA. | Mantener el SEO actual de características. |
-| `/demo.html` | Llevar a demo comercial. | Agenda una demo de TalIA. | Mantener el SEO actual de demo. |
+| `/que-es-talia` | Explicar qué es Tal-IA. | Qué es Tal-IA. | Regenerar visual manteniendo el enfoque base. |
+| `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de TalIA. | Regenerar visual manteniendo el SEO actual. |
+| `/buscar-contactos` | Mostrar búsqueda de contactos. | Buscar contactos para ventas. | Regenerar visual manteniendo el SEO actual. |
+| `/ia-de-whatsapp` | Mostrar IA de WhatsApp. | IA de WhatsApp. | Regenerar visual manteniendo el SEO actual. |
+| `/ia-para-ventas` | Mostrar IA para ventas. | IA para ventas. | Regenerar visual manteniendo el SEO actual. |
+| `/asistente-ia-empresas` | Mostrar asistente IA para empresas. | Asistente IA para empresas. | Regenerar visual manteniendo el SEO actual. |
+| `/crm-con-ia-para-whatsapp` | Mostrar CRM con IA para WhatsApp. | CRM con IA para WhatsApp. | Regenerar visual manteniendo el SEO actual. |
+| `/industrias/inmobiliarias` | Mostrar inmobiliarias. | IA para inmobiliarias. | Regenerar visual manteniendo el SEO actual. |
+| `/industrias/servicios` | Mostrar servicios. | IA para servicios. | Regenerar visual manteniendo el SEO actual. |
+| `/industrias/negocios-locales` | Mostrar negocios locales. | IA para negocios locales. | Regenerar visual manteniendo el SEO actual. |
+| `/industrias/ventas-b2b` | Mostrar ventas B2B. | IA para ventas B2B. | Regenerar visual manteniendo el SEO actual. |
+| `/industrias/turismo` | Mostrar turismo. | IA para turismo. | Regenerar visual manteniendo el SEO actual. |
 | `/precios` | Llevar a consulta comercial de precios. | Precios claros de TalIA. | Mantener el SEO actual de precios. |
-| `/presentacion.html` | Pieza comercial de apoyo. | Presentación comercial de TalIA. | Mantener como apoyo, sin cambiar el enfoque base. |
-| `/nota.html` | Pieza de apoyo / contenido auxiliar. | Nota de soporte de TalIA. | Mantener como apoyo, sin cambiar el enfoque base. |
+| `/demo.html` | Llevar a demo comercial. | Agenda una demo de TalIA. | Mantener el SEO actual de demo. |
 | `/video-demostracion-inmobiliarias` | Mostrar una demo visual. | Video demostración inmobiliaria. | Mantener el SEO actual de video demo. |
-| `/industrias/inmobiliarias` | Mantener la vista sectorial prioritaria. | IA para inmobiliarias. | Mantener el SEO actual de inmobiliarias. |
+
+## Secciones internas sin URL propia
+
+Estas piezas viven dentro de sus vistas madre o como bloques de contenido:
+
+- Google
+- Gob-MX
+- Email Marketing
+- WhatsApp Marketing
+- WhatsApp IA
+- Teléfono IA
+- Web Chat IA
+- Agenda
+- Calificación
+- Memoria
+- Prospectos
+- Clientes
+- Embudo
+- Reportes
+- Oportunidades
+- Cotizaciones
+- Actividades
+- Usuarios
 
 ## Vistas que se retiran
 
-Estas vistas quedan fuera del plan base porque no aparecen en `PLAN LANDING.md` como vistas a mantener o crear:
+Estas vistas quedan fuera de esta estructura porque no forman parte del árbol objetivo:
 
-- `/que-es-talia`
-- `/crm-con-ia-para-whatsapp`
-- `/asistente-ia-empresas`
-- `/ia-de-whatsapp`
-- `/ia-para-ventas`
+- `/automatizacion-whatsapp`
+- `/automatizacion-email`
+- `/automatizacion-crm`
+- `/automatizacion-prospeccion`
 - `/automatizacion-de-ventas`
 - `/seguimiento-ventas`
 - `/agenda-y-cotizaciones`
-- `/prospeccion-comercial`
-- `/buscar-contactos`
 - `/campanas-marketing`
-- `/industrias/servicios`
-- `/industrias/negocios-locales`
-- `/industrias/ventas-b2b`
-- `/industrias/turismo`
 
 ## Orden de lectura del sitio
 
