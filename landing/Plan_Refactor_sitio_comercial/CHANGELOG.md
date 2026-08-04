@@ -26,9 +26,9 @@ Registro de avances del refactor de `talia.mx`.
   - DEMO
 - Se separaron vistas que se mantienen, vistas nuevas a crear y secciones internas sin URL propia.
 - Se identificaron vistas que salen del arbol objetivo del plan.
+- Se ajusto la arquitectura de prospeccion para incluir `/prospeccion` como pagina padre y rutas hijas para `google`, `gob-mx` y `buscar-contactos`.
 
 ### Nota
 
 - El documento base sigue siendo `PLAN LANDING.md`.
 - Este changelog registra avances del refactor, no sustituye la directriz principal.
-

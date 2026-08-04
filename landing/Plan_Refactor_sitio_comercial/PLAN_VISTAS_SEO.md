@@ -11,12 +11,15 @@ HOME
 │   └── Mantener la vista actual `/que-es-talia` y regenerar su visual.
 
 ├── PROSPECCIÓN
+│   ├── /prospeccion
 │   ├── Google
+│   │   └── Mantener la vista que se cree en `/prospeccion/google` como hija de prospección.
 │   ├── Gob-MX
+│   │   └── Mantener la vista que se cree en `/prospeccion/gob-mx` como hija de prospección.
 │   ├── Prospección comercial
 │   │   └── Mantener la vista actual `/prospeccion-comercial` y regenerar su visual.
 │   └── Buscar contactos
-│       └── Mantener la vista actual `/buscar-contactos` y regenerar su visual.
+│       └── Mantener la vista que se cree en `/prospeccion/buscar-contactos` y regenerar su visual.
 
 ├── MARKETING
 │   ├── Email Marketing
@@ -90,7 +93,7 @@ TalIA tiene 4 productos y 1 tecnología.
 
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
-| `/prospeccion` | Presentar el módulo de prospección como vista madre. | Encuentra nuevos clientes. | Title y meta enfocados en prospección comercial. |
+| `/prospeccion` | Presentar el módulo de prospección como vista padre. | Encuentra empresas y obtén datos de contacto con múltiples fuentes. | Title y meta enfocados en prospección comercial. |
 | `/marketing` | Presentar el módulo de marketing como vista madre. | Contáctalos por correo y WhatsApp. | Title y meta enfocados en marketing comercial. |
 | `/atencion-con-ia` | Presentar el módulo de atención con IA como vista madre. | Responde automáticamente y agenda citas. | Title y meta enfocados en atención con IA. |
 | `/crm` | Presentar el módulo CRM como vista madre. | Organiza el seguimiento y convierte más ventas. | Title y meta enfocados en CRM comercial. |
@@ -100,6 +103,9 @@ TalIA tiene 4 productos y 1 tecnología.
 | URL | Objetivo | Texto | SEO |
 | --- | --- | --- | --- |
 | `/automatizacion` | Explicar la automatización como capa transversal. | La automatización conecta prospección, marketing, IA y CRM. | Title y meta enfocados en automatización comercial. |
+| `/prospeccion/google` | Explicar la búsqueda de empresas en Google Maps/Google Places. | Buscar empresas en Google Maps. | Title y meta enfocados en Google para prospección. |
+| `/prospeccion/gob-mx` | Explicar la búsqueda de empresas en bases oficiales de México. | Buscar empresas en bases oficiales de México. | Title y meta enfocados en Gob-MX para prospección. |
+| `/prospeccion/buscar-contactos` | Explicar la búsqueda específica de contactos de empresas. | Tal-IA encuentra empresas y obtiene teléfonos, correos y sitios web. | Title y meta enfocados en buscar contactos. |
 | `/industrias/constructoras` | Crear la vista de constructoras. | IA para constructoras. | Title y meta enfocados en constructoras. |
 
 ## Vistas que se mantienen
@@ -108,7 +114,7 @@ TalIA tiene 4 productos y 1 tecnología.
 | --- | --- | --- | --- |
 | `/que-es-talia` | Explicar qué es Tal-IA. | Qué es Tal-IA. | Regenerar visual manteniendo el enfoque base. |
 | `/prospeccion-comercial` | Mostrar prospección comercial. | Prospección comercial de TalIA. | Regenerar visual manteniendo el SEO actual. |
-| `/buscar-contactos` | Mostrar búsqueda de contactos. | Buscar contactos para ventas. | Regenerar visual manteniendo el SEO actual. |
+| `/buscar-contactos` | Mantener alias legado o redirección temporal si se conserva. | Buscar contactos para ventas. | Mantener solo si sigue activo como acceso legacy. |
 | `/ia-de-whatsapp` | Mostrar IA de WhatsApp. | IA de WhatsApp. | Regenerar visual manteniendo el SEO actual. |
 | `/ia-para-ventas` | Mostrar IA para ventas. | IA para ventas. | Regenerar visual manteniendo el SEO actual. |
 | `/asistente-ia-empresas` | Mostrar asistente IA para empresas. | Asistente IA para empresas. | Regenerar visual manteniendo el SEO actual. |
@@ -126,8 +132,6 @@ TalIA tiene 4 productos y 1 tecnología.
 
 Estas piezas viven dentro de sus vistas madre o como bloques de contenido:
 
-- Google
-- Gob-MX
 - Email Marketing
 - WhatsApp Marketing
 - WhatsApp IA
