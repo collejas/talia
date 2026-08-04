@@ -38,27 +38,27 @@ const pageCtas = {
     label: 'Ver agenda',
     message: 'Hola, quiero ver agenda y cotizaciones de Tal-IA.',
   },
-  '/prospeccion-comercial': {
+  '/lp/prospeccion/comercial': {
     label: 'Quiero prospectar',
     message: 'Hola, quiero ver la prospección comercial de Tal-IA.',
   },
-  '/prospeccion': {
+  '/lp/prospeccion': {
     label: 'Ver prospección',
     message: 'Hola, quiero ver la prospección de Tal-IA.',
   },
-  '/prospeccion/google': {
+  '/lp/prospeccion/google': {
     label: 'Ver Google',
     message: 'Hola, quiero ver Google para prospección en Tal-IA.',
   },
-  '/prospeccion/gob-mx': {
+  '/lp/prospeccion/gob-mx': {
     label: 'Ver Gob-MX',
     message: 'Hola, quiero ver Gob-MX para prospección en Tal-IA.',
   },
-  '/prospeccion/buscar-contactos': {
+  '/lp/prospeccion/buscar-contactos': {
     label: 'Buscar contactos',
     message: 'Hola, quiero buscar contactos de empresas con Tal-IA.',
   },
-  '/prospeccion/webscraper': {
+  '/lp/prospeccion/webscraper': {
     label: 'Ver Web Scraper',
     message: 'Hola, quiero ver Web Scraper para prospección en Tal-IA.',
   },
