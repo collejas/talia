@@ -129,7 +129,7 @@ Funciones
   - Seguimiento de ventas
   - Ventas e inventarios
   - Agendas, cotizaciones, notas y tareas
-  - Buscar contactos Web / Google / Gov-MX
+  - Buscar contactos Web / Google / Gob-MX
   - Campañas de Email / WhatsApp
   - Gestión inmobiliaria
   - Métricas
@@ -165,7 +165,7 @@ Los `slugs` de las vistas ya están cerrados y no deben cambiarse.
 | Seguimiento de ventas | `/seguimiento-ventas` |
 | Ventas e inventarios | `/ia-para-ventas` |
 | Agendas, cotizaciones, notas y tareas | `/agenda-y-cotizaciones` |
-| Buscar contactos Web / Google / Gov-MX | `/buscar-contactos` |
+| Buscar contactos Web / Google / Gob-MX | `/buscar-contactos` |
 | Campañas de Email / WhatsApp | `/campanas-marketing` |
 | Gestión inmobiliaria | `/industrias/inmobiliarias` |
 | Métricas | `/caracteristicas` |
@@ -206,7 +206,7 @@ Aquí se explica qué trae TalIA, pero siempre como beneficio:
 - Seguimiento de ventas.
 - Ventas e inventarios.
 - Agendas, cotizaciones, notas y tareas.
-- Buscar contactos Web / Google / Gov-MX.
+- Buscar contactos Web / Google / Gob-MX.
 - Campañas de Email / WhatsApp.
 - Gestión inmobiliaria.
 - Métricas.
@@ -313,7 +313,7 @@ Esta es la URL más fuerte para intención comercial porque junta:
 - Seguimiento de ventas
 - Ventas e inventarios
 - Agendas, cotizaciones, notas y tareas
-- Buscar contactos Web / Google / Gov-MX
+- Buscar contactos Web / Google / Gob-MX
 - Campañas de Email / WhatsApp
 - Gestión inmobiliaria
 - Métricas
@@ -350,7 +350,7 @@ Cada página debe tener una sola intención principal. La siguiente tabla sirve 
 | Seguimiento de ventas | `Seguimiento de ventas | TalIA` | `Cómo no perder prospectos en el seguimiento comercial` | `TalIA ordena el seguimiento de ventas con recordatorios, tareas y control de oportunidades.` | `Ver seguimiento` |
 | Ventas e inventarios | `Ventas e inventarios | TalIA` | `Conecta ventas e inventario en un solo flujo` | `TalIA ayuda a coordinar ventas, disponibilidad y control operativo desde un mismo lugar.` | `Ver gestión` |
 | Agendas, cotizaciones, notas y tareas | `Agendas, cotizaciones y tareas | TalIA` | `Cómo organizar citas, cotizaciones y pendientes` | `TalIA centraliza citas, cotizaciones, notas y tareas para dar mejor seguimiento comercial.` | `Ver agenda` |
-| Buscar contactos Web / Google / Gov-MX | `Buscar contactos para ventas | TalIA` | `Cómo conseguir prospectos desde web, Google y Gov-MX` | `TalIA ayuda a encontrar contactos útiles para ventas y convertir búsquedas en prospectos trabajables.` | `Buscar contactos` |
+| Buscar contactos Web / Google / Gob-MX | `Buscar contactos para ventas | TalIA` | `Cómo conseguir prospectos desde web, Google y Gob-MX` | `TalIA ayuda a encontrar contactos útiles para ventas y convertir búsquedas en prospectos trabajables.` | `Buscar contactos` |
 | Campañas de Email / WhatsApp | `Campañas de Email y WhatsApp | TalIA` | `Cómo activar y reactivar prospectos con campañas` | `TalIA permite enviar campañas comerciales por email y WhatsApp para mover leads fríos o generar respuesta.` | `Ver campañas` |
 | Gestión inmobiliaria | `Gestión inmobiliaria con IA | TalIA` | `Cómo vender mejor en inmobiliarias con IA` | `TalIA ayuda a inmobiliarias a responder leads, agendar citas y dar seguimiento comercial.` | `Ver inmobiliario` |
 | Métricas | `Métricas comerciales | TalIA` | `Cómo medir ventas, seguimiento y conversión` | `TalIA muestra métricas útiles para entender respuesta, seguimiento y avance comercial.` | `Ver métricas` |
