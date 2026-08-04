@@ -32,6 +32,7 @@ Registro de avances del refactor de `talia.mx`.
   - Web Scraper: correo electronico visible.
 - Se actualizo `buscar-contactos` para explicar que combina Google y Gob-MX y para reflejar los campos reales que alimentan la lista comercial.
 - Se hizo una segunda limpieza de enlaces legacy en paginas heredadas, video demostrativo y generadores internos para evitar que siguieran reapareciendo rutas retiradas.
+- Se ajustaron los `canonical` y `og:url` de las paginas legacy retiradas para que apunten al home o a la ruta vigente en el caso de `buscar-contactos`.
 
 ### Agregado
 
