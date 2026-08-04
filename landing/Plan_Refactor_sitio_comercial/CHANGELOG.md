@@ -10,6 +10,28 @@ Registro de avances del refactor de `talia.mx`.
 
 ## 2026-08-04
 
+### Avance reciente
+
+- Se reordeno la home para que el hero derecho represente correctamente los 4 modulos del flujo:
+  - Prospeccion
+  - Marketing
+  - Agente IA
+  - CRM
+- Se movio `Tal-IA Automatiza` al circulo central del hero y se elimino el quinto modulo visual como tarjeta separada.
+- Se ajusto el subtitulo principal de la home para incluir envios masivos por correo y WhatsApp.
+- Se redujo la altura del contenedor derecho del hero y se corrigio la distribucion de las tarjetas alrededor del circulo.
+- Se unifico el header de las vistas nuevas de prospeccion con el header general de la landing.
+- Se mejoraron las vistas de:
+  - `/lp/prospeccion/google`
+  - `/lp/prospeccion/gob-mx`
+  - `/lp/prospeccion/webscraper`
+  - `/lp/prospeccion/buscar-contactos`
+- Se alinearon los datos visibles por fuente:
+  - Google: nombre comercial, direccion, ubicacion, telefono, sitio web/Facebook y calificacion.
+  - Gob-MX: razon social, nombre comercial, direccion, ubicacion, telefono, correo, sitio web, tamano de la empresa y calificacion.
+  - Web Scraper: correo electronico visible.
+- Se actualizo `buscar-contactos` para explicar que combina Google y Gob-MX y para reflejar los campos reales que alimentan la lista comercial.
+
 ### Agregado
 
 - Se definio una estructura objetivo para la landing basada en:
