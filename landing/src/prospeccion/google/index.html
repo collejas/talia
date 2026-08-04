@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Qué es Tal-IA | Prospección, marketing, IA y CRM</title>
-  <meta name="description" content="Tal-IA es una plataforma comercial que conecta prospección, marketing, atención con IA y CRM para vender más por WhatsApp y dar seguimiento mejor." />
-  <link rel="canonical" href="https://talia.mx/que-es-talia" />
-  <link rel="alternate" hreflang="es-MX" href="https://talia.mx/que-es-talia" />
+  <title>Google para prospección | TalIA</title>
+  <meta name="description" content="TalIA ayuda a buscar empresas en Google Maps y Google Places para convertir búsquedas en prospectos listos para trabajar." />
+  <link rel="canonical" href="https://talia.mx/prospeccion/google" />
+  <link rel="alternate" hreflang="es-MX" href="https://talia.mx/prospeccion/google" />
   <link rel="alternate" hreflang="x-default" href="https://talia.mx/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
-  <meta property="og:site_name" content="Tal-IA" />
-  <meta property="og:title" content="Qué es Tal-IA | Prospección, marketing, IA y CRM" />
-  <meta property="og:description" content="Tal-IA es una plataforma comercial que conecta prospección, marketing, atención con IA y CRM para vender más por WhatsApp y dar seguimiento mejor." />
-  <meta property="og:url" content="https://talia.mx/que-es-talia" />
+  <meta property="og:site_name" content="TalIA" />
+  <meta property="og:title" content="Google para prospección | TalIA" />
+  <meta property="og:description" content="TalIA ayuda a buscar empresas en Google Maps y Google Places para convertir búsquedas en prospectos listos para trabajar." />
+  <meta property="og:url" content="https://talia.mx/prospeccion/google" />
   <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Qué es Tal-IA | Prospección, marketing, IA y CRM" />
-  <meta name="twitter:description" content="Tal-IA es una plataforma comercial que conecta prospección, marketing, atención con IA y CRM para vender más por WhatsApp y dar seguimiento mejor." />
+  <meta name="twitter:title" content="Google para prospección | TalIA" />
+  <meta name="twitter:description" content="TalIA ayuda a buscar empresas en Google Maps y Google Places para convertir búsquedas en prospectos listos para trabajar." />
   <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
   <meta name="theme-color" content="#7f13ec" />
   <meta name="application-name" content="TalIA" />
@@ -32,6 +32,94 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/css/landing-core.css?v=20260629a" />
   <link rel="stylesheet" href="/assets/css/webchat.css?v=20260625a" />
+  <style>
+    .search-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .search-hero__copy,
+    .search-hero__visual,
+    .search-section {
+      min-width: 0;
+    }
+
+    .search-hero__copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .search-hero__copy h1 {
+      margin: 18px 0 0;
+      max-width: 12ch;
+      font-size: clamp(42px, 5vw, 72px);
+      line-height: 0.97;
+      letter-spacing: -0.04em;
+      font-weight: 950;
+    }
+
+    .search-hero__copy p {
+      max-width: 58ch;
+    }
+
+    .search-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .search-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 19, 236, 0.12);
+      background: rgba(127, 19, 236, 0.08);
+      color: #5b21b6;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .search-hero__visual {
+      border-radius: 32px;
+      padding: 18px;
+      background:
+        radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 14px;
+    }
+
+    .search-hero__card {
+      display: grid;
+      gap: 10px;
+      border-radius: 24px;
+      padding: 14px;
+      background: white;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    .search-hero__card h3 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .search-hero__card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+  </style>
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -57,7 +145,7 @@
   <main class="page-shell">
     <nav class="nav" aria-label="Navegación principal">
       <a class="nav-access" href="https://talia.mx/auth/login">Acceso</a>
-      <a class="brand" href="/" aria-label="Tal-IA">
+      <a class="brand" href="/" aria-label="TalIA">
         <img src="/Logo8.svg" alt="" aria-hidden="true" />
         <span>Tal-IA</span>
       </a>
@@ -65,17 +153,16 @@
       <div class="nav-links nav-links--desktop">
         <a href="/">Inicio</a>
         <a href="/que-es-talia">Qué es Tal-IA</a>
-        <a href="/#prospeccion">Prospección</a>
-        <a href="/#marketing">Marketing</a>
-        <a href="/#agente-ia">Agente IA</a>
-        <a href="/#crm">CRM</a>
-        <a href="/#industrias">Industrias</a>
+        <a href="/prospeccion">Prospección</a>
+        <a href="/prospeccion/google">Google</a>
+        <a href="/prospeccion-comercial">Prospección comercial</a>
+        <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
         <a href="/precios">Precios</a>
         <a href="/demo.html" class="nav-cta nav-cta--secondary">Demo</a>
       </div>
 
-      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
-        Hablar por WhatsApp
+      <a class="nav-cta" data-cta-id="CTA_NAV_DEMO" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20Google%20para%20prospecci%C3%B3n%20en%20Tal-IA" target="_blank" rel="noopener noreferrer">
+        Ver Google
       </a>
 
       <details class="nav-mobile-menu">
@@ -83,104 +170,111 @@
         <div class="nav-mobile-menu__panel">
           <a href="/">Inicio</a>
           <a href="/que-es-talia">Qué es Tal-IA</a>
-          <a href="/#prospeccion">Prospección</a>
-          <a href="/#marketing">Marketing</a>
-          <a href="/#agente-ia">Agente IA</a>
-          <a href="/#crm">CRM</a>
-          <a href="/#industrias">Industrias</a>
+          <a href="/prospeccion">Prospección</a>
+          <a href="/prospeccion/google">Google</a>
+          <a href="/prospeccion-comercial">Prospección comercial</a>
+          <a href="/prospeccion/buscar-contactos">Buscar contactos</a>
           <a href="/precios">Precios</a>
           <div class="nav-mobile-menu__actions">
             <a href="https://talia.mx/auth/login" class="button tertiary">Acceso plataforma</a>
             <a href="/demo.html" class="button secondary">Demo</a>
-            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20Google%20para%20prospecci%C3%B3n%20en%20Tal-IA" class="button primary" target="_blank" rel="noopener noreferrer">Ver Google</a>
           </div>
         </div>
       </details>
     </nav>
 
-    <section class="hero hero--single">
-      <div class="hero__copy">
-        <div class="eyebrow">Producto</div>
-        <h1>Qué es Tal-IA</h1>
-        <p><strong>Tal-IA es una plataforma comercial que conecta prospección, marketing, atención con IA y CRM en un solo flujo.</strong></p>
-        <p>El objetivo es simple: encontrar clientes, contactarlos, atenderlos automáticamente, darles seguimiento y convertir más ventas sin perder control operativo.</p>
-        <div class="hero__note">Tal-IA no es solo un chat ni solo un CRM. Es la combinación de prospección, contacto, atención automática y organización comercial dentro de una sola operación.</div>
-        <div class="stat-strip">
-          <div class="stat" data-step="01">
-            <strong style="color: var(--core-green);">Prospección</strong>
-            <span>Encuentra clientes y bases útiles para vender.</span>
-          </div>
-          <div class="stat" data-step="02">
-            <strong style="color: var(--core-blue);">Marketing</strong>
-            <span>Activa campañas por email y WhatsApp.</span>
-          </div>
-          <div class="stat" data-step="03">
-            <strong style="color: var(--core-violet);">IA</strong>
-            <span>Atiende, califica y agenda automáticamente.</span>
-          </div>
-          <div class="stat" data-step="04">
-            <strong style="color: var(--core-amber);">CRM</strong>
-            <span>Organiza prospectos, oportunidades y seguimiento.</span>
-          </div>
-          <div class="stat" data-step="05">
-            <strong style="color: var(--core-dark);">Automatización</strong>
-            <span>Conecta todo sin venderlo como un módulo aparte.</span>
-          </div>
+    <section class="search-hero">
+      <div class="search-hero__copy">
+        <div class="eyebrow">Prospección / Google</div>
+        <h1>Buscar empresas en Google Maps</h1>
+        <p><strong>Esta página responde a la intención específica de encontrar empresas desde Google Maps y Google Places.</strong></p>
+        <p>TalIA ayuda a convertir búsquedas en una base comercial útil: identificar negocios, revisar cobertura, valorar calificaciones y obtener datos que después pueden pasar a ventas.</p>
+        <div class="search-pills">
+          <span class="search-pill">Google Maps</span>
+          <span class="search-pill">Google Places</span>
+          <span class="search-pill">Calificaciones</span>
+          <span class="search-pill">Cobertura</span>
         </div>
         <div class="hero__actions">
-          <a class="button primary" href="/demo.html">Agendar demo</a>
-          <a class="button secondary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20por%20WhatsApp%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-          <a class="button ghost" href="/precios">Ver precios</a>
+          <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20Google%20para%20prospecci%C3%B3n%20en%20Tal-IA" target="_blank" rel="noopener noreferrer">Ver Google</a>
+          <a class="button secondary" href="/prospeccion">Volver a prospección</a>
+          <a class="button ghost" href="/prospeccion-comercial">Prospección comercial</a>
         </div>
       </div>
+
+      <aside class="search-hero__visual">
+        <div class="search-hero__card">
+          <h3>Qué resuelve</h3>
+          <p>Dar contexto a una búsqueda en Google para convertirla en una lista comercial real.</p>
+        </div>
+        <div class="search-hero__card">
+          <h3>Qué incluye</h3>
+          <p>Lectura de resultados, validación de negocios y clasificación inicial por relevancia.</p>
+        </div>
+        <div class="search-hero__card">
+          <h3>Qué evita</h3>
+          <p>Perder tiempo con búsquedas sueltas que no terminan en un flujo comercial.</p>
+        </div>
+      </aside>
     </section>
 
-    <section class="section section--business">
+    <section class="section">
       <div class="section__head">
         <div>
-          <h2>Los 4 módulos base</h2>
-          <p class="section__lead">Este es el orden del sitio: prospección, marketing, atención con IA y CRM.</p>
+          <h2>Intención de búsqueda</h2>
+          <p class="section__lead">Aquí el usuario no busca prospección en general. Busca cómo usar Google para descubrir empresas y crear oportunidades.</p>
         </div>
       </div>
 
-      <div class="grid grid--5 business-grid">
-        <div class="business-card business-card--green"><span>Prospección</span></div>
-        <div class="business-card business-card--blue"><span>Marketing</span></div>
-        <div class="business-card business-card--violet"><span>Agente IA</span></div>
-        <div class="business-card business-card--amber"><span>CRM</span></div>
-        <div class="business-card business-card--dark"><span>Automatización</span></div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--blue); background: rgba(37,99,235,.05);">Google</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Búsqueda</h3>
+          <p>Encuentra negocios que ya tienen presencia pública.</p>
+        </article>
+        <article class="feature-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--violet); background: rgba(37,99,235,.05);">Google</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Validación</h3>
+          <p>Revisa calificaciones, cobertura y señales útiles para priorizar.</p>
+        </article>
+        <article class="feature-card">
+          <div class="eyebrow" style="border-color: rgba(37,99,235,.16); color: var(--green); background: rgba(37,99,235,.05);">Google</div>
+          <h3 style="margin: 12px 0 0; font-size: 18px;">Salida</h3>
+          <p>Convierte el resultado en contactos listos para seguir trabajando.</p>
+        </article>
       </div>
     </section>
 
     <section class="section">
       <div class="section__head">
         <div>
-          <h2>Qué se mantiene y se regenera visualmente</h2>
-          <p class="section__lead">Las vistas actuales siguen siendo parte del sitio, pero deben alinearse con la nueva estructura madre.</p>
+          <h2>Rutas relacionadas</h2>
+          <p class="section__lead">Después de Google, el siguiente paso puede ser la visión general de prospección o el proceso comercial completo.</p>
         </div>
       </div>
 
       <div class="grid grid--5 business-grid">
-        <a class="business-card business-card--green" href="/prospeccion-comercial"><span>Prospección comercial</span></a>
-        <a class="business-card business-card--blue" href="/prospeccion/buscar-contactos"><span>Buscar contactos</span></a>
-        <a class="business-card business-card--violet" href="/ia-de-whatsapp"><span>IA de WhatsApp</span></a>
-        <a class="business-card business-card--amber" href="/ia-para-ventas"><span>IA para ventas</span></a>
-        <a class="business-card business-card--dark" href="/asistente-ia-empresas"><span>Asistente IA</span></a>
+        <a class="business-card business-card--green" href="/prospeccion"><span>Prospección madre</span></a>
+        <a class="business-card business-card--blue" href="/prospeccion-comercial"><span>Prospección comercial</span></a>
+        <a class="business-card business-card--violet" href="/prospeccion/buscar-contactos"><span>Buscar contactos</span></a>
+        <a class="business-card business-card--amber" href="/precios"><span>Precios</span></a>
+        <a class="business-card business-card--dark" href="/demo.html"><span>Demo</span></a>
       </div>
     </section>
 
     <section class="cta-band">
       <div class="eyebrow">Siguiente paso</div>
-      <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Tal-IA ordena tu operación comercial</h2>
-      <p>Si necesitas encontrar clientes, contactarlos y dar seguimiento mejor, el flujo base arranca aquí.</p>
+      <h2 style="margin: 14px 0 0; font-size: clamp(28px, 3.2vw, 42px); line-height: 1; font-weight: 950;">Google como fuente de prospección</h2>
+      <p>Si tu intención es descubrir empresas a partir de búsquedas en Google Maps o Google Places, esta es la página correcta.</p>
       <div class="actions">
-        <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20qué%20es%20Tal-IA%20y%20revisar%20casos%20de%20uso" target="_blank" rel="noopener noreferrer">Hablar por WhatsApp</a>
-        <a class="button secondary" href="/demo.html">Agendar demo</a>
+        <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20Google%20para%20prospecci%C3%B3n%20en%20Tal-IA" target="_blank" rel="noopener noreferrer">Hablar por WhatsApp</a>
+        <a class="button secondary" href="/prospeccion">Volver a prospección</a>
       </div>
       <div class="footer-links">
         <a href="/">Inicio</a>
-        <a href="/precios">Precios</a>
-        <a href="/video-demostracion-inmobiliarias">Video demo inmobiliaria</a>
+        <a href="/prospeccion">Prospección</a>
+        <a href="/prospeccion-comercial">Prospección comercial</a>
       </div>
     </section>
   </main>
@@ -232,7 +326,6 @@
       } catch (_error) {}
     });
   </script>
-
   <script type="module">
     import { initialiseChat } from '/assets/js/modules/chat.js?v=20260313c';
     import { initialiseVisitTracking } from '/assets/js/modules/visit-tracking.js?v=20260313c';
@@ -264,7 +357,7 @@
           }
         }
       } catch (error) {
-        console.warn('[que-es-talia] No se pudo obtener configuración del webchat.', error);
+        console.warn('[prospeccion-google] No se pudo obtener configuración del webchat.', error);
       }
 
       initialiseChat({

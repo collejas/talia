@@ -65,17 +65,38 @@
   </url>
 
   <url>
-    <loc>https://talia.mx/prospeccion-comercial</loc>
+    <loc>https://talia.mx/prospeccion</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.97</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/prospeccion/google</loc>
     <lastmod>2026-08-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.96</priority>
   </url>
 
   <url>
-    <loc>https://talia.mx/buscar-contactos</loc>
+    <loc>https://talia.mx/prospeccion/gob-mx</loc>
     <lastmod>2026-08-04</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.94</priority>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/prospeccion/buscar-contactos</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://talia.mx/prospeccion-comercial</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.96</priority>
   </url>
 
   <url>
