@@ -115,7 +115,7 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de Tal-IA. Ej: 'Administra condominios y plazas comerciales; quiere automatizar atención a residentes y coordinación de incidencias vía WhatsApp sin saturar al personal.'"
+      "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de UNIDEL. Ej: 'Administra una cadena de restaurantes; quiere uniformar cocina y piso con bordado de logo y reposición recurrente.'"
       },
       "necesidad_proposito": {
         "type": "string",
@@ -160,7 +160,7 @@
 
 {
   "name": "send_information_email",
-  "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
+  "description": "Enviar al prospecto la información solicitada sobre UNIDEL cuando prefiere recibirla por correo en lugar de seguir por chat.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -242,7 +242,7 @@
 
 {
   "name": "list_demo_slots",
-  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de demo dentro de WhatsApp.",
+  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de cita o seguimiento dentro de WhatsApp.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -280,7 +280,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma la demo elegida para que se reserve el slot y se envíe el correo/invitación automáticamente.",
+  "description": "Confirma la cita elegida para que se reserve el slot y se envíe el correo/invitación automáticamente.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -299,7 +299,7 @@
       },
       "notes": {
         "type": "string",
-        "description": "Notas del prospecto que quieras guardar junto a la demo."
+        "description": "Notas del prospecto que quieras guardar junto a la cita."
       }
     },
     "required": [
@@ -316,14 +316,14 @@
 
 {
   "name": "reschedule_demo",
-  "description": "Reprograma una demo ya confirmada cuando el cliente solicita un cambio.",
+  "description": "Reprograma una cita ya confirmada cuando el cliente solicita un cambio.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "La conversación vinculada con la demo."
+        "description": "La conversación vinculada con la cita."
       },
       "booking_id": {
         "type": "string",
@@ -352,7 +352,7 @@
 
 {
   "name": "cancel_demo",
-  "description": "Cancela una demo previamente confirmada cuando el prospecto lo solicita.",
+  "description": "Cancela una cita previamente confirmada cuando el prospecto lo solicita.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -363,7 +363,7 @@
       },
       "booking_id": {
         "type": "string",
-        "description": "Identificador de la demo que se cancela."
+        "description": "Identificador de la cita que se cancela."
       },
       "reason": {
         "type": "string",
@@ -394,7 +394,7 @@
       },
       "reason": {
         "type": "string",
-        "description": "Frase corta explicando por qué necesitas crear un ciclo nuevo (ej. 'Quiere evaluar Tal-IA para otra sucursal')."
+        "description": "Frase corta explicando por qué necesitas crear un ciclo nuevo (ej. 'Quiere cotizar uniformes para otra sucursal')."
       }
     },
     "required": [
