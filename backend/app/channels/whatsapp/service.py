@@ -5195,8 +5195,18 @@ def _parse_interactive_payload(raw_payload: dict[str, Any]) -> dict[str, Any] | 
 def _extract_quick_reply_data(raw_payload: dict[str, Any]) -> dict[str, Any] | None:
     if not raw_payload:
         return None
-    button_payload = raw_payload.get("ButtonPayload") or raw_payload.get("buttonpayload")
-    button_text = raw_payload.get("ButtonText") or raw_payload.get("buttontext")
+    provider_message = raw_payload.get("message") if isinstance(raw_payload.get("message"), dict) else {}
+    meta_button = provider_message.get("button") if isinstance(provider_message.get("button"), dict) else {}
+    button_payload = (
+        raw_payload.get("ButtonPayload")
+        or raw_payload.get("buttonpayload")
+        or meta_button.get("payload")
+    )
+    button_text = (
+        raw_payload.get("ButtonText")
+        or raw_payload.get("buttontext")
+        or meta_button.get("text")
+    )
     interactive = _parse_interactive_payload(raw_payload)
     if not button_payload and interactive:
         reply_data = interactive.get("button_reply") or {}
@@ -5208,12 +5218,15 @@ def _extract_quick_reply_data(raw_payload: dict[str, Any]) -> dict[str, Any] | N
         "ButtonText": raw_payload.get("ButtonText"),
         "ButtonPayload": raw_payload.get("ButtonPayload"),
         "InteractiveData": raw_payload.get("InteractiveData"),
+        "meta_button": meta_button or None,
     }
+    context = provider_message.get("context") if isinstance(provider_message.get("context"), dict) else {}
     return {
         "payload": button_payload,
         "text": button_text or raw_payload.get("Body"),
         "interactive": interactive,
         "raw_fields": raw_fields,
+        "context_message_sid": context.get("id"),
     }
 
 
@@ -5250,10 +5263,14 @@ async def _maybe_handle_sales_acknowledgement(
     vendedor_id = seller.get("usuario_id")
     organizacion_ids = seller.get("organizacion_ids") or []
     try:
-        pending = await repo.find_pending_sales_assignment(
-            vendedor_id=vendedor_id,
-            organizacion_ids=organizacion_ids,
-        )
+        pending_kwargs: dict[str, Any] = {
+            "vendedor_id": vendedor_id,
+            "organizacion_ids": organizacion_ids,
+        }
+        context_message_sid = str(quick_reply.get("context_message_sid") or "").strip()
+        if context_message_sid:
+            pending_kwargs["notification_sid"] = context_message_sid
+        pending = await repo.find_pending_sales_assignment(**pending_kwargs)
     except CRMRepositoryError as exc:
         logger.warning(
             "whatsapp.sales_ack.assignment_lookup_failed",

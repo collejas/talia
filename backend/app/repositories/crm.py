@@ -5557,66 +5557,78 @@ class CRMRepository:
         )
 
     async def find_sales_rep_by_phone(self, *, phone_e164: str) -> dict[str, Any] | None:
-        """Localiza a un usuario/empleado usando su número de WhatsApp."""
+        """Localiza a un usuario/empleado tolerando +52 y +521 de Mexico."""
         normalized = (phone_e164 or "").strip()
         if not normalized:
             return None
+        candidates = [normalized]
+        canonical = normalize_phone(normalized)
+        if canonical and canonical not in candidates:
+            candidates.append(canonical)
+        if canonical.startswith("+521"):
+            candidates.append("+52" + canonical[4:])
+        elif canonical.startswith("+52"):
+            candidates.append("+521" + canonical[3:])
+        candidates = list(dict.fromkeys(candidates))
         params = {
-            "telefono_e164": f"eq.{normalized}",
+            "or": "(" + ",".join(f"telefono_e164.eq.{value}" for value in candidates) + ")",
             "select": "id,nombre_completo,correo",
-            "limit": "1",
+            "limit": "20",
         }
         resp = await self._request("GET", "/rest/v1/usuarios", params=params)
         data = resp.json() or []
-        if not isinstance(data, list) or not data:
+        if not isinstance(data, list):
             return None
-        row = data[0]
-        try:
-            usuario_id = UUID(str(row.get("id")))
-        except (TypeError, ValueError):
-            return None
-        empleados_params = {
-            "usuario_id": f"eq.{usuario_id}",
-            "es_vendedor": "is.true",
-            "select": "organizacion_id",
-        }
-        resp = await self._request("GET", "/rest/v1/empleados", params=empleados_params)
-        empleados = resp.json() or []
-        organizacion_ids: list[UUID] = []
-        if isinstance(empleados, list):
-            for item in empleados:
-                try:
-                    org_id = UUID(str(item.get("organizacion_id")))
-                except (TypeError, ValueError):
-                    continue
-                organizacion_ids.append(org_id)
-        if not organizacion_ids:
-            return None
-        return {
-            "usuario_id": usuario_id,
-            "nombre": row.get("nombre_completo") or row.get("correo"),
-            "correo": row.get("correo"),
-            "organizacion_ids": organizacion_ids,
-        }
+        for row in data:
+            try:
+                usuario_id = UUID(str(row.get("id")))
+            except (TypeError, ValueError):
+                continue
+            empleados_params = {
+                "usuario_id": f"eq.{usuario_id}",
+                "es_vendedor": "is.true",
+                "select": "organizacion_id",
+            }
+            employee_resp = await self._request("GET", "/rest/v1/empleados", params=empleados_params)
+            empleados = employee_resp.json() or []
+            organizacion_ids: list[UUID] = []
+            if isinstance(empleados, list):
+                for item in empleados:
+                    try:
+                        org_id = UUID(str(item.get("organizacion_id")))
+                    except (TypeError, ValueError):
+                        continue
+                    organizacion_ids.append(org_id)
+            if organizacion_ids:
+                return {
+                    "usuario_id": usuario_id,
+                    "nombre": row.get("nombre_completo") or row.get("correo"),
+                    "correo": row.get("correo"),
+                    "organizacion_ids": organizacion_ids,
+                }
+        return None
 
     async def find_pending_sales_assignment(
         self,
         *,
         vendedor_id: UUID,
         organizacion_ids: Sequence[UUID] | None = None,
+        notification_sid: str | None = None,
     ) -> dict[str, Any] | None:
-        """Obtiene la última notificación pendiente de acuse para el vendedor."""
+        """Obtiene la notificación pendiente, priorizando su SID exacto."""
         params: dict[str, Any] = {
             "vendedor_usuario_id": f"eq.{vendedor_id}",
             "aceptado_en": "is.null",
             "trigger_event": "like.notify_%",
             "order": "creado_en.desc",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,contacto_id,conversacion_id,metadata",
+            "select": "id,organizacion_id,oportunidad_id,contacto_id,conversacion_id,metadata,notificacion_message_sid",
         }
         if organizacion_ids:
             org_values = ",".join(f'"{org_id}"' for org_id in organizacion_ids)
             params["organizacion_id"] = f"in.({org_values})"
+        if notification_sid:
+            params["notificacion_message_sid"] = f"eq.{notification_sid.strip()}"
         resp = await self._request(
             "GET",
             "/rest/v1/asignaciones_vendedores",
