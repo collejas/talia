@@ -1587,6 +1587,7 @@ ${secondCellHtml}
         })
       }
       await loadCampaignTemplates(templatesCampanaId)
+      setTemplatesDialogOpen(false)
       resetTemplateForm()
       setBanner({
         type: "success",
