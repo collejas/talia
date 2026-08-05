@@ -2571,7 +2571,7 @@ ${secondCellHtml}
                               key={logo.id}
                               type="button"
                               className={cn(
-                                "rounded border p-1 text-left",
+                                "overflow-hidden rounded border p-1 text-left transition-colors",
                                 selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
                               )}
                               onClick={() => {
@@ -2587,14 +2587,16 @@ ${secondCellHtml}
                                 }))
                               }}
                             >
-                              <Image
-                                src={logo.file_url}
-                                alt={logo.nombre}
-                                width={160}
-                                height={48}
-                                unoptimized
-                                className="h-12 w-full rounded object-contain"
-                              />
+                              <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded bg-muted/20">
+                                <Image
+                                  src={logo.file_url}
+                                  alt={logo.nombre}
+                                  width={320}
+                                  height={144}
+                                  unoptimized
+                                  className="block h-auto max-h-full w-auto max-w-full object-contain"
+                                />
+                              </div>
                               <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
                             </button>
                           ))}
@@ -2937,14 +2939,14 @@ ${secondCellHtml}
                                     }))
                                   }}
                                 >
-                                  <div className="flex h-8 w-full items-center justify-center overflow-hidden rounded bg-background">
+                                  <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded bg-muted/20">
                                     <Image
                                       src={logo.file_url}
                                       alt={logo.nombre}
-                                      width={160}
-                                      height={48}
+                                      width={320}
+                                      height={144}
                                       unoptimized
-                                      className="max-h-8 w-auto max-w-full object-contain"
+                                      className="block h-auto max-h-full w-auto max-w-full object-contain"
                                     />
                                   </div>
                                   <p className="mt-1 truncate text-[9px] text-muted-foreground">{logo.nombre}</p>
