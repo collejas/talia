@@ -1,23 +1,32 @@
-# Compliance · Prospección WhatsApp
+# Compliance · Prospección UNIDEL WhatsApp
 
 ## Reglas base
-- Primer contacto en frío debe usar plantilla aprobada.
-- Si el prospecto pide no recibir mensajes, respetar de inmediato.
+
+- El primer contacto debe ser breve, respetuoso y orientado a entender la necesidad.
+- Si el prospecto pide no recibir mensajes, se respeta de inmediato.
 - No insistir tras rechazo explícito.
 
 ## Tono permitido
-- Claro, respetuoso, breve, sin presión excesiva.
-- Evitar lenguaje engañoso o promesas no verificadas.
+
+- Claro
+- Respetuoso
+- Breve
+- Sin presión excesiva
+- Sin promesas no verificadas
 
 ## Contenido no permitido
-- Afirmaciones falsas de precio, disponibilidad o resultados garantizados.
-- Mensajes invasivos o repetitivos fuera de contexto.
 
-## Escalamiento a humano
-- Molestia explícita.
-- Solicitud de negociación compleja.
-- Requerimientos legales/comerciales sensibles.
+- Precios inventados
+- Tiempos de entrega inventados
+- Disponibilidad no confirmada
+- Mensajes invasivos o repetitivos
 
 ## Cierre responsable
-- Confirmar siguiente paso (demo, envío de info o cierre de conversación).
-- Registrar contexto mínimo para seguimiento.
+
+- Confirmar siguiente paso solo si el prospecto mostró interés.
+- Registrar contexto mínimo útil para seguimiento.
+- Si el prospecto se baja, cerrar y no reabrir el tema en ese mismo turno.
+
+## Regla práctica
+
+La conversación debe sonar como una atención comercial real, no como un empuje agresivo.
