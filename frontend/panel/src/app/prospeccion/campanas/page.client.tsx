@@ -1242,6 +1242,8 @@ ${secondCellHtml}
         const uploaded = payload as LogoAsset
         setLogos((prev) => [uploaded, ...prev.filter((item) => item.id !== uploaded.id)])
         setSelectedLogoUrl(uploaded.file_url)
+        setTemplateImageIds((prev) => ({ ...prev, logo_url: uploaded.id }))
+        setTemplateImageAssets((prev) => ({ ...prev, logo_url: uploaded }))
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo subir la imagen."
         setTemplateError(message)
@@ -1340,11 +1342,13 @@ ${secondCellHtml}
       setTemplatesDialogOpen(true)
       await loadWaRules()
       await loadCampaignTemplates(campanaId)
+      const loads: Array<Promise<unknown>> = [loadLogos()]
       if (canal === "correo") {
-        await Promise.all([loadBrevoCatalog(canal), loadLogos()])
+        loads.push(loadBrevoCatalog(canal))
       } else {
         setBrevoCatalog([])
       }
+      await Promise.all(loads)
     },
     [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates, loadLogos, loadWaRules]
   )
@@ -1528,13 +1532,8 @@ ${secondCellHtml}
         emailImagenes.push({ variable_clave: key, logo_id: logoId })
       }
     }
-    const whatsappLogoId =
-      templateForm.canal === "whatsapp" && whatsappUsesHeaderImage
-        ? templateImageIds.logo_url ||
-          logos.find((logo) => logo.file_url === normalizedLogoUrl)?.id ||
-          logos.find((logo) => logo.file_url === whatsappMediaUrl)?.id ||
-          undefined
-        : undefined
+    const selectedLogoId = templateImageIds.logo_url || logos.find((logo) => logo.file_url === normalizedLogoUrl)?.id
+    const whatsappLogoId = templateForm.canal === "whatsapp" && whatsappUsesHeaderImage ? selectedLogoId : undefined
     const whatsappImagenes: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }> = whatsappLogoId
       ? [{ variable_clave: "logo_url", logo_id: whatsappLogoId }]
       : []
@@ -2575,7 +2574,18 @@ ${secondCellHtml}
                                 "rounded border p-1 text-left",
                                 selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
                               )}
-                              onClick={() => setSelectedLogoUrl(logo.file_url)}
+                              onClick={() => {
+                                setSelectedLogoUrl(logo.file_url)
+                                setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
+                                setTemplateImageAssets((prev) => ({
+                                  ...prev,
+                                  logo_url: {
+                                    id: logo.id,
+                                    nombre: logo.nombre,
+                                    file_url: logo.file_url,
+                                  },
+                                }))
+                              }}
                             >
                               <Image
                                 src={logo.file_url}
@@ -2914,7 +2924,18 @@ ${secondCellHtml}
                                     "overflow-hidden rounded border p-1 text-left transition-colors",
                                     selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
                                   )}
-                                  onClick={() => setSelectedLogoUrl(logo.file_url)}
+                                  onClick={() => {
+                                    setSelectedLogoUrl(logo.file_url)
+                                    setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
+                                    setTemplateImageAssets((prev) => ({
+                                      ...prev,
+                                      logo_url: {
+                                        id: logo.id,
+                                        nombre: logo.nombre,
+                                        file_url: logo.file_url,
+                                      },
+                                    }))
+                                  }}
                                 >
                                   <div className="flex h-8 w-full items-center justify-center overflow-hidden rounded bg-background">
                                     <Image
