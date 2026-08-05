@@ -1191,6 +1191,64 @@ async def test_send_meta_whatsapp_reply_falls_back_to_text(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_meta_whatsapp_reply_includes_graph_error_details(monkeypatch) -> None:
+    runtime = SimpleNamespace(
+        provider="meta",
+        meta_phone_number_id="1139218909270276",
+        meta_page_access_token="meta-token",
+        meta_graph_api_version="v21.0",
+    )
+    monkeypatch.setattr(service.tenant_runtime, "get_whatsapp_runtime_settings", _async_return(runtime))
+
+    class FakeResponse:
+        status_code = 400
+        text = '{"error":{"message":"(#132000) Number of parameters does not match the expected number of params","type":"OAuthException","code":132000,"error_data":{"details":"template expects 6 parameters but 5 were provided"}}}'
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "error": {
+                    "message": "(#132000) Number of parameters does not match the expected number of params",
+                    "type": "OAuthException",
+                    "code": 132000,
+                    "error_data": {
+                        "details": "template expects 6 parameters but 5 were provided",
+                    },
+                }
+            }
+
+    class FakeClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeClient)
+
+    result = await service._send_meta_whatsapp_reply(
+        to_number="+5214443891655",
+        body="Hola",
+        template_name="aviso_vendedor",
+        template_language="es_MX",
+        content_variables={"1": "Jorge", "2": "Pedro", "3": "Detalle", "4": "+5214441302811", "5": "N/D", "6": "La trucha Restaurante"},
+        organizacion_id=UUID("39e32c05-bfc2-4794-8aab-225873f2bf19"),
+    )
+
+    assert result.provider == "meta"
+    assert result.status == "failed"
+    assert result.error is not None
+    assert "http_400" in result.error
+    assert "code=132000" in result.error
+    assert "template expects 6 parameters" in result.error
+
+
+@pytest.mark.asyncio
 async def test_send_meta_whatsapp_reply_prefers_inbound_phone_number_id(monkeypatch) -> None:
     runtime = SimpleNamespace(
         provider="meta",

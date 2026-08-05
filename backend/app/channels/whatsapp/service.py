@@ -311,6 +311,49 @@ class TwilioSendResult:
     provider: str = "twilio"
 
 
+def _summarize_meta_error_response(response: Any) -> tuple[str, dict[str, Any]]:
+    """Devuelve un resumen corto y estable del error de Meta."""
+    summary: dict[str, Any] = {}
+    try:
+        payload = response.json()
+    except Exception:
+        payload = {}
+
+    error_payload = payload.get("error") if isinstance(payload, dict) else {}
+    if isinstance(error_payload, dict):
+        code = error_payload.get("code")
+        message = _trim_text(error_payload.get("message"))
+        error_type = _trim_text(error_payload.get("type"))
+        error_data = error_payload.get("error_data") if isinstance(error_payload.get("error_data"), dict) else {}
+        details = _trim_text(error_data.get("details")) if isinstance(error_data, dict) else None
+        if code is not None:
+            summary["code"] = code
+        if error_type:
+            summary["type"] = error_type
+        if message:
+            summary["message"] = message
+        if details:
+            summary["details"] = details
+
+    if summary:
+        parts: list[str] = []
+        if "code" in summary:
+            parts.append(f"code={summary['code']}")
+        if "type" in summary:
+            parts.append(f"type={summary['type']}")
+        if "message" in summary:
+            parts.append(f"message={summary['message']}")
+        if "details" in summary:
+            parts.append(f"details={summary['details']}")
+        return " | ".join(parts), summary
+
+    body_text = _trim_text(getattr(response, "text", None))
+    if body_text:
+        summary["body"] = body_text[:500]
+        return summary["body"], summary
+    return "unknown_meta_error", summary
+
+
 def _trim_text(value: Any) -> str | None:
     if isinstance(value, str):
         trimmed = value.strip()
@@ -1689,7 +1732,8 @@ def _normalize_meta_recipient_number(value: str | None) -> str | None:
     cleaned = value.strip()
     if cleaned.lower().startswith("whatsapp:"):
         cleaned = cleaned.split(":", 1)[1]
-    digits = re.sub(r"\D+", "", cleaned)
+    normalized = normalize_phone(cleaned)
+    digits = re.sub(r"\D+", "", normalized or cleaned)
     if digits:
         return digits
     return cleaned or None
@@ -4787,18 +4831,21 @@ async def _send_meta_whatsapp_reply(
         return TwilioSendResult(sid=None, status="failed", error=str(exc), provider="meta")
 
     if response.status_code >= 400:
+        error_summary, error_details = _summarize_meta_error_response(response)
         logger.warning(
             "whatsapp.meta_reply_failed",
             extra={
                 "status_code": response.status_code,
                 "body": response.text,
                 "recipient": normalized_to,
+                "error_summary": error_summary,
+                "error_details": error_details,
             },
         )
         return TwilioSendResult(
             sid=None,
             status="failed",
-            error=f"http_{response.status_code}",
+            error=f"http_{response.status_code}: {error_summary}",
             provider="meta",
         )
 
