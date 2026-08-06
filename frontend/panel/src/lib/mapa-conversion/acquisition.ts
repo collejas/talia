@@ -162,29 +162,49 @@ function aggregateConversionRows(
       }>
     | undefined,
 ): AcquisitionConversionBucket[] {
-  return Array.isArray(rows)
-    ? rows
-        .map((row) => ({
-          value: String(row?.value || "").trim(),
-          label: String(row?.label || "").trim() || "Sin dato",
-          canal: typeof row?.canal === "string" && row.canal.trim() ? row.canal.trim() : null,
-          parentCampaignValue:
-            typeof row?.parent_campaign_value === "string" && row.parent_campaign_value.trim()
-              ? row.parent_campaign_value.trim()
-              : null,
-          parentCampaignLabel:
-            typeof row?.parent_campaign_label === "string" && row.parent_campaign_label.trim()
-              ? row.parent_campaign_label.trim()
-              : null,
-          total: toNumber(row?.conversion_total),
-          contextTotal: toNumber(row?.context_total),
-          conversionLabel: String(row?.conversion_label || "").trim() || "Conversiones",
-          contextLabel: String(row?.context_label || "").trim() || "Base",
-          rate: toNumber(row?.conversion_rate_pct),
-        }))
-        .filter((row) => row.total > 0)
-        .sort((a, b) => b.total - a.total || b.rate - a.rate || a.label.localeCompare(b.label))
-    : [];
+  if (!Array.isArray(rows)) return [];
+
+  const totals = new Map<string, AcquisitionConversionBucket>();
+  for (const row of rows) {
+    const normalized = {
+      value: String(row?.value || "").trim(),
+      label: String(row?.label || "").trim() || "Sin dato",
+      canal: typeof row?.canal === "string" && row.canal.trim() ? row.canal.trim() : null,
+      parentCampaignValue:
+        typeof row?.parent_campaign_value === "string" && row.parent_campaign_value.trim()
+          ? row.parent_campaign_value.trim()
+          : null,
+      parentCampaignLabel:
+        typeof row?.parent_campaign_label === "string" && row.parent_campaign_label.trim()
+          ? row.parent_campaign_label.trim()
+          : null,
+      total: toNumber(row?.conversion_total),
+      contextTotal: toNumber(row?.context_total),
+      conversionLabel: String(row?.conversion_label || "").trim() || "Conversiones",
+      contextLabel: String(row?.context_label || "").trim() || "Base",
+      rate: toNumber(row?.conversion_rate_pct),
+    };
+    if (normalized.total <= 0) continue;
+    const key = [
+      normalized.canal || "",
+      normalized.value,
+      normalized.parentCampaignValue || "",
+    ].join("::");
+    const existing = totals.get(key);
+    if (existing) {
+      existing.total += normalized.total;
+      existing.contextTotal += normalized.contextTotal;
+      existing.rate = existing.contextTotal > 0
+        ? (existing.total / existing.contextTotal) * 100
+        : 0;
+    } else {
+      totals.set(key, normalized);
+    }
+  }
+
+  return Array.from(totals.values()).sort(
+    (a, b) => b.total - a.total || b.rate - a.rate || a.label.localeCompare(b.label),
+  );
 }
 
 function normalizeLookupKey(value: string): string {

@@ -98,6 +98,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 
 - Se alineó la sección de correo de `mapa-de-conversion` para que las tarjetas y gráficas de campañas usen el universo filtrado de visitas y no el ranking de atribución de campañas.
 - La gráfica `Correo · campañas que generaron visitas al sitio` ahora se alimenta del detalle de visitas filtrado por `utm_medium=email`; agrupa por `web_sessions.cid` y usa `utm_campaign` solo como fallback, mientras las plantillas agrupan por `tid`.
+
+## 2026-08-06
+
+- Se eliminó el refetch duplicado de hasta 5,000 sesiones que `AcquisitionSummary` hacía después de cargar `resumen-v2` y `mapa-v2`; el detalle fila por fila queda diferido en las tablas inferiores.
+- Se aclaró la semántica visual de adquisición: una sesión web atribuida a una promoción es una visita, no un contacto, conversación u oportunidad; la tasa correspondiente se presenta como tasa de contacto.
+- Se aisló la identidad de las plantillas WhatsApp por `campaña + plantilla` para evitar mezclar oportunidades cuando una plantilla se reutiliza en campañas distintas.
+- Se renombraron las tarjetas WhatsApp del mapa a oportunidades por campaña/plantilla y se dejó explícito que no representan visitas ni envíos.
 - Se conservó el bloque de WhatsApp sobre el agregado de atribución y conversiones, porque ese sí responde a otra semántica de negocio.
 
 ## 2026-06-27

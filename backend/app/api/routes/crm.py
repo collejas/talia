@@ -41997,7 +41997,10 @@ async def demografia_resumen_v2(
                 campaign_bucket["context_total"] += conversaciones_total
 
             if template_id_key or template_label_value:
-                template_key = f"whatsapp::{template_id_key or f'label:{template_label_value}'}"
+                # A template can be reused by multiple campaigns. Keep the campaign
+                # in the identity so its opportunity counts and parent label cannot mix.
+                template_identity = template_id_key or f"label:{template_label_value}"
+                template_key = f"whatsapp::{campana_id_key or 'sin-campana'}::{template_identity}"
                 template_bucket = template_conversion_rank.setdefault(
                     template_key,
                     {

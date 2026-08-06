@@ -733,23 +733,6 @@ export default async function Page({
               <div className="px-4 lg:px-6">
                 <AcquisitionSummary
                   summary={demografiaResponse?.summary ?? null}
-                  filters={{
-                    canales: canalesSelected,
-                    estado: nivel === "municipio" ? normalizedEstado : null,
-                    sourceClass,
-                    utmSource,
-                    utmMedium,
-                    utmCampaign,
-                    campanaId,
-                    campanaTipo,
-                    templateId,
-                    waCanalPublicitario,
-                    waCampanaPublicitaria,
-                    waReglaId,
-                    rango,
-                    desde,
-                    hasta,
-                  }}
                 />
               </div>
               {tableData.length && demografiaResponse ? (

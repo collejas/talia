@@ -193,12 +193,12 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
         <MetricCard
           title="Contactos totales"
           value={formatNumber(leadsTotal)}
-          description={`Conversión sobre visitas: ${conversion.toFixed(1)} %`}
+          description={`Tasa de contacto sobre visitas: ${conversion.toFixed(1)} %`}
         />
         <MetricCard
           title="Visitas sin contacto"
           value={formatNumber(visitasSinChat)}
-          description="Visitantes que no recibieron contacto"
+          description="Sesiones que todavía no tienen contacto asociado"
         />
         <MetricCard
           title="Forma principal de contacto"
