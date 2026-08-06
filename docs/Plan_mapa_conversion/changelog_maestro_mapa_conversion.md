@@ -109,6 +109,10 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se aclaró la semántica visual de adquisición: una sesión web atribuida a una promoción es una visita, no un contacto, conversación u oportunidad; la tasa correspondiente se presenta como tasa de contacto.
 - Se aisló la identidad de las plantillas WhatsApp por `campaña + plantilla` para evitar mezclar oportunidades cuando una plantilla se reutiliza en campañas distintas.
 - Se renombraron las tarjetas WhatsApp del mapa a oportunidades por campaña/plantilla y se dejó explícito que no representan visitas ni envíos.
+- Se corrigió `Referencias externas`: ya no interpreta `direct`, `campaign` ni otras clases de origen como dominios remitentes; ahora solo acepta hosts reales y los muestra en columnas por sesiones y contactos.
+- Se corrigió el contrato de `GET /crm/visitas/web-sessions` para devolver `referrer_host`; se excluyen referencias internas al propio sitio y se recuperan dominios externos históricos como Google, Facebook, ChatGPT y Bing.
+- Se agregó `traffic_contact_metrics.referrer_rows` al resumen v2 para que `Referencias externas` tenga datos aun cuando la tabla de visitas se cargue de forma diferida; la clave de caché del resumen cambió a `v6-referrer-rankings`.
+- `Referencias externas` ahora consume exclusivamente ese agregado del resumen y nunca el detalle diferido de sesiones, evitando que las clases `direct/campaign/organic_*` vuelvan a aparecer como dominios.
 - Se conservó el bloque de WhatsApp sobre el agregado de atribución y conversiones, porque ese sí responde a otra semántica de negocio.
 - Se corrigió la regresión que dejaba vacías las tarjetas de correo al retirar el refetch de sesiones: `resumen-v2` ahora expone rankings de tráfico por `web_sessions.cid` y `web_sessions.tid`.
 - Se dejó de traducir el UTM genérico `cold_outreach` como una campaña concreta; las sesiones sin `cid` o `tid` se muestran como no identificadas.

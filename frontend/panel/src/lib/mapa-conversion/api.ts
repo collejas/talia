@@ -178,6 +178,11 @@ export type DemografiaSummaryResponse = {
     sessions: number;
     sessions_with_contact: number;
     unique_people: number;
+    referrer_rows?: Array<{
+      host: string;
+      total: number;
+      converted: number;
+    }>;
   };
   leads: {
     rows: DemografiaLeadsRow[];

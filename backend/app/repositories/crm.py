@@ -15,7 +15,7 @@ from functools import lru_cache
 from hashlib import sha1
 from time import monotonic
 from typing import Any, Iterable, Literal, Mapping, Sequence
-from urllib.parse import quote as urlquote
+from urllib.parse import quote as urlquote, urlparse
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -4388,7 +4388,7 @@ class CRMRepository:
         campaign_id: UUID | None = None,
         template_id: UUID | None = None,
         limit: int = 5000,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         async def fetch_all_rows(path: str, base_params: dict[str, str]) -> list[dict[str, Any]]:
             page_size = 1000
             offset = 0
@@ -4413,7 +4413,7 @@ class CRMRepository:
 
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "session_id,contacto_id",
+            "select": "session_id,persona_id,contacto_id,referrer,referrer_host,landing_url",
         }
         if date_from and date_to:
             params["and"] = (
@@ -4441,13 +4441,69 @@ class CRMRepository:
 
         session_rows = await fetch_all_rows("/rest/v1/web_sessions", params)
 
+        source_class_values = {
+            "direct",
+            "campaign",
+            "organic_search",
+            "organic_social",
+            "referral",
+            "ai_referral",
+            "unknown",
+        }
+
+        def external_referrer_host(row: Mapping[str, Any]) -> str:
+            raw_host = str(row.get("referrer_host") or "").strip().lower()
+            raw_referrer = str(row.get("referrer") or "").strip().lower()
+            value = raw_host or raw_referrer
+            if not value or value in source_class_values:
+                return ""
+            try:
+                parsed = urlparse(value if "://" in value else f"https://{value}")
+                host = (parsed.hostname or "").strip().lower()
+                landing = str(row.get("landing_url") or "").strip()
+                landing_host = (urlparse(landing).hostname or "").strip().lower() if landing else ""
+            except ValueError:
+                return ""
+            if not host or "." not in host or host in source_class_values or host == landing_host:
+                return ""
+            return host
+
+        referrer_totals: dict[str, int] = {}
+        referrer_people: dict[str, set[str]] = {}
+        for row in session_rows:
+            host = external_referrer_host(row)
+            if not host:
+                continue
+            referrer_totals[host] = referrer_totals.get(host, 0) + 1
+            person_key = str(row.get("persona_id") or row.get("contacto_id") or "").strip().lower()
+            if person_key:
+                referrer_people.setdefault(host, set()).add(person_key)
+
+        def referrer_rows() -> list[dict[str, int | str]]:
+            return [
+                {
+                    "host": host,
+                    "total": total,
+                    "converted": len(referrer_people.get(host, set())),
+                }
+                for host, total in sorted(
+                    referrer_totals.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ]
+
         session_ids = {
             str(row.get("session_id") or "").strip()
             for row in session_rows
             if isinstance(row, dict) and str(row.get("session_id") or "").strip()
         }
         if not session_ids:
-            return {"sessions": 0, "sessions_with_contact": 0, "unique_people": 0}
+            return {
+                "sessions": 0,
+                "sessions_with_contact": 0,
+                "unique_people": 0,
+                "referrer_rows": referrer_rows(),
+            }
 
         visitor_params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -4525,6 +4581,22 @@ class CRMRepository:
             if person_id or contact_id:
                 conversation_contacts_by_session[session_id] = (person_id, contact_id)
 
+        session_referrer_by_id = {
+            str(row.get("session_id") or "").strip(): external_referrer_host(row)
+            for row in session_rows
+            if str(row.get("session_id") or "").strip()
+        }
+        for session_id, row in visitor_rows_by_session.items():
+            host = session_referrer_by_id.get(session_id)
+            person_key = str(row.get("persona_id") or row.get("contacto_id") or "").strip().lower()
+            if host and person_key:
+                referrer_people.setdefault(host, set()).add(person_key)
+        for session_id, (person_id, contact_id) in conversation_contacts_by_session.items():
+            host = session_referrer_by_id.get(session_id)
+            person_key = (person_id or contact_id).strip().lower()
+            if host and person_key:
+                referrer_people.setdefault(host, set()).add(person_key)
+
         people = {
             str(row.get("persona_id") or row.get("contacto_id") or "").strip().lower()
             for row in visitor_rows_by_session.values()
@@ -4544,6 +4616,7 @@ class CRMRepository:
             "sessions": len(session_ids),
             "sessions_with_contact": len(sessions_with_contact),
             "unique_people": len(people),
+            "referrer_rows": referrer_rows(),
         }
 
     async def list_contact_envios_by_ids(

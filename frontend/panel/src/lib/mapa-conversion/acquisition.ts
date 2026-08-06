@@ -74,6 +74,30 @@ function parseHost(value: string | null | undefined): string {
   }
 }
 
+const SOURCE_CLASS_VALUES = new Set([
+  "direct",
+  "campaign",
+  "organic_search",
+  "organic_social",
+  "referral",
+  "ai_referral",
+  "unknown",
+]);
+
+function parseExternalReferrerHost(value: string | null | undefined): string {
+  const trimmed = (value || "").trim().toLowerCase();
+  if (!trimmed || SOURCE_CLASS_VALUES.has(trimmed)) return "";
+
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    const host = (parsed.hostname || "").trim().toLowerCase();
+    if (!host || SOURCE_CLASS_VALUES.has(host) || !host.includes(".")) return "";
+    return host;
+  } catch {
+    return "";
+  }
+}
+
 function getSourceClassFromVisit(row: VisitTableRow): string {
   const raw = row.raw;
   if (!raw || typeof raw !== "object") return "desconocido";
@@ -91,9 +115,13 @@ function getSourceClassFromVisit(row: VisitTableRow): string {
 function getReferrerHostFromVisit(row: VisitTableRow): string {
   const raw = row.raw;
   if (!raw || typeof raw !== "object") return "";
-  const referrerHost = parseHost(typeof raw.referrer_host === "string" ? raw.referrer_host : null);
-  if (referrerHost) return referrerHost;
-  return parseHost(typeof raw.referrer === "string" ? raw.referrer : null);
+  const referrerHost = parseExternalReferrerHost(
+    typeof raw.referrer_host === "string" ? raw.referrer_host : null,
+  );
+  const referrer = parseExternalReferrerHost(typeof raw.referrer === "string" ? raw.referrer : null);
+  const landingHost = parseExternalReferrerHost(typeof raw.landing_url === "string" ? raw.landing_url : null);
+  const externalHost = referrerHost || referrer;
+  return externalHost && externalHost !== landingHost ? externalHost : "";
 }
 
 function formatUtmPart(value: unknown): string {
@@ -388,10 +416,16 @@ function aggregateSourceClassesFromSummary(
 }
 
 function aggregateReferrersFromSummary(summary: DemografiaSummaryResponse | null): AcquisitionHostBucket[] {
-  // fuentes_top contains source classes, not referrer hosts. Do not present
-  // values such as "campaign" as if they were external websites.
-  void summary;
-  return [];
+  const rows = summary?.traffic_contact_metrics?.referrer_rows;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => ({
+      host: parseExternalReferrerHost(typeof row?.host === "string" ? row.host : null),
+      total: toNumber(row?.total),
+      converted: toNumber(row?.converted),
+    }))
+    .filter((row) => row.host && row.total > 0)
+    .sort((a, b) => b.total - a.total || a.host.localeCompare(b.host));
 }
 
 export function buildAcquisitionMetrics(
@@ -501,10 +535,9 @@ export function buildAcquisitionMetrics(
   );
   const sourceClassRows =
     sourceClassRowsFromVisits.length > 0 ? sourceClassRowsFromVisits : aggregateSourceClassesFromSummary(summary);
-  const referrerRowsFromVisits = Array.from(hostBuckets.values()).sort(
-    (a, b) => b.total - a.total || a.host.localeCompare(b.host),
-  );
-  const referrerRows = referrerRowsFromVisits.length > 0 ? referrerRowsFromVisits : aggregateReferrersFromSummary(summary);
+  // The summary is the canonical aggregate for external referrers. The deferred
+  // visits table may contain source classes and must not replace this dimension.
+  const referrerRows = aggregateReferrersFromSummary(summary);
   const topSource = sourceClassRows[0] ?? null;
 
   return {

@@ -35,6 +35,11 @@ const SOURCE_CLASS_CONFIG: ChartConfig = {
   converted: { label: "Con contacto", color: "var(--chart-2)" },
 };
 
+const REFERRER_CONFIG: ChartConfig = {
+  total: { label: "Sesiones", color: "var(--chart-1)" },
+  converted: { label: "Con contacto", color: "#16a34a" },
+};
+
 const WHATSAPP_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -728,32 +733,39 @@ export function AcquisitionSummary({
               <CardTitle>Referencias externas</CardTitle>
               <CardDescription>Solo muestra hosts reales que enlazaron al sitio.</CardDescription>
             </CardHeader>
-            <CardContent className="grid max-h-96 min-w-0 gap-2 overflow-y-auto pr-2">
+            <CardContent className="min-w-0">
               {referrerRows.length ? (
-                referrerRows.map((item) => {
-                  const rate = item.total > 0 ? (item.converted / item.total) * 100 : 0;
-                  return (
-                    <div
-                      key={item.host}
-                      className="bg-muted/50 flex min-w-0 flex-col gap-2 rounded-lg px-3 py-2 text-sm"
-                    >
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 flex-1 truncate font-medium" title={item.host}>
-                          {item.host}
-                        </span>
-                        <Badge className="shrink-0" variant="outline">
-                          {formatNumber(item.total)}
-                        </Badge>
-                      </div>
-                      <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <span className="min-w-0 truncate">
-                          Convertidas: {formatNumber(item.converted)}
-                        </span>
-                        <span className="shrink-0 tabular-nums">{formatPercent(rate)}</span>
-                      </div>
-                    </div>
-                  );
-                })
+                <ChartContainer config={REFERRER_CONFIG} className="h-[320px] w-full">
+                  <BarChart
+                    data={referrerRows}
+                    layout="vertical"
+                    margin={{ top: 8, right: 36, left: 8, bottom: 8 }}
+                    barGap={4}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis
+                      dataKey="host"
+                      type="category"
+                      width={120}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value: string) => truncateLabel(value, 18)}
+                    />
+                    <ChartTooltip
+                      cursor={{ fill: "hsl(var(--muted))" }}
+                      content={<ChartTooltipContent />}
+                      formatter={(value, name) => [
+                        formatNumber(toNumber(value)),
+                        name === "converted" ? "Con contacto" : "Sesiones",
+                      ]}
+                    />
+                    <Bar dataKey="total" name="Sesiones" fill="var(--chart-1)" radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="total" position="right" formatter={(value: number) => formatNumber(value)} />
+                    </Bar>
+                    <Bar dataKey="converted" name="Con contacto" fill={CONVERTED_COLOR} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ChartContainer>
               ) : (
                 <p className="text-muted-foreground text-sm">No hay sitios externos identificados en este filtro.</p>
               )}
