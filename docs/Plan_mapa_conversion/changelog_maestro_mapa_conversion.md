@@ -121,6 +121,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigió `Sesiones y contactos` para que `Personas únicas` cruce las sesiones filtradas con `webchat_visitantes` usando `persona_id`/`contacto_id`, en lugar de leer un campo inexistente en `web_sessions`.
 - Se corrigió `Tasa de contacto` para calcular `sesiones con contacto / sesiones totales`; una visita atribuida a una campaña no se cuenta automáticamente como contacto.
 - Se implementaron filtros propios por lectura: resumen, tráfico web, conversaciones y campañas ya no muestran el mismo conjunto mezclado de controles.
+- `Referencias externas` pasó a una gráfica de pastel compacta con leyenda desplazable; en `Tráfico web`, `Sitios que enviaron visitas` y `Atribución de campañas` comparten fila en escritorio y se apilan en móvil.
+- El detalle de campañas y plantillas de correo dejó de mostrarse dentro de `Tráfico web` y queda reservado para la lectura `Campañas`.
 - En el mapa de `Campañas`, el tooltip dejó de mostrar el embudo geográfico genérico y ahora resume visitas atribuidas, contactos en CRM y conversaciones por canal.
 - En `Tráfico web`, se recuperó el KPI comparativo de sesiones: muestra aumento, decremento o ausencia de comparación contra el periodo anterior.
 - Se reorganizó la lectura de `Tráfico web` en tres niveles: `Origen del tráfico`, `Sitios que enviaron visitas` y `Atribución de campañas`.

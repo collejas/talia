@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/chart";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
 import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
-import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
+import { buildAcquisitionMetrics, type AcquisitionUtmBucket } from "@/lib/mapa-conversion/acquisition";
 import type { VisitsPayload } from "@/lib/visitas/data";
 import { cn } from "@/lib/utils";
 
@@ -352,13 +352,107 @@ function EmailTemplateAttributionCard({
   );
 }
 
+function ReferrerPieCard({
+  rows,
+}: {
+  rows: Array<{ host: string; total: number; converted: number }>;
+}) {
+  const colors = [
+    "var(--chart-1)",
+    "var(--chart-2)",
+    "var(--chart-3)",
+    "var(--chart-4)",
+    "var(--chart-5)",
+    "#0f766e",
+    "#b45309",
+    "#be123c",
+    "#4338ca",
+    "#475569",
+  ];
+  const data = rows.map((row, index) => ({
+    ...row,
+    fill: colors[index % colors.length],
+  }));
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Referencias externas</CardTitle>
+        <CardDescription>Hosts reales que enlazaron al sitio; incluye buscadores y asistentes digitales.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 lg:grid-cols-[minmax(220px,0.9fr)_minmax(0,1.1fr)] lg:items-center">
+        <ChartContainer config={REFERRER_CONFIG} className="h-52 w-full">
+          <PieChart>
+            <ChartTooltip
+              content={<ChartTooltipContent hideLabel />}
+              formatter={(value, _name, item) => {
+                const payload = item?.payload as (typeof data)[number] | undefined;
+                return [
+                  `${formatNumber(toNumber(value))} sesiones · ${formatNumber(payload?.converted ?? 0)} con contacto`,
+                  payload?.host || "Sitio remitente",
+                ];
+              }}
+            />
+            <Pie data={data} dataKey="total" nameKey="host" innerRadius={42} outerRadius={76} paddingAngle={1}>
+              {data.map((item) => <Cell key={item.host} fill={item.fill} />)}
+            </Pie>
+          </PieChart>
+        </ChartContainer>
+        <div className="grid max-h-52 gap-2 overflow-y-auto pr-1">
+          {data.map((item) => (
+            <div key={item.host} className="flex min-w-0 items-center justify-between gap-3 text-sm">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} />
+                <span className="min-w-0 truncate" title={item.host}>{item.host}</span>
+              </div>
+              <Badge className="shrink-0" variant="outline">{formatNumber(item.total)}</Badge>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrafficAttributionCard({
+  rows,
+  campaignLabels,
+}: {
+  rows: AcquisitionUtmBucket[];
+  campaignLabels: Map<string, string>;
+}) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Atribución: fuente, medio y campaña</CardTitle>
+        <CardDescription>No es un dominio remitente: explica las etiquetas con las que se identificó el tráfico.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid max-h-[32rem] min-h-72 gap-2 overflow-y-auto pr-2">
+        {rows.length ? rows.map((item) => (
+          <div key={`${item.utm_source}-${item.utm_medium}-${item.utm_campaign}`} className="bg-muted/50 flex flex-col gap-2 rounded-lg px-3 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-2">
+                {(["utm_source", "utm_medium", "utm_campaign"] as const).map((field) => (
+                  <div key={field} className="flex min-w-0 flex-col">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{formatUtmFieldLabel(field)}</span>
+                    <span className="min-w-0 font-medium">
+                      {formatUtmValue(item[field], campaignLabels)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <Badge variant="outline">{formatNumber(item.total)}</Badge>
+            </div>
+          </div>
+        )) : <p className="text-muted-foreground text-sm">No hay fuentes ni campañas destacadas en este filtro.</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 function normalizeLookupKey(value: string): string {
   const normalized = value.trim().toLowerCase();
   return normalized.replace(/[\s_-]+/g, "");
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 }
 
 function formatUtmValue(
@@ -721,127 +815,29 @@ export function AcquisitionSummary({
         </div>
         </div>
 
+      </> : null}
+
+      {mode === "traffic" ? <div className="grid items-start gap-4 xl:grid-cols-2">
         <div className="space-y-3">
           <div>
             <h3 className="text-base font-semibold">2. Sitios que enviaron visitas</h3>
             <p className="text-muted-foreground text-sm">
-              Dominios externos detectados como remitentes. No incluye campañas, fuentes UTM ni visitas directas.
+              Dominios externos detectados como remitentes, incluidos buscadores y asistentes digitales.
             </p>
           </div>
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Referencias externas</CardTitle>
-              <CardDescription>Solo muestra hosts reales que enlazaron al sitio.</CardDescription>
-            </CardHeader>
-            <CardContent className="min-w-0">
-              {referrerRows.length ? (
-                <div className="w-full overflow-x-auto pb-2">
-                  <div style={{ minWidth: `${Math.max(760, referrerRows.length * 82)}px` }}>
-                    <ChartContainer config={REFERRER_CONFIG} className="min-h-[360px] w-full">
-                      <BarChart
-                        data={referrerRows}
-                        margin={{ top: 38, right: 8, left: 0, bottom: 26 }}
-                        barGap={4}
-                      >
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="host"
-                          tickLine={false}
-                          axisLine={false}
-                          tickMargin={12}
-                          interval={0}
-                          angle={-25}
-                          textAnchor="end"
-                          tickFormatter={(value: string) => truncateLabel(value, 18)}
-                        />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                        <ChartTooltip
-                          cursor={{ fill: "hsl(var(--muted))" }}
-                          content={<ChartTooltipContent />}
-                          formatter={(value, name) => [
-                            formatNumber(toNumber(value)),
-                            name === "converted" ? "Con contacto" : "Sesiones",
-                          ]}
-                        />
-                        <Bar dataKey="total" name="Sesiones" fill="var(--chart-1)" radius={[6, 6, 0, 0]}>
-                          <LabelList dataKey="total" position="top" formatter={(value: number) => formatNumber(value)} />
-                        </Bar>
-                        <Bar dataKey="converted" name="Con contacto" fill={CONVERTED_COLOR} radius={[6, 6, 0, 0]}>
-                          <LabelList dataKey="converted" position="top" formatter={(value: number) => formatNumber(value)} />
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">No hay sitios externos identificados en este filtro.</p>
-              )}
-            </CardContent>
-          </Card>
+          <ReferrerPieCard rows={referrerRows} />
         </div>
-      </> : null}
-
-      {mode === "traffic" ? <div className="mt-2 space-y-1 border-t pt-5">
-        <h3 className="text-base font-semibold">3. Atribución de campañas</h3>
-        <p className="text-muted-foreground text-sm">
-          Detalle de las etiquetas de fuente, medio y campaña que acompañaron cada visita.
-        </p>
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-base font-semibold">3. Atribución de campañas</h3>
+            <p className="text-muted-foreground text-sm">
+              Fuente, medio y campaña asociados al tráfico identificado.
+            </p>
+          </div>
+          <TrafficAttributionCard rows={topUtmRows} campaignLabels={campaignLabels} />
+        </div>
       </div> : null}
-      {mode === "traffic" || mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
-        {mode === "traffic" ? <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Atribución: fuente, medio y campaña</CardTitle>
-            <CardDescription>
-              No es un dominio remitente: explica las etiquetas con las que se identificó el tráfico.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid max-h-[32rem] gap-2 overflow-y-auto pr-2 min-h-72">
-            {topUtmRows.length ? (
-              topUtmRows.map((item) => (
-                <div
-                  key={`${item.utm_source}-${item.utm_medium}-${item.utm_campaign}`}
-                  className="bg-muted/50 flex flex-col gap-2 rounded-lg px-3 py-3 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-2">
-                      <div className="flex min-w-0 flex-col">
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {formatUtmFieldLabel("utm_source")}
-                        </span>
-                        <span className="min-w-0 font-medium">
-                          {formatUtmValue(item.utm_source, campaignLabels)}
-                        </span>
-                      </div>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {formatUtmFieldLabel("utm_medium")}
-                        </span>
-                        <span className="min-w-0 font-medium">
-                          {formatUtmValue(item.utm_medium, campaignLabels)}
-                        </span>
-                      </div>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {formatUtmFieldLabel("utm_campaign")}
-                        </span>
-                        <span className="min-w-0 font-medium">
-                          {formatUtmValue(
-                            item.utm_campaign,
-                            isUuid(item.utm_campaign) ? campaignLabels : null,
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge variant="outline">{formatNumber(item.total)}</Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground text-sm">No hay fuentes ni campañas destacadas en este filtro.</p>
-            )}
-          </CardContent>
-        </Card> : null}
-
+      {mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-2">
         {mode === "conversations" ? <Card className="h-full">
           <CardHeader>
             <CardTitle>WhatsApp de atribución por canal</CardTitle>
@@ -912,13 +908,7 @@ export function AcquisitionSummary({
         </Card> : null}
       </div> : null}
 
-      {mode === "traffic" ? <div className="space-y-1">
-        <h4 className="text-sm font-semibold">Detalle de correo</h4>
-        <p className="text-muted-foreground text-sm">
-          Desglose de qué campañas y plantillas de email generaron las sesiones identificadas arriba.
-        </p>
-      </div> : null}
-      {mode === "traffic" || mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
+      {mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={correoCampaignRows}
           colorMap={correoCampaignColorMap}
