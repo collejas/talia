@@ -161,14 +161,15 @@ import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
 UTC = timezone.utc
-GOOGLE_RESULT_PHONE_FIELDS = ("phone", "phone_e164", "telefono_principal_e164", "telefono_movil_1_e164")
+# The Google contactables view exposes the normalized phone as `phone`.
+# Unlike the base `resultados` table, the view does not expose `phone_e164`.
+GOOGLE_RESULT_PHONE_FIELDS = ("phone", "telefono_principal_e164", "telefono_movil_1_e164")
 GOOGLE_RESULT_WEBSITE_FIELDS = ("website",)
 GOOGLE_RESULT_SEARCH_FIELDS = (
     "display_name",
     "actividad",
     "address",
     "phone",
-    "phone_e164",
     "telefono_principal_e164",
     "telefono_movil_1_e164",
     "email",
