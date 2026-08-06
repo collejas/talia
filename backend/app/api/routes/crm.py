@@ -41721,9 +41721,79 @@ async def demografia_resumen_v2(
                 except ValueError:
                     continue
 
-        link_rows: list[dict[str, Any]] = []
-        if utm_campaign_values:
-            link_rows = await repo.list_web_sessions_campaign_links(
+        campaign_ids_filter: list[UUID] | None = None
+        if campana_uuid_value:
+            campaign_ids_filter = [campana_uuid_value]
+        elif campana_tipo_value and campaign_ids_for_type:
+            campaign_ids_filter = campaign_ids_for_type
+
+        async def load_batches() -> list[dict[str, Any]]:
+            try:
+                batch_rows, _batch_total = await repo.list_contact_batches(
+                    usuario_token=effective_user_token,
+                    limit=1000,
+                    offset=0,
+                    campana_id=campana_uuid_value,
+                    order="creado_en.desc,id.desc",
+                )
+                return batch_rows
+            except CRMRepositoryError:
+                return []
+
+        async def load_campaign_conversion_rows() -> list[dict[str, Any]]:
+            rows: list[dict[str, Any]] = []
+            offset = 0
+            while True:
+                page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
+                    usuario_token=effective_user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_uuid_value,
+                    date_from_iso=date_from.isoformat() if date_from else None,
+                    date_to_iso=date_to.isoformat() if date_to else None,
+                    limit=500,
+                    offset=offset,
+                )
+                if not page_rows:
+                    break
+                rows.extend(page_rows)
+                if len(page_rows) < 500:
+                    break
+                offset += len(page_rows)
+            return rows
+
+        async def load_whatsapp_conversion_rows() -> list[dict[str, Any]]:
+            rows: list[dict[str, Any]] = []
+            offset = 0
+            while True:
+                page_rows = await repo.get_prospeccion_campana_whatsapp_metricas_rango(
+                    usuario_token=effective_user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_uuid_value,
+                    date_from_iso=date_from.isoformat() if date_from else None,
+                    date_to_iso=date_to.isoformat() if date_to else None,
+                    limit=500,
+                    offset=offset,
+                )
+                if not page_rows:
+                    break
+                rows.extend(page_rows)
+                if len(page_rows) < 500:
+                    break
+                offset += len(page_rows)
+            return rows
+
+        async def load_whatsapp_rules() -> list[dict[str, Any]]:
+            wa_rows, _wa_total = await repo.list_whatsapp_atribucion_reglas(
+                usuario_token=effective_user_token,
+                limit=500,
+                offset=0,
+                activo=True,
+                include_historial=False,
+            )
+            return wa_rows
+
+        link_rows, template_rows, batch_rows, campaign_conversion_rows, whatsapp_conversion_rows, wa_rules_rows = await asyncio.gather(
+            repo.list_web_sessions_campaign_links(
                 organizacion_id=organizacion_id,
                 utm_campaigns=utm_campaign_values,
                 date_from=date_from,
@@ -41732,38 +41802,37 @@ async def demografia_resumen_v2(
                 source_class=source_class_value,
                 utm_source=utm_source_value,
                 utm_medium=utm_medium_value,
-            )
-            for link_row in link_rows:
-                if not isinstance(link_row, dict):
-                    continue
-                campaign_key = str(link_row.get("utm_campaign") or "").strip().lower()
-                cid_value = str(link_row.get("cid") or "").strip()
-                if not campaign_key or not cid_value or campaign_key in utm_campaign_labels:
-                    continue
-                campaign_name = campaign_name_by_id.get(cid_value)
-                if campaign_name:
-                    utm_campaign_labels[campaign_key] = campaign_name
+            ) if utm_campaign_values else asyncio.sleep(0, result=[]),
+            repo.list_web_sessions_template_links(
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+                utm_campaign=utm_campaign_value,
+                campaign_ids=campaign_ids_filter,
+                template_id=None,
+            ),
+            load_batches(),
+            load_campaign_conversion_rows(),
+            load_whatsapp_conversion_rows(),
+            load_whatsapp_rules(),
+        )
+        for link_row in link_rows:
+            if not isinstance(link_row, dict):
+                continue
+            campaign_key = str(link_row.get("utm_campaign") or "").strip().lower()
+            cid_value = str(link_row.get("cid") or "").strip()
+            if not campaign_key or not cid_value or campaign_key in utm_campaign_labels:
+                continue
+            campaign_name = campaign_name_by_id.get(cid_value)
+            if campaign_name:
+                utm_campaign_labels[campaign_key] = campaign_name
 
         template_options: list[dict[str, Any]] = []
-        campaign_ids_filter: list[UUID] | None = None
-        if campana_uuid_value:
-            campaign_ids_filter = [campana_uuid_value]
-        elif campana_tipo_value and campaign_ids_for_type:
-            campaign_ids_filter = campaign_ids_for_type
-
         template_reference_by_campaign: dict[str, dict[str, Any]] = {}
-        template_rows = await repo.list_web_sessions_template_links(
-            organizacion_id=organizacion_id,
-            date_from=date_from,
-            date_to=date_to,
-            state_code=state_code,
-            source_class=source_class_value,
-            utm_source=utm_source_value,
-            utm_medium=utm_medium_value,
-            utm_campaign=utm_campaign_value,
-            campaign_ids=campaign_ids_filter,
-            template_id=None,
-        )
         template_totals: dict[str, int] = {}
         traffic_campaign_totals: dict[str, int] = {}
         traffic_template_totals: dict[tuple[str, str], int] = {}
@@ -41798,19 +41867,6 @@ async def demografia_resumen_v2(
             traffic_template_key = (cid_value, tid_value)
             traffic_template_totals[traffic_template_key] = traffic_template_totals.get(traffic_template_key, 0) + 1
 
-        # Completa el catálogo con plantillas usadas en campañas/lotes de prospección
-        # (principalmente WhatsApp), ya que el select de "Plantilla captada" también
-        # se usa en la tabla de Conversaciones y no debe depender solo de web_sessions.
-        try:
-            batch_rows, _batch_total = await repo.list_contact_batches(
-                usuario_token=effective_user_token,
-                limit=1000,
-                offset=0,
-                campana_id=campana_uuid_value,
-                order="creado_en.desc,id.desc",
-            )
-        except CRMRepositoryError:
-            batch_rows = []
         campaign_ids_for_type_set = {str(value) for value in campaign_ids_for_type}
         for batch in batch_rows:
             if not isinstance(batch, dict):
@@ -41922,29 +41978,6 @@ async def demografia_resumen_v2(
             )
         traffic_template_rankings.sort(key=lambda item: (-int(item["total"]), str(item["label"])))
 
-        campaign_conversion_rows: list[dict[str, Any]] = []
-        try:
-            conversion_page_size = 500
-            conversion_offset = 0
-            while True:
-                page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-                    usuario_token=effective_user_token,
-                    organizacion_id=organizacion_id,
-                    campana_id=campana_uuid_value,
-                    date_from_iso=date_from.isoformat() if date_from else None,
-                    date_to_iso=date_to.isoformat() if date_to else None,
-                    limit=conversion_page_size,
-                    offset=conversion_offset,
-                )
-                if not page_rows:
-                    break
-                campaign_conversion_rows.extend(page_rows)
-                if len(page_rows) < conversion_page_size:
-                    break
-                conversion_offset += len(page_rows)
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-
         if campana_tipo_value:
             campaign_conversion_rows = [
                 row
@@ -41975,29 +42008,6 @@ async def demografia_resumen_v2(
                 current_template = template_reference_by_campaign.get(campana_id_value)
                 if current_template is None or int(template_candidate["_rank"]) > int(current_template.get("_rank") or 0):
                     template_reference_by_campaign[campana_id_value] = template_candidate
-
-        whatsapp_conversion_rows: list[dict[str, Any]] = []
-        try:
-            whatsapp_page_size = 500
-            whatsapp_offset = 0
-            while True:
-                page_rows = await repo.get_prospeccion_campana_whatsapp_metricas_rango(
-                    usuario_token=effective_user_token,
-                    organizacion_id=organizacion_id,
-                    campana_id=campana_uuid_value,
-                    date_from_iso=date_from.isoformat() if date_from else None,
-                    date_to_iso=date_to.isoformat() if date_to else None,
-                    limit=whatsapp_page_size,
-                    offset=whatsapp_offset,
-                )
-                if not page_rows:
-                    break
-                whatsapp_conversion_rows.extend(page_rows)
-                if len(page_rows) < whatsapp_page_size:
-                    break
-                whatsapp_offset += len(page_rows)
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
         if campana_tipo_value:
             whatsapp_conversion_rows = [
@@ -42152,13 +42162,6 @@ async def demografia_resumen_v2(
             ),
         )
 
-        wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
-            usuario_token=effective_user_token,
-            limit=500,
-            offset=0,
-            activo=True,
-            include_historial=False,
-        )
         wa_canal_options: list[str] = []
         wa_campana_options: list[str] = []
         wa_regla_options: list[dict[str, Any]] = []

@@ -333,6 +333,7 @@ export default async function Page({
     rango,
     desde,
     hasta,
+    includeMap: view !== "overview",
     })
     .then((value) => ({ ok: true as const, value }))
     .catch((error: unknown) => ({

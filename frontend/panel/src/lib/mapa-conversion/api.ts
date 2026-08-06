@@ -482,6 +482,40 @@ function normalizeDemografiaMapResponse(map: DemografiaMapResponse): DemografiaM
   };
 }
 
+function buildEmptyDemografiaMapResponse(
+  nivel: "pais" | "estado" | "municipio",
+  estado: string | null,
+): DemografiaMapResponse {
+  return {
+    ok: true,
+    nivel,
+    estado,
+    range: {},
+    canales: null,
+    etapas: null,
+    totales_leads: {
+      total: 0,
+      abiertas: 0,
+      ganadas: 0,
+      perdidas: 0,
+      webchat_sin_conversacion: 0,
+      webchat_captado: 0,
+      webchat_post_captado: 0,
+    },
+    totales_visitantes: {
+      total: 0,
+      con_chat: 0,
+      sin_chat: 0,
+      webchat_con_chat: 0,
+      webchat_sin_chat: 0,
+    },
+    totales_leads_por_canal: {},
+    captado_orden: null,
+    dataset: [],
+    geojson: { type: "FeatureCollection", features: [] },
+  };
+}
+
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
   options: {
@@ -501,6 +535,7 @@ export async function loadDemografiaData(
     rango?: string | null;
     desde?: string | null;
     hasta?: string | null;
+    includeMap?: boolean;
   } = {},
 ): Promise<DemografiaData> {
   const resumenParams: DemografiaQueryParams = { nivel };
@@ -576,10 +611,14 @@ export async function loadDemografiaData(
 
   const [summary, map] = await Promise.all([
     callDemografiaEndpoint<DemografiaSummaryResponse>("resumen-v2", resumenParams),
-    callDemografiaEndpoint<DemografiaMapResponse>("mapa-v2", mapaParams),
+    options.includeMap === false
+      ? Promise.resolve<DemografiaMapResponse | null>(null)
+      : callDemografiaEndpoint<DemografiaMapResponse>("mapa-v2", mapaParams),
   ]);
   const normalizedSummary = normalizeDemografiaSummaryResponse(summary);
-  const normalizedMap = normalizeDemografiaMapResponse(map);
+  const normalizedMap = normalizeDemografiaMapResponse(
+    map ?? buildEmptyDemografiaMapResponse(nivel, options.estado ?? null),
+  );
   return {
     summary: normalizedSummary,
     map: mergeMapWithSummaryVisitors(normalizedMap, normalizedSummary),

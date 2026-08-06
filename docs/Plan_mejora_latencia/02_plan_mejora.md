@@ -201,6 +201,13 @@ Resultado esperado:
 Resultado esperado:
 - Menor sobrecosto por request de listado.
 
+### Avance adicional (2026-08-06) - Demografía mapa de conversión
+
+- Se confirmó en `logs/api.log` que `demografia.resumen_v2` estaba tardando entre `4.5 s` y `13.1 s` en cache miss.
+- El principal costo estaba concentrado en `catalogs_ms` (`3.1 s` a `9.6 s`), porque campañas, plantillas, lotes, conversiones y reglas se consultaban en cadena.
+- Se cambiaron esas consultas independientes a ejecución concurrente con `asyncio.gather`, conservando el mismo contrato de respuesta.
+- El mapa conserva su cache y `skip_visitantes=true`; queda pendiente medir después del despliegue el costo de `geojson_ms` y `whatsapp_locations_ms` en cache miss.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo
