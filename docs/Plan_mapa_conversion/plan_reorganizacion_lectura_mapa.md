@@ -73,6 +73,17 @@ Pregunta: ¿que resultado produjo cada campaña?
 
 Si una campaña no tiene ubicacion suficiente, debe mostrar tabla y KPI, no una distribucion geografica inventada.
 
+### Filtros por lectura
+
+Cada lectura debe mostrar solamente los filtros que modifican sus propios datos:
+
+- `Resumen`: periodo, alcance geografico y formas de contacto. No muestra filtros de fuente, UTM, campaña o plantilla.
+- `Trafico web`: periodo, alcance geografico, tipo de visita, origen, medio y campaña UTM. El canal solo se conserva para contextualizar el contacto generado desde WebChat.
+- `Conversaciones`: periodo, alcance geografico, canales, etapas, tipo de campaña, campaña, plantilla y atribución de WhatsApp por canal, campaña o regla de origen.
+- `Campañas`: periodo, alcance geografico, tipo de campaña, campaña y plantilla. No muestra filtros propios de sesiones web ni reglas de atribución de conversaciones.
+
+El cambio de lectura no debe conservar filtros visualmente ajenos al contexto. Los parámetros pueden permanecer en la URL para enlaces compartidos, pero los controles visibles deben corresponder al dominio activo.
+
 No existira una vista independiente llamada `Mapa y embudo`. El mapa debe vivir dentro del contexto que representa:
 
 - mapa de sesiones en `Trafico web`;
@@ -98,6 +109,7 @@ Cada paso debe conservar su propio total, tasa y fuente de verdad.
 - El componente geografico recibe un `mapScope` para no mezclar sesiones, conversaciones y actividad de campaña en colores, totales o tooltips.
 - Se retiro el bloque mixto de KPIs del recorrido normal.
 - Se corrigio la repeticion visual del total en las tarjetas de campañas.
+- Los controles ahora cambian por lectura: resumen compacto, adquisición web, conversaciones multicanal y resultados de campañas.
 
 ## Pendientes
 

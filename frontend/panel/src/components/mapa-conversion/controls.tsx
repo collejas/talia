@@ -51,6 +51,7 @@ const STAGE_OPTIONS = [
 
 const DEFAULT_STAGES = STAGE_OPTIONS.map((item) => item.value);
 type DemografiaControlsProps = {
+  mode?: "overview" | "traffic" | "conversations" | "campaigns";
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
   etapas: string[];
@@ -86,6 +87,7 @@ type DemografiaControlsProps = {
 };
 
 export function DemografiaControls({
+  mode = "overview",
   nivel,
   canales,
   etapas,
@@ -114,6 +116,9 @@ export function DemografiaControls({
   hasta,
   className,
 }: DemografiaControlsProps) {
+  const showTrafficFilters = mode === "traffic";
+  const showConversationFilters = mode === "conversations";
+  const showCampaignFilters = mode === "campaigns";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [desdeDraft, setDesdeDraft] = React.useState(desde ?? "");
@@ -290,11 +295,14 @@ export function DemografiaControls({
       <div className="border-b px-3 py-3 lg:px-4">
         <div className="flex items-center gap-2 text-sm font-medium text-card-foreground/80">
           <IconFilter className="size-4" />
-          Filtros de demografía
+          Filtros de esta vista
         </div>
       </div>
       <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto px-3 py-3 lg:px-4">
-        <div className="grid h-full gap-3 xl:grid-cols-3 xl:items-stretch">
+        <div className={cn(
+          "grid h-full gap-3 xl:items-stretch",
+          mode === "overview" ? "xl:grid-cols-2" : "xl:grid-cols-3",
+        )}>
           <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconWorld className="size-4" />
@@ -332,7 +340,7 @@ export function DemografiaControls({
                 </Select>
               </div>
 
-              <div className="space-y-1">
+              {mode !== "campaigns" ? <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Formas de contacto visibles
                 </p>
@@ -398,9 +406,9 @@ export function DemografiaControls({
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </div> : null}
 
-              <div className="space-y-1">
+              {mode === "conversations" || mode === "campaigns" ? <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Etapas de avance
                 </p>
@@ -435,9 +443,9 @@ export function DemografiaControls({
                     </DropdownMenuCheckboxItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </div> : null}
 
-              <div className="space-y-1">
+              {mode !== "overview" ? <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Color del mapa
                 </p>
@@ -461,16 +469,17 @@ export function DemografiaControls({
                     Canal predominante
                   </Button>
                 </div>
-              </div>
+              </div> : null}
             </div>
           </section>
 
           <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconWorld className="size-4" />
-              Visitas al sitio
+              {mode === "traffic" ? "Tráfico web" : "Periodo"}
             </div>
             <div className="grid gap-3">
+              {showTrafficFilters ? <>
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Tipo de visita
@@ -577,6 +586,8 @@ export function DemografiaControls({
                 </Select>
               </div>
 
+              </> : null}
+
               <div className="grid gap-3">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -639,10 +650,10 @@ export function DemografiaControls({
             </div>
           </section>
 
-          <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
+          {showConversationFilters || showCampaignFilters ? <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconMessageCircle className="size-4" />
-              Conversaciones y promociones
+              {showCampaignFilters ? "Campañas" : "Conversaciones"}
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
@@ -728,6 +739,7 @@ export function DemografiaControls({
                 </div>
               </div>
 
+              {showConversationFilters ? <>
               <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -814,12 +826,13 @@ export function DemografiaControls({
                   </SelectContent>
                 </Select>
               </div>
+              </> : null}
 
               <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters} className="h-8">
                 Limpiar filtros
               </Button>
             </div>
-          </section>
+          </section> : null}
         </div>
       </div>
     </div>

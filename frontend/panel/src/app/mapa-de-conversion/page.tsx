@@ -538,7 +538,26 @@ export default async function Page({
     return null;
   })();
   const viewHref = (nextView: PageView) => {
-    const query = buildQueryString({ ...params, vista: nextView });
+    const nextParams: PageSearchParams = { ...params, vista: nextView };
+    const removeKeys = (keys: string[]) => {
+      for (const key of keys) delete nextParams[key];
+    };
+    if (nextView !== "traffic") {
+      removeKeys(["source_class", "utm_source", "utm_medium", "utm_campaign"]);
+    }
+    if (nextView !== "conversations" && nextView !== "campaigns") {
+      removeKeys(["campana_id", "campana_tipo", "template_id"]);
+    }
+    if (nextView !== "conversations") {
+      removeKeys(["wa_canal_publicitario", "wa_campana_publicitaria", "wa_regla_id"]);
+    }
+    if (nextView !== "conversations" && nextView !== "campaigns") {
+      removeKeys(["etapas"]);
+    }
+    if (nextView === "overview") {
+      removeKeys(["color"]);
+    }
+    const query = buildQueryString(nextParams);
     return query ? `?${query}` : "?vista=overview";
   };
   return (
@@ -601,6 +620,7 @@ export default async function Page({
               <div className="px-4 lg:px-6">
                 <div className={view !== "overview" ? "grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch" : ""}>
                   <DemografiaControls
+                    mode={view}
                     nivel={nivel}
                     canales={canalesSelected}
                     etapas={etapas}
