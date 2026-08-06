@@ -14357,9 +14357,14 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
+        rpc_name = (
+            "/rest/v1/rpc/panel_inbox_threads_grouped"
+            if not channel_value or channel_value == "whatsapp"
+            else "/rest/v1/rpc/panel_inbox_threads"
+        )
         resp = await self._request_with_user(
             "POST",
-            "/rest/v1/rpc/panel_inbox_threads",
+            rpc_name,
             token=usuario_token,
             json=body,
         )

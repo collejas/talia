@@ -280,6 +280,21 @@ function fingerprintMessages(items: InboxMessage[]): string {
     .join("::");
 }
 
+function combineMessageHistories(histories: InboxMessage[][]): InboxMessage[] {
+  const byId = new Map<string, InboxMessage>();
+  histories.flat().forEach((message) => {
+    const key = message.id ?? `${message.timestamp ?? ""}|${message.body?.[0] ?? ""}`;
+    if (!byId.has(key)) {
+      byId.set(key, message);
+    }
+  });
+  return Array.from(byId.values()).sort((left, right) => {
+    const leftTime = Date.parse(left.timestamp ?? "");
+    const rightTime = Date.parse(right.timestamp ?? "");
+    return (Number.isNaN(leftTime) ? 0 : leftTime) - (Number.isNaN(rightTime) ? 0 : rightTime);
+  });
+}
+
 function parseReplyPayload(raw: string): InboxReplyPayload {
   if (!raw) return {};
   try {
@@ -1394,18 +1409,21 @@ export function InboxSplitView({
           );
           return;
         }
-        const response = await fetch(`/api/inbox/${conversationId}/messages?limit=100`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          messagesPollingDelayRef.current = Math.min(
-            MESSAGES_POLL_MAX_MS,
-            Math.trunc(messagesPollingDelayRef.current * 1.5),
-          );
-          return;
-        }
-        const payload = (await response.json()) as { messages?: InboxMessage[] };
-        const messages = Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
+        const selected = threadItems.find((thread) => thread.id === conversationId);
+        const conversationIds = Array.from(
+          new Set([conversationId, ...(selected?.conversationHistory ?? [])].filter(Boolean)),
+        );
+        const histories = await Promise.all(
+          conversationIds.map(async (id) => {
+            const response = await fetch(`/api/inbox/${id}/messages?limit=100`, {
+              cache: "no-store",
+            });
+            if (!response.ok) return [];
+            const payload = (await response.json()) as { messages?: InboxMessage[] };
+            return Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
+          }),
+        );
+        const messages = combineMessageHistories(histories);
         const fingerprint = fingerprintMessages(messages);
         if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
           messagesPollingDelayRef.current = Math.min(
@@ -1439,7 +1457,7 @@ export function InboxSplitView({
         messagesRefreshingRef.current = null;
       }
     },
-    [pendingAttachments.length, uploadingAttachments, sending],
+    [pendingAttachments.length, threadItems, uploadingAttachments, sending],
   );
 
   const handleAttachmentUpload = React.useCallback(
@@ -1643,9 +1661,12 @@ export function InboxSplitView({
         const messages = extractMessages(payload);
         setPendingAttachments([]);
         setAttachmentError(null);
+        const mergedMessages = messages.length
+          ? combineMessageHistories([currentMessages, messages])
+          : currentMessages;
         if (messages.length) {
-          setCurrentMessages(messages);
-          lastMessagesFingerprintRef.current = fingerprintMessages(messages);
+          setCurrentMessages(mergedMessages);
+          lastMessagesFingerprintRef.current = fingerprintMessages(mergedMessages);
         }
         setThreadItems((current) =>
           current.map((thread) => {
@@ -1659,7 +1680,7 @@ export function InboxSplitView({
                 : thread.manualMode;
             return {
               ...thread,
-              messages: messages.length ? messages : thread.messages,
+              messages: messages.length ? combineMessageHistories([thread.messages, messages]) : thread.messages,
               preview: lastMessage?.body?.[0] ?? thread.preview,
               previewAt: lastMessage?.timestamp ?? thread.previewAt,
               ultimoMensajeEn: lastMessage?.timestamp ?? thread.ultimoMensajeEn,
@@ -1678,7 +1699,7 @@ export function InboxSplitView({
         setSending(false);
       }
     },
-    [selectedId, threadItems, manualAgentMetadata],
+    [currentMessages, selectedId, threadItems, manualAgentMetadata],
   );
 
   const handleToggleManualMode = React.useCallback(async () => {
