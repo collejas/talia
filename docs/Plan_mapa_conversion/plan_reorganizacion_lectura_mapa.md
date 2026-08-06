@@ -7,8 +7,7 @@ Fecha: 2026-08-06
 El plan maestro separo fuentes de datos, pero la pantalla siguio presentando en un mismo recorrido:
 
 - trafico web y sesiones;
-- campañas de correo;
-- campañas de WhatsApp;
+- campañas de correo y WhatsApp;
 - conversaciones WebChat, WhatsApp, correo y voz;
 - CTAs y frases de atribucion;
 - ubicaciones geograficas;
@@ -18,57 +17,82 @@ La separacion tecnica no fue suficiente para que el usuario entendiera que cada 
 
 ## Nueva estructura de lectura
 
-La vista usa cuatro lecturas excluyentes, con los mismos filtros:
+La vista usara cuatro lecturas excluyentes, con filtros propios y un resumen transversal.
 
 ### Resumen
 
-Pregunta: ¿que paso en general?
+Pregunta: ¿cual es el estado general?
 
-- sesiones web;
-- sesiones con contacto;
-- personas unicas;
+El resumen no debe repetir el detalle de `Trafico web`. Debe condensar los tres dominios principales:
+
+- trafico web total;
+- contactos y personas unicas;
+- conversaciones por canal;
+- oportunidades;
 - tasa de contacto;
-- sesiones por origen.
+- tasa de conversion;
+- principales fuentes, canales y campañas como indicadores compactos.
+
+No debe mostrar listados ni las graficas detalladas de fuentes, campañas o plantillas.
 
 ### Trafico web
 
-Pregunta: ¿de donde llegaron las visitas?
+Pregunta: ¿de donde llegaron las visitas al sitio?
 
-- fuentes y medios;
-- campañas de correo que generaron sesiones;
-- plantillas de correo que generaron sesiones;
-- referencias externas;
-- detalle de sesiones web.
+- sesiones web;
+- origen de sesion: busqueda, referido, otro sitio, campaña, asistente digital, visita directa y otros;
+- fuente, medio, campaña y plantilla;
+- KPI de sesiones, personas identificadas y contacto generado desde WebChat;
+- mapa geografico de las sesiones web;
+- filtros por tipo de sesion, referencia, campaña, medio, plantilla y periodo;
+- listado de visitas web;
+- pais, estado o municipio de procedencia.
 
 ### Conversaciones
 
-Pregunta: ¿quien inicio o respondio una conversacion?
+Pregunta: ¿quien inicio o respondio una conversacion y desde donde?
 
-- WebChat;
-- WhatsApp;
-- correo;
-- voz;
-- atribucion WhatsApp por canal;
-- oportunidades de WhatsApp por campaña y plantilla;
-- detalle de conversaciones.
+- mapa geografico de conversaciones, separado del mapa de visitas web;
+- WebChat, WhatsApp, correo y voz como canales independientes;
+- conversaciones iniciadas, respondidas, contactos y oportunidades;
+- conversiones derivadas de conversaciones;
+- campaña, CTA o regla de atribucion cuando exista;
+- filtros por canal, campaña, CTA, ubicacion y periodo;
+- listado de conversaciones.
 
-### Mapa y embudo
+### Campañas
 
-Pregunta: ¿en que ubicacion y etapa se concentran los resultados?
+Pregunta: ¿que resultado produjo cada campaña?
 
-- mapa geografico;
-- tabla por ubicacion;
-- etapas del embudo.
+- correo y WhatsApp como bloques separados;
+- envios, entregas, aperturas, clics y visitas cuando aplique;
+- conversaciones, contactos y oportunidades generadas;
+- campaña y plantilla sin mezclar identidades reutilizadas;
+- filtros por canal, campaña, plantilla, ubicacion y periodo;
+- mapa solamente cuando exista ubicacion confiable de los resultados.
 
-No debe mostrar rankings de campañas ni detalle de conversaciones dentro de esta lectura.
+Si una campaña no tiene ubicacion suficiente, debe mostrar tabla y KPI, no una distribucion geografica inventada.
+
+No existira una vista independiente llamada `Mapa y embudo`. El mapa debe vivir dentro del contexto que representa:
+
+- mapa de sesiones en `Trafico web`;
+- mapa de conversaciones en `Conversaciones`;
+- mapa de resultados de campaña en `Campañas`, solo con trazabilidad geografica.
 
 ## Regla de producto
 
-Una visita, una conversacion, un contacto y una oportunidad son eventos diferentes. La UI no debe ponerlos en la misma tarjeta ni usar una misma palabra, como conversion, para todos ellos.
+Una visita, un contacto, una conversacion y una oportunidad son eventos diferentes. La UI no debe ponerlos en la misma tarjeta ni usar una misma palabra, como conversion, para todos ellos.
+
+El embudo semantico sera:
+
+`Visita -> Contacto -> Conversacion -> Oportunidad`
+
+Cada paso debe conservar su propio total, tasa y fuente de verdad.
 
 ## Cambios aplicados
 
-- Se agregaron las lecturas `Resumen`, `Trafico web`, `Conversaciones` y `Mapa y embudo`.
+- Se agregaron inicialmente las lecturas `Resumen`, `Trafico web`, `Conversaciones` y `Mapa y embudo`.
+- La propuesta actual reemplaza `Mapa y embudo` por `Campañas` y deja el mapa dentro de cada dominio.
 - `AcquisitionSummary` ahora renderiza bloques segun la lectura seleccionada.
 - Las tablas diferidas cargan solo sesiones web o solo conversaciones segun la lectura activa.
 - Se retiro el bloque mixto de KPIs del recorrido normal.
@@ -76,6 +100,7 @@ Una visita, una conversacion, un contacto y una oportunidad son eventos diferent
 
 ## Pendientes
 
-- Validar visualmente cada lectura en desktop y movil.
-- Revisar si el mapa debe tener una capa exclusiva de trafico web y otra exclusiva de conversaciones, en lugar de mostrar ambas en el mismo tooltip.
+- Implementar la lectura `Campañas` como bloque independiente.
+- Separar tecnicamente la consulta geografica de sesiones web, conversaciones y resultados de campaña.
+- Revisar si cada mapa debe tener capas independientes para visitas, contactos, conversaciones y oportunidades.
 - Mantener oportunidades del pipeline como una lectura posterior, no como sinonimo de visita o conversacion.

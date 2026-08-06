@@ -103,6 +103,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 
 - Se inicio una reorganizacion de lectura derivada en `plan_reorganizacion_lectura_mapa.md`: `Resumen`, `Trafico web`, `Conversaciones` y `Mapa y embudo` dejan de presentarse como un recorrido unico mezclado.
 - La vista ahora carga las tablas diferidas segun la lectura activa y no muestra simultaneamente detalle de sesiones web y conversaciones.
+- Se redefinio la arquitectura objetivo: `Resumen` sera un consolidado de trafico, conversaciones y conversiones; `Trafico web` tendra su propio mapa y listado; `Conversaciones` tendra mapa, canales, conversiones y listado; `Campañas` sustituira a `Mapa y embudo` como lectura de resultados de campañas.
 - Se eliminó el refetch duplicado de hasta 5,000 sesiones que `AcquisitionSummary` hacía después de cargar `resumen-v2` y `mapa-v2`; el detalle fila por fila queda diferido en las tablas inferiores.
 - Se aclaró la semántica visual de adquisición: una sesión web atribuida a una promoción es una visita, no un contacto, conversación u oportunidad; la tasa correspondiente se presenta como tasa de contacto.
 - Se aisló la identidad de las plantillas WhatsApp por `campaña + plantilla` para evitar mezclar oportunidades cuando una plantilla se reutiliza en campañas distintas.
