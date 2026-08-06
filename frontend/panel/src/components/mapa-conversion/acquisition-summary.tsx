@@ -27,7 +27,7 @@ type Props = {
   summary: DemografiaSummaryResponse | null;
   visitsPayload?: VisitsPayload | null;
   className?: string;
-  mode?: "overview" | "traffic" | "conversations";
+  mode?: "overview" | "traffic" | "conversations" | "campaigns";
 };
 
 const SOURCE_CLASS_CONFIG: ChartConfig = {
@@ -468,8 +468,45 @@ export function AcquisitionSummary({
     [whatsappCampaignConversionRows],
   );
   const conversationTotals = summary?.visitantes?.totals;
+  const emailVisitsTotal = correoCampaignRows.reduce((total, row) => total + row.total, 0);
+  const whatsappOpportunitiesTotal = whatsappCampaignConversionRows.reduce(
+    (total, row) => total + row.total,
+    0,
+  );
   return (
     <section className={cn("grid gap-4", className)}>
+      {mode === "overview" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricTile
+          title="Sesiones web"
+          value={formatNumber(totalSessions)}
+          helper="Visitas registradas"
+        />
+        <MetricTile
+          title="Personas únicas"
+          value={formatNumber(uniqueContacts)}
+          helper="Personas identificadas"
+        />
+        <MetricTile
+          title="Conversaciones"
+          value={formatNumber(
+            toNumber(conversationTotals?.sesiones_webchat_total) +
+              toNumber(conversationTotals?.conversaciones_whatsapp) +
+              toNumber(conversationTotals?.conversaciones_correo) +
+              toNumber(conversationTotals?.conversaciones_voz),
+          )}
+          helper="Todos los canales"
+        />
+        <MetricTile
+          title="Leads en embudo"
+          value={formatNumber(toNumber(summary?.leads?.totals?.total))}
+          helper="Registros comerciales"
+        />
+        <MetricTile
+          title="Tasa de contacto"
+          value={formatPercent(conversionRate)}
+          helper="Contacto sobre sesiones web"
+        />
+      </div> : null}
       {mode === "conversations" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricTile
           title="WebChat"
@@ -492,7 +529,29 @@ export function AcquisitionSummary({
           helper="Conversaciones registradas"
         />
       </div> : null}
-      {mode !== "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      {mode === "campaigns" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile
+          title="Campañas con tráfico"
+          value={formatNumber(correoCampaignRows.length)}
+          helper="Campañas de correo con sesiones web"
+        />
+        <MetricTile
+          title="Visitas desde correo"
+          value={formatNumber(emailVisitsTotal)}
+          helper="Sesiones web atribuidas a correo"
+        />
+        <MetricTile
+          title="Campañas WhatsApp"
+          value={formatNumber(whatsappCampaignConversionRows.length)}
+          helper="Campañas con oportunidades atribuidas"
+        />
+        <MetricTile
+          title="Oportunidades WhatsApp"
+          value={formatNumber(whatsappOpportunitiesTotal)}
+          helper="Oportunidades atribuidas a campañas"
+        />
+      </div> : null}
+      {mode === "traffic" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Sesiones por origen</CardTitle>
@@ -763,7 +822,7 @@ export function AcquisitionSummary({
         </Card> : null}
       </div> : null}
 
-      {mode === "traffic" ? <div className="grid gap-4 xl:grid-cols-2">
+      {mode === "traffic" || mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={correoCampaignRows}
           colorMap={correoCampaignColorMap}
@@ -783,7 +842,7 @@ export function AcquisitionSummary({
         />
       </div> : null}
 
-      {mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-2">
+      {mode === "conversations" || mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={whatsappCampaignConversionRows}
           colorMap={whatsappCampaignColorMap}

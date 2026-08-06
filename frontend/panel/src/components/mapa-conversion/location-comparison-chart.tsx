@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const CHANNEL_KEYS = ["webchat", "whatsapp", "voz", "correo"] as const;
 type ChannelKey = (typeof CHANNEL_KEYS)[number];
+type MapScope = "traffic" | "conversations" | "campaigns" | "all";
 type RgbTuple = [number, number, number];
 
 const CHANNEL_THEME_VARS: Record<ChannelKey, string> = {
@@ -37,6 +38,7 @@ export type LocationComparisonChartProps = {
   stageKeys?: string[];
   attributionFilterActive?: boolean;
   showSummary?: boolean;
+  mapScope?: MapScope;
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -375,6 +377,19 @@ function resolveFilteredEntryTotal(
   return total;
 }
 
+function resolveConversationEntryTotal(
+  entry: DemografiaMapResponse["dataset"][number],
+  allowedChannels?: Set<ChannelKey>,
+): number {
+  const active = allowedChannels?.size ? allowedChannels : new Set(CHANNEL_KEYS);
+  let total = 0;
+  if (active.has("webchat")) total += entry.conversacion_totales?.con_conversacion ?? 0;
+  if (active.has("whatsapp")) total += entry.conversation_channels?.conversaciones_whatsapp ?? 0;
+  if (active.has("voz")) total += entry.conversation_channels?.conversaciones_voz ?? 0;
+  if (active.has("correo")) total += entry.conversation_channels?.conversaciones_correo ?? 0;
+  return total;
+}
+
 function resolveEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
   allowLeadFallback: boolean = true,
@@ -411,6 +426,7 @@ export function LocationComparisonChart({
   stageKeys: stageKeysProp,
   attributionFilterActive = false,
   showSummary = true,
+  mapScope = "all",
 }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -429,6 +445,13 @@ export function LocationComparisonChart({
   const showConversationMetrics = activeChannelSet.has("webchat");
   const showWhatsappConversationMetrics = activeChannelSet.has("whatsapp");
   const allowLeadFallback = !attributionFilterActive;
+  const resolveScopedEntryTotal = useCallback(
+    (entry: DemografiaMapResponse["dataset"][number]) =>
+      mapScope === "conversations"
+        ? resolveConversationEntryTotal(entry, activeChannelSet)
+        : resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback),
+    [activeChannelSet, allowLeadFallback, mapScope],
+  );
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
   const themeVersion = useThemeVersion();
   const channelColors = resolveThemeChannelColors();
@@ -452,7 +475,7 @@ export function LocationComparisonChart({
       data.some(
         (entry) =>
           entry.key === manualSelectedKey &&
-          resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) > 0,
+          resolveScopedEntryTotal(entry) > 0,
       )
     ) {
       return manualSelectedKey;
@@ -461,11 +484,11 @@ export function LocationComparisonChart({
       return null;
     }
     return (
-      data.find((entry) => resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) > 0)?.key ??
+      data.find((entry) => resolveScopedEntryTotal(entry) > 0)?.key ??
       data[0]?.key ??
       null
     );
-  }, [activeChannelSet, allowLeadFallback, data, manualSelectedKey, nivel]);
+  }, [data, manualSelectedKey, nivel, resolveScopedEntryTotal]);
 
   const enhancedGeojson = useMemo<GeoJSONType | null>(() => {
     if (!shape || typeof shape !== "object") return null;
@@ -506,8 +529,8 @@ export function LocationComparisonChart({
 
   const mapLayerKey = useMemo(() => {
     if (!enhancedGeojson) return `empty-${activeChannels.join("|")}`;
-    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}-${themeVersion}`;
-  }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson, themeVersion]);
+    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${mapScope}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}-${themeVersion}`;
+  }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson, mapScope, themeVersion]);
 
   const maxTotal = useMemo(() => {
     return (
@@ -515,23 +538,23 @@ export function LocationComparisonChart({
         (max, entry) =>
           Math.max(
             max,
-            resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback),
+          resolveScopedEntryTotal(entry),
           ),
         0,
       ) || 1
     );
-  }, [activeChannelSet, allowLeadFallback, data]);
+  }, [data, resolveScopedEntryTotal]);
 
   const keysWithData = useMemo(() => {
     const set = new Set<string>();
     for (const entry of data) {
-      if (resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) <= 0) continue;
+      if (resolveScopedEntryTotal(entry) <= 0) continue;
       if (entry.key) {
         set.add(entry.key);
       }
     }
     return set;
-  }, [activeChannelSet, allowLeadFallback, data]);
+  }, [data, resolveScopedEntryTotal]);
 
   const selectedEntry = selectedKey ? datasetMap.get(selectedKey) ?? null : null;
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
@@ -541,7 +564,7 @@ export function LocationComparisonChart({
     [data],
   );
   const unknownVisitsTotal = unknownEntry
-    ? resolveFilteredEntryTotal(unknownEntry, activeChannelSet, allowLeadFallback)
+      ? resolveScopedEntryTotal(unknownEntry)
     : 0;
 
   const stageKeys = useMemo(
@@ -595,7 +618,7 @@ export function LocationComparisonChart({
       const conversation = showConversationMetrics
         ? resolveFilteredConversation(entry, activeChannelSet)
         : { con_conversacion: 0, sin_conversacion: 0 };
-      summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback);
+      summary.totalVisitas += resolveScopedEntryTotal(entry);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
       summary.whatsappConversations += resolveWhatsappConversationTotal(entry, activeChannelSet);
@@ -618,7 +641,7 @@ export function LocationComparisonChart({
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} interacciones · ${locationSubtitle}`;
     return summary;
-  }, [activeChannelSet, aggregatedStages, allowLeadFallback, attributionFilterActive, data, globalStages, showConversationMetrics, stageKeys]);
+  }, [activeChannelSet, aggregatedStages, attributionFilterActive, data, globalStages, resolveScopedEntryTotal, showConversationMetrics, stageKeys]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
@@ -641,8 +664,8 @@ export function LocationComparisonChart({
     return {
       scope: "location",
       title: activeEntry.name,
-      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback))} interacciones`,
-      totalVisitas: resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback),
+      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveScopedEntryTotal(activeEntry))} interacciones`,
+      totalVisitas: resolveScopedEntryTotal(activeEntry),
       conversation: {
         con_conversacion: conversation.con_conversacion ?? 0,
         sin_conversacion: conversation.sin_conversacion ?? 0,
@@ -659,8 +682,8 @@ export function LocationComparisonChart({
   }, [
     activeChannelSet,
     activeEntry,
-    allowLeadFallback,
     attributionFilterActive,
+    resolveScopedEntryTotal,
     showConversationMetrics,
     showWhatsappConversationMetrics,
     stageKeys,
@@ -706,7 +729,7 @@ export function LocationComparisonChart({
       const primaryEntry = entries[0];
       const total = entries.reduce(
         (acc, current) =>
-          acc + resolveFilteredEntryTotal(current, activeChannelSet, allowLeadFallback),
+          acc + resolveScopedEntryTotal(current),
         0,
       );
       const isSelected = entries.some(
@@ -756,7 +779,7 @@ export function LocationComparisonChart({
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [activeChannelSet, allowLeadFallback, channelColors, colorMode, datasetMap, hoveredKey, maxTotal, nivel, selectedKey],
+    [activeChannelSet, channelColors, colorMode, datasetMap, hoveredKey, maxTotal, nivel, resolveScopedEntryTotal, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -800,27 +823,9 @@ export function LocationComparisonChart({
 
       const aggregateTotal = entries.reduce(
         (acc, current) =>
-          acc + resolveFilteredEntryTotal(current, activeChannelSet, allowLeadFallback),
+          acc + resolveScopedEntryTotal(current),
         0,
       );
-      const aggregateByChannel = {
-        webchat: entries.reduce(
-          (acc, current) => acc + resolveChannelTotal(current, "webchat", activeChannelSet),
-          0,
-        ),
-        whatsapp: entries.reduce(
-          (acc, current) => acc + resolveChannelTotal(current, "whatsapp", activeChannelSet),
-          0,
-        ),
-        voz: entries.reduce(
-          (acc, current) => acc + resolveChannelTotal(current, "voz", activeChannelSet),
-          0,
-        ),
-        correo: entries.reduce(
-          (acc, current) => acc + resolveChannelTotal(current, "correo", activeChannelSet),
-          0,
-        ),
-      };
       const conversation = entries.reduce(
         (acc, current) => {
           const currentConversation = resolveFilteredConversation(current, activeChannelSet);
@@ -835,48 +840,58 @@ export function LocationComparisonChart({
         (acc, current) => acc + resolveWhatsappConversationTotal(current, activeChannelSet),
         0,
       );
+      const conversationByChannel = {
+        webchat: conversation.con_conversacion,
+        whatsapp: whatsappConversationTotal,
+        voz: entries.reduce(
+          (acc, current) => acc + (current.conversation_channels?.conversaciones_voz ?? 0),
+          0,
+        ),
+        correo: entries.reduce(
+          (acc, current) => acc + (current.conversation_channels?.conversaciones_correo ?? 0),
+          0,
+        ),
+      };
       const rows: MapTooltipRow[] = [
         {
           key: "total",
-          label: "Visitas totales",
+          label: mapScope === "traffic" ? "Visitas totales" : mapScope === "conversations" ? "Conversaciones totales" : "Actividad de campaña",
           value: formatNumber(aggregateTotal),
           color: "var(--chart-1)",
         },
       ];
-      for (const channel of displayedChannelKeys) {
-        const total = aggregateByChannel[channel];
+      if (mapScope === "traffic") {
         rows.push({
-          key: `channel-${channel}`,
-          label: `Total ${CHANNEL_LABELS[channel]}`,
-          value: formatNumber(total),
-          monospace: true,
-          color: resolveChannelColor(channel, channelColors),
+          key: "conversationYes",
+          label: "Visitas que iniciaron WebChat",
+          value: formatNumber(conversation.con_conversacion ?? 0),
+          color: "var(--chart-2)",
+          indent: true,
         });
-        if (showConversationMetrics && channel === "webchat") {
-          rows.push(
-            {
-              key: "conversationYes",
-              label: "Con conversación",
-              value: formatNumber(conversation.con_conversacion ?? 0),
-              color: "var(--chart-2)",
-              indent: true,
-            },
-            {
-              key: "conversationNo",
-              label: "Sin conversación",
-              value: formatNumber(conversation.sin_conversacion ?? 0),
-              color: "var(--chart-3)",
-              indent: true,
-            },
-          );
-        }
-        if (showWhatsappConversationMetrics && channel === "whatsapp") {
+      } else if (mapScope === "conversations") {
+        for (const channel of displayedChannelKeys) {
           rows.push({
-            key: "whatsappConversation",
-            label: "Conversaciones WhatsApp",
-            value: formatNumber(whatsappConversationTotal),
+            key: `channel-${channel}`,
+            label: CHANNEL_LABELS[channel],
+            value: formatNumber(conversationByChannel[channel]),
+            monospace: true,
+            color: resolveChannelColor(channel, channelColors),
+          });
+        }
+      } else {
+        for (const stageKey of stageKeys) {
+          const total = entries.reduce(
+            (acc, current) =>
+              acc + (((current.etapas_totales || {}) as Record<string, number | undefined>)[stageKey] ?? 0),
+            0,
+          );
+          if (total <= 0) continue;
+          rows.push({
+            key: `stage-${stageKey}`,
+            label: MAPA_STAGE_LABELS[stageKey] ?? formatStageLabel(stageKey),
+            value: formatNumber(total),
+            monospace: true,
             color: "var(--chart-2)",
-            indent: true,
           });
         }
       }
@@ -898,14 +913,14 @@ export function LocationComparisonChart({
     },
     [
       activeChannelSet,
-      allowLeadFallback,
       channelColors,
       datasetMap,
       displayedChannelKeys,
       handleFeatureClick,
+      mapScope,
+      resolveScopedEntryTotal,
       setHoveredKey,
-      showConversationMetrics,
-      showWhatsappConversationMetrics,
+      stageKeys,
     ],
   );
 

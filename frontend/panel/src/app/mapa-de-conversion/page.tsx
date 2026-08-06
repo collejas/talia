@@ -212,7 +212,7 @@ function buildQueryString(params: PageSearchParams): string {
 }
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
-type PageView = "overview" | "traffic" | "conversations" | "map";
+type PageView = "overview" | "traffic" | "conversations" | "campaigns";
 
 export default async function Page({
   searchParams,
@@ -223,7 +223,7 @@ export default async function Page({
   const requestedView = typeof params.vista === "string" ? params.vista : "overview";
   const view: PageView = requestedView === "traffic"
     || requestedView === "conversations"
-    || requestedView === "map"
+    || requestedView === "campaigns"
     ? requestedView
     : "overview";
   const exportQueryString = buildQueryString(params);
@@ -562,7 +562,7 @@ export default async function Page({
                     ["overview", "Resumen", "Qué está pasando"],
                     ["traffic", "Tráfico web", "De dónde llegan"],
                     ["conversations", "Conversaciones", "Quién respondió"],
-                    ["map", "Mapa y embudo", "Dónde y en qué etapa"],
+                    ["campaigns", "Campañas", "Qué resultado producen"],
                   ] as Array<[PageView, string, string]>).map(([tab, label, helper]) => (
                     <Link
                       key={tab}
@@ -599,7 +599,7 @@ export default async function Page({
                 </div>
               </div>
               <div className="px-4 lg:px-6">
-                <div className={view === "map" ? "grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch" : ""}>
+                <div className={view !== "overview" ? "grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch" : ""}>
                   <DemografiaControls
                     nivel={nivel}
                     canales={canalesSelected}
@@ -627,9 +627,9 @@ export default async function Page({
                     rango={rango}
                     desde={desde}
                     hasta={hasta}
-                    className={view === "map" ? "xl:min-h-[540px]" : ""}
+                    className={view === "campaigns" ? "xl:min-h-[540px]" : ""}
                   />
-                  {view === "map" ? <>
+                  {view !== "overview" ? <>
                   <section className="flex h-[560px] flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm">
                     <div className="border-b px-4 py-3">
                       <p className="text-sm font-medium text-card-foreground/80">Mapa</p>
@@ -640,6 +640,7 @@ export default async function Page({
                         nivel={nivelChart}
                         shape={mapShape}
                         colorMode={colorMode}
+                        mapScope={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : "campaigns"}
                         globalStages={globalStages}
                         channelFilter={canalesSelected}
                         stageKeys={stageKeys}
@@ -655,12 +656,16 @@ export default async function Page({
                     <div className="min-h-0 flex-1 overflow-y-auto p-4">
                       <div className="flex flex-col gap-4 text-sm">
                         <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                          El mapa separa tráfico web, conversaciones por canal, atribución WhatsApp y etapas de conversión. No mide envíos ni entregas de campañas.
+                          {view === "traffic"
+                            ? "Mapa de sesiones web. Las zonas representan el volumen de visitas del tráfico filtrado."
+                            : view === "conversations"
+                              ? "Mapa de conversaciones. Las zonas representan comunicaciones registradas por canal."
+                              : "Mapa de campañas. Para una lectura geográfica precisa, selecciona una campaña con ubicación trazable."}
                         </div>
 
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {mapKpisData.nivelLabel} con más visitas:
+                            {mapKpisData.nivelLabel} con más actividad:
                           </span>
                           <span className="text-lg font-semibold leading-tight">
                             {mapKpisData.topLocationName || "Sin datos"}
@@ -691,13 +696,13 @@ export default async function Page({
                 </div>
               </div>
               <SessionRecovery errors={errores} />
-              {view !== "map" ? <div className="px-4 lg:px-6">
+              {view !== "overview" ? <div className="px-4 lg:px-6">
                 <AcquisitionSummary
                   summary={demografiaResponse?.summary ?? null}
-                  mode={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : "overview"}
+                  mode={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : "campaigns"}
                 />
               </div> : null}
-              {view === "map" && tableData.length && demografiaResponse ? (
+              {view !== "overview" && tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
                   <MapaConversionTableClient
                     data={tableData}

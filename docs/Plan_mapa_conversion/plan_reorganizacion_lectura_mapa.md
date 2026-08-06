@@ -91,16 +91,15 @@ Cada paso debe conservar su propio total, tasa y fuente de verdad.
 
 ## Cambios aplicados
 
-- Se agregaron inicialmente las lecturas `Resumen`, `Trafico web`, `Conversaciones` y `Mapa y embudo`.
-- La propuesta actual reemplaza `Mapa y embudo` por `Campañas` y deja el mapa dentro de cada dominio.
+- Se reemplazo la lectura inicial `Mapa y embudo` por `Campañas` y se dejo el mapa dentro de cada dominio.
+- Se implementaron las lecturas `Resumen`, `Trafico web`, `Conversaciones` y `Campañas`.
 - `AcquisitionSummary` ahora renderiza bloques segun la lectura seleccionada.
 - Las tablas diferidas cargan solo sesiones web o solo conversaciones segun la lectura activa.
+- El componente geografico recibe un `mapScope` para no mezclar sesiones, conversaciones y actividad de campaña en colores, totales o tooltips.
 - Se retiro el bloque mixto de KPIs del recorrido normal.
 - Se corrigio la repeticion visual del total en las tarjetas de campañas.
 
 ## Pendientes
 
-- Implementar la lectura `Campañas` como bloque independiente.
-- Separar tecnicamente la consulta geografica de sesiones web, conversaciones y resultados de campaña.
 - Revisar si cada mapa debe tener capas independientes para visitas, contactos, conversaciones y oportunidades.
 - Mantener oportunidades del pipeline como una lectura posterior, no como sinonimo de visita o conversacion.
