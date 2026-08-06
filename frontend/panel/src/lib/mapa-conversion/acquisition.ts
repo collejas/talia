@@ -471,19 +471,27 @@ export function buildAcquisitionMetrics(
     });
   }
 
+  const contactMetrics = summary?.traffic_contact_metrics;
   const sessionsFromVisits = visitsPayload?.cards?.totalVisits ? toNumber(visitsPayload.cards.totalVisits) : 0;
   const sessionsFromSummary =
+    (contactMetrics?.sessions ?? 0) ||
     toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
     items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
   const convertedFromSummary =
-    toNumber(summary?.visitantes?.totals?.con_chat) ||
-    items.reduce((acc, item) => acc + toNumber(item.con_chat), 0);
+    contactMetrics?.unique_people ??
+    (toNumber(summary?.visitantes?.totals?.con_chat) ||
+      items.reduce((acc, item) => acc + toNumber(item.con_chat), 0));
 
   const sessions = sessionsFromVisits > 0 ? sessionsFromVisits : sessionsFromSummary;
   const convertedFromContacts = Array.from(sourceConvertedTotals.values()).reduce((acc, value) => acc + value, 0);
   const hasDetailedVisits = visitsPayload !== null;
   const uniqueContacts = hasDetailedVisits ? convertedFromContacts : convertedFromSummary;
-  const sessionsWithContact = hasDetailedVisits ? sessionsWithContactFromVisits : null;
+  const sessionsWithContact = hasDetailedVisits
+    ? sessionsWithContactFromVisits
+    : contactMetrics
+      ? toNumber(contactMetrics.sessions_with_contact)
+      : null;
+  const contactRateBase = sessionsWithContact ?? uniqueContacts;
   const emailTrafficRows = aggregateEmailTrafficRows(summary, visitsPayload);
 
   const sourceClassRowsFromVisits = Array.from(sourceBuckets.values()).sort(
@@ -501,7 +509,7 @@ export function buildAcquisitionMetrics(
     totalSessions: sessions,
     sessionsWithContact,
     uniqueContacts,
-    conversionRate: sessions > 0 ? (uniqueContacts / sessions) * 100 : 0,
+    conversionRate: sessions > 0 ? (contactRateBase / sessions) * 100 : 0,
     sourceClassRows,
     referrerRows,
     topUtmRows: aggregateTopUtm(summary),

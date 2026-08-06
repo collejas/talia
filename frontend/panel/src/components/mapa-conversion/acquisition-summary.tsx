@@ -411,6 +411,7 @@ function renderBarValueLabel(props: {
 
 export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
   const hasDetailedVisits = visitsPayload !== null;
+  const hasContactSummary = Boolean(summary?.traffic_contact_metrics);
   const campaignLabels = React.useMemo(() => {
     const labels = new Map<string, string>();
     const fromCatalog = summary?.attribution_catalog?.utm_campaign_labels ?? {};
@@ -557,17 +558,17 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
             />
             <MetricTile
               title="Personas únicas"
-              value={hasDetailedVisits ? formatNumber(uniqueContacts) : "—"}
+              value={hasDetailedVisits || hasContactSummary ? formatNumber(uniqueContacts) : "—"}
               helper={
-                hasDetailedVisits
+                hasDetailedVisits || hasContactSummary
                   ? "Personas deduplicadas aunque tengan varias sesiones"
-                  : "Disponible cuando se carga el detalle de sesiones"
+                  : "No disponible para este filtro"
               }
             />
             <MetricTile
               title="Tasa de contacto"
               value={formatPercent(conversionRate)}
-              helper="Contactos o sesiones con contacto respecto a las sesiones web"
+              helper="Sesiones con contacto respecto a las sesiones web"
             />
           </CardContent>
         </Card>

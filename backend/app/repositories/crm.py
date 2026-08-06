@@ -4372,6 +4372,172 @@ class CRMRepository:
             )
         return [row for row in data if isinstance(row, dict)]
 
+    async def summarize_web_session_contacts(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        state_code: str | None = None,
+        source_class: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        campaign_id: UUID | None = None,
+        template_id: UUID | None = None,
+        limit: int = 5000,
+    ) -> dict[str, int]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "session_id,contacto_id",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if date_from and date_to:
+            params["and"] = (
+                f"(first_seen_at.gte.{date_from.isoformat()},"
+                f"first_seen_at.lt.{date_to.isoformat()})"
+            )
+        elif date_from:
+            params["first_seen_at"] = f"gte.{date_from.isoformat()}"
+        elif date_to:
+            params["first_seen_at"] = f"lt.{date_to.isoformat()}"
+        if state_code:
+            params["cve_ent"] = f"eq.{state_code}"
+        if source_class:
+            params["source_class"] = f"eq.{source_class}"
+        if utm_source:
+            params["utm_source"] = f"eq.{utm_source}"
+        if utm_medium:
+            params["utm_medium"] = f"eq.{utm_medium}"
+        if utm_campaign:
+            params["utm_campaign"] = f"eq.{utm_campaign}"
+        if campaign_id:
+            params["cid"] = f"eq.{campaign_id}"
+        if template_id:
+            params["tid"] = f"eq.{template_id}"
+
+        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        session_rows = resp.json() or []
+        if not isinstance(session_rows, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al resumir web_sessions: {session_rows!r}")
+
+        session_ids = {
+            str(row.get("session_id") or "").strip()
+            for row in session_rows
+            if isinstance(row, dict) and str(row.get("session_id") or "").strip()
+        }
+        if not session_ids:
+            return {"sessions": 0, "sessions_with_contact": 0, "unique_people": 0}
+
+        visitor_params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "session_id,persona_id,contacto_id",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if date_from and date_to:
+            visitor_params["and"] = (
+                f"(registrado_en.gte.{date_from.isoformat()},"
+                f"registrado_en.lt.{date_to.isoformat()})"
+            )
+        elif date_from:
+            visitor_params["registrado_en"] = f"gte.{date_from.isoformat()}"
+        elif date_to:
+            visitor_params["registrado_en"] = f"lt.{date_to.isoformat()}"
+
+        conversation_params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,persona_id,contacto_id",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        message_params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "conversacion_id,datos",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if date_from and date_to:
+            conversation_params["and"] = (
+                f"(iniciada_en.gte.{date_from.isoformat()},"
+                f"iniciada_en.lt.{date_to.isoformat()})"
+            )
+            message_params["and"] = (
+                f"(creado_en.gte.{date_from.isoformat()},"
+                f"creado_en.lt.{date_to.isoformat()})"
+            )
+        elif date_from:
+            conversation_params["iniciada_en"] = f"gte.{date_from.isoformat()}"
+            message_params["creado_en"] = f"gte.{date_from.isoformat()}"
+        elif date_to:
+            conversation_params["iniciada_en"] = f"lt.{date_to.isoformat()}"
+            message_params["creado_en"] = f"lt.{date_to.isoformat()}"
+
+        visitor_resp, conversation_resp, message_resp = await asyncio.gather(
+            self._request("GET", "/rest/v1/webchat_visitantes", params=visitor_params),
+            self._request("GET", "/rest/v1/conversaciones", params=conversation_params),
+            self._request("GET", "/rest/v1/mensajes", params=message_params),
+        )
+        visitor_rows = visitor_resp.json() or []
+        conversation_rows = conversation_resp.json() or []
+        message_rows = message_resp.json() or []
+        if not isinstance(visitor_rows, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al resumir webchat_visitantes: {visitor_rows!r}"
+            )
+        if not isinstance(conversation_rows, list) or not isinstance(message_rows, list):
+            raise CRMRepositoryError("Respuesta inesperada al resumir conversaciones/mensajes")
+
+        visitor_rows_by_session = {
+            str(row.get("session_id") or "").strip(): row
+            for row in visitor_rows
+            if isinstance(row, dict) and str(row.get("session_id") or "").strip() in session_ids
+        }
+        conversations_by_id = {
+            str(row.get("id") or "").strip(): row
+            for row in conversation_rows
+            if isinstance(row, dict) and str(row.get("id") or "").strip()
+        }
+        conversation_contacts_by_session: dict[str, tuple[str, str]] = {}
+        for message in message_rows:
+            if not isinstance(message, dict):
+                continue
+            conversation = conversations_by_id.get(str(message.get("conversacion_id") or "").strip())
+            if not conversation:
+                continue
+            payload = message.get("datos")
+            if not isinstance(payload, dict):
+                continue
+            extra = payload.get("extra")
+            session_id = payload.get("session_id")
+            if isinstance(extra, dict):
+                session_id = session_id or extra.get("session_id")
+            session_id = str(session_id or "").strip()
+            if session_id not in session_ids:
+                continue
+            person_id = str(conversation.get("persona_id") or "").strip().lower()
+            contact_id = str(conversation.get("contacto_id") or "").strip().lower()
+            if person_id or contact_id:
+                conversation_contacts_by_session[session_id] = (person_id, contact_id)
+
+        people = {
+            str(row.get("persona_id") or row.get("contacto_id") or "").strip().lower()
+            for row in visitor_rows_by_session.values()
+            if row.get("persona_id") or row.get("contacto_id")
+        }
+        people.update(
+            person_id or contact_id
+            for person_id, contact_id in conversation_contacts_by_session.values()
+        )
+        sessions_with_contact = {
+            session_id
+            for session_id, row in visitor_rows_by_session.items()
+            if row.get("persona_id") or row.get("contacto_id")
+        }
+        sessions_with_contact.update(conversation_contacts_by_session)
+        return {
+            "sessions": len(session_ids),
+            "sessions_with_contact": len(sessions_with_contact),
+            "unique_people": len(people),
+        }
+
     async def list_contact_envios_by_ids(
         self,
         *,

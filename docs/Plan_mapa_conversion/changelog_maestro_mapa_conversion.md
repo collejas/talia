@@ -109,6 +109,10 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigió la regresión que dejaba vacías las tarjetas de correo al retirar el refetch de sesiones: `resumen-v2` ahora expone rankings de tráfico por `web_sessions.cid` y `web_sessions.tid`.
 - Se dejó de traducir el UTM genérico `cold_outreach` como una campaña concreta; las sesiones sin `cid` o `tid` se muestran como no identificadas.
 - Se dejó de mostrar `campaign` como sitio remitente: `fuentes_top` contiene clases de origen, no hosts de referencia.
+- Se corrigió `Sesiones y contactos` para que `Personas únicas` cruce las sesiones filtradas con `webchat_visitantes` usando `persona_id`/`contacto_id`, en lugar de leer un campo inexistente en `web_sessions`.
+- Se corrigió `Tasa de contacto` para calcular `sesiones con contacto / sesiones totales`; una visita atribuida a una campaña no se cuenta automáticamente como contacto.
+- Cuando no existe asociación a persona/contacto, la vista muestra `0` y no un espacio vacío ni la métrica antigua de chat.
+- Se agregó compatibilidad histórica para sesiones de WebChat anteriores al refactor: se recupera `session_id` desde `mensajes.datos` y se cruza con `conversaciones.persona_id/contacto_id`.
 
 ## 2026-06-27
 

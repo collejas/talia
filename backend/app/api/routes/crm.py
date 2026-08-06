@@ -41582,7 +41582,7 @@ async def demografia_resumen_v2(
 
     try:
         parallel_started = time.perf_counter()
-        leads_payload, visitantes_payload, comparison_visitantes_payload = await asyncio.gather(
+        leads_payload, visitantes_payload, comparison_visitantes_payload, contact_metrics_payload = await asyncio.gather(
             demografia_service.fetch_leads_resumen(
                 nivel=nivel_normalizado,
                 channels=channel_values,
@@ -41627,6 +41627,18 @@ async def demografia_resumen_v2(
             )
             if comparison_from and comparison_to
             else asyncio.sleep(0, result={"items": [], "totals": {}}),
+            repo.summarize_web_session_contacts(
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+                utm_campaign=utm_campaign_value,
+                campaign_id=campana_uuid_value,
+                template_id=template_uuid_value,
+            ),
         )
         stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
         whatsapp_locations_started = time.perf_counter()
@@ -42225,6 +42237,7 @@ async def demografia_resumen_v2(
             "campaigns": traffic_campaign_rankings,
             "templates": traffic_template_rankings,
         },
+        "traffic_contact_metrics": contact_metrics_payload,
         "leads": leads_payload,
         "visitantes": visitantes_payload,
     }

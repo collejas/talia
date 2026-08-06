@@ -174,6 +174,11 @@ export type DemografiaSummaryResponse = {
       total: number;
     }>;
   };
+  traffic_contact_metrics?: {
+    sessions: number;
+    sessions_with_contact: number;
+    unique_people: number;
+  };
   leads: {
     rows: DemografiaLeadsRow[];
     captado_orden: number;
