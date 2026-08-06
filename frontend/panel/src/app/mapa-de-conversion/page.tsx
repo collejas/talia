@@ -24,7 +24,6 @@ import {
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
-import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
 
@@ -213,6 +212,7 @@ function buildQueryString(params: PageSearchParams): string {
 }
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
+type PageView = "overview" | "traffic" | "conversations" | "map";
 
 export default async function Page({
   searchParams,
@@ -220,6 +220,12 @@ export default async function Page({
   searchParams?: Promise<PageSearchParams>;
 }) {
   const params = searchParams ? await searchParams : {};
+  const requestedView = typeof params.vista === "string" ? params.vista : "overview";
+  const view: PageView = requestedView === "traffic"
+    || requestedView === "conversations"
+    || requestedView === "map"
+    ? requestedView
+    : "overview";
   const exportQueryString = buildQueryString(params);
   const exportHref = `/api/crm/demografia/mapa-v2/export/xlsx${exportQueryString ? `?${exportQueryString}` : ""}`;
 
@@ -531,6 +537,10 @@ export default async function Page({
     }
     return null;
   })();
+  const viewHref = (nextView: PageView) => {
+    const query = buildQueryString({ ...params, vista: nextView });
+    return query ? `?${query}` : "?vista=overview";
+  };
   return (
     <SidebarProvider
       style={
@@ -546,6 +556,30 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <div className="px-4 lg:px-6">
+                <nav aria-label="Lecturas del mapa de conversión" className="flex flex-wrap gap-2 rounded-xl border bg-card p-2 shadow-sm">
+                  {([
+                    ["overview", "Resumen", "Qué está pasando"],
+                    ["traffic", "Tráfico web", "De dónde llegan"],
+                    ["conversations", "Conversaciones", "Quién respondió"],
+                    ["map", "Mapa y embudo", "Dónde y en qué etapa"],
+                  ] as Array<[PageView, string, string]>).map(([tab, label, helper]) => (
+                    <Link
+                      key={tab}
+                      href={viewHref(tab)}
+                      className={[
+                        "flex min-w-[150px] flex-1 flex-col rounded-lg px-3 py-2 text-left transition-colors",
+                        view === tab
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      <span className="text-sm font-semibold">{label}</span>
+                      <span className={view === tab ? "text-primary-foreground/75 text-xs" : "text-xs"}>{helper}</span>
+                    </Link>
+                  ))}
+                </nav>
+              </div>
               <div className="px-4 lg:px-6">
                 <div className="flex flex-wrap justify-end gap-2">
                   <Link
@@ -565,7 +599,7 @@ export default async function Page({
                 </div>
               </div>
               <div className="px-4 lg:px-6">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch">
+                <div className={view === "map" ? "grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch" : ""}>
                   <DemografiaControls
                     nivel={nivel}
                     canales={canalesSelected}
@@ -593,8 +627,9 @@ export default async function Page({
                     rango={rango}
                     desde={desde}
                     hasta={hasta}
-                    className="xl:min-h-[540px]"
+                    className={view === "map" ? "xl:min-h-[540px]" : ""}
                   />
+                  {view === "map" ? <>
                   <section className="flex h-[560px] flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm">
                     <div className="border-b px-4 py-3">
                       <p className="text-sm font-medium text-card-foreground/80">Mapa</p>
@@ -634,78 +669,6 @@ export default async function Page({
 
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Tráfico y atribución
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Visitas al sitio</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.sesionesWebTotales)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Sesiones webchat</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">WhatsApp atribuido</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.whatsappCampaignsTotal)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Conversaciones registradas</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(
-                                  mapKpisData.sesionesWebchatTotales +
-                                    mapKpisData.conversacionesWhatsapp +
-                                    mapKpisData.conversacionesVoz +
-                                    mapKpisData.conversacionesCorreo,
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Canales de contacto
-                          </div>
-                          <div className="rounded-md border border-dashed px-2 py-2 text-[11px] text-muted-foreground">
-                            Webchat y WhatsApp sí tienen detalle fila por fila abajo. Voz y correo hoy se muestran como conteo agregado.
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Webchat</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">WhatsApp</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.conversacionesWhatsapp)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Voz</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.conversacionesVoz)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Correo</span>
-                              <span className="font-medium tabular-nums">
-                                {formatNumber(mapKpisData.conversacionesCorreo)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Etapas
                           </div>
                           <div className="space-y-1">
@@ -724,18 +687,17 @@ export default async function Page({
                       </div>
                     </div>
                   </section>
+                  </> : null}
                 </div>
               </div>
-              <div className="px-4 lg:px-6">
-                <MapKpis {...mapKpisData} />
-              </div>
               <SessionRecovery errors={errores} />
-              <div className="px-4 lg:px-6">
+              {view !== "map" ? <div className="px-4 lg:px-6">
                 <AcquisitionSummary
                   summary={demografiaResponse?.summary ?? null}
+                  mode={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : "overview"}
                 />
-              </div>
-              {tableData.length && demografiaResponse ? (
+              </div> : null}
+              {view === "map" && tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
                   <MapaConversionTableClient
                     data={tableData}
@@ -755,6 +717,8 @@ export default async function Page({
                 </div>
               ) : null}
               <DeferredConversionTables
+                enabled={view === "traffic" || view === "conversations"}
+                mode={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : undefined}
                 filters={{
                   canales: canalesSelected,
                   estado: nivel === "municipio" ? normalizedEstado : null,
@@ -778,7 +742,7 @@ export default async function Page({
                   voz: conversacionesVoz,
                   correo: conversacionesCorreo,
                 }}
-              />
+                />
             </div>
           </div>
         </div>

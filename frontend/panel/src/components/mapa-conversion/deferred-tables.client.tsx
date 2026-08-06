@@ -32,6 +32,7 @@ type Props = {
     correo: number;
   };
   enabled?: boolean;
+  mode?: "traffic" | "conversations";
 };
 
 type ResponsePayload = {
@@ -91,7 +92,12 @@ function buildParams(filters: DeferredTablesFilters) {
   return params;
 }
 
-export function DeferredConversionTables({ filters, summaryCounts, enabled = true }: Props) {
+export function DeferredConversionTables({
+  filters,
+  summaryCounts,
+  enabled = true,
+  mode,
+}: Props) {
   const [visits, setVisits] = React.useState<SectionState>({
     data: null,
     error: null,
@@ -109,8 +115,8 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
     const params = buildParams(filters);
     const baseQuery = params.toString();
 
-    setVisits({ data: null, error: null, loading: true });
-    setConversations({ data: null, error: null, loading: true });
+    setVisits({ data: null, error: null, loading: mode === "traffic" });
+    setConversations({ data: null, error: null, loading: mode === "conversations" });
 
     const fetchSection = async (table: "visits" | "conversations") => {
       const query = new URLSearchParams(baseQuery);
@@ -142,13 +148,13 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
       }
     };
 
-    void fetchSection("visits");
-    void fetchSection("conversations");
+    if (mode === "traffic") void fetchSection("visits");
+    if (mode === "conversations") void fetchSection("conversations");
 
     return () => controller.abort();
-  }, [enabled, filters]);
+  }, [enabled, filters, mode]);
 
-  if (!enabled) return null;
+  if (!enabled || !mode) return null;
 
   const webchatConversationRows = (conversations.data ?? []).filter(
     (row) => row.raw?.canal === "webchat",
@@ -163,10 +169,12 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
     <>
       <div className="px-4 lg:px-6">
         <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          El detalle inferior del mapa solo desglosa fuentes que hoy tienen trazabilidad fila por fila en esta vista: visitas web, conversaciones webchat y WhatsApp atribuido. Voz y correo siguen siendo agregados.
+          {mode === "traffic"
+            ? "Detalle de sesiones web del tráfico filtrado. Las conversaciones se revisan en su propia lectura."
+            : "Detalle de conversaciones identificadas. Las visitas web se revisan en su propia lectura."}
         </div>
       </div>
-      <div className="px-4 lg:px-6">
+      {mode === "traffic" ? <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Visitas web
         </div>
@@ -185,8 +193,8 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             No hay visitas para mostrar.
           </div>
         )}
-      </div>
-      <div className="px-4 lg:px-6">
+      </div> : null}
+      {mode === "conversations" ? <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Conversaciones webchat
         </div>
@@ -205,8 +213,8 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             No hay conversaciones de webchat para mostrar.
           </div>
         )}
-      </div>
-      <div className="px-4 lg:px-6">
+      </div> : null}
+      {mode === "conversations" ? <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           WhatsApp atribuido
         </div>
@@ -225,8 +233,8 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             No hay conversaciones atribuidas de WhatsApp para mostrar.
           </div>
         )}
-      </div>
-      <div className="px-4 lg:px-6">
+      </div> : null}
+      {mode === "conversations" ? <div className="px-4 lg:px-6">
         <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Canales sin detalle fila por fila
         </div>
@@ -246,7 +254,7 @@ export function DeferredConversionTables({ filters, summaryCounts, enabled = tru
             </p>
           </div>
         </div>
-      </div>
+      </div> : null}
     </>
   );
 }

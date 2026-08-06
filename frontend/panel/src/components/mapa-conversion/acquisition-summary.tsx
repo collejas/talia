@@ -27,6 +27,7 @@ type Props = {
   summary: DemografiaSummaryResponse | null;
   visitsPayload?: VisitsPayload | null;
   className?: string;
+  mode?: "overview" | "traffic" | "conversations";
 };
 
 const SOURCE_CLASS_CONFIG: ChartConfig = {
@@ -409,7 +410,12 @@ function renderBarValueLabel(props: {
   );
 }
 
-export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
+export function AcquisitionSummary({
+  summary,
+  visitsPayload = null,
+  className,
+  mode = "overview",
+}: Props) {
   const hasDetailedVisits = visitsPayload !== null;
   const hasContactSummary = Boolean(summary?.traffic_contact_metrics);
   const campaignLabels = React.useMemo(() => {
@@ -461,9 +467,32 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
     () => buildCampaignColorMapWithPalette(whatsappCampaignConversionRows, WHATSAPP_CAMPAIGN_COLORS),
     [whatsappCampaignConversionRows],
   );
+  const conversationTotals = summary?.visitantes?.totals;
   return (
     <section className={cn("grid gap-4", className)}>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      {mode === "conversations" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile
+          title="WebChat"
+          value={formatNumber(toNumber(conversationTotals?.sesiones_webchat_total))}
+          helper="Sesiones que iniciaron conversación en el sitio"
+        />
+        <MetricTile
+          title="WhatsApp"
+          value={formatNumber(toNumber(conversationTotals?.conversaciones_whatsapp))}
+          helper="Conversaciones registradas"
+        />
+        <MetricTile
+          title="Correo"
+          value={formatNumber(toNumber(conversationTotals?.conversaciones_correo))}
+          helper="Conversaciones registradas"
+        />
+        <MetricTile
+          title="Voz"
+          value={formatNumber(toNumber(conversationTotals?.conversaciones_voz))}
+          helper="Conversaciones registradas"
+        />
+      </div> : null}
+      {mode !== "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Sesiones por origen</CardTitle>
@@ -609,10 +638,10 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
             )}
           </CardContent>
         </Card>
-      </div>
+      </div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
-        <Card className="h-full">
+      {mode === "traffic" || mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
+        {mode === "traffic" ? <Card className="h-full">
           <CardHeader>
             <CardTitle>Fuentes y campañas</CardTitle>
             <CardDescription>Origen, medio y campaña observados en el tráfico del sitio.</CardDescription>
@@ -662,9 +691,9 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
               <p className="text-muted-foreground text-sm">No hay fuentes ni campañas destacadas en este filtro.</p>
             )}
           </CardContent>
-        </Card>
+        </Card> : null}
 
-        <Card className="h-full">
+        {mode === "conversations" ? <Card className="h-full">
           <CardHeader>
             <CardTitle>WhatsApp de atribución por canal</CardTitle>
             <CardDescription>
@@ -731,10 +760,10 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
               <p className="text-muted-foreground text-sm">No hay atribución de WhatsApp en este filtro.</p>
             )}
           </CardContent>
-        </Card>
-      </div>
+        </Card> : null}
+      </div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {mode === "traffic" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={correoCampaignRows}
           colorMap={correoCampaignColorMap}
@@ -752,9 +781,9 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
           emptyMessage="No hay plantillas de correo con sesiones web atribuidas en este filtro."
           metricLabel="Sesiones web"
         />
-      </div>
+      </div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={whatsappCampaignConversionRows}
           colorMap={whatsappCampaignColorMap}
@@ -772,7 +801,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
           emptyMessage="No hay plantillas WhatsApp con conversión atribuida en este filtro."
           metricLabel="Oportunidades"
         />
-      </div>
+      </div> : null}
     </section>
   );
 }
