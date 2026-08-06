@@ -473,6 +473,26 @@ export function AcquisitionSummary({
     (total, row) => total + row.total,
     0,
   );
+  const webSessionsTrend = summary?.web_sessions_trend;
+  const trendComparisonLabel = webSessionsTrend?.comparable
+    ? webSessionsTrend.delta_pct === null
+      ? webSessionsTrend.current > 0
+        ? "Nuevo tráfico"
+        : "Sin variación"
+      : `${webSessionsTrend.delta_pct >= 0 ? "+" : ""}${formatPercent(webSessionsTrend.delta_pct)}`
+    : "Sin comparación";
+  const trendDirectionLabel =
+    webSessionsTrend?.direction === "up"
+      ? "Aumento vs. periodo anterior"
+      : webSessionsTrend?.direction === "down"
+        ? "Decremento vs. periodo anterior"
+        : "Sin cambio vs. periodo anterior";
+  const trendValueClass =
+    webSessionsTrend?.direction === "up"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : webSessionsTrend?.direction === "down"
+        ? "text-red-700 dark:text-red-400"
+        : "text-muted-foreground";
   return (
     <section className={cn("grid gap-4", className)}>
       {mode === "overview" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -551,7 +571,31 @@ export function AcquisitionSummary({
           helper="Oportunidades atribuidas a campañas"
         />
       </div> : null}
-      {mode === "traffic" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      {mode === "traffic" ? <>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricTile
+            title="Sesiones web"
+            value={formatNumber(totalSessions)}
+            helper="Visitas registradas en el periodo"
+          />
+          <MetricTile
+            title="Comparación de visitas"
+            value={trendComparisonLabel}
+            helper={trendDirectionLabel}
+            valueClassName={trendValueClass}
+          />
+          <MetricTile
+            title="Personas únicas"
+            value={formatNumber(uniqueContacts)}
+            helper="Personas identificadas"
+          />
+          <MetricTile
+            title="Tasa de contacto"
+            value={formatPercent(conversionRate)}
+            helper="Sesiones con contacto sobre sesiones web"
+          />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Sesiones por origen</CardTitle>
@@ -697,7 +741,8 @@ export function AcquisitionSummary({
             )}
           </CardContent>
         </Card>
-      </div> : null}
+        </div>
+      </> : null}
 
       {mode === "traffic" || mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
         {mode === "traffic" ? <Card className="h-full">
@@ -869,17 +914,19 @@ function MetricTile({
   title,
   value,
   helper,
+  valueClassName,
 }: {
   title: string;
   value: string;
   helper: string;
+  valueClassName?: string;
 }) {
   return (
     <div className="bg-muted/40 rounded-xl border p-4">
       <div className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
         {title}
       </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums">{value}</div>
+      <div className={cn("mt-2 text-2xl font-semibold tabular-nums", valueClassName)}>{value}</div>
       <div className="text-muted-foreground mt-1 text-xs">{helper}</div>
     </div>
   );
