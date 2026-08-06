@@ -668,6 +668,24 @@ wa_atribucion_scoped AS (
         COALESCE(NULLIF(lower(btrim(COALESCE(r.campana_publicitaria, ''))), ''), 'sin_campana') AS campana_publicitaria
     FROM wa_atribucion_raw r
     JOIN conversation_scoped cs ON cs.id = r.conversacion_id
+    UNION ALL
+    SELECT
+        nl.nivel AS location_level,
+        'UNK'::text AS location_key,
+        CASE
+            WHEN nl.nivel = 'pais' THEN 'País desconocido'
+            WHEN nl.nivel = 'municipio' THEN 'Municipio desconocido'
+            ELSE 'Estado desconocido'
+        END AS location_name,
+        COALESCE(NULLIF(lower(btrim(COALESCE(r.canal_publicitario, ''))), ''), 'sin_canal') AS canal_publicitario,
+        COALESCE(NULLIF(lower(btrim(COALESCE(r.campana_publicitaria, ''))), ''), 'sin_campana') AS campana_publicitaria
+    FROM wa_atribucion_raw r
+    CROSS JOIN normalized_level nl
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM conversation_scoped cs
+        WHERE cs.id = r.conversacion_id
+    )
 ),
 wa_atribucion_rank AS (
     SELECT

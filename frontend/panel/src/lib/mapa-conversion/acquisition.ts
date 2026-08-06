@@ -474,15 +474,17 @@ export function buildAcquisitionMetrics(
   const contactMetrics = summary?.traffic_contact_metrics;
   const sessionsFromVisits = visitsPayload?.cards?.totalVisits ? toNumber(visitsPayload.cards.totalVisits) : 0;
   const sessionsFromSummary =
-    (contactMetrics?.sessions ?? 0) ||
     toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
+    (contactMetrics?.sessions ?? 0) ||
     items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
   const convertedFromSummary =
     contactMetrics?.unique_people ??
     (toNumber(summary?.visitantes?.totals?.con_chat) ||
       items.reduce((acc, item) => acc + toNumber(item.con_chat), 0));
 
-  const sessions = sessionsFromVisits > 0 ? sessionsFromVisits : sessionsFromSummary;
+  // The summary aggregate is authoritative for the range. The visits payload is a
+  // detail dataset and must never replace the complete KPI with its page size.
+  const sessions = sessionsFromSummary > 0 ? sessionsFromSummary : sessionsFromVisits;
   const convertedFromContacts = Array.from(sourceConvertedTotals.values()).reduce((acc, value) => acc + value, 0);
   const hasDetailedVisits = visitsPayload !== null;
   const uniqueContacts = hasDetailedVisits ? convertedFromContacts : convertedFromSummary;

@@ -4389,10 +4389,31 @@ class CRMRepository:
         template_id: UUID | None = None,
         limit: int = 5000,
     ) -> dict[str, int]:
+        async def fetch_all_rows(path: str, base_params: dict[str, str]) -> list[dict[str, Any]]:
+            page_size = 1000
+            offset = 0
+            rows: list[dict[str, Any]] = []
+            while True:
+                params = {
+                    **base_params,
+                    "limit": str(page_size),
+                    "offset": str(offset),
+                }
+                response = await self._request("GET", path, params=params)
+                page = response.json() or []
+                if not isinstance(page, list):
+                    raise CRMRepositoryError(
+                        f"Respuesta inesperada al resumir {path}: {page!r}"
+                    )
+                rows.extend(row for row in page if isinstance(row, dict))
+                if len(page) < page_size:
+                    break
+                offset += page_size
+            return rows
+
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": "session_id,contacto_id",
-            "limit": str(max(1, min(limit, 5000))),
         }
         if date_from and date_to:
             params["and"] = (
@@ -4418,10 +4439,7 @@ class CRMRepository:
         if template_id:
             params["tid"] = f"eq.{template_id}"
 
-        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
-        session_rows = resp.json() or []
-        if not isinstance(session_rows, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al resumir web_sessions: {session_rows!r}")
+        session_rows = await fetch_all_rows("/rest/v1/web_sessions", params)
 
         session_ids = {
             str(row.get("session_id") or "").strip()
@@ -4434,7 +4452,6 @@ class CRMRepository:
         visitor_params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": "session_id,persona_id,contacto_id",
-            "limit": str(max(1, min(limit, 5000))),
         }
         if date_from and date_to:
             visitor_params["and"] = (
@@ -4449,12 +4466,10 @@ class CRMRepository:
         conversation_params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": "id,persona_id,contacto_id",
-            "limit": str(max(1, min(limit, 5000))),
         }
         message_params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "select": "conversacion_id,datos",
-            "limit": str(max(1, min(limit, 5000))),
         }
         if date_from and date_to:
             conversation_params["and"] = (
@@ -4472,20 +4487,11 @@ class CRMRepository:
             conversation_params["iniciada_en"] = f"lt.{date_to.isoformat()}"
             message_params["creado_en"] = f"lt.{date_to.isoformat()}"
 
-        visitor_resp, conversation_resp, message_resp = await asyncio.gather(
-            self._request("GET", "/rest/v1/webchat_visitantes", params=visitor_params),
-            self._request("GET", "/rest/v1/conversaciones", params=conversation_params),
-            self._request("GET", "/rest/v1/mensajes", params=message_params),
+        visitor_rows, conversation_rows, message_rows = await asyncio.gather(
+            fetch_all_rows("/rest/v1/webchat_visitantes", visitor_params),
+            fetch_all_rows("/rest/v1/conversaciones", conversation_params),
+            fetch_all_rows("/rest/v1/mensajes", message_params),
         )
-        visitor_rows = visitor_resp.json() or []
-        conversation_rows = conversation_resp.json() or []
-        message_rows = message_resp.json() or []
-        if not isinstance(visitor_rows, list):
-            raise CRMRepositoryError(
-                f"Respuesta inesperada al resumir webchat_visitantes: {visitor_rows!r}"
-            )
-        if not isinstance(conversation_rows, list) or not isinstance(message_rows, list):
-            raise CRMRepositoryError("Respuesta inesperada al resumir conversaciones/mensajes")
 
         visitor_rows_by_session = {
             str(row.get("session_id") or "").strip(): row

@@ -518,7 +518,9 @@ async function loadWebchatVisitRows(
   detailRows: number;
   errors: string[];
 }> {
-  const pageSize = 5000;
+  // PostgREST may enforce a 1,000-row server page even when a larger limit is requested.
+  // Continue until a short page so detail consumers never mistake a page for the total.
+  const pageSize = 1000;
   const rawRows: WebSessionAttributionRow[] = [];
   let shape: "array" | "items" | "other" | "none" = "array";
   let offset = 0;
