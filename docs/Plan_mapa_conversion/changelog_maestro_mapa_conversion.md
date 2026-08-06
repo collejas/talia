@@ -106,6 +106,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se aisló la identidad de las plantillas WhatsApp por `campaña + plantilla` para evitar mezclar oportunidades cuando una plantilla se reutiliza en campañas distintas.
 - Se renombraron las tarjetas WhatsApp del mapa a oportunidades por campaña/plantilla y se dejó explícito que no representan visitas ni envíos.
 - Se conservó el bloque de WhatsApp sobre el agregado de atribución y conversiones, porque ese sí responde a otra semántica de negocio.
+- Se corrigió la regresión que dejaba vacías las tarjetas de correo al retirar el refetch de sesiones: `resumen-v2` ahora expone rankings de tráfico por `web_sessions.cid` y `web_sessions.tid`.
+- Se dejó de traducir el UTM genérico `cold_outreach` como una campaña concreta; las sesiones sin `cid` o `tid` se muestran como no identificadas.
+- Se dejó de mostrar `campaign` como sitio remitente: `fuentes_top` contiene clases de origen, no hosts de referencia.
 
 ## 2026-06-27
 

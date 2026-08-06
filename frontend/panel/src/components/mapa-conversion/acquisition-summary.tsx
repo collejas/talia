@@ -351,6 +351,10 @@ function normalizeLookupKey(value: string): string {
   return normalized.replace(/[\s_-]+/g, "");
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 function formatUtmValue(
   value: string,
   campaignLabels: Map<string, string> | null,
@@ -406,6 +410,7 @@ function renderBarValueLabel(props: {
 }
 
 export function AcquisitionSummary({ summary, visitsPayload = null, className }: Props) {
+  const hasDetailedVisits = visitsPayload !== null;
   const campaignLabels = React.useMemo(() => {
     const labels = new Map<string, string>();
     const fromCatalog = summary?.attribution_catalog?.utm_campaign_labels ?? {};
@@ -510,19 +515,21 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                       ))}
                       <LabelList content={renderBarValueLabel} />
                     </Bar>
-                    <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR}>
-                      <LabelList content={renderBarValueLabel} />
-                    </Bar>
+                    {hasDetailedVisits ? (
+                      <Bar dataKey="converted" radius={[6, 6, 0, 0]} fill={CONVERTED_COLOR}>
+                        <LabelList content={renderBarValueLabel} />
+                      </Bar>
+                    ) : null}
                   </BarChart>
                 </ChartContainer>
-                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                {hasDetailedVisits ? <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <span
                     className="h-2.5 w-2.5 rounded-[2px]"
                     style={{ backgroundColor: CONVERTED_COLOR }}
                     aria-hidden="true"
                   />
                   <span>Verde = sesiones con contacto cuando existe detalle de sesiones</span>
-                </div>
+                </div> : null}
               </div>
             ) : (
               <p className="text-muted-foreground text-sm">No hay sesiones web para el filtro actual.</p>
@@ -545,20 +552,20 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
             />
             <MetricTile
               title="Sesiones con contacto"
-              value={sessionsWithContact == null ? "—" : formatNumber(sessionsWithContact)}
-              helper="Sesiones vinculadas con algún contacto"
+              value={formatNumber(sessionsWithContact ?? uniqueContacts)}
+              helper="Sesiones web asociadas a una conversación o contacto"
             />
             <MetricTile
-              title={sessionsWithContact == null ? "Sesiones con contacto" : "Contactos únicos"}
-              value={formatNumber(sessionsWithContact ?? uniqueContacts)}
+              title="Personas únicas"
+              value={hasDetailedVisits ? formatNumber(uniqueContacts) : "—"}
               helper={
-                sessionsWithContact == null
-                  ? "Sesiones web asociadas a una conversación o contacto"
-                  : "Personas deduplicadas aunque tengan varias sesiones"
+                hasDetailedVisits
+                  ? "Personas deduplicadas aunque tengan varias sesiones"
+                  : "Disponible cuando se carga el detalle de sesiones"
               }
             />
             <MetricTile
-              title={sessionsWithContact == null ? "Tasa de contacto" : "Tasa de contacto único"}
+              title="Tasa de contacto"
               value={formatPercent(conversionRate)}
               helper="Contactos o sesiones con contacto respecto a las sesiones web"
             />
@@ -567,8 +574,8 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
 
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>Sitios que envían visitas</CardTitle>
-            <CardDescription>Sitios externos que enviaron tráfico al sitio.</CardDescription>
+            <CardTitle>Referencias externas</CardTitle>
+            <CardDescription>Solo muestra hosts reales; una campaña no es un sitio remitente.</CardDescription>
           </CardHeader>
           <CardContent className="grid min-w-0 gap-2">
             {referrerRows.length ? (
@@ -597,7 +604,7 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                 );
               })
             ) : (
-              <p className="text-muted-foreground text-sm">No hay sitios externos en este filtro.</p>
+              <p className="text-muted-foreground text-sm">No hay hosts externos identificados en este filtro.</p>
             )}
           </CardContent>
         </Card>
@@ -639,7 +646,10 @@ export function AcquisitionSummary({ summary, visitsPayload = null, className }:
                           {formatUtmFieldLabel("utm_campaign")}
                         </span>
                         <span className="min-w-0 font-medium">
-                          {formatUtmValue(item.utm_campaign, campaignLabels)}
+                          {formatUtmValue(
+                            item.utm_campaign,
+                            isUuid(item.utm_campaign) ? campaignLabels : null,
+                          )}
                         </span>
                       </div>
                     </div>

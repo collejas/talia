@@ -4413,7 +4413,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "tid,last_seen_at,actualizado_en",
+                "select": "tid,cid,last_seen_at,actualizado_en",
             "order": "actualizado_en.desc,last_seen_at.desc",
             "limit": str(max(1, min(limit, 10000))),
             "tid": "not.is.null",

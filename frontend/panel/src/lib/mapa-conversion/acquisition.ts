@@ -260,6 +260,36 @@ function aggregateEmailTrafficRows(
   const templateTotals = new Map<string, AcquisitionConversionBucket>();
   const rows = Array.isArray(visitsPayload?.table) ? visitsPayload.table : [];
 
+  if (!rows.length) {
+    const trafficRankings = summary?.traffic_rankings;
+    return {
+      correoCampaignRows: (trafficRankings?.campaigns ?? []).map((row) => ({
+        value: String(row.value || "").trim(),
+        label: String(row.label || "Sin campaña identificada").trim(),
+        canal: "correo",
+        parentCampaignValue: null,
+        parentCampaignLabel: null,
+        total: toNumber(row.total),
+        contextTotal: 0,
+        conversionLabel: "Sesiones web",
+        contextLabel: "Base de sesiones web",
+        rate: 0,
+      })).filter((row) => row.total > 0),
+      correoTemplateRows: (trafficRankings?.templates ?? []).map((row) => ({
+        value: String(row.value || "").trim(),
+        label: String(row.label || "Sin plantilla identificada").trim(),
+        canal: "correo",
+        parentCampaignValue: row.parent_campaign_value ?? null,
+        parentCampaignLabel: row.parent_campaign_label ?? null,
+        total: toNumber(row.total),
+        contextTotal: 0,
+        conversionLabel: "Sesiones web",
+        contextLabel: "Base de sesiones web",
+        rate: 0,
+      })).filter((row) => row.total > 0),
+    };
+  }
+
   for (const row of rows) {
     const raw = row?.raw;
     if (!raw || typeof raw !== "object") continue;
@@ -358,24 +388,10 @@ function aggregateSourceClassesFromSummary(
 }
 
 function aggregateReferrersFromSummary(summary: DemografiaSummaryResponse | null): AcquisitionHostBucket[] {
-  const totals = new Map<string, AcquisitionHostBucket>();
-  const items = Array.isArray(summary?.visitantes?.items) ? summary?.visitantes?.items ?? [] : [];
-  for (const item of items) {
-    for (const sourceRow of item.fuentes_top ?? []) {
-      const host = String(sourceRow?.source || "").trim().toLowerCase();
-      if (!host) continue;
-      const existing = totals.get(host) ?? {
-        host,
-        total: 0,
-        converted: 0,
-      };
-      existing.total += toNumber(sourceRow?.total);
-      totals.set(host, existing);
-    }
-  }
-  return Array.from(totals.values())
-    .sort((a, b) => b.total - a.total || a.host.localeCompare(b.host))
-    .slice(0, 5);
+  // fuentes_top contains source classes, not referrer hosts. Do not present
+  // values such as "campaign" as if they were external websites.
+  void summary;
+  return [];
 }
 
 export function buildAcquisitionMetrics(
@@ -478,8 +494,7 @@ export function buildAcquisitionMetrics(
   const referrerRowsFromVisits = Array.from(hostBuckets.values())
     .sort((a, b) => b.total - a.total || a.host.localeCompare(b.host))
     .slice(0, 5);
-  const referrerRows =
-    referrerRowsFromVisits.length > 0 ? referrerRowsFromVisits : aggregateReferrersFromSummary(summary);
+  const referrerRows = referrerRowsFromVisits.length > 0 ? referrerRowsFromVisits : aggregateReferrersFromSummary(summary);
   const topSource = sourceClassRows[0] ?? null;
 
   return {

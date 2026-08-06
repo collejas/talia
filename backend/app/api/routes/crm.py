@@ -41699,6 +41699,7 @@ async def demografia_resumen_v2(
                 except ValueError:
                     continue
 
+        link_rows: list[dict[str, Any]] = []
         if utm_campaign_values:
             link_rows = await repo.list_web_sessions_campaign_links(
                 organizacion_id=organizacion_id,
@@ -41742,6 +41743,28 @@ async def demografia_resumen_v2(
             template_id=None,
         )
         template_totals: dict[str, int] = {}
+        traffic_campaign_totals: dict[str, int] = {}
+        traffic_template_totals: dict[tuple[str, str], int] = {}
+        email_traffic_total = 0
+        generic_email_campaign = "cold_outreach"
+        if isinstance(visitantes_items, list):
+            for item in visitantes_items:
+                if not isinstance(item, dict):
+                    continue
+                for utm_row in _ensure_list(item.get("utm_top"), default=[]):
+                    if not isinstance(utm_row, dict):
+                        continue
+                    if (
+                        _clean_text(utm_row.get("utm_source")).lower() == "prospeccion"
+                        and _clean_text(utm_row.get("utm_medium")).lower() == "email"
+                    ):
+                        email_traffic_total += int(utm_row.get("total") or 0)
+                        generic_email_campaign = _clean_text(utm_row.get("utm_campaign")) or generic_email_campaign
+
+        for link_row in link_rows:
+            cid_value = _clean_text(link_row.get("cid"))
+            if cid_value:
+                traffic_campaign_totals[cid_value] = traffic_campaign_totals.get(cid_value, 0) + 1
         for row in template_rows:
             if not isinstance(row, dict):
                 continue
@@ -41749,6 +41772,9 @@ async def demografia_resumen_v2(
             if not tid_value:
                 continue
             template_totals[tid_value] = template_totals.get(tid_value, 0) + 1
+            cid_value = _clean_text(row.get("cid"))
+            traffic_template_key = (cid_value, tid_value)
+            traffic_template_totals[traffic_template_key] = traffic_template_totals.get(traffic_template_key, 0) + 1
 
         # Completa el catálogo con plantillas usadas en campañas/lotes de prospección
         # (principalmente WhatsApp), ya que el select de "Plantilla captada" también
@@ -41827,6 +41853,52 @@ async def demografia_resumen_v2(
             ],
             key=lambda item: (-int(item.get("total") or 0), str(item.get("label") or "")),
         )
+
+        identified_campaign_sessions = sum(traffic_campaign_totals.values())
+        unidentified_email_sessions = max(email_traffic_total - identified_campaign_sessions, 0)
+        traffic_campaign_rankings = [
+            {
+                "value": campaign_id,
+                "label": campaign_name_by_id.get(campaign_id, f"Campaña {campaign_id[:8]}"),
+                "total": total,
+            }
+            for campaign_id, total in traffic_campaign_totals.items()
+            if total > 0
+        ]
+        if unidentified_email_sessions > 0:
+            traffic_campaign_rankings.append(
+                {
+                    "value": f"utm:{generic_email_campaign}:sin-cid",
+                    "label": f"Sin campaña identificada ({generic_email_campaign})",
+                    "total": unidentified_email_sessions,
+                }
+            )
+        traffic_campaign_rankings.sort(key=lambda item: (-int(item["total"]), str(item["label"])))
+
+        identified_template_sessions = sum(traffic_template_totals.values())
+        unidentified_template_sessions = max(email_traffic_total - identified_template_sessions, 0)
+        traffic_template_rankings = [
+            {
+                "value": template_id,
+                "label": template_labels.get(template_id, f"Plantilla {template_id[:8]}"),
+                "parent_campaign_value": campaign_id or None,
+                "parent_campaign_label": campaign_name_by_id.get(campaign_id, "Sin campaña") if campaign_id else "Sin campaña",
+                "total": total,
+            }
+            for (campaign_id, template_id), total in traffic_template_totals.items()
+            if total > 0
+        ]
+        if unidentified_template_sessions > 0:
+            traffic_template_rankings.append(
+                {
+                    "value": f"template:sin-tid:{generic_email_campaign}",
+                    "label": "Sin plantilla identificada",
+                    "parent_campaign_value": None,
+                    "parent_campaign_label": f"Sin campaña identificada ({generic_email_campaign})",
+                    "total": unidentified_template_sessions,
+                }
+            )
+        traffic_template_rankings.sort(key=lambda item: (-int(item["total"]), str(item["label"])))
 
         campaign_conversion_rows: list[dict[str, Any]] = []
         try:
@@ -42148,6 +42220,10 @@ async def demografia_resumen_v2(
         "attribution_rankings": {
             "campaigns": campaign_conversion_top,
             "templates": template_conversion_top,
+        },
+        "traffic_rankings": {
+            "campaigns": traffic_campaign_rankings,
+            "templates": traffic_template_rankings,
         },
         "leads": leads_payload,
         "visitantes": visitantes_payload,

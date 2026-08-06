@@ -160,6 +160,20 @@ export type DemografiaSummaryResponse = {
       conversion_rate_pct: number;
     }>;
   };
+  traffic_rankings?: {
+    campaigns?: Array<{
+      value: string;
+      label: string;
+      total: number;
+    }>;
+    templates?: Array<{
+      value: string;
+      label: string;
+      parent_campaign_value?: string | null;
+      parent_campaign_label?: string | null;
+      total: number;
+    }>;
+  };
   leads: {
     rows: DemografiaLeadsRow[];
     captado_orden: number;
