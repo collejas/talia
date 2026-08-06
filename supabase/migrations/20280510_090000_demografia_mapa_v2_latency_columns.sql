@@ -181,7 +181,7 @@ source_top AS (
             jsonb_agg(
                 jsonb_build_object('source', r.source_class, 'total', r.total)
                 ORDER BY r.total DESC, r.source_class
-            ) FILTER (WHERE r.rn <= 5),
+            ),
             '[]'::jsonb
         ) AS fuentes_top
     FROM source_rank r
@@ -220,7 +220,7 @@ utm_top AS (
                     'total', r.total
                 )
                 ORDER BY r.total DESC, r.utm_source, r.utm_medium, r.utm_campaign
-            ) FILTER (WHERE r.rn <= 5),
+            ),
             '[]'::jsonb
         ) AS utm_top
     FROM utm_rank r
@@ -697,7 +697,7 @@ wa_atribucion_top AS (
                     'total', r.total
                 )
                 ORDER BY r.total DESC, r.canal_publicitario, r.campana_publicitaria
-            ) FILTER (WHERE r.rn <= 5),
+            ),
             '[]'::jsonb
         ) AS wa_atribucion_top
     FROM wa_atribucion_rank r

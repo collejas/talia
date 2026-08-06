@@ -120,9 +120,9 @@ function aggregateTopUtm(summary: DemografiaSummaryResponse | null): Acquisition
       totals.set(key, existing);
     }
   }
-  return Array.from(totals.values())
-    .sort((a, b) => b.total - a.total || a.utm_source.localeCompare(b.utm_source))
-    .slice(0, 5);
+  return Array.from(totals.values()).sort(
+    (a, b) => b.total - a.total || a.utm_source.localeCompare(b.utm_source),
+  );
 }
 
 function aggregateWhatsappChannels(summary: DemografiaSummaryResponse | null): AcquisitionSourceBucket[] {
@@ -141,9 +141,9 @@ function aggregateWhatsappChannels(summary: DemografiaSummaryResponse | null): A
       totals.set(channel, existing);
     }
   }
-  return Array.from(totals.values())
-    .sort((a, b) => b.total - a.total || a.source.localeCompare(b.source))
-    .slice(0, 6);
+  return Array.from(totals.values()).sort(
+    (a, b) => b.total - a.total || a.source.localeCompare(b.source),
+  );
 }
 
 function aggregateConversionRows(
@@ -499,9 +499,9 @@ export function buildAcquisitionMetrics(
   );
   const sourceClassRows =
     sourceClassRowsFromVisits.length > 0 ? sourceClassRowsFromVisits : aggregateSourceClassesFromSummary(summary);
-  const referrerRowsFromVisits = Array.from(hostBuckets.values())
-    .sort((a, b) => b.total - a.total || a.host.localeCompare(b.host))
-    .slice(0, 5);
+  const referrerRowsFromVisits = Array.from(hostBuckets.values()).sort(
+    (a, b) => b.total - a.total || a.host.localeCompare(b.host),
+  );
   const referrerRows = referrerRowsFromVisits.length > 0 ? referrerRowsFromVisits : aggregateReferrersFromSummary(summary);
   const topSource = sourceClassRows[0] ?? null;
 

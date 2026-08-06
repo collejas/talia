@@ -4281,6 +4281,7 @@ class CRMRepository:
         utm_source: str | None = None,
         utm_medium: str | None = None,
         limit: int = 2000,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         campaign_values = [str(value or "").strip().lower() for value in utm_campaigns]
         campaign_values = [value for value in campaign_values if value]
@@ -4292,6 +4293,7 @@ class CRMRepository:
             "select": "utm_campaign,cid,actualizado_en,last_seen_at",
             "order": "actualizado_en.desc,last_seen_at.desc",
             "limit": str(max(1, min(limit, 5000))),
+            "offset": str(max(0, int(offset))),
             "cid": "not.is.null",
             "utm_campaign": _postgrest_in_clause(campaign_values),
         }
@@ -4576,12 +4578,14 @@ class CRMRepository:
         campaign_ids: Sequence[UUID] | None = None,
         template_id: UUID | None = None,
         limit: int = 5000,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
                 "select": "tid,cid,last_seen_at,actualizado_en",
             "order": "actualizado_en.desc,last_seen_at.desc",
             "limit": str(max(1, min(limit, 10000))),
+            "offset": str(max(0, int(offset))),
             "tid": "not.is.null",
         }
         if date_from:
@@ -15287,6 +15291,7 @@ class CRMRepository:
         usuario_token: str | None = None,
         organizacion_id: UUID | None = None,
         limit: int = 200,
+        offset: int = 0,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         include_contact_details: bool = True,
@@ -15298,6 +15303,7 @@ class CRMRepository:
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
+            "offset": str(max(0, int(offset))),
         }
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
@@ -15454,6 +15460,7 @@ class CRMRepository:
         usuario_token: str | None = None,
         organizacion_id: UUID | None = None,
         limit: int = 200,
+        offset: int = 0,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         include_persona_details: bool = True,
@@ -15462,6 +15469,7 @@ class CRMRepository:
             usuario_token=usuario_token,
             organizacion_id=organizacion_id,
             limit=limit,
+            offset=offset,
             date_from=date_from,
             date_to=date_to,
             include_contact_details=include_persona_details,

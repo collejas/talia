@@ -1,6 +1,6 @@
 "use server";
 
-import { callCrmApi } from "@/lib/api/crm";
+import { callCrmApi, type CrmResult } from "@/lib/api/crm";
 import { normalizeAcquisitionSourceClass } from "@/lib/mapa-conversion/source-class";
 
 type DashboardKpisResponse = {
@@ -270,6 +270,42 @@ function buildVisitsSearchParams(filters: VisitsFilters) {
   };
 }
 
+async function loadWhatsappConversationRows(
+  filters: VisitsFilters = {},
+): Promise<CrmResult<WhatsappConversationRow[]>> {
+  const pageSize = 500;
+  const rows: WhatsappConversationRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const result = await callCrmApi<WhatsappConversationRow[]>(
+      "/crm/visitas/whatsapp/conversaciones",
+      {
+        withUserToken: true,
+        searchParams: {
+          rango: filters.rango || undefined,
+          desde: filters.desde || undefined,
+          hasta: filters.hasta || undefined,
+          wa_canal_publicitario: filters.waCanalPublicitario || undefined,
+          wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
+          wa_regla_id: filters.waReglaId || undefined,
+          campana_id: filters.campanaId || undefined,
+          campana_tipo: filters.campanaTipo || undefined,
+          template_id: filters.templateId || undefined,
+          limit: pageSize,
+          offset,
+        },
+      },
+    );
+    if (!result.ok) return result;
+    rows.push(...result.data);
+    if (result.data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return { ok: true, data: rows };
+}
+
 function hasAttributionFilters(filters: VisitsFilters): boolean {
   return Boolean(
     (filters.sourceClass || "").trim() ||
@@ -482,22 +518,30 @@ async function loadWebchatVisitRows(
   detailRows: number;
   errors: string[];
 }> {
-  const detalleResult = await callCrmApi<WebSessionAttributionRow[]>("/crm/visitas/web-sessions", {
-    withUserToken: true,
-    searchParams: buildVisitsSearchParams(filters),
-  });
-
-  if (!detalleResult.ok) {
-    return {
-      rows: [],
-      shape: "none",
-      detailOk: false,
-      detailRows: 0,
-      errors: [detalleResult.error],
-    };
+  const pageSize = 5000;
+  const rawRows: WebSessionAttributionRow[] = [];
+  let shape: "array" | "items" | "other" | "none" = "array";
+  let offset = 0;
+  while (true) {
+    const detalleResult = await callCrmApi<WebSessionAttributionRow[]>("/crm/visitas/web-sessions", {
+      withUserToken: true,
+      searchParams: { ...buildVisitsSearchParams(filters), offset },
+    });
+    if (!detalleResult.ok) {
+      return {
+        rows: [],
+        shape: "none",
+        detailOk: false,
+        detailRows: 0,
+        errors: [detalleResult.error],
+      };
+    }
+    const page = unwrapWebSessionsPayload(detalleResult.data);
+    if (offset === 0) shape = page.shape;
+    rawRows.push(...page.rows);
+    if (page.rows.length < pageSize) break;
+    offset += pageSize;
   }
-
-  const { rows: rawRows, shape } = unwrapWebSessionsPayload(detalleResult.data);
   const normalized = normalizeWebSessionRows(rawRows);
   return {
     rows: applyChannelFilter(normalized, filters),
@@ -537,24 +581,7 @@ export async function loadConversationsTableForConversionMap(
   if (webchat.errors.length) {
     throw new Error(webchat.errors[0]);
   }
-  const whatsappResult = await callCrmApi<WhatsappConversationRow[]>(
-    "/crm/visitas/whatsapp/conversaciones",
-    {
-      withUserToken: true,
-      searchParams: {
-        rango: filters.rango || undefined,
-        desde: filters.desde || undefined,
-        hasta: filters.hasta || undefined,
-        wa_canal_publicitario: filters.waCanalPublicitario || undefined,
-        wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
-        wa_regla_id: filters.waReglaId || undefined,
-        campana_id: filters.campanaId || undefined,
-        campana_tipo: filters.campanaTipo || undefined,
-        template_id: filters.templateId || undefined,
-        limit: 500,
-      },
-    },
-  );
+  const whatsappResult = await loadWhatsappConversationRows(filters);
   if (!whatsappResult.ok) {
     throw new Error(whatsappResult.error);
   }
@@ -639,24 +666,7 @@ export async function loadConversionMapTablesForConversionMap(
   const whatsappPromise =
     section === "visits"
       ? null
-      : callCrmApi<WhatsappConversationRow[]>(
-          "/crm/visitas/whatsapp/conversaciones",
-          {
-            withUserToken: true,
-            searchParams: {
-              rango: filters.rango || undefined,
-              desde: filters.desde || undefined,
-              hasta: filters.hasta || undefined,
-              wa_canal_publicitario: filters.waCanalPublicitario || undefined,
-              wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
-              wa_regla_id: filters.waReglaId || undefined,
-              campana_id: filters.campanaId || undefined,
-              campana_tipo: filters.campanaTipo || undefined,
-              template_id: filters.templateId || undefined,
-              limit: 500,
-            },
-          },
-        );
+      : loadWhatsappConversationRows(filters);
 
   const [templatesResult, webchat] = await Promise.all([templatesPromise, webchatPromise]);
   const whatsappResult = whatsappPromise ? await whatsappPromise : null;
@@ -721,15 +731,7 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
         hasta: filters.hasta || undefined,
       },
     }),
-    callCrmApi<WhatsappConversationRow[]>("/crm/visitas/whatsapp/conversaciones", {
-      withUserToken: true,
-      searchParams: {
-        rango: filters.rango || undefined,
-        desde: filters.desde || undefined,
-        hasta: filters.hasta || undefined,
-        limit: 500,
-      },
-    }),
+    loadWhatsappConversationRows(filters),
     callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", { withUserToken: true }),
   ]);
 

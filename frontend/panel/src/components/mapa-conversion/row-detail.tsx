@@ -144,7 +144,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
     { label: "Sin contacto", value: visitasSinChat },
   ];
 
-  const topSegments: Segment[] = (summary?.leads?.rows ?? [])
+  const segments: Segment[] = (summary?.leads?.rows ?? [])
     .filter((segment) => segment.key === key)
     .map((segment) => ({
       canal: segment.canal,
@@ -152,8 +152,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
       total: sanitizeNumber(segment.total),
     }))
     .filter((segment) => segment.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
 
   const principalChannel = typeof canalMeta.principal === "string"
     ? canalMeta.principal
@@ -297,9 +296,9 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Origen de las visitas
         </h4>
-        <div className="grid gap-2">
+        <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
           {(Array.isArray(trafficWeb.fuentes_top) ? trafficWeb.fuentes_top : []).length ? (
-            (trafficWeb.fuentes_top as Array<Record<string, unknown>>).slice(0, 5).map((source, index) => (
+            (trafficWeb.fuentes_top as Array<Record<string, unknown>>).map((source, index) => (
               <div
                 key={`source-${index}`}
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
@@ -314,9 +313,9 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
             <p className="text-muted-foreground text-sm">Sin sitios destacados en este filtro.</p>
           )}
         </div>
-        <div className="grid gap-2">
+        <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
           {(Array.isArray(trafficWeb.utm_top) ? trafficWeb.utm_top : []).length ? (
-            (trafficWeb.utm_top as Array<Record<string, unknown>>).slice(0, 5).map((utm, index) => (
+            (trafficWeb.utm_top as Array<Record<string, unknown>>).map((utm, index) => (
               <div
                 key={`utm-${index}`}
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
@@ -339,9 +338,9 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           WhatsApp de atribución por canal
         </h4>
-        <div className="grid gap-2">
+        <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
           {(Array.isArray(whatsappAttribution.top) ? whatsappAttribution.top : []).length ? (
-            (whatsappAttribution.top as Array<Record<string, unknown>>).slice(0, 5).map((item, index) => (
+            (whatsappAttribution.top as Array<Record<string, unknown>>).map((item, index) => (
               <div
                 key={`wa-attrib-${index}`}
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
@@ -364,11 +363,11 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Principales grupos
+          Grupos
         </h4>
-        <div className="grid gap-2">
-          {topSegments.length ? (
-            topSegments.map((segment, index) => (
+        <div className="grid max-h-96 gap-2 overflow-y-auto pr-1">
+          {segments.length ? (
+            segments.map((segment, index) => (
               <div
                 key={`${segment.canal}-${segment.etapa}-${index}`}
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"

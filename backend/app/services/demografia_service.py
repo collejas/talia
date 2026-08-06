@@ -113,7 +113,7 @@ def _canonical_country_code(value: str | None) -> str:
     return COUNTRY_CODE_ALIAS_MAP.get(raw, raw)
 
 
-def _aggregate_top_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _aggregate_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     totals: dict[str, int] = {}
     for item in items:
         key = str(item.get("source") or "").strip().lower()
@@ -122,11 +122,11 @@ def _aggregate_top_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         totals[key] = totals.get(key, 0) + _to_number(item.get("total"))
     return [
         {"source": source, "total": total}
-        for source, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+        for source, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
 
 
-def _aggregate_top_utm(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _aggregate_utm(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     totals: dict[tuple[str, str, str], int] = {}
     for item in items:
         utm_source = str(item.get("utm_source") or "(none)").strip().lower() or "(none)"
@@ -144,11 +144,11 @@ def _aggregate_top_utm(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for (source, medium, campaign), total in sorted(
             totals.items(),
             key=lambda kv: (-kv[1], kv[0][0], kv[0][1], kv[0][2]),
-        )[:5]
+        )
     ]
 
 
-def _aggregate_top_wa(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _aggregate_wa(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     totals: dict[tuple[str, str], int] = {}
     for item in items:
         canal = str(item.get("canal_publicitario") or "sin_canal").strip().lower() or "sin_canal"
@@ -163,7 +163,7 @@ def _aggregate_top_wa(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "campana_publicitaria": campana,
             "total": total,
         }
-        for (canal, campana), total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))[:5]
+        for (canal, campana), total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
     ]
 
 
@@ -650,9 +650,9 @@ async def fetch_visitantes_resumen_v2(
 
     if grouped_by_key:
         for grouped in grouped_by_key.values():
-            grouped["fuentes_top"] = _aggregate_top_sources(grouped.pop("_fuentes_buffer", []))
-            grouped["utm_top"] = _aggregate_top_utm(grouped.pop("_utm_buffer", []))
-            grouped["wa_atribucion_top"] = _aggregate_top_wa(grouped.pop("_wa_buffer", []))
+            grouped["fuentes_top"] = _aggregate_sources(grouped.pop("_fuentes_buffer", []))
+            grouped["utm_top"] = _aggregate_utm(grouped.pop("_utm_buffer", []))
+            grouped["wa_atribucion_top"] = _aggregate_wa(grouped.pop("_wa_buffer", []))
             grouped["whatsapp_atribucion_top"] = grouped["wa_atribucion_top"]
             items.append(grouped)
         items.sort(key=lambda row: (_to_number(row.get("total")), str(row.get("name") or "")), reverse=True)

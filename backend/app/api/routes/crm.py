@@ -18250,6 +18250,7 @@ async def list_supervised_users(
     _: str = Depends(require_permission("pipeline.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[CRMUserSummary]:
     if usuario_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="usuario_id_required")
@@ -37430,6 +37431,7 @@ async def get_visits_whatsapp_conversations(
     user_token: str | None = Depends(optional_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -37476,6 +37478,7 @@ async def get_visits_whatsapp_conversations(
             usuario_token=_normalize_reports_user_token(user_token),
             organizacion_id=organizacion_id,
             limit=limit,
+            offset=offset,
             date_from=date_from,
             date_to=date_to,
         )
@@ -37751,7 +37754,6 @@ async def list_activities(
     asignado_a_usuario_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMActivitiesResponse:
     try:
         rows = await repo.list_activities(
@@ -41793,29 +41795,59 @@ async def demografia_resumen_v2(
             )
             return wa_rows
 
+        async def load_campaign_links() -> list[dict[str, Any]]:
+            if not utm_campaign_values:
+                return []
+            rows: list[dict[str, Any]] = []
+            offset = 0
+            page_size = 2000
+            while True:
+                page_rows = await repo.list_web_sessions_campaign_links(
+                    organizacion_id=organizacion_id,
+                    utm_campaigns=utm_campaign_values,
+                    date_from=date_from,
+                    date_to=date_to,
+                    state_code=state_code,
+                    source_class=source_class_value,
+                    utm_source=utm_source_value,
+                    utm_medium=utm_medium_value,
+                    limit=page_size,
+                    offset=offset,
+                )
+                rows.extend(page_rows)
+                if len(page_rows) < page_size:
+                    break
+                offset += page_size
+            return rows
+
+        async def load_template_links() -> list[dict[str, Any]]:
+            rows: list[dict[str, Any]] = []
+            offset = 0
+            page_size = 5000
+            while True:
+                page_rows = await repo.list_web_sessions_template_links(
+                    organizacion_id=organizacion_id,
+                    date_from=date_from,
+                    date_to=date_to,
+                    state_code=state_code,
+                    source_class=source_class_value,
+                    utm_source=utm_source_value,
+                    utm_medium=utm_medium_value,
+                    utm_campaign=utm_campaign_value,
+                    campaign_ids=campaign_ids_filter,
+                    template_id=None,
+                    limit=page_size,
+                    offset=offset,
+                )
+                rows.extend(page_rows)
+                if len(page_rows) < page_size:
+                    break
+                offset += page_size
+            return rows
+
         link_rows, template_rows, batch_rows, campaign_conversion_rows, whatsapp_conversion_rows, wa_rules_rows = await asyncio.gather(
-            repo.list_web_sessions_campaign_links(
-                organizacion_id=organizacion_id,
-                utm_campaigns=utm_campaign_values,
-                date_from=date_from,
-                date_to=date_to,
-                state_code=state_code,
-                source_class=source_class_value,
-                utm_source=utm_source_value,
-                utm_medium=utm_medium_value,
-            ) if utm_campaign_values else asyncio.sleep(0, result=[]),
-            repo.list_web_sessions_template_links(
-                organizacion_id=organizacion_id,
-                date_from=date_from,
-                date_to=date_to,
-                state_code=state_code,
-                source_class=source_class_value,
-                utm_source=utm_source_value,
-                utm_medium=utm_medium_value,
-                utm_campaign=utm_campaign_value,
-                campaign_ids=campaign_ids_filter,
-                template_id=None,
-            ),
+            load_campaign_links(),
+            load_template_links(),
             load_batches(),
             load_campaign_conversion_rows(),
             load_whatsapp_conversion_rows(),

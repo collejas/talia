@@ -710,7 +710,7 @@ export function AcquisitionSummary({
             <CardTitle>Referencias externas</CardTitle>
             <CardDescription>Solo muestra hosts reales; una campaña no es un sitio remitente.</CardDescription>
           </CardHeader>
-          <CardContent className="grid min-w-0 gap-2">
+          <CardContent className="grid max-h-96 min-w-0 gap-2 overflow-y-auto pr-2">
             {referrerRows.length ? (
               referrerRows.map((item) => {
                 const rate = item.total > 0 ? (item.converted / item.total) * 100 : 0;
@@ -750,7 +750,7 @@ export function AcquisitionSummary({
             <CardTitle>Fuentes y campañas</CardTitle>
             <CardDescription>Origen, medio y campaña observados en el tráfico del sitio.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2 min-h-72">
+          <CardContent className="grid max-h-[32rem] gap-2 overflow-y-auto pr-2 min-h-72">
             {topUtmRows.length ? (
               topUtmRows.map((item) => (
                 <div
