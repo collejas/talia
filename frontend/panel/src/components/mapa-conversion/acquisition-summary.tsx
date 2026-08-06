@@ -595,11 +595,20 @@ export function AcquisitionSummary({
             helper="Sesiones con contacto sobre sesiones web"
           />
         </div>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-base font-semibold">1. Origen del tráfico</h3>
+            <p className="text-muted-foreground text-sm">
+              Clasificación general de cómo llegaron las sesiones al sitio.
+            </p>
+          </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Sesiones por origen</CardTitle>
-            <CardDescription>Sesiones web observadas; las conversaciones y oportunidades se muestran aparte.</CardDescription>
+            <CardDescription>
+              Directo, búsqueda, redes sociales, promoción, referidos y asistentes digitales.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex h-full flex-col">
             {sourceClassRows.length ? (
@@ -704,51 +713,68 @@ export function AcquisitionSummary({
             />
           </CardContent>
         </Card>
+        </div>
+        </div>
 
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Referencias externas</CardTitle>
-            <CardDescription>Solo muestra hosts reales; una campaña no es un sitio remitente.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid max-h-96 min-w-0 gap-2 overflow-y-auto pr-2">
-            {referrerRows.length ? (
-              referrerRows.map((item) => {
-                const rate = item.total > 0 ? (item.converted / item.total) * 100 : 0;
-                return (
-                  <div
-                    key={item.host}
-                    className="bg-muted/50 flex min-w-0 flex-col gap-2 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <div className="flex min-w-0 items-center justify-between gap-3">
-                      <span className="min-w-0 flex-1 truncate font-medium" title={item.host}>
-                        {item.host}
-                      </span>
-                      <Badge className="shrink-0" variant="outline">
-                        {formatNumber(item.total)}
-                      </Badge>
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-base font-semibold">2. Sitios que enviaron visitas</h3>
+            <p className="text-muted-foreground text-sm">
+              Dominios externos detectados como remitentes. No incluye campañas, fuentes UTM ni visitas directas.
+            </p>
+          </div>
+          <Card className="h-full max-w-3xl">
+            <CardHeader>
+              <CardTitle>Referencias externas</CardTitle>
+              <CardDescription>Solo muestra hosts reales que enlazaron al sitio.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid max-h-96 min-w-0 gap-2 overflow-y-auto pr-2">
+              {referrerRows.length ? (
+                referrerRows.map((item) => {
+                  const rate = item.total > 0 ? (item.converted / item.total) * 100 : 0;
+                  return (
+                    <div
+                      key={item.host}
+                      className="bg-muted/50 flex min-w-0 flex-col gap-2 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 truncate font-medium" title={item.host}>
+                          {item.host}
+                        </span>
+                        <Badge className="shrink-0" variant="outline">
+                          {formatNumber(item.total)}
+                        </Badge>
+                      </div>
+                      <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span className="min-w-0 truncate">
+                          Convertidas: {formatNumber(item.converted)}
+                        </span>
+                        <span className="shrink-0 tabular-nums">{formatPercent(rate)}</span>
+                      </div>
                     </div>
-                    <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
-                      <span className="min-w-0 truncate">
-                        Convertidas: {formatNumber(item.converted)}
-                      </span>
-                      <span className="shrink-0 tabular-nums">{formatPercent(rate)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-muted-foreground text-sm">No hay hosts externos identificados en este filtro.</p>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })
+              ) : (
+                <p className="text-muted-foreground text-sm">No hay sitios externos identificados en este filtro.</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </> : null}
 
+      {mode === "traffic" ? <div className="space-y-1">
+        <h3 className="text-base font-semibold">3. Atribución de campañas</h3>
+        <p className="text-muted-foreground text-sm">
+          Detalle de las etiquetas de fuente, medio y campaña que acompañaron cada visita.
+        </p>
+      </div> : null}
       {mode === "traffic" || mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
         {mode === "traffic" ? <Card className="h-full">
           <CardHeader>
-            <CardTitle>Fuentes y campañas</CardTitle>
-            <CardDescription>Origen, medio y campaña observados en el tráfico del sitio.</CardDescription>
+            <CardTitle>Atribución: fuente, medio y campaña</CardTitle>
+            <CardDescription>
+              No es un dominio remitente: explica las etiquetas con las que se identificó el tráfico.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid max-h-[32rem] gap-2 overflow-y-auto pr-2 min-h-72">
             {topUtmRows.length ? (
@@ -867,6 +893,12 @@ export function AcquisitionSummary({
         </Card> : null}
       </div> : null}
 
+      {mode === "traffic" ? <div className="space-y-1">
+        <h4 className="text-sm font-semibold">Detalle de correo</h4>
+        <p className="text-muted-foreground text-sm">
+          Desglose de qué campañas y plantillas de email generaron las sesiones identificadas arriba.
+        </p>
+      </div> : null}
       {mode === "traffic" || mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
         <EmailCampaignPieCard
           data={correoCampaignRows}

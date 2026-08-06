@@ -118,6 +118,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se implementaron filtros propios por lectura: resumen, tráfico web, conversaciones y campañas ya no muestran el mismo conjunto mezclado de controles.
 - En el mapa de `Campañas`, el tooltip dejó de mostrar el embudo geográfico genérico y ahora resume visitas atribuidas, contactos en CRM y conversaciones por canal.
 - En `Tráfico web`, se recuperó el KPI comparativo de sesiones: muestra aumento, decremento o ausencia de comparación contra el periodo anterior.
+- Se reorganizó la lectura de `Tráfico web` en tres niveles: `Origen del tráfico`, `Sitios que enviaron visitas` y `Atribución de campañas`.
+- `Referencias externas` ahora queda bajo `Sitios que enviaron visitas` y se describe únicamente como hosts reales; no se presenta al mismo nivel que el origen general.
+- `Fuentes y campañas` se renombró visualmente como `Atribución: fuente, medio y campaña`; las campañas y plantillas de correo quedan como `Detalle de correo` subordinado a esa atribución.
 - Cuando no existe asociación a persona/contacto, la vista muestra `0` y no un espacio vacío ni la métrica antigua de chat.
 - Se agregó compatibilidad histórica para sesiones de WebChat anteriores al refactor: se recupera `session_id` desde `mensajes.datos` y se cruza con `conversaciones.persona_id/contacto_id`.
 
