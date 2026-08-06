@@ -879,19 +879,40 @@ export function LocationComparisonChart({
           });
         }
       } else {
-        for (const stageKey of stageKeys) {
-          const total = entries.reduce(
-            (acc, current) =>
-              acc + (((current.etapas_totales || {}) as Record<string, number | undefined>)[stageKey] ?? 0),
-            0,
-          );
+        const contactsTotal = entries.reduce(
+          (acc, current) => acc + (current.leads_total ?? 0),
+          0,
+        );
+        const conversationsTotal = Object.values(conversationByChannel).reduce(
+          (acc, current) => acc + current,
+          0,
+        );
+        rows[0] = {
+          ...rows[0],
+          label: "Visitas atribuidas",
+        };
+        rows.push({
+          key: "contacts",
+          label: "Contactos en CRM",
+          value: formatNumber(contactsTotal),
+          color: "var(--chart-2)",
+        });
+        rows.push({
+          key: "conversations",
+          label: "Conversaciones",
+          value: formatNumber(conversationsTotal),
+          color: "var(--chart-3)",
+        });
+        for (const channel of displayedChannelKeys) {
+          const total = conversationByChannel[channel];
           if (total <= 0) continue;
           rows.push({
-            key: `stage-${stageKey}`,
-            label: MAPA_STAGE_LABELS[stageKey] ?? formatStageLabel(stageKey),
+            key: `campaign-channel-${channel}`,
+            label: CHANNEL_LABELS[channel],
             value: formatNumber(total),
             monospace: true,
-            color: "var(--chart-2)",
+            color: resolveChannelColor(channel, channelColors),
+            indent: true,
           });
         }
       }

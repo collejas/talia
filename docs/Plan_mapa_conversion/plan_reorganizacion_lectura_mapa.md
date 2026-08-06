@@ -110,6 +110,7 @@ Cada paso debe conservar su propio total, tasa y fuente de verdad.
 - Se retiro el bloque mixto de KPIs del recorrido normal.
 - Se corrigio la repeticion visual del total en las tarjetas de campañas.
 - Los controles ahora cambian por lectura: resumen compacto, adquisición web, conversaciones multicanal y resultados de campañas.
+- El tooltip de `Campañas` muestra visitas atribuidas, contactos en CRM y conversaciones por canal; no presenta etapas del embudo como si fueran resultados únicos de campaña.
 
 ## Pendientes
 

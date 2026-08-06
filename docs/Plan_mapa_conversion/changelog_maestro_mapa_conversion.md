@@ -116,6 +116,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigió `Sesiones y contactos` para que `Personas únicas` cruce las sesiones filtradas con `webchat_visitantes` usando `persona_id`/`contacto_id`, en lugar de leer un campo inexistente en `web_sessions`.
 - Se corrigió `Tasa de contacto` para calcular `sesiones con contacto / sesiones totales`; una visita atribuida a una campaña no se cuenta automáticamente como contacto.
 - Se implementaron filtros propios por lectura: resumen, tráfico web, conversaciones y campañas ya no muestran el mismo conjunto mezclado de controles.
+- En el mapa de `Campañas`, el tooltip dejó de mostrar el embudo geográfico genérico y ahora resume visitas atribuidas, contactos en CRM y conversaciones por canal.
 - Cuando no existe asociación a persona/contacto, la vista muestra `0` y no un espacio vacío ni la métrica antigua de chat.
 - Se agregó compatibilidad histórica para sesiones de WebChat anteriores al refactor: se recupera `session_id` desde `mensajes.datos` y se cruza con `conversaciones.persona_id/contacto_id`.
 
