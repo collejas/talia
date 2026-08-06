@@ -728,44 +728,51 @@ export function AcquisitionSummary({
               Dominios externos detectados como remitentes. No incluye campañas, fuentes UTM ni visitas directas.
             </p>
           </div>
-          <Card className="h-full max-w-3xl">
+          <Card className="h-full">
             <CardHeader>
               <CardTitle>Referencias externas</CardTitle>
               <CardDescription>Solo muestra hosts reales que enlazaron al sitio.</CardDescription>
             </CardHeader>
             <CardContent className="min-w-0">
               {referrerRows.length ? (
-                <ChartContainer config={REFERRER_CONFIG} className="h-[320px] w-full">
-                  <BarChart
-                    data={referrerRows}
-                    layout="vertical"
-                    margin={{ top: 8, right: 36, left: 8, bottom: 8 }}
-                    barGap={4}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} />
-                    <YAxis
-                      dataKey="host"
-                      type="category"
-                      width={120}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value: string) => truncateLabel(value, 18)}
-                    />
-                    <ChartTooltip
-                      cursor={{ fill: "hsl(var(--muted))" }}
-                      content={<ChartTooltipContent />}
-                      formatter={(value, name) => [
-                        formatNumber(toNumber(value)),
-                        name === "converted" ? "Con contacto" : "Sesiones",
-                      ]}
-                    />
-                    <Bar dataKey="total" name="Sesiones" fill="var(--chart-1)" radius={[0, 4, 4, 0]}>
-                      <LabelList dataKey="total" position="right" formatter={(value: number) => formatNumber(value)} />
-                    </Bar>
-                    <Bar dataKey="converted" name="Con contacto" fill={CONVERTED_COLOR} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ChartContainer>
+                <div className="w-full overflow-x-auto pb-2">
+                  <div style={{ minWidth: `${Math.max(760, referrerRows.length * 82)}px` }}>
+                    <ChartContainer config={REFERRER_CONFIG} className="min-h-[360px] w-full">
+                      <BarChart
+                        data={referrerRows}
+                        margin={{ top: 38, right: 8, left: 0, bottom: 26 }}
+                        barGap={4}
+                      >
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="host"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={12}
+                          interval={0}
+                          angle={-25}
+                          textAnchor="end"
+                          tickFormatter={(value: string) => truncateLabel(value, 18)}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                        <ChartTooltip
+                          cursor={{ fill: "hsl(var(--muted))" }}
+                          content={<ChartTooltipContent />}
+                          formatter={(value, name) => [
+                            formatNumber(toNumber(value)),
+                            name === "converted" ? "Con contacto" : "Sesiones",
+                          ]}
+                        />
+                        <Bar dataKey="total" name="Sesiones" fill="var(--chart-1)" radius={[6, 6, 0, 0]}>
+                          <LabelList dataKey="total" position="top" formatter={(value: number) => formatNumber(value)} />
+                        </Bar>
+                        <Bar dataKey="converted" name="Con contacto" fill={CONVERTED_COLOR} radius={[6, 6, 0, 0]}>
+                          <LabelList dataKey="converted" position="top" formatter={(value: number) => formatNumber(value)} />
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                </div>
               ) : (
                 <p className="text-muted-foreground text-sm">No hay sitios externos identificados en este filtro.</p>
               )}
@@ -774,7 +781,7 @@ export function AcquisitionSummary({
         </div>
       </> : null}
 
-      {mode === "traffic" ? <div className="space-y-1">
+      {mode === "traffic" ? <div className="mt-2 space-y-1 border-t pt-5">
         <h3 className="text-base font-semibold">3. Atribución de campañas</h3>
         <p className="text-muted-foreground text-sm">
           Detalle de las etiquetas de fuente, medio y campaña que acompañaron cada visita.

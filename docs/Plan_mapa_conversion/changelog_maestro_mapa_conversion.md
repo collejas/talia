@@ -113,6 +113,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se corrigió el contrato de `GET /crm/visitas/web-sessions` para devolver `referrer_host`; se excluyen referencias internas al propio sitio y se recuperan dominios externos históricos como Google, Facebook, ChatGPT y Bing.
 - Se agregó `traffic_contact_metrics.referrer_rows` al resumen v2 para que `Referencias externas` tenga datos aun cuando la tabla de visitas se cargue de forma diferida; la clave de caché del resumen cambió a `v6-referrer-rankings`.
 - `Referencias externas` ahora consume exclusivamente ese agregado del resumen y nunca el detalle diferido de sesiones, evitando que las clases `direct/campaign/organic_*` vuelvan a aparecer como dominios.
+- La gráfica de `Referencias externas` se alineó a columnas verticales como `Sesiones por origen`, y se agregó separación visual entre `Sitios que enviaron visitas` y `Atribución de campañas`.
 - Se conservó el bloque de WhatsApp sobre el agregado de atribución y conversiones, porque ese sí responde a otra semántica de negocio.
 - Se corrigió la regresión que dejaba vacías las tarjetas de correo al retirar el refetch de sesiones: `resumen-v2` ahora expone rankings de tráfico por `web_sessions.cid` y `web_sessions.tid`.
 - Se dejó de traducir el UTM genérico `cold_outreach` como una campaña concreta; las sesiones sin `cid` o `tid` se muestran como no identificadas.
