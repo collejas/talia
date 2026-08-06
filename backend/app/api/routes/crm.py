@@ -27073,7 +27073,7 @@ async def reply_inbox_conversation(
                 user_payload.setdefault("type", "human")
                 agent_payload["user"] = user_payload
 
-        if channel in {"whatsapp", "correo"} and attachments_payload:
+        if channel == "correo" and attachments_payload:
             raise HTTPException(status_code=415, detail="attachments_not_supported")
 
         if agent_payload:
@@ -27214,6 +27214,7 @@ async def reply_inbox_conversation(
                 contact_id=str(persona_id),
                 content=content,
                 metadata=extra_metadata,
+                attachments=attachments_payload,
             )
             return {
                 "ok": True,
@@ -27409,7 +27410,7 @@ async def upload_inbox_attachment(
         raise HTTPException(status_code=502, detail="conversation_lookup_failed") from exc
 
     channel = (conversation_meta.get("channel") or "").lower()
-    if channel != "webchat":
+    if channel not in {"webchat", "whatsapp"}:
         raise HTTPException(status_code=400, detail="unsupported_channel")
 
     persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
@@ -27418,11 +27419,20 @@ async def upload_inbox_attachment(
         session_id = await _resolve_webchat_session_id(str(persona_id))
 
     try:
-        uploaded = await storage.upload_webchat_attachment(
-            file=file,
-            session_id=session_id,
-            conversation_id=str(conversacion_id),
-        )
+        if channel == "whatsapp":
+            content = await file.read()
+            uploaded = await storage.upload_whatsapp_attachment(
+                content=content,
+                filename=file.filename or "adjunto",
+                content_type=file.content_type,
+                conversation_id=str(conversacion_id),
+            )
+        else:
+            uploaded = await storage.upload_webchat_attachment(
+                file=file,
+                session_id=session_id,
+                conversation_id=str(conversacion_id),
+            )
     except StorageError as exc:
         raise HTTPException(status_code=502, detail="upload_failed") from exc
 
@@ -48533,6 +48543,7 @@ async def _send_manual_whatsapp_message(
     contact_id: str,
     content: str,
     metadata: dict[str, Any],
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     phone, wa_id, contact = await _resolve_whatsapp_identity(contact_id)
     if not phone:
@@ -48543,6 +48554,7 @@ async def _send_manual_whatsapp_message(
     send_result = await whatsapp_service.send_manual_message(
         to_number=phone,
         body=content,
+        attachments=attachments,
         organizacion_id=resolved_org_uuid,
     )
     if send_result.error:
@@ -48569,7 +48581,8 @@ async def _send_manual_whatsapp_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             metadata=metadata_payload,
-        organizacion_id=resolved_org_hint,
+            attachments=attachments,
+            organizacion_id=resolved_org_hint,
         )
     except StorageError as exc:
         logger.exception(

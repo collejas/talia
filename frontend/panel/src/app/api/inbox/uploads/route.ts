@@ -33,5 +33,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: response.error || "upload_failed" }, { status });
   }
 
-  return NextResponse.json(response.data ?? { ok: true });
+  const attachment = response.data?.attachment;
+  return NextResponse.json({
+    ok: true,
+    ...(attachment ?? {}),
+  });
 }
