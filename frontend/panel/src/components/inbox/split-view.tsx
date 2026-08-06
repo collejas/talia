@@ -753,6 +753,121 @@ function mergeMessageHistory(candidate: InboxMessage[], current: InboxMessage[])
   return current;
 }
 
+const InboxMessageRow = React.memo(function InboxMessageRow({
+  message,
+  isHydrated,
+}: {
+  message: InboxMessage;
+  isHydrated: boolean;
+}) {
+  const isAgent = message.role === "usuario";
+  const isHumanAgent = isHumanAgentMessage(message);
+  const metadata = message.datos && typeof message.datos === "object"
+    ? (message.datos as Record<string, unknown>)
+    : null;
+  const humanAuthor = isHumanAgent
+    ? resolveHumanAuthorName(metadata, message.author)
+    : null;
+  const displayAuthor =
+    isAgent && !isHumanAgent ? "Tal-IA" : isHumanAgent ? humanAuthor ?? message.author : message.author;
+  const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
+
+  return (
+    <div className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
+      <div className={`flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isAgent ? "justify-end" : ""}`}>
+        {isAgent && isHumanAgent ? (
+          <Badge variant="secondary" className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm">
+            Humano: {humanAuthor ?? message.author}
+          </Badge>
+        ) : (
+          <span className="font-medium text-foreground">{displayAuthor}</span>
+        )}
+        <span>{timestampLabel || "—"}</span>
+      </div>
+      <div
+        className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+      >
+        {message.body.map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+      {message.attachments.length ? (
+        <div className="mt-2 flex w-full max-w-xl flex-col gap-2 text-xs">
+          {message.attachments.map((attachment) => (
+            <div
+              key={attachment.id ?? attachment.url}
+              className="overflow-hidden rounded-2xl border border-muted bg-background/90 shadow-sm ring-1 ring-black/5"
+            >
+              {isImageAttachment(attachment) ? (
+                <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="block">
+                  <div className="relative h-72 w-full bg-black/5">
+                    <Image
+                      src={attachment.url}
+                      alt={attachment.name ?? "Imagen adjunta"}
+                      fill
+                      unoptimized
+                      className="object-contain"
+                      sizes="(max-width: 768px) 100vw, 480px"
+                    />
+                  </div>
+                </a>
+              ) : isVideoAttachment(attachment) ? (
+                <div className="bg-black/5 p-2">
+                  <video controls preload="metadata" className="max-h-72 w-full rounded-xl bg-black" src={attachment.url} />
+                </div>
+              ) : isAudioAttachment(attachment) ? (
+                <div className="px-3 py-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                    {getAttachmentIcon(attachment)}
+                    <span className="truncate">{attachment.name ?? "Audio adjunto"}</span>
+                  </div>
+                  <audio controls preload="metadata" className="w-full" src={attachment.url} />
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 px-3 py-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                    {getAttachmentIcon(attachment)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-foreground">{attachment.name ?? "Archivo adjunto"}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {attachment.mime ?? "application/octet-stream"}
+                      {attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <a
+                href={attachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-3 border-t border-muted bg-background/70 px-3 py-2 text-muted-foreground hover:text-foreground"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {isImageAttachment(attachment) ? <IconFile className="h-3.5 w-3.5" /> : null}
+                  <span className="truncate">
+                    {attachment.name ??
+                      (isImageAttachment(attachment)
+                        ? "Imagen adjunta"
+                        : isVideoAttachment(attachment)
+                          ? "Video adjunto"
+                          : isAudioAttachment(attachment)
+                            ? "Audio adjunto"
+                            : "Archivo adjunto")}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[11px] font-medium text-foreground/80">
+                  Abrir{attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
+                </span>
+              </a>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
 type InboxSplitViewProps = {
   threads: InboxThread[];
   batchOptions?: Array<{ value: string; label: string }>;
@@ -1423,7 +1538,10 @@ export function InboxSplitView({
             return Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
           }),
         );
-        const messages = combineMessageHistories(histories);
+        const fetchedMessages = combineMessageHistories(histories);
+        // Conserva las mismas referencias para mensajes ya renderizados; solo
+        // los mensajes nuevos llegan como filas nuevas al árbol de React.
+        const messages = combineMessageHistories([currentMessages, fetchedMessages]);
         const fingerprint = fingerprintMessages(messages);
         if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
           messagesPollingDelayRef.current = Math.min(
@@ -1457,7 +1575,7 @@ export function InboxSplitView({
         messagesRefreshingRef.current = null;
       }
     },
-    [pendingAttachments.length, threadItems, uploadingAttachments, sending],
+    [currentMessages, pendingAttachments.length, threadItems, uploadingAttachments, sending],
   );
 
   const handleAttachmentUpload = React.useCallback(
@@ -2160,132 +2278,9 @@ export function InboxSplitView({
               ) : null}
               <div className="flex flex-col gap-4">
               {currentMessages.length ? (
-                currentMessages.map((message) => {
-                  const isAgent = message.role === "usuario";
-                  const isHumanAgent = isHumanAgentMessage(message);
-                  const metadata =
-                    message.datos && typeof message.datos === "object"
-                      ? (message.datos as Record<string, unknown>)
-                      : null;
-                  const humanAuthor = isHumanAgent
-                    ? resolveHumanAuthorName(metadata, message.author)
-                    : null;
-                  const displayAuthor =
-                    isAgent && !isHumanAgent ? "Tal-IA" : isHumanAgent ? humanAuthor ?? message.author : message.author;
-                  const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
-                  return (
-                    <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
-                      <div
-                        className={`flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isAgent ? "justify-end" : ""}`}
-                      >
-                        {isAgent && isHumanAgent ? (
-                          <Badge
-                            variant="secondary"
-                            className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm"
-                          >
-                            Humano: {humanAuthor ?? message.author}
-                          </Badge>
-                        ) : (
-                          <span className="font-medium text-foreground">{displayAuthor}</span>
-                        )}
-                        <span>{timestampLabel || "—"}</span>
-                      </div>
-                      <div
-                        className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                      >
-                        {message.body.map((paragraph, index) => (
-                          <p key={index}>{paragraph}</p>
-                        ))}
-                      </div>
-                      {message.attachments.length ? (
-                        <div className="mt-2 flex w-full max-w-xl flex-col gap-2 text-xs">
-                          {message.attachments.map((attachment) => (
-                            <div
-                              key={attachment.id ?? attachment.url}
-                              className="overflow-hidden rounded-2xl border border-muted bg-background/90 shadow-sm ring-1 ring-black/5"
-                            >
-                              {isImageAttachment(attachment) ? (
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="block"
-                                >
-                                  <div className="relative h-72 w-full bg-black/5">
-                                    <Image
-                                      src={attachment.url}
-                                      alt={attachment.name ?? "Imagen adjunta"}
-                                      fill
-                                      unoptimized
-                                      className="object-contain"
-                                      sizes="(max-width: 768px) 100vw, 480px"
-                                    />
-                                  </div>
-                                </a>
-                              ) : isVideoAttachment(attachment) ? (
-                                <div className="bg-black/5 p-2">
-                                  <video
-                                    controls
-                                    preload="metadata"
-                                    className="max-h-72 w-full rounded-xl bg-black"
-                                    src={attachment.url}
-                                  />
-                                </div>
-                              ) : isAudioAttachment(attachment) ? (
-                                <div className="px-3 py-3">
-                                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                                    {getAttachmentIcon(attachment)}
-                                    <span className="truncate">{attachment.name ?? "Audio adjunto"}</span>
-                                  </div>
-                                  <audio controls preload="metadata" className="w-full" src={attachment.url} />
-                                </div>
-                              ) : (
-                                <div className="flex items-start gap-3 px-3 py-3">
-                                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                                    {getAttachmentIcon(attachment)}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-medium text-foreground">
-                                      {attachment.name ?? "Archivo adjunto"}
-                                    </div>
-                                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                      {attachment.mime ?? "application/octet-stream"}
-                                      {attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              <a
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between gap-3 border-t border-muted bg-background/70 px-3 py-2 text-muted-foreground hover:text-foreground"
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  {isImageAttachment(attachment) ? <IconFile className="h-3.5 w-3.5" /> : null}
-                                  <span className="truncate">
-                                    {attachment.name ??
-                                      (isImageAttachment(attachment)
-                                        ? "Imagen adjunta"
-                                        : isVideoAttachment(attachment)
-                                          ? "Video adjunto"
-                                          : isAudioAttachment(attachment)
-                                            ? "Audio adjunto"
-                                            : "Archivo adjunto")}
-                                  </span>
-                                </span>
-                                <span className="shrink-0 text-[11px] font-medium text-foreground/80">
-                                  Abrir
-                                  {attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
-                                </span>
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                      </div>
-                    );
-                  })
+                currentMessages.map((message) => (
+                  <InboxMessageRow key={message.id} message={message} isHydrated={isHydrated} />
+                ))
                 ) : (
                   <p className="text-sm text-muted-foreground">Aún no hay mensajes en esta conversación.</p>
                 )}
