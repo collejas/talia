@@ -79,6 +79,7 @@ export function UserCreateSection({
               )}
             >
               <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
               <option value="bloqueado">Bloqueado</option>
             </select>
           </div>
@@ -299,6 +300,7 @@ export function UserInlineRow({ user, rolesCatalog, departments, positions }: Us
                       )}
                     >
                       <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
                       <option value="bloqueado">Bloqueado</option>
                     </select>
                   </div>
