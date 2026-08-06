@@ -488,7 +488,7 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Importar prospectos en lote</DialogTitle>
             <DialogDescription>
@@ -592,12 +592,12 @@ export function ProspectosImportador({ onImported }: ProspectoImportadorProps) {
                       const contact = [normalizeCell(item.email), normalizeCell(item.phone)].filter(Boolean).join(" · ")
                       return (
                         <div key={`${item.row ?? "na"}-${label}-${index}`} className="rounded-md border bg-background px-3 py-2">
-                          <p className="font-medium">
+                          <p className="break-words font-medium">
                             {item.row ? `Fila ${item.row}: ` : ""}
                             {label}
                           </p>
                           {contact ? <p className="text-muted-foreground">{contact}</p> : null}
-                          <p className="text-muted-foreground">{item.detalle}</p>
+                          <p className="break-words text-muted-foreground">{item.detalle}</p>
                         </div>
                       )
                     })}
