@@ -716,12 +716,12 @@ export default async function Page({
                 </div>
               </div>
               <SessionRecovery errors={errores} />
-              {view !== "overview" ? <div className="px-4 lg:px-6">
+              <div className="px-4 lg:px-6">
                 <AcquisitionSummary
                   summary={demografiaResponse?.summary ?? null}
-                  mode={view === "traffic" ? "traffic" : view === "conversations" ? "conversations" : "campaigns"}
+                  mode={view}
                 />
-              </div> : null}
+              </div>
               {view !== "overview" && tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
                   <MapaConversionTableClient
