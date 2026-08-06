@@ -918,6 +918,10 @@ export function InboxSplitView({
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
   const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
+  const currentMessagesRef = React.useRef(currentMessages);
+  const threadItemsRef = React.useRef(threadItems);
+  currentMessagesRef.current = currentMessages;
+  threadItemsRef.current = threadItems;
   const threadsRefreshingRef = React.useRef(false);
   const threadEnrichmentRef = React.useRef(false);
   const threadEnrichedOnceRef = React.useRef<Set<string>>(new Set());
@@ -1146,12 +1150,12 @@ export function InboxSplitView({
       setCurrentMessages(initialMessages);
       lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
       setAutoScrollLocked(false);
-    } else if (isMessageSetRicher(initialMessages, currentMessages)) {
+    } else if (isMessageSetRicher(initialMessages, currentMessagesRef.current)) {
       setCurrentMessages(initialMessages);
       lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
     }
     previousSelectedIdRef.current = currentId;
-  }, [currentMessages, selectedThread?.id, selectedThread?.messages]);
+  }, [selectedThread?.id, selectedThread?.messages]);
 
   React.useEffect(() => {
     setPendingAttachments([]);
@@ -1524,7 +1528,7 @@ export function InboxSplitView({
           );
           return;
         }
-        const selected = threadItems.find((thread) => thread.id === conversationId);
+        const selected = threadItemsRef.current.find((thread) => thread.id === conversationId);
         const conversationIds = Array.from(
           new Set([conversationId, ...(selected?.conversationHistory ?? [])].filter(Boolean)),
         );
@@ -1541,7 +1545,7 @@ export function InboxSplitView({
         const fetchedMessages = combineMessageHistories(histories);
         // Conserva las mismas referencias para mensajes ya renderizados; solo
         // los mensajes nuevos llegan como filas nuevas al árbol de React.
-        const messages = combineMessageHistories([currentMessages, fetchedMessages]);
+        const messages = combineMessageHistories([currentMessagesRef.current, fetchedMessages]);
         const fingerprint = fingerprintMessages(messages);
         if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
           messagesPollingDelayRef.current = Math.min(
@@ -1575,7 +1579,7 @@ export function InboxSplitView({
         messagesRefreshingRef.current = null;
       }
     },
-    [currentMessages, pendingAttachments.length, threadItems, uploadingAttachments, sending],
+    [pendingAttachments.length, uploadingAttachments, sending],
   );
 
   const handleAttachmentUpload = React.useCallback(
