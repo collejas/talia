@@ -4433,7 +4433,7 @@ class ProspectoManualPayload(BaseModel):
 
     display_name: str | None = Field(default=None, min_length=2, max_length=200)
     nombre_comercial: str | None = Field(default=None, max_length=255)
-    titulo: str | None = Field(default=None, max_length=40)
+    titulo: str | None = Field(default=None, max_length=100)
     nombre: str | None = Field(default=None, max_length=120)
     primer_apellido: str | None = Field(default=None, max_length=120)
     segundo_apellido: str | None = Field(default=None, max_length=120)
@@ -4494,7 +4494,7 @@ class ProspectoUpdatePayload(BaseModel):
 
     display_name: str | None = Field(default=None, min_length=2, max_length=200)
     nombre_comercial: str | None = Field(default=None, max_length=255)
-    titulo: str | None = Field(default=None, max_length=40)
+    titulo: str | None = Field(default=None, max_length=100)
     nombre: str | None = Field(default=None, max_length=120)
     primer_apellido: str | None = Field(default=None, max_length=120)
     segundo_apellido: str | None = Field(default=None, max_length=120)

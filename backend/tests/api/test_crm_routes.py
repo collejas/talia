@@ -1778,7 +1778,7 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
             "items": [
                 {
                     "nombre_comercial": "Alpha SA de CV",
-                    "titulo": "Lic.",
+                    "titulo": "JEFE DE RELACIONES LABORALES Y CAPACITACIÓN",
                     "nombre": "Carlos",
                     "primer_apellido": "Perez",
                     "tipo_vialidad": "Calle",
@@ -1805,7 +1805,7 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert payload["ok"] is True
     assert payload["created"] == 2
     assert len(payload["prospectos"]) == 2
-    assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == "Lic."
+    assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == "JEFE DE RELACIONES LABORALES Y CAPACITACIÓN"
     assert fake_repo.last_bulk_inserted_prospectos[0]["nombre"] == "Carlos"
     assert fake_repo.last_bulk_inserted_prospectos[0]["primer_apellido"] == "Perez"
     assert fake_repo.last_bulk_inserted_prospectos[0]["address"] == "Calle Madero 456, Monterrey, Nuevo Leon"
