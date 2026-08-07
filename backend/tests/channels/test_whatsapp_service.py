@@ -1517,6 +1517,88 @@ async def test_generate_assistant_reply_retries_without_previous_response_id(mon
 
 
 @pytest.mark.asyncio
+async def test_generate_assistant_reply_recovers_incomplete_response(monkeypatch) -> None:
+    """Una respuesta incompleta debe recuperarse sin caer al fallback."""
+
+    message = _build_sample_message()
+    assistant_cfg = service.AssistantConfig(
+        assistant_id=None,
+        prompt_id="pmpt_test",
+        prompt_version="1",
+        project_id="proj-test",
+    )
+
+    class FakeResponse:
+        def model_dump(self) -> dict[str, Any]:
+            return {
+                "id": "resp-recovered",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "Respuesta recuperada"}],
+                    }
+                ],
+            }
+
+    class FakeResponses:
+        async def create(self, **kwargs: Any) -> FakeResponse:
+            assert kwargs["tool_choice"] == "none"
+            assert kwargs["max_output_tokens"] == 240
+            assert "prompt" in kwargs
+            return FakeResponse()
+
+    fake_client = SimpleNamespace(responses=FakeResponses())
+    usage_calls: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(service, "_build_assistant_from_runtime", lambda *args, **kwargs: assistant_cfg)
+    monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: fake_client)
+    monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
+    monkeypatch.setattr(service, "build_prompt_payload", lambda *args, **kwargs: {"prompt": "test"})
+    monkeypatch.setattr(service.storage, "fetch_persona_context", _async_none)
+    monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
+    monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
+    async def fake_record_response_usage(**kwargs: Any) -> None:
+        usage_calls.append(kwargs)
+
+    monkeypatch.setattr(service.openai_usage_ledger, "record_response_usage", fake_record_response_usage)
+
+    async def fake_run_tool_loop(**_: object):
+        return SimpleNamespace(
+            response={
+                "id": "resp-incomplete",
+                "status": "incomplete",
+                "output": [{"type": "reasoning"}],
+            },
+            conversation_id=None,
+            response_id="resp-incomplete",
+            tools_called=[],
+            side_effects={},
+        )
+
+    monkeypatch.setattr(service, "run_tool_loop", fake_run_tool_loop)
+
+    reply = await service._generate_assistant_reply(
+        message=message,
+        conversation_id="conv-1",
+        persona_id="contact-1",
+        openai_conversation_id=None,
+        previous_response_id=None,
+        catalog_context=None,
+        booking_context=None,
+        whatsapp_settings=SimpleNamespace(voice_api_key="api-key", project_id="proj-test"),
+        organizacion_id=UUID("39e32c05-bfc2-4794-8aab-225873f2bf19"),
+        prospeccion_mode=False,
+        origin_type="general_whatsapp",
+        inbound_message_id="inbound-1",
+    )
+
+    assert reply.text == "Respuesta recuperada"
+    assert reply.response_id == "resp-recovered"
+    assert len(usage_calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_generate_assistant_reply_short_circuits_prospeccion_negation(monkeypatch) -> None:
     message = schemas.WhatsAppIncomingMessage(
         message_sid="SM-negation",
