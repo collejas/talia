@@ -69,6 +69,37 @@ async def test_get_active_stage_by_legacy_code_requires_board_stage() -> None:
 
 
 @pytest.mark.asyncio
+async def test_whatsapp_attribution_does_not_copy_persona_into_legacy_contact_fk() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["json"] = kwargs.get("json")
+        return DummyResponse([{"id": "event-1", "persona_id": "persona-1", "contacto_id": None}])
+
+    repo._request_service_role = AsyncMock(side_effect=fake_request)
+
+    await repo.worker_create_whatsapp_atribucion_event(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        payload={
+            "persona_id": "persona-1",
+            "conversacion_id": "conversation-1",
+            "contacto_id": None,
+        },
+    )
+
+    payload = captured["json"]
+    assert isinstance(payload, list)
+    assert payload[0]["persona_id"] == "persona-1"
+    assert "contacto_id" not in payload[0]
+
+
+@pytest.mark.asyncio
 async def test_list_opportunities_builds_combined_and_filters() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"

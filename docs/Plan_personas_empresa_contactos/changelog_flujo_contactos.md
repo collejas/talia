@@ -33,6 +33,12 @@ Se implemento y documente la nueva experiencia de CRUD de contactos en el panel,
 - Refinamiento de mobile y accesibilidad.
 - Evaluar si se requieren endpoints nativos adicionales para relaciones.
 
+## 2026-08-07 - Atribución WhatsApp con persona canónica
+
+- `prospeccion_whatsapp_atribucion_eventos` guarda el evento con `persona_id`, que es la identidad operativa del refactor.
+- `contacto_id` queda como referencia legacy opcional y no recibe automáticamente el `persona_id`.
+- Esto evita que una condición de carrera durante la creación de la sombra `contactos` descarte la atribución por una FK legacy.
+
 ## 2026-06-17 - Barrido de compatibilidad `persona_id`
 
 Se avanzo el corte operativo de compatibilidad entre `contacto_id` y `persona_id` en backend y panel.

@@ -20791,10 +20791,14 @@ class CRMRepository:
             raise CRMRepositoryError("whatsapp_atribucion_persona_id_required")
         normalized_payload = dict(payload)
         normalized_payload["persona_id"] = resolved_persona_id
-        if not normalized_payload.get("contacto_id"):
-            # Compatibilidad temporal: mientras existan lectores legacy,
-            # el contrato sigue duplicando el identificador canónico.
-            normalized_payload["contacto_id"] = resolved_persona_id
+        # `personas.id` is the canonical identity after the contacts refactor.
+        # The legacy FK is nullable and cannot be filled with persona_id: the
+        # shadow row in `contactos` may not exist yet, or may not exist at all.
+        # A canonical persona is sufficient. Do not send a historical
+        # contacto_id alongside it because metadata may point to a deleted
+        # legacy row and the nullable FK must never block attribution.
+        if persona_id:
+            normalized_payload.pop("contacto_id", None)
         resp = await self._request_service_role(
             "POST",
             "/rest/v1/prospeccion_whatsapp_atribucion_eventos",

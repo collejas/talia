@@ -111,6 +111,8 @@ sin romper contratos publicos ni el lenguaje de usuario del panel.
   - `openai_request_usage`
 - el puente crea una sombra legacy en `public.contactos` solo cuando una escritura aun
   depende de ese FK; no cambia el modelo operativo nuevo
+- la atribución de WhatsApp ya no copia `persona_id` a `contacto_id`: cuando no existe una
+  sombra legacy válida, el evento se guarda con `persona_id` y deja `contacto_id` nulo
 
 ### Validacion reciente
 
