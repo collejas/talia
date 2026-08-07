@@ -5,6 +5,7 @@ import { IconBrandWhatsapp, IconMessageCircle, IconRobot, IconUser } from "@tabl
 import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
 import type { EmbudoCard } from "@/lib/embudo/data"
+import { buildWhatsappCtaTooltip, resolveWhatsappCtaAttribution } from "@/lib/embudo/helpers"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
@@ -61,6 +62,10 @@ export function EmbudoCardItem({
   const evasiveAnswersCount = card.leadScoring?.evasiveAnswersCount;
   const originBadge = useMemo(() => resolveOriginBadge(card), [card]);
   const contactOriginBadge = useMemo(() => resolveContactOriginBadge(card), [card]);
+  const whatsappCtaAttribution = useMemo(
+    () => resolveWhatsappCtaAttribution(card.metadata),
+    [card.metadata],
+  );
   const channelBadge = useMemo(() => resolveChannelBadge(card.canal), [card.canal]);
   const inboxContactId = card.personaId || card.contactoId;
   const inboxHref = inboxContactId ? `/inbox?persona_id=${encodeURIComponent(inboxContactId)}` : "/inbox";
@@ -150,6 +155,16 @@ export function EmbudoCardItem({
               title={contactOriginBadge.title}
             >
               {contactOriginBadge.label}
+            </Badge>
+          ) : null}
+          {whatsappCtaAttribution ? (
+            <Badge
+              variant="outline"
+              className="border-emerald-300 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+              title={buildWhatsappCtaTooltip(whatsappCtaAttribution)}
+            >
+              <IconBrandWhatsapp className="size-3" />
+              CTA de WhatsApp
             </Badge>
           ) : null}
         </div>
@@ -253,6 +268,7 @@ function buildAutoStageTooltip(card: EmbudoCard): string {
   }
   return parts.join(" · ");
 }
+
 
 function resolveOriginBadge(
   card: EmbudoCard,

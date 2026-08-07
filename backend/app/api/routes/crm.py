@@ -25448,6 +25448,7 @@ async def get_inbox_threads(
                         "prospeccion",
                         "prospeccion_whatsapp",
                         "whatsapp",
+                        "general_whatsapp",
                         "assistant",
                         "whatsapp_inbound",
                     }:
@@ -26137,6 +26138,7 @@ async def get_inbox_threads(
                 "prospeccion",
                 "prospeccion_whatsapp",
                 "whatsapp",
+                "general_whatsapp",
                 "assistant",
                 "whatsapp_inbound",
             }:

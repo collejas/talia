@@ -8,6 +8,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
+import { buildWhatsappCtaTooltip, resolveWhatsappCtaAttribution } from "@/lib/embudo/helpers";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -840,6 +841,11 @@ export function LeadDrawer({
       className,
     };
   }, [card]);
+
+  const whatsappCtaAttribution = useMemo(
+    () => resolveWhatsappCtaAttribution(card?.metadata),
+    [card?.metadata],
+  );
 
   const channelBadge = useMemo(() => {
     if (!card) return null;
@@ -3016,6 +3022,15 @@ export function LeadDrawer({
                     title={contactOriginBadge.title}
                   >
                     {contactOriginBadge.label}
+                  </Badge>
+                ) : null}
+                {whatsappCtaAttribution ? (
+                  <Badge
+                    variant="outline"
+                    className="w-fit border-emerald-300 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                    title={buildWhatsappCtaTooltip(whatsappCtaAttribution)}
+                  >
+                    CTA de WhatsApp
                   </Badge>
                 ) : null}
                 {channelBadge ? (

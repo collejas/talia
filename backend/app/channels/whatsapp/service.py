@@ -2104,15 +2104,56 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
     if isinstance(recent_event, dict):
         recent_conversation_id = _trim_text(recent_event.get("conversacion_id"))
         if recent_conversation_id and recent_conversation_id != conversation_id:
+            inherited_detail = {
+                "canal_publicitario": _trim_text(matched_rule.get("canal_publicitario")),
+                "campana_publicitaria": _trim_text(matched_rule.get("campana_publicitaria")),
+                "adset": _trim_text(matched_rule.get("adset")),
+                "anuncio": _trim_text(matched_rule.get("anuncio")),
+                "regla_id": _trim_text(matched_rule.get("id")),
+                "regla_nombre": _trim_text(matched_rule.get("nombre_regla")),
+                "tipo_match": applied_match_type,
+                "frase_normalizada": normalized_phrase,
+                "atribuido_en": _trim_text(recent_event.get("creado_en"))
+                or datetime.now(timezone.utc).isoformat(),
+                "heredado_de_conversacion_id": recent_conversation_id,
+            }
+            try:
+                await storage.merge_conversation_inbox_context(
+                    conversation_id,
+                    {
+                        "source": "publicidad_whatsapp",
+                        "source_detail": inherited_detail,
+                    },
+                )
+            except StorageError as exc:
+                log_event(
+                    logger,
+                    "whatsapp.publicidad_atribucion_inherited_context_failed",
+                    conversation_id=conversation_id,
+                    persona_id=persona_id,
+                    recent_conversation_id=recent_conversation_id,
+                    error=str(exc),
+                )
             log_event(
                 logger,
-                "whatsapp.publicidad_atribucion_skipped_recent_contact_window",
+                "whatsapp.publicidad_atribucion_inherited_recent_event",
                 conversation_id=conversation_id,
                 persona_id=persona_id,
                 recent_conversation_id=recent_conversation_id,
                 window_minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES,
             )
-            return None
+            return {
+                **recent_event,
+                "conversacion_id": conversation_id,
+                "persona_id": persona_id,
+                "regla_id": _trim_text(matched_rule.get("id")) or recent_event.get("regla_id"),
+                "canal_publicitario": inherited_detail["canal_publicitario"],
+                "campana_publicitaria": inherited_detail["campana_publicitaria"],
+                "adset": inherited_detail["adset"],
+                "anuncio": inherited_detail["anuncio"],
+                "tipo_match": applied_match_type,
+                "frase_normalizada": normalized_phrase,
+            }
 
     event_payload = {
         "organizacion_id": str(organizacion_id),

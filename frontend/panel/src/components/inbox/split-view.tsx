@@ -66,7 +66,7 @@ function getSourceBadge(
 ): { label: string; variant: "secondary" | "outline" } | null {
   const normalized = (source ?? "").trim().toLowerCase();
   if (normalized === "publicidad_whatsapp") {
-    return { label: "Publicidad WhatsApp", variant: "secondary" };
+    return { label: "CTA de WhatsApp", variant: "secondary" };
   }
   if (isProspeccionSource(normalized)) {
     return { label: "Prospección", variant: "secondary" };
@@ -2050,7 +2050,7 @@ export function InboxSplitView({
                             {sourceBadge.label}
                           </Badge>
                         ) : null}
-                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.reglaNombre ? (
+                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.reglaNombre ? (
                           <Badge
                             variant="outline"
                             className={`max-w-[200px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
@@ -2058,7 +2058,7 @@ export function InboxSplitView({
                             {sourceDetailText.reglaNombre}
                           </Badge>
                         ) : null}
-                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.canalPublicitario ? (
+                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.canalPublicitario ? (
                           <Badge
                             variant="outline"
                             className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
@@ -2066,7 +2066,7 @@ export function InboxSplitView({
                             {sourceDetailText.canalPublicitario}
                           </Badge>
                         ) : null}
-                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.campanaPublicitaria ? (
+                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.campanaPublicitaria ? (
                           <Badge
                             variant="outline"
                             className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}
@@ -2160,7 +2160,7 @@ export function InboxSplitView({
                     {selectedSourceBadge.label}
                   </Badge>
                 ) : null}
-                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.reglaNombre ? (
+                {selectedSourceBadge?.label === "CTA de WhatsApp" && selectedSourceDetail.reglaNombre ? (
                   <Badge
                     variant="outline"
                     className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
@@ -2168,7 +2168,7 @@ export function InboxSplitView({
                     {selectedSourceDetail.reglaNombre}
                   </Badge>
                 ) : null}
-                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.canalPublicitario ? (
+                {selectedSourceBadge?.label === "CTA de WhatsApp" && selectedSourceDetail.canalPublicitario ? (
                   <Badge
                     variant="outline"
                     className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
@@ -2176,7 +2176,7 @@ export function InboxSplitView({
                     {selectedSourceDetail.canalPublicitario}
                   </Badge>
                 ) : null}
-                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.campanaPublicitaria ? (
+                {selectedSourceBadge?.label === "CTA de WhatsApp" && selectedSourceDetail.campanaPublicitaria ? (
                   <Badge
                     variant="outline"
                     className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}

@@ -5,6 +5,43 @@ import type {
   PipelineBoardStage,
 } from "@/lib/embudo/data";
 
+export type WhatsappCtaAttribution = {
+  campaign: string | null;
+  rule: string | null;
+  channel: string | null;
+};
+
+export function resolveWhatsappCtaAttribution(
+  metadata: Record<string, unknown> | null | undefined,
+): WhatsappCtaAttribution | null {
+  const raw = metadata?.publicidad_whatsapp_atribucion;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+
+  const detail = raw as Record<string, unknown>;
+  const readText = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed || null;
+  };
+  const attribution: WhatsappCtaAttribution = {
+    campaign: readText(detail.campana_publicitaria),
+    rule: readText(detail.regla_nombre),
+    channel: readText(detail.canal_publicitario),
+  };
+
+  return attribution.campaign || attribution.rule || attribution.channel ? attribution : null;
+}
+
+export function buildWhatsappCtaTooltip(attribution: WhatsappCtaAttribution | null): string {
+  if (!attribution) return "CTA de WhatsApp";
+  const details = [
+    attribution.campaign ? `Campaña: ${attribution.campaign}` : null,
+    attribution.rule ? `Regla: ${attribution.rule}` : null,
+    attribution.channel ? `Canal: ${attribution.channel}` : null,
+  ].filter(Boolean);
+  return details.length ? `CTA de WhatsApp · ${details.join(" · ")}` : "CTA de WhatsApp";
+}
+
 export function parseMetadatos(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return {};
