@@ -840,9 +840,9 @@ export function AcquisitionSummary({
       {mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-2">
         {mode === "conversations" ? <Card className="h-full">
           <CardHeader>
-            <CardTitle>WhatsApp de atribución por canal</CardTitle>
+            <CardTitle>CTAs de WhatsApp</CardTitle>
             <CardDescription>
-              Distribución de inicios de WhatsApp atribuidos por canal, no de campañas de envío.
+              Conversaciones iniciadas desde frases o enlaces de WhatsApp atribuidos.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-72 flex-col gap-4">

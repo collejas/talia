@@ -123,6 +123,7 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se implementaron filtros propios por lectura: resumen, tráfico web, conversaciones y campañas ya no muestran el mismo conjunto mezclado de controles.
 - `Referencias externas` pasó a una gráfica de pastel compacta con leyenda desplazable; en `Tráfico web`, `Sitios que enviaron visitas` y `Atribución de campañas` comparten fila en escritorio y se apilan en móvil.
 - El detalle de campañas y plantillas de correo dejó de mostrarse dentro de `Tráfico web` y queda reservado para la lectura `Campañas`.
+- La tarjeta `WhatsApp de atribución por canal` se renombró como `CTAs de WhatsApp` y se aclaró que representa conversaciones iniciadas desde frases o enlaces atribuidos.
 - En el mapa de `Campañas`, el tooltip dejó de mostrar el embudo geográfico genérico y ahora resume visitas atribuidas, contactos en CRM y conversaciones por canal.
 - En `Tráfico web`, se recuperó el KPI comparativo de sesiones: muestra aumento, decremento o ausencia de comparación contra el periodo anterior.
 - Se reorganizó la lectura de `Tráfico web` en tres niveles: `Origen del tráfico`, `Sitios que enviaron visitas` y `Atribución de campañas`.

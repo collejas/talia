@@ -336,7 +336,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          WhatsApp de atribución por canal
+          CTAs de WhatsApp
         </h4>
         <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
           {(Array.isArray(whatsappAttribution.top) ? whatsappAttribution.top : []).length ? (
