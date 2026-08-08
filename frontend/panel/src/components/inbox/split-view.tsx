@@ -193,6 +193,20 @@ const CLIENT_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const THREAD_WEEKDAY_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  weekday: "long",
+});
+const THREAD_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const THREAD_DATE_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 type ReplyMetadata = {
   manual_mode?: boolean;
@@ -273,6 +287,53 @@ function formatFullTimeLabel(timestamp: string | null | undefined, hydrated: boo
   if (Number.isNaN(date.getTime())) return "";
   const formatter = hydrated ? CLIENT_FULL_TIME_FORMAT : SERVER_FULL_TIME_FORMAT;
   return formatter.format(date);
+}
+
+function isSameCalendarWeek(left: Date, right: Date, useUtc: boolean): boolean {
+  const startOfWeek = (date: Date): number => {
+    const cursor = new Date(date);
+    if (useUtc) {
+      const day = cursor.getUTCDay();
+      const delta = day === 0 ? -6 : 1 - day;
+      cursor.setUTCDate(cursor.getUTCDate() + delta);
+      cursor.setUTCHours(0, 0, 0, 0);
+    } else {
+      const day = cursor.getDay();
+      const delta = day === 0 ? -6 : 1 - day;
+      cursor.setDate(cursor.getDate() + delta);
+      cursor.setHours(0, 0, 0, 0);
+    }
+    return cursor.getTime();
+  };
+
+  return startOfWeek(left) === startOfWeek(right);
+}
+
+function formatThreadTimestampLabel(timestamp: string | null | undefined, hydrated: boolean): string {
+  if (!timestamp) return "—";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const now = new Date();
+  const useUtc = !hydrated;
+  const sameWeek = isSameCalendarWeek(date, now, useUtc);
+  const weekdayFormatter = hydrated ? THREAD_WEEKDAY_FORMAT : new Intl.DateTimeFormat("es-MX", { weekday: "long", timeZone: "UTC" });
+  const timeFormatter = hydrated ? THREAD_TIME_FORMAT : new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+
+  const time = timeFormatter.format(date);
+  if (sameWeek) {
+    return `${weekdayFormatter.format(date)} ${time}`;
+  }
+
+  const dateLabel = hydrated
+    ? new Intl.DateTimeFormat("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date)
+    : THREAD_DATE_FORMAT.format(date);
+
+  return `${dateLabel} ${time}`;
 }
 
 function fingerprintMessages(items: InboxMessage[]): string {
@@ -2100,130 +2161,130 @@ export function InboxSplitView({
             <>
               <ul className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
                 {filteredThreads.map((thread) => {
-                const isActive = thread.id === selectedId;
-                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
-                const unread = thread.noLeidos > 0;
-                const formattedTime = formatShortTimeLabel(displayTime, isHydrated);
-                const restartSequence = Math.max(1, thread.restartSequence ?? 1);
-                const isRestart = restartSequence > 1;
-                const channelBadgeClass = getChannelBadgeClass(thread.canal);
-                const sourceBadge = getSourceBadge(thread.source, thread.canal);
-                const sourceDetailText = getSourceDetailText(thread);
-                return (
-                  <li key={thread.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectThread(thread.id)}
-                      className={`flex w-full flex-col gap-0.5 px-2.5 py-1.5 text-left text-xs transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
-                    >
-                      <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-medium leading-tight" title={thread.contactoTelefono || undefined}>
-                    {thread.contactoNombre}
-                  </span>
-                  {isRestart ? (
-                    <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
-                      {`Reinicio #${restartSequence}`}
-                    </Badge>
-                  ) : null}
-                  {thread.reengageAttempts > 0 ? (
-                    <Badge variant="destructive" className="text-[10px] uppercase tracking-tight">
-                      {`${thread.reengageAttempts} reenganche${thread.reengageAttempts === 1 ? "" : "s"}`}
-                    </Badge>
-                  ) : null}
-                  {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
-                </div>
-                        <span className="text-[9px] text-muted-foreground">{formattedTime}</span>
-                      </div>
-                      <div className="flex items-center gap-1 overflow-hidden text-[9px] text-muted-foreground">
-                        <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
-                          {thread.canal}
-                        </Badge>
-                        {formatCountryLabel(
-                          thread.contactoCountryCode,
-                          thread.contactoCountryName,
-                          thread.contactoCityName,
-                          thread.contactoStateName,
-                          thread.contactoLada,
-                        ) ? (
-                          <Badge variant="outline" className={compactKpiTagClass}>
-                            {formatCountryLabel(
-                              thread.contactoCountryCode,
-                              thread.contactoCountryName,
-                              thread.contactoCityName,
-                              thread.contactoStateName,
-                              thread.contactoLada,
-                            )}
-                          </Badge>
-                        ) : null}
-                        {sourceBadge ? (
-                          <Badge
-                            variant={sourceBadge.variant}
-                            className={`uppercase ${compactKpiTagClass}`}
-                          >
-                            {sourceBadge.label}
-                          </Badge>
-                        ) : null}
-                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.reglaNombre ? (
-                          <Badge
-                            variant="outline"
-                            className={`max-w-[200px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
-                          >
-                            {sourceDetailText.reglaNombre}
-                          </Badge>
-                        ) : null}
-                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.canalPublicitario ? (
-                          <Badge
-                            variant="outline"
-                            className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
-                          >
-                            {sourceDetailText.canalPublicitario}
-                          </Badge>
-                        ) : null}
-                        {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.campanaPublicitaria ? (
-                          <Badge
-                            variant="outline"
-                            className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}
-                          >
-                            {sourceDetailText.campanaPublicitaria}
-                          </Badge>
-                        ) : null}
-                        {thread.campanaId ? (
-                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
-                            {thread.campanaLabel ??
-                              campanaLabelMap.get(thread.campanaId) ??
-                              "Campaña"}
-                          </Badge>
-                        ) : null}
-                        {thread.templateLabel ? (
-                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
-                            {thread.templateLabel}
-                          </Badge>
-                        ) : null}
-                        {thread.batchId ? (
-                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
-                            {thread.batchLabel ??
-                              batchLabelMap.get(thread.batchId) ??
-                              "Lote"}
-                          </Badge>
-                        ) : null}
-                        {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
-                      </div>
-                      <p className="line-clamp-1 text-[10px] leading-tight text-muted-foreground">
-                        {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
-                      </p>
-                      {thread.tags.length ? (
-                        <div className="flex flex-wrap gap-0.5 pt-0.5">
-                          {thread.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-[10px] uppercase">
-                              {tag}
-                            </Badge>
-                          ))}
+                  const isActive = thread.id === selectedId;
+                  const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
+                  const unread = thread.noLeidos > 0;
+                  const formattedTime = formatThreadTimestampLabel(displayTime, isHydrated);
+                  const restartSequence = Math.max(1, thread.restartSequence ?? 1);
+                  const isRestart = restartSequence > 1;
+                  const channelBadgeClass = getChannelBadgeClass(thread.canal);
+                  const sourceBadge = getSourceBadge(thread.source, thread.canal);
+                  const sourceDetailText = getSourceDetailText(thread);
+                  return (
+                    <li key={thread.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectThread(thread.id)}
+                        className={`flex w-full flex-col gap-0.5 px-2.5 py-1.5 text-left text-xs transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-xs font-medium leading-tight" title={thread.contactoTelefono || undefined}>
+                              {thread.contactoNombre}
+                            </span>
+                            {isRestart ? (
+                              <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
+                                {`Reinicio #${restartSequence}`}
+                              </Badge>
+                            ) : null}
+                            {thread.reengageAttempts > 0 ? (
+                              <Badge variant="destructive" className="text-[10px] uppercase tracking-tight">
+                                {`${thread.reengageAttempts} reenganche${thread.reengageAttempts === 1 ? "" : "s"}`}
+                              </Badge>
+                            ) : null}
+                            {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
+                          </div>
+                          <span className="shrink-0 text-[9px] text-muted-foreground">{formattedTime}</span>
                         </div>
-                      ) : null}
-                    </button>
-                  </li>
-                );
+                        <div className="flex items-center gap-1 overflow-hidden text-[9px] text-muted-foreground">
+                          <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
+                            {thread.canal}
+                          </Badge>
+                          {formatCountryLabel(
+                            thread.contactoCountryCode,
+                            thread.contactoCountryName,
+                            thread.contactoCityName,
+                            thread.contactoStateName,
+                            thread.contactoLada,
+                          ) ? (
+                            <Badge variant="outline" className={compactKpiTagClass}>
+                              {formatCountryLabel(
+                                thread.contactoCountryCode,
+                                thread.contactoCountryName,
+                                thread.contactoCityName,
+                                thread.contactoStateName,
+                                thread.contactoLada,
+                              )}
+                            </Badge>
+                          ) : null}
+                          {sourceBadge ? (
+                            <Badge
+                              variant={sourceBadge.variant}
+                              className={`uppercase ${compactKpiTagClass}`}
+                            >
+                              {sourceBadge.label}
+                            </Badge>
+                          ) : null}
+                          {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.reglaNombre ? (
+                            <Badge
+                              variant="outline"
+                              className={`max-w-[200px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
+                            >
+                              {sourceDetailText.reglaNombre}
+                            </Badge>
+                          ) : null}
+                          {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.canalPublicitario ? (
+                            <Badge
+                              variant="outline"
+                              className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
+                            >
+                              {sourceDetailText.canalPublicitario}
+                            </Badge>
+                          ) : null}
+                          {sourceBadge?.label === "CTA de WhatsApp" && sourceDetailText.campanaPublicitaria ? (
+                            <Badge
+                              variant="outline"
+                              className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}
+                            >
+                              {sourceDetailText.campanaPublicitaria}
+                            </Badge>
+                          ) : null}
+                          {thread.campanaId ? (
+                            <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
+                              {thread.campanaLabel ??
+                                campanaLabelMap.get(thread.campanaId) ??
+                                "Campaña"}
+                            </Badge>
+                          ) : null}
+                          {thread.templateLabel ? (
+                            <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
+                              {thread.templateLabel}
+                            </Badge>
+                          ) : null}
+                          {thread.batchId ? (
+                            <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
+                              {thread.batchLabel ??
+                                batchLabelMap.get(thread.batchId) ??
+                                "Lote"}
+                            </Badge>
+                          ) : null}
+                          {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
+                        </div>
+                        <p className="line-clamp-1 text-[10px] leading-tight text-muted-foreground">
+                          {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
+                        </p>
+                        {thread.tags.length ? (
+                          <div className="flex flex-wrap gap-0.5 pt-0.5">
+                            {thread.tags.map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-[10px] uppercase">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
                 })}
               </ul>
             </>
