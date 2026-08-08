@@ -932,6 +932,14 @@ export function InboxSplitView({
   const threadEnrichedOnceRef = React.useRef<Set<string>>(new Set());
   const hasExplicitThreadSelectionRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
+  const activeThreadsFilterKey = React.useMemo(
+    () =>
+      [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter]
+        .map((value) => String(value ?? "").trim().toLowerCase())
+        .join("|"),
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+  );
+  const lastThreadsFilterKeyRef = React.useRef(activeThreadsFilterKey);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
   const messagesPollingDelayRef = React.useRef<number>(MESSAGES_POLL_INITIAL_MS);
@@ -1325,6 +1333,8 @@ export function InboxSplitView({
         runtime_profile?: { recommended_threads_poll_seconds?: number };
       };
       const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+      const filtersChanged = lastThreadsFilterKeyRef.current !== activeThreadsFilterKey;
+      lastThreadsFilterKeyRef.current = activeThreadsFilterKey;
       if (typeof data?.total_threads === "number") {
         setTotalThreads(Math.max(0, data.total_threads));
       }
@@ -1339,6 +1349,9 @@ export function InboxSplitView({
         if (!incoming.length) {
           return [];
         }
+        if (filtersChanged) {
+          return incoming;
+        }
         return mergeThreadLists(current, incoming);
       });
     } catch (error) {
@@ -1346,7 +1359,7 @@ export function InboxSplitView({
     } finally {
       threadsRefreshingRef.current = false;
     }
-  }, [buildThreadsParams, shouldEnrichThreads]);
+  }, [activeThreadsFilterKey, buildThreadsParams, shouldEnrichThreads]);
 
   React.useEffect(() => {
     if (skipInitialThreadsRefreshRef.current) {
@@ -2124,28 +2137,28 @@ export function InboxSplitView({
                 );
                 })}
               </ul>
-              {threadItems.length < totalThreads ? (
-                <div className="shrink-0 border-t bg-card px-3 py-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => void handleLoadMoreThreads()}
-                    disabled={loadingMoreThreads}
-                  >
-                    {loadingMoreThreads
-                      ? "Cargando..."
-                      : `Cargar más (${threadItems.length}/${totalThreads})`}
-                  </Button>
-                </div>
-              ) : null}
             </>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
+            <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
               No hay conversaciones que coincidan con la búsqueda.
             </div>
           )}
+          {threadItems.length < totalThreads ? (
+            <div className="shrink-0 border-t bg-card px-3 py-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => void handleLoadMoreThreads()}
+                disabled={loadingMoreThreads}
+              >
+                {loadingMoreThreads
+                  ? "Cargando..."
+                  : `Cargar más (${threadItems.length}/${totalThreads})`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
