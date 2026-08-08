@@ -16,7 +16,7 @@ ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
 ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel-staging.log
 ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel-staging-error.log
 
-ExecStart=/usr/bin/npm run start -- -p 3101
+ExecStart=/bin/bash -lc '/usr/bin/node .next/standalone/server.js -p 3101 >> /var/www/talia/logs/panel-staging.log 2>> /var/www/talia/logs/panel-staging-error.log'
 
 Restart=on-failure
 RestartSec=5

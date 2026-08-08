@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy atomico para frontend panel en STAGING (Next.js):
-# 1) copia codigo a release nuevo
-# 2) valida TypeScript + lint + build en release nuevo
-# 3) swap atomico del symlink "current"
-# 4) reinicio de servicios staging
-# 5) purge opcional de Cloudflare (dominio staging)
+# Deploy atomico para frontend panel en STAGING (Next.js standalone):
+# 1) copia codigo a release temporal
+# 2) valida TypeScript + lint + build en release temporal
+# 3) empaqueta release minimo standalone
+# 4) swap atomico del symlink "current"
+# 5) reinicio de servicios staging
+# 6) purge opcional de Cloudflare (dominio staging)
 #
 # Uso:
 #   bash scripts/deploy_panel_staging_atomic.sh
@@ -31,6 +32,9 @@ set -euo pipefail
 #   MIN_FREE_GB=3
 #   CLEAN_TMP_ON_FAIL=1
 #   NPM_CACHE_DIR=/var/www/talia/.npm-cache
+#   RUN_AS_USER=jorge
+#   PANEL_LOG_FILE=/var/www/talia/logs/panel-staging.log
+#   PANEL_ERROR_LOG_FILE=/var/www/talia/logs/panel-staging-error.log
 
 PANEL_SOURCE_DIR="${PANEL_SOURCE_DIR:-/var/www/talia/frontend/panel}"
 PANEL_RELEASES_DIR="${PANEL_RELEASES_DIR:-/var/www/talia/releases/panel-staging}"
@@ -58,6 +62,7 @@ API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-45}"
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
 TMP_RELEASE="${NEW_RELEASE}.tmp"
+PACKED_RELEASE="${NEW_RELEASE}.standalone"
 
 SWAPPED=0
 PREV_RELEASE=""
@@ -69,6 +74,7 @@ rollback_if_needed() {
   local exit_code=$?
   if [[ ${exit_code} -ne 0 && "${CLEAN_TMP_ON_FAIL}" == "1" ]]; then
     rm -rf "${TMP_RELEASE}" || true
+    rm -rf "${PACKED_RELEASE}" || true
   fi
   if [[ ${exit_code} -ne 0 && ${SWAPPED} -eq 1 && -n "${PREV_RELEASE}" ]]; then
     echo "[rollback] Fallo despues de swap. Revirtiendo symlink a: ${PREV_RELEASE}"
@@ -90,6 +96,7 @@ cleanup_old_releases() {
   fi
   # 1) limpiar temporales fallidos
   find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.standalone" -print0 | xargs -0r rm -rf --
 
   # 2) conservar release activo + N recientes validos
   local current_target=""
@@ -117,6 +124,45 @@ cleanup_old_releases() {
       fi
       rm -rf -- "${rel}" 2>/dev/null || sudo -n rm -rf -- "${rel}" 2>/dev/null || true
     done
+  fi
+}
+
+assert_standalone_output() {
+  if [[ ! -f "${TMP_RELEASE}/.next/standalone/server.js" ]]; then
+    echo "[deploy-staging] ERROR no existe .next/standalone/server.js"
+    echo "[deploy-staging] Verifica que next.config.ts tenga output: \"standalone\""
+    return 1
+  fi
+
+  if [[ ! -d "${TMP_RELEASE}/.next/static" ]]; then
+    echo "[deploy-staging] ERROR no existe .next/static"
+    return 1
+  fi
+}
+
+package_standalone_release() {
+  echo "[deploy-staging] Empaquetando release standalone minimo"
+
+  rm -rf "${PACKED_RELEASE}"
+  mkdir -p "${PACKED_RELEASE}/.next"
+
+  cp -R "${TMP_RELEASE}/.next/standalone/." "${PACKED_RELEASE}/"
+  cp -R "${TMP_RELEASE}/.next/static" "${PACKED_RELEASE}/.next/"
+
+  if [[ -d "${TMP_RELEASE}/public" ]]; then
+    cp -R "${TMP_RELEASE}/public" "${PACKED_RELEASE}/"
+  fi
+
+  if [[ -f "${TMP_RELEASE}/.env.production" ]]; then
+    cp "${TMP_RELEASE}/.env.production" "${PACKED_RELEASE}/.env.production"
+  fi
+
+  if [[ -f "${TMP_RELEASE}/package.json" ]]; then
+    node -e 'const fs = require("fs"); const [src, dst] = process.argv.slice(1); const pkg = JSON.parse(fs.readFileSync(src, "utf8")); pkg.scripts = pkg.scripts || {}; pkg.scripts.start = "node .next/standalone/server.js"; fs.writeFileSync(dst, JSON.stringify(pkg, null, 2) + "\n");' "${TMP_RELEASE}/package.json" "${PACKED_RELEASE}/package.json"
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${PACKED_RELEASE}" >/dev/null 2>&1 || true
   fi
 }
 
@@ -233,8 +279,11 @@ if [[ "${SKIP_BUILD}" != "1" ]]; then
   npm run build
 fi
 
-echo "[deploy-staging] Promoviendo release temporal a release final"
-mv "${TMP_RELEASE}" "${NEW_RELEASE}"
+assert_standalone_output
+package_standalone_release
+
+echo "[deploy-staging] Promoviendo release standalone a release final"
+mv "${PACKED_RELEASE}" "${NEW_RELEASE}"
 if command -v sudo >/dev/null 2>&1; then
   sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${NEW_RELEASE}" >/dev/null 2>&1 || true
 fi

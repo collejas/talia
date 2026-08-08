@@ -121,6 +121,9 @@ sudo bash scripts/cleanup_disk.sh
 * También limpia logs de usuario en `/home/jorge` como `.npm/_logs`, `.vscode-server`, `.codex/log` y `.twilio-cli`
 * También limpia caches de usuario de npm, Playwright y Go, y recorta versiones viejas de VS Code Server
 
+* Si quieres dejarlo explícito para GitHub/gh:
+sudo RUN_USER_GH_CACHE_CLEAN=1 bash scripts/cleanup_disk.sh
+
 * Si quieres purgar logs rotados aunque no hayan vencido:
 sudo RUN_LOGS_PURGE=1 KEEP_CURRENT_LOGS=1 bash scripts/cleanup_disk.sh
 

@@ -29,6 +29,13 @@ RUN_USER_LOG_CLEAN="${RUN_USER_LOG_CLEAN:-1}"
 RUN_USER_NPM_CACHE_CLEAN="${RUN_USER_NPM_CACHE_CLEAN:-1}"
 RUN_USER_PLAYWRIGHT_CACHE_CLEAN="${RUN_USER_PLAYWRIGHT_CACHE_CLEAN:-1}"
 RUN_USER_GO_CACHE_CLEAN="${RUN_USER_GO_CACHE_CLEAN:-1}"
+RUN_USER_GH_CACHE_CLEAN="${RUN_USER_GH_CACHE_CLEAN:-1}"
+RUN_USER_GO_MOD_CACHE_CLEAN="${RUN_USER_GO_MOD_CACHE_CLEAN:-0}"
+RUN_CODEX_SESSION_CLEAN="${RUN_CODEX_SESSION_CLEAN:-0}"
+CODEX_SESSION_KEEP_DAYS="${CODEX_SESSION_KEEP_DAYS:-30}"
+RUN_CODEX_TMP_CLEAN="${RUN_CODEX_TMP_CLEAN:-0}"
+RUN_VSCODE_SERVER_CLI_CLEAN="${RUN_VSCODE_SERVER_CLI_CLEAN:-0}"
+RUN_GIT_GC_AGGRESSIVE="${RUN_GIT_GC_AGGRESSIVE:-0}"
 RUN_VSCODE_SERVER_PRUNE="${RUN_VSCODE_SERVER_PRUNE:-1}"
 VSCODE_SERVER_KEEP_VERSIONS="${VSCODE_SERVER_KEEP_VERSIONS:-1}"
 
@@ -172,22 +179,50 @@ cleanup_git_objects_in_dir() {
   repo_owner="$(resolve_path_owner "${repo_dir}/.git" || resolve_path_owner "${repo_dir}" || true)"
 
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN git -C ${repo_dir} gc --prune=now (owner=${repo_owner:-unknown})"
+    if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+      log "DRY_RUN git -C ${repo_dir} reflog expire --expire=now --all && git gc --prune=now --aggressive (owner=${repo_owner:-unknown})"
+    else
+      log "DRY_RUN git -C ${repo_dir} gc --prune=now (owner=${repo_owner:-unknown})"
+    fi
     return 0
   fi
 
   if [[ "$(id -u)" -eq 0 && -n "${repo_owner}" && "${repo_owner}" != "root" ]]; then
     if command -v sudo >/dev/null 2>&1; then
-      sudo -u "${repo_owner}" git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+      if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+        sudo -u "${repo_owner}" git -C "${repo_dir}" reflog expire --expire=now --all >/dev/null 2>&1 || true
+        sudo -u "${repo_owner}" git -C "${repo_dir}" gc --prune=now --aggressive >/dev/null 2>&1 || true
+      else
+        sudo -u "${repo_owner}" git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+      fi
     elif command -v runuser >/dev/null 2>&1; then
-      runuser -u "${repo_owner}" -- git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+      if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+        runuser -u "${repo_owner}" -- git -C "${repo_dir}" reflog expire --expire=now --all >/dev/null 2>&1 || true
+        runuser -u "${repo_owner}" -- git -C "${repo_dir}" gc --prune=now --aggressive >/dev/null 2>&1 || true
+      else
+        runuser -u "${repo_owner}" -- git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+      fi
     else
-      su -s /bin/bash - "${repo_owner}" -c "git -C '${repo_dir}' gc --prune=now" >/dev/null 2>&1 || true
+      if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+        su -s /bin/bash - "${repo_owner}" -c "git -C '${repo_dir}' reflog expire --expire=now --all && git -C '${repo_dir}' gc --prune=now --aggressive" >/dev/null 2>&1 || true
+      else
+        su -s /bin/bash - "${repo_owner}" -c "git -C '${repo_dir}' gc --prune=now" >/dev/null 2>&1 || true
+      fi
     fi
-    log "git gc completed in ${repo_dir} as ${repo_owner}"
+    if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+      log "git gc aggressive completed in ${repo_dir} as ${repo_owner}"
+    else
+      log "git gc completed in ${repo_dir} as ${repo_owner}"
+    fi
   else
-    git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
-    log "git gc completed in ${repo_dir}"
+    if [[ "${RUN_GIT_GC_AGGRESSIVE}" == "1" ]]; then
+      git -C "${repo_dir}" reflog expire --expire=now --all >/dev/null 2>&1 || true
+      git -C "${repo_dir}" gc --prune=now --aggressive >/dev/null 2>&1 || true
+      log "git gc aggressive completed in ${repo_dir}"
+    else
+      git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+      log "git gc completed in ${repo_dir}"
+    fi
   fi
 
   cleanup_git_pack_tmp_files_in_dir "${repo_dir}"
@@ -534,7 +569,35 @@ cleanup_user_caches_in_dir() {
     run_rm_rf "${home_dir}/go/pkg/sumdb"
   fi
 
+  if [[ "${RUN_USER_GO_MOD_CACHE_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/go/pkg/mod"
+  fi
+
+  if [[ "${RUN_USER_GH_CACHE_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/.cache/gh"
+  fi
+
+  if [[ "${RUN_CODEX_TMP_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/.codex/.tmp"
+  fi
+
+  if [[ "${RUN_CODEX_SESSION_CLEAN}" == "1" ]]; then
+    if [[ -d "${home_dir}/.codex/sessions" ]]; then
+      if [[ "${DRY_RUN}" == "1" ]]; then
+        log "DRY_RUN prune codex sessions in ${home_dir}/.codex/sessions keep_days=${CODEX_SESSION_KEEP_DAYS}"
+      else
+        find "${home_dir}/.codex/sessions" -type f -mtime +"${CODEX_SESSION_KEEP_DAYS}" -delete 2>/dev/null || true
+        find "${home_dir}/.codex/sessions" -type d -empty -delete 2>/dev/null || true
+        log "codex sessions pruned in ${home_dir}/.codex/sessions keep_days=${CODEX_SESSION_KEEP_DAYS}"
+      fi
+    fi
+  fi
+
   cleanup_vscode_server_versions_in_dir "${home_dir}"
+
+  if [[ "${RUN_VSCODE_SERVER_CLI_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/.vscode-server/cli"
+  fi
 
   log "user cache cleanup done dir=${home_dir}"
 }

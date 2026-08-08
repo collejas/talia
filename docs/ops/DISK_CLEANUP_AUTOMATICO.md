@@ -30,6 +30,13 @@ Variables principales:
 - `RUN_USER_NPM_CACHE_CLEAN`
 - `RUN_USER_PLAYWRIGHT_CACHE_CLEAN`
 - `RUN_USER_GO_CACHE_CLEAN`
+- `RUN_USER_GH_CACHE_CLEAN`
+- `RUN_USER_GO_MOD_CACHE_CLEAN`
+- `RUN_CODEX_SESSION_CLEAN`
+- `CODEX_SESSION_KEEP_DAYS`
+- `RUN_CODEX_TMP_CLEAN`
+- `RUN_VSCODE_SERVER_CLI_CLEAN`
+- `RUN_GIT_GC_AGGRESSIVE`
 - `RUN_VSCODE_SERVER_PRUNE`
 - `VSCODE_SERVER_KEEP_VERSIONS`
 - `DRY_RUN`
@@ -40,6 +47,12 @@ Notas:
 - Si existen, limpia sus logs de `frontend/.next/dev/logs` y corre `git gc` sobre esos repos para reducir reflogs y objetos sueltos.
 - También limpia logs de usuario en `/home/jorge`, incluyendo `.npm/_logs`, `.vscode-server`, `.codex/log` y `.twilio-cli`.
 - También limpia caches de usuario de npm, Playwright y Go, y recorta versiones viejas de VS Code Server dejando solo la(s) más reciente(s).
+- También limpia la caché de `gh` en `/home/jorge/.cache/gh`, sin tocar `~/.config/gh/hosts.yml` ni `~/.config/gh/config.yml`.
+- Con `RUN_USER_GO_MOD_CACHE_CLEAN=1` borra el módulo descargado de Go en `/home/jorge/go/pkg/mod`, que suele ocupar mucho más que `go/pkg/mod/cache`.
+- Con `RUN_CODEX_SESSION_CLEAN=1` borra sesiones antiguas de Codex en `/home/jorge/.codex/sessions` según `CODEX_SESSION_KEEP_DAYS`.
+- Con `RUN_CODEX_TMP_CLEAN=1` borra `/home/jorge/.codex/.tmp`.
+- Con `RUN_VSCODE_SERVER_CLI_CLEAN=1` borra `/home/jorge/.vscode-server/cli`.
+- Con `RUN_GIT_GC_AGGRESSIVE=1` ejecuta `reflog expire --expire=now --all` y `git gc --prune=now --aggressive` en los repos detectados.
 - Con `RUN_LOGS_PURGE=1` borra rotados (`.log.*`, `.out`, `.err`) aunque todavía no hayan vencido; con `KEEP_CURRENT_LOGS=1` conserva los `.log` activos.
 
 ## Verificacion
