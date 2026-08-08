@@ -2270,7 +2270,7 @@ export function InboxSplitView({
                           ) : null}
                           {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                         </div>
-                        <p className="min-h-[1rem] line-clamp-1 text-[10px] leading-tight text-muted-foreground">
+                        <p className="h-[1rem] overflow-hidden whitespace-nowrap text-ellipsis text-[10px] leading-none text-muted-foreground">
                           {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
                         </p>
                         {thread.tags.length ? (
