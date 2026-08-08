@@ -25310,7 +25310,9 @@ async def get_inbox_threads(
     stage_timings: dict[str, float] = {}
     enrich_requested = bool(enrich)
     source_requested = _clean_text(source)
-    source_for_repo = None if source_requested == "publicidad_whatsapp" else source
+    # El filtro debe aplicarse antes de paginar. La función persistida incluye
+    # atribuciones de cualquier conversación agrupada dentro del hilo.
+    source_for_repo = source
     high_demand_mode = await high_demand_controller.current_mode() if enrich_requested else {"active": False}
     # El enriquecimiento diferido solo aplica a listados interactivos. El detalle
     # de un hilo visible y la vista filtrada de publicidad WhatsApp deben seguir
