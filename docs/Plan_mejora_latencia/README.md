@@ -1,5 +1,7 @@
 # Plan de mejora de latencia
 
+- [Workspace de oportunidad en Inbox](06_workspace_oportunidad_inbox.md)
+
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
 
 ## Archivos

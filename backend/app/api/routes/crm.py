@@ -11961,6 +11961,7 @@ class CRMContact(BaseModel):
 
 class CRMContactCreate(BaseModel):
     cuenta_id: UUID | None = None
+    tipo: str | None = Field(default=None, max_length=120)
     request_id: UUID | None = None
     codigo_contacto: str | None = Field(default=None, max_length=64)
     nombre_nombres: str | None = Field(default=None, max_length=160)
@@ -12046,6 +12047,7 @@ class CRMContactCreate(BaseModel):
 
 class CRMContactUpdate(BaseModel):
     cuenta_id: UUID | None = None
+    tipo: str | None = Field(default=None, max_length=120)
     codigo_contacto: str | None = Field(default=None, max_length=64)
     nombre_nombres: str | None = Field(default=None, max_length=160)
     apellido_paterno: str | None = Field(default=None, max_length=160)

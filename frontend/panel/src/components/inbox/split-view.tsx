@@ -33,6 +33,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
+import { LeadDrawer, type LeadDrawerSubmitPayload } from "@/components/embudo/lead-drawer";
+import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
+import { loadLeadWorkspace, updateLeadCard } from "@/lib/embudo/actions";
 
 const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_POLL_INITIAL_MS = 3500;
@@ -918,6 +921,11 @@ export function InboxSplitView({
   const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
   const [promoteForm, setPromoteForm] = React.useState<InboxPromoteFormState | null>(null);
   const [promoteFormError, setPromoteFormError] = React.useState<string | null>(null);
+  const [opportunityDrawerOpen, setOpportunityDrawerOpen] = React.useState(false);
+  const [opportunityDrawerLoading, setOpportunityDrawerLoading] = React.useState(false);
+  const [opportunityDrawerError, setOpportunityDrawerError] = React.useState<string | null>(null);
+  const [opportunityCard, setOpportunityCard] = React.useState<EmbudoCard | null>(null);
+  const [opportunityStages, setOpportunityStages] = React.useState<EmbudoStage[]>([]);
   const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>([]);
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
@@ -1156,6 +1164,41 @@ export function InboxSplitView({
     const inAll = threadItems.find((thread) => thread.id === selectedId);
     return inAll ?? null;
   }, [selectedId, filteredThreads, threadItems]);
+
+  const openOpportunityWorkspace = React.useCallback(async () => {
+    const opportunityId = selectedThread?.opportunityId;
+    if (!opportunityId) return;
+    setOpportunityDrawerLoading(true);
+    setOpportunityDrawerError(null);
+    try {
+      const result = await loadLeadWorkspace(opportunityId);
+      if (!result.ok) throw new Error(result.error);
+      setOpportunityStages(result.stages);
+      setOpportunityCard(result.card);
+      setOpportunityDrawerOpen(true);
+    } catch (error) {
+      setOpportunityDrawerError(error instanceof Error ? error.message : "No se pudo cargar la oportunidad.");
+    } finally {
+      setOpportunityDrawerLoading(false);
+    }
+  }, [selectedThread?.opportunityId]);
+
+  const saveOpportunityWorkspace = React.useCallback(async (payload: LeadDrawerSubmitPayload) => {
+    if (!opportunityCard) return { ok: false as const, error: "No se encontró la oportunidad." };
+    const currentStage = opportunityStages.find((stage) => stage.id === opportunityCard.etapaId) ?? null;
+    const result = await updateLeadCard({
+      oportunidadId: opportunityCard.oportunidadId,
+      personaId: opportunityCard.personaId,
+      contactoId: opportunityCard.contactoId,
+      currentCard: opportunityCard,
+      currentStage,
+      contacto: payload.contacto,
+      oportunidad: payload.oportunidad,
+      mergeMetadata: payload.mergeMetadata,
+    });
+    if (result.ok) setOpportunityCard(result.card);
+    return result;
+  }, [opportunityCard, opportunityStages]);
   const selectedSourceBadge = selectedThread
     ? getSourceBadge(selectedThread.source, selectedThread.canal)
     : null;
@@ -2280,6 +2323,12 @@ export function InboxSplitView({
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
+                {selectedThread.opportunityId ? (
+                  <Button variant="outline" size="sm" className="gap-2" onClick={openOpportunityWorkspace} disabled={opportunityDrawerLoading}>
+                    <IconTargetArrow className="size-4" />
+                    {opportunityDrawerLoading ? "Abriendo…" : "Abrir oportunidad"}
+                  </Button>
+                ) : null}
                 {selectedThread.canal.toLowerCase() === "correo" && selectedThread.opportunityId ? (
                   <Badge variant="outline" className="uppercase">
                     Oportunidad creada
@@ -2617,6 +2666,21 @@ export function InboxSplitView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {opportunityDrawerError ? (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-destructive/40 bg-background px-4 py-3 text-sm text-destructive shadow-lg">
+          {opportunityDrawerError}
+        </div>
+      ) : null}
+      <LeadDrawer
+        open={opportunityDrawerOpen}
+        onOpenChange={setOpportunityDrawerOpen}
+        currentStage={opportunityStages.find((stage) => stage.id === opportunityCard?.etapaId) ?? null}
+        allStages={opportunityStages}
+        card={opportunityCard}
+        side="left"
+        nonModal
+        onSubmit={saveOpportunityWorkspace}
+      />
     </div>
   );
 }

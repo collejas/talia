@@ -67,10 +67,36 @@ export type LeadActionResult =
 
 export type LeadDeleteResult = { ok: true; oportunidadId: string; contactoId: string } | { ok: false; error: string };
 
+export type LeadWorkspaceResult =
+  | { ok: true; stages: EmbudoStage[]; card: EmbudoCard }
+  | { ok: false; error: string };
+
 type PipelineCardResponse = {
   stage: PipelineBoardStage;
   card: PipelineBoardCard;
 };
+
+export async function loadLeadWorkspace(opportunityId: string): Promise<LeadWorkspaceResult> {
+  const normalizedId = opportunityId.trim();
+  if (!normalizedId) return { ok: false, error: "La oportunidad no es válida." };
+  const [cardResult, boardResult] = await Promise.all([
+    callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${normalizedId}`),
+    callCrmApi<{ stages?: PipelineBoardStage[] }>("/crm/pipeline/board", {
+      searchParams: { limit: "1" },
+    }),
+  ]);
+  if (!cardResult.ok) {
+    return { ok: false, error: cardResult.error || "No se pudo cargar la oportunidad." };
+  }
+  if (!cardResult.data?.card || !cardResult.data.stage) {
+    return { ok: false, error: "La respuesta de la oportunidad está incompleta." };
+  }
+  const stages = (boardResult.ok && Array.isArray(boardResult.data?.stages) ? boardResult.data.stages : [])
+    .map((stage) => adaptStage(stage, parseMetadatos(stage.metadatos)));
+  const currentStage = adaptStage(cardResult.data.stage, parseMetadatos(cardResult.data.stage.metadatos));
+  if (!stages.some((stage) => stage.id === currentStage.id)) stages.push(currentStage);
+  return { ok: true, stages, card: adaptCard(cardResult.data.card) };
+}
 
 type CalendarBookingResponseRow = {
   status: string;
@@ -372,6 +398,27 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   const companyValue = sanitizeNullableString(rawContact.company_name);
   const notesValue = sanitizeNullableString(rawContact.notes);
   const needValue = sanitizeNullableString(rawContact.necesidad_proposito);
+  const explicitContactFields = [
+    "nombre_nombres",
+    "apellido_paterno",
+    "apellido_materno",
+    "correo_principal",
+    "telefono_principal_e164",
+    "telefono_movil_1_e164",
+    "puesto",
+    "area",
+    "rol_decision",
+    "origen",
+    "persona_fisica_moral",
+    "tipo",
+    "razon_social",
+    "rfc",
+    "regimen_capital",
+  ] as const;
+  for (const field of explicitContactFields) {
+    const value = sanitizeNullableString(rawContact[field]);
+    if (value !== null) contactUpdatePayload[field] = value;
+  }
   if (correoValue !== null) {
     contactUpdatePayload.correo = correoValue;
   }
@@ -404,6 +451,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     if (companyValue !== null) contactInsertPayload.company_name = companyValue;
     if (notesValue !== null) contactInsertPayload.notes = notesValue;
     if (needValue !== null) contactInsertPayload.necesidad_proposito = needValue;
+    Object.assign(contactInsertPayload, contactUpdatePayload);
     removeUndefined(contactInsertPayload);
 
     logDebug("build-contact-payload", { insertKeys: Object.keys(contactInsertPayload) });

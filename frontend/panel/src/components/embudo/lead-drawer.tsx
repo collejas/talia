@@ -90,13 +90,24 @@ type QuoteAttachmentDraft = {
 
 const formSchema = z.object({
   nombre: z.string().trim().max(120).optional().or(z.literal("")),
+  apellidoPaterno: z.string().trim().max(120).optional().or(z.literal("")),
+  apellidoMaterno: z.string().trim().max(120).optional().or(z.literal("")),
+  origen: z.string().trim().max(80).optional().or(z.literal("")),
+  puesto: z.string().trim().max(120).optional().or(z.literal("")),
+  area: z.string().trim().max(120).optional().or(z.literal("")),
+  rolDecision: z.string().trim().max(120).optional().or(z.literal("")),
   correo: z
     .string()
     .trim()
     .optional()
     .refine((value) => !value || EMAIL_REGEX.test(value), { message: "Ingresa un correo válido." }),
   telefono: z.string().trim().optional(),
+  telefonoTipo: z.enum(["movil", "fijo", "trabajo", "whatsapp"]),
   empresa: z.string().trim().max(160).optional().or(z.literal("")),
+  tipoPersonaEmpresa: z.enum(["moral", "pfea"]),
+  razonSocial: z.string().trim().max(255).optional().or(z.literal("")),
+  rfc: z.string().trim().max(13).optional().or(z.literal("")),
+  regimenCapital: z.string().trim().max(120).optional().or(z.literal("")),
   monto: z
     .string()
     .trim()
@@ -151,6 +162,8 @@ type LeadDrawerProps = {
   allStages: EmbudoStage[];
   card: EmbudoCard | null;
   mode?: "create" | "edit";
+  side?: "left" | "right";
+  nonModal?: boolean;
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
@@ -725,6 +738,8 @@ export function LeadDrawer({
   allStages,
   card,
   mode = "edit",
+  side = "right",
+  nonModal = false,
   onSubmit,
   onCreate,
   onDelete,
@@ -750,9 +765,20 @@ export function LeadDrawer({
         : "";
     return {
       nombre: card?.nombre ?? "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      origen: card?.contactOrigin ?? "",
+      puesto: "",
+      area: "",
+      rolDecision: "",
       correo: card?.correo ?? "",
       telefono: card?.telefono ?? "",
+      telefonoTipo: "movil",
       empresa: card?.empresa ?? "",
+      tipoPersonaEmpresa: "moral",
+      razonSocial: "",
+      rfc: "",
+      regimenCapital: "",
       monto: formatCurrencyInputValue(parseNumberInput(monto), card?.moneda ?? "MXN"),
       moneda: card?.moneda ?? "",
       probabilidad: formatPercentInputValue(parseNumberInput(probabilidad)),
@@ -872,7 +898,7 @@ export function LeadDrawer({
     reset,
     setValue,
     getValues,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = form;
   const montoField = register("monto");
   const probabilidadField = register("probabilidad");
@@ -1672,12 +1698,22 @@ export function LeadDrawer({
 
   const onSubmitForm = async (values: FormValues) => {
     const nombreRaw = (values.nombre ?? "").trim();
+    const apellidoPaternoRaw = (values.apellidoPaterno ?? "").trim();
+    const apellidoMaternoRaw = (values.apellidoMaterno ?? "").trim();
+    const nombreCompletoRaw = [nombreRaw, apellidoPaternoRaw, apellidoMaternoRaw].filter(Boolean).join(" ");
+    const origenRaw = (values.origen ?? "").trim();
+    const puestoRaw = (values.puesto ?? "").trim();
+    const areaRaw = (values.area ?? "").trim();
+    const rolDecisionRaw = (values.rolDecision ?? "").trim();
     const correoRaw = (values.correo ?? "").trim();
     const telefonoRaw = (values.telefono ?? "").trim();
     const montoRaw = (values.monto ?? "").trim();
     const monedaRaw = (values.moneda ?? "").trim().toUpperCase();
     const probRaw = (values.probabilidad ?? "").trim();
     const empresaRaw = (values.empresa ?? "").trim();
+    const razonSocialRaw = (values.razonSocial ?? "").trim();
+    const rfcRaw = (values.rfc ?? "").trim().toUpperCase();
+    const regimenCapitalRaw = (values.regimenCapital ?? "").trim();
     const notasRaw = (values.notas ?? "").trim();
     const necesidadPropositoRaw = (values.necesidadProposito ?? "").trim();
     const proyectoNombreRaw = (values.proyectoNombre ?? "").trim();
@@ -1707,10 +1743,25 @@ export function LeadDrawer({
       }
 
       const contactoPayload: Record<string, unknown> = {
-        nombre_completo: nombreRaw.length ? nombreRaw : null,
+        nombre_nombres: nombreRaw.length ? nombreRaw : null,
+        apellido_paterno: apellidoPaternoRaw.length ? apellidoPaternoRaw : null,
+        apellido_materno: apellidoMaternoRaw.length ? apellidoMaternoRaw : null,
+        nombre_completo: nombreCompletoRaw.length ? nombreCompletoRaw : null,
+        origen: origenRaw.length ? origenRaw : "embudo_manual",
+        puesto: puestoRaw.length ? puestoRaw : null,
+        area: areaRaw.length ? areaRaw : null,
+        rol_decision: rolDecisionRaw.length ? rolDecisionRaw : null,
         correo: correoRaw.length ? correoRaw : null,
         correo_principal: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
+        telefono_principal_e164: telefonoRaw.length ? telefonoRaw : null,
+        telefono_movil_1_e164:
+          telefonoRaw.length && ["movil", "whatsapp"].includes(values.telefonoTipo) ? telefonoRaw : null,
+        persona_fisica_moral: values.tipoPersonaEmpresa === "pfea" ? "fisica" : "moral",
+        tipo: values.tipoPersonaEmpresa === "pfea" ? "persona_fisica_actividad_empresarial" : "empresa",
+        razon_social: razonSocialRaw.length ? razonSocialRaw : null,
+        rfc: rfcRaw.length ? rfcRaw : null,
+        regimen_capital: regimenCapitalRaw.length ? regimenCapitalRaw : null,
       };
       if (empresaRaw.length) {
         contactoPayload.company_name = empresaRaw;
@@ -1802,14 +1853,35 @@ export function LeadDrawer({
     }
 
     const contactoUpdates: Record<string, unknown> = {
-      nombre_completo: nombreRaw.length ? nombreRaw : null,
+      nombre_completo: dirtyFields.nombre || dirtyFields.apellidoPaterno || dirtyFields.apellidoMaterno
+        ? (nombreCompletoRaw.length ? nombreCompletoRaw : null)
+        : card.nombre,
       correo: correoRaw.length ? correoRaw : null,
       correo_principal: correoRaw.length ? correoRaw : null,
       telefono_e164: telefonoRaw.length ? telefonoRaw : null,
+      telefono_principal_e164: telefonoRaw.length ? telefonoRaw : null,
       company_name: empresaRaw.length ? empresaRaw : null,
       notes: notasRaw.length ? notasRaw : null,
       necesidad_proposito: necesidadPropositoRaw.length ? necesidadPropositoRaw : null,
     };
+    if (dirtyFields.nombre) contactoUpdates.nombre_nombres = nombreRaw || null;
+    if (dirtyFields.apellidoPaterno) contactoUpdates.apellido_paterno = apellidoPaternoRaw || null;
+    if (dirtyFields.apellidoMaterno) contactoUpdates.apellido_materno = apellidoMaternoRaw || null;
+    if (dirtyFields.origen) contactoUpdates.origen = origenRaw || null;
+    if (dirtyFields.puesto) contactoUpdates.puesto = puestoRaw || null;
+    if (dirtyFields.area) contactoUpdates.area = areaRaw || null;
+    if (dirtyFields.rolDecision) contactoUpdates.rol_decision = rolDecisionRaw || null;
+    if (dirtyFields.telefono || dirtyFields.telefonoTipo) {
+      contactoUpdates.telefono_movil_1_e164 =
+        telefonoRaw.length && ["movil", "whatsapp"].includes(values.telefonoTipo) ? telefonoRaw : null;
+    }
+    if (dirtyFields.tipoPersonaEmpresa) {
+      contactoUpdates.persona_fisica_moral = values.tipoPersonaEmpresa === "pfea" ? "fisica" : "moral";
+      contactoUpdates.tipo = values.tipoPersonaEmpresa === "pfea" ? "persona_fisica_actividad_empresarial" : "empresa";
+    }
+    if (dirtyFields.razonSocial) contactoUpdates.razon_social = razonSocialRaw || null;
+    if (dirtyFields.rfc) contactoUpdates.rfc = rfcRaw || null;
+    if (dirtyFields.regimenCapital) contactoUpdates.regimen_capital = regimenCapitalRaw || null;
 
     const montoParsed = montoRaw.length ? parseNumberInput(montoRaw) : null;
     const probabilidadParsed = probRaw.length ? parseNumberInput(probRaw) : null;
@@ -2597,35 +2669,6 @@ export function LeadDrawer({
     }
   }, [fetchRenderedQuotePdf, quotePreviewPdfUrl]);
 
-  const buildQuotePdfPayloadFromEntry = useCallback((quote: LeadQuoteEntry) => {
-    const items = (quote.items ?? []).map((item, index) => ({
-      catalog_item_id: item.catalogItemId,
-      titulo: item.title ?? null,
-      descripcion: item.description ?? quote.description ?? null,
-      unidad: item.unit ?? "unidad",
-      cantidad: item.quantity ?? null,
-      precio_unitario: item.unitPrice ?? null,
-      descuento: item.discount ?? null,
-      total: item.total ?? null,
-      moneda: item.currency ?? quote.currency ?? quoteMoneda,
-      orden: index + 1,
-      metadatos: item.fotoUrl ? { fotoUrl: item.fotoUrl } : undefined,
-    }));
-    return {
-      folio: quote.folio ?? null,
-      titulo: quote.title ?? null,
-      descripcion: quote.description ?? quoteProjectNeeds,
-      conceptos: quote.concepts ?? undefined,
-      items,
-      subtotal: quote.subtotal ?? null,
-      impuestos: quote.taxes ?? null,
-      total: quote.total ?? null,
-      moneda: (quote.currency || quoteMoneda || "MXN").trim().toUpperCase(),
-      valido_hasta: quote.validUntil ?? null,
-      metadatos: quote.metadata ?? undefined,
-    };
-  }, [quoteMoneda, quoteProjectNeeds]);
-
   const handleOpenQuotePreview = useCallback(async () => {
     if (quoteVendorSettingsLoading) {
       setQuoteError("Espera a que cargue la configuración de cotización.");
@@ -2996,8 +3039,8 @@ export function LeadDrawer({
 
   return (
     <>
-      <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden">
+      <Drawer open={open} onOpenChange={onOpenChange} direction={side} modal={!nonModal}>
+      <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=left]:w-full data-[vaul-drawer-direction=left]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=left]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=left]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden data-[vaul-drawer-direction=left]:overflow-hidden">
         <DrawerHeader className="items-start">
           <DrawerTitle>
             {isCreateMode ? "Nueva Oportunidad" : card?.nombre ?? "Lead sin nombre"}
@@ -3237,13 +3280,11 @@ export function LeadDrawer({
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-nombre">
                     Nombre
                   </label>
-                  <Input
-                    id="lead-nombre"
-                    placeholder="Nombre del contacto"
-                    disabled={isBusy}
-                    aria-invalid={errors.nombre ? "true" : "false"}
-                    {...register("nombre")}
-                  />
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Input id="lead-nombre" placeholder="Nombre(s)" disabled={isBusy} {...register("nombre")} />
+                    <Input placeholder="Primer apellido" disabled={isBusy} {...register("apellidoPaterno")} />
+                    <Input placeholder="Segundo apellido" disabled={isBusy} {...register("apellidoMaterno")} />
+                  </div>
                   {errors.nombre ? (
                     <p className="text-xs text-destructive">{errors.nombre.message}</p>
                   ) : null}
@@ -3279,6 +3320,24 @@ export function LeadDrawer({
                     <p className="text-xs text-destructive">{errors.telefono.message}</p>
                   ) : null}
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">Tipo de teléfono</label>
+                  <select className="h-9 rounded-md border bg-background px-3 text-sm" disabled={isBusy} {...register("telefonoTipo")}>
+                    <option value="movil">Móvil</option><option value="whatsapp">WhatsApp</option>
+                    <option value="fijo">Fijo</option><option value="trabajo">Trabajo</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">Origen</label>
+                  <Input placeholder="Referido, sitio web, campaña…" disabled={isBusy} {...register("origen")} />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input placeholder="Puesto" disabled={isBusy} {...register("puesto")} />
+                <Input placeholder="Área" disabled={isBusy} {...register("area")} />
+                <Input placeholder="Rol en la decisión" disabled={isBusy} {...register("rolDecision")} />
+              </div>
               <div className="grid gap-2">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-empresa">
                   Empresa
@@ -3289,6 +3348,19 @@ export function LeadDrawer({
                   disabled={isBusy}
                   {...register("empresa")}
                 />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground">Tipo de persona de la empresa</label>
+                  <select className="h-9 rounded-md border bg-background px-3 text-sm" disabled={isBusy} {...register("tipoPersonaEmpresa")}>
+                    <option value="moral">Persona moral</option><option value="pfea">Persona física con actividad empresarial (PFEA)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input placeholder="Razón social" disabled={isBusy} {...register("razonSocial")} />
+                <Input placeholder="RFC" maxLength={13} disabled={isBusy} {...register("rfc")} />
+                <Input placeholder="Régimen de capital" disabled={isBusy} {...register("regimenCapital")} />
               </div>
               <div className="rounded-xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm">
                 <div className="flex items-center gap-2 text-indigo-900">
