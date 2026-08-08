@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
+import { cn } from "@/lib/utils";
 import { LeadDrawer, type LeadDrawerSubmitPayload } from "@/components/embudo/lead-drawer";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { loadLeadWorkspace, updateLeadCard } from "@/lib/embudo/actions";
@@ -2077,8 +2078,8 @@ export function InboxSplitView({
   }, [selectedThread, promoteForm]);
 
   return (
-    <div className="flex gap-4">
-      <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
+    <div className={cn("flex gap-4 transition-[padding] duration-300", opportunityDrawerOpen && "xl:pr-[min(34vw,520px)]")}>
+      <aside className={cn("flex h-[calc(100vh-13rem)] min-h-[320px] flex-col overflow-hidden rounded-lg border bg-card transition-[width] duration-300", opportunityDrawerOpen ? "w-[272px]" : "w-[320px]")}>
         <div className="flex min-h-0 flex-1 flex-col">
           {filteredThreads.length ? (
             <>
@@ -2677,8 +2678,9 @@ export function InboxSplitView({
         currentStage={opportunityStages.find((stage) => stage.id === opportunityCard?.etapaId) ?? null}
         allStages={opportunityStages}
         card={opportunityCard}
-        side="left"
+        side="right"
         nonModal
+        contentClassName="data-[vaul-drawer-direction=right]:max-w-full xl:data-[vaul-drawer-direction=right]:max-w-[min(34vw,520px)]"
         onSubmit={saveOpportunityWorkspace}
       />
     </div>

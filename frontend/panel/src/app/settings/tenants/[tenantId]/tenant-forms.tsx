@@ -426,7 +426,9 @@ function parseListLines(value: string): string[] {
 
 function buildExtrasCatalogsJson(
   config: Record<string, unknown> | null | undefined,
+  origenes: string[],
   puestos: string[],
+  areas: string[],
   rolesDecision: string[],
   clasificacionesNegocio: string[],
   tamanos: string[],
@@ -437,7 +439,9 @@ function buildExtrasCatalogsJson(
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
   const extras = isRecord(nextConfig.extras) ? { ...nextConfig.extras } : {}
   const extrasCatalogos = isRecord(extras.catalogos) ? { ...extras.catalogos } : {}
+  extrasCatalogos.origen = origenes
   extrasCatalogos.puesto = puestos
+  extrasCatalogos.area = areas
   extrasCatalogos.rol_decision = rolesDecision
   extrasCatalogos.clasificacion_negocio = clasificacionesNegocio
   extrasCatalogos.tamano = tamanos
@@ -461,6 +465,12 @@ export function TenantExtrasCatalogsForm({
   const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
   const extrasConfig = isRecord(config?.extras) ? (config?.extras as Record<string, unknown>) : null
   const catalogosConfig = isRecord(extrasConfig?.catalogos) ? (extrasConfig?.catalogos as Record<string, unknown>) : null
+  const [origenes, setOrigenes] = useState(() =>
+    (Array.isArray(catalogosConfig?.origen) ? catalogosConfig?.origen : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
   const [puestos, setPuestos] = useState(() =>
     (Array.isArray(catalogosConfig?.puesto) ? catalogosConfig?.puesto : [])
       .map((item) => (typeof item === "string" ? item : ""))
@@ -469,6 +479,12 @@ export function TenantExtrasCatalogsForm({
   )
   const [rolesDecision, setRolesDecision] = useState(() =>
     (Array.isArray(catalogosConfig?.rol_decision) ? catalogosConfig?.rol_decision : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
+  const [areas, setAreas] = useState(() =>
+    (Array.isArray(catalogosConfig?.area) ? catalogosConfig?.area : [])
       .map((item) => (typeof item === "string" ? item : ""))
       .filter(Boolean)
       .join("\n"),
@@ -507,7 +523,9 @@ export function TenantExtrasCatalogsForm({
     () =>
       buildExtrasCatalogsJson(
         config,
+        parseListLines(origenes),
         parseListLines(puestos),
+        parseListLines(areas),
         parseListLines(rolesDecision),
         parseListLines(clasificacionesNegocio),
         parseListLines(tamanos),
@@ -515,7 +533,7 @@ export function TenantExtrasCatalogsForm({
         parseListLines(formasPago),
         parseListLines(metodosPago),
       ),
-    [config, puestos, rolesDecision, clasificacionesNegocio, tamanos, usosCfdi, formasPago, metodosPago],
+    [config, origenes, puestos, areas, rolesDecision, clasificacionesNegocio, tamanos, usosCfdi, formasPago, metodosPago],
   )
 
   return (
@@ -523,6 +541,11 @@ export function TenantExtrasCatalogsForm({
       <input type="hidden" name="tenant_id" value={tenantId} />
       <input type="hidden" name="config_json" value={configJson} />
       <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="extras_origenes">Orígenes</Label>
+          <Textarea id="extras_origenes" value={origenes} onChange={(event) => setOrigenes(event.target.value)} placeholder={"Sitio web\nReferido\nCampaña"} className="min-h-[180px]" />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select al capturar un contacto.</p>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="extras_puestos">Puestos</Label>
           <Textarea
@@ -549,6 +572,11 @@ export function TenantExtrasCatalogsForm({
             Un valor por línea. Los valores antiguos se conservan en el modal de edición para no romper contactos
             existentes.
           </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="extras_areas">Áreas</Label>
+          <Textarea id="extras_areas" value={areas} onChange={(event) => setAreas(event.target.value)} placeholder={"Dirección\nCompras\nOperaciones"} className="min-h-[180px]" />
+          <p className="text-xs text-muted-foreground">Un valor por línea. Se mostrará como select al capturar un contacto.</p>
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="extras_clasificaciones_negocio">Clasificación de negocio</Label>

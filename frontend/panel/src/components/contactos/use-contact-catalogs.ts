@@ -45,6 +45,8 @@ export function useTenantContactCatalogs() {
   const { context: permissionContext } = usePermissions()
   const tenantKey = permissionContext.organizacion_id?.trim() || "unknown"
   const [puestoOptions, setPuestoOptions] = useState<ContactCatalogOption[]>([])
+  const [origenOptions, setOrigenOptions] = useState<ContactCatalogOption[]>([])
+  const [areaOptions, setAreaOptions] = useState<ContactCatalogOption[]>([])
   const [rolDecisionOptions, setRolDecisionOptions] = useState<ContactCatalogOption[]>([])
   const [clasificacionNegocioOptions, setClasificacionNegocioOptions] = useState<ContactCatalogOption[]>([])
   const [tamanoOptions, setTamanoOptions] = useState<ContactCatalogOption[]>([])
@@ -67,6 +69,8 @@ export function useTenantContactCatalogs() {
         })
         if (!response.ok) {
           setPuestoOptions([])
+          setOrigenOptions([])
+          setAreaOptions([])
           setRolDecisionOptions([])
           setClasificacionNegocioOptions([])
           setTamanoOptions([])
@@ -79,6 +83,8 @@ export function useTenantContactCatalogs() {
         const payload = (await response.json()) as CatalogsResponse
         const catalogos = asRecord(payload.catalogos)
         const puestosRaw = catalogos ? catalogos.puesto ?? catalogos.puestos : null
+        const origenesRaw = catalogos ? catalogos.origen ?? catalogos.origenes : null
+        const areasRaw = catalogos ? catalogos.area ?? catalogos.areas : null
         const rolesRaw =
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null
         const clasificacionesRaw =
@@ -88,6 +94,8 @@ export function useTenantContactCatalogs() {
         const formaPagoRaw = catalogos ? catalogos.forma_pago ?? catalogos.formas_pago : null
         const metodoPagoRaw = catalogos ? catalogos.metodo_pago ?? catalogos.metodos_pago : null
         setPuestoOptions(valuesToOptions(normalizeValues(puestosRaw)))
+        setOrigenOptions(valuesToOptions(normalizeValues(origenesRaw)))
+        setAreaOptions(valuesToOptions(normalizeValues(areasRaw)))
         setRolDecisionOptions(valuesToOptions(normalizeValues(rolesRaw)))
         setClasificacionNegocioOptions(valuesToOptions(normalizeValues(clasificacionesRaw)))
         setTamanoOptions(valuesToOptions(normalizeValues(tamanosRaw)))
@@ -97,6 +105,8 @@ export function useTenantContactCatalogs() {
       } catch {
         if (controller.signal.aborted) return
         setPuestoOptions([])
+        setOrigenOptions([])
+        setAreaOptions([])
         setRolDecisionOptions([])
         setClasificacionNegocioOptions([])
         setTamanoOptions([])
@@ -111,6 +121,8 @@ export function useTenantContactCatalogs() {
     }
 
     setPuestoOptions([])
+    setOrigenOptions([])
+    setAreaOptions([])
     setRolDecisionOptions([])
     setClasificacionNegocioOptions([])
     setTamanoOptions([])
@@ -125,6 +137,8 @@ export function useTenantContactCatalogs() {
   return useMemo(
     () => ({
       puestoOptions,
+      origenOptions,
+      areaOptions,
       rolDecisionOptions,
       clasificacionNegocioOptions,
       tamanoOptions,
@@ -133,6 +147,6 @@ export function useTenantContactCatalogs() {
       metodoPagoOptions,
       loading,
     }),
-    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions, tamanoOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
+    [loading, puestoOptions, origenOptions, areaOptions, rolDecisionOptions, clasificacionNegocioOptions, tamanoOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
   )
 }

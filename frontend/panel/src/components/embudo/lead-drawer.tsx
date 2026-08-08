@@ -55,6 +55,8 @@ import {
   type QuoteVendorSettings,
 } from "@/lib/settings/quote-vendors";
 import { usePermissions } from "@/hooks/use-permissions";
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
+import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 import {
   IconAlertTriangle,
   IconBrandWhatsapp,
@@ -164,6 +166,7 @@ type LeadDrawerProps = {
   mode?: "create" | "edit";
   side?: "left" | "right";
   nonModal?: boolean;
+  contentClassName?: string;
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
@@ -740,6 +743,7 @@ export function LeadDrawer({
   mode = "edit",
   side = "right",
   nonModal = false,
+  contentClassName,
   onSubmit,
   onCreate,
   onDelete,
@@ -749,6 +753,7 @@ export function LeadDrawer({
   onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
+  const tenantCatalogs = useTenantContactCatalogs();
   const stageName = currentStage?.nombre ?? "Sin etapa";
   const resolvedTableroId = useMemo(
     () => currentStage?.tableroId || allStages.find((stage) => stage.tableroId)?.tableroId || "",
@@ -898,10 +903,15 @@ export function LeadDrawer({
     reset,
     setValue,
     getValues,
+    watch,
     formState: { errors, dirtyFields },
   } = form;
   const montoField = register("monto");
   const probabilidadField = register("probabilidad");
+  const origenValue = watch("origen") ?? "";
+  const puestoValue = watch("puesto") ?? "";
+  const areaValue = watch("area") ?? "";
+  const rolDecisionValue = watch("rolDecision") ?? "";
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -3040,7 +3050,7 @@ export function LeadDrawer({
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange} direction={side} modal={!nonModal}>
-      <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=left]:w-full data-[vaul-drawer-direction=left]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=left]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=left]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden data-[vaul-drawer-direction=left]:overflow-hidden">
+      <DrawerContent className={cn("data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=left]:w-full data-[vaul-drawer-direction=left]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=left]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=left]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden data-[vaul-drawer-direction=left]:overflow-hidden", contentClassName)}>
         <DrawerHeader className="items-start">
           <DrawerTitle>
             {isCreateMode ? "Nueva Oportunidad" : card?.nombre ?? "Lead sin nombre"}
@@ -3330,13 +3340,13 @@ export function LeadDrawer({
                 </div>
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground">Origen</label>
-                  <Input placeholder="Referido, sitio web, campaña…" disabled={isBusy} {...register("origen")} />
+                  <ContactCatalogSelect value={origenValue} onValueChange={(value) => setValue("origen", value, { shouldDirty: true, shouldValidate: true })} options={mergeCatalogOptions(tenantCatalogs.origenOptions, origenValue)} placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un origen"} disabled={isBusy || tenantCatalogs.loading} />
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Input placeholder="Puesto" disabled={isBusy} {...register("puesto")} />
-                <Input placeholder="Área" disabled={isBusy} {...register("area")} />
-                <Input placeholder="Rol en la decisión" disabled={isBusy} {...register("rolDecision")} />
+                <ContactCatalogSelect value={puestoValue} onValueChange={(value) => setValue("puesto", value, { shouldDirty: true, shouldValidate: true })} options={mergeCatalogOptions(tenantCatalogs.puestoOptions, puestoValue)} placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un puesto"} disabled={isBusy || tenantCatalogs.loading} />
+                <ContactCatalogSelect value={areaValue} onValueChange={(value) => setValue("area", value, { shouldDirty: true, shouldValidate: true })} options={mergeCatalogOptions(tenantCatalogs.areaOptions, areaValue)} placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un área"} disabled={isBusy || tenantCatalogs.loading} />
+                <ContactCatalogSelect value={rolDecisionValue} onValueChange={(value) => setValue("rolDecision", value, { shouldDirty: true, shouldValidate: true })} options={mergeCatalogOptions(tenantCatalogs.rolDecisionOptions, rolDecisionValue)} placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un rol"} disabled={isBusy || tenantCatalogs.loading} />
               </div>
               <div className="grid gap-2">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-empresa">
