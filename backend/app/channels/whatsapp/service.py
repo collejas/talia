@@ -4399,6 +4399,85 @@ async def _generate_assistant_reply(
         El intento anterior estaba en `handle_incoming_message`, donde ese
         closure no existe y convertía todas las respuestas vacías en fallback.
         """
+        recovery_started = time.perf_counter()
+
+        async def _run_recovery_attempt(
+            *,
+            attempt_kwargs: dict[str, Any],
+            attempt_number: int,
+            recovery_mode: str,
+            empty_event: str,
+            failed_event: str,
+        ) -> tuple[str | None, str | None, str | None]:
+            try:
+                retry_response = await client.responses.create(**attempt_kwargs)
+                retry_payload = retry_response.model_dump()
+                retry_text = _extract_text_from_response(retry_payload)
+                retry_response_id = retry_payload.get("id") or response_id
+                conversation_value = retry_payload.get("conversation")
+                if isinstance(conversation_value, dict):
+                    retry_conversation_id = (
+                        conversation_value.get("id")
+                        or response_conversation_id
+                        or openai_conversation_id
+                    )
+                elif isinstance(conversation_value, str):
+                    retry_conversation_id = conversation_value
+                else:
+                    retry_conversation_id = response_conversation_id or openai_conversation_id
+
+                debug_timings["empty_retry_ms"] = round(
+                    (time.perf_counter() - recovery_started) * 1000,
+                    2,
+                )
+                await openai_usage_ledger.record_response_usage(
+                    organizacion_id=organizacion_id,
+                    channel="whatsapp",
+                    feature="sales_chat",
+                    assistant=assistant,
+                    response_payload=retry_payload,
+                    request_purpose="empty_reply_retry",
+                    latency_ms=int(round(debug_timings["empty_retry_ms"])),
+                    api_key=whatsapp_settings.voice_api_key,
+                    request_metadata={
+                        "conversation_id": conversation_id,
+                        "recovery_reason": "empty_or_incomplete_response",
+                        "recovery_attempt": attempt_number,
+                        "recovery_mode": recovery_mode,
+                    },
+                    conversation_id=conversation_id,
+                    persona_id=persona_id,
+                    quality_retry_used=True,
+                    project_id=assistant.project_id,
+                )
+                if retry_text:
+                    log_event(
+                        logger,
+                        "whatsapp.empty_reply_recovered",
+                        conversation_id=conversation_id,
+                        assistant_response_id=retry_response_id,
+                        recovery_attempt=attempt_number,
+                    )
+                    return retry_text, retry_response_id, retry_conversation_id
+                logger.warning(
+                    empty_event,
+                    extra={
+                        "conversation_id": conversation_id,
+                        "response_id": retry_response_id,
+                        "recovery_attempt": attempt_number,
+                    },
+                )
+            except Exception as exc:  # pragma: no cover - recuperación defensiva
+                logger.warning(
+                    failed_event,
+                    extra={
+                        "conversation_id": conversation_id,
+                        "recovery_attempt": attempt_number,
+                        "error": str(exc),
+                    },
+                )
+            return None, response_id, response_conversation_id or openai_conversation_id
+
         retry_kwargs: dict[str, Any] = {
             "input": [
                 {
@@ -4429,54 +4508,50 @@ async def _generate_assistant_reply(
         elif response_id or previous_response_id:
             retry_kwargs["previous_response_id"] = response_id or previous_response_id
 
-        retry_started = time.perf_counter()
-        try:
-            retry_response = await client.responses.create(**retry_kwargs)
-            debug_timings["empty_retry_ms"] = round((time.perf_counter() - retry_started) * 1000, 2)
-            retry_payload = retry_response.model_dump()
-            retry_text = _extract_text_from_response(retry_payload)
-            retry_response_id = retry_payload.get("id") or response_id
-            retry_conversation_id = (
-                (retry_payload.get("conversation") or {}).get("id")
-                or response_conversation_id
-                or openai_conversation_id
-            )
-            await openai_usage_ledger.record_response_usage(
-                organizacion_id=organizacion_id,
-                channel="whatsapp",
-                feature="sales_chat",
-                assistant=assistant,
-                response_payload=retry_payload,
-                request_purpose="empty_reply_retry",
-                latency_ms=int(round(debug_timings["empty_retry_ms"])),
-                api_key=whatsapp_settings.voice_api_key,
-                request_metadata={
-                    "conversation_id": conversation_id,
-                    "recovery_reason": "empty_or_incomplete_response",
+        recovered = await _run_recovery_attempt(
+            attempt_kwargs=retry_kwargs,
+            attempt_number=1,
+            recovery_mode="continuation",
+            empty_event="whatsapp.empty_reply_retry_empty",
+            failed_event="whatsapp.empty_reply_retry_failed",
+        )
+        if recovered[0]:
+            return recovered
+
+        clean_retry_kwargs: dict[str, Any] = {
+            "input": [
+                *initial_input,
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Responde directamente al último mensaje del cliente usando el contexto anterior. "
+                                "Entrega SOLO el mensaje final de WhatsApp, en 1-3 frases y máximo 300 caracteres. "
+                                "No uses herramientas, no menciones este intento y no dejes la respuesta vacía."
+                            ),
+                        }
+                    ],
                 },
-                conversation_id=conversation_id,
-                persona_id=persona_id,
-                quality_retry_used=True,
-                project_id=assistant.project_id,
-            )
-            if retry_text:
-                log_event(
-                    logger,
-                    "whatsapp.empty_reply_recovered",
-                    conversation_id=conversation_id,
-                    assistant_response_id=retry_response_id,
-                )
-                return retry_text, retry_response_id, retry_conversation_id
-            logger.warning(
-                "whatsapp.empty_reply_retry_empty",
-                extra={"conversation_id": conversation_id, "response_id": retry_response_id},
-            )
-        except Exception as exc:  # pragma: no cover - recuperación defensiva
-            logger.warning(
-                "whatsapp.empty_reply_retry_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
-        return None, response_id, response_conversation_id or openai_conversation_id
+            ],
+            "store": True,
+            "max_output_tokens": 400,
+            "temperature": 0.2,
+            "metadata": metadata_payload,
+            "tool_choice": "none",
+        }
+        clean_retry_kwargs.update(_build_request_template(include_tools=False))
+        if assistant.is_prompt:
+            clean_retry_kwargs.pop("temperature", None)
+
+        return await _run_recovery_attempt(
+            attempt_kwargs=clean_retry_kwargs,
+            attempt_number=2,
+            recovery_mode="clean_context",
+            empty_event="whatsapp.empty_reply_clean_retry_empty",
+            failed_event="whatsapp.empty_reply_clean_retry_failed",
+        )
 
     request_kwargs.update(_build_request_template(include_tools=True))
     if assistant.is_prompt:
