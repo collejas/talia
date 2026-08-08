@@ -16181,7 +16181,10 @@ def _apply_persisted_inbox_context(row: dict[str, Any]) -> None:
         return
 
     source_value = _clean_text(context.get("source"))
-    if source_value:
+    current_source = _clean_text(row.get("source"))
+    # La proyección puede devolver un source derivado por atribución CTA para
+    # un hilo agrupado; no lo regreses al source histórico del contexto.
+    if source_value and current_source != "publicidad_whatsapp":
         row["source"] = source_value
 
     source_detail = context.get("source_detail")
