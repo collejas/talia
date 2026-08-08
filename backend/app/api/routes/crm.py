@@ -27445,6 +27445,35 @@ async def upload_inbox_attachment(
     return {"ok": True, "attachment": uploaded}
 
 
+@router.get("/inbox/attachments/by-path")
+async def download_inbox_attachment_by_path(
+    *,
+    path: Annotated[str, Query(min_length=10, max_length=2048)],
+    _: str = Depends(require_permission("ver_inbox")),
+) -> RedirectResponse:
+    normalized_path = path.strip().lstrip("/")
+    parts = normalized_path.split("/", 1)
+    if (
+        len(parts) != 2
+        or parts[0] != "whatsapp"
+        or not parts[1]
+        or "\\" in normalized_path
+        or any(segment in {"", ".", ".."} for segment in parts[1].split("/"))
+    ):
+        raise HTTPException(status_code=400, detail="attachment_path_invalid")
+
+    repo = CRMRepository()
+    try:
+        signed_url = await repo.create_signed_storage_url(
+            bucket="whatsapp",
+            object_path=parts[1],
+            expires_in=300,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="attachment_signed_url_failed") from exc
+    return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
 @router.get("/inbox/attachments/{attachment_id}")
 async def download_inbox_attachment(
     *,

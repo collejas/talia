@@ -205,13 +205,15 @@ function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow)
       if (!raw || typeof raw !== "object") continue;
       const record = raw as Record<string, unknown>;
       const url = typeof record.url === "string" ? record.url : null;
-      if (!url) continue;
       const attachmentId = typeof record.id === "string" ? record.id : undefined;
       const path = typeof record.path === "string" ? record.path : undefined;
-      const effectiveUrl =
-        attachmentId && path?.startsWith("whatsapp/")
+      if (!url && !path) continue;
+      const effectiveUrl = path?.startsWith("whatsapp/")
+        ? attachmentId
           ? `/api/crm/inbox/attachments/${attachmentId}`
-          : url;
+          : `/api/crm/inbox/attachments/path?path=${encodeURIComponent(path)}`
+        : url;
+      if (!effectiveUrl) continue;
       const sizeValue = record.size;
       let size: number | undefined;
       if (typeof sizeValue === "number") {
