@@ -40,6 +40,9 @@ export type EmbudoCard = {
   contactOrigin: string | null;
   titulo: string;
   nombre: string | null;
+  nombreNombres: string | null;
+  apellidoPaterno: string | null;
+  apellidoMaterno: string | null;
   contactoProfileName: string | null;
   correo: string | null;
   telefono: string | null;

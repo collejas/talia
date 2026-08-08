@@ -167,6 +167,8 @@ type LeadDrawerProps = {
   side?: "left" | "right";
   nonModal?: boolean;
   contentClassName?: string;
+  embedded?: boolean;
+  closeOnSave?: boolean;
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
@@ -182,6 +184,42 @@ type LeadDrawerProps = {
     targetStage: EmbudoStage;
   }) => void;
 };
+
+function LeadDrawerRoot({
+  embedded,
+  open,
+  onOpenChange,
+  side,
+  nonModal,
+  children,
+}: {
+  embedded: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  side: "left" | "right";
+  nonModal: boolean;
+  children: ReactNode;
+}) {
+  if (embedded) return open ? <>{children}</> : null;
+  return <Drawer open={open} onOpenChange={onOpenChange} direction={side} modal={!nonModal}>{children}</Drawer>;
+}
+
+function LeadDrawerSurface({
+  embedded,
+  nonModal,
+  className,
+  children,
+}: {
+  embedded: boolean;
+  nonModal: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  if (embedded) {
+    return <aside className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card", className)}>{children}</aside>;
+  }
+  return <DrawerContent hideOverlay={nonModal} className={className}>{children}</DrawerContent>;
+}
 
 type QuoteChannel = "email" | "whatsapp";
 
@@ -744,6 +782,8 @@ export function LeadDrawer({
   side = "right",
   nonModal = false,
   contentClassName,
+  embedded = false,
+  closeOnSave = true,
   onSubmit,
   onCreate,
   onDelete,
@@ -769,9 +809,9 @@ export function LeadDrawer({
         ? String(Math.round(card.probabilidad))
         : "";
     return {
-      nombre: card?.nombre ?? "",
-      apellidoPaterno: "",
-      apellidoMaterno: "",
+      nombre: card?.nombreNombres ?? card?.nombre ?? "",
+      apellidoPaterno: card?.apellidoPaterno ?? "",
+      apellidoMaterno: card?.apellidoMaterno ?? "",
       origen: card?.contactOrigin ?? "",
       puesto: "",
       area: "",
@@ -1096,7 +1136,7 @@ export function LeadDrawer({
 
   const drawerRecordKey = isCreateMode
     ? `create:${currentStage?.id ?? "sin-etapa"}`
-    : `edit:${card?.oportunidadId ?? "sin-oportunidad"}`;
+    : `edit:${card?.oportunidadId ?? "sin-oportunidad"}:${card?.nombreNombres ?? ""}:${card?.apellidoPaterno ?? ""}:${card?.apellidoMaterno ?? ""}`;
 
   useEffect(() => {
     if (!open) {
@@ -1848,7 +1888,7 @@ export function LeadDrawer({
       }
 
       setError(null);
-      onOpenChange(false);
+      if (closeOnSave) onOpenChange(false);
       return;
     }
 
@@ -1986,7 +2026,7 @@ export function LeadDrawer({
     }
 
     setError(null);
-    onOpenChange(false);
+    if (closeOnSave) onOpenChange(false);
   };
 
   const handleDeleteLead = async () => {
@@ -3046,59 +3086,29 @@ export function LeadDrawer({
   };
 
   const hasUpcomingSections = upcomingStageGroups.length > 0;
+  const drawerDescriptionContent = (
+    <>
+      <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
+      {!isCreateMode ? (
+        <span className="flex flex-wrap items-center gap-2">
+          {originBadge ? <Badge variant="outline" className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", originBadge.className)} title={originBadge.title}>{originBadge.label}</Badge> : null}
+          {contactOriginBadge ? <Badge variant="outline" className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", contactOriginBadge.className)} title={contactOriginBadge.title}>{contactOriginBadge.label}</Badge> : null}
+          {whatsappCtaAttribution ? <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wide text-emerald-800" title={buildWhatsappCtaTooltip(whatsappCtaAttribution)}>CTA de WhatsApp</Badge> : null}
+          {channelBadge ? <Badge variant="outline" className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", channelBadge.className)} title={channelBadge.title}>{channelBadge.icon}{channelBadge.label}</Badge> : null}
+        </span>
+      ) : null}
+    </>
+  );
 
   return (
     <>
-      <Drawer open={open} onOpenChange={onOpenChange} direction={side} modal={!nonModal}>
-      <DrawerContent className={cn("data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=left]:w-full data-[vaul-drawer-direction=left]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=left]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=left]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden data-[vaul-drawer-direction=left]:overflow-hidden", contentClassName)}>
+      <LeadDrawerRoot embedded={embedded} open={open} onOpenChange={onOpenChange} side={side} nonModal={nonModal}>
+      <LeadDrawerSurface embedded={embedded} nonModal={nonModal} className={cn("data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=left]:w-full data-[vaul-drawer-direction=left]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=left]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=left]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden data-[vaul-drawer-direction=left]:overflow-hidden", contentClassName)}>
         <DrawerHeader className="items-start">
-          <DrawerTitle>
+          {embedded ? <h2 className="font-semibold text-foreground">
             {isCreateMode ? "Nueva Oportunidad" : card?.nombre ?? "Lead sin nombre"}
-          </DrawerTitle>
-          <DrawerDescription className="flex flex-col gap-1 text-left">
-            <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
-            {!isCreateMode ? (
-              <span className="flex flex-wrap items-center gap-2">
-                {originBadge ? (
-                  <Badge
-                    variant="outline"
-                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", originBadge.className)}
-                    title={originBadge.title}
-                  >
-                    {originBadge.label}
-                  </Badge>
-                ) : null}
-                {contactOriginBadge ? (
-                  <Badge
-                    variant="outline"
-                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", contactOriginBadge.className)}
-                    title={contactOriginBadge.title}
-                  >
-                    {contactOriginBadge.label}
-                  </Badge>
-                ) : null}
-                {whatsappCtaAttribution ? (
-                  <Badge
-                    variant="outline"
-                    className="w-fit border-emerald-300 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
-                    title={buildWhatsappCtaTooltip(whatsappCtaAttribution)}
-                  >
-                    CTA de WhatsApp
-                  </Badge>
-                ) : null}
-                {channelBadge ? (
-                  <Badge
-                    variant="outline"
-                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", channelBadge.className)}
-                    title={channelBadge.title}
-                  >
-                    {channelBadge.icon}
-                    {channelBadge.label}
-                  </Badge>
-                ) : null}
-              </span>
-            ) : null}
-          </DrawerDescription>
+          </h2> : <DrawerTitle>{isCreateMode ? "Nueva Oportunidad" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>}
+          {embedded ? <div className="flex flex-col gap-1 text-left text-sm text-muted-foreground">{drawerDescriptionContent}</div> : <DrawerDescription className="flex flex-col gap-1 text-left">{drawerDescriptionContent}</DrawerDescription>}
         </DrawerHeader>
 
         <Tabs
@@ -4161,8 +4171,8 @@ export function LeadDrawer({
           </TabsContent>
           ) : null}
     </Tabs>
-  </DrawerContent>
-    </Drawer>
+  </LeadDrawerSurface>
+    </LeadDrawerRoot>
     {!isCreateMode && card ? (
       <>
       <Dialog open={quoteDialogOpen} onOpenChange={handleQuoteDialogOpenChange}>

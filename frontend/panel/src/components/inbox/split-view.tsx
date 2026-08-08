@@ -1197,9 +1197,24 @@ export function InboxSplitView({
       oportunidad: payload.oportunidad,
       mergeMetadata: payload.mergeMetadata,
     });
-    if (result.ok) setOpportunityCard(result.card);
+    if (result.ok) {
+      const refreshed = await loadLeadWorkspace(opportunityCard.oportunidadId);
+      if (refreshed.ok) {
+        setOpportunityStages(refreshed.stages);
+        setOpportunityCard(refreshed.card);
+      } else {
+        setOpportunityCard(result.card);
+      }
+    }
     return result;
   }, [opportunityCard, opportunityStages]);
+
+  React.useEffect(() => {
+    if (opportunityDrawerOpen && opportunityCard && selectedThread?.opportunityId !== opportunityCard.oportunidadId) {
+      setOpportunityDrawerOpen(false);
+      setOpportunityCard(null);
+    }
+  }, [opportunityCard, opportunityDrawerOpen, selectedThread?.opportunityId]);
   const selectedSourceBadge = selectedThread
     ? getSourceBadge(selectedThread.source, selectedThread.canal)
     : null;
@@ -2078,12 +2093,12 @@ export function InboxSplitView({
   }, [selectedThread, promoteForm]);
 
   return (
-    <div className={cn("flex gap-4 transition-[padding] duration-300", opportunityDrawerOpen && "xl:pr-[min(34vw,520px)]")}>
+    <div className="flex min-w-0 gap-4">
       <aside className={cn("flex h-[calc(100vh-13rem)] min-h-[320px] flex-col overflow-hidden rounded-lg border bg-card transition-[width] duration-300", opportunityDrawerOpen ? "w-[272px]" : "w-[320px]")}>
         <div className="flex min-h-0 flex-1 flex-col">
           {filteredThreads.length ? (
             <>
-              <ul className="min-h-0 flex-1 divide-y overflow-y-auto">
+              <ul className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
                 {filteredThreads.map((thread) => {
                 const isActive = thread.id === selectedId;
                 const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
@@ -2236,11 +2251,11 @@ export function InboxSplitView({
         </div>
       </aside>
 
-      <section className="flex h-[calc(100vh-13rem)] min-h-[320px] flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+      <section className="flex h-[calc(100vh-13rem)] min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         {selectedThread ? (
           <>
-            <header className="flex items-center justify-between gap-4 border-b px-5 py-4">
-              <div className="flex flex-wrap items-center gap-3">
+            <header className="flex max-h-16 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b px-3 py-2">
+              <div className="flex min-w-0 flex-nowrap items-center gap-2 whitespace-nowrap">
                 <h3 className="text-lg font-semibold" title={selectedThread.contactoTelefono || undefined}>
                   {selectedThread.contactoNombre}
                 </h3>
@@ -2323,7 +2338,7 @@ export function InboxSplitView({
                   <span className="text-xs text-muted-foreground">{selectedThread.contactoTelefono}</span>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {selectedThread.opportunityId ? (
                   <Button variant="outline" size="sm" className="gap-2" onClick={openOpportunityWorkspace} disabled={opportunityDrawerLoading}>
                     <IconTargetArrow className="size-4" />
@@ -2369,7 +2384,7 @@ export function InboxSplitView({
               </div>
             </header>
 
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4">
+            <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
               {manualToggleError ? (
                 <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {manualToggleError}
@@ -2679,8 +2694,9 @@ export function InboxSplitView({
         allStages={opportunityStages}
         card={opportunityCard}
         side="right"
-        nonModal
-        contentClassName="data-[vaul-drawer-direction=right]:max-w-full xl:data-[vaul-drawer-direction=right]:max-w-[min(34vw,520px)]"
+        embedded
+        closeOnSave={false}
+        contentClassName="h-[calc(100vh-13rem)] min-h-[320px] w-[min(34vw,520px)] min-w-[420px] shrink-0"
         onSubmit={saveOpportunityWorkspace}
       />
     </div>

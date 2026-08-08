@@ -95,7 +95,18 @@ export async function loadLeadWorkspace(opportunityId: string): Promise<LeadWork
     .map((stage) => adaptStage(stage, parseMetadatos(stage.metadatos)));
   const currentStage = adaptStage(cardResult.data.stage, parseMetadatos(cardResult.data.stage.metadatos));
   if (!stages.some((stage) => stage.id === currentStage.id)) stages.push(currentStage);
-  return { ok: true, stages, card: adaptCard(cardResult.data.card) };
+  const card = adaptCard(cardResult.data.card);
+  const personaId = card.personaId || card.contactoId;
+  if (personaId) {
+    const personaResult = await callCrmApi<CrmContact>(`/crm/personas/${personaId}`);
+    if (personaResult.ok) {
+      card.nombreNombres = sanitizeNullableString(personaResult.data.nombre_nombres ?? personaResult.data.nombre);
+      card.apellidoPaterno = sanitizeNullableString(personaResult.data.apellido_paterno);
+      card.apellidoMaterno = sanitizeNullableString(personaResult.data.apellido_materno);
+      card.nombre = sanitizeNullableString(personaResult.data.nombre_completo) ?? card.nombre;
+    }
+  }
+  return { ok: true, stages, card };
 }
 
 type CalendarBookingResponseRow = {
@@ -150,6 +161,10 @@ type CrmContactSearchResponse = {
 
 type CrmContact = {
   id: string;
+  nombre?: string | null;
+  nombre_nombres?: string | null;
+  apellido_paterno?: string | null;
+  apellido_materno?: string | null;
   nombre_completo?: string | null;
   correo?: string | null;
   telefono_e164?: string | null;
