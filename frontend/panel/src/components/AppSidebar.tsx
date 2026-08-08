@@ -65,6 +65,7 @@ type NavItem = {
   icon?: Icon
   permission?: NavPermission
   ownerAdminOnly?: boolean
+  ownerOnly?: boolean
   masterTenantOnly?: boolean
   children?: NavItem[]
 }
@@ -180,12 +181,14 @@ const NAVIGATION: {
           url: "/settings/inbox-metrics",
           icon: IconInbox,
           permission: "settings.manage",
+          ownerOnly: true,
         },
         {
           title: "Ops Alta Demanda",
           url: "/settings/ops",
           icon: IconGauge,
           permission: "settings.manage",
+          ownerOnly: true,
         },
         {
           title: "Supabase Connectivity",
@@ -336,7 +339,11 @@ export function AppSidebar({
     const filterItems = (list: NavItem[]): NavItem[] =>
       list.reduce<NavItem[]>((acc, item) => {
         const children = item.children ? filterItems(item.children) : undefined
-        const allowedByRole = item.ownerAdminOnly ? isAdmin : hasPermission(item.permission)
+        const allowedByRole = item.ownerOnly
+          ? permissionContext.es_owner
+          : item.ownerAdminOnly
+            ? isAdmin
+            : hasPermission(item.permission)
         const allowedByTenant = item.masterTenantOnly ? isMasterTenant : true
         const allowed = (allowedByRole && allowedByTenant) || (children && children.length > 0)
         if (!allowed) return acc
