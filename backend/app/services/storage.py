@@ -599,6 +599,90 @@ async def notify_opportunity_assignment(
     )
 
 
+async def _ensure_inbound_assignment_before_notification(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID | None,
+    conversation_id: str | None,
+    persona_id: str | None,
+    channel: str,
+) -> None:
+    """Completa la asignación antes de publicar cualquier evento de Inbox."""
+    if not organizacion_id or not conversation_id or not persona_id:
+        return
+    conversation_uuid = _safe_uuid(conversation_id)
+    if not conversation_uuid:
+        return
+
+    try:
+        conversation = await repo.get_conversation_summary(conversation_id=conversation_uuid)
+    except CRMRepositoryError as exc:
+        logger.error(
+            "storage.inbound_assignment_lookup_failed",
+            extra={"conversation_id": conversation_id, "message_channel": channel, "error": str(exc)},
+        )
+        return
+
+    if isinstance(conversation, dict) and _safe_uuid(conversation.get("asignado_a_usuario_id")):
+        return
+
+    try:
+        linked_opportunities = await repo.list_opportunities_by_conversation_ids(
+            organizacion_id=organizacion_id,
+            conversation_ids=[conversation_id],
+            limit=1,
+        )
+        linked_opportunity = linked_opportunities[0] if linked_opportunities else None
+        opportunity_assignee = (
+            _safe_uuid(linked_opportunity.get("asignado_a_usuario_id"))
+            if isinstance(linked_opportunity, dict)
+            else None
+        )
+        if opportunity_assignee:
+            await repo.assign_conversation_if_unassigned(
+                organizacion_id=organizacion_id,
+                conversation_id=conversation_id,
+                usuario_id=opportunity_assignee,
+            )
+        else:
+            await ensure_conversation_opportunity(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                channel=channel,
+            )
+    except (CRMRepositoryError, StorageError) as exc:
+        logger.error(
+            "storage.inbound_assignment_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "conversation_id": conversation_id,
+                "persona_id": persona_id,
+                "message_channel": channel,
+                "error": str(exc),
+            },
+        )
+        return
+
+    try:
+        confirmed = await repo.get_conversation_summary(conversation_id=conversation_uuid)
+    except CRMRepositoryError as exc:
+        logger.error(
+            "storage.inbound_assignment_confirmation_failed",
+            extra={"conversation_id": conversation_id, "message_channel": channel, "error": str(exc)},
+        )
+        return
+    if not isinstance(confirmed, dict) or not _safe_uuid(confirmed.get("asignado_a_usuario_id")):
+        logger.error(
+            "storage.inbound_assignment_not_confirmed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "conversation_id": conversation_id,
+                "persona_id": persona_id,
+                "message_channel": channel,
+            },
+        )
+
+
 def _looks_like_placeholder_name(value: str) -> bool:
     lowered = value.strip().lower()
     if not lowered:
@@ -1695,6 +1779,19 @@ async def register_webchat_message(
                 "storage.webchat_channel_patch_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+    if author == "user":
+        org_value = _safe_uuid(
+            result.get("organizacion_id")
+            or organizacion_id
+            or (metadata or {}).get("resolved_organizacion_id")
+        )
+        await _ensure_inbound_assignment_before_notification(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(result.get("conversation_id") or ""),
+            persona_id=str(result.get("persona_id") or ""),
+            channel="webchat",
+        )
     try:
         persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(
@@ -1800,6 +1897,18 @@ async def register_whatsapp_message(
             ),
             label="cancel_whatsapp_followups_for_inbound",
         )
+        org_value = _safe_uuid(
+            result.get("organizacion_id")
+            or organizacion_id
+            or metadata_payload.get("resolved_organizacion_id")
+        )
+        await _ensure_inbound_assignment_before_notification(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(conversation_id),
+            persona_id=str(result.get("persona_id") or resolved_persona_id or ""),
+            channel="whatsapp",
+        )
 
     try:
         persona_id_value = str(result.get("persona_id") or "")
@@ -1890,6 +1999,19 @@ async def register_messenger_message(
                 "storage.messenger_channel_patch_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+    if direction == "entrante":
+        org_value = _safe_uuid(
+            result.get("organizacion_id")
+            or organizacion_id
+            or metadata_payload.get("resolved_organizacion_id")
+        )
+        await _ensure_inbound_assignment_before_notification(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(conversation_id or ""),
+            persona_id=str(result.get("persona_id") or ""),
+            channel="messenger",
+        )
     try:
         persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(

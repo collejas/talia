@@ -24,6 +24,7 @@ class NotificationRepo:
         self.opportunity_assignee = opportunity_assignee
         self.permitted_users = permitted_users or set()
         self.global_fallback_called = False
+        self.assignment_calls: list[dict[str, object]] = []
 
     async def get_conversation_summary(self, *, conversation_id: UUID) -> dict[str, object]:
         return self.conversation
@@ -32,6 +33,19 @@ class NotificationRepo:
         if self.opportunity_assignee is None:
             return []
         return [{"asignado_a_usuario_id": str(self.opportunity_assignee)}]
+
+    async def assign_conversation_if_unassigned(
+        self, *, organizacion_id: UUID, conversation_id: str, usuario_id: UUID
+    ) -> dict[str, object]:
+        self.assignment_calls.append(
+            {
+                "organizacion_id": organizacion_id,
+                "conversation_id": conversation_id,
+                "usuario_id": usuario_id,
+            }
+        )
+        self.conversation["asignado_a_usuario_id"] = str(usuario_id)
+        return self.conversation
 
     async def list_supervisor_user_ids_for_sales_rep(
         self, *, organizacion_id: UUID, empleado_usuario_id: UUID
@@ -105,6 +119,34 @@ async def test_inbox_without_assignment_does_not_broadcast() -> None:
 
     assert recipients == []
     assert repo.global_fallback_called is False
+
+
+@pytest.mark.asyncio
+async def test_inbound_assignment_repairs_conversation_from_existing_opportunity() -> None:
+    organization_id = uuid4()
+    assignee = uuid4()
+    conversation_id = str(uuid4())
+    repo = NotificationRepo(
+        conversation={"asignado_a_usuario_id": None},
+        opportunity_assignee=assignee,
+    )
+
+    await storage._ensure_inbound_assignment_before_notification(
+        repo=repo,
+        organizacion_id=organization_id,
+        conversation_id=conversation_id,
+        persona_id=str(uuid4()),
+        channel="whatsapp",
+    )
+
+    assert repo.assignment_calls == [
+        {
+            "organizacion_id": organization_id,
+            "conversation_id": conversation_id,
+            "usuario_id": assignee,
+        }
+    ]
+    assert repo.conversation["asignado_a_usuario_id"] == str(assignee)
 
 
 @pytest.mark.asyncio
