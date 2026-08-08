@@ -62,6 +62,7 @@ const GROUPABLE_TYPES = new Set([
   "crm.note.created",
 ])
 const GROUP_FLUSH_MS = 6000
+const NOTIFICATION_STREAM_FALLBACK_REFRESH_MS = 15000
 
 function pluralize(count: number, singular: string, plural?: string) {
   return `${count} ${count === 1 ? singular : plural ?? `${singular}s`}`
@@ -420,6 +421,24 @@ export function GlobalNotificationsProvider({ children, tenantId }: GlobalNotifi
     if (tenantId === undefined) return
     const stream = new EventSource("/api/notifications/stream")
     const grouped = groupedRef.current
+    let hasOpened = false
+
+    const recoverFromStreamIssue = () => {
+      void refresh().catch(() => {
+        // La siguiente reconexion o ciclo de respaldo intentara sincronizar de nuevo.
+      })
+    }
+
+    stream.onopen = () => {
+      if (hasOpened) {
+        recoverFromStreamIssue()
+      }
+      hasOpened = true
+    }
+
+    stream.onerror = () => {
+      recoverFromStreamIssue()
+    }
 
     stream.onmessage = (event) => {
       try {
@@ -459,7 +478,19 @@ export function GlobalNotificationsProvider({ children, tenantId }: GlobalNotifi
       grouped.clear()
       stream.close()
     }
-  }, [enqueueToast, tenantId, unreadOnly])
+  }, [enqueueToast, refresh, tenantId, unreadOnly])
+
+  useEffect(() => {
+    if (tenantId === undefined) return
+
+    const fallbackTimer = window.setInterval(() => {
+      void refresh().catch(() => {
+        // La sesion puede estar expirando; el proveedor SSE seguira reintentando.
+      })
+    }, NOTIFICATION_STREAM_FALLBACK_REFRESH_MS)
+
+    return () => window.clearInterval(fallbackTimer)
+  }, [refresh, tenantId])
 
   const value = useMemo<NotificationsContextValue>(
     () => ({

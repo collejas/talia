@@ -427,7 +427,17 @@ async def _notify_inbox_message(
                     group_key=group_key,
                 ),
             )
-        except CRMRepositoryError:
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.inbox_notification_create_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "usuario_id": str(usuario_id),
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "error": str(exc),
+                },
+            )
             continue
 
 
@@ -3123,7 +3133,17 @@ async def ensure_conversation_opportunity(
                                 group_key=f"opportunity.created:{assigned_id or 'unassigned'}",
                             ),
                         )
-                    except CRMRepositoryError:
+                    except CRMRepositoryError as exc:
+                        logger.warning(
+                            "storage.opportunity_notification_create_failed",
+                            extra={
+                                "organizacion_id": str(organizacion_uuid),
+                                "usuario_id": str(usuario_id),
+                                "opportunity_id": str(opportunity_id),
+                                "conversation_id": conversation_id,
+                                "error": str(exc),
+                            },
+                        )
                         continue
     if include_restart_metadata:
         return {
