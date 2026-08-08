@@ -26663,6 +26663,21 @@ async def get_inbox_messages(
     return [CRMInboxMessage.model_validate(row) for row in rows]
 
 
+@router.post("/inbox/conversations/{conversacion_id}/read")
+async def mark_inbox_conversation_read(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("messages.read")),
+    user_token: str = Depends(require_user_token),
+    conversacion_id: UUID,
+) -> dict[str, Any]:
+    updated = await repo.mark_inbox_thread_read(
+        usuario_token=user_token,
+        conversacion_id=conversacion_id,
+    )
+    return {"ok": True, "updated_conversations": updated}
+
+
 @router.post("/inbox/conversations/{conversacion_id}/manual")
 async def set_inbox_manual_mode(
     *,

@@ -48,6 +48,7 @@ export function InboxWorkspace({
   const [reengageFilter, setReengageFilter] = React.useState("");
   const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
   const [visibleThreadsCount, setVisibleThreadsCount] = React.useState(threads.length);
+  const [unreadMessages, setUnreadMessages] = React.useState(summary.unread ?? 0);
 
   const derivedReengageOptions = React.useMemo(
     () => buildDerivedReengageOptions(threads),
@@ -199,7 +200,7 @@ export function InboxWorkspace({
   return (
     <div className="space-y-4">
       <InboxToolbar
-        summary={summary}
+        summary={{ ...summary, unread: unreadMessages }}
         visibleTotal={visibleThreadsCount}
         stateFilterValue={estadoFilterValue}
         onStateFilterValueChange={setEstadoFilterValue}
@@ -234,6 +235,7 @@ export function InboxWorkspace({
         dateFilter={activeDateFilter}
         reengageFilter={reengageFilter}
         onVisibleThreadsCountChange={setVisibleThreadsCount}
+        onThreadRead={(count) => setUnreadMessages((current) => Math.max(0, current - count))}
       />
     </div>
   );

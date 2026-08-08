@@ -14394,7 +14394,7 @@ class CRMRepository:
     ) -> dict[str, Any]:
         resp = await self._request_with_user(
             "POST",
-            "/rest/v1/rpc/panel_inbox_resumen",
+            "/rest/v1/rpc/panel_inbox_resumen_persisted",
             token=usuario_token,
             json={},
         )
@@ -14402,6 +14402,23 @@ class CRMRepository:
         if isinstance(data, dict):
             return data
         raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_resumen: {data!r}")
+
+    async def mark_inbox_thread_read(
+        self,
+        *,
+        usuario_token: str,
+        conversacion_id: UUID,
+    ) -> int:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_inbox_mark_thread_read",
+            token=usuario_token,
+            json={"p_conversacion_id": str(conversacion_id)},
+        )
+        data = resp.json()
+        if isinstance(data, int):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_mark_thread_read: {data!r}")
 
     async def inbox_threads(
         self,

@@ -881,6 +881,7 @@ type InboxSplitViewProps = {
   dateFilter: DateFilterOption;
   reengageFilter: string;
   onVisibleThreadsCountChange?: (count: number) => void;
+  onThreadRead?: (unreadMessages: number) => void;
 };
 
 export function InboxSplitView({
@@ -896,6 +897,7 @@ export function InboxSplitView({
   dateFilter,
   reengageFilter,
   onVisibleThreadsCountChange,
+  onThreadRead,
 }: InboxSplitViewProps) {
   const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
@@ -1111,6 +1113,13 @@ export function InboxSplitView({
       })
       .filter((thread) => {
         if (!normalizedEstadoFilter || normalizedEstadoFilter === "all") return true;
+        if (normalizedEstadoFilter === "unread") return thread.noLeidos > 0;
+        if (normalizedEstadoFilter === "awaiting") {
+          return (thread.estado ?? "").toLowerCase() === "pendiente";
+        }
+        if (normalizedEstadoFilter === "archived") {
+          return (thread.estado ?? "").toLowerCase() === "cerrada";
+        }
         return (thread.estado ?? "").toLowerCase() === normalizedEstadoFilter;
       })
       .filter((thread) => {
@@ -1529,10 +1538,31 @@ export function InboxSplitView({
     };
   }, [selectedThread?.id, threadItems, needsThreadEnrichment, buildThreadDetailParams]);
 
-  const handleSelectThread = React.useCallback((threadId: string) => {
-    hasExplicitThreadSelectionRef.current = true;
-    setSelectedId(threadId);
-  }, []);
+  const handleSelectThread = React.useCallback(
+    (threadId: string) => {
+      hasExplicitThreadSelectionRef.current = true;
+      setSelectedId(threadId);
+      const selected = threadItemsRef.current.find((thread) => thread.id === threadId);
+      const unreadMessages = Math.max(0, selected?.noLeidos ?? 0);
+      if (unreadMessages <= 0) return;
+
+      setThreadItems((current) =>
+        current.map((thread) =>
+          thread.id === threadId ? { ...thread, noLeidos: 0 } : thread,
+        ),
+      );
+      onThreadRead?.(unreadMessages);
+      void fetch(`/api/inbox/${threadId}/read`, {
+        method: "POST",
+        cache: "no-store",
+      }).then((response) => {
+        if (!response.ok) {
+          void refreshThreads();
+        }
+      });
+    },
+    [onThreadRead, refreshThreads],
+  );
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {
