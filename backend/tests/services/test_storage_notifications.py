@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -104,3 +105,44 @@ async def test_inbox_without_assignment_does_not_broadcast() -> None:
 
     assert recipients == []
     assert repo.global_fallback_called is False
+
+
+@pytest.mark.asyncio
+async def test_inbox_notification_retries_until_assignment_is_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    organization_id = uuid4()
+    assignee = uuid4()
+
+    class EventuallyAssignedRepo(NotificationRepo):
+        attempts = 0
+
+        async def get_conversation_summary(self, *, conversation_id: UUID) -> dict[str, object]:
+            return {"asignado_a_usuario_id": None}
+
+        async def list_opportunities_by_conversation_ids(self, **_: object) -> list[dict[str, object]]:
+            self.attempts += 1
+            if self.attempts < 2:
+                return []
+            return [{"asignado_a_usuario_id": str(assignee)}]
+
+    repo = EventuallyAssignedRepo(
+        conversation={"asignado_a_usuario_id": None},
+        permitted_users={assignee},
+    )
+    create_notification = AsyncMock()
+    monkeypatch.setattr(storage, "create_and_publish_user_notification", create_notification)
+    monkeypatch.setattr(storage, "INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS", (0.0, 0.0))
+
+    await storage._notify_inbox_message(
+        repo=repo,
+        organizacion_id=organization_id,
+        conversation_id=str(uuid4()),
+        persona_id=str(uuid4()),
+        channel="whatsapp",
+        direction="entrante",
+        message_text="Hola",
+        message_id=str(uuid4()),
+    )
+
+    create_notification.assert_awaited_once()

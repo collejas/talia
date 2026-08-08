@@ -32,6 +32,7 @@ from app.services.user_notifications import (
 logger = get_logger(__name__)
 
 DEFAULT_CALENDAR_SETTINGS_SLUG = "default"
+INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS = (0.0, 0.5, 1.5, 3.0, 5.0)
 
 
 class StorageError(RuntimeError):
@@ -385,12 +386,36 @@ async def _notify_inbox_message(
     if not convo_uuid:
         return
 
-    recipients = await _resolve_inbox_notification_users(
-        repo=repo,
-        organizacion_id=organizacion_id,
-        conversation_id=convo_uuid,
-    )
+    recipients: list[UUID] = []
+    for attempt, delay_seconds in enumerate(INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS, start=1):
+        if delay_seconds:
+            await asyncio.sleep(delay_seconds)
+        recipients = await _resolve_inbox_notification_users(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            conversation_id=convo_uuid,
+        )
+        if recipients:
+            break
+        logger.info(
+            "storage.inbox_notification_waiting_for_assignment",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "attempt": attempt,
+                "max_attempts": len(INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS),
+            },
+        )
     if not recipients:
+        logger.error(
+            "storage.inbox_notification_dropped_no_recipient",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            },
+        )
         return
 
     channel_label = _normalize_channel_label(channel)
@@ -439,6 +464,139 @@ async def _notify_inbox_message(
                 },
             )
             continue
+
+
+async def _notify_opportunity_created_after_assignment(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity_id: UUID,
+    conversation_id: str,
+    persona_id: str,
+    channel: str | None,
+) -> None:
+    """Publica la alerta solo después de confirmar el asignado persistido."""
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=opportunity_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.error(
+            "storage.opportunity_notification_lookup_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "opportunity_id": str(opportunity_id),
+                "conversation_id": conversation_id,
+                "error": str(exc),
+            },
+        )
+        return
+    if not isinstance(opportunity, dict):
+        logger.error(
+            "storage.opportunity_notification_missing_opportunity",
+            extra={"opportunity_id": str(opportunity_id), "conversation_id": conversation_id},
+        )
+        return
+
+    assigned_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+    if not assigned_id:
+        logger.error(
+            "storage.opportunity_notification_dropped_no_assignment",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "opportunity_id": str(opportunity_id),
+                "conversation_id": conversation_id,
+            },
+        )
+        return
+
+    recipients = await _resolve_opportunity_notification_users(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        assigned_user_id=assigned_id,
+    )
+    if not recipients:
+        logger.error(
+            "storage.opportunity_notification_dropped_no_permitted_recipient",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "opportunity_id": str(opportunity_id),
+                "conversation_id": conversation_id,
+                "assigned_user_id": str(assigned_id),
+            },
+        )
+        return
+    channel_label = _normalize_channel_label(channel)
+    title_value = _clean_text(opportunity.get("titulo")) or "Oportunidad nueva"
+    dedupe_key = f"opportunity.created:{opportunity_id}"
+    for usuario_id in recipients:
+        try:
+            existing = await repo.get_ui_notification_by_dedupe_key(
+                usuario_id=usuario_id,
+                organizacion_id=organizacion_id,
+                dedupe_key=dedupe_key,
+            )
+            if existing:
+                continue
+            await create_and_publish_user_notification(
+                repo=repo,
+                notification=UserNotificationCreate(
+                    organizacion_id=organizacion_id,
+                    usuario_id=usuario_id,
+                    type="opportunity.created",
+                    level="success",
+                    title="Nueva oportunidad creada",
+                    message=f"{channel_label}: {title_value}",
+                    category="pipeline",
+                    entity_kind="opportunity",
+                    entity_id=str(opportunity_id),
+                    oportunidad_id=opportunity_id,
+                    persona_id=_safe_uuid(persona_id),
+                    action=UserNotificationAction(
+                        label="Ver oportunidad",
+                        href=f"/embudo?oportunidadId={opportunity_id}",
+                    ),
+                    meta={
+                        "channel": (channel or "").strip().lower(),
+                        "conversation_id": conversation_id,
+                        "persona_id": persona_id,
+                        "opportunity_id": str(opportunity_id),
+                    },
+                    dedupe_key=dedupe_key,
+                    group_key=f"opportunity.created:{assigned_id}",
+                ),
+            )
+        except CRMRepositoryError as exc:
+            logger.error(
+                "storage.opportunity_notification_create_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "usuario_id": str(usuario_id),
+                    "opportunity_id": str(opportunity_id),
+                    "conversation_id": conversation_id,
+                    "error": str(exc),
+                },
+            )
+
+
+async def notify_opportunity_assignment(
+    *,
+    organizacion_id: UUID,
+    opportunity_id: UUID,
+    conversation_id: str,
+    persona_id: str | None,
+    channel: str | None,
+) -> None:
+    """Garantiza la alerta del vendedor después de cualquier asignación."""
+    await _notify_opportunity_created_after_assignment(
+        repo=CRMRepository(),
+        organizacion_id=organizacion_id,
+        opportunity_id=opportunity_id,
+        conversation_id=conversation_id,
+        persona_id=persona_id or "",
+        channel=channel,
+    )
 
 
 def _looks_like_placeholder_name(value: str) -> bool:
@@ -3061,90 +3219,15 @@ async def ensure_conversation_opportunity(
                 },
             )
 
-    created_new = restart_created
-    if not created_new:
-        try:
-            existing_by_conversation = await repo.list_opportunities_by_conversation_ids(
-                organizacion_id=organizacion_uuid,
-                conversation_ids=[conversation_id],
-                limit=1,
-            )
-        except CRMRepositoryError:
-            existing_by_conversation = []
-        if existing_by_conversation:
-            created_new = False
-        else:
-            try:
-                existing_contact_opportunity = await repo.get_contact_opportunity(
-                    contact_id=persona_uuid,
-                )
-            except CRMRepositoryError:
-                existing_contact_opportunity = None
-            if existing_contact_opportunity and str(existing_contact_opportunity.get("id")) == str(opportunity_id):
-                created_new = False
-            else:
-                created_new = True
-
-    if created_new and normalized_channel in {"webchat", "whatsapp"}:
-        try:
-            opportunity = await repo.get_pipeline_opportunity(
-                organizacion_id=organizacion_uuid,
-                oportunidad_id=opportunity_id,
-            )
-        except CRMRepositoryError:
-            opportunity = None
-        if isinstance(opportunity, dict):
-            assigned_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
-            recipients = await _resolve_opportunity_notification_users(
-                repo=repo,
-                organizacion_id=organizacion_uuid,
-                assigned_user_id=assigned_id,
-            )
-            if recipients:
-                channel_label = _normalize_channel_label(channel)
-                title_value = _clean_text(opportunity.get("titulo")) or "Oportunidad nueva"
-                message = f"{channel_label}: {title_value}"
-                meta = {
-                    "channel": normalized_channel,
-                    "conversation_id": conversation_id,
-                    "persona_id": resolved_persona_id,
-                    "opportunity_id": str(opportunity_id),
-                }
-                for usuario_id in recipients:
-                    try:
-                        await create_and_publish_user_notification(
-                            repo=repo,
-                            notification=UserNotificationCreate(
-                                organizacion_id=organizacion_uuid,
-                                usuario_id=usuario_id,
-                                type="opportunity.created",
-                                level="success",
-                                title="Nueva oportunidad creada",
-                                message=message,
-                                category="pipeline",
-                                entity_kind="opportunity",
-                                entity_id=str(opportunity_id),
-                                action=UserNotificationAction(
-                                    label="Ver oportunidad",
-                                    href=f"/embudo?oportunidadId={opportunity_id}",
-                                ),
-                                meta=meta,
-                                dedupe_key=f"opportunity.created:{opportunity_id}",
-                                group_key=f"opportunity.created:{assigned_id or 'unassigned'}",
-                            ),
-                        )
-                    except CRMRepositoryError as exc:
-                        logger.warning(
-                            "storage.opportunity_notification_create_failed",
-                            extra={
-                                "organizacion_id": str(organizacion_uuid),
-                                "usuario_id": str(usuario_id),
-                                "opportunity_id": str(opportunity_id),
-                                "conversation_id": conversation_id,
-                                "error": str(exc),
-                            },
-                        )
-                        continue
+    if normalized_channel in {"webchat", "whatsapp"}:
+        await _notify_opportunity_created_after_assignment(
+            repo=repo,
+            organizacion_id=organizacion_uuid,
+            opportunity_id=opportunity_id,
+            conversation_id=conversation_id,
+            persona_id=resolved_persona_id,
+            channel=channel,
+        )
     if include_restart_metadata:
         return {
             "oportunidad_id": str(opportunity_id),

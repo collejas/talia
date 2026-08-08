@@ -18234,6 +18234,26 @@ async def reassign_opportunity(
             },
         )
 
+    if conversation_id:
+        try:
+            await storage.notify_opportunity_assignment(
+                organizacion_id=organizacion_id,
+                opportunity_id=oportunidad_id,
+                conversation_id=str(conversation_id),
+                persona_id=str(persona_id) if persona_id else None,
+                channel=str(oportunidad.get("canal") or "panel"),
+            )
+        except Exception as exc:  # pragma: no cover - la reasignacion ya fue persistida
+            logger.error(
+                "crm.reassign.assignment_notification_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "opportunity_id": str(oportunidad_id),
+                    "conversation_id": str(conversation_id),
+                    "error": str(exc),
+                },
+            )
+
     return CRMReassignOpportunityResponse(
         oportunidad_id=oportunidad_id,
         asignado_usuario_id=payload.asignado_usuario_id,
