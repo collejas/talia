@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-type EntityType = "persona" | "cuenta";
+export type ActivityContextEntityType = "persona" | "cuenta" | "oportunidad";
 
 type ActivityNotesPanelProps = {
-  entityType: EntityType;
+  entityType: ActivityContextEntityType;
   entityId: string;
 };
 
@@ -151,7 +151,9 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
     <Card>
       <CardHeader>
         <CardTitle>Seguimiento</CardTitle>
-        <CardDescription>Registra notas y programa recordatorios para esta {entityType === "persona" ? "persona" : "cuenta"}.</CardDescription>
+        <CardDescription>
+          Registra notas y programa recordatorios para esta {entityType === "persona" ? "persona" : entityType === "cuenta" ? "cuenta" : "oportunidad"}.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <form className="space-y-3 rounded-xl border bg-muted/20 p-4" onSubmit={handleSubmit}>

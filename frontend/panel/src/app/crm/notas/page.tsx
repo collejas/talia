@@ -1,5 +1,5 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { ClientDataTable } from "@/components/client-data-table";
+import { CrmNotesWorkspace } from "@/components/crm/crm-notes-workspace";
 import { loadCrmNotes } from "@/lib/crm/notes";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function CrmNotesPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <CrmNotesWorkspace rows={payload.rows} />
       )}
     </AppViewLayout>
   );

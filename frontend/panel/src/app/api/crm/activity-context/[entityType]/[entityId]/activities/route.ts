@@ -7,6 +7,7 @@ type RouteParams = { entityType: string; entityId: string };
 function resolveEntityFilter(entityType: string, entityId: string): Record<string, string> | null {
   if (entityType === "persona") return { persona_id: entityId };
   if (entityType === "cuenta") return { cuenta_id: entityId };
+  if (entityType === "oportunidad") return { oportunidad_id: entityId };
   return null;
 }
 

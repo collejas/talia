@@ -37757,6 +37757,7 @@ async def list_activities(
     asignado_a_usuario_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMActivitiesResponse:
     try:
         rows = await repo.list_activities(
@@ -37796,7 +37797,8 @@ async def list_activities(
                 for user in users
                 if isinstance(user, dict) and str(user.get("id") or "").strip()
             }
-        except CRMRepositoryError:
+        except Exception as exc:  # La actividad debe seguir visible aunque falle el enriquecimiento del usuario.
+            logger.warning("crm.activity_users_enrichment_failed", extra={"error": str(exc)})
             users_by_id = {}
     payload: list[dict[str, Any]] = []
     for row in rows:
@@ -38485,7 +38487,8 @@ async def list_notes(
                 for user in users
                 if isinstance(user, dict) and str(user.get("id") or "").strip()
             }
-        except CRMRepositoryError:
+        except Exception as exc:  # La nota debe seguir visible aunque falle el enriquecimiento del usuario.
+            logger.warning("crm.note_users_enrichment_failed", extra={"error": str(exc)})
             users_by_id = {}
     payload: list[dict[str, Any]] = []
     for row in rows:

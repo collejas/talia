@@ -7,6 +7,7 @@ type RouteParams = { entityType: string; entityId: string };
 function resolveRelation(entityType: string, entityId: string): { relacion_tipo: string; relacion_id: string } | null {
   if (entityType === "persona") return { relacion_tipo: "persona", relacion_id: entityId };
   if (entityType === "cuenta") return { relacion_tipo: "cuenta", relacion_id: entityId };
+  if (entityType === "oportunidad") return { relacion_tipo: "oportunidad", relacion_id: entityId };
   return null;
 }
 

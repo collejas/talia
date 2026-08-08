@@ -32,12 +32,19 @@ export async function loadCrmNotes(): Promise<CrmNotesPayload> {
     searchParams: { limit: "100", offset: "0" },
   });
 
-  if (!response.ok || !response.data || !Array.isArray(response.data.items)) {
+  const notes = response.ok
+    ? Array.isArray(response.data)
+      ? response.data
+      : response.data && Array.isArray((response.data as CRMNotesResponse).items)
+        ? (response.data as CRMNotesResponse).items
+        : null
+    : null;
+  if (!notes) {
     const errorMessage = response.ok ? "Respuesta inválida del CRM" : response.error;
     return { rows: [], total: 0, errors: [errorMessage] };
   }
 
-  const rows = response.data.items.map<DataTableRow>((note, index) => ({
+  const rows = notes.map<DataTableRow>((note, index) => ({
     id: index + 1,
     header: note.texto.slice(0, 60) + (note.texto.length > 60 ? "…" : ""),
     type: note.tipo,
@@ -50,7 +57,7 @@ export async function loadCrmNotes(): Promise<CrmNotesPayload> {
 
   return {
     rows,
-    total: response.data.items.length,
+    total: notes.length,
     errors: [],
   };
 }
