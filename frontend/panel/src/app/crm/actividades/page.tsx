@@ -16,7 +16,11 @@ export default async function CrmActivitiesPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <ClientDataTable
+          rows={payload.rows}
+          columnLabels={{ target: "Oportunidad", limit: "Vencimiento" }}
+          detailDescription="Revisa la actividad y abre la oportunidad relacionada."
+        />
       )}
     </AppViewLayout>
   );

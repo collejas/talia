@@ -17,6 +17,12 @@ type NoteRecord = {
   tipo: string;
   creado_por_usuario_id?: string | null;
   creado_en: string;
+  oportunidad?: {
+    id: string;
+    codigo_oportunidad: string | null;
+    titulo: string | null;
+    contacto_nombre: string | null;
+  } | null;
 };
 
 function resolveContextType(value: string): ActivityContextEntityType | null {
@@ -26,7 +32,7 @@ function resolveContextType(value: string): ActivityContextEntityType | null {
 
 function resolveContextHref(type: ActivityContextEntityType, id: string): string | null {
   if (type === "persona") return `/personas/${encodeURIComponent(id)}`;
-  if (type === "oportunidad") return "/embudo";
+  if (type === "oportunidad") return `/embudo?oportunidadId=${encodeURIComponent(id)}`;
   return null;
 }
 
@@ -36,6 +42,9 @@ function NoteDetails({ row }: { row: DataTableRow }) {
 
   const contextType = resolveContextType(note.relacion_tipo);
   const contextHref = contextType ? resolveContextHref(contextType, note.relacion_id) : null;
+  const opportunityLabel = note.oportunidad
+    ? [note.oportunidad.codigo_oportunidad, note.oportunidad.titulo].filter(Boolean).join(" · ")
+    : null;
 
   return (
     <div className="space-y-4 pb-4">
@@ -45,7 +54,7 @@ function NoteDetails({ row }: { row: DataTableRow }) {
           {note.tipo} · {note.visible_para_cliente ? "Visible para cliente" : "Nota interna"} · {new Date(note.creado_en).toLocaleString("es-MX")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Relación: {note.relacion_tipo} · {note.relacion_id}
+          {opportunityLabel ? `Oportunidad: ${opportunityLabel}` : `Relación: ${note.relacion_tipo} · ${note.relacion_id}`}
         </p>
         {contextHref ? (
           <Button asChild variant="link" className="mt-2 h-auto px-0">

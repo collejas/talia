@@ -380,6 +380,14 @@ function createBaseColumns(
       meta: { label: targetLabel } satisfies ColumnMeta,
       cell: ({ row }) => {
         const raw = row.original.raw as Record<string, unknown> | undefined
+        const targetHref = typeof raw?.target_href === "string" ? raw.target_href : ""
+        if (targetHref) {
+          return (
+            <Link href={targetHref} className="text-right text-primary underline-offset-2 hover:underline">
+              {row.original.target}
+            </Link>
+          )
+        }
         const metricMeta =
           raw && typeof raw === "object"
             ? (raw as { metric_meta?: { formatted?: string; value?: unknown } }).metric_meta

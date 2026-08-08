@@ -19,6 +19,14 @@ type CRMActivity = {
   oportunidad_id: string | null;
   asignado_a_usuario_id: string | null;
   creado_por_usuario_id: string | null;
+  asignado_a_usuario?: { id: string; nombre_completo: string | null } | null;
+  creado_por_usuario?: { id: string; nombre_completo: string | null } | null;
+  oportunidad?: {
+    id: string;
+    codigo_oportunidad: string | null;
+    titulo: string | null;
+    contacto_nombre: string | null;
+  } | null;
   metadata: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string;
@@ -50,10 +58,24 @@ export async function loadCrmActivities(): Promise<CrmActivitiesPayload> {
     header: activity.asunto || activity.tipo || "Actividad sin título",
     type: activity.tipo,
     status: activity.estado,
-    target: activity.prioridad,
+    target:
+      [activity.oportunidad?.codigo_oportunidad, activity.oportunidad?.titulo]
+        .filter(Boolean)
+        .join(" · ") || "Sin oportunidad",
     limit: activity.fecha_vencimiento || "Sin fecha",
-    reviewer: activity.asignado_a_usuario_id || "Sin asignar",
-    raw: activity,
+    reviewer:
+      activity.asignado_a_usuario?.nombre_completo?.trim() ||
+      activity.asignado_a_usuario_id ||
+      "Sin asignar",
+    raw: {
+      ...activity,
+      target_href: activity.oportunidad?.id
+        ? `/embudo?oportunidadId=${encodeURIComponent(activity.oportunidad.id)}`
+        : undefined,
+      detail_href: activity.oportunidad?.id
+        ? `/embudo?oportunidadId=${encodeURIComponent(activity.oportunidad.id)}`
+        : undefined,
+    },
   }));
 
   return {

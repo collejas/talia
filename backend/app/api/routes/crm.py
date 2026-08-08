@@ -16425,6 +16425,7 @@ class CRMActivity(BaseModel):
     metadata: dict | None = None
     creado_en: datetime
     actualizado_en: datetime
+    oportunidad: dict[str, Any] | None = None
 
 
 class CRMActivityCreate(BaseModel):
@@ -17031,6 +17032,7 @@ class CRMNote(BaseModel):
     creado_por_usuario: CRMUserSummary | None = None
     creado_en: datetime
     actualizado_en: datetime
+    oportunidad: dict[str, Any] | None = None
 
 
 class CRMNoteCreate(BaseModel):
@@ -37800,6 +37802,25 @@ async def list_activities(
         except Exception as exc:  # La actividad debe seguir visible aunque falle el enriquecimiento del usuario.
             logger.warning("crm.activity_users_enrichment_failed", extra={"error": str(exc)})
             users_by_id = {}
+    opportunity_ids = [
+        UUID(str(row.get("oportunidad_id")))
+        for row in rows
+        if isinstance(row, dict) and row.get("oportunidad_id")
+    ]
+    opportunities_by_id: dict[str, dict[str, Any]] = {}
+    if opportunity_ids:
+        try:
+            opportunities = await repo.list_opportunities_by_ids(
+                organizacion_id=organizacion_id,
+                opportunity_ids=opportunity_ids,
+            )
+            opportunities_by_id = {
+                str(opportunity.get("id")): opportunity
+                for opportunity in opportunities
+                if isinstance(opportunity, dict) and opportunity.get("id")
+            }
+        except Exception as exc:
+            logger.warning("crm.activity_opportunity_enrichment_failed", extra={"error": str(exc)})
     payload: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -37811,6 +37832,7 @@ async def list_activities(
                 **row,
                 "creado_por_usuario": users_by_id.get(created_by_id) if created_by_id else None,
                 "asignado_a_usuario": users_by_id.get(assigned_by_id) if assigned_by_id else None,
+                "oportunidad": opportunities_by_id.get(str(row.get("oportunidad_id"))) if row.get("oportunidad_id") else None,
             },
         )
     items = [CRMActivity.model_validate(row) for row in payload]
@@ -38490,6 +38512,25 @@ async def list_notes(
         except Exception as exc:  # La nota debe seguir visible aunque falle el enriquecimiento del usuario.
             logger.warning("crm.note_users_enrichment_failed", extra={"error": str(exc)})
             users_by_id = {}
+    opportunity_ids = [
+        UUID(str(row.get("relacion_id")))
+        for row in rows
+        if isinstance(row, dict) and str(row.get("relacion_tipo") or "").strip().lower() == "oportunidad" and row.get("relacion_id")
+    ]
+    opportunities_by_id: dict[str, dict[str, Any]] = {}
+    if opportunity_ids:
+        try:
+            opportunities = await repo.list_opportunities_by_ids(
+                organizacion_id=organizacion_id,
+                opportunity_ids=opportunity_ids,
+            )
+            opportunities_by_id = {
+                str(opportunity.get("id")): opportunity
+                for opportunity in opportunities
+                if isinstance(opportunity, dict) and opportunity.get("id")
+            }
+        except Exception as exc:
+            logger.warning("crm.note_opportunity_enrichment_failed", extra={"error": str(exc)})
     payload: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -38499,6 +38540,9 @@ async def list_notes(
             {
                 **row,
                 "creado_por_usuario": users_by_id.get(created_by_id) if created_by_id else None,
+                "oportunidad": opportunities_by_id.get(str(row.get("relacion_id")))
+                if str(row.get("relacion_tipo") or "").strip().lower() == "oportunidad"
+                else None,
             },
         )
     return [CRMNote.model_validate(row) for row in payload]

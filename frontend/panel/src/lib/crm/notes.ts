@@ -11,6 +11,13 @@ type CRMNote = {
   visible_para_cliente: boolean;
   tipo: string;
   creado_por_usuario_id: string | null;
+  creado_por_usuario?: { id: string; nombre_completo: string | null } | null;
+  oportunidad?: {
+    id: string;
+    codigo_oportunidad: string | null;
+    titulo: string | null;
+    contacto_nombre: string | null;
+  } | null;
   creado_en: string;
   actualizado_en: string;
 };
@@ -49,10 +56,21 @@ export async function loadCrmNotes(): Promise<CrmNotesPayload> {
     header: note.texto.slice(0, 60) + (note.texto.length > 60 ? "…" : ""),
     type: note.tipo,
     status: note.visible_para_cliente ? "Visible" : "Privada",
-    target: note.relacion_tipo,
-    limit: "Relacionado",
-    reviewer: note.creado_por_usuario_id || "Sistema",
-    raw: note,
+    target: note.oportunidad
+      ? [note.oportunidad.codigo_oportunidad, note.oportunidad.titulo].filter(Boolean).join(" · ") || "Oportunidad"
+      : note.relacion_tipo,
+    limit: note.oportunidad?.contacto_nombre || "Relacionado",
+    reviewer: note.creado_por_usuario?.nombre_completo?.trim() || note.creado_por_usuario_id || "Sistema",
+    raw: {
+      ...note,
+      target_href: note.oportunidad
+        ? `/embudo?oportunidadId=${encodeURIComponent(note.oportunidad.id)}`
+        : note.relacion_tipo === "persona"
+          ? `/personas/${encodeURIComponent(note.relacion_id)}`
+          : note.relacion_tipo === "cuenta"
+            ? `/empresas/${encodeURIComponent(note.relacion_id)}`
+            : undefined,
+    },
   }));
 
   return {
