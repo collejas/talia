@@ -30,8 +30,20 @@ try:
     from buscador.scrapers.demo_site import DemoSiteScraper
     from buscador.scrapers.domain_crawler import create_domain_crawler
     from buscador.scrapers.simple_site import SimpleSiteScraper
+    BUSCADOR_AVAILABLE = True
+    BUSCADOR_IMPORT_ERROR: Exception | None = None
 except Exception as exc:  # pragma: no cover - import guard
-    raise RuntimeError("No es posible importar el módulo buscador") from exc
+    EmailExtractor = None  # type: ignore[assignment]
+    HttpFetcher = None  # type: ignore[assignment]
+    DemoSiteScraper = None  # type: ignore[assignment]
+    create_domain_crawler = None  # type: ignore[assignment]
+    SimpleSiteScraper = None  # type: ignore[assignment]
+    BUSCADOR_AVAILABLE = False
+    BUSCADOR_IMPORT_ERROR = exc
+    LOG.warning(
+        "buscador.import_unavailable",
+        extra={"expected": str(BUSCADOR_ROOT), "error": str(exc)},
+    )
 
 
 class BuscadorRunnerError(Exception):
@@ -76,6 +88,10 @@ async def run_buscador(
     """Ejecuta el scraper en un hilo aparte para no bloquear el loop."""
 
     params.ensure_valid()
+    if not BUSCADOR_AVAILABLE:
+        raise BuscadorRunnerError(
+            "El módulo local 'buscador' no está disponible en este servidor."
+        ) from BUSCADOR_IMPORT_ERROR
 
     return await asyncio.to_thread(_run_buscador_sync, params, control)
 

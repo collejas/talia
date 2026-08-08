@@ -1528,10 +1528,10 @@ export function InboxSplitView({
           );
           return;
         }
-        const selected = threadItemsRef.current.find((thread) => thread.id === conversationId);
-        const conversationIds = Array.from(
-          new Set([conversationId, ...(selected?.conversationHistory ?? [])].filter(Boolean)),
-        );
+        // Historical conversations are loaded by the detail endpoint once. The
+        // live poll only needs the canonical conversation; querying every
+        // restart here creates one request per historical conversation.
+        const conversationIds = [conversationId];
         const histories = await Promise.all(
           conversationIds.map(async (id) => {
             const response = await fetch(`/api/inbox/${id}/messages?limit=100`, {
