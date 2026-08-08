@@ -2175,11 +2175,11 @@ export function InboxSplitView({
                       <button
                         type="button"
                         onClick={() => handleSelectThread(thread.id)}
-                        className={`flex w-full flex-col gap-0.5 px-2.5 py-1.5 text-left text-xs transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
+                        className={`flex min-h-[5.5rem] w-full flex-col gap-1 px-2.5 py-2 text-left text-xs transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-h-[1.25rem] items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-1">
-                            <span className="truncate text-xs font-medium leading-tight" title={thread.contactoTelefono || undefined}>
+                            <span className="truncate text-xs font-medium leading-snug" title={thread.contactoTelefono || undefined}>
                               {thread.contactoNombre}
                             </span>
                             {isRestart ? (
@@ -2196,7 +2196,7 @@ export function InboxSplitView({
                           </div>
                           <span className="shrink-0 text-[9px] text-muted-foreground">{formattedTime}</span>
                         </div>
-                        <div className="flex items-center gap-1 overflow-hidden text-[9px] text-muted-foreground">
+                        <div className="flex min-h-[1.1rem] items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] text-muted-foreground">
                           <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                             {thread.canal}
                           </Badge>
@@ -2270,13 +2270,13 @@ export function InboxSplitView({
                           ) : null}
                           {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                         </div>
-                        <p className="line-clamp-1 text-[10px] leading-tight text-muted-foreground">
+                        <p className="min-h-[1rem] line-clamp-1 text-[10px] leading-tight text-muted-foreground">
                           {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
                         </p>
                         {thread.tags.length ? (
-                          <div className="flex flex-wrap gap-0.5 pt-0.5">
+                          <div className="flex min-h-[1.1rem] flex-nowrap gap-0.5 overflow-hidden whitespace-nowrap pt-0.5">
                             {thread.tags.map((tag) => (
-                              <Badge key={tag} variant="outline" className="text-[10px] uppercase">
+                              <Badge key={tag} variant="outline" className="shrink-0 text-[10px] uppercase">
                                 {tag}
                               </Badge>
                             ))}
