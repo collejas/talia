@@ -109,15 +109,15 @@ export function InboxToolbar({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-1.5 rounded-md border bg-card p-2 shadow-none [&_select]:h-7 [&_select]:rounded [&_select]:px-1.5 [&_select]:text-[9px] [&_[data-slot=input]]:h-7 [&_[data-slot=input]]:px-2 [&_[data-slot=input]]:text-[10px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:gap-1 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-[10px] [&_[data-slot=button]_svg]:mr-0 [&_[data-slot=button]_svg]:size-3">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
         <div>
-          <h2 className="text-lg font-semibold">Bandeja de entrada</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-sm font-semibold leading-tight">Bandeja de entrada</h2>
+          <p className="text-[10px] leading-tight text-muted-foreground">
             {total} conversaciones · {unread} sin leer · {awaiting} en seguimiento
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1">
           <div className="flex items-center">
             <select
               className="h-8 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
@@ -216,15 +216,15 @@ export function InboxToolbar({
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 lg:flex-none">
-            <IconSearch className="size-4 text-muted-foreground" />
+          <div className="flex items-center gap-1 lg:flex-none">
+            <IconSearch className="size-3 text-muted-foreground" />
             <Input
               placeholder="Buscar por contacto, asunto o etiqueta"
-              className="h-8 w-32 leading-none"
+              className="w-28 leading-none"
             />
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {onCopyLink ? (
             <Button size="sm" variant="outline" onClick={onCopyLink}>
               <IconLink className="mr-2 size-4" />

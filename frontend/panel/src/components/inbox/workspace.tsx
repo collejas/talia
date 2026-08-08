@@ -198,7 +198,7 @@ export function InboxWorkspace({
   const activeDateFilter: DateFilterOption = (dateFilterValue || "all") as DateFilterOption;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <InboxToolbar
         summary={{ ...summary, unread: unreadMessages }}
         visibleTotal={visibleThreadsCount}

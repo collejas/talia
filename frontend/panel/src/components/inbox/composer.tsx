@@ -82,15 +82,15 @@ export function InboxComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-t bg-background/80 px-5 py-4"
+      className="border-t bg-background/80 px-2.5 py-2"
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
         {attachments && attachments.length ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="flex items-center gap-2 rounded-full border border-muted px-3 py-1 text-xs"
+                className="flex items-center gap-1 rounded-md border border-muted px-2 py-0.5 text-[10px]"
               >
                 <span className="max-w-[160px] truncate">{attachment.name ?? attachment.url}</span>
                 {attachment.size ? (
@@ -114,26 +114,26 @@ export function InboxComposer({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-9 text-muted-foreground"
+          className="size-7 text-muted-foreground"
           disabled={interactionDisabled}
         >
-          <IconMoodSmile className="size-5" />
+          <IconMoodSmile className="size-4" />
           <span className="sr-only">Insertar emoji</span>
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-9 text-muted-foreground"
+          className="size-7 text-muted-foreground"
           onClick={handleFileTrigger}
           disabled={interactionDisabled}
         >
-            <IconPaperclip className="size-5" />
+            <IconPaperclip className="size-4" />
             <span className="sr-only">Adjuntar archivo</span>
           </Button>
           <input
@@ -154,27 +154,27 @@ export function InboxComposer({
               }
             }}
             placeholder={placeholder ?? "Escribe tu respuesta"}
-            className="min-h-[48px] flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="min-h-[34px] flex-1 resize-none rounded border border-input bg-background px-2 py-1.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             disabled={interactionDisabled}
             autoComplete="off"
-            rows={2}
+            rows={1}
           />
           <Button
             type="submit"
             size="icon"
-            className="size-9"
+            className="size-7"
             disabled={interactionDisabled || (!hasText && !hasAttachments)}
           >
-            <IconSend className="size-5" />
+            <IconSend className="size-4" />
             <span className="sr-only">Enviar mensaje</span>
           </Button>
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="flex justify-between text-[9px] leading-tight text-muted-foreground">
           <span>Presiona Enter para enviar · Shift + Enter para salto de línea</span>
           {busy ? <span>Procesando…</span> : null}
         </div>
         {locked && disabledMessage ? (
-          <div className="rounded-md border border-muted/60 bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded border border-muted/60 bg-muted px-2 py-1 text-[10px] text-muted-foreground">
             {disabledMessage}
           </div>
         ) : null}

@@ -778,7 +778,7 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
 
   return (
     <div className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
-      <div className={`flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isAgent ? "justify-end" : ""}`}>
+      <div className={`flex flex-wrap items-center gap-1 text-[9px] leading-tight text-muted-foreground ${isAgent ? "justify-end" : ""}`}>
         {isAgent && isHumanAgent ? (
           <Badge variant="secondary" className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm">
             Humano: {humanAuthor ?? message.author}
@@ -789,18 +789,18 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
         <span>{timestampLabel || "—"}</span>
       </div>
       <div
-        className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+        className={`max-w-xl whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs leading-snug shadow-none ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
       >
         {message.body.map((paragraph, index) => (
           <p key={index}>{paragraph}</p>
         ))}
       </div>
       {message.attachments.length ? (
-        <div className="mt-2 flex w-full max-w-xl flex-col gap-2 text-xs">
+        <div className="mt-1 flex w-full max-w-xl flex-col gap-1 text-[10px]">
           {message.attachments.map((attachment) => (
             <div
               key={attachment.id ?? attachment.url}
-              className="overflow-hidden rounded-2xl border border-muted bg-background/90 shadow-sm ring-1 ring-black/5"
+              className="overflow-hidden rounded-lg border border-muted bg-background/90 shadow-none"
             >
               {isImageAttachment(attachment) ? (
                 <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="block">
@@ -2093,8 +2093,8 @@ export function InboxSplitView({
   }, [selectedThread, promoteForm]);
 
   return (
-    <div className="flex min-w-0 gap-4">
-      <aside className={cn("flex h-[calc(100vh-13rem)] min-h-[320px] flex-col overflow-hidden rounded-lg border bg-card transition-[width] duration-300", opportunityDrawerOpen ? "w-[272px]" : "w-[320px]")}>
+    <div className="flex min-w-0 gap-2 [&_[data-slot=badge]]:gap-0.5 [&_[data-slot=badge]]:px-1.5 [&_[data-slot=badge]]:py-0 [&_[data-slot=badge]]:text-[9px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:gap-1 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-[10px]">
+      <aside className={cn("flex h-[calc(100vh-10.5rem)] min-h-[320px] flex-col overflow-hidden rounded-md border bg-card transition-[width] duration-300", opportunityDrawerOpen ? "w-[272px]" : "w-[320px]")}>
         <div className="flex min-h-0 flex-1 flex-col">
           {filteredThreads.length ? (
             <>
@@ -2114,11 +2114,11 @@ export function InboxSplitView({
                     <button
                       type="button"
                       onClick={() => handleSelectThread(thread.id)}
-                      className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
+                      className={`flex w-full flex-col gap-0.5 px-2.5 py-1.5 text-left text-xs transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
                     >
                       <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium" title={thread.contactoTelefono || undefined}>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium leading-tight" title={thread.contactoTelefono || undefined}>
                     {thread.contactoNombre}
                   </span>
                   {isRestart ? (
@@ -2133,9 +2133,9 @@ export function InboxSplitView({
                   ) : null}
                   {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
                 </div>
-                        <span className="text-xs text-muted-foreground">{formattedTime}</span>
+                        <span className="text-[9px] text-muted-foreground">{formattedTime}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1 overflow-hidden text-[9px] text-muted-foreground">
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                           {thread.canal}
                         </Badge>
@@ -2209,11 +2209,11 @@ export function InboxSplitView({
                         ) : null}
                         {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                       </div>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">
+                      <p className="line-clamp-1 text-[10px] leading-tight text-muted-foreground">
                         {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
                       </p>
                       {thread.tags.length ? (
-                        <div className="flex flex-wrap gap-1 pt-1">
+                        <div className="flex flex-wrap gap-0.5 pt-0.5">
                           {thread.tags.map((tag) => (
                             <Badge key={tag} variant="outline" className="text-[10px] uppercase">
                               {tag}
@@ -2233,7 +2233,7 @@ export function InboxSplitView({
             </div>
           )}
           {threadItems.length < totalThreads ? (
-            <div className="shrink-0 border-t bg-card px-3 py-3">
+            <div className="shrink-0 border-t bg-card px-2 py-1.5">
               <Button
                 type="button"
                 variant="outline"
@@ -2251,7 +2251,7 @@ export function InboxSplitView({
         </div>
       </aside>
 
-      <section className="flex h-[calc(100vh-13rem)] min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+      <section className="flex h-[calc(100vh-10.5rem)] min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-md border bg-card">
         {selectedThread ? (
           <>
             <header className="flex max-h-16 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b px-3 py-2">
@@ -2384,7 +2384,7 @@ export function InboxSplitView({
               </div>
             </header>
 
-            <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+            <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
               {manualToggleError ? (
                 <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {manualToggleError}
@@ -2400,7 +2400,7 @@ export function InboxSplitView({
                   Modo manual activado: el asistente no enviará respuestas automáticas.
                 </div>
               ) : null}
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
               {currentMessages.length ? (
                 currentMessages.map((message) => (
                   <InboxMessageRow key={message.id} message={message} isHydrated={isHydrated} />
@@ -2696,7 +2696,7 @@ export function InboxSplitView({
         side="right"
         embedded
         closeOnSave={false}
-        contentClassName="h-[calc(100vh-13rem)] min-h-[320px] w-[min(34vw,520px)] min-w-[420px] shrink-0"
+        contentClassName="h-[calc(100vh-10.5rem)] min-h-[320px] w-[min(34vw,520px)] min-w-[420px] shrink-0 text-[13px] [&_[data-slot=drawer-header]]:gap-0.5 [&_[data-slot=drawer-header]]:p-2.5 [&_[data-slot=drawer-header]_h2]:text-sm [&_[data-slot=drawer-header]_span]:text-[10px] [&_[data-slot=tabs]]:gap-1 [&_[data-slot=tabs-list]]:mx-2 [&_[data-slot=tabs-list]]:gap-0.5 [&_[data-slot=tabs-list]]:rounded-md [&_[data-slot=tabs-list]]:p-0.5 [&_[data-slot=tabs-trigger]]:h-7 [&_[data-slot=tabs-trigger]]:gap-1 [&_[data-slot=tabs-trigger]]:px-1 [&_[data-slot=tabs-trigger]]:py-0.5 [&_[data-slot=tabs-trigger]]:text-[10px] [&_[data-slot=input]]:h-8 [&_[data-slot=input]]:px-2 [&_[data-slot=input]]:text-xs [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=badge]]:gap-0.5 [&_[data-slot=badge]]:px-1.5 [&_[data-slot=badge]]:py-0 [&_[data-slot=badge]]:text-[9px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-xs [&_form]:gap-2 [&_form]:px-2.5 [&_form]:pb-2.5 [&_section]:space-y-2 [&_section]:rounded-lg [&_section]:p-2 [&_section]:shadow-none [&_textarea]:min-h-[64px] [&_textarea]:px-2 [&_textarea]:py-1.5 [&_textarea]:text-xs"
         onSubmit={saveOpportunityWorkspace}
       />
     </div>
