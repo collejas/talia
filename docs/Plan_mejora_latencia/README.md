@@ -23,12 +23,16 @@ Documentación generada para diagnóstico y plan de mejora de rendimiento en bac
   - Métricas de latencia por endpoint crítico.
   - Decisión de arranque para Fase 1.
 
+- `05_inbox_persistente_definitivo.md`
+  - Modelo persistente, compatibilidad persona/cuenta, triggers, seguridad y rendimiento.
+
 ## Orden recomendado
 
 1. Leer `01_diagnostico_actual.md`.
 2. Revisar avance histórico en `02_plan_mejora.md`.
 3. Ejecutar `03_plan_integral_realtime_mv_sin_redis.md` como plan principal, con medición continua.
 4. Usar `04_ejecucion_fase0_baseline.md` como punto de comparación antes/después.
+5. Usar `05_inbox_persistente_definitivo.md` como arquitectura vigente de Inbox.
 
 ## Estado actual
 

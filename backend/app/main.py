@@ -12,7 +12,6 @@ from starlette.staticfiles import StaticFiles
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.crm import (
-    inbox_snapshot_refresh_runner,
     inbox_threads_metrics_snapshot_runner,
     router as crm_router,
 )
@@ -72,7 +71,6 @@ async def app_lifespan(_: FastAPI):
     await webchat_followup_runner.start()
     await webchat_closure_rescue_runner.start()
     await inbox_threads_metrics_snapshot_runner.start()
-    await inbox_snapshot_refresh_runner.start()
     await high_demand_mode_runner.start()
     await activity_reminder_jobs_runner.start()
     await deleted_busquedas_purge_runner.start()
@@ -96,10 +94,6 @@ async def app_lifespan(_: FastAPI):
             _shutdown_with_timeout(
                 name="high_demand_mode_runner",
                 coro=high_demand_mode_runner.shutdown(),
-            ),
-            _shutdown_with_timeout(
-                name="inbox_snapshot_refresh_runner",
-                coro=inbox_snapshot_refresh_runner.shutdown(),
             ),
             _shutdown_with_timeout(
                 name="inbox_threads_metrics_snapshot_runner",

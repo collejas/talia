@@ -923,6 +923,7 @@ export function InboxSplitView({
   currentMessagesRef.current = currentMessages;
   threadItemsRef.current = threadItems;
   const threadsRefreshingRef = React.useRef(false);
+  const skipInitialThreadsRefreshRef = React.useRef(threads.length > 0);
   const threadEnrichmentRef = React.useRef(false);
   const threadEnrichedOnceRef = React.useRef<Set<string>>(new Set());
   const hasExplicitThreadSelectionRef = React.useRef(false);
@@ -1344,8 +1345,15 @@ export function InboxSplitView({
   }, [buildThreadsParams, shouldEnrichThreads]);
 
   React.useEffect(() => {
-    let cancelled = false;
+    if (skipInitialThreadsRefreshRef.current) {
+      skipInitialThreadsRefreshRef.current = false;
+      return;
+    }
     void refreshThreads();
+  }, [refreshThreads]);
+
+  React.useEffect(() => {
+    let cancelled = false;
     const interval = setInterval(() => {
       if (cancelled || inboxStreamConnectedRef.current) {
         return;

@@ -402,7 +402,10 @@ SALE_TARGET_STAGE_CODES = (
     "demo",
 )
 WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
-INBOX_THREADS_CACHE_TTL_SECONDS = 20.0
+# La proyección persistente ya es la fuente rápida y transaccional. Mantener
+# resultados de threads en memoria retrasaría los eventos SSE y reintroduciría
+# inconsistencias entre instancias.
+INBOX_THREADS_CACHE_TTL_SECONDS = 0.0
 INBOX_THREADS_CACHE_MAX_ENTRIES = 256
 _INBOX_THREADS_CACHE: dict[str, tuple[float, list[Any]]] = {}
 _INBOX_THREADS_CACHE_LOCK = asyncio.Lock()
@@ -491,6 +494,8 @@ def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
 
 
 async def _read_inbox_threads_cache(cache_key: str) -> list[Any] | None:
+    if INBOX_THREADS_CACHE_TTL_SECONDS <= 0:
+        return None
     now = time.monotonic()
     async with _INBOX_THREADS_CACHE_LOCK:
         entry = _INBOX_THREADS_CACHE.get(cache_key)
@@ -504,6 +509,8 @@ async def _read_inbox_threads_cache(cache_key: str) -> list[Any] | None:
 
 
 async def _write_inbox_threads_cache(cache_key: str, rows: list[Any]) -> None:
+    if INBOX_THREADS_CACHE_TTL_SECONDS <= 0:
+        return
     now = time.monotonic()
     expires_at = now + INBOX_THREADS_CACHE_TTL_SECONDS
     async with _INBOX_THREADS_CACHE_LOCK:
@@ -26288,86 +26295,26 @@ async def get_inbox_filter_options(
         )
         return cached_payload
 
-    rows = await repo.inbox_threads(
+    rows = await repo.inbox_filter_options(
         usuario_token=user_token,
         source=source,
         channel=channel,
-        limit=limit,
-        offset=0,
-        message_limit=1,
     )
-
-    batch_ids: set[str] = set()
-    campana_ids: set[str] = set()
-    for row in rows:
-        batch_value = _clean_text(row.get("batch_id"))
-        if batch_value:
-            batch_ids.add(batch_value)
-        campana_value = _clean_text(row.get("campana_id"))
-        if campana_value:
-            campana_ids.add(campana_value)
-
-    batch_label_map: dict[str, str] = {}
-    if batch_ids:
-        try:
-            batch_rows, _ = await repo.list_contact_batches(
-                usuario_token=user_token,
-                limit=max(limit, 300),
-                offset=0,
-            )
-        except CRMRepositoryError:
-            batch_rows = []
-        for batch in batch_rows:
-            batch_id_value = _clean_text(batch.get("id"))
-            if not batch_id_value or batch_id_value not in batch_ids:
-                continue
-            title = _clean_text(batch.get("titulo"))
-            if not title:
-                metadata = batch.get("metadata") if isinstance(batch.get("metadata"), dict) else {}
-                title = _clean_text(metadata.get("campana_nombre")) or _clean_text(
-                    metadata.get("lista_nombre")
-                )
-            if title:
-                batch_label_map[batch_id_value] = title
-
-    campana_label_map: dict[str, str] = {}
-    if campana_ids:
-        campaign_cache_key = _build_inbox_catalog_cache_key(
-            {
-                "type": "campaigns",
-                "org": str(organizacion_id),
-            }
-        )
-        campaign_rows = await _read_inbox_catalog_cache(campaign_cache_key)
-        if campaign_rows is None:
-            try:
-                campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
-            except CRMRepositoryError:
-                campaign_rows = []
-            else:
-                await _write_inbox_catalog_cache(campaign_cache_key, campaign_rows)
-        for campaign in campaign_rows:
-            campaign_id_value = _clean_text(campaign.get("id"))
-            if not campaign_id_value or campaign_id_value not in campana_ids:
-                continue
-            name = _clean_text(campaign.get("nombre"))
-            if name:
-                campana_label_map[campaign_id_value] = name
-
-    batches = []
-    for value in sorted(batch_ids):
-        label = batch_label_map.get(value) or f"Batch {value[:8]}"
-        batches.append(CRMInboxContextOption(value=value, label=label))
-
-    campanas = []
-    for value in sorted(campana_ids):
-        label = campana_label_map.get(value) or f"Campaña {value[:8]}"
-        campanas.append(CRMInboxContextOption(value=value, label=label))
+    batches = [
+        CRMInboxContextOption(value=str(row["option_id"]), label=str(row["option_label"]))
+        for row in rows
+        if row.get("option_type") == "batch" and row.get("option_id")
+    ]
+    campanas = [
+        CRMInboxContextOption(value=str(row["option_id"]), label=str(row["option_label"]))
+        for row in rows
+        if row.get("option_type") == "campaign" and row.get("option_id")
+    ]
 
     duration_ms = (time.perf_counter() - start) * 1000
     log_payload = {
         "duration_ms": round(duration_ms, 2),
-        "threads_scanned": len(rows),
+        "projection_options": len(rows),
         "batch_options": len(batches),
         "campana_options": len(campanas),
         "source": source,

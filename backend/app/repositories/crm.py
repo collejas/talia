@@ -14440,11 +14440,7 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
-        rpc_name = (
-            "/rest/v1/rpc/panel_inbox_threads_grouped"
-            if not channel_value or channel_value == "whatsapp"
-            else "/rest/v1/rpc/panel_inbox_threads"
-        )
+        rpc_name = "/rest/v1/rpc/panel_inbox_threads_persisted"
         resp = await self._request_with_user(
             "POST",
             rpc_name,
@@ -14455,6 +14451,28 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_threads: {data!r}")
         return data
+
+    async def inbox_filter_options(
+        self,
+        *,
+        usuario_token: str,
+        source: str | None = None,
+        channel: str | None = None,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_source": source.strip().lower() if isinstance(source, str) and source.strip() else None,
+            "p_channel": channel.strip().lower() if isinstance(channel, str) and channel.strip() else None,
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_inbox_filter_options_persisted",
+            token=usuario_token,
+            json=payload,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en inbox_filter_options: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
 
     async def inbox_threads_debug(
         self,
