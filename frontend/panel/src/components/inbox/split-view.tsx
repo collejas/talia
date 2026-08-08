@@ -870,6 +870,7 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
 
 type InboxSplitViewProps = {
   threads: InboxThread[];
+  initialTotalThreads: number;
   batchOptions?: Array<{ value: string; label: string }>;
   campanaOptions?: Array<{ value: string; label: string }>;
   sourceFilter?: string | null;
@@ -884,6 +885,7 @@ type InboxSplitViewProps = {
 
 export function InboxSplitView({
   threads,
+  initialTotalThreads,
   batchOptions,
   campanaOptions,
   sourceFilter,
@@ -897,7 +899,9 @@ export function InboxSplitView({
 }: InboxSplitViewProps) {
   const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
-  const [totalThreads, setTotalThreads] = React.useState<number>(threads.length);
+  const [totalThreads, setTotalThreads] = React.useState<number>(
+    Math.max(threads.length, initialTotalThreads),
+  );
   const [threadsRefreshIntervalMs, setThreadsRefreshIntervalMs] = React.useState<number>(
     THREADS_REFRESH_INTERVAL_MS,
   );
@@ -1071,8 +1075,8 @@ export function InboxSplitView({
 
   React.useEffect(() => {
     setThreadItems(threads);
-    setTotalThreads(threads.length);
-  }, [threads]);
+    setTotalThreads(Math.max(threads.length, initialTotalThreads));
+  }, [threads, initialTotalThreads]);
 
   const filteredThreads = React.useMemo(() => {
     const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
@@ -1989,10 +1993,10 @@ export function InboxSplitView({
   return (
     <div className="flex gap-4">
       <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col">
           {filteredThreads.length ? (
             <>
-              <ul className="divide-y">
+              <ul className="min-h-0 flex-1 divide-y overflow-y-auto">
                 {filteredThreads.map((thread) => {
                 const isActive = thread.id === selectedId;
                 const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
@@ -2121,7 +2125,7 @@ export function InboxSplitView({
                 })}
               </ul>
               {threadItems.length < totalThreads ? (
-                <div className="border-t px-3 py-3">
+                <div className="shrink-0 border-t bg-card px-3 py-3">
                   <Button
                     type="button"
                     variant="outline"

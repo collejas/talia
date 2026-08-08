@@ -61,6 +61,7 @@ export default async function Page({ searchParams }: InboxPageProps) {
                 <InboxWorkspace
                   summary={inboxData.summary}
                   threads={inboxData.threads}
+                  totalThreads={inboxData.totalThreads}
                   reengageTagOptions={inboxData.reengageTags}
                   batchOptions={inboxData.batchOptions}
                   campanaOptions={inboxData.campanaOptions}

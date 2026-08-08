@@ -15,6 +15,7 @@ import {
 type InboxWorkspaceProps = {
   summary: InboxSummary;
   threads: InboxThread[];
+  totalThreads: number;
   reengageTagOptions: string[];
   batchOptions?: Array<{ value: string; label: string }>;
   campanaOptions?: Array<{ value: string; label: string }>;
@@ -31,6 +32,7 @@ type InboxWorkspaceProps = {
 export function InboxWorkspace({
   summary,
   threads,
+  totalThreads,
   reengageTagOptions,
   batchOptions: initialBatchOptions,
   campanaOptions: initialCampanaOptions,
@@ -221,6 +223,7 @@ export function InboxWorkspace({
       />
       <InboxSplitView
         threads={threads}
+        initialTotalThreads={totalThreads}
         batchOptions={batchOptions}
         campanaOptions={campanaOptions}
         sourceFilter={activeSourceFilter}
