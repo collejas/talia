@@ -561,10 +561,28 @@ def _calculate_next_followup_due(
     reengage_sent_at = _parse_ts(reengage_meta.get("sent_at"))
     escalate_sent_at = _parse_ts(escalate_meta.get("sent_at"))
     reengage_attempts = int(reengage_meta.get("attempts") or 0)
-    max_reengage_attempts = max(1, whatsapp_settings.reengage_max_attempts)
+    source = str(_ensure_dict(conversation.get("inbox_context")).get("source") or "").strip().lower()
+    is_prospeccion = source in {"prospeccion", "publicidad_whatsapp"}
+    if is_prospeccion:
+        if not whatsapp_settings.prospeccion_followup_enabled:
+            return None
+        inactivity_minutes = whatsapp_settings.prospeccion_inactivity_minutes
+        reengage_minutes = whatsapp_settings.prospeccion_reengage_minutes
+        max_reengage_attempts = max(0, whatsapp_settings.prospeccion_reengage_max_attempts)
+        escalate_minutes = whatsapp_settings.prospeccion_escalate_minutes
+    else:
+        reengage_minutes = whatsapp_settings.reengage_minutes
+        max_reengage_attempts = max(1, whatsapp_settings.reengage_max_attempts)
+        escalate_minutes = whatsapp_settings.escalate_minutes
+
+    if max_reengage_attempts == 0:
+        return None
 
     if reengage_attempts < max_reengage_attempts:
-        due_at = last_out + timedelta(minutes=max(1, whatsapp_settings.reengage_minutes))
+        delay_minutes = max(1, reengage_minutes)
+        if is_prospeccion and reengage_attempts == 0 and not reengage_sent_at:
+            delay_minutes = max(delay_minutes, inactivity_minutes)
+        due_at = last_out + timedelta(minutes=delay_minutes)
         return {
             "due_at": due_at,
             "next_action": "reengage",
@@ -581,7 +599,7 @@ def _calculate_next_followup_due(
         return None
 
     baseline = reengage_sent_at or last_out
-    due_at = baseline + timedelta(minutes=max(0, whatsapp_settings.escalate_minutes))
+    due_at = baseline + timedelta(minutes=max(0, escalate_minutes))
     return {
         "due_at": due_at,
         "next_action": "escalate",

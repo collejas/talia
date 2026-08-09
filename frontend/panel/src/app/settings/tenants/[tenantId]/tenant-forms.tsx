@@ -1113,6 +1113,11 @@ export type WhatsAppInitialValues = {
   whatsapp_template_prospeccion_sids?: string
   whatsapp_prospeccion_prompt_id?: string
   whatsapp_prospeccion_prompt_version?: string
+  whatsapp_prospeccion_followup_enabled?: boolean
+  whatsapp_prospeccion_inactivity_minutes?: number
+  whatsapp_prospeccion_reengage_minutes?: number
+  whatsapp_prospeccion_reengage_max_attempts?: number
+  whatsapp_prospeccion_escalate_minutes?: number
 }
 
 type MessengerInitialValues = {
@@ -1165,11 +1170,19 @@ function buildWhatsProspSettingsKey(
   initialValues: Pick<
     WhatsAppInitialValues,
     "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+      | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
+      | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
+      | "whatsapp_prospeccion_escalate_minutes"
   >,
 ): string {
   return JSON.stringify({
     whatsapp_prospeccion_prompt_id: initialValues.whatsapp_prospeccion_prompt_id ?? "",
     whatsapp_prospeccion_prompt_version: initialValues.whatsapp_prospeccion_prompt_version ?? "",
+    whatsapp_prospeccion_followup_enabled: initialValues.whatsapp_prospeccion_followup_enabled ?? false,
+    whatsapp_prospeccion_inactivity_minutes: initialValues.whatsapp_prospeccion_inactivity_minutes ?? "",
+    whatsapp_prospeccion_reengage_minutes: initialValues.whatsapp_prospeccion_reengage_minutes ?? "",
+    whatsapp_prospeccion_reengage_max_attempts: initialValues.whatsapp_prospeccion_reengage_max_attempts ?? "",
+    whatsapp_prospeccion_escalate_minutes: initialValues.whatsapp_prospeccion_escalate_minutes ?? "",
   })
 }
 
@@ -2875,6 +2888,9 @@ export function TenantWhatsAppProspeccionSettings({
   initialValues: Pick<
     WhatsAppInitialValues,
     "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+      | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
+      | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
+      | "whatsapp_prospeccion_escalate_minutes"
   >
 }) {
   const formKey = useMemo(() => buildWhatsProspSettingsKey(initialValues), [initialValues])
@@ -2895,6 +2911,9 @@ function TenantWhatsAppProspeccionSettingsForm({
   initialValues: Pick<
     WhatsAppInitialValues,
     "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+      | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
+      | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
+      | "whatsapp_prospeccion_escalate_minutes"
   >
 }) {
   const actions = useTenantSettingsActions()
@@ -2951,6 +2970,43 @@ function TenantWhatsAppProspeccionSettingsForm({
             <p className="text-xs text-muted-foreground">
               Si se deja vacío, el runtime intentará resolver la versión configurada por defecto.
             </p>
+          </div>
+        </div>
+        <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 p-4 space-y-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Seguimiento automático de campañas</p>
+            <p className="text-xs text-muted-foreground">
+              Estos valores aplican a conversaciones de <code>prospeccion</code> y <code>publicidad_whatsapp</code>. No modifican WhatsApp de atención.
+            </p>
+          </div>
+          <div className="flex items-start gap-3">
+            <input
+              id="whatsapp_prospeccion_followup_enabled"
+              name="whatsapp_prospeccion_followup_enabled"
+              type="checkbox"
+              className="mt-1 size-4"
+              defaultChecked={Boolean(initialValues.whatsapp_prospeccion_followup_enabled ?? false)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="whatsapp_prospeccion_followup_enabled">Activar reenganche y escalación</Label>
+              <p className="text-xs text-muted-foreground">
+                Desactivado evita mensajes automáticos posteriores a la respuesta de la campaña.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {([
+              ["whatsapp_prospeccion_inactivity_minutes", "Minutos de inactividad", initialValues.whatsapp_prospeccion_inactivity_minutes, "Mínimo de espera antes del primer seguimiento automático."],
+              ["whatsapp_prospeccion_reengage_minutes", "Minutos para reenganche", initialValues.whatsapp_prospeccion_reengage_minutes, "Espera antes del primer mensaje automático."],
+              ["whatsapp_prospeccion_reengage_max_attempts", "Máximo de intentos", initialValues.whatsapp_prospeccion_reengage_max_attempts, "Usa 0 para no enviar reenganches."],
+              ["whatsapp_prospeccion_escalate_minutes", "Minutos para escalar", initialValues.whatsapp_prospeccion_escalate_minutes, "Espera después del último reenganche antes de escalar."],
+            ] as const).map(([id, label, value, help]) => (
+              <div className="space-y-2" key={id}>
+                <Label htmlFor={id}>{label}</Label>
+                <Input id={id} name={id} type="number" min={0} step={1} defaultValue={value ?? ""} />
+                <p className="text-xs text-muted-foreground">{help}</p>
+              </div>
+            ))}
           </div>
         </div>
         <div className="flex items-center justify-between gap-3">

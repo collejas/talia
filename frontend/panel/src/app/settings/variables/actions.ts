@@ -768,6 +768,7 @@ export async function updateTwilioSettingsAction(_: CrudActionState, formData: F
 export async function updateWhatsAppSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const provider = getText(formData, "whatsapp_provider") as "twilio" | "meta" | ""
+    const manageWhatsProspInDb = formData.get("whatsapp_prospeccion_templates_managed_in_db") === "1"
     const sendSellerDataToCustomer = formData.has("whatsapp_send_seller_data_to_customer")
     const promptId = getText(formData, "whatsapp_prompt_id")
     const promptVersion = getText(formData, "whatsapp_prompt_version")
@@ -794,10 +795,14 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateCancelMetaLanguage = getText(formData, "whatsapp_template_cancel_meta_language")
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
-    const manageWhatsProspInDb = formData.get("whatsapp_prospeccion_templates_managed_in_db") === "1"
+    const prospeccionFollowupEnabled = formData.has("whatsapp_prospeccion_followup_enabled")
+    const prospeccionInactivityMinutes = parseNumber(getText(formData, "whatsapp_prospeccion_inactivity_minutes"))
+    const prospeccionReengageMinutes = parseNumber(getText(formData, "whatsapp_prospeccion_reengage_minutes"))
+    const prospeccionMaxAttempts = parseNumber(getText(formData, "whatsapp_prospeccion_reengage_max_attempts"))
+    const prospeccionEscalateMinutes = parseNumber(getText(formData, "whatsapp_prospeccion_escalate_minutes"))
 
     const whatsappPatch: Record<string, unknown> = {}
-    whatsappPatch.send_seller_data_to_customer = sendSellerDataToCustomer
+    if (!manageWhatsProspInDb) whatsappPatch.send_seller_data_to_customer = sendSellerDataToCustomer
     if (provider === "twilio" || provider === "meta") whatsappPatch.provider = provider
     if (promptId) whatsappPatch.prompt_id = promptId
     if (promptVersion) whatsappPatch.prompt_version = promptVersion
@@ -836,6 +841,13 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const prospeccionPatch: Record<string, unknown> = {}
     if (prospeccionPromptId) prospeccionPatch.prompt_id = prospeccionPromptId
     if (prospeccionPromptVersion) prospeccionPatch.prompt_version = prospeccionPromptVersion
+    if (manageWhatsProspInDb) {
+      prospeccionPatch.followup_enabled = prospeccionFollowupEnabled
+      if (prospeccionInactivityMinutes !== undefined) prospeccionPatch.inactivity_minutes = prospeccionInactivityMinutes
+      if (prospeccionReengageMinutes !== undefined) prospeccionPatch.reengage_minutes = prospeccionReengageMinutes
+      if (prospeccionMaxAttempts !== undefined) prospeccionPatch.reengage_max_attempts = prospeccionMaxAttempts
+      if (prospeccionEscalateMinutes !== undefined) prospeccionPatch.escalate_minutes = prospeccionEscalateMinutes
+    }
     if (Object.keys(prospeccionPatch).length) {
       whatsappPatch.prospeccion = prospeccionPatch
     }

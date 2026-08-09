@@ -1171,6 +1171,11 @@ class WhatsappRuntimeSettings:
     reengage_minutes: int
     reengage_max_attempts: int
     escalate_minutes: int
+    prospeccion_followup_enabled: bool
+    prospeccion_inactivity_minutes: int
+    prospeccion_reengage_minutes: int
+    prospeccion_reengage_max_attempts: int
+    prospeccion_escalate_minutes: int
     sales_template_sid: str | None
     sales_template_name: str | None
     sales_template_language: str | None
@@ -1214,6 +1219,11 @@ class WhatsappRuntimeSettings:
             reengage_minutes=settings.whatsapp_reengage_minutes,
             reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
             escalate_minutes=settings.whatsapp_escalate_minutes,
+            prospeccion_followup_enabled=True,
+            prospeccion_inactivity_minutes=settings.whatsapp_inactivity_minutes,
+            prospeccion_reengage_minutes=settings.whatsapp_reengage_minutes,
+            prospeccion_reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
+            prospeccion_escalate_minutes=settings.whatsapp_escalate_minutes,
             sales_template_sid=settings.whatsapp_sales_template_sid,
             sales_template_name=None,
             sales_template_language=None,
@@ -1322,6 +1332,22 @@ async def get_whatsapp_runtime_settings(
     templates = _as_dict(whatsapp_cfg.get("templates")) or {}
     templates_meta = _as_dict(whatsapp_cfg.get("templates_meta")) or {}
     prospeccion_cfg = _as_dict(whatsapp_cfg.get("prospeccion")) or {}
+    settings_payload.prospeccion_followup_enabled = _coerce_bool(
+        prospeccion_cfg.get("followup_enabled"),
+        settings_payload.prospeccion_followup_enabled,
+    )
+    settings_payload.prospeccion_inactivity_minutes = _coerce_positive_int(
+        prospeccion_cfg.get("inactivity_minutes"), settings_payload.inactivity_minutes
+    )
+    settings_payload.prospeccion_reengage_minutes = _coerce_positive_int(
+        prospeccion_cfg.get("reengage_minutes"), settings_payload.reengage_minutes
+    )
+    settings_payload.prospeccion_reengage_max_attempts = _coerce_positive_int(
+        prospeccion_cfg.get("reengage_max_attempts"), settings_payload.reengage_max_attempts
+    )
+    settings_payload.prospeccion_escalate_minutes = _coerce_positive_int(
+        prospeccion_cfg.get("escalate_minutes"), settings_payload.escalate_minutes
+    )
     sales_template = _coerce_str_or_none(templates.get("sales"))
     if sales_template is not None:
         settings_payload.sales_template_sid = sales_template
