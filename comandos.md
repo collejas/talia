@@ -140,6 +140,8 @@ cd /var/www/talia/landing/src && node scripts/generate-sitemap.mjs && sudo rsync
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 
+# ANALYTICS
+AIzaSyAhf3QSTXkwvczUUmWaxF5hFLfs7U8XFRY
 
 # VER USO DE RAM
 df -h
