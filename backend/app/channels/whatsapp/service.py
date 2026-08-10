@@ -69,8 +69,8 @@ from . import schemas
 logger = get_logger("app.channels.whatsapp")
 
 DEFAULT_FALLBACK = (
-    "Tu mensaje quedó registrado, pero tuve un problema momentáneo al responder. "
-    "Intentemos nuevamente en unos instantes."
+    "Hola. Puedo ayudarte a encontrar contactos, enviar campañas, atender con IA "
+    "o centralizar el seguimiento en CRM. No pude responder tu mensaje; inténtalo nuevamente."
 )
 
 _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
@@ -4193,9 +4193,12 @@ async def _generate_assistant_reply(
                 {
                     "type": "input_text",
                     "text": (
-                        "Estilo WhatsApp (regla estricta): responde breve. "
-                        "Por defecto usa 1–3 frases (máx. ~300 caracteres) y termina con 1 pregunta. "
-                        "No des listas largas ni autopromoción; ofrece ampliar solo si el usuario pide detalles."
+                        "Estilo WhatsApp (regla estricta): responde breve, en 1–3 frases y máximo ~300 caracteres. "
+                        "No termines cada respuesta con una pregunta. Informa primero y califica después: "
+                        "si pide informes, presenta las cuatro capacidades en orden; si pregunta cómo resolver "
+                        "una necesidad, haz una sola pregunta de clasificación; si solo tiene curiosidad, responde "
+                        "y detente. Ante intención seria, ofrece demo virtual o contacto con un vendedor. "
+                        "No hagas preguntas técnicas ni encadenes preguntas."
                     ),
                 }
             ],
@@ -4264,7 +4267,8 @@ async def _generate_assistant_reply(
                         "text": (
                             "Agenda desactivada para este tenant/canal: no preguntes por horarios, fechas ni disponibilidad, "
                             "no listes slots, no agendes, reprogrames ni canceles citas. "
-                            "Captura la necesidad y los datos básicos, ejecuta close_lead y comunica que un asesor se pondrá en contacto."
+                            "Si expresa intención seria o solicita un asesor, captura la necesidad y los datos básicos, "
+                            "ejecuta close_lead y comunica que un asesor se pondrá en contacto. Si solo pide información, responde sin capturar datos ni ejecutar close_lead."
                         ),
                     }
                 ],

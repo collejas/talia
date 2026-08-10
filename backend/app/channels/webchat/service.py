@@ -3922,8 +3922,9 @@ async def _run_assistant_turn(
                         "text": (
                             "Agenda desactivada para este tenant: no preguntes por horarios, fechas ni "
                             "disponibilidad; no listes horarios y no agendes, reprogrames ni canceles citas. "
-                            "Captura únicamente la necesidad y los datos de contacto, usa close_lead cuando "
-                            "corresponda y comunica que un asesor se pondrá en contacto."
+                            "Si expresa intención seria o solicita un asesor, captura la necesidad y los datos de contacto, "
+                            "usa close_lead cuando corresponda y comunica que un asesor se pondrá en contacto. "
+                            "Si solo pide información, responde sin capturar datos ni ejecutar close_lead."
                         ),
                     }
                 ],
