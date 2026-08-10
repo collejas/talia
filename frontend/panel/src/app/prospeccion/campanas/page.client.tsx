@@ -315,6 +315,7 @@ export function CampanasMetricsClient() {
     waPhrase: "",
     waLinkLabel: "",
   })
+  const [internalLinkDraft, setInternalLinkDraft] = useState({ label: "", url: "" })
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
   const fetchCampanas = useCallback(async () => {
@@ -754,6 +755,7 @@ export function CampanasMetricsClient() {
   const resetTemplateForm = useCallback(() => {
     setSelectedLogoUrl("")
     setTemplateImageIds({})
+    setInternalLinkDraft({ label: "", url: "" })
     setTemplateForm({
       id: "",
       canal: templatesCampanaCanal ?? "correo",
@@ -937,6 +939,33 @@ export function CampanasMetricsClient() {
     const htmlToken = `<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">${label}</a>`
     appendTemplateToken("cuerpoHtml", htmlToken)
   }, [appendTemplateToken, templateForm.webLinkLabel])
+
+  const insertCorreoInternalLink = useCallback(() => {
+    const label = internalLinkDraft.label.trim()
+    const rawUrl = internalLinkDraft.url.trim()
+    if (!label || !rawUrl) {
+      setTemplateError("Escribe el texto y la URL del enlace interno antes de insertarlo.")
+      return
+    }
+
+    const baseUrl = normalizeWebBaseUrl(templateForm.ctaBaseUrl || tenantBaseUrl || "https://talia.mx/")
+    let destinationUrl = ""
+    try {
+      const parsedUrl = new URL(rawUrl, baseUrl || "https://talia.mx/")
+      if (!/^https?:$/.test(parsedUrl.protocol)) throw new Error("invalid_protocol")
+      destinationUrl = parsedUrl.toString()
+    } catch {
+      setTemplateError("La URL del enlace interno no es válida.")
+      return
+    }
+
+    appendTemplateToken(
+      "cuerpoHtml",
+      `<a href="${escapeHtmlText(destinationUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtmlText(label)}</a>`
+    )
+    setInternalLinkDraft({ label: "", url: "" })
+    setTemplateError(null)
+  }, [appendTemplateToken, internalLinkDraft.label, internalLinkDraft.url, normalizeWebBaseUrl, templateForm.ctaBaseUrl, tenantBaseUrl])
 
   const bookingLinkLabel = useMemo(() => {
     const label = (templateForm.bookingLinkLabel || "").trim()
@@ -3172,6 +3201,37 @@ ${secondCellHtml}
                               <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoWaMeLink()}>
                                 Insertar enlace WhatsApp
                               </Button>
+                            </div>
+                            <div className="rounded-md border bg-muted/20 p-2">
+                              <div className="mb-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Enlace interno</p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Agrega varios enlaces a vistas internas. Los UTM de la campaña se conservarán al enviar el correo.
+                                </p>
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] sm:items-end">
+                                <div className="space-y-1">
+                                  <Label htmlFor="internal-link-label">Texto visible</Label>
+                                  <Input
+                                    id="internal-link-label"
+                                    value={internalLinkDraft.label}
+                                    onChange={(event) => setInternalLinkDraft((prev) => ({ ...prev, label: event.target.value }))}
+                                    placeholder="Conoce nuestros precios"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor="internal-link-url">URL o ruta interna</Label>
+                                  <Input
+                                    id="internal-link-url"
+                                    value={internalLinkDraft.url}
+                                    onChange={(event) => setInternalLinkDraft((prev) => ({ ...prev, url: event.target.value }))}
+                                    placeholder="/precios"
+                                  />
+                                </div>
+                                <Button type="button" variant="secondary" size="sm" onClick={() => insertCorreoInternalLink()}>
+                                  Agregar enlace
+                                </Button>
+                              </div>
                             </div>
                             <p className="text-[11px] text-muted-foreground">
                               Variables: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
