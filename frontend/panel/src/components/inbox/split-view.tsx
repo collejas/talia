@@ -998,6 +998,8 @@ export function InboxSplitView({
   const threadItemsRef = React.useRef(threadItems);
   currentMessagesRef.current = currentMessages;
   threadItemsRef.current = threadItems;
+  const selectedConversationIdRef = React.useRef<string | null>(null);
+  const opportunityContextRef = React.useRef<{ threadId: string; opportunityId: string } | null>(null);
   const threadsRefreshingRef = React.useRef(false);
   const skipInitialThreadsRefreshRef = React.useRef(threads.length > 0);
   const threadEnrichmentRef = React.useRef(false);
@@ -1228,25 +1230,40 @@ export function InboxSplitView({
   }, [selectedId, filteredThreads, threadItems]);
 
   const openOpportunityWorkspace = React.useCallback(async () => {
+    const threadId = selectedThread?.id ?? null;
     const opportunityId = selectedThread?.opportunityId;
     if (!opportunityId) return;
+    if (!threadId) return;
+    opportunityContextRef.current = { threadId, opportunityId };
     setOpportunityDrawerLoading(true);
     setOpportunityDrawerError(null);
     try {
       const result = await loadLeadWorkspace(opportunityId);
+      const currentContext = opportunityContextRef.current;
+      if (!currentContext || currentContext.threadId !== threadId || currentContext.opportunityId !== opportunityId) {
+        return;
+      }
       if (!result.ok) throw new Error(result.error);
       setOpportunityStages(result.stages);
       setOpportunityCard(result.card);
       setOpportunityDrawerOpen(true);
     } catch (error) {
+      const currentContext = opportunityContextRef.current;
+      if (!currentContext || currentContext.threadId !== threadId || currentContext.opportunityId !== opportunityId) {
+        return;
+      }
       setOpportunityDrawerError(error instanceof Error ? error.message : "No se pudo cargar la oportunidad.");
     } finally {
-      setOpportunityDrawerLoading(false);
+      const currentContext = opportunityContextRef.current;
+      if (currentContext && currentContext.threadId === threadId && currentContext.opportunityId === opportunityId) {
+        setOpportunityDrawerLoading(false);
+      }
     }
-  }, [selectedThread?.opportunityId]);
+  }, [selectedThread?.id, selectedThread?.opportunityId]);
 
   const saveOpportunityWorkspace = React.useCallback(async (payload: LeadDrawerSubmitPayload) => {
     if (!opportunityCard) return { ok: false as const, error: "No se encontró la oportunidad." };
+    const context = opportunityContextRef.current;
     const currentStage = opportunityStages.find((stage) => stage.id === opportunityCard.etapaId) ?? null;
     const result = await updateLeadCard({
       oportunidadId: opportunityCard.oportunidadId,
@@ -1259,7 +1276,24 @@ export function InboxSplitView({
       mergeMetadata: payload.mergeMetadata,
     });
     if (result.ok) {
+      const latestContext = opportunityContextRef.current;
+      if (
+        !latestContext ||
+        !context ||
+        latestContext.threadId !== context.threadId ||
+        latestContext.opportunityId !== context.opportunityId
+      ) {
+        return result;
+      }
       const refreshed = await loadLeadWorkspace(opportunityCard.oportunidadId);
+      const refreshedContext = opportunityContextRef.current;
+      if (
+        !refreshedContext ||
+        refreshedContext.threadId !== context.threadId ||
+        refreshedContext.opportunityId !== context.opportunityId
+      ) {
+        return result;
+      }
       if (refreshed.ok) {
         setOpportunityStages(refreshed.stages);
         setOpportunityCard(refreshed.card);
@@ -1274,6 +1308,7 @@ export function InboxSplitView({
     if (opportunityDrawerOpen && opportunityCard && selectedThread?.opportunityId !== opportunityCard.oportunidadId) {
       setOpportunityDrawerOpen(false);
       setOpportunityCard(null);
+      opportunityContextRef.current = null;
     }
   }, [opportunityCard, opportunityDrawerOpen, selectedThread?.opportunityId]);
   const selectedSourceBadge = selectedThread
@@ -1661,8 +1696,13 @@ export function InboxSplitView({
   const handleSelectThread = React.useCallback(
     (threadId: string) => {
       hasExplicitThreadSelectionRef.current = true;
-      setSelectedId(threadId);
       const selected = threadItemsRef.current.find((thread) => thread.id === threadId);
+      const initialMessages = selected?.messages ?? [];
+      selectedConversationIdRef.current = threadId;
+      setSelectedId(threadId);
+      setCurrentMessages(initialMessages);
+      lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
+      setAutoScrollLocked(false);
       const unreadMessages = Math.max(0, selected?.noLeidos ?? 0);
       if (unreadMessages <= 0) return;
 
@@ -1718,9 +1758,15 @@ export function InboxSplitView({
           }),
         );
         const fetchedMessages = combineMessageHistories(histories);
+        if (selectedConversationIdRef.current !== conversationId) {
+          return;
+        }
         // Conserva las mismas referencias para mensajes ya renderizados; solo
         // los mensajes nuevos llegan como filas nuevas al árbol de React.
         const messages = combineMessageHistories([currentMessagesRef.current, fetchedMessages]);
+        if (selectedConversationIdRef.current !== conversationId) {
+          return;
+        }
         const fingerprint = fingerprintMessages(messages);
         if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
           messagesPollingDelayRef.current = Math.min(
@@ -1843,6 +1889,10 @@ export function InboxSplitView({
   }, []);
 
   const selectedConversationId = selectedThread?.id ?? null;
+
+  React.useEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
 
   React.useEffect(() => {
     if (!selectedConversationId) {
