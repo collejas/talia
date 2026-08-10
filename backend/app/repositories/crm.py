@@ -3994,6 +3994,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear logo: {row!r}")
         return row
 
+    async def delete_logo(
+        self,
+        *,
+        organizacion_id: UUID,
+        logo_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/logos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{logo_id}",
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar logo: {data!r}")
+        row = data[0] if data else None
+        if row is not None and not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar logo: {row!r}")
+        return row
+
     async def list_quotes(
         self,
         *,

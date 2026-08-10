@@ -24196,6 +24196,40 @@ async def upload_settings_logo(
     return logo
 
 
+@router.delete("/settings/logos/{logo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_settings_logo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.manage")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    logo_id: UUID,
+) -> Response:
+    try:
+        rows = await repo.list_logos(organizacion_id=organizacion_id)
+        logo_row = next((row for row in rows if str(row.get("id") or "") == str(logo_id)), None)
+        if logo_row is None:
+            raise HTTPException(status_code=404, detail="logo_not_found")
+
+        deleted_row = await repo.delete_logo(
+            organizacion_id=organizacion_id,
+            logo_id=logo_id,
+        )
+        if deleted_row is None:
+            raise HTTPException(status_code=404, detail="logo_not_found")
+
+        storage_path = _clean_text(logo_row.get("file_path"))
+        if storage_path:
+            await repo.delete_storage_object(bucket="logos", object_path=storage_path)
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc).lower()
+        if "23503" in message or "foreign key" in message or "referenced" in message:
+            raise HTTPException(status_code=409, detail="logo_in_use") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/settings/media/upload", response_model=CRMMediaAssetUpload)
 async def upload_settings_media(
     *,

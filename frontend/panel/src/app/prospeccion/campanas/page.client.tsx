@@ -9,6 +9,7 @@ import {
   IconPencil,
   IconRefresh,
   IconTargetArrow,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react"
 import Image from "next/image"
@@ -68,6 +69,83 @@ type LogoAsset = {
 }
 
 type TemplateImageAssetMap = Partial<Record<ContactoTemplateImagenVariable, LogoAsset>>
+
+function LogoGallery({
+  logos,
+  selectedLogoUrl,
+  onSelect,
+  onDelete,
+  deletingId,
+  className,
+}: {
+  logos: LogoAsset[]
+  selectedLogoUrl: string
+  onSelect: (logo: LogoAsset) => void
+  onDelete: (logo: LogoAsset) => void
+  deletingId: string | null
+  className?: string
+}) {
+  if (!logos.length) return null
+
+  return (
+    <div className={cn("grid", className)}>
+      {logos.map((logo) => (
+        <div key={logo.id} className="group relative min-w-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "w-full overflow-hidden rounded border p-1 text-left transition-colors",
+                  selectedLogoUrl === logo.file_url ? "border-primary" : "border-border hover:border-primary/60"
+                )}
+                onClick={() => onSelect(logo)}
+              >
+                <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded bg-muted/20">
+                  <Image
+                    src={logo.file_url}
+                    alt={logo.nombre}
+                    width={320}
+                    height={144}
+                    unoptimized
+                    className="block h-auto max-h-full w-auto max-w-full object-contain"
+                  />
+                </div>
+                <p className="mt-1 truncate pr-5 text-[10px] text-muted-foreground">{logo.nombre}</p>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="start" className="max-w-[min(28rem,calc(100vw-2rem))] p-2">
+              <div className="rounded bg-white p-1">
+                <Image
+                  src={logo.file_url}
+                  alt={`Vista completa de ${logo.nombre}`}
+                  width={560}
+                  height={420}
+                  unoptimized
+                  className="max-h-[24rem] w-auto max-w-[26rem] object-contain"
+                />
+              </div>
+              <p className="mt-1 max-w-[26rem] truncate text-[11px]">{logo.nombre}</p>
+            </TooltipContent>
+          </Tooltip>
+          <button
+            type="button"
+            aria-label={`Eliminar ${logo.nombre}`}
+            title="Eliminar imagen"
+            className="absolute right-1.5 top-1.5 rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDelete(logo)
+            }}
+            disabled={deletingId === logo.id}
+          >
+            {deletingId === logo.id ? <IconLoader className="size-3.5 animate-spin" /> : <IconTrash className="size-3.5" />}
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const EMAIL_IMAGE_MAX_WIDTH_LANDSCAPE = 600
 const EMAIL_IMAGE_MAX_WIDTH_PORTRAIT = 420
@@ -190,6 +268,7 @@ export function CampanasMetricsClient() {
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [logoDeletingId, setLogoDeletingId] = useState<string | null>(null)
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
   const [templateImageIds, setTemplateImageIds] = useState<Partial<Record<ContactoTemplateImagenVariable, string>>>({})
   const [templateImageAssets, setTemplateImageAssets] = useState<TemplateImageAssetMap>({})
@@ -1254,6 +1333,47 @@ ${secondCellHtml}
     },
     [effectiveTemplateSlug, templateForm.canal, templateForm.id, templatesCampanaId]
   )
+
+  const handleLogoDelete = useCallback(async (logo: LogoAsset) => {
+    if (typeof window !== "undefined" && !window.confirm(`¿Eliminar la imagen "${logo.nombre}"?`)) return
+    setLogoDeletingId(logo.id)
+    setTemplateError(null)
+    try {
+      const response = await fetch(`/api/settings/logos/${encodeURIComponent(logo.id)}`, { method: "DELETE" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.detail === "string"
+            ? payload.detail
+            : typeof payload?.error === "string"
+              ? payload.error
+              : "No se pudo eliminar la imagen."
+        )
+      }
+      setLogos((prev) => prev.filter((item) => item.id !== logo.id))
+      setTemplateImageIds((prev) => {
+        const next = { ...prev }
+        for (const key of Object.keys(next) as ContactoTemplateImagenVariable[]) {
+          if (next[key] === logo.id) delete next[key]
+        }
+        return next
+      })
+      setTemplateImageAssets((prev) => {
+        const next = { ...prev }
+        for (const key of Object.keys(next) as ContactoTemplateImagenVariable[]) {
+          if (next[key]?.id === logo.id) delete next[key]
+        }
+        return next
+      })
+      setSelectedLogoUrl((current) => (current === logo.file_url ? "" : current))
+      setBanner({ type: "success", message: "Imagen eliminada." })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo eliminar la imagen."
+      setTemplateError(message === "logo_in_use" ? "No se puede eliminar porque la imagen está usada por una plantilla guardada." : message)
+    } finally {
+      setLogoDeletingId(null)
+    }
+  }, [])
 
   const loadCampaignTemplates = useCallback(async (campanaId: string) => {
     setTemplatesLoading(true)
@@ -2565,44 +2685,18 @@ ${secondCellHtml}
                           {logosLoading ? "Cargando..." : "Cargar galería"}
                         </Button>
                       </div>
-                      {logos.length ? (
-                        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-                          {logos.map((logo) => (
-                            <button
-                              key={logo.id}
-                              type="button"
-                              className={cn(
-                                "overflow-hidden rounded border p-1 text-left transition-colors",
-                                selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
-                              )}
-                              onClick={() => {
-                                setSelectedLogoUrl(logo.file_url)
-                                setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
-                                setTemplateImageAssets((prev) => ({
-                                  ...prev,
-                                  logo_url: {
-                                    id: logo.id,
-                                    nombre: logo.nombre,
-                                    file_url: logo.file_url,
-                                  },
-                                }))
-                              }}
-                            >
-                              <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded bg-muted/20">
-                                <Image
-                                  src={logo.file_url}
-                                  alt={logo.nombre}
-                                  width={320}
-                                  height={144}
-                                  unoptimized
-                                  className="block h-auto max-h-full w-auto max-w-full object-contain"
-                                />
-                              </div>
-                              <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
+                      <LogoGallery
+                        logos={logos}
+                        selectedLogoUrl={selectedLogoUrl}
+                        deletingId={logoDeletingId}
+                        className="mt-3 grid-cols-2 gap-2 md:grid-cols-4"
+                        onSelect={(logo) => {
+                          setSelectedLogoUrl(logo.file_url)
+                          setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
+                          setTemplateImageAssets((prev) => ({ ...prev, logo_url: logo }))
+                        }}
+                        onDelete={(logo) => void handleLogoDelete(logo)}
+                      />
                     </section>
                   </div>
                 ) : (
@@ -2917,44 +3011,18 @@ ${secondCellHtml}
                               Insertar seleccionada
                             </Button>
                           </div>
-                          {logos.length ? (
-                            <div className="mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-4">
-                              {logos.map((logo) => (
-                                <button
-                                  key={logo.id}
-                                  type="button"
-                                  className={cn(
-                                    "overflow-hidden rounded border p-1 text-left transition-colors",
-                                    selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
-                                  )}
-                                  onClick={() => {
-                                    setSelectedLogoUrl(logo.file_url)
-                                    setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
-                                    setTemplateImageAssets((prev) => ({
-                                      ...prev,
-                                      logo_url: {
-                                        id: logo.id,
-                                        nombre: logo.nombre,
-                                        file_url: logo.file_url,
-                                      },
-                                    }))
-                                  }}
-                                >
-                                  <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded bg-muted/20">
-                                    <Image
-                                      src={logo.file_url}
-                                      alt={logo.nombre}
-                                      width={320}
-                                      height={144}
-                                      unoptimized
-                                      className="block h-auto max-h-full w-auto max-w-full object-contain"
-                                    />
-                                  </div>
-                                  <p className="mt-1 truncate text-[9px] text-muted-foreground">{logo.nombre}</p>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
+                          <LogoGallery
+                            logos={logos}
+                            selectedLogoUrl={selectedLogoUrl}
+                            deletingId={logoDeletingId}
+                            className="mt-2 grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-4"
+                            onSelect={(logo) => {
+                              setSelectedLogoUrl(logo.file_url)
+                              setTemplateImageIds((prev) => ({ ...prev, logo_url: logo.id }))
+                              setTemplateImageAssets((prev) => ({ ...prev, logo_url: logo }))
+                            }}
+                            onDelete={(logo) => void handleLogoDelete(logo)}
+                          />
                         </div>
 
                         <div className="grid gap-2.5 lg:grid-cols-2">
