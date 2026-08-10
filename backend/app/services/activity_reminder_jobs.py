@@ -113,8 +113,6 @@ class ActivityReminderJobsRunner:
         except CRMRepositoryError as exc:
             logger.warning("activity_reminder.list_due_failed", extra={"error": str(exc)})
             return
-        if not activities:
-            return
         for row in activities:
             try:
                 await self._process_activity(repo=repo, row=row)

@@ -1612,6 +1612,13 @@ export function LeadDrawer({
       setNoteError("Selecciona la fecha y hora del recordatorio.");
       return;
     }
+    const reminderAtIso = noteReminderEnabled
+      ? fromDateTimeLocalInput(noteReminderAt)
+      : null;
+    if (noteReminderEnabled && !reminderAtIso) {
+      setNoteError("La fecha y hora del recordatorio no son válidas.");
+      return;
+    }
 
     setNotePending(true);
     setNoteError(null);
@@ -1628,8 +1635,8 @@ export function LeadDrawer({
             descripcion: trimmed,
             prioridad: "media",
             estado: "pendiente",
-            fecha_vencimiento: noteReminderAt,
-            recordatorio_en: noteReminderAt,
+              fecha_vencimiento: reminderAtIso,
+              recordatorio_en: reminderAtIso,
           }),
         });
         const activityBody = await activityResponse.json().catch(() => ({}));
