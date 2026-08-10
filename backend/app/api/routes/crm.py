@@ -37918,7 +37918,7 @@ async def create_activity(
                 activity_row=row,
                 actor_user_id=usuario_id,
             )
-        except CRMRepositoryError as exc:
+        except Exception as exc:
             logger.warning(
                 "crm.activity_created_notification_failed",
                 extra={"error": str(exc), "activity_id": str(row.get("id") or "")},
@@ -38630,7 +38630,7 @@ async def create_note(
                 note_row=row,
                 actor_user_id=usuario_id,
             )
-        except CRMRepositoryError as exc:
+        except Exception as exc:
             logger.warning(
                 "crm.note_created_notification_failed",
                 extra={"error": str(exc), "note_id": str(row.get("id") or "")},

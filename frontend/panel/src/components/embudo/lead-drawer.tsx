@@ -3939,7 +3939,7 @@ export function LeadDrawer({
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
-                    onClick={handleAddNote}
+                    onClick={() => void handleAddNote()}
                     disabled={notePending || isBusy}
                   >
                     {notePending ? "Guardando..." : "Guardar nota"}
