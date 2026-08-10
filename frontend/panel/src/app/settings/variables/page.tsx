@@ -290,6 +290,10 @@ export default async function SettingsVariablesPage() {
     whatsapp_template_prospeccion_sids: (getNestedStringArray(whatsappTemplates, "prospeccion") ?? []).join("\n"),
     whatsapp_prospeccion_prompt_id: getNestedString(whatsappProspeccionConfig, "prompt_id"),
     whatsapp_prospeccion_prompt_version: getNestedString(whatsappProspeccionConfig, "prompt_version"),
+    whatsapp_prospeccion_send_seller_data_to_customer:
+      getNestedBoolean(whatsappProspeccionConfig, "send_seller_data_to_customer")
+      ?? getNestedBoolean(whatsappConfig, "send_seller_data_to_customer")
+      ?? false,
     whatsapp_prospeccion_followup_enabled: getNestedBoolean(whatsappProspeccionConfig, "followup_enabled"),
     whatsapp_prospeccion_inactivity_minutes: getNestedNumber(whatsappProspeccionConfig, "inactivity_minutes"),
     whatsapp_prospeccion_reengage_minutes: getNestedNumber(whatsappProspeccionConfig, "reengage_minutes"),

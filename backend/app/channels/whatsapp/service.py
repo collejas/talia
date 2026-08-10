@@ -298,6 +298,7 @@ class AssistantReply:
     response_id: str | None
     tools_called: list[str] | None = None
     debug_timings: dict[str, float] | None = None
+    skip_post_send_tasks: bool = False
 
 
 @dataclass(slots=True)
@@ -475,6 +476,17 @@ def _looks_like_information_email_request(body: str | None) -> bool:
 
 _NEGATION_PHRASES: tuple[str, ...] = (
     "no gracias",
+    "stop",
+    "ya no quiero",
+    "ya no deseo",
+    "no deseo continuar",
+    "no me mandes nada",
+    "no me envien nada",
+    "no me envíes nada",
+    "quita mi numero",
+    "quita mi número",
+    "elimina mi numero",
+    "elimina mi número",
     "no me interesa",
     "no me interesa gracias",
     "de momento no",
@@ -495,9 +507,9 @@ def _looks_like_definitive_negation(body: str | None) -> bool:
     normalized = _normalize_fast_path_text(body)
     if not normalized:
         return False
-    if normalized == "baja":
+    if normalized in {"baja", "stop", "unsubscribe"}:
         return True
-    if re.search(r"\b(baja|dar de baja|cancelar(?: la)?(?: campana| campaña)?|no me interesa|no gracias)\b", normalized):
+    if re.search(r"\b(baja|dar(?:me)? de baja|cancelar(?: la)?(?: campana| campaña)?|no me interesa|no gracias|stop|unsubscribe)\b", normalized):
         return True
     return any(phrase in normalized for phrase in _NEGATION_PHRASES)
 
@@ -3512,7 +3524,8 @@ async def handle_incoming_message(
             outbound_message_id=outgoing_registration.get("message_id"),
         )
         skip_post_send_tasks = bool(
-            assistant_reply.tools_called and "mark_lost_negacion" in assistant_reply.tools_called
+            assistant_reply.skip_post_send_tasks
+            or (assistant_reply.tools_called and "mark_lost_negacion" in assistant_reply.tools_called)
         )
         if not skip_post_send_tasks:
             _schedule_background_coroutine(
@@ -4063,7 +4076,8 @@ async def _generate_assistant_reply(
             text="Perfecto, gracias por tu tiempo. Si en algún momento quieres explorar cómo automatizar tu atención, con gusto te ayudo. ¡Excelente día!",
             openai_conversation_id=openai_conversation_id,
             response_id=previous_response_id,
-            tools_called=["mark_lost_negacion"],
+            tools_called=["mark_lost_negacion_failed"],
+            skip_post_send_tasks=True,
         )
 
     summary_record: dict[str, Any] | None = None

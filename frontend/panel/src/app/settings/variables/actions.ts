@@ -795,6 +795,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateCancelMetaLanguage = getText(formData, "whatsapp_template_cancel_meta_language")
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
+    const prospeccionSendSellerData = formData.has("whatsapp_prospeccion_send_seller_data_to_customer")
     const prospeccionFollowupEnabled = formData.has("whatsapp_prospeccion_followup_enabled")
     const prospeccionInactivityMinutes = parseNumber(getText(formData, "whatsapp_prospeccion_inactivity_minutes"))
     const prospeccionReengageMinutes = parseNumber(getText(formData, "whatsapp_prospeccion_reengage_minutes"))
@@ -842,6 +843,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (prospeccionPromptId) prospeccionPatch.prompt_id = prospeccionPromptId
     if (prospeccionPromptVersion) prospeccionPatch.prompt_version = prospeccionPromptVersion
     if (manageWhatsProspInDb) {
+      prospeccionPatch.send_seller_data_to_customer = prospeccionSendSellerData
       prospeccionPatch.followup_enabled = prospeccionFollowupEnabled
       if (prospeccionInactivityMinutes !== undefined) prospeccionPatch.inactivity_minutes = prospeccionInactivityMinutes
       if (prospeccionReengageMinutes !== undefined) prospeccionPatch.reengage_minutes = prospeccionReengageMinutes

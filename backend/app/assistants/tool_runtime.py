@@ -33,6 +33,7 @@ class ToolRuntimeContext:
     persona_id: str | None = None
     session_id: str | None = None
     channel: str | None = None
+    source: str | None = None
     organizacion_id: str | None = None
     feature: str | None = None
     catalog_inmobiliario_enabled: bool = True

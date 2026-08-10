@@ -3502,7 +3502,13 @@ async def _notify_customer_assigned_seller(
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(
         organizacion_id=org_uuid,
     )
-    if not getattr(whatsapp_settings, "send_seller_data_to_customer", False):
+    source = str(context.source or "").strip().lower()
+    seller_data_enabled = (
+        getattr(whatsapp_settings, "prospeccion_send_seller_data_to_customer", False)
+        if source in {"prospeccion", "publicidad_whatsapp"}
+        else getattr(whatsapp_settings, "send_seller_data_to_customer", False)
+    )
+    if not seller_data_enabled:
         return False
 
     repo = CRMRepository()

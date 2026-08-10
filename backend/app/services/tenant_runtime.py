@@ -1162,6 +1162,7 @@ class WhatsappRuntimeSettings:
     provider: str
     agenda_enabled: bool
     send_seller_data_to_customer: bool
+    prospeccion_send_seller_data_to_customer: bool
     assistant_id: str | None
     prompt_id: str | None
     prompt_version: str | None
@@ -1210,6 +1211,7 @@ class WhatsappRuntimeSettings:
             provider="twilio",
             agenda_enabled=True,
             send_seller_data_to_customer=False,
+            prospeccion_send_seller_data_to_customer=False,
             assistant_id=settings.whatsapp_assistant_id,
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
@@ -1332,6 +1334,10 @@ async def get_whatsapp_runtime_settings(
     templates = _as_dict(whatsapp_cfg.get("templates")) or {}
     templates_meta = _as_dict(whatsapp_cfg.get("templates_meta")) or {}
     prospeccion_cfg = _as_dict(whatsapp_cfg.get("prospeccion")) or {}
+    settings_payload.prospeccion_send_seller_data_to_customer = _coerce_bool(
+        prospeccion_cfg.get("send_seller_data_to_customer"),
+        settings_payload.send_seller_data_to_customer,
+    )
     settings_payload.prospeccion_followup_enabled = _coerce_bool(
         prospeccion_cfg.get("followup_enabled"),
         settings_payload.prospeccion_followup_enabled,

@@ -1113,6 +1113,7 @@ export type WhatsAppInitialValues = {
   whatsapp_template_prospeccion_sids?: string
   whatsapp_prospeccion_prompt_id?: string
   whatsapp_prospeccion_prompt_version?: string
+  whatsapp_prospeccion_send_seller_data_to_customer?: boolean
   whatsapp_prospeccion_followup_enabled?: boolean
   whatsapp_prospeccion_inactivity_minutes?: number
   whatsapp_prospeccion_reengage_minutes?: number
@@ -1169,7 +1170,7 @@ function buildWhatsAppSettingsKey(initialValues: WhatsAppInitialValues): string 
 function buildWhatsProspSettingsKey(
   initialValues: Pick<
     WhatsAppInitialValues,
-    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version" | "whatsapp_prospeccion_send_seller_data_to_customer"
       | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
       | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
       | "whatsapp_prospeccion_escalate_minutes"
@@ -1178,6 +1179,7 @@ function buildWhatsProspSettingsKey(
   return JSON.stringify({
     whatsapp_prospeccion_prompt_id: initialValues.whatsapp_prospeccion_prompt_id ?? "",
     whatsapp_prospeccion_prompt_version: initialValues.whatsapp_prospeccion_prompt_version ?? "",
+    whatsapp_prospeccion_send_seller_data_to_customer: initialValues.whatsapp_prospeccion_send_seller_data_to_customer ?? false,
     whatsapp_prospeccion_followup_enabled: initialValues.whatsapp_prospeccion_followup_enabled ?? false,
     whatsapp_prospeccion_inactivity_minutes: initialValues.whatsapp_prospeccion_inactivity_minutes ?? "",
     whatsapp_prospeccion_reengage_minutes: initialValues.whatsapp_prospeccion_reengage_minutes ?? "",
@@ -2887,7 +2889,7 @@ export function TenantWhatsAppProspeccionSettings({
   tenantId: string
   initialValues: Pick<
     WhatsAppInitialValues,
-    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version" | "whatsapp_prospeccion_send_seller_data_to_customer"
       | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
       | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
       | "whatsapp_prospeccion_escalate_minutes"
@@ -2911,6 +2913,7 @@ function TenantWhatsAppProspeccionSettingsForm({
   initialValues: Pick<
     WhatsAppInitialValues,
     "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+      | "whatsapp_prospeccion_send_seller_data_to_customer"
       | "whatsapp_prospeccion_followup_enabled" | "whatsapp_prospeccion_inactivity_minutes"
       | "whatsapp_prospeccion_reengage_minutes" | "whatsapp_prospeccion_reengage_max_attempts"
       | "whatsapp_prospeccion_escalate_minutes"
@@ -2978,6 +2981,21 @@ function TenantWhatsAppProspeccionSettingsForm({
             <p className="text-xs text-muted-foreground">
               Estos valores aplican a conversaciones de <code>prospeccion</code> y <code>publicidad_whatsapp</code>. No modifican WhatsApp de atención.
             </p>
+          </div>
+          <div className="flex items-start gap-3">
+            <input
+              id="whatsapp_prospeccion_send_seller_data_to_customer"
+              name="whatsapp_prospeccion_send_seller_data_to_customer"
+              type="checkbox"
+              className="mt-1 size-4"
+              defaultChecked={Boolean(initialValues.whatsapp_prospeccion_send_seller_data_to_customer ?? false)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="whatsapp_prospeccion_send_seller_data_to_customer">Enviar datos del vendedor</Label>
+              <p className="text-xs text-muted-foreground">
+                Permite compartir con el contacto el vendedor asignado cuando una campaña escala. Es independiente de WhatsApp de atención.
+              </p>
+            </div>
           </div>
           <div className="flex items-start gap-3">
             <input

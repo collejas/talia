@@ -400,6 +400,7 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
             conversation_id=str(conversation_id),
             persona_id=context["persona_id"],
             opportunity=context["opportunity"],
+            source=str(_ensure_dict(context["conversation"].get("inbox_context")).get("source") or "").strip().lower(),
             followup_meta=next_due["followup_meta"],
             metadata=next_due["metadata"],
             repo=repo,
@@ -733,6 +734,7 @@ async def _escalate_persona_to_sales(
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
     repo: CRMRepository,
+    source: str | None = None,
 ) -> bool:
     persona = opportunity.get("contacto")
     if isinstance(persona, dict):
@@ -752,6 +754,7 @@ async def _escalate_persona_to_sales(
         conversation_id=conversation_id,
         persona_id=persona_id,
         channel="whatsapp",
+        source=source,
     )
     try:
         await whatsapp_tools._notify_sales_rep(
@@ -990,7 +993,7 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
 def _is_outbound_prospeccion_without_reply(conversation: dict[str, Any]) -> bool:
     context = _ensure_dict(conversation.get("inbox_context"))
     source = str(context.get("source") or "").strip().lower()
-    if source != "prospeccion":
+    if source not in {"prospeccion", "publicidad_whatsapp"}:
         return False
     last_in = _parse_ts(conversation.get("ultimo_entrante_en"))
     return last_in is None

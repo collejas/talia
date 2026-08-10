@@ -4292,6 +4292,21 @@ async def mark_opportunity_lost(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
+    # El cierre debe ser autosuficiente: no depender solo de la tarea que
+    # cancela seguimientos cuando entra el mensaje del contacto.
+    try:
+        from app.services import whatsapp_followups
+
+        await whatsapp_followups.cancel_followup_jobs_for_inbound(
+            conversation_id=str(conversation_id or ""),
+            reason="opportunity_lost_negation",
+        )
+    except Exception as exc:
+        logger.warning(
+            "storage.mark_opportunity_lost.cancel_followups_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
 
 async def record_demo_booking_metadata(
     *,
