@@ -15,6 +15,7 @@ let lastTrackedHref = null;
 let historyListenersBound = false;
 let pendingNavigationTimer = null;
 let browserGeoPromise = null;
+const INITIALIZED_GLOBAL_KEY = '__TALIA_VISIT_TRACKING_INITIALIZED__';
 
 const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRACKED_QUERY_KEYS = [
@@ -368,8 +369,19 @@ function bindHistoryListeners() {
 }
 
 export function initialiseVisitTracking(options = {}) {
-  config = { ...defaultConfig, ...options };
+  const previousTenantAlias = config.tenantAlias;
+  config = { ...config, ...options };
   ensureSessionId();
+  const alreadyInitialized = typeof window !== 'undefined' && Boolean(window[INITIALIZED_GLOBAL_KEY]);
+  if (alreadyInitialized) {
+    if (config.tenantAlias && config.tenantAlias !== previousTenantAlias) {
+      void sendVisit('tenant_config_update', { force: true });
+    }
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window[INITIALIZED_GLOBAL_KEY] = true;
+  }
   bindHistoryListeners();
   void sendVisit('page_load');
   void resolveBrowserGeo().then((geo) => {
