@@ -1110,6 +1110,9 @@ export type WhatsAppInitialValues = {
   whatsapp_template_appointment_meta_language?: string
   whatsapp_template_cancel_meta_name?: string
   whatsapp_template_cancel_meta_language?: string
+  whatsapp_template_activity_reminder_meta_name?: string
+  whatsapp_template_activity_reminder_meta_language?: string
+  whatsapp_activity_reminder_minutes_before?: number
   whatsapp_template_prospeccion_sids?: string
   whatsapp_prospeccion_prompt_id?: string
   whatsapp_prospeccion_prompt_version?: string
@@ -1164,6 +1167,9 @@ function buildWhatsAppSettingsKey(initialValues: WhatsAppInitialValues): string 
     whatsapp_template_appointment_meta_language: initialValues.whatsapp_template_appointment_meta_language ?? "",
     whatsapp_template_cancel_meta_name: initialValues.whatsapp_template_cancel_meta_name ?? "",
     whatsapp_template_cancel_meta_language: initialValues.whatsapp_template_cancel_meta_language ?? "",
+    whatsapp_template_activity_reminder_meta_name: initialValues.whatsapp_template_activity_reminder_meta_name ?? "",
+    whatsapp_template_activity_reminder_meta_language: initialValues.whatsapp_template_activity_reminder_meta_language ?? "",
+    whatsapp_activity_reminder_minutes_before: initialValues.whatsapp_activity_reminder_minutes_before ?? 90,
   })
 }
 
@@ -2759,6 +2765,42 @@ function TenantWhatsAppSettingsForm({
                 placeholder="es_MX"
                 defaultValue={initialValues.whatsapp_template_cancel_meta_language ?? ""}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_activity_reminder_meta_name">
+                Nombre plantilla recordatorio de actividad
+              </Label>
+              <Input
+                id="whatsapp_template_activity_reminder_meta_name"
+                name="whatsapp_template_activity_reminder_meta_name"
+                placeholder="recordatorio_actividad"
+                defaultValue={initialValues.whatsapp_template_activity_reminder_meta_name ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_activity_reminder_meta_language">
+                Idioma plantilla recordatorio de actividad
+              </Label>
+              <Input
+                id="whatsapp_template_activity_reminder_meta_language"
+                name="whatsapp_template_activity_reminder_meta_language"
+                placeholder="es_MX"
+                defaultValue={initialValues.whatsapp_template_activity_reminder_meta_language ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_activity_reminder_minutes_before">Minutos antes del evento</Label>
+              <Input
+                id="whatsapp_activity_reminder_minutes_before"
+                name="whatsapp_activity_reminder_minutes_before"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={initialValues.whatsapp_activity_reminder_minutes_before ?? 90}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se aplica al crear o reprogramar actividades nuevas. Predeterminado: 90 minutos.
+              </p>
             </div>
           </div>
         </fieldset>

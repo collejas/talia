@@ -287,6 +287,18 @@ export default async function SettingsVariablesPage() {
       getNestedRecord(whatsappTemplatesMeta, "cancel") ?? {},
       "language",
     ),
+    whatsapp_template_activity_reminder_meta_name: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "activity_reminder") ?? {},
+      "name",
+    ),
+    whatsapp_template_activity_reminder_meta_language: getNestedString(
+      getNestedRecord(whatsappTemplatesMeta, "activity_reminder") ?? {},
+      "language",
+    ),
+    whatsapp_activity_reminder_minutes_before: getNestedNumber(
+      getNestedRecord(whatsappTemplatesMeta, "activity_reminder") ?? {},
+      "minutes_before",
+    ) ?? 90,
     whatsapp_template_prospeccion_sids: (getNestedStringArray(whatsappTemplates, "prospeccion") ?? []).join("\n"),
     whatsapp_prospeccion_prompt_id: getNestedString(whatsappProspeccionConfig, "prompt_id"),
     whatsapp_prospeccion_prompt_version: getNestedString(whatsappProspeccionConfig, "prompt_version"),

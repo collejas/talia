@@ -793,6 +793,11 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateAppointmentMetaLanguage = getText(formData, "whatsapp_template_appointment_meta_language")
     const templateCancelMetaName = getText(formData, "whatsapp_template_cancel_meta_name")
     const templateCancelMetaLanguage = getText(formData, "whatsapp_template_cancel_meta_language")
+    const templateActivityReminderMetaName = getText(formData, "whatsapp_template_activity_reminder_meta_name")
+    const templateActivityReminderMetaLanguage = getText(formData, "whatsapp_template_activity_reminder_meta_language")
+    const activityReminderMinutesBefore = parseNumber(
+      getText(formData, "whatsapp_activity_reminder_minutes_before"),
+    )
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
     const prospeccionSendSellerData = formData.has("whatsapp_prospeccion_send_seller_data_to_customer")
@@ -836,6 +841,16 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (Object.keys(appointmentMetaPatch).length) templatesMetaPatch.appointment = appointmentMetaPatch
     const cancelMetaPatch = buildMetaTemplateValue(templateCancelMetaName, templateCancelMetaLanguage)
     if (Object.keys(cancelMetaPatch).length) templatesMetaPatch.cancel = cancelMetaPatch
+    const activityReminderMetaPatch = buildMetaTemplateValue(
+      templateActivityReminderMetaName,
+      templateActivityReminderMetaLanguage,
+    )
+    if (activityReminderMinutesBefore !== undefined && activityReminderMinutesBefore >= 0) {
+      activityReminderMetaPatch.minutes_before = String(Math.trunc(activityReminderMinutesBefore))
+    }
+    if (Object.keys(activityReminderMetaPatch).length) {
+      templatesMetaPatch.activity_reminder = activityReminderMetaPatch
+    }
     if (Object.keys(templatesMetaPatch).length) {
       whatsappPatch.templates_meta = templatesMetaPatch
     }
