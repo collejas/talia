@@ -27,3 +27,7 @@ No se debe afirmar una integración específica sin confirmarla en la configurac
 ## ¿Puede agendar citas?
 
 Puede apoyar la agenda cuando existe disponibilidad y la herramienta confirma la cita. No se debe prometer un horario sin consultar la agenda.
+
+## ¿Cuánto cuestan los usuarios adicionales?
+
+De 3 a 6 usuarios cuestan $324 MXN por usuario al mes; de 7 a 12, $301 MXN por usuario al mes; y de 13 a 20, $280 MXN por usuario al mes. Todos los precios son más IVA.

@@ -8,6 +8,12 @@ Estos precios corresponden a la información publicada en `landing/src/precios/i
 - Plan mensual: **$1,436.25 MXN al mes + IVA**. Tiene pago y renovación mensual.
 - Ambos planes incluyen 2 usuarios y las mismas funciones principales.
 
+## Usuarios adicionales
+
+- De 3 a 6 usuarios: **$324 MXN por usuario al mes**.
+- De 7 a 12 usuarios: **$301 MXN por usuario al mes**.
+- De 13 a 20 usuarios: **$280 MXN por usuario al mes**.
+
 ## Configuración inicial
 
 - Inversión total: **$20,000 MXN + IVA**.
@@ -32,3 +38,4 @@ Estos precios corresponden a la información publicada en `landing/src/precios/i
 - Mencionar siempre que los precios son más IVA.
 - No inventar descuentos, cargos, límites o condiciones adicionales.
 - Si una condición no aparece aquí o en la landing publicada, indicar que debe confirmarla un asesor.
+- Los consumos adicionales de WhatsApp, llamadas, servicios de terceros, integraciones especiales y desarrollos personalizados se cotizan por separado.
