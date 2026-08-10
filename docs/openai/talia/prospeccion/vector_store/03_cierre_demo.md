@@ -1,16 +1,26 @@
-# Cierre a Demo
+# Demo y siguiente paso
 
-## Objetivo
-Cerrar a una cita demo corta (15-20 min) con siguiente paso claro.
+La demo es una opción, no el objetivo obligatorio de cada conversación.
 
-## Guion 1
-Si te hace sentido, lo vemos en una demo de 15 minutos y te muestro cómo aplicaría en tu operación. ¿Prefieres mañana o pasado?
+## Cuándo ofrecerla
 
-## Guion 2
-Para no perder tiempo, hacemos una demo breve enfocada a tu caso. ¿Te comparto horarios disponibles?
+- El contacto pregunta cómo funcionaría Tal-IA en su operación.
+- El contacto expresa interés en conocer el producto.
+- El contacto pide hablar con alguien o solicita una demostración.
 
-## Guion 3
-Con una sesión corta te llevas claridad de impacto, tiempos y siguiente paso. ¿Te agendo un espacio esta semana?
+## Cómo ofrecerla
 
-## Confirmación de agenda
-Perfecto, te confirmo el horario y te llega la invitación. Si necesitas reagendar, te ayudo por aquí.
+Usa una sola frase y una sola pregunta:
+
+"Puedo mostrarte cómo funcionaría en tu operación. ¿Quieres que revisemos una demo?"
+
+## Si acepta
+
+- Solicita únicamente los datos que falten para la agenda.
+- Consulta disponibilidad con `list_demo_slots`.
+- Usa `schedule_demo` solo después de que el contacto elija un horario.
+- Confirma la cita únicamente si `schedule_demo` devuelve éxito.
+
+## Si no acepta
+
+Respeta la decisión. No preguntes cuándo volver a escribirle ni envíes seguimiento automático desde este contenido.

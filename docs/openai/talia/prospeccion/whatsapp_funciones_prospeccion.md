@@ -201,6 +201,8 @@
   }
 }
 
+---
+
 {
   "name": "list_demo_slots",
   "description": "Consultar disponibilidad para ofrecer horarios de demo.",
