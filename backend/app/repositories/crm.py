@@ -3223,17 +3223,6 @@ class CRMRepository:
         payload = dict(payload)
         if "recordatorio_en" in payload and "recordatorio_notificado_en" not in payload:
             payload["recordatorio_notificado_en"] = None
-        if "fecha_vencimiento" in payload and "whatsapp_recordatorio_en" not in payload:
-            scheduled_at = payload.get("fecha_vencimiento")
-            if scheduled_at:
-                try:
-                    parsed_scheduled_at = datetime.fromisoformat(str(scheduled_at).replace("Z", "+00:00"))
-                    payload["whatsapp_recordatorio_en"] = (
-                        parsed_scheduled_at - timedelta(minutes=90)
-                    ).isoformat()
-                except ValueError:
-                    pass
-            payload["whatsapp_recordatorio_enviado_en"] = None
         params = {
             "id": f"eq.{activity_id}",
             "organizacion_id": f"eq.{organizacion_id}",

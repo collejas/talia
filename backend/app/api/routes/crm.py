@@ -37883,8 +37883,16 @@ async def create_activity(
             body.setdefault("persona_id", opportunity_row.get("persona_id"))
             body.setdefault("cuenta_id", opportunity_row.get("cuenta_id"))
     if payload.fecha_vencimiento and "whatsapp_recordatorio_en" not in body:
+        try:
+            whatsapp_runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+                organizacion_id=organizacion_id,
+            )
+            reminder_minutes_before = whatsapp_runtime.activity_reminder_minutes_before
+        except Exception as exc:
+            logger.warning("crm.activity_whatsapp_reminder_config_failed", extra={"error": str(exc)})
+            reminder_minutes_before = 90
         body["whatsapp_recordatorio_en"] = (
-            payload.fecha_vencimiento - timedelta(minutes=90)
+            payload.fecha_vencimiento - timedelta(minutes=reminder_minutes_before)
         ).isoformat()
     # Las actividades independientes de una oportunidad pertenecen al usuario
     # que las crea por defecto. Así el recordatorio no queda sin destinatario.
@@ -37930,6 +37938,19 @@ async def update_activity(
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="actividad_update_vacia")
+    if payload.fecha_vencimiento:
+        try:
+            whatsapp_runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+                organizacion_id=organizacion_id,
+            )
+            reminder_minutes_before = whatsapp_runtime.activity_reminder_minutes_before
+        except Exception as exc:
+            logger.warning("crm.activity_whatsapp_reminder_config_failed", extra={"error": str(exc)})
+            reminder_minutes_before = 90
+        body["whatsapp_recordatorio_en"] = (
+            payload.fecha_vencimiento - timedelta(minutes=reminder_minutes_before)
+        ).isoformat()
+        body["whatsapp_recordatorio_enviado_en"] = None
     try:
         row = await repo.update_activity(
             organizacion_id=organizacion_id,

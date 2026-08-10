@@ -287,6 +287,7 @@ const SECTIONS: SectionConfig[] = [
           "whatsapp.templates_meta.cancel.language",
           "whatsapp.templates_meta.activity_reminder.name",
           "whatsapp.templates_meta.activity_reminder.language",
+          "whatsapp.templates_meta.activity_reminder.minutes_before",
         ],
         subgroups: [
           {
@@ -306,6 +307,7 @@ const SECTIONS: SectionConfig[] = [
               "whatsapp.templates_meta.cancel.language",
               "whatsapp.templates_meta.activity_reminder.name",
               "whatsapp.templates_meta.activity_reminder.language",
+              "whatsapp.templates_meta.activity_reminder.minutes_before",
             ],
           },
         ],
@@ -344,6 +346,12 @@ const SECTIONS: SectionConfig[] = [
       { label: "Idioma plantilla cancelación", path: "whatsapp.templates_meta.cancel.language" },
       { label: "Nombre plantilla recordatorio de actividad", path: "whatsapp.templates_meta.activity_reminder.name" },
       { label: "Idioma plantilla recordatorio de actividad", path: "whatsapp.templates_meta.activity_reminder.language" },
+      {
+        label: "Minutos antes del evento",
+        path: "whatsapp.templates_meta.activity_reminder.minutes_before",
+        type: "number",
+        defaultValue: "90",
+      },
     ],
     routeChannel: "whatsapp",
     routeDescription: "Registra el número que recibirá mensajes de WhatsApp.",

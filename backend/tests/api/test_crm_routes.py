@@ -85,6 +85,19 @@ class DummyCRMRepository(CRMRepository):
         self.account_owner_id: uuid.UUID | None = None
         self.persona_owner_id: uuid.UUID | None = None
 
+    async def get_opportunity(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_opportunity", kwargs))
+        return {
+            "id": str(kwargs["opportunity_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "codigo_oportunidad": "Opo - TEST",
+            "contacto_nombre": "Cliente Demo",
+            "asignado_a_usuario_id": None,
+            "propietario_usuario_id": None,
+            "persona_id": None,
+            "cuenta_id": None,
+        }
+
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
 
