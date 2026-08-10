@@ -3922,9 +3922,7 @@ async def _run_assistant_turn(
                         "text": (
                             "Agenda desactivada para este tenant: no preguntes por horarios, fechas ni "
                             "disponibilidad; no listes horarios y no agendes, reprogrames ni canceles citas. "
-                            "Si expresa intención seria o solicita un asesor, captura la necesidad y los datos de contacto, "
-                            "usa close_lead cuando corresponda y comunica que un asesor se pondrá en contacto. "
-                            "Si solo pide información, responde sin capturar datos ni ejecutar close_lead."
+                            "Devuelve el estado de agenda desactivada a la capa que procesa la herramienta."
                         ),
                     }
                 ],
@@ -3945,12 +3943,9 @@ async def _run_assistant_turn(
                         "No fuerces repreguntas adicionales."
                         if profiling_enabled_for_channel
                         else "Perfilamiento IA desactivado para este tenant/canal. "
-                        "No hagas preguntas de perfilamiento o scoring. "
                         "No envíes campos de scoring en close_lead "
                         "(financing_type, credit_preapproved, budget_range, purchase_timeline, "
-                        "decision_authority, visited_properties, profiling_statuses, profiling_reprompt_counts). "
-                        "Flujo permitido: captura de datos básicos, close_lead simple, "
-                        "y gestión de agenda/email si el prospecto lo pide."
+                        "decision_authority, visited_properties, profiling_statuses, profiling_reprompt_counts)."
                     ),
                 }
             ],
@@ -3979,7 +3974,7 @@ async def _run_assistant_turn(
                             + (
                                 "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
                                 "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
-                                "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                                "con zonas/fraccionamientos disponibles."
                             if catalog_inmobiliario_enabled
                             else catalog_disabled_note
                         )
@@ -4099,8 +4094,7 @@ async def _run_assistant_turn(
                 {
                     "type": "input_text",
                     "text": (
-                        "Estilo webchat (regla estricta): responde breve y escaneable. "
-                        "Por defecto 2–4 frases, máximo 1 pregunta. "
+                        "Estilo webchat técnico: responde breve y escaneable. "
                         "Evita párrafos largos y listas extensas; ofrece ampliar solo si el usuario pide detalles."
                     ),
                 }
