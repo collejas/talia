@@ -1013,7 +1013,6 @@ def _missing_basic_contact_fields(persona: dict[str, Any] | None) -> list[str]:
     required_order: tuple[tuple[str, str], ...] = (
         ("full_name", "nombre_completo"),
         ("email", "correo"),
-        ("company_name", "company_name"),
     )
     if not isinstance(persona, dict):
         return [field for field, _ in required_order]
@@ -1034,8 +1033,7 @@ def _build_persona_required_guidance(missing_fields: list[str]) -> str:
     question_map = {
         "full_name": "¿Me compartes tu nombre completo para la invitación?",
         "email": "¿A qué correo te envío la invitación de la cita?",
-        "company_name": "¿Cuál es el nombre de tu empresa?",
-    }
+        }
     question_text = question_map.get(first, "¿Me compartes ese dato para continuar?")
     return (
         "Antes de agendar la cita en prospección faltan datos básicos del contacto. "
@@ -2823,8 +2821,29 @@ async def _handle_schedule_demo(
         "oportunidad_id": tarjeta_id,
     }
     organizacion_hint = webchat_service._extract_persona_org(persona)
+    if not organizacion_hint:
+        organizacion_hint = conversation_meta.get("organizacion_id")
+
+    persona_name = webchat_service._extract_persona_name(persona)
+    zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
+        await webchat_service.create_zoom_meeting_for_booking_if_enabled(
+            organizacion_id=webchat_service._resolve_calendar_organizacion_uuid(organizacion_hint),
+            start_at=slot_datetime,
+            timezone_name=calendar_settings.timezone,
+            topic=f"Demo Tal-IA - {persona_name or persona_id}",
+            agenda=notes,
+        )
+    )
+    if not zoom_meeting_url:
+        return {
+            "status": "virtual_meeting_unavailable",
+            "message": "No se pudo generar la reunión virtual de Zoom. La cita no fue reservada.",
+            "zoom_status": zoom_metadata.get("zoom_status") if zoom_metadata else None,
+        }
     if organizacion_hint:
         metadata_payload["organizacion_id"] = organizacion_hint
+    if zoom_metadata:
+        metadata_payload.update(zoom_metadata)
 
     persona_record = persona
     confirm_metadata = {
@@ -2836,6 +2855,8 @@ async def _handle_schedule_demo(
     persona_org = webchat_service._extract_persona_org(persona_record)
     if persona_org:
         confirm_metadata["organizacion_id"] = persona_org
+    if zoom_metadata:
+        confirm_metadata.update(zoom_metadata)
 
     try:
         hold = await webchat_service.calendar_service.hold_slot(
@@ -2851,6 +2872,8 @@ async def _handle_schedule_demo(
             hold_id=hold.get("hold_id"),
             notes=notes,
             metadata=confirm_metadata,
+            meeting_url=zoom_meeting_url,
+            external_join_url=zoom_external_join_url,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
@@ -2877,6 +2900,7 @@ async def _handle_schedule_demo(
         "timezone": booking_response.timezone,
         "status": booking_response.status,
         "hold_id": booking_response.hold_id,
+        "meeting_url": zoom_meeting_url,
     }
     return {
         "status": "ok",

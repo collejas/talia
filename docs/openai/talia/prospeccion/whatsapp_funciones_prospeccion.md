@@ -243,7 +243,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirmar demo agendada.",
+  "description": "Confirmar una demo virtual elegida para reservar el horario, generar la reunión de Zoom y enviar la invitación. No usar sin nombre y correo confirmados.",
   "strict": true,
   "parameters": {
     "type": "object",

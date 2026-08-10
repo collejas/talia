@@ -255,7 +255,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma la demo elegida para que se reserve el slot y se envíe el correo/invitación automáticamente.",
+  "description": "Confirma una demo virtual elegida para que se reserve el slot, se genere la reunión de Zoom y se envíe el correo/invitación automáticamente. No la uses sin nombre y correo confirmados.",
   "strict": true,
   "parameters": {
     "type": "object",

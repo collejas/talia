@@ -1759,6 +1759,30 @@ async def _resolve_persona(persona_id: str | None) -> dict[str, Any] | None:
             extra={"persona_id": persona_id, "error": str(exc)},
         )
         return None
+
+
+def _missing_basic_contact_fields(persona: dict[str, Any] | None) -> list[str]:
+    missing: list[str] = []
+    if not _extract_persona_name(persona):
+        missing.append("full_name")
+    if not _extract_persona_email(persona):
+        missing.append("email")
+    return missing
+
+
+def _build_basic_contact_guidance(missing_fields: list[str]) -> str:
+    first = missing_fields[0] if missing_fields else "full_name"
+    question = {
+        "full_name": "¿Con quién tengo el gusto?",
+        "email": "¿A qué correo te envío la invitación?",
+    }.get(first, "¿Me compartes ese dato para continuar?")
+    return (
+        "Antes de agendar una demo virtual faltan datos básicos del contacto. "
+        f"Campo faltante: {first}. Haz una sola pregunta exacta: {question} "
+        "Cuando responda, guarda el dato y vuelve a ejecutar schedule_demo."
+    )
+
+
 def _is_answered_scoring_value(value: Any) -> bool:
     if value is None:
         return False
@@ -4775,6 +4799,13 @@ async def _execute_function_call(
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+        missing_contact_fields = _missing_basic_contact_fields(persona)
+        if missing_contact_fields:
+            return {
+                "status": "persona_missing",
+                "missing_fields": missing_contact_fields,
+                "guidance": _build_basic_contact_guidance(missing_contact_fields),
+            }
         prefilter_status = await _has_prefilter_for_schedule(
             persona=persona,
             opportunity_id=tarjeta_id,
@@ -4867,6 +4898,12 @@ async def _execute_function_call(
             topic=f"Demo Tal-IA - {persona_name or context.persona_id}",
             agenda=notes,
         )
+        if not zoom_meeting_url:
+            return {
+                "status": "virtual_meeting_unavailable",
+                "message": "No se pudo generar la reunión virtual de Zoom. La cita no fue reservada.",
+                "zoom_status": zoom_metadata.get("zoom_status") if zoom_metadata else None,
+            }
 
         hold_metadata = {
             "slot_id": slot_identifier,
@@ -5083,6 +5120,7 @@ async def _execute_function_call(
             "timezone": booking_response.timezone,
             "status": booking_response.status,
             "hold_id": booking_response.hold_id,
+            "meeting_url": zoom_meeting_url,
         }
         return {
             "status": "ok",
