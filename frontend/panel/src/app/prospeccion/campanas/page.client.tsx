@@ -70,6 +70,19 @@ type LogoAsset = {
 
 type TemplateImageAssetMap = Partial<Record<ContactoTemplateImagenVariable, LogoAsset>>
 
+function escapeHtmlText(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }
+    return entities[character] ?? character
+  })
+}
+
 function LogoGallery({
   logos,
   selectedLogoUrl,
@@ -296,6 +309,7 @@ export function CampanasMetricsClient() {
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
+    webLinkLabel: "",
     bookingLinkLabel: "",
     waRuleId: "",
     waPhrase: "",
@@ -756,6 +770,7 @@ export function CampanasMetricsClient() {
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
+      webLinkLabel: "",
       bookingLinkLabel: "",
       waRuleId: "",
       waPhrase: "",
@@ -918,10 +933,10 @@ export function CampanasMetricsClient() {
   )
 
   const insertCorreoTrackedLink = useCallback(() => {
-    const htmlToken =
-      '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar Sitio {{website_url}}</a>'
+    const label = escapeHtmlText((templateForm.webLinkLabel || "").trim() || "Visitar Sitio {{website_url}}")
+    const htmlToken = `<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">${label}</a>`
     appendTemplateToken("cuerpoHtml", htmlToken)
-  }, [appendTemplateToken])
+  }, [appendTemplateToken, templateForm.webLinkLabel])
 
   const bookingLinkLabel = useMemo(() => {
     const label = (templateForm.bookingLinkLabel || "").trim()
@@ -1454,6 +1469,7 @@ ${secondCellHtml}
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
+        webLinkLabel: "",
         bookingLinkLabel: "",
         waRuleId: "",
         waPhrase: "",
@@ -1514,6 +1530,8 @@ ${secondCellHtml}
         (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
       ctaBaseUrl:
         (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
+      webLinkLabel:
+        (typeof metadata["tracking_link_text"] === "string" && metadata["tracking_link_text"].trim()) || "",
       bookingLinkLabel:
         (typeof metadata["booking_link_text"] === "string" && metadata["booking_link_text"].trim()) ||
         (typeof metadata["booking_link_label"] === "string" && metadata["booking_link_label"].trim()) ||
@@ -1568,6 +1586,8 @@ ${secondCellHtml}
           (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
         ctaBaseUrl:
           (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
+        webLinkLabel:
+          (typeof metadata["tracking_link_text"] === "string" && metadata["tracking_link_text"].trim()) || "",
         bookingLinkLabel:
           (typeof metadata["booking_link_text"] === "string" && metadata["booking_link_text"].trim()) ||
           (typeof metadata["booking_link_label"] === "string" && metadata["booking_link_label"].trim()) ||
@@ -1631,6 +1651,11 @@ ${secondCellHtml}
     }
     if ((templateForm.bookingLinkLabel || "").trim()) {
       metadata["booking_link_text"] = templateForm.bookingLinkLabel.trim()
+    }
+    if ((templateForm.webLinkLabel || "").trim()) {
+      metadata["tracking_link_text"] = templateForm.webLinkLabel.trim()
+    } else {
+      delete metadata["tracking_link_text"]
     }
     if (templateForm.canal === "whatsapp") {
       if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
@@ -3025,7 +3050,16 @@ ${secondCellHtml}
                           />
                         </div>
 
-                        <div className="grid gap-2.5 lg:grid-cols-2">
+                        <div className="grid gap-2.5 lg:grid-cols-3">
+                          <div className="space-y-1">
+                            <Label>Texto del enlace web</Label>
+                            <Input
+                              value={templateForm.webLinkLabel}
+                              onChange={(event) => setTemplateForm((prev) => ({ ...prev, webLinkLabel: event.target.value }))}
+                              placeholder="Visitar Sitio {{website_url}}"
+                            />
+                            <p className="text-[11px] text-muted-foreground">Si lo dejas vacío, se usará el texto actual.</p>
+                          </div>
                           <div className="space-y-1">
                             <Label>Texto del link de agenda</Label>
                             <Input
