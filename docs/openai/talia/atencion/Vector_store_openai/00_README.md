@@ -12,6 +12,7 @@ Este vector store contiene conocimiento factual para personas que llegan por Wha
 - `04_crm_agenda_y_vendedores.md`
 - `05_canales_y_campanas.md`
 - `06_limites_y_compliance.md`
+- `07_modulo_inmobiliario.md`
 
 No subir este README ni los archivos de funciones como conocimiento del agente.
 
@@ -26,6 +27,6 @@ No subir este README ni los archivos de funciones como conocimiento del agente.
 ## Publicación
 
 1. Crear o conservar el vector store `talia_atencion_vs`.
-2. Subir los seis archivos numerados.
+2. Subir los siete archivos numerados.
 3. Asociarlo exclusivamente al prompt de atención.
-4. Probar dudas de capacidades, precios, CRM, campañas, agenda, rechazo y despedida.
+4. Probar dudas de capacidades, precios, CRM, campañas, agenda, módulo inmobiliario, rechazo y despedida.

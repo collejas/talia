@@ -12,6 +12,7 @@ Este vector store contiene conocimiento factual para conversaciones de prospecci
 - `04_faq_comercial.md`: capacidades confirmadas del sistema.
 - `05_compliance_prospeccion.md`: límites, bajas y uso responsable.
 - `06_normalizacion_inteligente_de_canales.md`: interpretación de abreviaturas comunes.
+- `07_modulo_inmobiliario.md`: capacidades inmobiliarias y reglas para no inventar inventario.
 
 ## Reglas de mantenimiento
 
@@ -25,6 +26,6 @@ Este vector store contiene conocimiento factual para conversaciones de prospecci
 ## Publicación
 
 1. Crear o conservar el vector store `talia_prospeccion_vs`.
-2. Subir los seis archivos de este directorio.
+2. Subir los siete archivos de este directorio.
 3. Asociarlo exclusivamente al prompt configurado en `whatsapp.prospeccion.prompt_id`.
-4. Probar respuestas de capacidades, precio, rechazo, baja, solicitud de información y demo.
+4. Probar respuestas de capacidades, precio, módulo inmobiliario, rechazo, baja, solicitud de información y demo.
