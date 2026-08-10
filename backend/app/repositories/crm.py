@@ -3147,6 +3147,49 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar recordatorios de actividades: {data!r}")
         return data
 
+    async def list_due_activities_for_whatsapp_reminders(
+        self,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "estado": "eq.pendiente",
+            "whatsapp_recordatorio_en": f"lte.{datetime.now(timezone.utc).isoformat()}",
+            "whatsapp_recordatorio_enviado_en": "is.null",
+            "order": "whatsapp_recordatorio_en.asc.nullslast",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        resp = await self._request("GET", "/rest/v1/actividades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar recordatorios WhatsApp: {data!r}")
+        return data
+
+    async def mark_whatsapp_activity_reminder_sent(
+        self,
+        *,
+        organizacion_id: UUID,
+        activity_id: UUID,
+        sent_at: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{activity_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "whatsapp_recordatorio_enviado_en": "is.null",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/actividades",
+            params=params,
+            json={"whatsapp_recordatorio_enviado_en": sent_at},
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        return data[0] if isinstance(data[0], dict) else None
+
     async def create_activity(
         self,
         *,
@@ -3180,6 +3223,17 @@ class CRMRepository:
         payload = dict(payload)
         if "recordatorio_en" in payload and "recordatorio_notificado_en" not in payload:
             payload["recordatorio_notificado_en"] = None
+        if "fecha_vencimiento" in payload and "whatsapp_recordatorio_en" not in payload:
+            scheduled_at = payload.get("fecha_vencimiento")
+            if scheduled_at:
+                try:
+                    parsed_scheduled_at = datetime.fromisoformat(str(scheduled_at).replace("Z", "+00:00"))
+                    payload["whatsapp_recordatorio_en"] = (
+                        parsed_scheduled_at - timedelta(minutes=90)
+                    ).isoformat()
+                except ValueError:
+                    pass
+            payload["whatsapp_recordatorio_enviado_en"] = None
         params = {
             "id": f"eq.{activity_id}",
             "organizacion_id": f"eq.{organizacion_id}",

@@ -6,10 +6,13 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
+from app.channels.whatsapp.service import send_manual_message
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.tenant_runtime import get_whatsapp_runtime_settings
 from app.services.user_notifications import (
     UserNotificationAction,
     UserNotificationCreate,
@@ -120,6 +123,100 @@ class ActivityReminderJobsRunner:
                     "activity_reminder.process_row_failed",
                     extra={"error": str(exc), "activity_id": row.get("id")},
                 )
+        try:
+            whatsapp_activities = await repo.list_due_activities_for_whatsapp_reminders(limit=100)
+        except CRMRepositoryError as exc:
+            logger.warning("activity_reminder.whatsapp_list_due_failed", extra={"error": str(exc)})
+            return
+        for row in whatsapp_activities:
+            try:
+                await self._process_whatsapp_activity(repo=repo, row=row)
+            except Exception as exc:  # pragma: no cover - defensivo por fila
+                logger.warning(
+                    "activity_reminder.whatsapp_process_row_failed",
+                    extra={"error": str(exc), "activity_id": row.get("id")},
+                )
+
+    async def _process_whatsapp_activity(
+        self,
+        *,
+        repo: CRMRepository,
+        row: dict[str, Any],
+    ) -> None:
+        activity_id = _safe_uuid(row.get("id"))
+        organizacion_id = _safe_uuid(row.get("organizacion_id"))
+        creator_id = _safe_uuid(row.get("creado_por_usuario_id"))
+        scheduled_at = _parse_iso_datetime(row.get("fecha_vencimiento"))
+        if not activity_id or not organizacion_id or not creator_id or not scheduled_at:
+            return
+        runtime = await get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+        template_name = runtime.activity_reminder_template_name
+        template_language = runtime.activity_reminder_template_language
+        if runtime.provider != "meta" or not template_name or not template_language:
+            return
+
+        creator = await repo.get_user_by_id(organizacion_id=organizacion_id, usuario_id=creator_id)
+        phone = _clean_text(creator.get("telefono_e164")) if creator else None
+        if not phone:
+            logger.info("activity_reminder.whatsapp_skipped_no_creator_phone", extra={"activity_id": str(activity_id)})
+            return
+
+        timezone_name = _clean_text(creator.get("timezone")) if creator else None
+        try:
+            local_timezone = ZoneInfo(timezone_name or "UTC")
+        except Exception:
+            local_timezone = timezone.utc
+        local_scheduled_at = scheduled_at.astimezone(local_timezone)
+
+        opportunity: dict[str, Any] | None = None
+        opportunity_id = _safe_uuid(row.get("oportunidad_id"))
+        if opportunity_id:
+            opportunity = await repo.get_opportunity(
+                organizacion_id=organizacion_id,
+                opportunity_id=opportunity_id,
+            )
+        persona: dict[str, Any] | None = None
+        persona_id = _safe_uuid(row.get("persona_id"))
+        if persona_id:
+            persona = await repo.get_persona_by_id(
+                persona_id=str(persona_id),
+                organizacion_id=organizacion_id,
+            )
+
+        activity_type = _clean_text(row.get("tipo")) or "Actividad"
+        activity_type = activity_type.replace("_", " ").strip().capitalize()
+        contact_name = _clean_text(
+            (opportunity or {}).get("contacto_nombre")
+            or (persona or {}).get("nombre_completo")
+            or (persona or {}).get("display_name")
+        ) or "tu contacto"
+        opportunity_code = _clean_text((opportunity or {}).get("codigo_oportunidad")) or "sin oportunidad"
+
+        result = await send_manual_message(
+            to_number=phone,
+            template_name=template_name,
+            template_language=template_language,
+            template_variables={
+                "1": activity_type,
+                "2": contact_name,
+                "3": opportunity_code,
+                "4": local_scheduled_at.strftime("%H:%M"),
+                "5": local_scheduled_at.strftime("%d/%m/%Y"),
+            },
+            organizacion_id=organizacion_id,
+        )
+        if result.status != "sent":
+            logger.warning(
+                "activity_reminder.whatsapp_send_failed",
+                extra={"activity_id": str(activity_id), "status": result.status, "error": result.error},
+            )
+            return
+        await repo.mark_whatsapp_activity_reminder_sent(
+            organizacion_id=organizacion_id,
+            activity_id=activity_id,
+            sent_at=datetime.now(timezone.utc).isoformat(),
+        )
+        logger.info("activity_reminder.whatsapp_sent", extra={"activity_id": str(activity_id)})
 
     async def _process_activity(self, *, repo: CRMRepository, row: dict[str, Any]) -> None:
         activity_id = _safe_uuid(row.get("id"))

@@ -16434,6 +16434,8 @@ class CRMActivity(BaseModel):
     cancelado_en: datetime | None = None
     cerrado_por_usuario_id: UUID | None = None
     recordatorio_notificado_en: datetime | None = None
+    whatsapp_recordatorio_en: datetime | None = None
+    whatsapp_recordatorio_enviado_en: datetime | None = None
     metadata: dict | None = None
     creado_en: datetime
     actualizado_en: datetime
@@ -37880,6 +37882,10 @@ async def create_activity(
         if isinstance(opportunity_row, dict):
             body.setdefault("persona_id", opportunity_row.get("persona_id"))
             body.setdefault("cuenta_id", opportunity_row.get("cuenta_id"))
+    if payload.fecha_vencimiento and "whatsapp_recordatorio_en" not in body:
+        body["whatsapp_recordatorio_en"] = (
+            payload.fecha_vencimiento - timedelta(minutes=90)
+        ).isoformat()
     # Las actividades independientes de una oportunidad pertenecen al usuario
     # que las crea por defecto. Así el recordatorio no queda sin destinatario.
     if (

@@ -1186,6 +1186,8 @@ class WhatsappRuntimeSettings:
     cancel_template_sid: str | None
     cancel_template_name: str | None
     cancel_template_language: str | None
+    activity_reminder_template_name: str | None
+    activity_reminder_template_language: str | None
     prospeccion_prompt_id: str | None
     prospeccion_prompt_version: str | None
     prospeccion_template_sids: list[str]
@@ -1235,6 +1237,8 @@ class WhatsappRuntimeSettings:
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
             cancel_template_name=None,
             cancel_template_language=None,
+            activity_reminder_template_name=None,
+            activity_reminder_template_language=None,
             prospeccion_prompt_id=None,
             prospeccion_prompt_version=None,
             prospeccion_template_sids=[],
@@ -1397,6 +1401,19 @@ async def get_whatsapp_runtime_settings(
     )
     if cancel_template_language is not None:
         settings_payload.cancel_template_language = cancel_template_language
+    activity_reminder_template_meta = _as_dict(templates_meta.get("activity_reminder")) or {}
+    activity_reminder_template_name = _coerce_str_or_none(
+        activity_reminder_template_meta.get("name")
+        or activity_reminder_template_meta.get("template_name")
+    )
+    if activity_reminder_template_name is not None:
+        settings_payload.activity_reminder_template_name = activity_reminder_template_name
+    activity_reminder_template_language = _coerce_str_or_none(
+        activity_reminder_template_meta.get("language")
+        or activity_reminder_template_meta.get("template_language")
+    )
+    if activity_reminder_template_language is not None:
+        settings_payload.activity_reminder_template_language = activity_reminder_template_language
     prospeccion_prompt_id = _coerce_str_or_none(prospeccion_cfg.get("prompt_id"))
     if prospeccion_prompt_id is not None:
         settings_payload.prospeccion_prompt_id = prospeccion_prompt_id

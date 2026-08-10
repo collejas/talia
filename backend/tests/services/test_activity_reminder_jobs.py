@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -24,6 +25,18 @@ class FakeRepo:
             "organizacion_id": str(kwargs["organizacion_id"]),
             "recordatorio_notificado_en": kwargs["payload"].get("recordatorio_notificado_en"),
         }
+
+
+class FakeWhatsappRepo(FakeRepo):
+    async def get_user_by_id(self, **kwargs):
+        return {"telefono_e164": "+5215512345678", "timezone": "America/Mexico_City"}
+
+    async def get_opportunity(self, **kwargs):
+        return {"codigo_oportunidad": "Opo - 0276", "contacto_nombre": "Luis Perez"}
+
+    async def mark_whatsapp_activity_reminder_sent(self, **kwargs):
+        self.updated_payloads.append({"whatsapp_recordatorio_enviado_en": kwargs["sent_at"]})
+        return {"id": str(kwargs["activity_id"])}
 
 
 @pytest.mark.asyncio
@@ -84,3 +97,45 @@ async def test_activity_reminder_skips_when_notification_exists(monkeypatch: pyt
     create_mock.assert_not_called()
     assert repo.updated_payloads
     assert repo.updated_payloads[0]["recordatorio_notificado_en"] == "2026-05-12T17:30:00Z"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_activity_reminder_sends_five_template_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    send_mock = AsyncMock(return_value=SimpleNamespace(status="sent", error=None))
+    monkeypatch.setattr(activity_reminder_jobs, "send_manual_message", send_mock)
+    monkeypatch.setattr(
+        activity_reminder_jobs,
+        "get_whatsapp_runtime_settings",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                provider="meta",
+                activity_reminder_template_name="recordatorio_actividad",
+                activity_reminder_template_language="es_MX",
+            )
+        ),
+    )
+    runner = activity_reminder_jobs.ActivityReminderJobsRunner()
+    repo = FakeWhatsappRepo()
+    row = {
+        "id": str(uuid.uuid4()),
+        "organizacion_id": str(uuid.uuid4()),
+        "creado_por_usuario_id": str(uuid.uuid4()),
+        "oportunidad_id": str(uuid.uuid4()),
+        "tipo": "mensaje",
+        "fecha_vencimiento": "2026-12-31T19:30:00Z",
+    }
+
+    await runner._process_whatsapp_activity(repo=repo, row=row)
+
+    send_mock.assert_awaited_once()
+    payload = send_mock.await_args.kwargs
+    assert payload["template_name"] == "recordatorio_actividad"
+    assert payload["template_language"] == "es_MX"
+    assert payload["template_variables"] == {
+        "1": "Mensaje",
+        "2": "Luis Perez",
+        "3": "Opo - 0276",
+        "4": "13:30",
+        "5": "31/12/2026",
+    }
+    assert repo.updated_payloads
