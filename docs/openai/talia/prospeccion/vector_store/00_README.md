@@ -16,7 +16,8 @@ Este vector store contiene conocimiento factual para conversaciones de prospecci
 ## Reglas de mantenimiento
 
 - Mantener solo información comprobable y vigente.
-- No incluir precios, porcentajes, testimonios o integraciones no verificadas.
+- Los precios deben coincidir con `landing/src/precios/index.html`; si cambia la landing, actualizar este vector store antes de publicar el nuevo prompt.
+- No incluir precios, porcentajes, testimonios o integraciones que no estén verificadas y publicadas.
 - No incluir instrucciones de comportamiento que contradigan el prompt.
 - No incluir secretos, datos de tenants, conversaciones reales ni enlaces internos.
 - Si un dato no está aquí ni en el contexto de la conversación, el agente debe reconocer que no lo tiene.
