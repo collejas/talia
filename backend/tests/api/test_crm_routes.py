@@ -98,6 +98,9 @@ class DummyCRMRepository(CRMRepository):
             "cuenta_id": None,
         }
 
+    async def assign_calendar_booking_creator(self, **kwargs: Any) -> None:
+        self.calls.append(("assign_calendar_booking_creator", kwargs))
+
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
 
@@ -3919,9 +3922,10 @@ async def test_create_agenda_booking_can_be_created_without_contact(
         fake_sync_booking_with_opportunity,
     )
 
+    request_headers = _headers(include_user_token=True)
     resp = await client.post(
         "/crm/agenda/bookings",
-        headers=_headers(include_user_token=True),
+        headers=request_headers,
         json={
             "sin_contacto": True,
             "start_at": "2026-01-01T10:00:00Z",
@@ -3940,6 +3944,14 @@ async def test_create_agenda_booking_can_be_created_without_contact(
     assert captured["hold"]["metadata"]["sin_contacto"] is True
     assert captured["confirm"]["metadata"]["asunto"] == "Bloqueo personal"
     assert captured["confirm"]["metadata"]["sin_contacto"] is True
+    assignment_calls = [
+        kwargs
+        for call_name, kwargs in fake_repo.calls
+        if call_name == "assign_calendar_booking_creator"
+    ]
+    assert assignment_calls
+    assert str(assignment_calls[-1]["usuario_id"]) == request_headers["X-Usuario-Id"]
+    assert str(assignment_calls[-1]["organizacion_id"]) == request_headers["X-Organizacion-Id"]
     assert "zoom" not in captured
     assert "email" not in captured
     assert "sync" not in captured

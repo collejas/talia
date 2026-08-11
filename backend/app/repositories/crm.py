@@ -15890,6 +15890,28 @@ class CRMRepository:
             prefer="return=minimal",
         )
 
+    async def assign_calendar_booking_creator(
+        self,
+        *,
+        booking_id: str,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> None:
+        """Asigna el responsable autenticado a una cita ya confirmada."""
+        booking_key = booking_id.strip()
+        if not booking_key:
+            raise CRMRepositoryError("booking_id_required")
+        await self._request(
+            "PATCH",
+            "/rest/v1/calendar_bookings",
+            params={
+                "id": f"eq.{booking_key}",
+                "organizacion_id": f"eq.{organizacion_id}",
+            },
+            json={"created_by": str(usuario_id), "updated_by": str(usuario_id)},
+            prefer="return=minimal",
+        )
+
     async def user_has_role(self, *, usuario_id: UUID, role_code: str) -> bool:
         normalized_target = (role_code or "").strip().lower()
         if not normalized_target:

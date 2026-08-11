@@ -27991,9 +27991,14 @@ async def create_agenda_booking(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("agenda.view")),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: AgendaBookingCreatePayload,
 ) -> dict[str, Any]:
+    authenticated_user_id = _safe_uuid(_jwt_verify_and_sub(user_token)) or usuario_id
+    if authenticated_user_id is None:
+        raise HTTPException(status_code=401, detail="auth_required")
+
     start_dt = _parse_datetime_input(payload.start_at, field="start_at")
     crear_oportunidad = False
 
@@ -28114,6 +28119,33 @@ async def create_agenda_booking(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     booking_response = webchat_service._build_booking_response(booking_raw)
+    try:
+        await repo.assign_calendar_booking_creator(
+            booking_id=booking_response.booking_id,
+            organizacion_id=organizacion_id,
+            usuario_id=authenticated_user_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.agenda.booking.creator_assignment_failed",
+            extra={
+                "booking_id": booking_response.booking_id,
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(authenticated_user_id),
+                "error": str(exc),
+            },
+        )
+        try:
+            await calendar_service.cancel_booking(
+                booking_id=booking_response.booking_id,
+                reason="No se pudo asignar el responsable autenticado",
+            )
+        except Exception:
+            logger.exception(
+                "crm.agenda.booking.creator_assignment_rollback_failed",
+                extra={"booking_id": booking_response.booking_id},
+            )
+        raise HTTPException(status_code=502, detail="booking_assignment_failed") from exc
     if tarjeta_id and persona_data:
         await webchat_service._sync_booking_with_opportunity(
             booking=booking_response,
