@@ -159,6 +159,35 @@ def test_build_openai_input_avoids_redundant_crm_lines_when_summary_exists() -> 
     assert "Resumen previo (2026-07-15T17:20:45.690444+00:00):" in text
 
 
+def test_build_openai_input_preserves_local_history_when_response_chain_is_missing() -> None:
+    message = schemas.WhatsAppIncomingMessage(
+        message_sid="SM-current",
+        from_number="whatsapp:+521111111111",
+        to_number="whatsapp:+521000000000",
+        body="Con Pedro Martinez, me interesa un terreno.",
+        wa_id="521111111111",
+        profile_name="Visitante",
+        num_media=0,
+        media=[],
+        raw_payload={},
+    )
+
+    payload = service._build_openai_input(
+        message,
+        history_messages=[
+            {"id": "m1", "direccion": "entrante", "texto": "Hola"},
+            {"id": "m2", "direccion": "saliente", "texto": "Hola, soy Tal-IA."},
+        ],
+    )
+
+    assert [item["role"] for item in payload] == ["user", "assistant", "user"]
+    assert payload[0]["content"][0]["text"] == "Hola"
+    assert payload[0]["content"][0]["type"] == "input_text"
+    assert payload[1]["content"][0]["text"] == "Hola, soy Tal-IA."
+    assert payload[1]["content"][0]["type"] == "output_text"
+    assert payload[2]["content"][0]["text"].startswith("Con Pedro Martinez")
+
+
 @pytest.mark.asyncio
 async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
     """Los acuses del botón de vendedor no deben disparar al asistente."""

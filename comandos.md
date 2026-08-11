@@ -206,7 +206,7 @@ du -shL /var/www/talia/current/panel
   );
 Gran Penon
   select public.cleanup_test_phone_whatsapp(
-    '+5214441882244',
+    '+5214442150144',
     '3dbb2a99-9d81-4233-8444-0990d53b93b3'::uuid
   );
 

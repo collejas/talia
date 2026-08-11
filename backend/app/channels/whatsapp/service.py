@@ -69,8 +69,7 @@ from . import schemas
 logger = get_logger("app.channels.whatsapp")
 
 DEFAULT_FALLBACK = (
-    "Hola. Puedo ayudarte a encontrar contactos, enviar campañas, atender con IA "
-    "o centralizar el seguimiento en CRM. No pude responder tu mensaje; inténtalo nuevamente."
+    "En este momento no pude procesar tu mensaje. Por favor, inténtalo nuevamente en unos segundos."
 )
 
 _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
@@ -4117,6 +4116,24 @@ async def _generate_assistant_reply(
         context_payload = context_payload or {}
         context_payload["origin_type"] = origin_type
 
+    history_messages: list[dict[str, Any]] = []
+    if not previous_response_id and not openai_conversation_id:
+        try:
+            history_messages = await storage.fetch_recent_messages(
+                conversation_id=conversation_id,
+                limit=12,
+            )
+            current_id = str(inbound_message_id or "").strip()
+            history_messages = [
+                row for row in history_messages
+                if str(row.get("id") or "").strip() != current_id
+            ][-10:]
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fetch_history_for_openai_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
     initial_input = _build_openai_input(
         message,
         context_data=context_payload,
@@ -4124,6 +4141,7 @@ async def _generate_assistant_reply(
         summary_created_en=summary_created_en,
         catalog_context=catalog_context,
         attachment_content_items=attachment_content_items,
+        history_messages=history_messages,
     )
     profiling_enabled_for_channel = True
     if organizacion_id:
@@ -5303,6 +5321,7 @@ def _build_openai_input(
     summary_created_en: str | None = None,
     catalog_context: str | None = None,
     attachment_content_items: list[dict[str, Any]] | None = None,
+    history_messages: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Normaliza el contenido del mensaje con contexto CRM para la Responses API."""
     text_parts: list[str] = []
@@ -5341,6 +5360,18 @@ def _build_openai_input(
     if attachment_content_items:
         user_message["content"].extend(attachment_content_items)
     messages: list[dict[str, Any]] = []
+    for history_row in history_messages or []:
+        history_text = str(history_row.get("texto") or "").strip()
+        direction = str(history_row.get("direccion") or "").strip().lower()
+        if not history_text or direction not in {"entrante", "saliente"}:
+            continue
+        content_type = "input_text" if direction == "entrante" else "output_text"
+        messages.append(
+            {
+                "role": "user" if direction == "entrante" else "assistant",
+                "content": [{"type": content_type, "text": history_text}],
+            }
+        )
     if catalog_context:
         messages.append(
             {
