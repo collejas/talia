@@ -74,7 +74,7 @@ Variables útiles:
 
 5) Deploy de producción si hubo SOLO cambios de BACKEND
 cd /var/www/talia/backend
-poetry install
+
 sudo systemctl restart talia-api.service
 sudo systemctl is-active --quiet talia-api.service
 
