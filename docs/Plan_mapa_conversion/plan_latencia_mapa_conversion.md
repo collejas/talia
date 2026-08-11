@@ -377,4 +377,14 @@ Se revisó la base de datos de producción mediante Supabase MCP, incluyendo `pg
 4. **Escalamiento:** si el volumen sigue creciendo, crear una vista materializada diaria de atribución por campaña/plantilla y refrescarla fuera de la petición web.
 5. **Validación:** comparar p50/p95/p99 de `resumen-v2`, tasa de `57014`, tiempo de la RPC y tiempo total de la vista antes de declarar resuelto el problema.
 
-No se aplicó ninguna migración ni cambio de datos durante este diagnóstico.
+Durante el diagnóstico inicial no se aplicó ninguna migración ni cambio de datos.
+
+### Avance de implementación (2026-08-11)
+
+- `resumen-v2` ahora acepta `incluir_atribucion_campanas`, con valor predeterminado `false`.
+- La vista solicita esa atribución únicamente cuando la pestaña activa es `Campañas`.
+- `Resumen`, `Tráfico` y `Conversaciones` dejan de esperar la RPC pesada de atribución.
+- Se aplicó en Supabase el índice `prospeccion_contactos_log_org_envio_idx`.
+- La medición posterior no mostró una mejora suficiente en la RPC aislada: siguió sin utilizar el índice nuevo y registró aproximadamente **7.16 s** en una ejecución.
+
+Conclusión: la separación del camino crítico queda implementada; la reescritura de la RPC sigue pendiente y es necesaria para mejorar la pestaña `Campañas` y eliminar el escaneo amplio de logs.

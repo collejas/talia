@@ -41639,6 +41639,7 @@ async def demografia_resumen_v2(
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
+    incluir_atribucion_campanas: bool = Query(default=False),
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -41727,6 +41728,7 @@ async def demografia_resumen_v2(
             "desde": (desde or "").strip() or None,
             "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
+            "incluir_atribucion_campanas": incluir_atribucion_campanas,
         },
     )
     cached_resumen = await _read_demografia_response_cache(
@@ -41905,6 +41907,8 @@ async def demografia_resumen_v2(
                 return []
 
         async def load_campaign_conversion_rows() -> list[dict[str, Any]]:
+            if not incluir_atribucion_campanas:
+                return []
             rows: list[dict[str, Any]] = []
             offset = 0
             while True:

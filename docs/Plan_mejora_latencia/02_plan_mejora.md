@@ -231,6 +231,24 @@ Priorizar la separación de la atribución del camino crítico de `resumen-v2`:
 
 Estado: **Diagnóstico confirmado; implementación pendiente.** No se aplicaron migraciones en esta revisión.
 
+### Avance de la primera acción (2026-08-11)
+
+Implementado localmente y listo para deploy:
+
+- La atribución campaña/plantilla se excluye por defecto de `resumen-v2`.
+- La pestaña `Campañas` la solicita de forma explícita.
+- Se agregó `incluir_atribucion_campanas` al contrato de `resumen-v2`.
+- Se aplicó en Supabase el índice `prospeccion_contactos_log_org_envio_idx`.
+
+Validación:
+
+- `python3 -m py_compile backend/app/api/routes/crm.py`: correcto.
+- `npx tsc --noEmit`: correcto.
+- React Doctor: **100/100**.
+- La RPC aislada no mejoró de forma suficiente con el índice; la reescritura SQL continúa pendiente.
+
+El usuario realizará el deploy de backend y panel. Después del deploy se debe medir primero `resumen-v2` en las tres pestañas no relacionadas con campañas antes de continuar con la reescritura de la RPC.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

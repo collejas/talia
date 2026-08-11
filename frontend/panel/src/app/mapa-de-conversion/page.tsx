@@ -334,6 +334,7 @@ export default async function Page({
     desde,
     hasta,
     includeMap: view !== "overview",
+    includeCampaignAttribution: view === "campaigns",
     })
     .then((value) => ({ ok: true as const, value }))
     .catch((error: unknown) => ({
