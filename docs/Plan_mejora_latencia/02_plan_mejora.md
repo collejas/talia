@@ -208,6 +208,29 @@ Resultado esperado:
 - Se cambiaron esas consultas independientes a ejecución concurrente con `asyncio.gather`, conservando el mismo contrato de respuesta.
 - El mapa conserva su cache y `skip_visitantes=true`; queda pendiente medir después del despliegue el costo de `geojson_ms` y `whatsapp_locations_ms` en cache miss.
 
+### Diagnóstico Supabase confirmado y siguiente acción (2026-08-11)
+
+La revisión directa de Supabase confirmó que la función geográfica no es el cuello principal:
+
+- `panel_visitantes_geo_resumen_v2`: aproximadamente `146 ms` en ejecución directa.
+- `prospeccion_campana_template_atribucion_rango`: media histórica aproximada de `3.1 s`, máximo de `7.9 s` y errores `57014` por timeout.
+- Ejecución directa de atribución: `1.84 s`, con `421,727` buffers compartidos y uso de temporal.
+- Volumen del tenant principal: `16,801` envíos y `52,769` logs de prospección.
+
+La función de atribución procesa dos veces `prospeccion_contactos_log` y realiza agregaciones amplias antes de aplicar el resultado final. Esto explica los `6.4–6.7 s` de `resumen-v2` y los `502` observados en producción.
+
+#### Decisión recomendada
+
+Priorizar la separación de la atribución del camino crítico de `resumen-v2`:
+
+1. Servir inicialmente mapa, KPIs y datos geográficos sin esperar rankings de campaña/plantilla.
+2. Resolver rankings desde caché breve o mediante carga diferida.
+3. Reescribir la RPC para filtrar primero envíos por tenant/rango y reutilizar una única relación de logs.
+4. Validar un índice parcial `(organizacion_id, envio_id) WHERE envio_id IS NOT NULL` en `prospeccion_contactos_log` con `EXPLAIN (ANALYZE, BUFFERS)`.
+5. Evaluar una vista materializada diaria si el volumen continúa creciendo.
+
+Estado: **Diagnóstico confirmado; implementación pendiente.** No se aplicaron migraciones en esta revisión.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

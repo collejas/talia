@@ -344,3 +344,37 @@ Validación recomendada:
 - Verificar que nuevos inbound de WhatsApp sigan generando eventos.
 - Confirmar que una recarga fría de `mapa-de-conversion` sigue mostrando la tarjeta con datos.
 - Revisar que futuros cambios en personas/contactos no vuelvan a bloquear la persistencia de atribución.
+
+## 18) Diagnóstico Supabase y acción recomendada
+
+Fecha: **2026-08-11**
+Estado: **Diagnóstico confirmado; cambios de base de datos aún no aplicados.**
+
+Se revisó la base de datos de producción mediante Supabase MCP, incluyendo `pg_stat_statements`, índices, tamaños de tablas y `EXPLAIN (ANALYZE, BUFFERS)`.
+
+### Evidencia encontrada
+
+- `panel_visitantes_geo_resumen_v2` ejecutó en aproximadamente **146 ms** para el tenant principal y rango de 30 días. No es el cuello dominante.
+- `prospeccion_campana_template_atribucion_rango` presentó medias históricas de aproximadamente **3.1 s**, máximos de **7.9 s** y errores `57014 statement timeout`.
+- En una ejecución directa con rango anual, esta función tardó **1.84 s**, con aproximadamente **421,727 shared buffers** y uso de archivos temporales.
+- El tenant principal tiene aproximadamente:
+  - `16,801` filas en `prospeccion_contacto_envio`.
+  - `52,769` filas en `prospeccion_contactos_log`.
+  - `2,161` filas en `web_sessions`.
+- La función procesa los logs de prospección dos veces, para respuestas y eventos Brevo, y no restringe ambas agregaciones inicialmente a los envíos candidatos del rango.
+- Los logs de la API confirmaron que `resumen-v2` llegó a **6.4–6.7 s** y devolvió `502` después de que la RPC de atribución alcanzó el timeout.
+- `mapa-v2` se observó en **2.5–2.6 s**; el componente más visible fue `geojson_ms`, entre **0.96–1.19 s**, no la función SQL principal.
+
+### Acción recomendada
+
+1. **Acción inmediata:** sacar la atribución campaña/plantilla del camino crítico de `resumen-v2`. Debe cargarse desde una caché breve o de forma diferida, porque no es necesaria para pintar el mapa ni los KPIs iniciales.
+2. **Optimización SQL:** reescribir `prospeccion_campana_template_atribucion_rango` para:
+   - filtrar primero los `envio_id` del tenant y rango;
+   - reutilizar una sola relación filtrada de logs;
+   - evitar escanear y agrupar todos los logs dos veces;
+   - conservar el filtro explícito por `organizacion_id`.
+3. **Índice candidato para validar con un nuevo `EXPLAIN`:** índice parcial compuesto sobre `prospeccion_contactos_log (organizacion_id, envio_id)` para filas con `envio_id IS NOT NULL`.
+4. **Escalamiento:** si el volumen sigue creciendo, crear una vista materializada diaria de atribución por campaña/plantilla y refrescarla fuera de la petición web.
+5. **Validación:** comparar p50/p95/p99 de `resumen-v2`, tasa de `57014`, tiempo de la RPC y tiempo total de la vista antes de declarar resuelto el problema.
+
+No se aplicó ninguna migración ni cambio de datos durante este diagnóstico.
