@@ -33,6 +33,8 @@ _SECRET_CACHE: dict[str, Any] = {}
 _SECRET_CACHE_EXPIRES: dict[str, datetime] = {}
 _PUBLIC_URL_CACHE: dict[str, str | None] = {}
 _PUBLIC_URL_CACHE_EXPIRES: dict[str, datetime] = {}
+_CLOSE_LEAD_POLICY_CACHE: dict[str, CloseLeadPolicy] = {}
+_CLOSE_LEAD_POLICY_CACHE_EXPIRES: dict[str, datetime] = {}
 
 CONFIG_TTL_SECONDS = 60
 SECRET_TTL_SECONDS = 60
@@ -60,6 +62,52 @@ class WebchatRuntimeSettings:
     inactivity_minutes: int | None
     project_id: str | None
     location_href: str | None
+
+
+@dataclass(slots=True, frozen=True)
+class CloseLeadPolicy:
+    """Campos que el tenant exige antes de cerrar una oportunidad."""
+
+    activo: bool = True
+    nombre_requerido: bool = True
+    telefono_requerido: bool = True
+    necesidad_proposito_requerido: bool = True
+    notes_requerido: bool = True
+    correo_requerido: bool = False
+    company_name_requerido: bool = False
+
+    def required_fields(self) -> tuple[str, ...]:
+        fields: list[str] = []
+        for attribute, field_name in (
+            ("nombre_requerido", "nombre_completo"),
+            ("telefono_requerido", "telefono"),
+            ("necesidad_proposito_requerido", "necesidad_proposito"),
+            ("notes_requerido", "notes"),
+            ("correo_requerido", "correo"),
+            ("company_name_requerido", "company_name"),
+        ):
+            if getattr(self, attribute):
+                fields.append(field_name)
+        return tuple(fields)
+
+    def developer_instruction(self) -> str:
+        required = set(self.required_fields())
+        labels = (
+            ("nombre_completo", "nombre"),
+            ("telefono", "teléfono"),
+            ("necesidad_proposito", "necesidad/interés"),
+            ("notes", "notas"),
+            ("correo", "correo"),
+            ("company_name", "empresa"),
+        )
+        lines = [
+            "Política de cierre de oportunidad de este tenant/canal:",
+            *(f"- {label}: {'obligatorio' if field in required else 'opcional'}" for field, label in labels),
+            "Llama close_lead cuando todos los campos obligatorios estén disponibles y persiste notes y necesidad_proposito.",
+            "Si un campo de contacto obligatorio falta, usa la función de captura correspondiente antes de intentar close_lead.",
+            "No inventes campos faltantes; si falta un campo obligatorio, solicítalo de forma breve o continúa la conversación.",
+        ]
+        return "\n".join(lines)
 
 
 @dataclass(slots=True)
@@ -160,6 +208,8 @@ def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
         _CONFIG_CACHE_EXPIRES.clear()
         _SECRET_CACHE.clear()
         _SECRET_CACHE_EXPIRES.clear()
+        _CLOSE_LEAD_POLICY_CACHE.clear()
+        _CLOSE_LEAD_POLICY_CACHE_EXPIRES.clear()
         return
 
     cache_prefix = f"{organizacion_id}:"
@@ -169,6 +219,10 @@ def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
         if key.startswith(cache_prefix):
             _SECRET_CACHE.pop(key, None)
             _SECRET_CACHE_EXPIRES.pop(key, None)
+    for key in list(_CLOSE_LEAD_POLICY_CACHE.keys()):
+        if key.startswith(cache_prefix):
+            _CLOSE_LEAD_POLICY_CACHE.pop(key, None)
+            _CLOSE_LEAD_POLICY_CACHE_EXPIRES.pop(key, None)
 
 
 async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
@@ -265,6 +319,58 @@ async def get_org_config(*, organizacion_id: UUID, force_refresh: bool = False) 
     _CONFIG_CACHE[cache_key] = config
     _CONFIG_CACHE_EXPIRES[cache_key] = now + timedelta(seconds=CONFIG_TTL_SECONDS)
     return config
+
+
+async def get_close_lead_policy(
+    *,
+    organizacion_id: UUID | None,
+    channel: str | None,
+    force_refresh: bool = False,
+) -> CloseLeadPolicy:
+    """Carga la política explícita de cierre sin depender de JSONB del tenant."""
+
+    channel_value = str(channel or "whatsapp").strip().lower()
+    if channel_value not in {"whatsapp", "webchat"} or organizacion_id is None:
+        return CloseLeadPolicy()
+
+    cache_key = f"{organizacion_id}:{channel_value}"
+    now = datetime.now(timezone.utc)
+    if not force_refresh:
+        expires = _CLOSE_LEAD_POLICY_CACHE_EXPIRES.get(cache_key)
+        cached = _CLOSE_LEAD_POLICY_CACHE.get(cache_key)
+        if cached is not None and expires and expires > now:
+            return cached
+
+    try:
+        rows = await _supabase_get(
+            "/rest/v1/close_lead_policies",
+            params={
+                "select": "activo,nombre_requerido,telefono_requerido,necesidad_proposito_requerido,notes_requerido,correo_requerido,company_name_requerido",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": f"eq.{channel_value}",
+                "limit": "1",
+            },
+        )
+    except Exception as exc:  # pragma: no cover - resiliencia del runtime
+        logger.warning(
+            "tenant_runtime.close_lead_policy_fetch_failed",
+            extra={"organizacion_id": str(organizacion_id), "channel": channel_value, "error": str(exc)},
+        )
+        return CloseLeadPolicy()
+
+    row = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+    policy = CloseLeadPolicy(
+        activo=_coerce_bool(row.get("activo"), True),
+        nombre_requerido=_coerce_bool(row.get("nombre_requerido"), True),
+        telefono_requerido=_coerce_bool(row.get("telefono_requerido"), True),
+        necesidad_proposito_requerido=_coerce_bool(row.get("necesidad_proposito_requerido"), True),
+        notes_requerido=_coerce_bool(row.get("notes_requerido"), True),
+        correo_requerido=_coerce_bool(row.get("correo_requerido"), False),
+        company_name_requerido=_coerce_bool(row.get("company_name_requerido"), False),
+    )
+    _CLOSE_LEAD_POLICY_CACHE[cache_key] = policy
+    _CLOSE_LEAD_POLICY_CACHE_EXPIRES[cache_key] = now + timedelta(seconds=CONFIG_TTL_SECONDS)
+    return policy
 
 
 async def get_org_public_base_url(*, organizacion_id: UUID, force_refresh: bool = False) -> str | None:

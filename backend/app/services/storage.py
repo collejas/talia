@@ -2383,8 +2383,8 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
 
     Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en, datos.
     """
-    repo = CRMRepository()
     try:
+        repo = CRMRepository()
         return await repo.fetch_recent_messages(conversation_id=conversation_id, limit=limit)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc

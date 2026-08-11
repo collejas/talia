@@ -26,7 +26,7 @@
 
 {
   "name": "set_email",
-  "description": "Guardar o actualizar el correo electrónico del lead.",
+  "description": "Guardar o actualizar el correo electrónico opcional del lead. No es requisito para ejecutar close_lead.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -78,7 +78,7 @@
 
 {
   "name": "set_company_name",
-  "description": "Guardar o actualizar el nombre de la empresa / razón social del lead.",
+  "description": "Guardar o actualizar el nombre opcional de la empresa / razón social del lead. No es requisito para ejecutar close_lead.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead con la información útil capturada durante la conversación. Se usa para guardar avances del contacto, su necesidad y el resumen comercial, sin depender de que ya exista cita confirmada.",
+  "description": "Cerrar y consolidar el lead cuando ya existen nombre, teléfono de WhatsApp, necesidad/interés y notas. El correo y la empresa son opcionales y nunca deben bloquear este cierre. Puede usarse para guardar avances sin depender de que ya exista cita confirmada.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -115,11 +115,11 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de Tal-IA. Ej: 'Administra condominios y plazas comerciales; quiere automatizar atención a residentes y coordinación de incidencias vía WhatsApp sin saturar al personal.'"
+        "description": "Resumen factual y corto de lo que el prospecto dijo o confirmó: contexto, problema, interés y siguiente objetivo. No inventes datos ni dependas de correo o empresa. Ej: 'Busca un lote residencial para inversión y quiere conocer opciones de pago.'"
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
+        "description": "Necesidad o interés principal expresado por el prospecto, en una sola frase clara tipo titular. Debe estar sustentado en la conversación. Ej: 'Conocer opciones de lotes residenciales para inversión.'"
       }
     },
     "required": [
@@ -280,7 +280,7 @@
   }
 }
 
---
+---
 
 {
   "name": "schedule_demo",

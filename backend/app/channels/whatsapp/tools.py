@@ -2404,6 +2404,12 @@ async def _handle_close_lead(
     persona = await _resolve_persona(persona_id)
     notes = _require(arguments, "notes")
     necesidad = _require(arguments, "necesidad_proposito")
+    await lead_tools.validate_close_lead_requirements(
+        context=context,
+        persona=persona,
+        notes=notes,
+        necesidad=necesidad,
+    )
     siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
     tarjeta_id = None
     try:

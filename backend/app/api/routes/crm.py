@@ -17022,6 +17022,32 @@ class CRMScoringSeedResponse(BaseModel):
     message: str | None = None
 
 
+class CRMCloseLeadPolicy(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    activo: bool = True
+    nombre_requerido: bool = True
+    telefono_requerido: bool = True
+    necesidad_proposito_requerido: bool = True
+    notes_requerido: bool = True
+    correo_requerido: bool = False
+    company_name_requerido: bool = False
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class CRMCloseLeadPolicyUpsert(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    activo: bool = True
+    nombre_requerido: bool = True
+    telefono_requerido: bool = True
+    necesidad_proposito_requerido: bool = True
+    notes_requerido: bool = True
+    correo_requerido: bool = False
+    company_name_requerido: bool = False
+
+
 class CRMPipelineCardResponse(BaseModel):
     stage: CRMPipelineBoardStage
     card: CRMPipelineBoardCard
@@ -39103,6 +39129,51 @@ async def get_pipeline_scoring_config(
         reprompt_rows=reprompts,
         rule_rows=rules,
     )
+
+
+@router.get("/pipeline/close-lead-policy", response_model=CRMCloseLeadPolicy)
+async def get_close_lead_policy(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    canal: Literal["whatsapp", "webchat"] = Query(...),
+) -> CRMCloseLeadPolicy:
+    try:
+        row = await repo.get_close_lead_policy(organizacion_id=organizacion_id, canal=canal)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo cargar la política de cierre.") from exc
+    if row is None:
+        row = {
+            "organizacion_id": organizacion_id,
+            "canal": canal,
+            "activo": True,
+            "nombre_requerido": True,
+            "telefono_requerido": True,
+            "necesidad_proposito_requerido": True,
+            "notes_requerido": True,
+            "correo_requerido": False,
+            "company_name_requerido": False,
+        }
+    return CRMCloseLeadPolicy.model_validate(row)
+
+
+@router.put("/pipeline/close-lead-policy", response_model=CRMCloseLeadPolicy)
+async def upsert_close_lead_policy(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMCloseLeadPolicyUpsert,
+) -> CRMCloseLeadPolicy:
+    body = payload.model_dump(mode="json")
+    body["organizacion_id"] = str(organizacion_id)
+    try:
+        row = await repo.upsert_close_lead_policy(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo guardar la política de cierre.") from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=organizacion_id)
+    return CRMCloseLeadPolicy.model_validate(row)
 
 
 @router.get("/pipeline/scoring/feature-status", response_model=CRMScoringFeatureStatus)

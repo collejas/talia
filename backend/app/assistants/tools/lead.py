@@ -154,14 +154,70 @@ def _lead_close_already_marked(persona: dict[str, Any] | None) -> bool:
     return bool(state.get("lead_closed_at"))
 
 
-def _has_required_close_lead_fields(persona: dict[str, Any] | None) -> bool:
+def _has_required_close_lead_fields(
+    persona: dict[str, Any] | None,
+    policy: tenant_runtime.CloseLeadPolicy | None = None,
+) -> bool:
     if not isinstance(persona, dict):
         return False
+    policy = policy or tenant_runtime.CloseLeadPolicy()
     name = str(persona.get("nombre_completo") or "").strip()
     email = _contact_email_value(persona) or ""
     phone = _contact_phone_value(persona) or ""
     company = str(persona.get("company_name") or "").strip()
-    return bool(name and email and phone and company)
+    necesidad = str(persona.get("necesidad_proposito") or "").strip()
+    notes = str(persona.get("notes") or "").strip()
+    return all(
+        (
+            not policy.nombre_requerido or bool(name),
+            not policy.telefono_requerido or bool(phone),
+            not policy.necesidad_proposito_requerido or bool(necesidad),
+            not policy.notes_requerido or bool(notes),
+            not policy.correo_requerido or bool(email),
+            not policy.company_name_requerido or bool(company),
+        )
+    )
+
+
+async def get_close_lead_policy(context: ToolRuntimeContext) -> tenant_runtime.CloseLeadPolicy:
+    organization_id = None
+    try:
+        organization_id = UUID(str(context.organizacion_id)) if context.organizacion_id else None
+    except (TypeError, ValueError):
+        organization_id = None
+    return await tenant_runtime.get_close_lead_policy(
+        organizacion_id=organization_id,
+        channel=context.channel,
+    )
+
+
+async def validate_close_lead_requirements(
+    *,
+    context: ToolRuntimeContext,
+    persona: dict[str, Any] | None,
+    notes: str,
+    necesidad: str,
+) -> tenant_runtime.CloseLeadPolicy:
+    policy = await get_close_lead_policy(context)
+    # Los contextos internos de compatibilidad pueden no traer tenant; en el
+    # flujo real de WhatsApp/Webchat siempre se propaga organizacion_id.
+    if not context.organizacion_id:
+        return policy
+    values = {
+        "nombre_completo": str((persona or {}).get("nombre_completo") or "").strip(),
+        "telefono": _contact_phone_value(persona) or "",
+        "correo": _contact_email_value(persona) or "",
+        "company_name": str((persona or {}).get("company_name") or "").strip(),
+        "necesidad_proposito": necesidad.strip(),
+        "notes": notes.strip(),
+    }
+    missing = [field for field in policy.required_fields() if not values.get(field)]
+    if missing:
+        raise ValueError(
+            "Faltan campos obligatorios para close_lead según la política del tenant: "
+            + ", ".join(missing)
+        )
+    return policy
 
 
 def _build_need_title(text: str, *, fallback_company: str | None = None) -> str:
@@ -349,7 +405,8 @@ async def _maybe_auto_close_lead(
             return None
     if _lead_close_already_marked(persona_record):
         return None
-    if not _has_required_close_lead_fields(persona_record):
+    policy = await get_close_lead_policy(context)
+    if not _has_required_close_lead_fields(persona_record, policy):
         return None
 
     summary_text = ""
@@ -853,6 +910,15 @@ async def try_execute_lead_tool(
         return await _handle_information_package(arguments, context)
 
     if tool_name == "close_lead":
+        notes = _require_argument(arguments, "notes")
+        necesidad = _require_argument(arguments, "necesidad_proposito")
+        persona_record = await storage.fetch_persona(context.persona_id)
+        await validate_close_lead_requirements(
+            context=context,
+            persona=persona_record,
+            notes=notes,
+            necesidad=necesidad,
+        )
         return await _complete_close_lead(arguments=arguments, context=context)
         notes = _require_argument(arguments, "notes")
         necesidad = _require_argument(arguments, "necesidad_proposito")

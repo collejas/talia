@@ -7024,6 +7024,38 @@ class CRMRepository:
             },
         )
 
+    async def get_close_lead_policy(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: str,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/close_lead_policies",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": f"eq.{canal}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        data = resp.json()
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def upsert_close_lead_policy(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/close_lead_policies",
+            json=payload,
+            params={"on_conflict": "organizacion_id,canal"},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada al guardar close_lead_policy: {data!r}")
+        return data[0]
+
     async def list_scoring_questions(
         self,
         *,

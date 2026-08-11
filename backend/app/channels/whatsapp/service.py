@@ -4161,6 +4161,17 @@ async def _generate_assistant_reply(
                     "error": str(exc),
                 },
             )
+    close_lead_policy = await tenant_runtime.get_close_lead_policy(
+        organizacion_id=organizacion_id,
+        channel="whatsapp",
+    )
+    initial_input.insert(
+        0,
+        {
+            "role": "developer",
+            "content": [{"type": "input_text", "text": close_lead_policy.developer_instruction()}],
+        },
+    )
     initial_input.insert(
         0,
         {

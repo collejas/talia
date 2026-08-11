@@ -3891,8 +3891,8 @@ async def _run_assistant_turn(
         "Trabaja solo con las fuentes y flujos permitidos para el tenant."
     )
     profiling_enabled_for_channel = True
+    resolved_org = _resolve_org_uuid(organizacion_id)
     if organizacion_id:
-        resolved_org = _resolve_org_uuid(organizacion_id)
         if resolved_org:
             try:
                 profiling_started = time.perf_counter()
@@ -3911,6 +3911,17 @@ async def _run_assistant_turn(
                         "error": str(exc),
                     },
                 )
+
+    close_lead_policy = await tenant_runtime.get_close_lead_policy(
+        organizacion_id=UUID(resolved_org) if resolved_org else None,
+        channel="webchat",
+    )
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [{"type": "input_text", "text": close_lead_policy.developer_instruction()}],
+        }
+    )
 
     if not agenda_enabled:
         base_input.append(
@@ -4481,6 +4492,7 @@ async def _execute_function_call(
         persona_id=context.persona_id,
         session_id=context.session_id,
         channel="webchat",
+        organizacion_id=context.organizacion_id,
         catalog_inmobiliario_enabled=context.catalog_inmobiliario_enabled,
         catalog_no_inmobiliario_enabled=context.catalog_no_inmobiliario_enabled,
         agenda_enabled=context.agenda_enabled,
