@@ -202,7 +202,7 @@ du -shL /var/www/talia/current/panel
 # EJECUTAR LIMPIEZA DE MI TELEFONO:
   select public.cleanup_test_phone_whatsapp(
     '+5214441302811',
-    'a2f79c76-340a-4fe7-b05a-6ff4dd532325'::uuid
+    '00000000-0000-0000-0000-000000000001'::uuid
   );
 Gran Penon
   select public.cleanup_test_phone_whatsapp(
