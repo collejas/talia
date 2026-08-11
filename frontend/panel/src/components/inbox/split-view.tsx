@@ -1016,6 +1016,8 @@ export function InboxSplitView({
   const lastThreadsFilterKeyRef = React.useRef(activeThreadsFilterKey);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
+  const messagesAbortControllerRef = React.useRef<AbortController | null>(null);
+  const selectionEpochRef = React.useRef(0);
   const messagesPollingDelayRef = React.useRef<number>(MESSAGES_POLL_INITIAL_MS);
   const lastMessagesFingerprintRef = React.useRef<string>("");
   const previousSelectedIdRef = React.useRef<string | null>(null);
@@ -1696,6 +1698,9 @@ export function InboxSplitView({
   const handleSelectThread = React.useCallback(
     (threadId: string) => {
       hasExplicitThreadSelectionRef.current = true;
+      selectionEpochRef.current += 1;
+      messagesAbortControllerRef.current?.abort();
+      messagesAbortControllerRef.current = null;
       const selected = threadItemsRef.current.find((thread) => thread.id === threadId);
       const initialMessages = selected?.messages ?? [];
       selectedConversationIdRef.current = threadId;
@@ -1735,6 +1740,13 @@ export function InboxSplitView({
       }
 
       messagesRefreshingRef.current = conversationId;
+      const selectionEpoch = selectionEpochRef.current;
+      const isActiveSelection = () =>
+        selectedConversationIdRef.current === conversationId &&
+        selectionEpochRef.current === selectionEpoch;
+      const abortController = new AbortController();
+      messagesAbortControllerRef.current?.abort();
+      messagesAbortControllerRef.current = abortController;
       try {
         if (typeof document !== "undefined" && document.hidden) {
           messagesPollingDelayRef.current = Math.min(
@@ -1743,14 +1755,23 @@ export function InboxSplitView({
           );
           return;
         }
-        // Historical conversations are loaded by the detail endpoint once. The
-        // live poll only needs the canonical conversation; querying every
-        // restart here creates one request per historical conversation.
-        const conversationIds = [conversationId];
+        // A WhatsApp thread can contain several restart conversations for the
+        // same phone. The selected thread exposes those IDs in
+        // conversationHistory; loading only the canonical conversation makes
+        // the visible thread look incomplete. Keep the list bounded and
+        // stable so a malformed payload cannot fan out indefinitely.
+        const selectedThread = threadItemsRef.current.find((thread) => thread.id === conversationId);
+        const conversationIds = Array.from(
+          new Set([
+            conversationId,
+            ...(selectedThread?.conversationHistory ?? []),
+          ].filter((id): id is string => typeof id === "string" && id.trim().length > 0)),
+        ).slice(0, 50);
         const histories = await Promise.all(
           conversationIds.map(async (id) => {
             const response = await fetch(`/api/inbox/${id}/messages?limit=100`, {
               cache: "no-store",
+              signal: abortController.signal,
             });
             if (!response.ok) return [];
             const payload = (await response.json()) as { messages?: InboxMessage[] };
@@ -1758,13 +1779,13 @@ export function InboxSplitView({
           }),
         );
         const fetchedMessages = combineMessageHistories(histories);
-        if (selectedConversationIdRef.current !== conversationId) {
+        if (!isActiveSelection()) {
           return;
         }
         // Conserva las mismas referencias para mensajes ya renderizados; solo
         // los mensajes nuevos llegan como filas nuevas al árbol de React.
         const messages = combineMessageHistories([currentMessagesRef.current, fetchedMessages]);
-        if (selectedConversationIdRef.current !== conversationId) {
+        if (!isActiveSelection()) {
           return;
         }
         const fingerprint = fingerprintMessages(messages);
@@ -1795,9 +1816,17 @@ export function InboxSplitView({
           }),
         );
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
         console.error("[inbox] refresh messages failed", error);
       } finally {
-        messagesRefreshingRef.current = null;
+        if (messagesRefreshingRef.current === conversationId) {
+          messagesRefreshingRef.current = null;
+        }
+        if (messagesAbortControllerRef.current === abortController) {
+          messagesAbortControllerRef.current = null;
+        }
       }
     },
     [pendingAttachments.length, uploadingAttachments, sending],
@@ -1956,6 +1985,8 @@ export function InboxSplitView({
 
       setSendError(null);
       setSending(true);
+      const selectionEpoch = selectionEpochRef.current;
+      const targetThreadId = targetThread.id;
       try {
         const manualControls =
           targetThread.manualMode
@@ -1999,6 +2030,13 @@ export function InboxSplitView({
         const text = await response.text();
         const payload = parseReplyPayload(text);
 
+        if (
+          selectedConversationIdRef.current !== targetThreadId ||
+          selectionEpochRef.current !== selectionEpoch
+        ) {
+          return response.ok;
+        }
+
         if (!response.ok) {
           const message = extractError(payload) ?? "No se pudo enviar el mensaje. Inténtalo de nuevo.";
           setSendError(message);
@@ -2008,9 +2046,10 @@ export function InboxSplitView({
         const messages = extractMessages(payload);
         setPendingAttachments([]);
         setAttachmentError(null);
+        const latestMessages = currentMessagesRef.current;
         const mergedMessages = messages.length
-          ? combineMessageHistories([currentMessages, messages])
-          : currentMessages;
+          ? combineMessageHistories([latestMessages, messages])
+          : latestMessages;
         if (messages.length) {
           setCurrentMessages(mergedMessages);
           lastMessagesFingerprintRef.current = fingerprintMessages(mergedMessages);
