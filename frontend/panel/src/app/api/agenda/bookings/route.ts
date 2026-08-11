@@ -29,8 +29,9 @@ export async function POST(request: NextRequest) {
   const personaId = payload.persona_id?.trim() || payload.contacto_id?.trim()
   const startAt = payload.start_at?.trim()
   const oportunidadId = payload.oportunidad_id?.trim()
+  const sinContacto = payload.sin_contacto === true
 
-  if (!personaId) {
+  if (!personaId && !sinContacto) {
     return NextResponse.json({ error: "persona_id_required" }, { status: 400 })
   }
   if (!startAt) {
@@ -40,11 +41,11 @@ export async function POST(request: NextRequest) {
   const response = await callCrmApi<AgendaActionResponse>("/crm/agenda/bookings", {
     method: "POST",
     body: {
-      persona_id: personaId,
-      contacto_id: personaId,
+      persona_id: sinContacto ? undefined : personaId,
+      contacto_id: sinContacto ? undefined : personaId,
       oportunidad_id: oportunidadId || undefined,
       crear_oportunidad: payload.crear_oportunidad ?? false,
-      sin_contacto: payload.sin_contacto ?? false,
+      sin_contacto: sinContacto,
       asunto: payload.asunto?.trim() || undefined,
       modalidad: payload.modalidad?.trim() || "virtual",
       start_at: startAt,
