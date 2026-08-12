@@ -396,3 +396,28 @@ Conclusión: la separación del camino crítico queda implementada; la reescritu
 3. **Tablas:** el loader de visitas/conversaciones ahora comparte promesas in-flight por tenant/usuario/filtros/sección y conserva el resultado 2 minutos. Las lecturas de web sessions y WhatsApp se lanzan en paralelo.
 
 Estado: cambios locales listos para deploy; la migración SQL ya está aplicada en Supabase. Falta que el usuario despliegue backend y panel y vuelva a medir la pestaña `Campañas` en una recarga fría.
+
+### Verificación posterior al deploy (2026-08-12)
+
+El deploy redujo la latencia aislada, pero la vista todavía presenta un cuello de producción:
+
+- `mapa-v2` en cache hit responde normalmente en **<10 ms**; no es el problema actual.
+- `resumen-v2` en cache miss registró **6.7–18.1 s**. La etapa dominante fue `catalogs_ms`, con **4.2–8.6 s**.
+- La RPC `prospeccion_campana_template_atribucion_rango` se está ejecutando varias veces en paralelo. `pg_stat_statements` registra grupos con medias de **1.66 s** y **3.21 s**, máximos de **7.9 s**; los logs muestran nuevos `57014 statement timeout` bajo concurrencia.
+- Las tablas registraron **8.9–16.1 s** para aproximadamente `2,185` visitas y `251` conversaciones. La carga de `web-sessions` se realiza en páginas seriales de 1,000 filas, cada una con varios segundos de backend.
+- El cache del loader de tablas es local al proceso Next. Los reinicios y workers distintos no comparten ese resultado; por eso hay recargas frías repetidas.
+
+### Siguiente acción recomendada
+
+Separar completamente la atribución campaña/plantilla del contrato crítico de `resumen-v2`. La pestaña Campañas debe pintar mapa/KPIs con el resumen normal y cargar sus rankings desde un endpoint diferido, con cache compartido o persistencia preagregada. En paralelo, el endpoint de tablas debe dejar de paginar sesiones web con enriquecimiento completo para la primera pintura; requiere una consulta específica de tabla o un agregado persistido.
+
+Estado: diagnóstico confirmado después del deploy; no se aplicó código adicional en esta revisión.
+
+### Implementación de separación de campañas (2026-08-12)
+
+- `resumen-v2` dejó de solicitar atribución de campañas desde la vista; ahora siempre carga el resumen crítico sin la RPC pesada.
+- Se agregó `/crm/demografia/campanas-atribucion`, que ejecuta únicamente las métricas de correo y WhatsApp en paralelo.
+- La pestaña Campañas carga esa información después de pintar el resumen mediante `/api/crm/mapa-conversion/campaign-attribution`.
+- La lectura de sesiones web para tablas ahora obtiene ventanas de páginas en paralelo, conservando el límite de 1,000 filas por respuesta.
+
+Estado: listo para deploy. La validación de producción queda pendiente después de publicar backend y panel.

@@ -41685,6 +41685,70 @@ async def demografia_mapa(
     }
 
 
+@router.get("/demografia/campanas-atribucion")
+async def demografia_campanas_atribucion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str | None = Depends(optional_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    campana_id: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Carga diferida y acotada para la pestaña Campañas."""
+    campana_uuid: UUID | None = None
+    if campana_id:
+        try:
+            campana_uuid = UUID(campana_id.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
+
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
+    effective_user_token = _normalize_reports_user_token(user_token)
+    try:
+        campaign_rows, whatsapp_rows = await asyncio.gather(
+            repo.get_prospeccion_campana_template_atribucion_rango(
+                usuario_token=effective_user_token,
+                organizacion_id=organizacion_id,
+                campana_id=campana_uuid,
+                date_from_iso=date_from.isoformat() if date_from else None,
+                date_to_iso=date_to.isoformat() if date_to else None,
+                limit=1000,
+                offset=0,
+            ),
+            repo.get_prospeccion_campana_whatsapp_metricas_rango(
+                usuario_token=effective_user_token,
+                organizacion_id=organizacion_id,
+                campana_id=campana_uuid,
+                date_from_iso=date_from.isoformat() if date_from else None,
+                date_to_iso=date_to.isoformat() if date_to else None,
+                limit=1000,
+                offset=0,
+            ),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "campaign_rows": campaign_rows,
+        "whatsapp_rows": whatsapp_rows,
+    }
+
+
 @router.get("/demografia/resumen-v2")
 async def demografia_resumen_v2(
     *,

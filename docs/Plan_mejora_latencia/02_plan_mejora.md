@@ -264,6 +264,26 @@ Validación local del 2026-08-12:
 
 Pendiente operativo: desplegar backend/panel y medir `crm.mapa_conversion.tables.request`, `crm.demografia.mapa_v2` y la pestaña `Campañas` con recarga fría y caliente. No se realizó deploy desde esta sesión.
 
+### Verificación posterior al deploy (2026-08-12)
+
+La medición real confirma que #2 redujo el costo aislado, pero no elimina la latencia bajo concurrencia:
+
+- `mapa-v2` cache hit: generalmente menor a `10 ms`.
+- `resumen-v2` cache miss: `6.7–18.1 s`; `catalogs_ms`: `4.2–8.6 s`.
+- La RPC de campañas alcanza hasta `7.9 s` y continúa produciendo `57014` cuando varias solicitudes la ejecutan simultáneamente.
+- Tablas: `8.9–16.1 s`; la causa son páginas seriales de `web-sessions` y cache aislado por worker de Next.
+
+Decisión siguiente: retirar `incluir_atribucion_campanas=true` del camino de `resumen-v2` y servir la atribución mediante carga diferida/cacheada. Después, construir una lectura de tablas específica y compacta, evitando traer el enriquecimiento completo de sesiones en varias páginas.
+
+### Implementación iniciada (2026-08-12)
+
+- `resumen-v2` ya no incluye atribución de campañas en la carga inicial.
+- Se agregó endpoint dedicado de atribución diferida para correo y WhatsApp.
+- La UI de Campañas solicita los rankings después de montar el resumen base.
+- Las páginas de `web-sessions` de las tablas se solicitan en ventanas concurrentes para reducir el tiempo serial.
+
+Validación local: `py_compile`, `npx tsc --noEmit`, React Doctor **100/100** y `git diff --check` correctos. Falta deploy y medición real.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

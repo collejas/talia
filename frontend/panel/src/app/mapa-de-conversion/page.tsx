@@ -14,6 +14,7 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { AcquisitionSummary } from "@/components/mapa-conversion/acquisition-summary";
+import { DeferredCampaignSummary } from "@/components/mapa-conversion/deferred-campaign-summary.client";
 import { DeferredConversionTables } from "@/components/mapa-conversion/deferred-tables.client";
 import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
@@ -334,7 +335,7 @@ export default async function Page({
     desde,
     hasta,
     includeMap: view !== "overview",
-    includeCampaignAttribution: view === "campaigns",
+    includeCampaignAttribution: false,
     })
     .then((value) => ({ ok: true as const, value }))
     .catch((error: unknown) => ({
@@ -719,10 +720,17 @@ export default async function Page({
               </div>
               <SessionRecovery errors={errores} />
               <div className="px-4 lg:px-6">
-                <AcquisitionSummary
-                  summary={demografiaResponse?.summary ?? null}
-                  mode={view}
-                />
+                {view === "campaigns" ? (
+                  <DeferredCampaignSummary
+                    summary={demografiaResponse?.summary ?? null}
+                    filters={{ campanaId, campanaTipo, templateId, rango, desde, hasta }}
+                  />
+                ) : (
+                  <AcquisitionSummary
+                    summary={demografiaResponse?.summary ?? null}
+                    mode={view}
+                  />
+                )}
               </div>
               {view !== "overview" && tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">

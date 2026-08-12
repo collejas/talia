@@ -50,6 +50,11 @@ export type AcquisitionMetrics = {
   topSource: AcquisitionSourceBucket | null;
 };
 
+export type DeferredCampaignAttribution = {
+  campaign_rows?: Array<Record<string, unknown>>;
+  whatsapp_rows?: Array<Record<string, unknown>>;
+};
+
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -233,6 +238,92 @@ function aggregateConversionRows(
   return Array.from(totals.values()).sort(
     (a, b) => b.total - a.total || b.rate - a.rate || a.label.localeCompare(b.label),
   );
+}
+
+export function buildDeferredCampaignAttribution(
+  data: DeferredCampaignAttribution,
+  filters: { campanaTipo?: string | null; templateId?: string | null } = {},
+): NonNullable<DemografiaSummaryResponse["attribution_rankings"]> {
+  const campaignRank = new Map<string, Record<string, unknown>>();
+  const templateRank = new Map<string, Record<string, unknown>>();
+  const channelFilter = normalizeText(filters.campanaTipo);
+  const templateFilter = normalizeText(filters.templateId);
+
+  for (const row of data.campaign_rows ?? []) {
+    const canal = normalizeText(typeof row.canal === "string" ? row.canal : null) || "correo";
+    if (channelFilter && canal !== channelFilter) continue;
+    const campaignId = String(row.campana_id || "").trim();
+    const campaignLabel = String(row.campana_nombre || "Sin campaña").trim() || "Sin campaña";
+    const templateId = String(row.template_id || "").trim();
+    if (templateFilter && templateId !== templateFilter) continue;
+    const sessions = toNumber(row.sesiones_utm);
+    const sent = toNumber(row.envios_enviados);
+    const campaignKey = `${canal}::${campaignId || campaignLabel}`;
+    const campaign = campaignRank.get(campaignKey) ?? {
+      value: campaignId || campaignKey,
+      label: campaignLabel,
+      canal,
+      conversion_total: 0,
+      context_total: 0,
+      conversion_label: "Sesiones UTM",
+      context_label: "Enviados",
+    };
+    campaign.conversion_total = toNumber(campaign.conversion_total) + sessions;
+    campaign.context_total = toNumber(campaign.context_total) + sent;
+    campaignRank.set(campaignKey, campaign);
+
+    const templateKey = templateId || String(row.template_slug || row.template_nombre || "").trim();
+    if (!templateKey) continue;
+    const template = templateRank.get(`${campaignKey}::${templateKey}`) ?? {
+      value: templateKey,
+      label: String(row.template_nombre || row.template_slug || templateKey).trim(),
+      canal,
+      parent_campaign_value: campaignId || null,
+      parent_campaign_label: campaignLabel,
+      conversion_total: 0,
+      context_total: 0,
+      conversion_label: "Sesiones UTM",
+      context_label: "Enviados",
+    };
+    template.conversion_total = toNumber(template.conversion_total) + sessions;
+    template.context_total = toNumber(template.context_total) + sent;
+    templateRank.set(`${campaignKey}::${templateKey}`, template);
+  }
+
+  for (const row of data.whatsapp_rows ?? []) {
+    const canal = normalizeText(typeof row.canal === "string" ? row.canal : null) || "whatsapp";
+    if (channelFilter && canal !== channelFilter) continue;
+    const campaignId = String(row.campana_id || "").trim();
+    const campaignLabel = String(row.campana_nombre || "Sin campaña").trim() || "Sin campaña";
+    const key = `whatsapp::${campaignId || campaignLabel}`;
+    const campaign = campaignRank.get(key) ?? {
+      value: campaignId || key,
+      label: campaignLabel,
+      canal,
+      conversion_total: 0,
+      context_total: 0,
+      conversion_label: "Oportunidades",
+      context_label: "Conversaciones",
+    };
+    campaign.conversion_total = toNumber(campaign.conversion_total) + toNumber(row.oportunidades_total);
+    campaign.context_total = toNumber(campaign.context_total) + toNumber(row.conversaciones_total);
+    campaignRank.set(key, campaign);
+  }
+
+  const finalize = (rows: Record<string, unknown>[]) => rows
+    .filter((row) => toNumber(row.conversion_total) > 0)
+    .sort((a, b) => toNumber(b.conversion_total) - toNumber(a.conversion_total))
+    .map((row) => ({
+      ...row,
+      conversion_rate_pct: toNumber(row.context_total) > 0
+        ? (toNumber(row.conversion_total) / toNumber(row.context_total)) * 100
+        : 0,
+    }));
+
+  return {
+    campaigns: finalize(Array.from(campaignRank.values())) as NonNullable<DemografiaSummaryResponse["attribution_rankings"]>["campaigns"],
+    templates: finalize(Array.from(templateRank.values())) as NonNullable<DemografiaSummaryResponse["attribution_rankings"]>["templates"],
+  };
 }
 
 function normalizeLookupKey(value: string): string {

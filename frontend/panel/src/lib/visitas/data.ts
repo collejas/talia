@@ -523,26 +523,53 @@ async function loadWebchatVisitRows(
   const pageSize = 1000;
   const rawRows: WebSessionAttributionRow[] = [];
   let shape: "array" | "items" | "other" | "none" = "array";
-  let offset = 0;
-  while (true) {
-    const detalleResult = await callCrmApi<WebSessionAttributionRow[]>("/crm/visitas/web-sessions", {
+  const fetchPage = async (offset: number) => callCrmApi<WebSessionAttributionRow[]>(
+    "/crm/visitas/web-sessions",
+    {
       withUserToken: true,
       searchParams: { ...buildVisitsSearchParams(filters), offset },
-    });
-    if (!detalleResult.ok) {
-      return {
-        rows: [],
-        shape: "none",
-        detailOk: false,
-        detailRows: 0,
-        errors: [detalleResult.error],
-      };
+    },
+  );
+  const firstResult = await fetchPage(0);
+  if (!firstResult.ok) {
+    return {
+      rows: [],
+      shape: "none",
+      detailOk: false,
+      detailRows: 0,
+      errors: [firstResult.error],
+    };
+  }
+  const firstPage = unwrapWebSessionsPayload(firstResult.data);
+  shape = firstPage.shape;
+  rawRows.push(...firstPage.rows);
+
+  let nextOffset = pageSize;
+  let hasFullPage = firstPage.rows.length >= pageSize;
+  while (hasFullPage) {
+    // PostgREST caps each response at 1,000 rows. Fetch a small window in
+    // parallel so a 2–3 page tenant does not pay the full serial round-trip.
+    const offsets = [nextOffset, nextOffset + pageSize, nextOffset + pageSize * 2];
+    const results = await Promise.all(offsets.map(fetchPage));
+    for (let index = 0; index < results.length; index += 1) {
+      const result = results[index];
+      if (!result.ok) {
+        return {
+          rows: [],
+          shape: "none",
+          detailOk: false,
+          detailRows: 0,
+          errors: [result.error],
+        };
+      }
+      const page = unwrapWebSessionsPayload(result.data);
+      rawRows.push(...page.rows);
+      if (page.rows.length < pageSize) {
+        hasFullPage = false;
+        break;
+      }
     }
-    const page = unwrapWebSessionsPayload(detalleResult.data);
-    if (offset === 0) shape = page.shape;
-    rawRows.push(...page.rows);
-    if (page.rows.length < pageSize) break;
-    offset += pageSize;
+    nextOffset += pageSize * results.length;
   }
   const normalized = normalizeWebSessionRows(rawRows);
   return {
