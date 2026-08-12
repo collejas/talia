@@ -82,6 +82,8 @@ Salida: decisión aprobada, credenciales provisionadas de forma segura y matriz 
 
 Crear una migración antes de escribir el código que dependa de estas columnas.
 
+La primera migración de esta fase es `supabase/migrations/20260812_130000_email_service_core.sql`. Su aplicación debe verificarse en la base de datos antes de iniciar backend. No modifica las tablas de Brevo ni las tablas actuales de prospección.
+
 ### Regla obligatoria de modelado
 
 Toda información importante de Postmark debe almacenarse en columnas explícitas. Esto incluye tenant, dominio, remitente, stream, campaña, batch, envío, destinatario, estado, cuota, periodo, MessageID, eventos, rebotes, quejas, aperturas, clics y fechas.
@@ -127,7 +129,7 @@ Restricciones e índices:
 Tablas propuestas:
 
 - `public.tenant_email_plans`: límite, periodo, fecha de vigencia, estado y flags de envío.
-- `public.tenant_email_usage`: una fila por tenant y periodo con contadores reservados, aceptados, entregados, fallidos y rebotados.
+- `public.tenant_email_usage_periods`: una fila por tenant y periodo con contadores reservados, aceptados, entregados, fallidos y rebotados.
 - `public.tenant_email_usage_events`: ledger inmutable de reserva, liberación, aceptación y ajuste.
 
 Los contadores de cuota no deben depender de una suma eventual de webhooks. La reserva debe ser atómica para evitar que dos workers superen el límite.

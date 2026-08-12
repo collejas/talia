@@ -4,6 +4,15 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 ## [No publicado]
 
+### Base de datos
+
+- Se creó la migración nueva `supabase/migrations/20260812_130000_email_service_core.sql`.
+- Se agregaron tablas propias para migración por tenant, dominios, planes, cuotas, plantillas, mensajes, intentos, eventos, webhooks y supresiones.
+- Se agregaron columnas explícitas, constraints, índices, RLS y claves compuestas para impedir referencias cross-tenant.
+- Se agregó el ledger `tenant_email_usage_events` para auditar reservas, liberaciones y consumo de cuota sin depender únicamente de contadores agregados.
+- Se inicializó únicamente el tenant maestro `00000000-0000-0000-0000-000000000001` en estado `pending` y con la funcionalidad desactivada.
+- No se modificaron tablas ni migraciones de Brevo o de prospección existentes.
+
 ### Documentación
 
 - Se creó el plan general de migración completa de Brevo a un servicio central de correo.
@@ -31,7 +40,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - Confirmar la cuenta y el plan comercial de Postmark.
 - Confirmar aprobación de Bulk API para la cuenta.
-- Diseñar y revisar las migraciones nuevas de base de datos.
+- Aplicar y verificar la migración nueva en la base de datos real.
 - Implementar las carpetas y módulos propios de la integración.
 - Definir los contratos API neutrales visibles para el panel.
 - Implementar el piloto en el tenant maestro.
