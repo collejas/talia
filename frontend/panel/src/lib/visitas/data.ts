@@ -610,9 +610,13 @@ type ConversionMapTablesCacheEntry = {
   value: ConversionMapTablesResult;
 };
 
-const CONVERSION_MAP_TABLES_CACHE_TTL_MS = 45_000;
+const CONVERSION_MAP_TABLES_CACHE_TTL_MS = 120_000;
 const CONVERSION_MAP_TABLES_CACHE_MAX_ENTRIES = 64;
 const _CONVERSION_MAP_TABLES_CACHE = new Map<string, ConversionMapTablesCacheEntry>();
+const _CONVERSION_MAP_TABLES_INFLIGHT = new Map<
+  string,
+  Promise<ConversionMapTablesResult>
+>();
 
 function buildConversionMapTablesCacheKey(
   filters: VisitsFilters,
@@ -659,19 +663,28 @@ export async function loadConversionMapTablesForConversionMap(
     return cloneConversionMapTablesResult(cached.value)
   }
 
-  const templatesPromise = hasAttributionFilters(filters)
-    ? callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", {
-        withUserToken: true,
-      })
-    : Promise.resolve(null);
-  const webchatPromise = loadWebchatVisitRows(filters);
-  const whatsappPromise =
-    section === "visits"
-      ? null
-      : loadWhatsappConversationRows(filters);
+  const inflight = _CONVERSION_MAP_TABLES_INFLIGHT.get(cacheKey);
+  if (inflight) {
+    return cloneConversionMapTablesResult(await inflight);
+  }
 
-  const [templatesResult, webchat] = await Promise.all([templatesPromise, webchatPromise]);
-  const whatsappResult = whatsappPromise ? await whatsappPromise : null;
+  const work = (async (): Promise<ConversionMapTablesResult> => {
+    const templatesPromise = hasAttributionFilters(filters)
+      ? callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", {
+          withUserToken: true,
+        })
+      : Promise.resolve(null);
+    const webchatPromise = loadWebchatVisitRows(filters);
+    const whatsappPromise =
+      section === "visits"
+        ? Promise.resolve(null)
+        : loadWhatsappConversationRows(filters);
+
+    const [templatesResult, webchat, whatsappResult] = await Promise.all([
+      templatesPromise,
+      webchatPromise,
+      whatsappPromise,
+    ]);
 
   const errors: string[] = [];
   if (templatesResult && !templatesResult.ok) errors.push(templatesResult.error);
@@ -708,17 +721,27 @@ export async function loadConversionMapTablesForConversionMap(
     conversationsTable: finalConversationsTable,
     errors: Array.from(new Set(errors)),
   };
-  _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
-    expiresAt: now + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
-    value: cloneConversionMapTablesResult(payload),
-  });
-  if (_CONVERSION_MAP_TABLES_CACHE.size > CONVERSION_MAP_TABLES_CACHE_MAX_ENTRIES) {
-    const oldestKey = _CONVERSION_MAP_TABLES_CACHE.keys().next().value as string | undefined;
-    if (oldestKey) {
-      _CONVERSION_MAP_TABLES_CACHE.delete(oldestKey);
+    _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
+      expiresAt: Date.now() + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
+      value: cloneConversionMapTablesResult(payload),
+    });
+    if (_CONVERSION_MAP_TABLES_CACHE.size > CONVERSION_MAP_TABLES_CACHE_MAX_ENTRIES) {
+      const oldestKey = _CONVERSION_MAP_TABLES_CACHE.keys().next().value as string | undefined;
+      if (oldestKey) {
+        _CONVERSION_MAP_TABLES_CACHE.delete(oldestKey);
+      }
+    }
+    return payload;
+  })();
+
+  _CONVERSION_MAP_TABLES_INFLIGHT.set(cacheKey, work);
+  try {
+    return cloneConversionMapTablesResult(await work);
+  } finally {
+    if (_CONVERSION_MAP_TABLES_INFLIGHT.get(cacheKey) === work) {
+      _CONVERSION_MAP_TABLES_INFLIGHT.delete(cacheKey);
     }
   }
-  return payload;
 }
 
 export async function loadVisitsData(filters: VisitsFilters = {}): Promise<VisitsPayload> {

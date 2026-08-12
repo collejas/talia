@@ -249,6 +249,21 @@ Validación:
 
 El usuario realizará el deploy de backend y panel. Después del deploy se debe medir primero `resumen-v2` en las tres pestañas no relacionadas con campañas antes de continuar con la reescritura de la RPC.
 
+### Acciones #2, #3 y #4 (2026-08-12)
+
+- **#2 RPC:** aplicada la reescritura tenant-scoped de `prospeccion_campana_template_atribucion_rango`; la medición directa bajó a **2.21 s** y dejó de duplicar el escaneo de logs.
+- **#3 GeoJSON:** añadido coalescing de cargas concurrentes y TTL de 1 hora para catálogos geográficos estáticos.
+- **#4 tablas:** añadido cache in-flight y TTL de 2 minutos por alcance seguro; web sessions y conversaciones WhatsApp se solicitan concurrentemente.
+
+Validación local del 2026-08-12:
+
+- `py_compile`: correcto.
+- `npx tsc --noEmit`: correcto.
+- React Doctor: **100/100**.
+- `git diff --check`: correcto.
+
+Pendiente operativo: desplegar backend/panel y medir `crm.mapa_conversion.tables.request`, `crm.demografia.mapa_v2` y la pestaña `Campañas` con recarga fría y caliente. No se realizó deploy desde esta sesión.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

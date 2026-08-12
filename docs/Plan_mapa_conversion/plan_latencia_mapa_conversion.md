@@ -388,3 +388,11 @@ Durante el diagnóstico inicial no se aplicó ninguna migración ni cambio de da
 - La medición posterior no mostró una mejora suficiente en la RPC aislada: siguió sin utilizar el índice nuevo y registró aproximadamente **7.16 s** en una ejecución.
 
 Conclusión: la separación del camino crítico queda implementada; la reescritura de la RPC sigue pendiente y es necesaria para mejorar la pestaña `Campañas` y eliminar el escaneo amplio de logs.
+
+### Acciones #2, #3 y #4 ejecutadas (2026-08-12)
+
+1. **RPC de campañas:** se aplicó `20260812_120000_prospeccion_campana_template_atribucion_fast.sql`. La función ahora deriva primero los envíos del tenant/rango, materializa una sola relación `scoped_logs` y reutiliza esa relación para respuestas y Brevo. `EXPLAIN (ANALYZE, BUFFERS)` pasó a aproximadamente **2.21 s**, con uso confirmado de `prospeccion_contactos_log_org_envio_idx`.
+2. **GeoJSON:** se agregó coalescing de cargas concurrentes y el TTL del catálogo estático pasó de 15 minutos a 1 hora. Esto evita que requests simultáneos hagan la misma lectura de Supabase; el fallback local se conserva.
+3. **Tablas:** el loader de visitas/conversaciones ahora comparte promesas in-flight por tenant/usuario/filtros/sección y conserva el resultado 2 minutos. Las lecturas de web sessions y WhatsApp se lanzan en paralelo.
+
+Estado: cambios locales listos para deploy; la migración SQL ya está aplicada en Supabase. Falta que el usuario despliegue backend y panel y vuelva a medir la pestaña `Campañas` en una recarga fría.

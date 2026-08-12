@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import unicodedata
 from time import monotonic
 from dataclasses import dataclass
@@ -16,10 +17,29 @@ from app.core.logging import get_logger
 from app.data import data_path
 
 logger = get_logger(__name__)
-_GEO_DB_CACHE_TTL_SECONDS = 900.0
+_GEO_DB_CACHE_TTL_SECONDS = 3600.0
 _GEO_COUNTRIES_CACHE: tuple[float, dict[str, Any]] | None = None
 _GEO_STATES_CACHE: tuple[float, dict[str, Any]] | None = None
 _GEO_MUNICIPALITIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_GEO_INFLIGHT: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
+
+async def _coalesce_geo_load(
+    key: str,
+    loader: Any,
+) -> dict[str, Any]:
+    """Comparte una carga fría entre requests concurrentes del mismo catálogo."""
+    loop = asyncio.get_running_loop()
+    current = _GEO_INFLIGHT.get(key)
+    if current is not None and not current.done() and current.get_loop() is loop:
+        return await current
+    task = loop.create_task(loader())
+    _GEO_INFLIGHT[key] = task
+    try:
+        return await task
+    finally:
+        if _GEO_INFLIGHT.get(key) is task:
+            _GEO_INFLIGHT.pop(key, None)
 
 try:  # pragma: no cover - dependemos del entorno de ejecución
     import phonenumbers
@@ -396,23 +416,28 @@ async def load_world_countries_geojson_db_first() -> dict[str, Any]:
     cached = _cache_get(_GEO_COUNTRIES_CACHE)
     if cached is not None:
         return cached
-    try:
-        payload = await _fetch_geojson_collection(
-            table="geo_paises",
-            select="codigo_iso2,codigo_iso3,nombre,nombre_largo,geom",
-            filters={"activo": "eq.true", "geom": "not.is.null"},
-            order="nombre.asc",
-            limit=400,
-        )
-        payload = _normalize_countries_feature_collection(payload)
-        if isinstance(payload.get("features"), list) and payload["features"]:
-            _GEO_COUNTRIES_CACHE = _cache_set(payload)
-            return payload
-    except Exception as exc:
-        logger.warning("leads_geo.countries_db_fallback_file", extra={"error": str(exc)})
-    fallback = load_world_countries_geojson()
-    _GEO_COUNTRIES_CACHE = _cache_set(fallback)
-    return fallback
+
+    async def _load() -> dict[str, Any]:
+        global _GEO_COUNTRIES_CACHE
+        try:
+            payload = await _fetch_geojson_collection(
+                table="geo_paises",
+                select="codigo_iso2,codigo_iso3,nombre,nombre_largo,geom",
+                filters={"activo": "eq.true", "geom": "not.is.null"},
+                order="nombre.asc",
+                limit=400,
+            )
+            payload = _normalize_countries_feature_collection(payload)
+            if isinstance(payload.get("features"), list) and payload["features"]:
+                _GEO_COUNTRIES_CACHE = _cache_set(payload)
+                return payload
+        except Exception as exc:
+            logger.warning("leads_geo.countries_db_fallback_file", extra={"error": str(exc)})
+        fallback = load_world_countries_geojson()
+        _GEO_COUNTRIES_CACHE = _cache_set(fallback)
+        return fallback
+
+    return await _coalesce_geo_load("countries", _load)
 
 
 async def load_full_states_geojson_db_first() -> dict[str, Any]:
@@ -420,23 +445,28 @@ async def load_full_states_geojson_db_first() -> dict[str, Any]:
     cached = _cache_get(_GEO_STATES_CACHE)
     if cached is not None:
         return cached
-    try:
-        payload = await _fetch_geojson_collection(
-            table="geo_estados_mexico",
-            select="clave_entidad,nombre,pais_codigo,geom",
-            filters={"activo": "eq.true", "pais_codigo": "eq.MX", "geom": "not.is.null"},
-            order="clave_entidad.asc",
-            limit=64,
-        )
-        payload = _normalize_states_feature_collection(payload)
-        if isinstance(payload.get("features"), list) and payload["features"]:
-            _GEO_STATES_CACHE = _cache_set(payload)
-            return payload
-    except Exception as exc:
-        logger.warning("leads_geo.states_db_fallback_file", extra={"error": str(exc)})
-    fallback = load_full_states_geojson()
-    _GEO_STATES_CACHE = _cache_set(fallback)
-    return fallback
+
+    async def _load() -> dict[str, Any]:
+        global _GEO_STATES_CACHE
+        try:
+            payload = await _fetch_geojson_collection(
+                table="geo_estados_mexico",
+                select="clave_entidad,nombre,pais_codigo,geom",
+                filters={"activo": "eq.true", "pais_codigo": "eq.MX", "geom": "not.is.null"},
+                order="clave_entidad.asc",
+                limit=64,
+            )
+            payload = _normalize_states_feature_collection(payload)
+            if isinstance(payload.get("features"), list) and payload["features"]:
+                _GEO_STATES_CACHE = _cache_set(payload)
+                return payload
+        except Exception as exc:
+            logger.warning("leads_geo.states_db_fallback_file", extra={"error": str(exc)})
+        fallback = load_full_states_geojson()
+        _GEO_STATES_CACHE = _cache_set(fallback)
+        return fallback
+
+    return await _coalesce_geo_load("states", _load)
 
 
 async def load_states_geojson_db_first() -> dict[str, Any]:
@@ -448,33 +478,37 @@ async def load_state_municipalities_geojson_db_first(cve_ent: str) -> dict[str, 
     cached = _cache_get(_GEO_MUNICIPALITIES_CACHE.get(state_code))
     if cached is not None:
         return cached
-    try:
-        payload = await _fetch_geojson_collection(
-            table="geo_municipios_mexico",
-            select="clave_entidad,clave_municipio,cvegeo,nombre,geom",
-            filters={
-                "activo": "eq.true",
-                "clave_entidad": f"eq.{state_code}",
-                "geom": "not.is.null",
-            },
-            order="clave_municipio.asc",
-            limit=3000,
-        )
-        payload = _normalize_municipalities_feature_collection(payload)
-        if isinstance(payload.get("features"), list) and payload["features"]:
-            _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(payload)
-            return payload
-        raise KeyError(state_code)
-    except KeyError:
-        raise
-    except Exception as exc:
-        logger.warning(
-            "leads_geo.municipalities_db_fallback_file",
-            extra={"state_code": state_code, "error": str(exc)},
-        )
-    fallback = load_state_municipalities_geojson(state_code)
-    _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(fallback)
-    return fallback
+
+    async def _load() -> dict[str, Any]:
+        try:
+            payload = await _fetch_geojson_collection(
+                table="geo_municipios_mexico",
+                select="clave_entidad,clave_municipio,cvegeo,nombre,geom",
+                filters={
+                    "activo": "eq.true",
+                    "clave_entidad": f"eq.{state_code}",
+                    "geom": "not.is.null",
+                },
+                order="clave_municipio.asc",
+                limit=3000,
+            )
+            payload = _normalize_municipalities_feature_collection(payload)
+            if isinstance(payload.get("features"), list) and payload["features"]:
+                _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(payload)
+                return payload
+            raise KeyError(state_code)
+        except KeyError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "leads_geo.municipalities_db_fallback_file",
+                extra={"state_code": state_code, "error": str(exc)},
+            )
+        fallback = load_state_municipalities_geojson(state_code)
+        _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(fallback)
+        return fallback
+
+    return await _coalesce_geo_load(f"municipalities:{state_code}", _load)
 
 
 def state_display_name(cve_ent: str) -> str | None:
