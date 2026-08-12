@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _TRAILING_CONNECTORS = {
@@ -25,6 +26,7 @@ _KNOWN_FAILURE_PHRASES = {
     "tuve un problema al procesar",
     "ocurrio un problema al procesar",
 }
+_NUMBERED_LIST_CLOSER = re.compile(r"(?<!\w)\d+\)(?=\s|$)")
 
 
 def _normalize_text(value: Any) -> str:
@@ -32,6 +34,12 @@ def _normalize_text(value: Any) -> str:
         return ""
     text = str(value).strip()
     return text
+
+
+def _parenthesis_balance_text(value: str) -> str:
+    """Remove list markers such as ``1)`` before checking parentheses."""
+
+    return _NUMBERED_LIST_CLOSER.sub("", value)
 
 
 def evaluate_reply_quality(text: Any) -> tuple[bool, str]:
@@ -58,8 +66,8 @@ def evaluate_reply_quality(text: Any) -> tuple[bool, str]:
         return False, "unbalanced_code_fence"
     if value.count('"') % 2 != 0 and value.count('"') >= 3:
         return False, "unbalanced_quote"
-    if value.count("(") != value.count(")"):
+    parenthesis_text = _parenthesis_balance_text(value)
+    if parenthesis_text.count("(") != parenthesis_text.count(")"):
         return False, "unbalanced_parentheses"
 
     return True, "ok"
-
