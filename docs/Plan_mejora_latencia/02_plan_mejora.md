@@ -290,6 +290,14 @@ Se paralelizó el enriquecimiento del endpoint `GET /crm/visitas/web-sessions`: 
 
 Validación de esta iteración: `py_compile`, `npx tsc --noEmit` y `git diff --check` correctos. React Doctor de esta ejecución fue cancelado durante un escaneo completo; la última ejecución exitosa del panel había reportado 100/100.
 
+### Ajuste de paginación del Tráfico web (2026-08-12)
+
+La carga de `web-sessions` tenía una espera serial: primero pedía offset 0 y después abría una ventana de páginas concurrentes. Para tablas mayores de 1,000 filas, esa primera espera elevaba el tiempo de primera pintura.
+
+El loader ahora pide offsets 0, 1,000, 2,000 y 3,000 en paralelo desde el inicio; si todas las páginas están llenas, continúa con la siguiente ventana para no perder filas. El cambio está limitado al panel y mantiene el contrato de datos.
+
+Validación: `npx tsc --noEmit`, React Doctor con alcance de cambios **100/100** y `git diff --check` correctos. Pendiente deploy y medición real.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

@@ -422,6 +422,14 @@ Estado: diagnóstico confirmado después del deploy; no se aplicó código adici
 
 Estado: listo para deploy. La validación de producción queda pendiente después de publicar backend y panel.
 
+### Ajuste adicional de carga de Tráfico web (2026-08-12)
+
+La medición de producción mostró que el loader del panel esperaba la primera página de `web-sessions` antes de solicitar las siguientes. Para un tenant con 2,186 sesiones, esto agregaba una ida completa al backend antes de terminar la tabla.
+
+Se ajustó `frontend/panel/src/lib/visitas/data.ts` para solicitar en paralelo las primeras cuatro ventanas de 1,000 filas y continuar con otra ventana únicamente si todas vienen completas. Se conserva la recuperación completa; no se reduce ni trunca la tabla.
+
+Estado: listo para deploy y medición en recarga fría. Comparar `crm.mapa_conversion.tables.request` para `section=visits` antes y después.
+
 ### Optimización de tablas web (2026-08-12)
 
 En `visitas/web-sessions`, el enriquecimiento posterior a la página base hacía en serie las lecturas de envíos, contactos y plantillas. Se cambiaron a lecturas concurrentes; la resolución de prospectos conserva su dependencia de los envíos y se ejecuta después.

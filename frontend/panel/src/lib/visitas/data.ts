@@ -530,26 +530,14 @@ async function loadWebchatVisitRows(
       searchParams: { ...buildVisitsSearchParams(filters), offset },
     },
   );
-  const firstResult = await fetchPage(0);
-  if (!firstResult.ok) {
-    return {
-      rows: [],
-      shape: "none",
-      detailOk: false,
-      detailRows: 0,
-      errors: [firstResult.error],
-    };
-  }
-  const firstPage = unwrapWebSessionsPayload(firstResult.data);
-  shape = firstPage.shape;
-  rawRows.push(...firstPage.rows);
-
-  let nextOffset = pageSize;
-  let hasFullPage = firstPage.rows.length >= pageSize;
+  // PostgREST caps each response at 1,000 rows. Fetch the first window in
+  // parallel so a 2–3 page tenant does not pay an extra serial round-trip.
+  // If all pages are full, continue with another window to preserve the
+  // complete result for larger tenants.
+  let nextOffset = 0;
+  let hasFullPage = true;
   while (hasFullPage) {
-    // PostgREST caps each response at 1,000 rows. Fetch a small window in
-    // parallel so a 2–3 page tenant does not pay the full serial round-trip.
-    const offsets = [nextOffset, nextOffset + pageSize, nextOffset + pageSize * 2];
+    const offsets = [0, 1, 2, 3].map((pageIndex) => nextOffset + pageIndex * pageSize);
     const results = await Promise.all(offsets.map(fetchPage));
     for (let index = 0; index < results.length; index += 1) {
       const result = results[index];
@@ -563,13 +551,14 @@ async function loadWebchatVisitRows(
         };
       }
       const page = unwrapWebSessionsPayload(result.data);
+      if (nextOffset === 0 && index === 0) shape = page.shape;
       rawRows.push(...page.rows);
       if (page.rows.length < pageSize) {
         hasFullPage = false;
         break;
       }
     }
-    nextOffset += pageSize * results.length;
+    nextOffset += pageSize * offsets.length;
   }
   const normalized = normalizeWebSessionRows(rawRows);
   return {
