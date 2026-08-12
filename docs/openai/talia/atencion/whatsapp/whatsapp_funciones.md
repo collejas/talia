@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead al final de la calificación. Se usa cuando ya tenemos nombre, correo, teléfono y empresa confirmados. También incluye el resumen de la necesidad para el equipo comercial.",
+  "description": "Cerrar y consolidar el lead cuando la política de cierre del tenant/canal indique que están disponibles todos sus campos obligatorios. La función siempre recibe el resumen de notas y la necesidad/interés; correo y empresa solo son requisitos si la política activa los exige.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -175,25 +175,29 @@
       },
       "full_name": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
-        "description": "Nombre de la persona a quien va dirigido el correo. Opcional si ya se registró."
+        "description": "Nombre de la persona a quien va dirigido el correo. Usa null si no se conoce; el backend puede recuperarlo del contacto."
       },
       "company_name": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
-        "description": "Nombre de la empresa o marca del prospecto para personalizar el asunto."
+        "description": "Nombre de la empresa o marca para personalizar el asunto. Usa null si no se conoce; el backend puede recuperarlo del contacto."
       },
       "summary": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
-        "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
+        "description": "Resumen breve sobre la necesidad u objetivo del lead. Usa null si no se conoce; el backend puede usar el contexto guardado."
       },
       "highlights": {
         "type": [
-          "array"
+          "array",
+          "null"
         ],
         "description": "Lista de beneficios concretos que quieres remarcar en el correo.",
         "items": {
@@ -202,7 +206,8 @@
       },
       "resources": {
         "type": [
-          "array"
+          "array",
+          "null"
         ],
         "description": "Enlaces adicionales que quieras compartir (ej. video, ficha técnica).",
         "items": {
