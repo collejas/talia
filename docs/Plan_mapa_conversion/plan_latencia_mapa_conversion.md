@@ -421,3 +421,9 @@ Estado: diagnóstico confirmado después del deploy; no se aplicó código adici
 - La lectura de sesiones web para tablas ahora obtiene ventanas de páginas en paralelo, conservando el límite de 1,000 filas por respuesta.
 
 Estado: listo para deploy. La validación de producción queda pendiente después de publicar backend y panel.
+
+### Optimización de tablas web (2026-08-12)
+
+En `visitas/web-sessions`, el enriquecimiento posterior a la página base hacía en serie las lecturas de envíos, contactos y plantillas. Se cambiaron a lecturas concurrentes; la resolución de prospectos conserva su dependencia de los envíos y se ejecuta después.
+
+El loader del panel también mantiene ventanas concurrentes de páginas de 1,000 sesiones. Resultado esperado: menor tiempo acumulado para `traffic` y menor presión sobre el pool de Supabase.

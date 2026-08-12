@@ -284,6 +284,12 @@ Decisión siguiente: retirar `incluir_atribucion_campanas=true` del camino de `r
 
 Validación local: `py_compile`, `npx tsc --noEmit`, React Doctor **100/100** y `git diff --check` correctos. Falta deploy y medición real.
 
+### Optimización adicional de tablas (2026-08-12)
+
+Se paralelizó el enriquecimiento del endpoint `GET /crm/visitas/web-sessions`: envíos, contactos y plantillas ya no esperan uno a otro. Prospectos continúa después de obtener los envíos porque sus IDs pueden venir de esa relación.
+
+Validación de esta iteración: `py_compile`, `npx tsc --noEmit` y `git diff --check` correctos. React Doctor de esta ejecución fue cancelado durante un escaneo completo; la última ejecución exitosa del panel había reportado 100/100.
+
 ## Fase 3 (hardening y escalamiento: 1-2 semanas)
 
 ### 1. `mapa-v2` preventivo

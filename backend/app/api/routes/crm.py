@@ -37248,26 +37248,50 @@ async def get_visits_web_sessions(
 
         envios_map: dict[str, dict[str, Any]] = {}
         prospectos_map: dict[str, dict[str, Any]] = {}
-        if envio_ids:
-            envios = await repo.list_contact_envios_by_ids(
+        async def load_envios() -> list[dict[str, Any]]:
+            if not envio_ids:
+                return []
+            return await repo.list_contact_envios_by_ids(
                 organizacion_id=organizacion_id,
                 envio_ids=envio_ids,
             )
-            envios_map = {
-                str(item.get("id")): item
-                for item in envios
-                if isinstance(item, dict) and item.get("id")
-            }
-            for item in envios:
-                if not isinstance(item, dict):
-                    continue
-                prospecto_id_raw = str(item.get("prospecto_id") or "").strip()
-                if not prospecto_id_raw or prospecto_id_raw in seen_prospectos:
-                    continue
-                parsed_prospecto = _safe_uuid(prospecto_id_raw)
-                if parsed_prospecto:
-                    seen_prospectos.add(prospecto_id_raw)
-                    prospecto_ids.append(parsed_prospecto)
+
+        async def load_contacts() -> list[dict[str, Any]]:
+            if not contact_ids:
+                return []
+            return await repo.get_contacts_by_ids(
+                organizacion_id=organizacion_id,
+                contacto_ids=contact_ids,
+            )
+
+        async def load_templates() -> list[dict[str, Any]]:
+            if not template_ids:
+                return []
+            return await repo.list_contact_templates_by_ids(
+                organizacion_id=organizacion_id,
+                template_ids=template_ids,
+            )
+
+        envios, contacts, templates = await asyncio.gather(
+            load_envios(),
+            load_contacts(),
+            load_templates(),
+        )
+        envios_map = {
+            str(item.get("id")): item
+            for item in envios
+            if isinstance(item, dict) and item.get("id")
+        }
+        for item in envios:
+            if not isinstance(item, dict):
+                continue
+            prospecto_id_raw = str(item.get("prospecto_id") or "").strip()
+            if not prospecto_id_raw or prospecto_id_raw in seen_prospectos:
+                continue
+            parsed_prospecto = _safe_uuid(prospecto_id_raw)
+            if parsed_prospecto:
+                seen_prospectos.add(prospecto_id_raw)
+                prospecto_ids.append(parsed_prospecto)
 
         if prospecto_ids:
             prospectos = await repo.list_prospectos_by_ids(
@@ -37304,29 +37328,16 @@ async def get_visits_web_sessions(
                         snapshot.setdefault("id", prospecto_id)
                         prospectos_map[prospecto_id] = snapshot
 
-        contacts_map: dict[str, dict[str, Any]] = {}
-        if contact_ids:
-            contacts = await repo.get_contacts_by_ids(
-                organizacion_id=organizacion_id,
-                contacto_ids=contact_ids,
-            )
-            contacts_map = {
-                str(item.get("id")): item
-                for item in contacts
-                if isinstance(item, dict) and item.get("id")
-            }
-
-        templates_map: dict[str, dict[str, Any]] = {}
-        if template_ids:
-            templates = await repo.list_contact_templates_by_ids(
-                organizacion_id=organizacion_id,
-                template_ids=template_ids,
-            )
-            templates_map = {
-                str(item.get("id")): item
-                for item in templates
-                if isinstance(item, dict) and item.get("id")
-            }
+        contacts_map = {
+            str(item.get("id")): item
+            for item in contacts
+            if isinstance(item, dict) and item.get("id")
+        }
+        templates_map = {
+            str(item.get("id")): item
+            for item in templates
+            if isinstance(item, dict) and item.get("id")
+        }
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
