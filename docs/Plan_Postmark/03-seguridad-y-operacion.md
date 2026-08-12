@@ -4,6 +4,12 @@
 
 Aprobado con pendientes de implementación. Este documento define controles; todavía no certifica el sistema migrado.
 
+## Ocultamiento del proveedor
+
+El proveedor central de correo es un detalle interno de infraestructura y no debe revelarse a tenants. Revisar que no aparezca en pantallas de configuración, formularios, URLs o endpoints consumidos por el panel, respuestas JSON, errores, logs enviados al cliente, variables públicas de Next.js ni documentación tenant-facing.
+
+La ocultación no sustituye autorización: los permisos, ownership y validaciones deben seguir existiendo en backend. El nombre técnico puede conservarse en código y observabilidad interna restringida para diagnóstico operativo.
+
 ## Secretos
 
 - Guardar tokens Postmark únicamente en secretos del backend/deploy.
@@ -84,4 +90,4 @@ No permitido:
 8. ¿Los tokens están fuera del frontend y de los logs?
 9. ¿El batch revisa errores individuales?
 10. ¿El inbound evita crear conversaciones en otro tenant?
-
+11. ¿Una búsqueda en el bundle, respuestas API y vistas tenant-facing confirma que no se revela el proveedor?

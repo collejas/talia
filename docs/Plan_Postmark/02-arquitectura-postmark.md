@@ -12,6 +12,12 @@ El modelo Postmark debe guardar en columnas todos los datos que participen en co
 
 `metadata/jsonb` no será el modelo principal. Solo se permitirá para conservar datos crudos del proveedor o extensiones variables que no tengan uso frecuente. Antes de agregar un campo JSON se debe justificar por qué no corresponde una columna explícita.
 
+## Abstracción visible para tenants
+
+La arquitectura debe separar el nombre interno del proveedor de la interfaz del producto. El backend puede tener módulos y secretos específicos del proveedor, pero los contratos consumidos por el panel deben ser neutrales. El tenant verá únicamente configuración de correo, dominio de envío, remitente, cuota y estados de entrega.
+
+No exponer el nombre del proveedor en rutas tenant-facing, nombres de propiedades JSON, errores, textos del panel, variables públicas ni documentación de ayuda para tenants.
+
 ## Cuenta y servidores
 
 Usar una cuenta central de GEOACTIV y separar el tráfico por servidores/streams según el volumen y el aislamiento requerido.

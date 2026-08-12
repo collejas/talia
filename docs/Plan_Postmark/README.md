@@ -36,6 +36,7 @@ Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modi
 - Migrar los demás tenants uno por uno y retirar Brevo solo después de completar la verificación de paridad y el corte.
 - Modelar la información Postmark en columnas explícitas, con foreign keys, constraints e índices adecuados.
 - Evitar `metadata`, `json`, `jsonb`, `payload`, `config` y estructuras similares para datos de negocio; usarlos solo para información cruda, opcional y no consultada frecuentemente.
+- No mostrar el nombre del proveedor en vistas, configuraciones, respuestas API, errores ni textos visibles para tenants.
 - No eliminar tablas históricas de Brevo hasta demostrar que ningún reporte, auditoría, función SQL, job o migración activa depende de ellas y conservar un respaldo.
 
 ## Decisión de implementación aprobada
@@ -51,6 +52,12 @@ Durante la migración solo puede existir una diferencia operativa: los tenants t
 Toda información que se consulte, filtre, ordene, relacione, valide, audite, reporte o use en permisos y lógica de negocio debe existir como columna explícita. El diseño debe priorizar consultas rápidas, índices eficientes, integridad referencial y aislamiento por tenant.
 
 No se deben esconder datos estructurales dentro de `metadata`, `json`, `jsonb`, `payload`, `config`, `settings` o campos equivalentes. Solo se permitirán, con justificación documentada, para datos crudos del proveedor, extensiones realmente variables o información que no se consulte frecuentemente.
+
+## Regla de ocultamiento del proveedor
+
+El proveedor maestro de correo no debe ser identificable por ningún tenant. Las vistas, formularios, configuraciones, nombres de campos, respuestas JSON, mensajes de error, notificaciones, documentación de ayuda y bundles del panel deben usar terminología neutral: “Correo”, “Servicio de correo”, “Dominio de envío”, “Remitente”, “Cuota” y “Estado de entrega”.
+
+El nombre técnico del proveedor solo puede existir en código backend, secretos, tareas internas de plataforma y logs técnicos restringidos. No debe enviarse al navegador ni aparecer en endpoints, payloads o errores tenant-facing.
 
 ## Fuentes oficiales revisadas
 

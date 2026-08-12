@@ -31,6 +31,21 @@ La secuencia operativa será:
 
 Las tablas históricas de Brevo no se eliminarán como parte automática del primer despliegue. Antes habrá que verificar dependencias en SQL, reportes, auditoría, jobs y datos históricos, generar respaldo y aprobar su eliminación.
 
+## Fase 0.1: aislamiento de proveedor en producto
+
+El proveedor maestro de correo no se mostrará a los tenants. La experiencia tenant-facing debe usar exclusivamente nombres neutrales:
+
+- “Correo”;
+- “Servicio de correo”;
+- “Dominio de envío”;
+- “Remitente”;
+- “Cuota de correo”;
+- “Estado de entrega”.
+
+No se debe incluir el nombre técnico del proveedor en vistas, formularios, configuraciones del tenant, respuestas API, contratos TypeScript visibles al panel, mensajes de error, notificaciones, documentación de ayuda, HTML, JavaScript ni variables públicas del frontend.
+
+El proveedor podrá aparecer únicamente en módulos backend, secretos, configuración interna de plataforma, tareas administrativas internas y logs técnicos restringidos. Los endpoints tenant-facing deben devolver códigos neutrales como `email_provider_unavailable`, `sending_domain_unverified` o `email_quota_exceeded`, nunca el nombre del proveedor.
+
 ## Fase 0: decisiones y preflight
 
 1. Confirmar cuenta Postmark, plan Platform y aprobación de Bulk API.
@@ -274,4 +289,5 @@ Validar que un mensaje a múltiples destinatarios se contabilice por destinatari
 - Los webhooks son idempotentes y no permiten cross-tenant updates.
 - Las métricas del piloto coinciden con eventos de Postmark y registros locales.
 - El inbound crea/relaciona la conversación correcta.
+- Las vistas, configuraciones, respuestas y errores tenant-facing no revelan el proveedor maestro.
 - `rg -n -i "brevo|api.brevo.com" backend frontend/panel supabase` solo devuelve historial/documentación explícitamente archivada.
