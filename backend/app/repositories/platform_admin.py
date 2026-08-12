@@ -869,6 +869,35 @@ class PlatformRepository:
         config = row.get("config")
         return config if isinstance(config, dict) else ({} if config is None else None)
 
+    async def get_close_lead_policy(
+        self, *, organizacion_id: UUID, canal: str
+    ) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/close_lead_policies",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": f"eq.{canal}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
+    async def upsert_close_lead_policy(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/close_lead_policies",
+            params={"on_conflict": "organizacion_id,canal"},
+            json=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("close_lead_policy_update_failed")
+        return data[0]
+
     async def set_organizacion_config(
         self, *, organizacion_id: UUID, config: dict[str, Any]
     ) -> dict[str, Any]:

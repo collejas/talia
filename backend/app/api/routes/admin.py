@@ -47,6 +47,32 @@ class AdminDebugRowsResponse(BaseModel):
     items: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class AdminCloseLeadPolicy(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    activo: bool = True
+    nombre_requerido: bool = True
+    telefono_requerido: bool = True
+    necesidad_proposito_requerido: bool = True
+    notes_requerido: bool = True
+    correo_requerido: bool = False
+    company_name_requerido: bool = False
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class AdminCloseLeadPolicyUpsert(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    activo: bool = True
+    nombre_requerido: bool = True
+    telefono_requerido: bool = True
+    necesidad_proposito_requerido: bool = True
+    notes_requerido: bool = True
+    correo_requerido: bool = False
+    company_name_requerido: bool = False
+
+
 def _resolve_matrix_path(value: str) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -3279,6 +3305,37 @@ async def set_tenant_config(
         organizacion_id=organizacion_id,
         config=config if isinstance(config, dict) else {},
     )
+
+
+@router.get("/tenants/{organizacion_id}/close-lead-policy", response_model=AdminCloseLeadPolicy)
+async def get_tenant_close_lead_policy(
+    organizacion_id: UUID,
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+    canal: Literal["whatsapp", "webchat"] = Query(...),
+) -> AdminCloseLeadPolicy:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
+    row = await repo.get_close_lead_policy(organizacion_id=organizacion_id, canal=canal)
+    if row is None:
+        raise HTTPException(status_code=404, detail="close_lead_policy_not_found")
+    return AdminCloseLeadPolicy.model_validate(row)
+
+
+@router.put("/tenants/{organizacion_id}/close-lead-policy", response_model=AdminCloseLeadPolicy)
+async def set_tenant_close_lead_policy(
+    organizacion_id: UUID,
+    payload: AdminCloseLeadPolicyUpsert,
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> AdminCloseLeadPolicy:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
+    body = payload.model_dump(mode="json")
+    body["organizacion_id"] = str(organizacion_id)
+    row = await repo.upsert_close_lead_policy(payload=body)
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=organizacion_id)
+    return AdminCloseLeadPolicy.model_validate(row)
 
 
 @router.patch("/tenants/{organizacion_id}/profiling-toggle", response_model=TenantProfilingToggleResponse)

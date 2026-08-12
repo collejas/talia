@@ -34,7 +34,6 @@ import {
   IconNotes,
   IconBrandWhatsapp,
   IconShieldCheck,
-  IconCheck,
   IconShoppingCart,
   type Icon,
 } from "@tabler/icons-react"
@@ -159,7 +158,6 @@ const NAVIGATION: {
         { title: "Formato de correos", url: "/settings/email", icon: IconMail, permission: "settings.manage" },
         { title: "Recordatorios de citas", url: "/settings/reminders", icon: IconBell, permission: "settings.manage" },
         { title: "Calificación IA", url: "/settings/scoring", icon: IconGauge, permission: "settings.manage" },
-        { title: "Cierre de oportunidades", url: "/settings/close-lead", icon: IconCheck, permission: "settings.manage" },
         {
           title: "Formato de cotización",
           url: "/settings/formato-cotizacion",

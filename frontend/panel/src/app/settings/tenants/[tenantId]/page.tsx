@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
 import { activateTenantContextAndRedirectAction } from "./actions"
+import { fetchTenantCloseLeadPolicy } from "@/app/settings/close-lead/actions"
+import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 import {
   TenantProspeccionLimitsCard,
   type TenantProspeccionLimits,
@@ -156,6 +158,10 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
         withUserToken: true,
       })
     : null
+  const closeLeadPolicies = await Promise.all([
+    fetchTenantCloseLeadPolicy(tenantId, "whatsapp"),
+    fetchTenantCloseLeadPolicy(tenantId, "webchat"),
+  ]).catch(() => null)
 
   const errors: string[] = []
   if (!configResp.ok) errors.push(configResp.error)
@@ -478,7 +484,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
         <CardContent>
           <Tabs defaultValue="webchat">
-          <TabsList className="grid grid-cols-10">
+          <TabsList className="grid grid-cols-11">
             <TabsTrigger value="webchat">Webchat</TabsTrigger>
             <TabsTrigger value="calendar">Calendario</TabsTrigger>
             <TabsTrigger value="mail">Correo</TabsTrigger>
@@ -488,6 +494,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TabsTrigger value="messenger">Messenger</TabsTrigger>
             <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
+            <TabsTrigger value="close-lead">Cierre</TabsTrigger>
             <TabsTrigger value="secrets">Secretos</TabsTrigger>
             </TabsList>
             <TabsContent value="webchat" className="pt-4">
@@ -556,6 +563,20 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 hasGeneralApiKey={hasGeneralApiKey}
                 hasVoiceApiKey={hasVoiceApiKey}
               />
+            </TabsContent>
+            <TabsContent value="close-lead" className="pt-4">
+              {closeLeadPolicies ? (
+                <CloseLeadPolicyPanel
+                  tenantId={tenantId}
+                  initialWhatsapp={closeLeadPolicies[0]}
+                  initialWebchat={closeLeadPolicies[1]}
+                />
+              ) : (
+                <SettingsErrorCallout
+                  title="No se pudo cargar el cierre"
+                  messages={["No se recibieron las políticas de cierre de este tenant."]}
+                />
+              )}
             </TabsContent>
             <TabsContent value="secrets" className="pt-4">
               <TenantSecretsManager tenantId={tenantId} secrets={secrets} />

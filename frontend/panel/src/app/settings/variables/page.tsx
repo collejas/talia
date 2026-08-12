@@ -5,6 +5,8 @@ import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
+import { fetchCloseLeadPolicy } from "@/app/settings/close-lead/actions"
+import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 
 import {
   TenantSettingsActions,
@@ -145,6 +147,10 @@ export default async function SettingsVariablesPage() {
     organizacionId: null,
     withUserToken: true,
   })
+  const closeLeadPolicies = await Promise.all([
+    fetchCloseLeadPolicy("whatsapp"),
+    fetchCloseLeadPolicy("webchat"),
+  ]).catch(() => null)
 
   const errors: string[] = []
   if (!settingsResp.ok) errors.push(settingsResp.error)
@@ -406,7 +412,7 @@ export default async function SettingsVariablesPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="webchat">
-                <TabsList className="grid grid-cols-10">
+                <TabsList className="grid grid-cols-11">
                   <TabsTrigger value="webchat">Webchat</TabsTrigger>
                   <TabsTrigger value="calendar">Agenda</TabsTrigger>
                   <TabsTrigger value="mail">Correo</TabsTrigger>
@@ -416,6 +422,7 @@ export default async function SettingsVariablesPage() {
                   <TabsTrigger value="messenger">Messenger</TabsTrigger>
                   <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
                   <TabsTrigger value="openai">OpenAI</TabsTrigger>
+                  <TabsTrigger value="close-lead">Cierre</TabsTrigger>
                   <TabsTrigger value="secrets">Secretos</TabsTrigger>
                 </TabsList>
                 <TabsContent value="webchat" className="pt-4">
@@ -488,6 +495,19 @@ export default async function SettingsVariablesPage() {
                     hasGeneralApiKey={hasGeneralApiKey}
                     hasVoiceApiKey={hasVoiceApiKey}
                   />
+                </TabsContent>
+                <TabsContent value="close-lead" className="pt-4">
+                  {closeLeadPolicies ? (
+                    <CloseLeadPolicyPanel
+                      initialWhatsapp={closeLeadPolicies[0]}
+                      initialWebchat={closeLeadPolicies[1]}
+                    />
+                  ) : (
+                    <SettingsErrorCallout
+                      title="No se pudo cargar el cierre"
+                      messages={["No se recibieron las políticas de cierre del tenant actual."]}
+                    />
+                  )}
                 </TabsContent>
                 <TabsContent value="secrets" className="pt-4">
                   <TenantSecretsManager tenantId={tenantId} secrets={secrets} />

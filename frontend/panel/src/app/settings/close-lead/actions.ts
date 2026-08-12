@@ -29,6 +29,21 @@ export async function fetchCloseLeadPolicy(canal: CloseLeadChannel): Promise<Clo
   return response.data;
 }
 
+export async function fetchTenantCloseLeadPolicy(
+  tenantId: string,
+  canal: CloseLeadChannel,
+): Promise<CloseLeadPolicy> {
+  const response = await callCrmApi<CloseLeadPolicy>(`/admin/tenants/${tenantId}/close-lead-policy`, {
+    searchParams: { canal },
+    organizacionId: null,
+    withUserToken: true,
+  });
+  if (!response.ok || !response.data) {
+    throw new Error(response.ok ? "No se pudo cargar la política de cierre." : response.error);
+  }
+  return response.data;
+}
+
 export async function saveCloseLeadPolicy(input: {
   canal: CloseLeadChannel;
   activo: boolean;
@@ -47,5 +62,30 @@ export async function saveCloseLeadPolicy(input: {
     throw new Error(response.ok ? "No se pudo guardar la política de cierre." : response.error);
   }
   revalidatePath("/settings/close-lead");
+  return response.data;
+}
+
+export async function saveTenantCloseLeadPolicy(input: {
+  tenantId: string;
+  canal: CloseLeadChannel;
+  activo: boolean;
+  nombre_requerido: boolean;
+  telefono_requerido: boolean;
+  necesidad_proposito_requerido: boolean;
+  notes_requerido: boolean;
+  correo_requerido: boolean;
+  company_name_requerido: boolean;
+}): Promise<CloseLeadPolicy> {
+  const { tenantId, ...body } = input;
+  const response = await callCrmApi<CloseLeadPolicy>(`/admin/tenants/${tenantId}/close-lead-policy`, {
+    method: "PUT",
+    organizacionId: null,
+    withUserToken: true,
+    body,
+  });
+  if (!response.ok || !response.data) {
+    throw new Error(response.ok ? "No se pudo guardar la política de cierre." : response.error);
+  }
+  revalidatePath(`/settings/tenants/${tenantId}`);
   return response.data;
 }

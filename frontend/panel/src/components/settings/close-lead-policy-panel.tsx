@@ -2,12 +2,17 @@
 
 import { useState, useTransition } from "react";
 
-import { saveCloseLeadPolicy, type CloseLeadChannel, type CloseLeadPolicy } from "@/app/settings/close-lead/actions";
+import {
+  saveCloseLeadPolicy,
+  saveTenantCloseLeadPolicy,
+  type CloseLeadChannel,
+  type CloseLeadPolicy,
+} from "@/app/settings/close-lead/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
-type Props = { initialWhatsapp: CloseLeadPolicy; initialWebchat: CloseLeadPolicy };
+type Props = { initialWhatsapp: CloseLeadPolicy; initialWebchat: CloseLeadPolicy; tenantId?: string };
 
 const FIELDS = [
   ["nombre_requerido", "Nombre"],
@@ -18,7 +23,7 @@ const FIELDS = [
   ["company_name_requerido", "Empresa"],
 ] as const;
 
-export function CloseLeadPolicyPanel({ initialWhatsapp, initialWebchat }: Props) {
+export function CloseLeadPolicyPanel({ initialWhatsapp, initialWebchat, tenantId }: Props) {
   const [policies, setPolicies] = useState<Record<CloseLeadChannel, CloseLeadPolicy>>({
     whatsapp: initialWhatsapp,
     webchat: initialWebchat,
@@ -35,7 +40,7 @@ export function CloseLeadPolicyPanel({ initialWhatsapp, initialWebchat }: Props)
     setMessage(null);
     startTransition(async () => {
       try {
-        await saveCloseLeadPolicy({
+        const payload = {
           canal: channel,
           activo: policy.activo,
           nombre_requerido: policy.nombre_requerido,
@@ -44,7 +49,12 @@ export function CloseLeadPolicyPanel({ initialWhatsapp, initialWebchat }: Props)
           notes_requerido: policy.notes_requerido,
           correo_requerido: policy.correo_requerido,
           company_name_requerido: policy.company_name_requerido,
-        });
+        };
+        if (tenantId) {
+          await saveTenantCloseLeadPolicy({ tenantId, ...payload });
+        } else {
+          await saveCloseLeadPolicy(payload);
+        }
         setMessage(`Política de ${channel} guardada.`);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "No se pudo guardar la política.");
