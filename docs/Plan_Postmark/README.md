@@ -85,3 +85,5 @@ Los nombres exactos podrán ajustarse al patrón final del repositorio, pero Pos
 - [Templates API](https://postmarkapp.com/developer/api/templates-api)
 - [Webhooks overview](https://postmarkapp.com/developer/webhooks/webhooks-overview)
 - [Inbound processing](https://postmarkapp.com/developer/user-guide/inbound)
+- [Postmark Manual](https://postmarkapp.com/manual)
+- [Postmark Developer Documentation](https://postmarkapp.com/developer)

@@ -1,5 +1,14 @@
 # Arquitectura objetivo con Postmark
 
+## Guías oficiales para crear la infraestructura
+
+La infraestructura se construirá siguiendo dos fuentes oficiales:
+
+- [Postmark Manual](https://postmarkapp.com/manual): guía de cuenta, servidores, dominios, DKIM, Return-Path, Message Streams, pruebas, tracking, webhooks, DMARC e inbound.
+- [Postmark Developer Documentation](https://postmarkapp.com/developer): referencia de API, librerías, templates, mensajes, dominios, streams, webhooks, supresiones y procesamiento inbound.
+
+La implementación de Talia usará la REST API desde backend para obtener respuestas, MessageID, códigos de error, batch sending y control explícito de reintentos. SMTP no será la base de la nueva integración porque no ofrece el mismo nivel de control para lotes, respuestas individuales, plantillas e idempotencia.
+
 ## Principio de aislamiento de la migración
 
 Postmark tendrá su propia implementación y su propio modelo de datos. Brevo no será un adaptador de compatibilidad ni una dependencia del nuevo código. La referencia a Brevo en este plan sirve para localizar lo que debe migrarse y retirarse, no para reutilizar su arquitectura.

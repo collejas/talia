@@ -17,6 +17,9 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se restringió el uso de `metadata`, `json`, `jsonb`, `payload`, `config` y `settings` a datos crudos o realmente variables que no formen parte de la lógica de negocio.
 - Se documentaron cuotas, estados, idempotencia, webhooks, inbound, dominios, plantillas, supresiones, observabilidad, rollback y eliminación final de Brevo.
 - Se agregó este archivo para registrar los siguientes avances de la implementación.
+- Se documentaron como fuentes oficiales de infraestructura el [Postmark Manual](https://postmarkapp.com/manual) y la [Postmark Developer Documentation](https://postmarkapp.com/developer).
+- Se definió que el Manual guiará la creación de cuenta, servidores, dominios, DNS, streams, pruebas, tracking, webhooks, DMARC e inbound.
+- Se definió que la Developer Documentation será la referencia para APIs, contratos, librerías, templates, dominios, mensajes, supresiones y webhooks.
 
 ### Validaciones
 
@@ -62,4 +65,3 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - ...
 ```
-

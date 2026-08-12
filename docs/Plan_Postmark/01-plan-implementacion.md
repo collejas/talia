@@ -64,6 +64,8 @@ La integración no se agregará dentro de `backend/app/services/brevo.py`, `back
 
 ## Fase 0: decisiones y preflight
 
+La creación de la infraestructura seguirá como guía operativa el [Postmark Manual](https://postmarkapp.com/manual) y como referencia técnica de APIs y contratos la [Postmark Developer Documentation](https://postmarkapp.com/developer). El manual cubre la decisión API/SMTP, servidores, dominios, DKIM, Return-Path, streams, pruebas, tracking, webhooks, templates, DMARC e inbound.
+
 1. Confirmar cuenta Postmark, plan Platform y aprobación de Bulk API.
 2. Confirmar volumen mensual, picos horarios, tipos de correo y política de consentimiento.
 3. Inventariar tenants activos, dominios remitentes, remitentes, plantillas, campañas programadas y envíos pendientes.
