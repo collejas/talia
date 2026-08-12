@@ -12,6 +12,25 @@ Al finalizar, Talia enviará y recibirá el correo operativo sin usar Brevo. No 
 - UI que requiera importar o consultar plantillas Brevo;
 - procesamiento inbound dependiente del formato de Brevo.
 
+## Decisión de implementación
+
+La implementación de Postmark será nueva e independiente. No se reutilizarán servicios, contratos, tablas, endpoints ni nombres de negocio de Brevo. El código existente se revisará únicamente para conocer los flujos que deben conservarse funcionalmente.
+
+El primer tenant habilitado será el tenant maestro dueño de la aplicación:
+
+`00000000-0000-0000-0000-000000000001`
+
+La secuencia operativa será:
+
+1. Construir tablas y servicios Postmark propios.
+2. Probar todos los flujos en el tenant maestro.
+3. Corregir y estabilizar con evidencia real.
+4. Migrar tenants individualmente, sin activar el siguiente hasta cerrar el anterior.
+5. Deshabilitar Brevo cuando todos los tenants estén confirmados en Postmark.
+6. Retirar código, endpoints, secretos, jobs y tablas exclusivas de Brevo.
+
+Las tablas históricas de Brevo no se eliminarán como parte automática del primer despliegue. Antes habrá que verificar dependencias en SQL, reportes, auditoría, jobs y datos históricos, generar respaldo y aprobar su eliminación.
+
 ## Fase 0: decisiones y preflight
 
 1. Confirmar cuenta Postmark, plan Platform y aprobación de Bulk API.
@@ -22,13 +41,21 @@ Al finalizar, Talia enviará y recibirá el correo operativo sin usar Brevo. No 
    - `broadcasts` o equivalente para prospección/campañas permitidas.
    - `inbound` para respuestas, si se adopta inbound de Postmark.
 5. Definir política de cuota: mensual, diaria o ambas; qué estados consumen cuota; qué ocurre con reservas y cancelaciones.
-6. Elegir tenant piloto y una ventana de reversión.
+6. Fijar como tenant piloto `00000000-0000-0000-0000-000000000001` y definir una ventana de reversión.
 
 Salida: decisión aprobada, credenciales provisionadas de forma segura y matriz de dependencias cerrada.
 
 ## Fase 1: modelo de datos propio
 
 Crear una migración antes de escribir el código que dependa de estas columnas.
+
+### Regla obligatoria de modelado
+
+Toda información importante de Postmark debe almacenarse en columnas explícitas. Esto incluye tenant, dominio, remitente, stream, campaña, batch, envío, destinatario, estado, cuota, periodo, MessageID, eventos, rebotes, quejas, aperturas, clics y fechas.
+
+No usar `metadata`, `json`, `jsonb`, `payload`, `config`, `settings` ni campos equivalentes para información que se consulte, filtre, ordene, relacione, valide, audite, reporte o utilice en permisos y lógica de negocio. Esa información debe tener columnas, foreign keys, constraints e índices.
+
+Los campos JSON solo podrán existir para datos crudos u opcionales del proveedor que no formen parte de la lógica principal y que no se consulten frecuentemente. Su uso debe justificarse en la migración y no puede sustituir una columna necesaria.
 
 ### Dominio remitente
 
@@ -74,7 +101,9 @@ Los contadores de cuota no deben depender de una suma eventual de webhooks. La r
 
 ### Mensajes y webhooks
 
-Agregar o extender entidades explícitas para:
+Crear tablas nuevas exclusivas de Postmark. No reutilizar ni alterar las tablas de Brevo para almacenar mensajes Postmark. Las tablas nuevas pueden referenciar entidades de negocio existentes, como organización, campaña, batch y contacto, únicamente mediante foreign keys o IDs de negocio.
+
+Las tablas nuevas deben tener columnas explícitas para:
 
 - `provider` (`postmark` después del corte).
 - `provider_message_id`.
@@ -85,11 +114,13 @@ Agregar o extender entidades explícitas para:
 - `delivered_at`, `opened_at`, `clicked_at`, `bounced_at`, `complained_at`.
 - `idempotency_key`.
 
+Agregar índices para `organizacion_id`, `provider_message_id`, `envio_id`, `campana_id`, `status`, `created_at` y las combinaciones usadas por cuota, webhooks, panel y reportes. No crear un índice sobre JSON como sustituto de una columna estructural.
+
 Crear una tabla de recepción de webhooks con unique por `(provider, event_id o message_id, event_type, event_timestamp)` según el payload disponible. Debe soportar reintentos sin duplicar efectos.
 
-## Fase 2: adaptador Postmark
+## Fase 2: implementación Postmark independiente
 
-Crear un módulo dedicado, por ejemplo `backend/app/services/postmark.py`, sin mezclar llamadas HTTP en las rutas.
+Crear módulos nuevos, por ejemplo `backend/app/services/postmark.py` y `backend/app/services/postmark_email.py`, sin modificar `brevo.py`, `brevo_quota.py`, `brevo_templates.py` ni insertar Postmark dentro del servicio Brevo actual.
 
 Responsabilidades:
 
@@ -104,11 +135,11 @@ Responsabilidades:
 
 El adaptador debe verificar el resultado de cada mensaje en respuestas batch: Postmark puede responder HTTP exitoso aunque existan errores individuales.
 
-## Fase 3: servicio de correo neutral
+## Fase 3: servicio de correo Postmark propio
 
-Refactorizar `backend/app/services/email.py` para que la interfaz de negocio no conozca Brevo.
+Crear un servicio nuevo para Postmark. Los flujos migrados se conectarán explícitamente a este servicio y no pasarán por `backend/app/services/email.py` mientras ese módulo conserve rutas de Brevo/SMTP del sistema anterior.
 
-Contrato objetivo:
+Contrato propio objetivo:
 
 ```python
 send_email_detailed(
@@ -118,11 +149,14 @@ send_email_detailed(
     to=..., 
     template=..., 
     template_model=..., 
-    metadata=..., 
+    envio_id=...,
+    campana_id=...,
+    batch_id=...,
+    reply_to=...,
 )
 ```
 
-Durante la transición puede existir un flag interno de proveedor, pero no debe permitir que nuevos flujos vuelvan a Brevo. El fallback automático debe ser explícito y temporal; nunca debe enviar accidentalmente por SMTP personal cuando el producto exige el dominio Postmark del tenant.
+No habrá flag de proveedor ni fallback dentro del nuevo servicio. Si el tenant no tiene dominio, remitente o cuota válidos, el envío Postmark se rechaza. El sistema anterior solo continuará atendiendo tenants no migrados, fuera del flujo Postmark y sin compartir sus tablas nuevas.
 
 ## Fase 4: dominios, remitentes y panel
 
@@ -144,13 +178,12 @@ Permisos recomendados:
 
 ## Fase 5: migración de plantillas
 
-1. Exportar el catálogo local y el catálogo remoto Brevo.
-2. Normalizar variables de plantilla a un contrato propio.
-3. Convertir `{{ variable }}` y bloques incompatibles al lenguaje de plantillas seleccionado.
+1. Definir las plantillas nuevas desde los requisitos de producto y los flujos actuales.
+2. Crear un contrato propio de variables y contenido.
+3. Crear plantillas Postmark con alias estables y versionados.
 4. Validar HTML, texto plano, enlaces, imágenes y unsubscribe.
-5. Crear plantillas Postmark con alias estables y versionados.
-6. Mantener snapshot local de la plantilla usada por cada envío.
-7. Eliminar el importador Brevo después de verificar paridad.
+5. Mantener snapshot en las tablas nuevas de la plantilla usada por cada envío.
+6. No crear importador ni sincronizador Brevo.
 
 No se debe depender de la plantilla remota para reconstruir históricamente un envío.
 
@@ -190,20 +223,19 @@ El endpoint debe:
 
 Postmark reintenta webhooks que no reciben 200. La deduplicación por MessageID/evento es obligatoria.
 
-Para respuestas entrantes, decidir entre:
-
-- Inbound Message Stream de Postmark con webhook JSON, recomendado para retirar IMAP/Brevo.
-- Mantener IMAP temporalmente solo durante transición, con fecha de eliminación.
+Para respuestas entrantes se implementará directamente un Inbound Message Stream de Postmark con webhook JSON. No se agregará una capa de compatibilidad con el lector IMAP/Brevo.
 
 ## Fase 8: métricas y atribución
 
-Renombrar contratos de negocio:
+Crear funciones, vistas y contratos nuevos para Postmark. No modificar las funciones históricas de métricas Brevo para hacerlas funcionar con Postmark.
+
+Los contratos nuevos usarán nombres de negocio neutrales:
 
 - `brevo_aperturas` -> `aperturas`.
 - `brevo_clicks` -> `clics`.
 - `brevo_eventos` -> `email_eventos`.
 
-Conservar `provider` y detalles crudos solo como auditoría técnica. Actualizar funciones SQL, repositorios, schemas y panel. Mantener intacta la atribución existente por `envio_id`, `campana_id`, `template_id`, UTM y sesiones.
+Conservar `provider` y detalles crudos solo como auditoría técnica en las tablas nuevas. Mantener intacta la atribución de negocio por `envio_id`, `campana_id`, `template_id`, UTM y sesiones mediante las nuevas funciones/repositorios. Las funciones Brevo se retirarán al final, no se convertirán en una base compartida.
 
 Validar que un mensaje a múltiples destinatarios se contabilice por destinatario cuando la métrica sea de emails, no como una sola petición API.
 
@@ -226,6 +258,9 @@ Validar que un mensaje a múltiples destinatarios se contabilice por destinatari
 - retirar imports y nombres Brevo de métricas;
 - eliminar UI de catálogo/importación Brevo;
 - eliminar webhook Brevo después de confirmar cero eventos pendientes;
+- buscar referencias activas a las tablas Brevo en código, funciones SQL, vistas, reportes y jobs;
+- generar respaldo verificable de las tablas históricas antes de cualquier eliminación;
+- eliminar tablas Brevo solo con evidencia de que no son necesarias para operación, auditoría, cumplimiento o análisis histórico;
 - archivar documentación y migraciones históricas, sin borrar auditoría útil.
 
 ## Criterios de aceptación
@@ -240,4 +275,3 @@ Validar que un mensaje a múltiples destinatarios se contabilice por destinatari
 - Las métricas del piloto coinciden con eventos de Postmark y registros locales.
 - El inbound crea/relaciona la conversación correcta.
 - `rg -n -i "brevo|api.brevo.com" backend frontend/panel supabase` solo devuelve historial/documentación explícitamente archivada.
-

@@ -18,7 +18,7 @@ Brevo aparece directamente en ambos grupos, mientras que algunos flujos fuerzan 
   - Soporta `smtp`, `brevo` y `auto`.
   - Devuelve `local_message_id` y `provider_message_id`.
   - Tiene lógica de adjuntos, HTML/texto, Message-ID y copia IMAP en enviados.
-  - Es el punto preferente para introducir un adaptador Postmark.
+- Se documenta como referencia del sistema anterior. La implementación Postmark no se agregará dentro de este módulo; tendrá servicios y contratos propios.
 
 - `backend/app/services/tenant_runtime.py`
   - Resuelve `MailRuntimeSettings` desde buzones de usuario/tenant.
@@ -45,11 +45,11 @@ Brevo aparece directamente en ambos grupos, mientras que algunos flujos fuerzan 
 - `backend/app/services/prospeccion_contact_sender.py`
   - Renderiza plantillas locales y construye URLs de tracking.
   - En el envío de correo de prospección fuerza `provider_preference="brevo"`.
-  - Debe cambiar a un servicio Postmark que conserve el mismo contrato local y agregue metadata/tags de tenant, campaña y envío.
+  - Debe reemplazarse por un servicio Postmark nuevo que conserve la funcionalidad de negocio, pero use sus propios contratos y tablas con columnas explícitas.
 
 - `backend/app/services/prospeccion_email_inbound_reader.py`
   - Actualmente lee buzones por IMAP y reutiliza el procesamiento inbound asociado a Brevo.
-  - Debe sustituirse por inbound webhook/stream de Postmark o mantenerse solo como compatibilidad temporal durante el corte.
+  - El inbound Postmark se implementará en un flujo nuevo. Este lector no se reutilizará ni se convertirá en una capa compartida.
 
 ### Rutas identificadas
 
@@ -63,7 +63,7 @@ Brevo aparece directamente en ambos grupos, mientras que algunos flujos fuerzan 
   - `POST /prospeccion/contacto/brevo/webhook`
   - Rutas de envíos, programación, métricas y cotizaciones que llaman a servicios de correo.
 
-Estas rutas no deben conservar nombres Brevo después del corte, salvo una ruta de compatibilidad temporal con fecha de eliminación definida.
+Estas rutas pertenecen exclusivamente al sistema anterior y no serán reutilizadas por Postmark. Se retirarán después de migrar el último tenant y verificar que no existan dependencias.
 
 ## Panel
 
@@ -79,7 +79,7 @@ Estas rutas no deben conservar nombres Brevo después del corte, salvo una ruta 
 - `frontend/panel/src/app/api/prospeccion/contacto/templates/import-brevo/route.ts`
 - `frontend/panel/src/app/api/prospeccion/contacto/brevo-quota/route.ts`
 
-Estos adapters deben migrar a contratos neutrales o a endpoints `postmark` solo si el proveedor debe ser visible. La UI de operación debe hablar de “Correo”, “Cuota” y “Dominio de envío”, no de Brevo/Postmark.
+La UI nueva tendrá endpoints y contratos propios de Postmark o neutrales, sin reutilizar estos adapters. La UI de operación debe hablar de “Correo”, “Cuota” y “Dominio de envío”, no de Brevo/Postmark.
 
 ### Cuota
 
@@ -97,6 +97,8 @@ Entidades existentes relevantes:
 - `public.prospeccion_contactos_log`
 - `public.prospeccion_contacto_templates`
 - campañas de prospección y tablas de sesiones/atribución.
+
+Estas entidades se documentan como referencias del negocio actual. No se usarán como tablas de almacenamiento de Postmark. El nuevo flujo tendrá tablas propias y solo podrá relacionarse con campañas, contactos y sesiones mediante referencias explícitas.
 
 Puntos de acoplamiento detectados:
 
@@ -124,4 +126,3 @@ La nueva configuración global mínima será:
 - IDs de streams y configuración de webhooks.
 
 La configuración de cada tenant deberá persistir como columnas explícitas: dominio, estado, dominio DKIM, Return-Path, remitente, Reply-To y fecha de verificación. No se debe esconder esta información estructural en `metadata` o `config` JSONB.
-

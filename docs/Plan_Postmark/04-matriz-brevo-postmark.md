@@ -1,12 +1,14 @@
 # Matriz de sustitución Brevo/Postmark
 
+Esta matriz describe qué comportamiento debe reemplazarse; no implica reutilizar la implementación de Brevo. Los servicios, tablas y contratos Postmark se crearán de forma independiente.
+
 | Área actual | Evidencia en Talia | Sustituto objetivo | Criterio de retiro |
 |---|---|---|---|
-| Envío común | `backend/app/services/email.py` | Adaptador Postmark detrás de contrato neutral | No existe rama Brevo/SMTP accidental para correo gestionado por GEOACTIV |
+| Envío común | `backend/app/services/email.py` | Servicio Postmark nuevo y aislado | Los flujos migrados no pasan por el módulo Brevo actual |
 | Envío de prospección | `prospeccion_contact_sender.py` | Postmark Broadcast/batch + worker | Todos los envíos guardan MessageID Postmark |
 | API Brevo | `brevo.py`, `brevo_quota.py`, `brevo_templates.py` | `postmark.py`, servicio de cuota local, servicio de dominios/plantillas | Módulos Brevo eliminados |
-| Catálogo remoto de plantillas | `/templates/brevo-catalog` | Catálogo local + Postmark Templates API opcional | UI no llama Brevo |
-| Importación de plantilla | `/templates/import-brevo` | Importador local/manual o sincronización Postmark | Ruta Brevo retirada |
+| Catálogo remoto de plantillas | `/templates/brevo-catalog` | Tablas nuevas de plantillas Postmark + Postmark Templates API opcional | UI no llama Brevo |
+| Importación de plantilla | `/templates/import-brevo` | Creación propia de plantillas y variables | No existe importador ni sincronizador Brevo |
 | Cuota | `/prospeccion/contacto/brevo-quota` | `/prospeccion/contacto/email-quota` | Cuota calculada por Talia |
 | Eventos | `/prospeccion/contacto/brevo/webhook` | Webhooks transaccional/broadcast Postmark | Cero webhook Brevo productivo |
 | Inbound | lector IMAP y parseo Brevo | Postmark Inbound Stream/webhook | IMAP Brevo retirado |
@@ -29,4 +31,3 @@ Aunque no todos usan Brevo directamente, deben quedar bajo la política de corre
 - lectores de buzón y respuestas entrantes.
 
 La definición final debe indicar para cada flujo si usará Postmark transaccional, buzón SMTP del usuario o un canal no relacionado. Para cumplir “cero Brevo”, todos deben eliminar únicamente Brevo; no es obligatorio eliminar SMTP personal si el producto todavía lo necesita, pero no debe mezclarse con el servicio central sin decisión explícita.
-

@@ -31,7 +31,26 @@ Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modi
 - Mantener separación entre streams transaccionales y Broadcast.
 - Mantener la cuota de cada tenant en PostgreSQL, no inferirla desde el consumo global de Postmark.
 - Usar la API de Postmark desde backend; ninguna API key debe llegar al panel.
-- Migrar primero un tenant piloto y retirar Brevo solo después de completar la verificación de paridad y el corte.
+- Construir Postmark con código, contratos y tablas propias; no reutilizar la implementación de Brevo.
+- Implementar primero en el tenant maestro `00000000-0000-0000-0000-000000000001`.
+- Migrar los demás tenants uno por uno y retirar Brevo solo después de completar la verificación de paridad y el corte.
+- Modelar la información Postmark en columnas explícitas, con foreign keys, constraints e índices adecuados.
+- Evitar `metadata`, `json`, `jsonb`, `payload`, `config` y estructuras similares para datos de negocio; usarlos solo para información cruda, opcional y no consultada frecuentemente.
+- No eliminar tablas históricas de Brevo hasta demostrar que ningún reporte, auditoría, función SQL, job o migración activa depende de ellas y conservar un respaldo.
+
+## Decisión de implementación aprobada
+
+La migración será una implementación aislada e independiente de Postmark. Brevo no será la base del nuevo diseño: no se copiarán sus servicios, contratos, tablas ni nombres de proveedor como modelo de negocio.
+
+El tenant maestro `00000000-0000-0000-0000-000000000001` será el primer tenant habilitado porque es el dueño de la aplicación. Después se hará una migración controlada tenant por tenant, con evidencia de envío, dominios, cuotas, webhooks, métricas e inbound antes de avanzar.
+
+Durante la migración solo puede existir una diferencia operativa: los tenants todavía no migrados seguirán atendidos por el sistema anterior y los tenants migrados por Postmark. No habrá fallback entre proveedores, mezcla de proveedores dentro del mismo tenant ni código compartido nuevo. Brevo se deshabilitará al terminar la migración de todos los tenants. El código y las tablas exclusivas de Brevo se retirarán después de la verificación final; los datos históricos se respaldarán y solo se eliminarán cuando no tengan valor operativo, legal, de auditoría o analítico.
+
+## Regla de modelado de datos
+
+Toda información que se consulte, filtre, ordene, relacione, valide, audite, reporte o use en permisos y lógica de negocio debe existir como columna explícita. El diseño debe priorizar consultas rápidas, índices eficientes, integridad referencial y aislamiento por tenant.
+
+No se deben esconder datos estructurales dentro de `metadata`, `json`, `jsonb`, `payload`, `config`, `settings` o campos equivalentes. Solo se permitirán, con justificación documentada, para datos crudos del proveedor, extensiones realmente variables o información que no se consulte frecuentemente.
 
 ## Fuentes oficiales revisadas
 
@@ -43,4 +62,3 @@ Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modi
 - [Templates API](https://postmarkapp.com/developer/api/templates-api)
 - [Webhooks overview](https://postmarkapp.com/developer/webhooks/webhooks-overview)
 - [Inbound processing](https://postmarkapp.com/developer/user-guide/inbound)
-

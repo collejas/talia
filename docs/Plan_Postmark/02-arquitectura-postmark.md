@@ -1,5 +1,17 @@
 # Arquitectura objetivo con Postmark
 
+## Principio de aislamiento de la migración
+
+Postmark tendrá su propia implementación y su propio modelo de datos. Brevo no será un adaptador de compatibilidad ni una dependencia del nuevo código. La referencia a Brevo en este plan sirve para localizar lo que debe migrarse y retirarse, no para reutilizar su arquitectura.
+
+El despliegue inicial se limitará al tenant maestro `00000000-0000-0000-0000-000000000001`. La habilitación del resto de tenants será progresiva y con una marca explícita de migración por tenant.
+
+## Principio de datos explícitos
+
+El modelo Postmark debe guardar en columnas todos los datos que participen en consultas, filtros, ordenamiento, relaciones, cuotas, permisos, auditoría, reportes o lógica de negocio. Cada dato relevante debe poder indexarse y validarse directamente.
+
+`metadata/jsonb` no será el modelo principal. Solo se permitirá para conservar datos crudos del proveedor o extensiones variables que no tengan uso frecuente. Antes de agregar un campo JSON se debe justificar por qué no corresponde una columna explícita.
+
 ## Cuenta y servidores
 
 Usar una cuenta central de GEOACTIV y separar el tráfico por servidores/streams según el volumen y el aislamiento requerido.
@@ -10,7 +22,7 @@ Configuración inicial sugerida:
 - servidor broadcast: prospección/campañas que cumplan la política de Postmark;
 - servidor inbound: recepción y parseo de respuestas, si el modelo final usa Inbound Processing.
 
-No crear un stream por tenant. Los tenants se aíslan en Talia mediante ownership, dominio, metadata, ledger y permisos. Los streams deben separar tipos de tráfico para proteger entregabilidad.
+No crear un stream por tenant. Los tenants se aíslan en Talia mediante ownership, dominio, columnas explícitas de tenant, ledger y permisos. Los streams deben separar tipos de tráfico para proteger entregabilidad.
 
 ## Dominios personalizados
 
@@ -37,9 +49,9 @@ Usar API de email o batch con stream transaccional. Cada mensaje debe ser indivi
 
 Usar Broadcast Message Stream. Para grandes campañas, usar Bulk API solo después de obtener aprobación de Postmark. Para envíos individualizados en lote, usar batch/batchWithTemplates y revisar cada resultado de la respuesta.
 
-### Metadata
+### Metadata técnica opcional
 
-Enviar metadata técnica mínima y no información personal innecesaria:
+Si Postmark requiere metadata de transporte para correlación, enviar únicamente identificadores técnicos mínimos. La fuente de verdad será siempre la tabla nueva y sus columnas; esta metadata no sustituye columnas ni se usará como filtro principal:
 
 ```json
 {
@@ -86,4 +98,3 @@ Tenant registra dominio
 - Las llamadas batch tienen límite de 500 mensajes y 50 MB.
 - Postmark puede devolver HTTP 200 con errores individuales en operaciones batch.
 - El límite comercial del tenant lo impone Talia, no Postmark.
-
