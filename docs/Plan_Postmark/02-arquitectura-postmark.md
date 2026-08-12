@@ -6,6 +6,21 @@ Postmark tendrá su propia implementación y su propio modelo de datos. Brevo no
 
 El despliegue inicial se limitará al tenant maestro `00000000-0000-0000-0000-000000000001`. La habilitación del resto de tenants será progresiva y con una marca explícita de migración por tenant.
 
+## Separación física de módulos
+
+La implementación debe vivir en carpetas propias, separadas del código legado:
+
+```text
+backend/app/integrations/postmark/
+backend/app/services/postmark/
+backend/app/schemas/postmark/
+backend/tests/integrations/postmark/
+backend/tests/services/postmark/
+frontend/panel/src/lib/email-service/
+```
+
+Las migraciones nuevas se agregarán al directorio estándar de migraciones, pero crearán tablas Postmark propias. No se colocará lógica Postmark dentro de archivos Brevo ni dentro del servicio de correo legado.
+
 ## Principio de datos explícitos
 
 El modelo Postmark debe guardar en columnas todos los datos que participen en consultas, filtros, ordenamiento, relaciones, cuotas, permisos, auditoría, reportes o lógica de negocio. Cada dato relevante debe poder indexarse y validarse directamente.

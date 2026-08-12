@@ -46,6 +46,22 @@ No se debe incluir el nombre técnico del proveedor en vistas, formularios, conf
 
 El proveedor podrá aparecer únicamente en módulos backend, secretos, configuración interna de plataforma, tareas administrativas internas y logs técnicos restringidos. Los endpoints tenant-facing deben devolver códigos neutrales como `email_provider_unavailable`, `sending_domain_unverified` o `email_quota_exceeded`, nunca el nombre del proveedor.
 
+## Fase 0.2: estructura propia de código
+
+La implementación se hará en carpetas nuevas y separadas del código actual de Brevo. La estructura inicial propuesta es:
+
+```text
+backend/app/integrations/postmark/
+backend/app/services/postmark/
+backend/app/schemas/postmark/
+backend/tests/integrations/postmark/
+backend/tests/services/postmark/
+frontend/panel/src/lib/email-service/
+supabase/migrations/  # migraciones nuevas con tablas propias
+```
+
+La integración no se agregará dentro de `backend/app/services/brevo.py`, `backend/app/services/brevo_quota.py`, `backend/app/services/brevo_templates.py`, `backend/app/services/email.py` ni dentro de los módulos legados de prospección. Los flujos existentes se conectarán al nuevo servicio mediante cambios explícitos en sus puntos de entrada, sin convertir el código legado en una capa compartida.
+
 ## Fase 0: decisiones y preflight
 
 1. Confirmar cuenta Postmark, plan Platform y aprobación de Bulk API.
@@ -135,7 +151,7 @@ Crear una tabla de recepción de webhooks con unique por `(provider, event_id o 
 
 ## Fase 2: implementación Postmark independiente
 
-Crear módulos nuevos, por ejemplo `backend/app/services/postmark.py` y `backend/app/services/postmark_email.py`, sin modificar `brevo.py`, `brevo_quota.py`, `brevo_templates.py` ni insertar Postmark dentro del servicio Brevo actual.
+Crear los módulos dentro de `backend/app/integrations/postmark/` y `backend/app/services/postmark/`, sin modificar `brevo.py`, `brevo_quota.py`, `brevo_templates.py` ni insertar Postmark dentro del servicio Brevo actual.
 
 Responsabilidades:
 

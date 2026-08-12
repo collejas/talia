@@ -32,6 +32,7 @@ Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modi
 - Mantener la cuota de cada tenant en PostgreSQL, no inferirla desde el consumo global de Postmark.
 - Usar la API de Postmark desde backend; ninguna API key debe llegar al panel.
 - Construir Postmark con código, contratos y tablas propias; no reutilizar la implementación de Brevo.
+- Mantener la implementación en carpetas propias de Postmark, separadas del código de Brevo y del servicio de correo anterior siempre que la arquitectura lo permita.
 - Implementar primero en el tenant maestro `00000000-0000-0000-0000-000000000001`.
 - Migrar los demás tenants uno por uno y retirar Brevo solo después de completar la verificación de paridad y el corte.
 - Modelar la información Postmark en columnas explícitas, con foreign keys, constraints e índices adecuados.
@@ -58,6 +59,19 @@ No se deben esconder datos estructurales dentro de `metadata`, `json`, `jsonb`, 
 El proveedor maestro de correo no debe ser identificable por ningún tenant. Las vistas, formularios, configuraciones, nombres de campos, respuestas JSON, mensajes de error, notificaciones, documentación de ayuda y bundles del panel deben usar terminología neutral: “Correo”, “Servicio de correo”, “Dominio de envío”, “Remitente”, “Cuota” y “Estado de entrega”.
 
 El nombre técnico del proveedor solo puede existir en código backend, secretos, tareas internas de plataforma y logs técnicos restringidos. No debe enviarse al navegador ni aparecer en endpoints, payloads o errores tenant-facing.
+
+## Estructura física prevista
+
+La implementación nueva se organizará, como mínimo, en espacios propios:
+
+- `backend/app/integrations/postmark/` para cliente API, dominios, plantillas, envío, webhooks y normalización de respuestas;
+- `backend/app/services/postmark/` para reglas de negocio de cuotas, dominios, campañas y mensajes;
+- `backend/app/schemas/postmark/` para contratos internos de la integración;
+- `backend/tests/integrations/postmark/` y `backend/tests/services/postmark/` para pruebas;
+- `frontend/panel/src/lib/email-service/` para clientes y tipos neutrales del panel, sin exponer el nombre del proveedor;
+- `supabase/migrations/` con migraciones nuevas y tablas propias, sin reutilizar tablas de Brevo.
+
+Los nombres exactos podrán ajustarse al patrón final del repositorio, pero Postmark no se implementará dentro de `brevo.py`, `email.py`, `brevo_quota.py`, `brevo_templates.py` ni dentro de otro módulo legado.
 
 ## Fuentes oficiales revisadas
 
