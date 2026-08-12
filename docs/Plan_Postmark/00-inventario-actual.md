@@ -40,7 +40,7 @@ Brevo aparece directamente en ambos grupos, mientras que algunos flujos fuerzan 
 
 - `backend/app/services/brevo_templates.py`
   - Lista y obtiene plantillas SMTP remotas de Brevo.
-  - Debe eliminarse después de migrar/importar las plantillas locales.
+  - Debe eliminarse después de crear y validar las plantillas nuevas de Postmark.
 
 - `backend/app/services/prospeccion_contact_sender.py`
   - Renderiza plantillas locales y construye URLs de tracking.

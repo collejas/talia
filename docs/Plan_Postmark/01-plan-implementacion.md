@@ -70,8 +70,8 @@ La integración no se agregará dentro de `backend/app/services/brevo.py`, `back
 4. Definir streams centrales:
    - `outbound` o equivalente para transaccional.
    - `broadcasts` o equivalente para prospección/campañas permitidas.
-   - `inbound` para respuestas, si se adopta inbound de Postmark.
-5. Definir política de cuota: mensual, diaria o ambas; qué estados consumen cuota; qué ocurre con reservas y cancelaciones.
+   - `inbound` para respuestas entrantes, obligatorio en la arquitectura nueva.
+5. Aplicar la política de cuotas definida en [decisiones operativas](./06-decisiones-operativas-y-criterios.md).
 6. Fijar como tenant piloto `00000000-0000-0000-0000-000000000001` y definir una ventana de reversión.
 
 Salida: decisión aprobada, credenciales provisionadas de forma segura y matriz de dependencias cerrada.
@@ -158,7 +158,7 @@ Responsabilidades:
 - enviar un mensaje transaccional;
 - enviar lote con mensajes individualizados;
 - enviar Bulk API para broadcast, previa aprobación;
-- enviar usando plantilla Postmark cuando convenga;
+- enviar usando el catálogo y contrato de plantillas propios definidos por Talia;
 - crear/listar/verificar/eliminar dominios con Account API;
 - consultar estado de dominio y credenciales DNS;
 - configurar webhooks/servers en tareas administrativas;

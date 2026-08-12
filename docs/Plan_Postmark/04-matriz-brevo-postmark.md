@@ -7,7 +7,7 @@ Esta matriz describe qué comportamiento debe reemplazarse; no implica reutiliza
 | Envío común | `backend/app/services/email.py` | Servicio Postmark nuevo y aislado | Los flujos migrados no pasan por el módulo Brevo actual |
 | Envío de prospección | `prospeccion_contact_sender.py` | Postmark Broadcast/batch + worker | Todos los envíos guardan MessageID Postmark |
 | API Brevo | `brevo.py`, `brevo_quota.py`, `brevo_templates.py` | `postmark.py`, servicio de cuota local, servicio de dominios/plantillas | Módulos Brevo eliminados |
-| Catálogo remoto de plantillas | `/templates/brevo-catalog` | Tablas nuevas de plantillas Postmark + Postmark Templates API opcional | UI no llama Brevo |
+| Catálogo remoto de plantillas | `/templates/brevo-catalog` | Tablas nuevas de plantillas propias y renderer de Talia | UI no llama Brevo |
 | Importación de plantilla | `/templates/import-brevo` | Creación propia de plantillas y variables | No existe importador ni sincronizador Brevo |
 | Cuota | `/prospeccion/contacto/brevo-quota` | `/prospeccion/contacto/email-quota` | Cuota calculada por Talia |
 | Eventos | `/prospeccion/contacto/brevo/webhook` | Webhooks transaccional/broadcast Postmark | Cero webhook Brevo productivo |

@@ -23,6 +23,7 @@ Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modi
 4. [Matriz Brevo/Postmark](./04-matriz-brevo-postmark.md)
 5. [Seguridad y operación](./03-seguridad-y-operacion.md)
 6. [Runbook de dominios por tenant](./05-runbook-dominio-tenant.md)
+7. [Decisiones operativas y criterios](./06-decisiones-operativas-y-criterios.md)
 
 ## Decisiones iniciales
 

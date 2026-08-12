@@ -41,7 +41,7 @@ Configuración inicial sugerida:
 
 - servidor transaccional: invitaciones, confirmaciones, cotizaciones, notificaciones y correo operacional;
 - servidor broadcast: prospección/campañas que cumplan la política de Postmark;
-- servidor inbound: recepción y parseo de respuestas, si el modelo final usa Inbound Processing.
+- servidor inbound: recepción y parseo de respuestas mediante Inbound Processing, obligatorio en la arquitectura nueva.
 
 No crear un stream por tenant. Los tenants se aíslan en Talia mediante ownership, dominio, columnas explícitas de tenant, ledger y permisos. Los streams deben separar tipos de tráfico para proteger entregabilidad.
 
