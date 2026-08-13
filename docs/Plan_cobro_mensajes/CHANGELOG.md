@@ -144,6 +144,21 @@ Pendiente de API:
 - Se añadió la entrada **Cobro de mensajes** al menú de Settings.
 - TypeScript, ESLint y React Doctor quedaron aprobados.
 
+### Backfill histórico — Completado
+
+- Se creó y aplicó `supabase/migrations/20260813_145000_message_billing_historical_backfill.sql`.
+- Respaldo previo verificado: `backups/message_billing_before_backfill_20260813_224935/message_billing_before_backfill_20260813_224935_full.dump`.
+- Se encontraron `2,603` mensajes históricos.
+- Se insertaron `2,018` mensajes elegibles en `cobro_mensajes`, pertenecientes a `2` tenants.
+- Se excluyeron `585` mensajes sin identificador del proveedor; no se pueden deduplicar con seguridad.
+- Se reconstruyeron `277` resúmenes de hilo para `274` conversaciones.
+- Se reconstruyeron `9` periodos mensuales.
+- El cargo GEOACTIV histórico reconstruido es `$181.6200 MXN`.
+- No se recuperaron cargos Meta históricos: los eventos disponibles conservaron categorías `service` y `referral_conversion` con `billable=false`; no hay registros históricos `marketing`.
+- Se recuperaron `1,244` eventos históricos con información de pricing Meta; lo demás quedó como `unknown`.
+- No quedaron candidatos elegibles sin ledger y no existen duplicados por mensaje ni por proveedor.
+- No se modificaron filas originales de `mensajes` ni `eventos_entrega`.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado

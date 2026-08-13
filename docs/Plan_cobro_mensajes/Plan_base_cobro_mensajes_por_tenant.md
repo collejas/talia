@@ -934,4 +934,6 @@ El plan estará listo para operar cuando:
 
 **Documento base para aprobación comercial y técnica.**
 
-La base de datos y el primer servicio backend de contabilización ya están aplicados para WhatsApp/Meta. Todavía no se activan cobros históricos ni facturación automática. La regla implementada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.
+La base de datos, el primer servicio backend de contabilización y el backfill histórico ya están aplicados para WhatsApp/Meta. Todavía no se activa facturación automática. La regla implementada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.
+
+El backfill histórico insertó 2,018 de 2,603 mensajes. Los 585 excluidos no tenían identificador del proveedor. La información Meta disponible permitió recuperar categorías service y referral_conversion no facturables, pero no permitió identificar mensajes marketing históricos facturables.
