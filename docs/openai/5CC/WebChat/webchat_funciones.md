@@ -115,7 +115,7 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de Tal-IA. Ej: 'Administra condominios y plazas comerciales; quiere automatizar atención a residentes y coordinación de incidencias vía WhatsApp sin saturar al personal.'"
+        "description": "Resumen corto en lenguaje humano. Incluye qué busca el prospecto, el contexto y qué espera de Tal-IA. Ej: 'Quiere conocer Porta Mezquite, revisar lotes disponibles y recibir información comercial por correo sin perder tiempo.'"
       },
       "necesidad_proposito": {
         "type": "string",
@@ -135,7 +135,7 @@
 
 {
   "name": "send_information_email",
-  "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
+  "description": "Enviar al prospecto la información solicitada sobre Porta Mezquite y Tal-IA cuando prefiere recibirla por correo en lugar de agendar una cita.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -260,7 +260,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma una demo virtual elegida para que se reserve el slot, se genere la reunión de Zoom y se envíe el correo/invitación automáticamente. No la uses sin nombre y correo confirmados.",
+  "description": "Confirma una cita o visita elegida para que se reserve el slot, se genere la reunión o confirmación correspondiente y se envíe el correo/invitación automáticamente. No la uses sin nombre y correo confirmados.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -279,7 +279,7 @@
       },
       "notes": {
         "type": "string",
-        "description": "Notas del prospecto que quieras guardar junto a la demo."
+        "description": "Notas del prospecto que quieras guardar junto a la cita."
       }
     },
     "required": [
@@ -296,14 +296,14 @@
 
 {
   "name": "reschedule_demo",
-  "description": "Reprograma una demo ya confirmada cuando el cliente solicita un cambio.",
+  "description": "Reprograma una cita ya confirmada cuando el cliente solicita un cambio.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "La conversación vinculada con la demo."
+        "description": "La conversación vinculada con la cita."
       },
       "booking_id": {
         "type": "string",
@@ -332,7 +332,7 @@
 
 {
   "name": "cancel_demo",
-  "description": "Cancela una demo previamente confirmada cuando el prospecto lo solicita.",
+  "description": "Cancela una cita previamente confirmada cuando el prospecto lo solicita.",
   "strict": true,
   "parameters": {
     "type": "object",
