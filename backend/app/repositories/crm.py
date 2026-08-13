@@ -7670,6 +7670,176 @@ class CRMRepository:
             return data[0]
         return None
 
+    async def list_billing_periods(
+        self,
+        *,
+        organizacion_id: UUID | None = None,
+        fecha_inicio: datetime | None = None,
+        fecha_fin: datetime | None = None,
+        limit: int = 24,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": (
+                "id,organizacion_id,fecha_inicio,fecha_fin,estado,mensajes_cantidad,"
+                "mensajes_entrantes_cantidad,mensajes_salientes_cantidad,"
+                "hilos_con_actividad_cantidad,conversiones_cantidad,subtotal_mensajes,"
+                "costo_meta_periodo,costo_mensaje_periodo,ajustes_total,total,moneda,"
+                "cerrado_en,creado_en"
+            ),
+            "order": "fecha_inicio.desc",
+            "limit": str(max(1, min(limit, 120))),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        if fecha_inicio:
+            params["fecha_fin"] = f"gte.{fecha_inicio.isoformat()}"
+        if fecha_fin:
+            params["fecha_inicio"] = f"lt.{fecha_fin.isoformat()}"
+        resp = await self._request("GET", "/rest/v1/cobro_periodos", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar periodos de cobro: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_billing_messages(
+        self,
+        *,
+        organizacion_id: UUID | None = None,
+        periodo_id: UUID | None = None,
+        categoria_meta: str | None = None,
+        direccion: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[dict[str, Any]], int]:
+        safe_page = max(1, page)
+        safe_size = max(1, min(page_size, 100))
+        params: dict[str, Any] = {
+            "select": (
+                "id,organizacion_id,periodo_id,mensaje_id,conversacion_id,proveedor,canal,"
+                "proveedor_mensaje_id,direccion,tipo_contenido,origen_mensaje,es_plantilla,"
+                "nombre_plantilla,idioma_plantilla,categoria_meta,tipo_pricing_meta,"
+                "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
+                "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
+                "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
+                "tipo_cargo,fuente_registro,conciliacion_estado,creado_en"
+            ),
+            "order": "creado_en.desc",
+            "limit": str(safe_size),
+            "offset": str((safe_page - 1) * safe_size),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        if periodo_id:
+            params["periodo_id"] = f"eq.{periodo_id}"
+        if categoria_meta:
+            params["categoria_meta"] = f"eq.{categoria_meta}"
+        if direccion:
+            params["direccion"] = f"eq.{direccion}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/cobro_mensajes",
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar mensajes de cobro: {data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return [row for row in data if isinstance(row, dict)], total
+
+    async def list_billing_app_rates(
+        self, *, organizacion_id: UUID | None = None, active_only: bool = False
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": (
+                "id,alcance,organizacion_id,precio_mensaje,moneda,vigente_desde,vigente_hasta,"
+                "activo,motivo,origen_registro,creado_en,actualizado_en"
+            ),
+            "order": "vigente_desde.desc",
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        if active_only:
+            params["activo"] = "eq.true"
+        resp = await self._request("GET", "/rest/v1/cobro_tarifas_app", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar tarifas de aplicación: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_billing_effective_app_rate(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        select = (
+            "id,alcance,organizacion_id,precio_mensaje,moneda,vigente_desde,vigente_hasta,"
+            "activo,motivo,origen_registro,creado_en,actualizado_en"
+        )
+        common = {
+            "select": select,
+            "activo": "eq.true",
+            "order": "vigente_desde.desc",
+            "limit": "1",
+        }
+        tenant_params = {**common, "alcance": "eq.tenant", "organizacion_id": f"eq.{organizacion_id}"}
+        global_params = {**common, "alcance": "eq.global"}
+        tenant_resp = await self._request("GET", "/rest/v1/cobro_tarifas_app", params=tenant_params)
+        tenant_rows = tenant_resp.json() or []
+        if isinstance(tenant_rows, list) and tenant_rows:
+            return tenant_rows[0] if isinstance(tenant_rows[0], dict) else None
+        global_resp = await self._request("GET", "/rest/v1/cobro_tarifas_app", params=global_params)
+        global_rows = global_resp.json() or []
+        if isinstance(global_rows, list) and global_rows:
+            return global_rows[0] if isinstance(global_rows[0], dict) else None
+        return None
+
+    async def create_billing_app_rate(
+        self,
+        *,
+        alcance: str,
+        organizacion_id: UUID | None,
+        precio_mensaje: Decimal,
+        motivo: str | None = None,
+        vigente_desde: datetime | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "p_alcance": alcance,
+            "p_organizacion_id": str(organizacion_id) if organizacion_id else None,
+            "p_precio_mensaje": str(precio_mensaje),
+            "p_motivo": motivo,
+            "p_vigente_desde": vigente_desde.isoformat() if vigente_desde else None,
+        }
+        data = await self._rpc("crear_cobro_tarifa_app", payload)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada al crear tarifa de cobro: {data!r}")
+        return data[0]
+
+    async def create_billing_provider_rate(
+        self,
+        *,
+        proveedor: str,
+        canal: str,
+        pais_codigo_iso2: str,
+        categoria_meta: str,
+        iniciador_hilo: str,
+        precio_unitario: Decimal,
+        motivo: str | None = None,
+        vigente_desde: datetime | None = None,
+    ) -> dict[str, Any]:
+        data = await self._rpc(
+            "crear_cobro_tarifa_proveedor",
+            {
+                "p_proveedor": proveedor,
+                "p_canal": canal,
+                "p_pais_codigo_iso2": pais_codigo_iso2,
+                "p_categoria_meta": categoria_meta,
+                "p_iniciador_hilo": iniciador_hilo,
+                "p_precio_unitario": str(precio_unitario),
+                "p_motivo": motivo,
+                "p_vigente_desde": vigente_desde.isoformat() if vigente_desde else None,
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada al crear tarifa de proveedor: {data!r}")
+        return data[0]
+
     async def record_webchat_visit(
         self,
         *,

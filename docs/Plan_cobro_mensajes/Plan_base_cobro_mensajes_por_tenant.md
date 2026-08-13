@@ -865,8 +865,24 @@ Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido
 - capturar columnas de pricing de Meta. **Implementado para callbacks Cloud API**;
 - registrar consumos de forma idempotente. **Implementado después de la persistencia del mensaje WhatsApp**;
 - separar estado de proveedor y estado de conciliación;
-- crear endpoints tenant y administrador;
+- crear endpoints tenant y administrador. **Primera versión implementada**;
 - evitar que el cliente controle importes o tenant.
+
+### Contrato inicial de consulta backend
+
+Las rutas están bajo `/api/billing` y requieren autenticación:
+
+| Ruta | Alcance | Uso |
+|---|---|---|
+| `GET /summary` | Tenant autenticado | Periodos, mensajes, hilos, cargo GEOACTIV, costo Meta y total propio |
+| `GET /messages` | Tenant autenticado | Ledger propio paginado, con filtros por periodo, dirección y categoría Meta |
+| `GET /tariff/effective` | Tenant autenticado | Tarifa GEOACTIV efectiva; override particular o tarifa global |
+| `GET /master/summary` | Solo owner | Resumen agregado de todos los tenants |
+| `GET /master/messages` | Solo owner | Ledger global paginado, opcionalmente filtrado por tenant |
+| `POST /master/tariff/app` | Solo owner | Crea una nueva tarifa GEOACTIV global o particular y cierra la versión activa anterior |
+| `POST /master/tariff/provider` | Solo owner | Versiona la tarifa informativa del proveedor por canal, país, categoría e iniciador |
+
+El tenant normal no puede solicitar otro `organizacion_id` para ampliar su alcance ni crear tarifas. El tenant maestro no recibe payloads de mensajería ni metadata; recibe solamente columnas del ledger necesarias para operación, auditoría y reportes. Las tarifas anteriores no se editan: se cierran y se crea una nueva versión.
 
 ### Fase 4: panel
 

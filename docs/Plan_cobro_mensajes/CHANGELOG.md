@@ -110,6 +110,30 @@ Pendiente de esta fase:
 - Probar una conversación real entrante y una conversación iniciada por la empresa con callbacks de Meta.
 - Añadir el endpoint de consulta y el panel de reportes.
 
+### API de consulta — Completado para primera versión
+
+- Se agregó el router `/api/billing` al backend.
+- El tenant autenticado puede consultar `/summary`, `/messages` y `/tariff/effective` únicamente para su organización real.
+- El owner puede consultar `/master/summary` y `/master/messages` para visualizar todos los tenants y filtrar por organización.
+- Los mensajes se entregan paginados y filtrables por periodo, dirección y categoría Meta.
+- Las respuestas exponen columnas explícitas del ledger y no exponen payloads crudos de proveedores.
+- Se agregaron pruebas de aislamiento de alcance y separación entre cargo GEOACTIV y costo Meta.
+
+Pendiente de API:
+
+- Agregar endpoints de configuración de límites, alertas y ajustes.
+- Crear el panel visual de tenant y tenant maestro.
+
+### Configuración de tarifa GEOACTIV — Completado para primera versión
+
+- Se agregó `POST /api/billing/master/tariff/app`, exclusivo para el owner.
+- Permite establecer tarifa global o override particular por tenant.
+- El cambio se ejecuta mediante `crear_cobro_tarifa_app` dentro de una transacción.
+- La versión anterior se cierra y los consumos históricos mantienen la fotografía de tarifa aplicada.
+- No se permite configurar tarifas futuras en esta primera versión para evitar periodos sin tarifa activa.
+- Se agregó `POST /api/billing/master/tariff/provider` para versionar la tarifa informativa de Meta por canal, país, categoría e iniciador del hilo.
+- La tarifa de Meta permanece separada del cargo GEOACTIV y solo alimenta estadísticas de costo.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado

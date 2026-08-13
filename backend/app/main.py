@@ -19,6 +19,7 @@ from app.api.routes.propuesta import router as propuesta_router
 from app.api.routes.health import router as health_router
 from app.api.routes.public_auth import router as public_auth_router
 from app.api.routes.public_billing import router as public_billing_router
+from app.api.routes.billing import router as billing_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.tenant import router as tenant_router
 from app.channels.messenger.router import router as messenger_router
@@ -165,6 +166,7 @@ def create_app() -> FastAPI:
     app.include_router(crm_router)
     app.include_router(propuesta_router)
     app.include_router(public_billing_router)
+    app.include_router(billing_router)
     app.include_router(public_auth_router)
     app.include_router(webhooks_router)
     app.include_router(webchat_router)
