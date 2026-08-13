@@ -11,7 +11,9 @@ Definir un sistema de cobro claro, rápido, auditable y aislado por tenant para 
 1. mensajes entrantes y salientes de la conversación;
 2. hilos de conversación utilizados como agrupador operativo y de reportes;
 3. categoría de Meta del mensaje, aunque la tarifa comercial de GEOACTIV sea la misma para todas las categorías;
-4. importe por tenant y periodo de cobro.
+4. costo estimado que Meta cobra directamente al tenant;
+5. importe propio de GEOACTIV por tenant y periodo de cobro;
+6. costo combinado para estadísticas de conversión.
 
 El sistema deberá permitir que:
 
@@ -29,6 +31,16 @@ La regla comercial base es:
 - cobrar el mismo importe sin importar si el mensaje es `marketing`, `utility`, `authentication`, `service` u otra categoría de Meta;
 - no cobrar un importe adicional por crear, abrir, mantener o cerrar un hilo;
 - registrar todo por tenant.
+
+Además, el sistema tendrá dos importes independientes:
+
+```text
+costo_meta_mxn = costo estimado del proveedor, pagado directamente por el tenant a Meta
+cargo_app_mxn = cargo propio de GEOACTIV, inicialmente $0.09 MXN por mensaje
+costo_total_conversion_mxn = costo_meta_mxn + cargo_app_mxn
+```
+
+El `costo_meta_mxn` será informativo y estadístico durante la primera etapa. No se agregará al saldo ni a la factura de GEOACTIV mientras la aplicación no lo esté cobrando al tenant.
 
 ## 3. Unidad de cobro
 
@@ -118,6 +130,67 @@ La categoría sirve para:
 
 La categoría no modifica el precio mientras el plan comercial mantenga una tarifa única de $0.09 MXN.
 
+## 7. Costo de Meta separado del cargo de GEOACTIV
+
+La configuración inicial para México será:
+
+```text
+proveedor: Meta
+canal: WhatsApp
+país: MX
+iniciador: empresa
+costo_meta_unitario: $0.5614 MXN
+```
+
+Este valor representa el costo estimado que el tenant paga directamente a Meta por mensajes salientes iniciados por la empresa. No representa todavía un importe cobrado por GEOACTIV.
+
+### Reglas de aplicación
+
+- mensaje entrante del cliente: `costo_meta_mxn = 0`;
+- mensaje saliente dentro de un hilo iniciado por el cliente: `costo_meta_mxn = 0`, salvo que Meta reporte otro tratamiento;
+- mensaje saliente que inicia la empresa: `costo_meta_mxn = 0.5614` con la tarifa vigente aplicable;
+- cargo de GEOACTIV por mensaje entrante o saliente: `cargo_app_mxn = 0.09`;
+- el costo Meta no se suma a la deuda de GEOACTIV en la primera etapa;
+- el costo combinado sí se muestra en estadísticas de rentabilidad y conversión.
+
+La aplicación debe guardar quién inició el hilo:
+
+```text
+cliente
+empresa
+desconocido
+```
+
+No se debe deducir esta condición solamente mirando si un mensaje es entrante o saliente, porque una respuesta saliente puede pertenecer a un hilo iniciado por el cliente.
+
+### Configuración por país y tarifa vigente
+
+El precio de Meta no debe quedar hardcodeado en React, FastAPI ni en una migración que obligue a modificar código para cambiarlo. Debe existir un catálogo versionado:
+
+```text
+cobro_tarifas_proveedor
+```
+
+con columnas explícitas para:
+
+```text
+id
+proveedor
+canal
+pais_codigo_iso2
+categoria_meta
+iniciador_hilo
+precio_unitario
+moneda
+vigente_desde
+vigente_hasta
+activo
+creado_en
+actualizado_en
+```
+
+La tarifa inicial será una fila para `Meta`, `WhatsApp`, `MX`, `empresa`, con precio `0.5614 MXN`. Si Meta cambia el precio, se cierra la vigencia anterior y se crea una nueva fila; nunca se modifica el precio histórico usado para calcular estadísticas anteriores.
+
 ## 7. Tablas nuevas propuestas
 
 Todas las tablas nuevas deben tener columnas explícitas. No se utilizarán `metadata`, `payload`, `data`, `extras`, `settings`, `json`, `jsonb` ni campos equivalentes para guardar información estructural del cobro.
@@ -151,7 +224,40 @@ Constraints:
 - no más de un plan activo aplicable para el mismo periodo;
 - moneda limitada inicialmente a `MXN`.
 
-### 7.2 `organizaciones_cobro`
+### 7.2 `cobro_tarifas_proveedor`
+
+Catálogo versionado de costos estimados de Meta u otros proveedores. Este catálogo no representa cargos de GEOACTIV.
+
+Columnas:
+
+```text
+id uuid primary key
+proveedor text not null
+canal text not null
+pais_codigo_iso2 char(2) not null
+categoria_meta text not null
+iniciador_hilo text not null
+precio_unitario numeric(12,4) not null
+moneda char(3) not null default 'MXN'
+vigente_desde timestamptz not null
+vigente_hasta timestamptz null
+activo boolean not null default true
+creado_por_usuario_id uuid not null references usuarios(id)
+cerrado_por_usuario_id uuid null references usuarios(id)
+creado_en timestamptz not null default now()
+actualizado_en timestamptz not null default now()
+```
+
+La tarifa inicial será `Meta / WhatsApp / MX / empresa / 0.5614 MXN`. Las tarifas históricas no se editan; se cierran y se crea una nueva versión.
+
+Constraints:
+
+- precio mayor o igual a cero;
+- `vigente_hasta` posterior a `vigente_desde` cuando exista;
+- no debe existir solapamiento para la misma combinación de proveedor, canal, país, categoría e iniciador;
+- `iniciador_hilo` limitado a `cliente`, `empresa` o `desconocido`.
+
+### 7.3 `organizaciones_cobro`
 
 Configuración comercial efectiva por tenant.
 
@@ -180,7 +286,7 @@ suspendido
 cancelado
 ```
 
-### 7.3 `cobro_periodos`
+### 7.4 `cobro_periodos`
 
 Periodos cerrables de facturación.
 
@@ -212,7 +318,7 @@ Constraints:
 - un periodo cerrado no se modifica directamente;
 - correcciones posteriores se realizan mediante ajustes.
 
-### 7.4 `cobro_mensajes`
+### 7.5 `cobro_mensajes`
 
 Ledger de mensajes entrantes y salientes cobrables o no cobrables.
 
@@ -249,11 +355,27 @@ conciliado_en timestamptz null
 creado_en timestamptz not null default now()
 ```
 
+Columnas adicionales para costos de proveedor y conversión:
+
+```text
+iniciador_hilo text not null
+tarifa_proveedor_id uuid null references cobro_tarifas_proveedor(id)
+costo_meta_aplica boolean not null default false
+costo_meta_unitario numeric(12,4) not null default 0
+costo_meta_importe numeric(12,4) not null default 0
+cargo_app_unitario numeric(12,4) not null default 0.09
+cargo_app_importe numeric(12,4) not null default 0
+costo_total_conversion numeric(12,4) not null default 0
+```
+
 Constraints críticas:
 
 - `direccion in ('entrante', 'saliente')`;
 - `importe = precio_unitario` cuando `facturable = true`;
 - `importe = 0` cuando `facturable = false`;
+- `costo_meta_importe = costo_meta_unitario` cuando `costo_meta_aplica = true`;
+- `costo_meta_importe = 0` cuando `costo_meta_aplica = false`;
+- `costo_total_conversion = costo_meta_importe + cargo_app_importe`;
 - `proveedor_mensaje_id` no puede repetirse para el mismo tenant y proveedor;
 - `tipo_cargo = 'mensaje'`;
 - `categoria_meta` limitada a un catálogo controlado;
@@ -270,7 +392,7 @@ Constraints críticas:
 (mensaje_id) unique
 ```
 
-### 7.5 `cobro_hilos_resumen`
+### 7.6 `cobro_hilos_resumen`
 
 Resumen de hilos con actividad. Esta tabla no contiene cargos por hilo.
 
@@ -307,7 +429,7 @@ Constraints críticas:
 (organizacion_id, conversacion_id) unique
 ```
 
-### 7.6 `cobro_ajustes`
+### 7.7 `cobro_ajustes`
 
 Correcciones, créditos y cargos manuales auditables.
 
@@ -328,7 +450,7 @@ creado_en timestamptz not null default now()
 
 Los ajustes no se eliminan. Si un ajuste fue incorrecto, se crea otro ajuste inverso.
 
-## 8. Relaciones multitenant
+## 9. Relaciones multitenant
 
 Toda tabla de cobro debe incluir `organizacion_id` aunque también tenga una referencia a otra entidad.
 
@@ -342,7 +464,7 @@ Las relaciones importantes deberán usar claves foráneas compuestas cuando corr
 
 Esto evita que un registro de un tenant apunte accidentalmente a un mensaje, conversación o periodo de otro tenant.
 
-## 9. Acceso del tenant maestro y tenants normales
+## 10. Acceso del tenant maestro y tenants normales
 
 ### Tenant maestro
 
@@ -355,6 +477,7 @@ El tenant maestro tendrá un visualizador global con:
 - periodos abiertos y cerrados;
 - ajustes;
 - discrepancias de conciliación;
+- costo Meta estimado, cargo de GEOACTIV y costo combinado;
 - totales globales y por tenant.
 
 El visualizador global deberá mostrar el tenant explícitamente en cada fila y no mezclar totales sin una columna de agrupación.
@@ -371,6 +494,8 @@ Cada tenant podrá consultar únicamente:
 - sus ajustes autorizados;
 - sus reportes de consumo.
 
+El tenant podrá consultar el costo Meta estimado, pero no podrá modificar la tarifa del proveedor salvo que se defina expresamente un rol administrativo para ello.
+
 El tenant normal no podrá:
 
 - cambiar `organizacion_id`;
@@ -383,7 +508,47 @@ El tenant normal no podrá:
 
 La seguridad debe aplicarse en RLS y en backend. Ocultar filas en el frontend no es una medida de autorización.
 
-## 10. API propuesta
+## 11. Configuración frontend y backend
+
+### Frontend administrativo
+
+El tenant maestro tendrá una pantalla de configuración de tarifas con:
+
+- proveedor;
+- canal;
+- país;
+- categoría Meta;
+- iniciador del hilo;
+- precio unitario;
+- moneda;
+- fecha de inicio de vigencia;
+- fecha de fin de vigencia;
+- estado activo.
+
+La pantalla deberá mostrar advertencia cuando se intente cerrar o crear una tarifa que afecte cálculos futuros. Las tarifas históricas no se editan.
+
+El tenant normal verá el precio vigente y sus costos estimados, pero no podrá modificarlo.
+
+### Backend
+
+El backend deberá exponer endpoints administrativos separados:
+
+```text
+GET  /api/admin/billing/provider-rates
+POST /api/admin/billing/provider-rates
+PATCH /api/admin/billing/provider-rates/{rate_id}/close
+```
+
+El backend debe:
+
+- validar rol administrativo;
+- validar país, canal, proveedor, categoría e iniciador;
+- impedir solapamiento de vigencias;
+- impedir que el frontend envíe directamente `costo_meta_importe` o `costo_total_conversion`;
+- calcular esos valores desde la tarifa vigente;
+- registrar quién creó o cerró una tarifa.
+
+## 12. API propuesta
 
 ### Tenant normal
 
@@ -414,18 +579,20 @@ Reglas:
 - todos los listados usan paginación y límites máximos;
 - las respuestas devuelven columnas de negocio, no payloads internos.
 
-## 11. Totales y fórmula
+## 13. Totales y fórmula
 
 ```text
 subtotal_mensajes = mensajes_entrantes_facturables * 0.09
                    + mensajes_salientes_facturables * 0.09
 ajustes_total = suma de cobro_ajustes
 total = subtotal_mensajes + ajustes_total
+costo_meta_periodo = suma de costo_meta_importe
+costo_conversion_periodo = suma de costo_total_conversion
 ```
 
 Los importes deben calcularse con `numeric`, nunca con `float`.
 
-## 12. Estados del consumo
+## 14. Estados del consumo
 
 ### Estado del proveedor
 
@@ -458,7 +625,7 @@ facturado
 cancelado
 ```
 
-## 13. Conciliación e idempotencia
+## 15. Conciliación e idempotencia
 
 El proceso deberá ser idempotente:
 
@@ -466,14 +633,17 @@ El proceso deberá ser idempotente:
 2. busca el proveedor y el ID del mensaje;
 3. confirma el tenant desde la conversación y el mensaje;
 4. determina la categoría Meta;
-5. busca si ya existe `cobro_mensajes` para ese proveedor e ID;
-6. crea una sola fila de consumo;
-7. actualiza o crea el resumen del hilo;
-8. actualiza totales del periodo de forma transaccional.
+5. identifica quién inició el hilo;
+6. obtiene la tarifa Meta vigente si el mensaje es saliente iniciado por la empresa;
+7. calcula el cargo de GEOACTIV y el costo combinado;
+8. busca si ya existe `cobro_mensajes` para ese proveedor e ID;
+9. crea una sola fila de consumo;
+10. actualiza o crea el resumen del hilo;
+11. actualiza totales del periodo de forma transaccional.
 
 Los eventos de entrega solamente actualizan el estado del consumo relacionado. No crean cargos nuevos.
 
-## 14. Datos históricos
+## 16. Datos históricos
 
 No se deben cobrar automáticamente todos los datos históricos actuales porque existen:
 
@@ -490,7 +660,7 @@ Se recomienda:
 3. ejecutar una conciliación separada;
 4. aplicar créditos o cargos históricos únicamente después de revisión administrativa.
 
-## 15. Reglas de rendimiento
+## 17. Reglas de rendimiento
 
 - índices compuestos por `organizacion_id` y fecha;
 - índices por `periodo_id`, `facturable` y `categoria_meta`;
@@ -502,7 +672,7 @@ Se recomienda:
 - evitar joins sin filtro de tenant;
 - particionamiento solamente si el volumen futuro lo justifica.
 
-## 16. Auditoría y protección contra fraude o error
+## 18. Auditoría y protección contra fraude o error
 
 Debe conservarse:
 
@@ -513,29 +683,39 @@ Debe conservarse:
 - qué conversación agrupó el mensaje cobrado;
 - qué proveedor confirmó el mensaje;
 - qué categoría devolvió Meta;
+- qué tarifa Meta estaba vigente;
+- cuál fue el costo Meta estimado;
+- cuál fue el cargo de GEOACTIV;
+- cuál fue el costo combinado de conversión;
 - por qué un registro fue excluido.
 
 No se deben editar ni borrar cargos de periodos cerrados. Las correcciones deben ser movimientos compensatorios.
 
-## 17. Riesgos y decisiones pendientes
+## 19. Riesgos y decisiones pendientes
 
-### Decisión 1: mensajes fallidos
+### Decisión 1: precio de Meta
+
+El documento usa `0.5614 MXN` como tarifa inicial configurable para México y mensajes iniciados por la empresa. Antes de activar estadísticas productivas se debe confirmar la tarifa vigente y su alcance exacto con la cuenta de Meta del tenant.
+
+### Decisión 2: mensajes fallidos
 
 La recomendación es no cobrar mensajes rechazados antes de ser aceptados por el proveedor.
 
-### Decisión 2: canales futuros
+### Decisión 3: canales futuros
 
 El plan inicial cubre WhatsApp/Meta. Email, Messenger, Webchat y otros canales deben tener tipos de cargo separados si se incorporan más adelante.
 
-### Decisión 3: impuestos
+### Decisión 4: impuestos
 
 Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido. La base debe guardar subtotal, impuesto y total por separado si se requiere facturación fiscal.
 
-## 18. Fases de implementación
+## 20. Fases de implementación
 
 ### Fase 1: definición
 
 - aprobar reglas de aceptación, fallo y duplicidad;
+- aprobar la separación entre costo Meta informativo y cargo de GEOACTIV;
+- confirmar tarifa inicial de Meta de $0.5614 MXN;
 - confirmar fecha de inicio;
 - confirmar precio con o sin IVA.
 
@@ -582,7 +762,7 @@ Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido
 - cerrar el periodo;
 - comenzar facturación.
 
-## 19. Criterio de terminado
+## 21. Criterio de terminado
 
 El plan estará listo para operar cuando:
 
@@ -596,6 +776,9 @@ El plan estará listo para operar cuando:
 - los totales puedan reproducirse desde el ledger;
 - los casos no conciliados se muestren antes de cobrar;
 - la fórmula de $0.09 MXN por cada mensaje entrante o saliente esté publicada y probada.
+- el precio Meta de $0.5614 MXN pueda modificarse por vigencia sin cambiar código;
+- las estadísticas separen costo Meta, cargo de GEOACTIV y costo combinado;
+- el costo Meta no se agregue al cobro de GEOACTIV mientras siga siendo un costo directo del tenant.
 
 ## Estado del documento
 
