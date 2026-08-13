@@ -142,6 +142,12 @@ type MetricColumnConfig = {
   metricKey: string
 }
 
+export type DateColumnConfig = {
+  id: string
+  label: string
+  field: string
+}
+
 const COLUMN_DRAG_PREFIX = "column:"
 const NON_REORDERABLE_COLUMN_IDS = new Set(["drag-handle", "row-select"])
 const BADGE_VARIANTS = new Set(["default", "secondary", "destructive", "outline"])
@@ -593,6 +599,7 @@ function DraggableRow({
 export function DataTable({
   data: initialData,
   extraColumns = [],
+  dateColumns = [],
   initialVisibility,
   storageKey,
   columnLabels,
@@ -609,6 +616,7 @@ export function DataTable({
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
+  dateColumns?: DateColumnConfig[]
   initialVisibility?: VisibilityState
   storageKey?: string
   columnLabels?: ColumnLabels
@@ -744,9 +752,31 @@ export function DataTable({
     }))
   }, [metricColumns])
 
+  const dateColumnDefs = React.useMemo<ColumnDef<TableRowData>[]>(() => {
+    const formatter = new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "short",
+      timeStyle: "short",
+    })
+    return dateColumns.map((config) => ({
+      id: config.id,
+      accessorFn: (row: TableRowData) => {
+        const value = row.raw?.[config.field]
+        return typeof value === "string" ? value : ""
+      },
+      header: ({ column }) => <SortButton column={column} label={config.label} />,
+      cell: ({ row }) => {
+        const value = row.original.raw?.[config.field]
+        if (typeof value !== "string" || !value.trim()) return "Sin fecha"
+        const date = new Date(value)
+        return Number.isNaN(date.getTime()) ? "Sin fecha" : formatter.format(date)
+      },
+      meta: { label: config.label },
+    }))
+  }, [dateColumns])
+
   const mergedColumns = React.useMemo(
-    () => [...resolvedBaseColumns, ...metricColumnDefs, ...extraColumns],
-    [resolvedBaseColumns, metricColumnDefs, extraColumns]
+    () => [...resolvedBaseColumns, ...metricColumnDefs, ...dateColumnDefs, ...extraColumns],
+    [resolvedBaseColumns, metricColumnDefs, dateColumnDefs, extraColumns]
   )
 
   const defaultColumnOrder = React.useMemo(() => {

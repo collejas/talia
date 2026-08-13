@@ -14,6 +14,7 @@ type CRMActivity = {
   fecha_vencimiento: string | null;
   inicio_en: string | null;
   fin_en: string | null;
+  recordatorio_en: string | null;
   cuenta_id: string | null;
   contacto_id: string | null;
   oportunidad_id: string | null;
@@ -37,6 +38,17 @@ type CRMActivitiesResponse = {
   limit: number;
   offset: number;
 };
+
+const dateTimeFormatter = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "Sin fecha";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sin fecha" : dateTimeFormatter.format(date);
+}
 
 export type CrmActivitiesPayload = {
   rows: DataTableRow[];
@@ -62,7 +74,7 @@ export async function loadCrmActivities(): Promise<CrmActivitiesPayload> {
       [activity.oportunidad?.codigo_oportunidad, activity.oportunidad?.titulo]
         .filter(Boolean)
         .join(" · ") || "Sin oportunidad",
-    limit: activity.fecha_vencimiento || "Sin fecha",
+    limit: formatDateTime(activity.fecha_vencimiento),
     reviewer:
       activity.asignado_a_usuario?.nombre_completo?.trim() ||
       activity.asignado_a_usuario_id ||

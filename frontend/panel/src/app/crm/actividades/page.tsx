@@ -18,7 +18,11 @@ export default async function CrmActivitiesPage() {
       ) : (
         <ClientDataTable
           rows={payload.rows}
-          columnLabels={{ target: "Oportunidad", limit: "Vencimiento" }}
+          columnLabels={{ target: "Oportunidad", limit: "Aplicación" }}
+          dateColumns={[
+            { id: "created_at", label: "Creada", field: "creado_en" },
+            { id: "reminder_at", label: "Recordatorio", field: "recordatorio_en" },
+          ]}
           detailDescription="Revisa la actividad y abre la oportunidad relacionada."
         />
       )}

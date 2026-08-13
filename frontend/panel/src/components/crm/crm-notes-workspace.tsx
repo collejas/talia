@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ActivityNotesPanel, type ActivityContextEntityType } from "@/components/crm/activity-notes-panel";
 import { Button } from "@/components/ui/button";
 import { ClientDataTable } from "@/components/client-data-table";
-import type { DataTableRow } from "@/components/data-table";
+import type { DataTableRow, DateColumnConfig } from "@/components/data-table";
 
 type NoteRecord = {
   id: string;
@@ -72,7 +72,13 @@ function NoteDetails({ row }: { row: DataTableRow }) {
   );
 }
 
-export function CrmNotesWorkspace({ rows }: { rows: DataTableRow[] }) {
+export function CrmNotesWorkspace({
+  rows,
+  dateColumns,
+}: {
+  rows: DataTableRow[];
+  dateColumns?: DateColumnConfig[];
+}) {
   return (
     <ClientDataTable
       rows={rows}
@@ -88,6 +94,7 @@ export function CrmNotesWorkspace({ rows }: { rows: DataTableRow[] }) {
       detailDescription="Revisa la nota, abre el registro relacionado y agrega seguimiento."
       renderRowDetails={(row) => <NoteDetails row={row} />}
       initialVisibility={{ limit: false }}
+      dateColumns={dateColumns}
     />
   );
 }

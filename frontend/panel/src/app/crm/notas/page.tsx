@@ -16,7 +16,10 @@ export default async function CrmNotesPage() {
           ))}
         </div>
       ) : (
-        <CrmNotesWorkspace rows={payload.rows} />
+        <CrmNotesWorkspace
+          rows={payload.rows}
+          dateColumns={[{ id: "created_at", label: "Creada", field: "creado_en" }]}
+        />
       )}
     </AppViewLayout>
   );

@@ -391,7 +391,10 @@ export async function deleteGoogleBusqueda(busquedaId: string) {
   if (!busquedaId) {
     throw new Error("Falta el ID de la búsqueda.");
   }
-  const url = buildClientUrl(`/api/prospeccion/google/busquedas/${busquedaId}`);
+  // The Next.js proxy exposes DELETE on the collection route and translates
+  // delete_id into the backend's /{busqueda_id} route.
+  const url = buildClientUrl("/api/prospeccion/google/busquedas");
+  url.searchParams.set("delete_id", busquedaId);
   return requestJson<{ ok: boolean; deleted?: number }>(url.toString(), {
     method: "DELETE",
   });
