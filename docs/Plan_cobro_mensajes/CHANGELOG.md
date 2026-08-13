@@ -134,6 +134,16 @@ Pendiente de API:
 - Se agregó `POST /api/billing/master/tariff/provider` para versionar la tarifa informativa de Meta por canal, país, categoría e iniciador del hilo.
 - La tarifa de Meta permanece separada del cargo GEOACTIV y solo alimenta estadísticas de costo.
 
+### Panel frontend — Primera versión completada
+
+- Se creó `/settings/cobro-mensajes` con una vista reutilizable para tenant y tenant maestro.
+- El tenant consulta sus KPIs, tarifa efectiva y detalle propio.
+- El tenant maestro consulta el consolidado global, detalle de todos los tenants y configuración de tarifas.
+- Se agregaron filtros por categoría Meta y dirección, paginación y estados de carga, error y vacío.
+- Se agregaron proxies Next.js para mantener cookies/tokens del panel fuera del navegador.
+- Se añadió la entrada **Cobro de mensajes** al menú de Settings.
+- TypeScript, ESLint y React Doctor quedaron aprobados.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado

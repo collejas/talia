@@ -35,6 +35,7 @@ import {
   IconBrandWhatsapp,
   IconShieldCheck,
   IconShoppingCart,
+  IconCoin,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -207,6 +208,12 @@ const NAVIGATION: {
           url: "/settings/openai-costs",
           icon: IconDatabase,
           permission: ["settings.view", "settings.manage"],
+        },
+        {
+          title: "Cobro de mensajes",
+          url: "/settings/cobro-mensajes",
+          icon: IconCoin,
+          permission: ["settings.view", "reports.view"],
         },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },

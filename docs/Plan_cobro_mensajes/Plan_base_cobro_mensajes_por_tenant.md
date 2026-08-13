@@ -886,11 +886,12 @@ El tenant normal no puede solicitar otro `organizacion_id` para ampliar su alcan
 
 ### Fase 4: panel
 
-- visualizador global para tenant maestro;
-- visualizador propio para cada tenant;
-- resumen de mensajes, hilos, categorías e importes;
-- detalle auditable por mensaje;
-- estados vacío, cargando, error y conciliación pendiente.
+- visualizador global para tenant maestro. **Primera versión implementada**;
+- visualizador propio para cada tenant. **Primera versión implementada**;
+- resumen de mensajes, hilos, categorías e importes. **Implementado**;
+- detalle auditable por mensaje. **Implementado con paginación y filtros**;
+- estados vacío, cargando, error y conciliación pendiente. **Implementados los estados de carga, error y vacío**;
+- edición visual de tarifa GEOACTIV y tarifa informativa Meta para owner. **Primera versión implementada**.
 
 ### Fase 5: prueba
 
