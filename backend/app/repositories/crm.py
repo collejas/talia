@@ -5031,6 +5031,25 @@ class CRMRepository:
                 "perdida",
             }
 
+        async def _conversation_is_closed(conversation_id: str) -> bool:
+            conversation_key = str(conversation_id or "").strip()
+            if not conversation_key:
+                return False
+            response = await self._request(
+                "GET",
+                "/rest/v1/conversaciones",
+                params={
+                    "id": f"eq.{conversation_key}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "select": "estado",
+                    "limit": "1",
+                },
+            )
+            rows = response.json() or []
+            if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+                return False
+            return str(rows[0].get("estado") or "").strip().lower() in {"cerrada", "closed"}
+
         async def _patch_metadata(
             opportunity_id: UUID,
             metadata: dict[str, Any],
@@ -5176,8 +5195,19 @@ class CRMRepository:
                             continue
                         if _is_closed_opportunity(candidate):
                             continue
+                        candidate_metadata = _ensure_metadata(candidate.get("metadata"))
+                        candidate_conversation = str(
+                            candidate_metadata.get("conversation_id") or ""
+                        ).strip()
+                        if (
+                            (canal or "").strip().lower() == "whatsapp"
+                            and candidate_conversation
+                            and candidate_conversation != conversation_key
+                            and await _conversation_is_closed(candidate_conversation)
+                        ):
+                            continue
                         opportunity_id = _coerce_uuid(candidate.get("id"), field="opportunity_id")
-                        metadata = _merged_metadata(candidate.get("metadata"))
+                        metadata = _merged_metadata(candidate_metadata)
                         current_assignee = candidate.get("asignado_a_usuario_id")
                         assignee_uuid = (
                             _coerce_uuid(current_assignee, field="asignado_a_usuario_id")
@@ -5258,6 +5288,27 @@ class CRMRepository:
             if isinstance(metadata_conversation, str):
                 existing_conversation = metadata_conversation.strip()
             if _is_closed_opportunity(row):
+                return await self._create_opportunity_from_contact(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contacto_id,
+                    conversation_id=conversation_key,
+                    canal=canal,
+                    contacto_nombre=contacto_nombre,
+                    contacto_empresa=contacto_empresa,
+                    base_metadata=base_metadata,
+                    parent_row=row,
+                    parent_metadata=metadata,
+                    parent_assignee=assignee_uuid,
+                    is_restart=True,
+                    contact_ready=contact_ready,
+                    require_contact_ready=require_contact_ready,
+                )
+            if (
+                (canal or "").strip().lower() == "whatsapp"
+                and existing_conversation
+                and existing_conversation != conversation_key
+                and await _conversation_is_closed(existing_conversation)
+            ):
                 return await self._create_opportunity_from_contact(
                     organizacion_id=organizacion_id,
                     contacto_id=contacto_id,
