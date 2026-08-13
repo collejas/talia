@@ -42,6 +42,15 @@ costo_total_conversion_mxn = costo_meta_mxn + cargo_app_mxn
 
 El `costo_meta_mxn` será informativo y estadístico durante la primera etapa. No se agregará al saldo ni a la factura de GEOACTIV mientras la aplicación no lo esté cobrando al tenant.
 
+El `cargo_app_mxn` sí será configurable por el dueño de la aplicación:
+
+- tarifa global para todos los tenants;
+- tarifa particular para un tenant específico;
+- la tarifa particular tiene prioridad sobre la global;
+- si el tenant no tiene tarifa particular activa, se utiliza la global;
+- un tenant normal solamente puede consultar su tarifa efectiva;
+- solamente el tenant maestro puede crear, cerrar o modificar tarifas.
+
 ## 3. Unidad de cobro
 
 La unidad de cobro será un mensaje individual persistido en `mensajes`.
@@ -191,11 +200,76 @@ actualizado_en
 
 La tarifa inicial será una fila para `Meta`, `WhatsApp`, `MX`, `empresa`, con precio `0.5614 MXN`. Si Meta cambia el precio, se cierra la vigencia anterior y se crea una nueva fila; nunca se modifica el precio histórico usado para calcular estadísticas anteriores.
 
-## 7. Tablas nuevas propuestas
+## 8. Tarifas de GEOACTIV: globales y particulares
+
+El precio que GEOACTIV cobra por mensaje no debe quedar fijo en código ni depender únicamente del plan. Se guardará en una tabla versionada:
+
+### `cobro_tarifas_app`
+
+Columnas:
+
+```text
+id uuid primary key
+alcance text not null
+organizacion_id uuid null references organizaciones(id)
+precio_mensaje numeric(12,4) not null
+moneda char(3) not null default 'MXN'
+vigente_desde timestamptz not null
+vigente_hasta timestamptz null
+activo boolean not null default true
+creado_por_usuario_id uuid not null references usuarios(id)
+cerrado_por_usuario_id uuid null references usuarios(id)
+motivo text null
+creado_en timestamptz not null default now()
+actualizado_en timestamptz not null default now()
+```
+
+Valores de `alcance`:
+
+```text
+global
+tenant
+```
+
+Constraints:
+
+- una tarifa `global` debe tener `organizacion_id = null`;
+- una tarifa `tenant` debe tener `organizacion_id`;
+- `precio_mensaje >= 0`;
+- `vigente_hasta` debe ser posterior a `vigente_desde` cuando exista;
+- no debe haber dos tarifas activas solapadas para el mismo alcance y tenant;
+- las tarifas cerradas no se editan;
+- una nueva tarifa reemplaza la vigencia futura, no modifica el histórico.
+
+### Precedencia de tarifa
+
+La tarifa efectiva se resuelve así:
+
+```text
+si existe tarifa particular activa del tenant:
+    cargo_app_unitario = tarifa particular
+    origen_tarifa_app = particular
+si no existe:
+    cargo_app_unitario = tarifa global
+    origen_tarifa_app = global
+```
+
+Cada consumo debe guardar una fotografía de la tarifa usada:
+
+```text
+tarifa_app_id uuid not null references cobro_tarifas_app(id)
+origen_tarifa_app text not null
+cargo_app_unitario numeric(12,4) not null
+cargo_app_importe numeric(12,4) not null
+```
+
+De esta forma, cambiar una tarifa no modifica cobros históricos.
+
+## 9. Tablas nuevas propuestas
 
 Todas las tablas nuevas deben tener columnas explícitas. No se utilizarán `metadata`, `payload`, `data`, `extras`, `settings`, `json`, `jsonb` ni campos equivalentes para guardar información estructural del cobro.
 
-### 7.1 `cobro_planes`
+### 9.1 `cobro_planes`
 
 Catálogo de planes comerciales.
 
@@ -207,9 +281,6 @@ codigo text unique not null
 nombre text not null
 descripcion text null
 moneda char(3) not null default 'MXN'
-precio_mensaje numeric(12,4) not null
-cobra_mensaje_saliente boolean not null default true
-cobra_mensaje_entrante boolean not null default true
 activo boolean not null default true
 vigente_desde timestamptz not null
 vigente_hasta timestamptz null
@@ -224,7 +295,7 @@ Constraints:
 - no más de un plan activo aplicable para el mismo periodo;
 - moneda limitada inicialmente a `MXN`.
 
-### 7.2 `cobro_tarifas_proveedor`
+### 9.2 `cobro_tarifas_proveedor`
 
 Catálogo versionado de costos estimados de Meta u otros proveedores. Este catálogo no representa cargos de GEOACTIV.
 
@@ -257,7 +328,7 @@ Constraints:
 - no debe existir solapamiento para la misma combinación de proveedor, canal, país, categoría e iniciador;
 - `iniciador_hilo` limitado a `cliente`, `empresa` o `desconocido`.
 
-### 7.3 `organizaciones_cobro`
+### 9.3 `organizaciones_cobro`
 
 Configuración comercial efectiva por tenant.
 
@@ -286,7 +357,7 @@ suspendido
 cancelado
 ```
 
-### 7.4 `cobro_periodos`
+### 9.4 `cobro_periodos`
 
 Periodos cerrables de facturación.
 
@@ -318,7 +389,7 @@ Constraints:
 - un periodo cerrado no se modifica directamente;
 - correcciones posteriores se realizan mediante ajustes.
 
-### 7.5 `cobro_mensajes`
+### 9.5 `cobro_mensajes`
 
 Ledger de mensajes entrantes y salientes cobrables o no cobrables.
 
@@ -363,6 +434,8 @@ tarifa_proveedor_id uuid null references cobro_tarifas_proveedor(id)
 costo_meta_aplica boolean not null default false
 costo_meta_unitario numeric(12,4) not null default 0
 costo_meta_importe numeric(12,4) not null default 0
+tarifa_app_id uuid not null references cobro_tarifas_app(id)
+origen_tarifa_app text not null
 cargo_app_unitario numeric(12,4) not null default 0.09
 cargo_app_importe numeric(12,4) not null default 0
 costo_total_conversion numeric(12,4) not null default 0
@@ -392,7 +465,7 @@ Constraints críticas:
 (mensaje_id) unique
 ```
 
-### 7.6 `cobro_hilos_resumen`
+### 9.6 `cobro_hilos_resumen`
 
 Resumen de hilos con actividad. Esta tabla no contiene cargos por hilo.
 
@@ -407,6 +480,9 @@ canal text not null
 fecha_inicio_hilo timestamptz not null
 fecha_primer_mensaje_saliente timestamptz null
 mensaje_saliente_inicial_id uuid null references mensajes(id)
+oportunidad_id uuid null references oportunidades(id)
+conversion_atribuida boolean not null default false
+conversion_en timestamptz null
 mensajes_entrantes_cantidad integer not null default 0
 mensajes_salientes_cantidad integer not null default 0
 ultimo_mensaje_en timestamptz null
@@ -429,7 +505,7 @@ Constraints críticas:
 (organizacion_id, conversacion_id) unique
 ```
 
-### 7.7 `cobro_ajustes`
+### 9.7 `cobro_ajustes`
 
 Correcciones, créditos y cargos manuales auditables.
 
@@ -450,7 +526,7 @@ creado_en timestamptz not null default now()
 
 Los ajustes no se eliminan. Si un ajuste fue incorrecto, se crea otro ajuste inverso.
 
-## 9. Relaciones multitenant
+## 10. Relaciones multitenant
 
 Toda tabla de cobro debe incluir `organizacion_id` aunque también tenga una referencia a otra entidad.
 
@@ -464,7 +540,7 @@ Las relaciones importantes deberán usar claves foráneas compuestas cuando corr
 
 Esto evita que un registro de un tenant apunte accidentalmente a un mensaje, conversación o periodo de otro tenant.
 
-## 10. Acceso del tenant maestro y tenants normales
+## 11. Acceso del tenant maestro y tenants normales
 
 ### Tenant maestro
 
@@ -472,7 +548,7 @@ El tenant maestro tendrá un visualizador global con:
 
 - todos los tenants;
 - mensajes facturables por tenant;
-- hilos facturables por tenant;
+- hilos con actividad por tenant;
 - categorías Meta;
 - periodos abiertos y cerrados;
 - ajustes;
@@ -488,7 +564,7 @@ Cada tenant podrá consultar únicamente:
 
 - sus mensajes;
 - sus conversaciones;
-- sus hilos cobrados;
+- sus resúmenes de hilos;
 - sus periodos;
 - sus importes;
 - sus ajustes autorizados;
@@ -508,12 +584,14 @@ El tenant normal no podrá:
 
 La seguridad debe aplicarse en RLS y en backend. Ocultar filas en el frontend no es una medida de autorización.
 
-## 11. Configuración frontend y backend
+## 12. Configuración frontend y backend
 
 ### Frontend administrativo
 
 El tenant maestro tendrá una pantalla de configuración de tarifas con:
 
+- selector de alcance: global o tenant particular;
+- tenant objetivo cuando el alcance sea particular;
 - proveedor;
 - canal;
 - país;
@@ -527,6 +605,13 @@ El tenant maestro tendrá una pantalla de configuración de tarifas con:
 
 La pantalla deberá mostrar advertencia cuando se intente cerrar o crear una tarifa que afecte cálculos futuros. Las tarifas históricas no se editan.
 
+La configuración debe ofrecer para cada tenant:
+
+- usar tarifa global;
+- establecer tarifa particular;
+- ver la tarifa efectiva;
+- ver si la tarifa efectiva proviene de la configuración global o particular.
+
 El tenant normal verá el precio vigente y sus costos estimados, pero no podrá modificarlo.
 
 ### Backend
@@ -537,6 +622,11 @@ El backend deberá exponer endpoints administrativos separados:
 GET  /api/admin/billing/provider-rates
 POST /api/admin/billing/provider-rates
 PATCH /api/admin/billing/provider-rates/{rate_id}/close
+GET  /api/admin/billing/app-rates
+POST /api/admin/billing/app-rates/global
+POST /api/admin/billing/app-rates/tenant/{organizacion_id}
+PATCH /api/admin/billing/app-rates/{rate_id}/close
+POST /api/admin/billing/app-rates/tenant/{organizacion_id}/use-global
 ```
 
 El backend debe:
@@ -544,11 +634,16 @@ El backend debe:
 - validar rol administrativo;
 - validar país, canal, proveedor, categoría e iniciador;
 - impedir solapamiento de vigencias;
+- permitir editar tarifa global únicamente al dueño de la aplicación;
+- permitir editar tarifa particular únicamente al dueño de la aplicación;
+- resolver la tarifa efectiva con precedencia particular sobre global;
+- permitir quitar el override particular y volver a la tarifa global;
 - impedir que el frontend envíe directamente `costo_meta_importe` o `costo_total_conversion`;
+- impedir que el frontend envíe directamente `cargo_app_importe`;
 - calcular esos valores desde la tarifa vigente;
 - registrar quién creó o cerró una tarifa.
 
-## 12. API propuesta
+## 13. API propuesta
 
 ### Tenant normal
 
@@ -579,7 +674,7 @@ Reglas:
 - todos los listados usan paginación y límites máximos;
 - las respuestas devuelven columnas de negocio, no payloads internos.
 
-## 13. Totales y fórmula
+## 14. Totales y fórmula
 
 ```text
 subtotal_mensajes = mensajes_entrantes_facturables * 0.09
@@ -592,7 +687,7 @@ costo_conversion_periodo = suma de costo_total_conversion
 
 Los importes deben calcularse con `numeric`, nunca con `float`.
 
-## 14. Estados del consumo
+## 15. Estados del consumo
 
 ### Estado del proveedor
 
@@ -625,7 +720,7 @@ facturado
 cancelado
 ```
 
-## 15. Conciliación e idempotencia
+## 16. Conciliación e idempotencia
 
 El proceso deberá ser idempotente:
 
@@ -643,7 +738,7 @@ El proceso deberá ser idempotente:
 
 Los eventos de entrega solamente actualizan el estado del consumo relacionado. No crean cargos nuevos.
 
-## 16. Datos históricos
+## 17. Datos históricos
 
 No se deben cobrar automáticamente todos los datos históricos actuales porque existen:
 
@@ -660,7 +755,7 @@ Se recomienda:
 3. ejecutar una conciliación separada;
 4. aplicar créditos o cargos históricos únicamente después de revisión administrativa.
 
-## 17. Reglas de rendimiento
+## 18. Reglas de rendimiento
 
 - índices compuestos por `organizacion_id` y fecha;
 - índices por `periodo_id`, `facturable` y `categoria_meta`;
@@ -672,7 +767,7 @@ Se recomienda:
 - evitar joins sin filtro de tenant;
 - particionamiento solamente si el volumen futuro lo justifica.
 
-## 18. Auditoría y protección contra fraude o error
+## 19. Auditoría y protección contra fraude o error
 
 Debe conservarse:
 
@@ -691,7 +786,7 @@ Debe conservarse:
 
 No se deben editar ni borrar cargos de periodos cerrados. Las correcciones deben ser movimientos compensatorios.
 
-## 19. Riesgos y decisiones pendientes
+## 20. Riesgos y decisiones pendientes
 
 ### Decisión 1: precio de Meta
 
@@ -709,7 +804,7 @@ El plan inicial cubre WhatsApp/Meta. Email, Messenger, Webchat y otros canales d
 
 Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido. La base debe guardar subtotal, impuesto y total por separado si se requiere facturación fiscal.
 
-## 20. Fases de implementación
+## 21. Fases de implementación
 
 ### Fase 1: definición
 
@@ -762,7 +857,7 @@ Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido
 - cerrar el periodo;
 - comenzar facturación.
 
-## 21. Criterio de terminado
+## 22. Criterio de terminado
 
 El plan estará listo para operar cuando:
 
