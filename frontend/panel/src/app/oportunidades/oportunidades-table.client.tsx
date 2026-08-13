@@ -22,6 +22,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NoteAttachments } from "@/components/crm/note-attachments";
+import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 import {
   OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
@@ -29,7 +31,7 @@ import {
 } from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -671,6 +673,8 @@ function OpportunityRowDetails({
   const [noteFeedback, setNoteFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
     null,
   );
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
+  const noteFileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedVendorLabel =
     vendorOptions.find((option) => option.id === selectedVendorId)?.label?.trim() || "";
 
@@ -859,8 +863,8 @@ function OpportunityRowDetails({
 
   const handleCreateNote = async () => {
     const text = noteText.trim();
-    if (!text) {
-      setNoteFeedback({ type: "error", message: "Escribe una nota antes de guardar." });
+    if (!text && !noteFiles.length) {
+      setNoteFeedback({ type: "error", message: "Escribe una nota o adjunta al menos un archivo." });
       return;
     }
 
@@ -871,7 +875,7 @@ function OpportunityRowDetails({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          texto: text,
+          texto: text || "Evidencia adjunta",
           tipo: "interna",
           visible_para_cliente: false,
         }),
@@ -880,7 +884,12 @@ function OpportunityRowDetails({
       if (!response.ok) {
         throw new Error(typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`);
       }
+      const createdNoteId = typeof body?.data?.id === "string" ? body.data.id : null;
+      if (createdNoteId) {
+        for (const file of noteFiles) await uploadNoteAttachment(createdNoteId, file);
+      }
       setNoteText("");
+      setNoteFiles([]);
       setNoteFeedback({ type: "success", message: "Nota creada." });
       await fetchDetail();
     } catch (error) {
@@ -1072,9 +1081,37 @@ function OpportunityRowDetails({
               <Textarea
                 value={noteText}
                 onChange={(event) => setNoteText(event.target.value)}
-                placeholder="Escribe una nota interna para esta oportunidad..."
+                placeholder="Escribe una nota interna o agrega evidencia..."
                 disabled={notePending}
               />
+              <input
+                ref={noteFileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx"
+                className="hidden"
+                onChange={(event) => {
+                  setNoteFiles((current) => [...current, ...Array.from(event.target.files ?? [])]);
+                  event.target.value = "";
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => noteFileInputRef.current?.click()}
+                  disabled={notePending}
+                >
+                  Adjuntar evidencia
+                </Button>
+                {noteFiles.length ? (
+                  <span className="text-xs text-muted-foreground">
+                    {noteFiles.length} archivo(s) listo(s) para subir
+                  </span>
+                ) : null}
+              </div>
               {noteFeedback ? (
                 <p className={noteFeedback.type === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>
                   {noteFeedback.message}
@@ -1116,6 +1153,7 @@ function OpportunityRowDetails({
                   <p className="mt-1 text-xs text-muted-foreground">
                     {renderUserLine(note.creado_por_usuario, "Nota", note.creado_en)}
                   </p>
+                  <NoteAttachments noteId={note.id} />
                 </div>
               ))}
             </div>

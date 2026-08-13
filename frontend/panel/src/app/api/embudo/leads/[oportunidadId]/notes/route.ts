@@ -29,8 +29,7 @@ export async function GET(
 
   const response = await callCrmApi<{ items?: CrmNoteRow[] } | CrmNoteRow[]>("/crm/notas", {
     searchParams: {
-      relacion_tipo: "oportunidad",
-      relacion_id: oportunidadId,
+      oportunidad_id: oportunidadId,
     },
     withUserToken: true,
   });
@@ -101,4 +100,3 @@ export async function POST(
 
   return NextResponse.json({ data: response.data });
 }
-

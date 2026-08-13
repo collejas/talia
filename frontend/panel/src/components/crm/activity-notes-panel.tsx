@@ -92,8 +92,8 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed) {
-      setError("Escribe una nota o instrucción.");
+    if (!trimmed && !pendingFiles.length) {
+      setError("Escribe una nota o adjunta al menos un archivo.");
       return;
     }
     const reminderIso = reminderEnabled ? toIso(reminderAt) : null;
@@ -114,7 +114,7 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
           body: JSON.stringify({
             tipo: activityType,
             asunto: trimmed.slice(0, 255),
-            descripcion: trimmed,
+            descripcion: trimmed || "Evidencia adjunta",
             estado: "pendiente",
             prioridad: "media",
             fecha_vencimiento: reminderIso,
@@ -130,7 +130,7 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          texto: trimmed,
+          texto: trimmed || "Evidencia adjunta",
           actividad_id: activityId,
           tipo: "interna",
           visible_para_cliente: false,
@@ -234,7 +234,7 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
               <div key={note.id} className="rounded-lg border p-3 text-sm">
                 <p className="whitespace-pre-wrap">{note.texto}</p>
                 <p className="mt-2 text-xs text-muted-foreground">{formatDate(note.creado_en)}</p>
-                {entityType === "oportunidad" ? <NoteAttachments noteId={note.id} /> : null}
+                <NoteAttachments noteId={note.id} />
               </div>
             ))}
           </div>

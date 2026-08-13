@@ -48,6 +48,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
+import { NoteAttachments } from "@/components/crm/note-attachments";
+import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 import {
   DEFAULT_QUOTE_VENDOR_SETTINGS,
   buildQuoteVendorSettingsPayload,
@@ -1000,6 +1002,8 @@ export function LeadDrawer({
   const [noteReminderEnabled, setNoteReminderEnabled] = useState(false);
   const [noteReminderAt, setNoteReminderAt] = useState("");
   const [noteActivityType, setNoteActivityType] = useState("seguimiento");
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
+  const noteFileInputRef = useRef<HTMLInputElement | null>(null);
   const [notesState, setNotesState] = useState<NotesState>({ status: "idle", data: [] });
   const [activitiesState, setActivitiesState] = useState<ActivitiesState>({ status: "idle", data: [] });
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -1604,8 +1608,8 @@ export function LeadDrawer({
     if (!card) return;
 
     const trimmed = noteText.trim();
-    if (!trimmed) {
-      setNoteError("Escribe una nota antes de guardar.");
+    if (!trimmed && !noteFiles.length) {
+      setNoteError("Escribe una nota o adjunta al menos un archivo.");
       return;
     }
     if (noteReminderEnabled && !noteReminderAt.trim()) {
@@ -1632,7 +1636,7 @@ export function LeadDrawer({
           body: JSON.stringify({
             tipo: noteActivityType,
             asunto: `Seguimiento de ${card.nombre ?? "oportunidad"}`,
-            descripcion: trimmed,
+            descripcion: trimmed || "Evidencia adjunta",
             prioridad: "media",
             estado: "pendiente",
               fecha_vencimiento: reminderAtIso,
@@ -1654,7 +1658,7 @@ export function LeadDrawer({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          texto: trimmed,
+          texto: trimmed || "Evidencia adjunta",
           actividad_id: activityId || undefined,
           tipo: "interna",
           visible_para_cliente: false,
@@ -1667,7 +1671,13 @@ export function LeadDrawer({
         throw new Error(message);
       }
 
+      const createdNoteId = typeof noteBody?.data?.id === "string" ? noteBody.data.id : null;
+      if (createdNoteId) {
+        for (const file of noteFiles) await uploadNoteAttachment(createdNoteId, file);
+      }
+
       setNoteText("");
+      setNoteFiles([]);
       setNoteReminderEnabled(false);
       setNoteReminderAt("");
       setNoteActivityType("seguimiento");
@@ -1699,6 +1709,7 @@ export function LeadDrawer({
     noteReminderAt,
     noteReminderEnabled,
     noteText,
+    noteFiles,
   ]);
 
   const handleCompleteActivity = useCallback(
@@ -3898,10 +3909,37 @@ export function LeadDrawer({
                 <Textarea
                   value={noteText}
                   onChange={(event) => setNoteText(event.target.value)}
-                  placeholder="Escribe una nota interna..."
+                  placeholder="Escribe una nota interna o agrega evidencia..."
                   disabled={notePending || isBusy}
-                  minLength={1}
                 />
+                <input
+                  ref={noteFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx"
+                  className="hidden"
+                  onChange={(event) => {
+                    setNoteFiles((current) => [...current, ...Array.from(event.target.files ?? [])]);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => noteFileInputRef.current?.click()}
+                    disabled={notePending || isBusy}
+                  >
+                    <IconPaperclip className="size-4" /> Adjuntar evidencia
+                  </Button>
+                  {noteFiles.length ? (
+                    <span className="text-xs text-muted-foreground">
+                      {noteFiles.length} archivo(s) listo(s) para subir
+                    </span>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="note-reminder-enabled"
@@ -3983,6 +4021,7 @@ export function LeadDrawer({
                         {renderUserLine(entry.creado_por_usuario, "Nota", entry.creado_en)}
                         {entry.actividad_id ? " · Vinculada a actividad" : ""}
                       </p>
+                      <NoteAttachments noteId={entry.id} />
                     </div>
                   ))
                 ) : notesState.status === "loaded" ? (

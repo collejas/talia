@@ -148,8 +148,7 @@ export async function GET(
   const [notesResult, activitiesResult, quotesResult, historyResult] = await Promise.all([
     callCrmApi<{ items?: CRMNoteRow[] } | CRMNoteRow[]>("/crm/notas", {
       searchParams: {
-        relacion_tipo: "oportunidad",
-        relacion_id: oportunidadId,
+        oportunidad_id: oportunidadId,
       },
       withUserToken: true,
     }),

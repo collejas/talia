@@ -57,7 +57,7 @@ function NoteDetails({ row }: { row: DataTableRow }) {
         <p className="mt-1 text-xs text-muted-foreground">
           {opportunityLabel ? `Oportunidad: ${opportunityLabel}` : `Relación: ${note.relacion_tipo} · ${note.relacion_id}`}
         </p>
-        {note.relacion_tipo === "oportunidad" ? <NoteAttachments noteId={note.id} /> : null}
+        <NoteAttachments noteId={note.id} />
         {contextHref ? (
           <Button asChild variant="link" className="mt-2 h-auto px-0">
             <Link href={contextHref}>Abrir {contextType === "persona" ? "contacto" : "oportunidad"}</Link>

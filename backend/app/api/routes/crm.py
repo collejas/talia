@@ -38680,14 +38680,21 @@ async def list_notes(
     relacion_tipo: str | None = Query(default=None),
     relacion_id: UUID | None = Query(default=None),
     actividad_id: UUID | None = Query(default=None),
+    oportunidad_id: UUID | None = Query(default=None),
 ) -> list[CRMNote]:
     try:
-        rows = await repo.list_notes(
-            organizacion_id=organizacion_id,
-            relacion_tipo=relacion_tipo,
-            relacion_id=relacion_id,
-            actividad_id=actividad_id,
-        )
+        if oportunidad_id:
+            rows = await repo.list_notes_for_opportunity(
+                organizacion_id=organizacion_id,
+                oportunidad_id=oportunidad_id,
+            )
+        else:
+            rows = await repo.list_notes(
+                organizacion_id=organizacion_id,
+                relacion_tipo=relacion_tipo,
+                relacion_id=relacion_id,
+                actividad_id=actividad_id,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     user_ids = sorted(
@@ -38793,7 +38800,7 @@ async def create_note(
     return CRMNote.model_validate(row)
 
 
-async def _get_opportunity_note_or_404(
+async def _get_crm_note_or_404(
     *,
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -38805,8 +38812,6 @@ async def _get_opportunity_note_or_404(
         raise HTTPException(status_code=502, detail="nota_lookup_failed") from exc
     if not note:
         raise HTTPException(status_code=404, detail="nota_no_encontrada")
-    if str(note.get("relacion_tipo") or "").strip().lower() != "oportunidad":
-        raise HTTPException(status_code=400, detail="nota_no_asociada_a_oportunidad")
     return note
 
 
@@ -38819,7 +38824,7 @@ async def list_note_attachments(
     nota_id: UUID,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[CRMNoteAttachment]:
-    await _get_opportunity_note_or_404(
+    await _get_crm_note_or_404(
         repo=repo,
         organizacion_id=organizacion_id,
         nota_id=nota_id,
@@ -38857,7 +38862,7 @@ async def upload_note_attachment(
     nota_id: UUID,
     file: UploadFile = File(...),
 ) -> CRMNoteAttachment:
-    await _get_opportunity_note_or_404(
+    await _get_crm_note_or_404(
         repo=repo,
         organizacion_id=organizacion_id,
         nota_id=nota_id,
@@ -38949,7 +38954,7 @@ async def get_note_attachment_url(
     nota_id: UUID,
     adjunto_id: UUID,
 ) -> dict[str, Any]:
-    await _get_opportunity_note_or_404(
+    await _get_crm_note_or_404(
         repo=repo,
         organizacion_id=organizacion_id,
         nota_id=nota_id,
@@ -38984,7 +38989,7 @@ async def delete_note_attachment(
     nota_id: UUID,
     adjunto_id: UUID,
 ) -> Response:
-    await _get_opportunity_note_or_404(
+    await _get_crm_note_or_404(
         repo=repo,
         organizacion_id=organizacion_id,
         nota_id=nota_id,

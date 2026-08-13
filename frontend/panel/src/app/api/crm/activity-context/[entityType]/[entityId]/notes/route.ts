@@ -20,7 +20,9 @@ export async function GET(
   if (!relation) return NextResponse.json({ error: "entidad_no_soportada" }, { status: 400 });
 
   const response = await callCrmApi<{ items?: unknown[] } | unknown[]>("/crm/notas", {
-    searchParams: relation,
+    searchParams: entityType === "oportunidad"
+      ? { oportunidad_id: entityId }
+      : relation,
     withUserToken: true,
   });
   if (!response.ok) {

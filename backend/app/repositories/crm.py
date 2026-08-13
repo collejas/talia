@@ -8063,6 +8063,40 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar notas: {data!r}")
         return data
 
+    async def list_notes_for_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+    ) -> list[dict[str, Any]]:
+        opportunity = await self.get_opportunity(
+            organizacion_id=organizacion_id,
+            opportunity_id=oportunidad_id,
+        )
+        if not opportunity:
+            return []
+        relation_filters = [("oportunidad", oportunidad_id)]
+        persona_id = opportunity.get("persona_id") or opportunity.get("contacto_id")
+        if persona_id:
+            relation_filters.append(("persona", UUID(str(persona_id))))
+
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        for relacion_tipo, relacion_id in relation_filters:
+            rows = await self.list_notes(
+                organizacion_id=organizacion_id,
+                relacion_tipo=relacion_tipo,
+                relacion_id=relacion_id,
+            )
+            for row in rows:
+                row_id = str(row.get("id") or "")
+                if row_id:
+                    rows_by_id[row_id] = row
+        return sorted(
+            rows_by_id.values(),
+            key=lambda row: str(row.get("creado_en") or ""),
+            reverse=True,
+        )
+
     async def get_note(
         self,
         *,
@@ -8131,7 +8165,7 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
-        resp = await self._request(
+        resp = await self._request_service_role(
             "POST",
             "/rest/v1/nota_adjuntos",
             json=body,
@@ -8152,7 +8186,7 @@ class CRMRepository:
         nota_id: UUID,
         attachment_id: UUID,
     ) -> None:
-        await self._request(
+        await self._request_service_role(
             "DELETE",
             "/rest/v1/nota_adjuntos",
             params={
@@ -24842,7 +24876,7 @@ class CRMRepository:
                 continue
             for attempt in range(3):
                 try:
-                    resp = await self._request(
+                    resp = await self._request_service_role(
                         "POST",
                         f"/storage/v1/object/sign/{bucket_name}/{candidate}",
                         json={"expiresIn": expires_in},
