@@ -18,6 +18,7 @@ type InboxComposerProps = {
   onSend?: (content: string, attachments: ComposerAttachment[]) => Promise<boolean | void> | boolean | void;
   onAttachmentAdd?: (files: FileList | null) => Promise<void> | void;
   onAttachmentRemove?: (id: string) => void;
+  manualMode?: boolean;
   disabled?: boolean;
   disabledMessage?: string;
 };
@@ -32,6 +33,7 @@ export function InboxComposer({
   onSend,
   onAttachmentAdd,
   onAttachmentRemove,
+  manualMode = false,
   disabled,
   disabledMessage,
 }: InboxComposerProps) {
@@ -154,10 +156,12 @@ export function InboxComposer({
               }
             }}
             placeholder={placeholder ?? "Escribe tu respuesta"}
-            className="min-h-[34px] flex-1 resize-none rounded border border-input bg-background px-2 py-1.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className={`flex-1 rounded border border-input bg-background px-2 py-1.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+              manualMode ? "min-h-[84px] max-h-[240px] resize-y" : "min-h-[34px] resize-none"
+            }`}
             disabled={interactionDisabled}
             autoComplete="off"
-            rows={1}
+            rows={manualMode ? 3 : 1}
           />
           <Button
             type="submit"

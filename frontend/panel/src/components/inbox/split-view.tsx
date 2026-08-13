@@ -2575,6 +2575,7 @@ export function InboxSplitView({
               onSend={handleSendMessage}
               onAttachmentAdd={handleAttachmentUpload}
               onAttachmentRemove={handleAttachmentRemove}
+              manualMode={selectedThread.manualMode}
               disabled={!selectedThread.manualMode}
               disabledMessage='Activa "Pausar asistente" para escribir manualmente.'
             />
