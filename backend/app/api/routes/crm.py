@@ -42132,7 +42132,7 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
-            "schema_version": "resumen-v2-attribution-rankings-v6-referrer-rankings",
+            "schema_version": "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,

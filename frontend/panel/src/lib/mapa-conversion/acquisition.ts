@@ -246,6 +246,7 @@ export function buildDeferredCampaignAttribution(
 ): NonNullable<DemografiaSummaryResponse["attribution_rankings"]> {
   const campaignRank = new Map<string, Record<string, unknown>>();
   const templateRank = new Map<string, Record<string, unknown>>();
+  const whatsappTemplateRows = new Map<string, Array<Record<string, unknown>>>();
   const channelFilter = normalizeText(filters.campanaTipo);
   const templateFilter = normalizeText(filters.templateId);
 
@@ -256,6 +257,17 @@ export function buildDeferredCampaignAttribution(
     const campaignLabel = String(row.campana_nombre || "Sin campaña").trim() || "Sin campaña";
     const templateId = String(row.template_id || "").trim();
     if (templateFilter && templateId !== templateFilter) continue;
+
+    // WhatsApp has a separate operational attribution feed whose conversion
+    // metric is oportunidades_total. The template feed's sesiones_utm is a
+    // traffic metric and must not be added to WhatsApp opportunities.
+    if (canal === "whatsapp") {
+      const campaignKey = campaignId || campaignLabel;
+      const rows = whatsappTemplateRows.get(campaignKey) ?? [];
+      rows.push(row);
+      whatsappTemplateRows.set(campaignKey, rows);
+      continue;
+    }
     const sessions = toNumber(row.sesiones_utm);
     const sent = toNumber(row.envios_enviados);
     const campaignKey = `${canal}::${campaignId || campaignLabel}`;
@@ -308,6 +320,29 @@ export function buildDeferredCampaignAttribution(
     campaign.conversion_total = toNumber(campaign.conversion_total) + toNumber(row.oportunidades_total);
     campaign.context_total = toNumber(campaign.context_total) + toNumber(row.conversaciones_total);
     campaignRank.set(key, campaign);
+
+    // The WhatsApp operational RPC is aggregated by campaign. When that
+    // campaign has exactly one template in the selected range, its distinct
+    // opportunity total can safely be shown at template level as well.
+    const templateRows = whatsappTemplateRows.get(campaignId || campaignLabel) ?? [];
+    if (templateRows.length === 1) {
+      const templateRow = templateRows[0];
+      const templateId = String(templateRow.template_id || templateRow.template_slug || "").trim();
+      if (templateId) {
+        const templateKey = `whatsapp::${campaignId || campaignLabel}::${templateId}`;
+        templateRank.set(templateKey, {
+          value: templateId,
+          label: String(templateRow.template_nombre || templateRow.template_slug || templateId).trim(),
+          canal,
+          parent_campaign_value: campaignId || null,
+          parent_campaign_label: campaignLabel,
+          conversion_total: toNumber(row.oportunidades_total),
+          context_total: toNumber(row.conversaciones_total),
+          conversion_label: "Oportunidades",
+          context_label: "Conversaciones",
+        });
+      }
+    }
   }
 
   const finalize = (rows: Record<string, unknown>[]) => rows
