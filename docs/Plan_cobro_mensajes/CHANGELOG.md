@@ -74,9 +74,9 @@ Documentos:
 ### Estado de implementación
 
 **Diseño y documentación:** completado.  
-**Migraciones de cobro:** pendientes.  
-**Backend de cobro:** pendiente.  
-**Frontend de configuración y reportes:** pendiente.  
+**Migraciones de cobro:** completado.
+**Backend de cobro:** en desarrollo.
+**Frontend de configuración y reportes:** pendiente.
 **Activación de cobro:** pendiente.
 
 ### Base de datos — En desarrollo / estructura aplicada
@@ -93,11 +93,22 @@ Documentos:
 - No se generaron cargos ni se hizo backfill de mensajes históricos.
 - Se añadió una restricción de exclusión para impedir periodos solapados del mismo tenant.
 
+### Backend de contabilización — En desarrollo
+
+- Se creó y aplicó `supabase/migrations/20260813_142000_message_billing_register_rpc.sql`.
+- `cobro_mensajes.canal` quedó como columna explícita para resolver tarifas por canal.
+- `registrar_cobro_mensaje` valida tenant, mensaje y conversación; resuelve tarifa particular/global; crea el periodo mensual; inserta el ledger de forma idempotente; actualiza el resumen del hilo y los totales del periodo.
+- El cargo GEOACTIV se fija en `$0.09 MXN` por cada mensaje aceptado con identificador del proveedor, tanto entrante como saliente.
+- El costo Meta se calcula únicamente para mensajes salientes del hilo iniciado por la empresa y queda separado del cargo GEOACTIV.
+- `actualizar_cobro_meta_mensaje` captura posteriormente categoría, pricing y billable desde el status de Meta y ajusta el costo histórico del ledger y del periodo.
+- El flujo WhatsApp llama al ledger después de persistir el mensaje. Un error de billing no interrumpe el registro ni la entrega del mensaje.
+- Se agregaron pruebas unitarias para tarifas/campos explícitos, detección de Meta, extracción de pricing y ausencia de identificador del proveedor.
+
 Pendiente de esta fase:
 
-- Crear el servicio transaccional que poblará el ledger.
-- Definir la resolución final de tarifa Meta por categoría y fallback.
 - Validar RLS con usuarios reales de owner y tenant normal.
+- Probar una conversación real entrante y una conversación iniciada por la empresa con callbacks de Meta.
+- Añadir el endpoint de consulta y el panel de reportes.
 
 ## Próximas fases
 
@@ -118,10 +129,8 @@ Pendiente de esta fase:
 
 ### Fase 3 — Backend
 
-- Crear servicio transaccional e idempotente de consumo.
-- Registrar mensajes entrantes y salientes.
-- Resolver tarifa Meta y tarifa GEOACTIV efectiva.
-- Calcular cargo de la aplicación y costo combinado.
+- Validar en entorno real el servicio transaccional e idempotente ya creado.
+- Completar la cobertura de Messenger, Webchat y otros canales cuando se active su cobro.
 - Crear endpoints administrativos y de tenant.
 
 ### Fase 4 — Frontend

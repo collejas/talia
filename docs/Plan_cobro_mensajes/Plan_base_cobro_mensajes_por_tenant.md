@@ -858,12 +858,12 @@ Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido
 - agregar índices;
 - crear constraints;
 - configurar RLS;
-- crear funciones transaccionales de registro.
+- crear funciones transaccionales de registro. **Completado para WhatsApp/Meta** mediante `registrar_cobro_mensaje` y `actualizar_cobro_meta_mensaje`.
 
 ### Fase 3: backend
 
-- capturar columnas de pricing de Meta;
-- registrar consumos de forma idempotente;
+- capturar columnas de pricing de Meta. **Implementado para callbacks Cloud API**;
+- registrar consumos de forma idempotente. **Implementado después de la persistencia del mensaje WhatsApp**;
 - separar estado de proveedor y estado de conciliación;
 - crear endpoints tenant y administrador;
 - evitar que el cliente controle importes o tenant.
@@ -917,4 +917,4 @@ El plan estará listo para operar cuando:
 
 **Documento base para aprobación comercial y técnica.**
 
-Todavía no crea tablas, no cambia tarifas y no activa cobros. La regla documentada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.
+La base de datos y el primer servicio backend de contabilización ya están aplicados para WhatsApp/Meta. Todavía no se activan cobros históricos ni facturación automática. La regla implementada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.

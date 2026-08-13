@@ -7603,6 +7603,73 @@ class CRMRepository:
             return None
         return row if isinstance(row, dict) else None
 
+    async def register_billing_message(
+        self,
+        *,
+        organizacion_id: str,
+        mensaje_id: str,
+        proveedor: str,
+        canal: str,
+        proveedor_mensaje_id: str,
+        estado_proveedor: str = "accepted",
+        categoria_meta: str = "unknown",
+        tipo_pricing_meta: str | None = None,
+        billable_meta: bool | None = None,
+        es_plantilla: bool = False,
+        nombre_plantilla: str | None = None,
+        idioma_plantilla: str | None = None,
+        fuente_registro: str = "backend_message_registration",
+        fecha_evento: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Registra consumo mediante el RPC transaccional e idempotente."""
+        payload: dict[str, Any] = {
+            "p_organizacion_id": organizacion_id,
+            "p_mensaje_id": mensaje_id,
+            "p_proveedor": proveedor,
+            "p_canal": canal,
+            "p_proveedor_mensaje_id": proveedor_mensaje_id,
+            "p_estado_proveedor": estado_proveedor,
+            "p_categoria_meta": categoria_meta,
+            "p_tipo_pricing_meta": tipo_pricing_meta,
+            "p_billable_meta": billable_meta,
+            "p_es_plantilla": es_plantilla,
+            "p_nombre_plantilla": nombre_plantilla,
+            "p_idioma_plantilla": idioma_plantilla,
+            "p_fuente_registro": fuente_registro,
+        }
+        if fecha_evento is not None:
+            payload["p_fecha_evento"] = fecha_evento.isoformat()
+        data = await self._rpc("registrar_cobro_mensaje", payload)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada registrar_cobro_mensaje: {data!r}")
+        return data[0]
+
+    async def update_billing_meta_message(
+        self,
+        *,
+        proveedor: str,
+        proveedor_mensaje_id: str,
+        estado_proveedor: str | None = None,
+        categoria_meta: str | None = None,
+        tipo_pricing_meta: str | None = None,
+        billable_meta: bool | None = None,
+    ) -> dict[str, Any] | None:
+        """Actualiza categoría/precio Meta cuando llega el status del proveedor."""
+        data = await self._rpc(
+            "actualizar_cobro_meta_mensaje",
+            {
+                "p_proveedor": proveedor,
+                "p_proveedor_mensaje_id": proveedor_mensaje_id,
+                "p_estado_proveedor": estado_proveedor,
+                "p_categoria_meta": categoria_meta,
+                "p_tipo_pricing_meta": tipo_pricing_meta,
+                "p_billable_meta": billable_meta,
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        return None
+
     async def record_webchat_visit(
         self,
         *,

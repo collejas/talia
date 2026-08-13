@@ -22,6 +22,7 @@ from app.services.scoring_contract import (
 )
 from app.services.phone_utils import normalize_phone
 from app.services import tenant_runtime
+from app.services import message_billing
 from app.services.ui_realtime_hub import inbox_topic_for_org, ui_realtime_hub
 from app.services.user_notifications import (
     UserNotificationAction,
@@ -1887,6 +1888,39 @@ async def register_whatsapp_message(
         raise StorageError(str(exc)) from exc
     conversation_id = result.get("conversation_id")
 
+    # El ledger es idempotente y se mantiene aislado del flujo principal: una
+    # falla de configuración de tarifas nunca debe borrar ni impedir el
+    # registro del mensaje ya aceptado por WhatsApp.
+    billing_org = (
+        result.get("organizacion_id")
+        or organizacion_id
+        or metadata_payload.get("resolved_organizacion_id")
+    )
+    try:
+        billing_result = await message_billing.register_message_consumption(
+            repo=repo,
+            organizacion_id=str(billing_org or "") or None,
+            mensaje_id=str(result.get("message_id") or "") or None,
+            proveedor_mensaje_id=message_sid,
+            direccion=direction,
+            metadata=metadata_payload,
+            webhook_payload=webhook_payload,
+        )
+        if billing_result and billing_result.get("duplicado"):
+            logger.info(
+                "storage.message_billing_duplicate_ignored",
+                extra={"message_id": str(result.get("message_id") or "")},
+            )
+    except (CRMRepositoryError, AttributeError) as exc:
+        logger.warning(
+            "storage.message_billing_failed",
+            extra={
+                "message_id": str(result.get("message_id") or ""),
+                "organizacion_id": str(billing_org or ""),
+                "error": str(exc),
+            },
+        )
+
     if direction == "entrante" and conversation_id:
         from app.services import whatsapp_followups as whatsapp_followup_jobs
 
@@ -2799,7 +2833,16 @@ async def record_delivery_event(
             error_code=error_code,
             provider_timestamp=provider_timestamp,
         )
-    except CRMRepositoryError as exc:
+        if provider == "meta":
+            pricing_fields = message_billing.extract_meta_pricing_fields(raw_payload)
+            if pricing_fields:
+                await repo.update_billing_meta_message(
+                    proveedor=provider,
+                    proveedor_mensaje_id=message_sid,
+                    estado_proveedor=event,
+                    **pricing_fields,
+                )
+    except (CRMRepositoryError, AttributeError) as exc:
         raise StorageError(str(exc)) from exc
 
 
