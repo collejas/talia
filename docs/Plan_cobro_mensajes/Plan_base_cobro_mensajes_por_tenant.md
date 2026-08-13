@@ -269,31 +269,17 @@ De esta forma, cambiar una tarifa no modifica cobros históricos.
 
 Todas las tablas nuevas deben tener columnas explícitas. No se utilizarán `metadata`, `payload`, `data`, `extras`, `settings`, `json`, `jsonb` ni campos equivalentes para guardar información estructural del cobro.
 
-### 9.1 `cobro_planes`
+### 9.1 Reutilización de facturación comercial existente
 
-Catálogo de planes comerciales.
+El repositorio ya cuenta con `commercial_plans`, `tenant_billing_accounts` y `tenant_billing_events`, utilizados para suscripción y estado comercial de Stripe. No se crearán duplicados para el consumo de mensajes.
 
-Columnas:
+El ledger de mensajes queda separado de Stripe:
 
-```text
-id uuid primary key
-codigo text unique not null
-nombre text not null
-descripcion text null
-moneda char(3) not null default 'MXN'
-activo boolean not null default true
-vigente_desde timestamptz not null
-vigente_hasta timestamptz null
-creado_en timestamptz not null default now()
-actualizado_en timestamptz not null default now()
-```
+- `tenant_billing_accounts`: suscripción, acceso y estado comercial;
+- `tenant_billing_events`: idempotencia de eventos Stripe;
+- `cobro_*`: consumo de mensajes, tarifas, periodos, costos y estadísticas.
 
-Constraints:
-
-- precios mayores o iguales a cero;
-- `vigente_hasta` posterior a `vigente_desde` cuando exista;
-- no más de un plan activo aplicable para el mismo periodo;
-- moneda limitada inicialmente a `MXN`.
+La configuración específica de límites y alertas por tenant se implementa en `cobro_configuracion_tenant`.
 
 ### 9.2 `cobro_tarifas_proveedor`
 
@@ -328,7 +314,7 @@ Constraints:
 - no debe existir solapamiento para la misma combinación de proveedor, canal, país, categoría e iniciador;
 - `iniciador_hilo` limitado a `cliente`, `empresa` o `desconocido`.
 
-### 9.3 `organizaciones_cobro`
+### 9.3 `cobro_configuracion_tenant`
 
 Configuración comercial efectiva por tenant.
 
@@ -336,13 +322,6 @@ Columnas:
 
 ```text
 organizacion_id uuid primary key references organizaciones(id)
-plan_id uuid not null references cobro_planes(id)
-estado text not null
-fecha_inicio_cobro timestamptz not null
-fecha_fin_cobro timestamptz null
-dia_corte smallint not null default 1
-saldo_credito numeric(12,4) not null default 0
-permite_pruebas boolean not null default false
 limite_mensajes_periodo integer null
 limite_costo_app_periodo numeric(14,4) null
 limite_costo_meta_periodo numeric(14,4) null
@@ -350,16 +329,6 @@ porcentaje_alerta_consumo smallint not null default 80
 suspension_automatica_por_limite boolean not null default false
 creado_en timestamptz not null default now()
 actualizado_en timestamptz not null default now()
-```
-
-Estados recomendados:
-
-```text
-pendiente
-prueba
-activo
-suspendido
-cancelado
 ```
 
 ### 9.4 `cobro_periodos`
@@ -379,6 +348,8 @@ mensajes_entrantes_cantidad integer not null default 0
 mensajes_salientes_cantidad integer not null default 0
 hilos_con_actividad_cantidad integer not null default 0
 subtotal_mensajes numeric(14,4) not null default 0
+costo_meta_periodo numeric(14,4) not null default 0
+costo_mensaje_periodo numeric(14,4) not null default 0
 ajustes_total numeric(14,4) not null default 0
 total numeric(14,4) not null default 0
 moneda char(3) not null default 'MXN'

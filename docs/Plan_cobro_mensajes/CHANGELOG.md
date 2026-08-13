@@ -79,6 +79,26 @@ Documentos:
 **Frontend de configuración y reportes:** pendiente.  
 **Activación de cobro:** pendiente.
 
+### Base de datos — En desarrollo / estructura aplicada
+
+- Se creó y aplicó `supabase/migrations/20260813_140000_message_billing_foundation.sql`.
+- Se creó y aplicó `supabase/migrations/20260813_141000_message_billing_period_overlap_guard.sql`.
+- Se crearon tablas para tarifas GEOACTIV globales/particulares, tarifas publicadas de proveedor, configuración de límites, periodos, ledger de mensajes, resúmenes de hilos, ajustes y alertas.
+- Se agregó idempotencia por tenant, proveedor e ID del mensaje.
+- Se agregaron claves foráneas compuestas para proteger relaciones entre tenant, mensaje, conversación, oportunidad y periodo.
+- Se activó y forzó RLS en las nuevas tablas.
+- El owner puede administrar tarifas y configuración; cada tenant puede consultar únicamente sus filas.
+- Se cargó la tarifa global inicial de GEOACTIV de `$0.0900 MXN`.
+- Se cargó la tarifa inicial de Meta de `$0.5614 MXN` para México, WhatsApp, categoría fallback y mensajes iniciados por empresa.
+- No se generaron cargos ni se hizo backfill de mensajes históricos.
+- Se añadió una restricción de exclusión para impedir periodos solapados del mismo tenant.
+
+Pendiente de esta fase:
+
+- Crear el servicio transaccional que poblará el ledger.
+- Definir la resolución final de tarifa Meta por categoría y fallback.
+- Validar RLS con usuarios reales de owner y tenant normal.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado
