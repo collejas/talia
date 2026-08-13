@@ -8063,6 +8063,105 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar notas: {data!r}")
         return data
 
+    async def get_note(
+        self,
+        *,
+        organizacion_id: UUID,
+        note_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{note_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/notas", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener nota: {row!r}")
+        return row
+
+    async def list_note_attachments(
+        self,
+        *,
+        organizacion_id: UUID,
+        nota_id: UUID,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "nota_id": f"eq.{nota_id}",
+            "order": "subido_en.desc",
+            "limit": str(max(1, min(limit, 50))),
+        }
+        resp = await self._request("GET", "/rest/v1/nota_adjuntos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar adjuntos de nota: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_note_attachment(
+        self,
+        *,
+        organizacion_id: UUID,
+        nota_id: UUID,
+        attachment_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "nota_id": f"eq.{nota_id}",
+            "id": f"eq.{attachment_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/nota_adjuntos", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener adjunto de nota: {row!r}")
+        return row
+
+    async def create_note_attachment(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/nota_adjuntos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el adjunto de nota creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear adjunto de nota: {row!r}")
+        return row
+
+    async def delete_note_attachment(
+        self,
+        *,
+        organizacion_id: UUID,
+        nota_id: UUID,
+        attachment_id: UUID,
+    ) -> None:
+        await self._request(
+            "DELETE",
+            "/rest/v1/nota_adjuntos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "nota_id": f"eq.{nota_id}",
+                "id": f"eq.{attachment_id}",
+            },
+        )
+
     async def create_note(
         self,
         *,

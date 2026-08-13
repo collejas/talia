@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { IconCalendarPlus, IconNotes, IconPlus } from "@tabler/icons-react";
+import { IconCalendarPlus, IconNotes, IconPaperclip, IconPlus } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { NoteAttachments } from "@/components/crm/note-attachments";
+import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 
 export type ActivityContextEntityType = "persona" | "cuenta" | "oportunidad";
 
@@ -59,6 +61,8 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
   const [activityType, setActivityType] = React.useState("seguimiento");
   const [pending, setPending] = React.useState(false);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -135,7 +139,13 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
       const noteBody = await noteResponse.json().catch(() => ({}));
       if (!noteResponse.ok) throw new Error(noteBody.error || "No se pudo guardar la nota.");
 
+      const createdNoteId = typeof noteBody.data?.id === "string" ? noteBody.data.id : null;
+      if (createdNoteId && pendingFiles.length) {
+        for (const file of pendingFiles) await uploadNoteAttachment(createdNoteId, file);
+      }
+
       setText("");
+      setPendingFiles([]);
       setReminderEnabled(false);
       setReminderAt("");
       setSuccess(activityId ? "Nota y recordatorio guardados." : "Nota guardada.");
@@ -159,6 +169,23 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
         <form className="space-y-3 rounded-xl border bg-muted/20 p-4" onSubmit={handleSubmit}>
           <div className="flex items-center gap-2 text-sm font-medium"><IconNotes className="size-4" /> Nueva nota</div>
           <Textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="Qué pidió, qué debes enviar o qué debes recordar…" rows={3} />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={(event) => {
+                setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])]);
+                event.target.value = "";
+              }}
+            />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()}>
+              <IconPaperclip className="size-4" /> Adjuntar evidencia
+            </Button>
+            {pendingFiles.length ? <span className="text-xs text-muted-foreground">{pendingFiles.length} archivo(s) listo(s) para subir</span> : null}
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={reminderEnabled} onChange={(event) => setReminderEnabled(event.target.checked)} />
             Programar actividad y recordatorio
@@ -203,7 +230,13 @@ export function ActivityNotesPanel({ entityType, entityId }: ActivityNotesPanelP
         {notes.length ? (
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Notas recientes</h3>
-            {notes.map((note) => <div key={note.id} className="rounded-lg border p-3 text-sm"><p className="whitespace-pre-wrap">{note.texto}</p><p className="mt-2 text-xs text-muted-foreground">{formatDate(note.creado_en)}</p></div>)}
+            {notes.map((note) => (
+              <div key={note.id} className="rounded-lg border p-3 text-sm">
+                <p className="whitespace-pre-wrap">{note.texto}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{formatDate(note.creado_en)}</p>
+                {entityType === "oportunidad" ? <NoteAttachments noteId={note.id} /> : null}
+              </div>
+            ))}
           </div>
         ) : null}
       </CardContent>

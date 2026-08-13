@@ -17085,6 +17085,58 @@ class CRMNoteCreate(BaseModel):
     creado_por_usuario_id: UUID | None = None
 
 
+class CRMNoteAttachment(BaseModel):
+    id: UUID
+    nota_id: UUID
+    nombre_original: str
+    content_type: str
+    tamano_bytes: int
+    checksum_sha256: str | None = None
+    subido_por_usuario_id: UUID | None = None
+    subido_en: datetime
+    url: str | None = None
+
+
+NOTE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024
+NOTE_ATTACHMENT_MAX_COUNT = 10
+NOTE_ATTACHMENT_BUCKET = "crm-note-attachments"
+NOTE_ATTACHMENT_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+def _note_attachment_name(filename: str | None) -> str:
+    candidate = Path((filename or "evidencia").replace("\\", "/")).name.strip()
+    if not candidate or candidate in {".", ".."}:
+        return "evidencia"
+    return candidate[:255]
+
+
+def _note_attachment_response(
+    row: Mapping[str, Any],
+    *,
+    url: str | None = None,
+) -> CRMNoteAttachment:
+    return CRMNoteAttachment(
+        id=UUID(str(row["id"])),
+        nota_id=UUID(str(row["nota_id"])),
+        nombre_original=str(row.get("nombre_original") or "evidencia"),
+        content_type=str(row.get("content_type") or "application/octet-stream"),
+        tamano_bytes=int(row.get("tamano_bytes") or 0),
+        checksum_sha256=row.get("checksum_sha256"),
+        subido_por_usuario_id=UUID(str(row["subido_por_usuario_id"])) if row.get("subido_por_usuario_id") else None,
+        subido_en=row["subido_en"],
+        url=url,
+    )
+
+
 class CRMAuditLog(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -38739,6 +38791,227 @@ async def create_note(
                 extra={"error": str(exc), "note_id": str(row.get("id") or "")},
             )
     return CRMNote.model_validate(row)
+
+
+async def _get_opportunity_note_or_404(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    nota_id: UUID,
+) -> dict[str, Any]:
+    try:
+        note = await repo.get_note(organizacion_id=organizacion_id, note_id=nota_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_lookup_failed") from exc
+    if not note:
+        raise HTTPException(status_code=404, detail="nota_no_encontrada")
+    if str(note.get("relacion_tipo") or "").strip().lower() != "oportunidad":
+        raise HTTPException(status_code=400, detail="nota_no_asociada_a_oportunidad")
+    return note
+
+
+@router.get("/notas/{nota_id}/adjuntos", response_model=list[CRMNoteAttachment])
+async def list_note_attachments(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
+    nota_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[CRMNoteAttachment]:
+    await _get_opportunity_note_or_404(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        nota_id=nota_id,
+    )
+    try:
+        rows = await repo.list_note_attachments(
+            organizacion_id=organizacion_id,
+            nota_id=nota_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjuntos_lookup_failed") from exc
+
+    result: list[CRMNoteAttachment] = []
+    for row in rows:
+        try:
+            url = await repo.create_signed_storage_url(
+                bucket=str(row.get("storage_bucket") or NOTE_ATTACHMENT_BUCKET),
+                object_path=str(row["storage_path"]),
+                expires_in=300,
+            )
+        except CRMRepositoryError:
+            url = None
+        result.append(_note_attachment_response(row, url=url))
+    return result
+
+
+@router.post("/notas/{nota_id}/adjuntos", response_model=CRMNoteAttachment, status_code=status.HTTP_201_CREATED)
+async def upload_note_attachment(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    nota_id: UUID,
+    file: UploadFile = File(...),
+) -> CRMNoteAttachment:
+    await _get_opportunity_note_or_404(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        nota_id=nota_id,
+    )
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="archivo_nombre_requerido")
+
+    content_type = (file.content_type or "").strip().lower()
+    if content_type not in NOTE_ATTACHMENT_MIME_TYPES:
+        raise HTTPException(status_code=415, detail="tipo_de_archivo_no_permitido")
+
+    try:
+        existing = await repo.list_note_attachments(
+            organizacion_id=organizacion_id,
+            nota_id=nota_id,
+            limit=NOTE_ATTACHMENT_MAX_COUNT,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjuntos_lookup_failed") from exc
+    if len(existing) >= NOTE_ATTACHMENT_MAX_COUNT:
+        raise HTTPException(status_code=409, detail="limite_de_adjuntos_excedido")
+
+    content = await file.read(NOTE_ATTACHMENT_MAX_BYTES + 1)
+    if len(content) > NOTE_ATTACHMENT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="archivo_demasiado_grande")
+    if not content:
+        raise HTTPException(status_code=400, detail="archivo_vacio")
+
+    signatures = {
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/webp": content[:4] == b"RIFF" and content[8:12] == b"WEBP",
+        "application/pdf": content.startswith(b"%PDF-"),
+    }
+    if content_type in signatures and not signatures[content_type]:
+        raise HTTPException(status_code=415, detail="contenido_de_archivo_invalido")
+
+    filename = _note_attachment_name(file.filename)
+    attachment_id = uuid4()
+    object_path = f"{organizacion_id}/{nota_id}/{attachment_id}-{filename}"
+    checksum = hashlib.sha256(content).hexdigest()
+    try:
+        await repo.upload_storage_object(
+            bucket=NOTE_ATTACHMENT_BUCKET,
+            object_key=object_path,
+            content=content,
+            content_type=content_type,
+        )
+        row = await repo.create_note_attachment(
+            organizacion_id=organizacion_id,
+            payload={
+                "id": str(attachment_id),
+                "nota_id": str(nota_id),
+                "nombre_original": filename,
+                "content_type": content_type,
+                "tamano_bytes": len(content),
+                "storage_bucket": NOTE_ATTACHMENT_BUCKET,
+                "storage_path": object_path,
+                "checksum_sha256": checksum,
+                "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+    except CRMRepositoryError as exc:
+        try:
+            await repo.delete_storage_object(
+                bucket=NOTE_ATTACHMENT_BUCKET,
+                object_path=object_path,
+            )
+        except CRMRepositoryError:
+            logger.warning("crm.note_attachment_orphan_cleanup_failed", extra={"nota_id": str(nota_id)})
+        raise HTTPException(status_code=502, detail="archivo_subida_fallida") from exc
+    try:
+        url = await repo.create_signed_storage_url(
+            bucket=NOTE_ATTACHMENT_BUCKET,
+            object_path=object_path,
+            expires_in=300,
+        )
+    except CRMRepositoryError:
+        url = None
+    return _note_attachment_response(row, url=url)
+
+
+@router.get("/notas/{nota_id}/adjuntos/{adjunto_id}/url")
+async def get_note_attachment_url(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
+    nota_id: UUID,
+    adjunto_id: UUID,
+) -> dict[str, Any]:
+    await _get_opportunity_note_or_404(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        nota_id=nota_id,
+    )
+    try:
+        row = await repo.get_note_attachment(
+            organizacion_id=organizacion_id,
+            nota_id=nota_id,
+            attachment_id=adjunto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjunto_lookup_failed") from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="nota_adjunto_no_encontrado")
+    try:
+        url = await repo.create_signed_storage_url(
+            bucket=str(row.get("storage_bucket") or NOTE_ATTACHMENT_BUCKET),
+            object_path=str(row["storage_path"]),
+            expires_in=300,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjunto_url_failed") from exc
+    return {"url": url, "expires_in": 300}
+
+
+@router.delete("/notas/{nota_id}/adjuntos/{adjunto_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_note_attachment(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
+    nota_id: UUID,
+    adjunto_id: UUID,
+) -> Response:
+    await _get_opportunity_note_or_404(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        nota_id=nota_id,
+    )
+    try:
+        row = await repo.get_note_attachment(
+            organizacion_id=organizacion_id,
+            nota_id=nota_id,
+            attachment_id=adjunto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjunto_lookup_failed") from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="nota_adjunto_no_encontrado")
+    try:
+        await repo.delete_note_attachment(
+            organizacion_id=organizacion_id,
+            nota_id=nota_id,
+            attachment_id=adjunto_id,
+        )
+        await repo.delete_storage_object(
+            bucket=str(row.get("storage_bucket") or NOTE_ATTACHMENT_BUCKET),
+            object_path=str(row["storage_path"]),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="nota_adjunto_delete_failed") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/audit_logs", response_model=list[CRMAuditLog])

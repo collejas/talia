@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { ActivityNotesPanel, type ActivityContextEntityType } from "@/components/crm/activity-notes-panel";
+import { NoteAttachments } from "@/components/crm/note-attachments";
 import { Button } from "@/components/ui/button";
 import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableRow, DateColumnConfig } from "@/components/data-table";
@@ -56,6 +57,7 @@ function NoteDetails({ row }: { row: DataTableRow }) {
         <p className="mt-1 text-xs text-muted-foreground">
           {opportunityLabel ? `Oportunidad: ${opportunityLabel}` : `Relación: ${note.relacion_tipo} · ${note.relacion_id}`}
         </p>
+        {note.relacion_tipo === "oportunidad" ? <NoteAttachments noteId={note.id} /> : null}
         {contextHref ? (
           <Button asChild variant="link" className="mt-2 h-auto px-0">
             <Link href={contextHref}>Abrir {contextType === "persona" ? "contacto" : "oportunidad"}</Link>
