@@ -43,18 +43,18 @@ def parse_delivery_channels(arguments: dict[str, Any], *, default_channel: str) 
     if isinstance(channels_raw, list):
         for item in channels_raw:
             value = str(item or "").strip().lower()
-            if value in {"email", "whatsapp"} and value not in channels:
+            if value in {"email", "whatsapp", "webchat"} and value not in channels:
                 channels.append(value)
     elif isinstance(channels_raw, str):
         value = channels_raw.strip().lower()
-        if value in {"email", "whatsapp"}:
+        if value in {"email", "whatsapp", "webchat"}:
             channels.append(value)
         elif value == "both":
             channels.extend(["email", "whatsapp"])
 
     if not channels:
         normalized = default_channel.strip().lower()
-        if normalized in {"email", "whatsapp"}:
+        if normalized in {"email", "whatsapp", "webchat"}:
             channels = [normalized]
         else:
             channels = ["email"]

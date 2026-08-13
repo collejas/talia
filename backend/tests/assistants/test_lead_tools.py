@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from app.assistants.tool_runtime import ToolRuntimeContext
@@ -251,3 +253,60 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
     assert payload["profiling_statuses"]["decision_authority"] == "skipped_max_retries"
     assert payload["profiling_reprompt_counts"]["decision_authority"] == 2
     assert payload["events"]["appointment_requested"] is True
+
+
+@pytest.mark.asyncio
+async def test_information_package_defaults_webchat_channel_to_webchat_documents(monkeypatch):
+    async def fake_fetch_persona(persona_id):
+        assert persona_id == "persona-webchat"
+        return {"id": persona_id, "organizacion_id": "00000000-0000-0000-0000-000000000001"}
+
+    async def fake_mail_settings(**__):
+        return SimpleNamespace(username=None, from_name=None)
+
+    async def fake_template(*_, **__):
+        return None
+
+    resolved_calls = []
+
+    async def fake_resolve_documents_for_context(*, context, channel_scope, document_ids=None, category=None, limit=3):
+        resolved_calls.append(
+            {
+                "channel_scope": channel_scope,
+                "document_ids": document_ids,
+                "category": category,
+                "limit": limit,
+                "context_channel": context.channel,
+            }
+        )
+        return [
+            {
+                "id": "doc-1",
+                "title": "Porta Mezquite",
+                "channel_scope": "both",
+                "category": "presentacion",
+                "mime": "application/pdf",
+                "url": "https://example.com/porta-mezquite.pdf",
+                "delivery_url": "https://example.com/porta-mezquite.pdf",
+            }
+        ]
+
+    monkeypatch.setattr(lead_tools, "_fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(lead_tools.tenant_runtime, "get_mail_runtime_settings", fake_mail_settings)
+    monkeypatch.setattr(lead_tools.storage, "fetch_email_template", fake_template)
+    monkeypatch.setattr(lead_tools.document_delivery_service, "resolve_documents_for_context", fake_resolve_documents_for_context)
+
+    result = await lead_tools._handle_information_package(
+        arguments={},
+        context=ToolRuntimeContext(
+            conversation_id="conv-webchat",
+            persona_id="persona-webchat",
+            channel="webchat",
+            organizacion_id="00000000-0000-0000-0000-000000000001",
+        ),
+    )
+
+    assert result["channels"] == ["webchat"]
+    assert result["webchat"]["status"] == "ok"
+    assert result["webchat"]["documents"][0]["category"] == "presentacion"
+    assert resolved_calls[0]["channel_scope"] == "webchat"

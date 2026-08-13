@@ -1781,7 +1781,7 @@ async def _handle_information_package(
         result["whatsapp"] = whatsapp_results
         welcome_document_sent = any(
             isinstance(document, dict)
-            and str(document.get("category") or "").strip().lower() == "welcome"
+            and str(document.get("category") or "").strip().lower() == "presentacion"
             for document in whatsapp_documents
         )
         if welcome_document_sent:
@@ -1806,6 +1806,32 @@ async def _handle_information_package(
             result["documents"] = document_delivery_service.build_document_manifest(
                 whatsapp_documents
             )
+
+    if "webchat" in channels:
+        explicit_webchat_document_selection = any(
+            key in arguments and bool(arguments.get(key))
+            for key in (
+                "assistant_document_ids",
+                "document_ids",
+                "assistant_document_category",
+                "category",
+                "assistant_document_limit",
+                "document_limit",
+            )
+        )
+        webchat_documents = await _resolve_assistant_documents_for_context(
+            arguments,
+            context,
+            channel_scope="webchat",
+            default_limit=3 if explicit_webchat_document_selection else 1,
+        )
+        webchat_manifest = document_delivery_service.build_document_manifest(webchat_documents)
+        result["webchat"] = {
+            "status": "ok",
+            "documents": webchat_manifest,
+        }
+        if "documents" not in result:
+            result["documents"] = webchat_manifest
 
     return result
 

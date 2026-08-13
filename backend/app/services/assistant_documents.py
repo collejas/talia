@@ -22,7 +22,7 @@ ASSISTANT_DOCUMENT_BUCKET = "assistant_documents"
 ASSISTANT_DOCUMENT_DOWNLOAD_ROUTE = "/api/crm/public/assistant-documents"
 ALLOWED_ASSISTANT_DOCUMENT_MIME_TYPES = {"application/pdf"}
 ALLOWED_ASSISTANT_DOCUMENT_EXTENSIONS = {".pdf"}
-ALLOWED_ASSISTANT_DOCUMENT_SCOPES = {"email", "whatsapp", "both"}
+ALLOWED_ASSISTANT_DOCUMENT_SCOPES = {"email", "whatsapp", "webchat", "both"}
 ASSISTANT_DOCUMENT_DOWNLOAD_TTL_SECONDS = 3600
 
 
@@ -51,10 +51,14 @@ def _normalize_category(value: str | None) -> str | None:
         "brochure",
         "folleto",
         "pdf",
-        "presentacion",
-        "presentación",
     }:
         return "general"
+    if normalized in {
+        "presentacion",
+        "presentación",
+        "welcome",
+    }:
+        return "presentacion"
     return normalized
 
 

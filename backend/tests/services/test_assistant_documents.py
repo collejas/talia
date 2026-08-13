@@ -44,6 +44,12 @@ def _make_pdf_upload(filename: str = "catalogo.pdf", content: bytes = b"%PDF-1.4
     )
 
 
+def test_normalize_category_keeps_presentacion() -> None:
+    assert assistant_documents._normalize_category("Presentación") == "presentacion"
+    assert assistant_documents._normalize_category("welcome") == "presentacion"
+    assert assistant_documents._normalize_category("Brochure") == "general"
+
+
 @pytest.mark.asyncio
 async def test_upload_assistant_document_generates_storage_path(
     monkeypatch: pytest.MonkeyPatch,

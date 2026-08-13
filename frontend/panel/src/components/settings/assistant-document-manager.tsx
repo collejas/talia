@@ -45,7 +45,7 @@ export function AssistantDocumentManager({ initialDocuments }: Props) {
   );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("general");
+  const [category, setCategory] = useState("presentacion");
   const [channelScope, setChannelScope] = useState<AssistantDocument["channel_scope"]>("both");
   const [tags, setTags] = useState("");
   const [sortOrder, setSortOrder] = useState("100");
@@ -107,7 +107,7 @@ export function AssistantDocumentManager({ initialDocuments }: Props) {
           replaceDocument(created.data);
           setTitle("");
           setDescription("");
-          setCategory("general");
+          setCategory("presentacion");
           setChannelScope("both");
           setTags("");
           setSortOrder("100");

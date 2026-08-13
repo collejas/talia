@@ -310,7 +310,7 @@ const SECTIONS: SectionConfig[] = [
     fields: [
       { label: "Prompt ID", path: "whatsapp.prompt_id" },
       { label: "Versión del prompt", path: "whatsapp.prompt_version" },
-      { label: "Versión del PDF de bienvenida", path: "whatsapp.welcome_document_prompt_version" },
+      { label: "Versión del PDF de presentación", path: "whatsapp.welcome_document_prompt_version" },
       { label: "Link de ubicación", path: "whatsapp.location_href" },
       { label: "Assistant ID", path: "whatsapp.assistant_id" },
       { label: "Minutos de inactividad", path: "whatsapp.inactivity_minutes", type: "number" },

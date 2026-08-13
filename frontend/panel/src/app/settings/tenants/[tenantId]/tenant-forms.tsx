@@ -2433,7 +2433,7 @@ function TenantWhatsAppSettingsForm({
             </div>
             <div className="space-y-2">
               <Label htmlFor="whatsapp_welcome_document_prompt_version">
-                whatsapp.welcome_document_prompt_version
+                whatsapp.presentacion_document_prompt_version
               </Label>
               <Input
                 id="whatsapp_welcome_document_prompt_version"
@@ -2441,7 +2441,7 @@ function TenantWhatsAppSettingsForm({
                 defaultValue={initialValues.whatsapp_welcome_document_prompt_version ?? ""}
               />
               <p className="text-xs text-muted-foreground">
-                Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de bienvenida.
+                Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de presentación.
               </p>
             </div>
             <div className="space-y-2">

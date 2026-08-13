@@ -1140,7 +1140,7 @@ async def _send_welcome_document_for_conversation(
         documents = await assistant_document_delivery.resolve_documents_for_context(
             context=context,
             channel_scope="whatsapp",
-            category="welcome",
+            category="presentacion",
             limit=1,
         )
     except Exception as exc:
@@ -1178,6 +1178,7 @@ async def _send_welcome_document_for_conversation(
             body=None,
             attachments=[attachments[0]],
             organizacion_id=organizacion_id,
+            meta_phone_number_id=_trim_text(getattr(message, "phone_number_id", None)),
         )
     except Exception as exc:
         logger.warning(
@@ -4980,6 +4981,7 @@ async def _send_meta_whatsapp_reply(
                     source_url=attachment_url,
                     filename=name or "documento.pdf",
                     mime=mime or "application/pdf",
+                    meta_phone_number_id=resolved_meta_phone_number_id,
                 )
                 if media_id:
                     payload = {
@@ -5069,13 +5071,15 @@ async def _upload_meta_whatsapp_document(
     source_url: str,
     filename: str,
     mime: str,
+    meta_phone_number_id: str | None = None,
 ) -> str | None:
     """Sube un PDF a Meta para enviarlo luego como documento por ID."""
 
-    if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+    resolved_meta_phone_number_id = _trim_text(meta_phone_number_id) or runtime.meta_phone_number_id
+    if not resolved_meta_phone_number_id or not runtime.meta_page_access_token:
         return None
     graph_version = runtime.meta_graph_api_version or "v21.0"
-    upload_url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/media"
+    upload_url = f"https://graph.facebook.com/{graph_version}/{resolved_meta_phone_number_id}/media"
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             source_response = await client.get(source_url)
@@ -5305,6 +5309,7 @@ async def send_manual_message(
     template_language: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | str | None = None,
+    meta_phone_number_id: str | None = None,
 ) -> TwilioSendResult:
     """Expone el envío de mensajes manuales desde el panel o automatizaciones."""
     org_uuid: UUID | None
@@ -5321,6 +5326,7 @@ async def send_manual_message(
         template_language=template_language,
         attachments=attachments,
         organizacion_id=org_uuid,
+        meta_phone_number_id=meta_phone_number_id,
     )
 
 

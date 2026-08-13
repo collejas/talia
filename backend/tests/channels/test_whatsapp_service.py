@@ -489,8 +489,8 @@ async def test_handle_incoming_message_skips_post_send_tasks_for_negation(monkey
 
 
 @pytest.mark.asyncio
-async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monkeypatch) -> None:
-    """En el primer turno con el prompt de bienvenida, el backend envía el PDF y marca contexto."""
+async def test_handle_incoming_message_sends_presentation_document_on_first_turn(monkeypatch) -> None:
+    """En el primer turno con el prompt de presentación, el backend envía el PDF y marca contexto."""
     message = _build_sample_message()
 
     monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
@@ -583,12 +583,12 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
         return [
             {
                 "id": "doc-1",
-                "title": "welcome",
+                "title": "presentacion",
                 "channel_scope": "whatsapp",
-                "category": "welcome",
+                "category": "presentacion",
                 "mime": "application/pdf",
-                "url": "https://example.com/welcome.pdf",
-                "delivery_url": "https://example.com/welcome.pdf",
+                "url": "https://example.com/presentacion.pdf",
+                "delivery_url": "https://example.com/presentacion.pdf",
             }
         ]
 
@@ -621,6 +621,132 @@ async def test_handle_incoming_message_sends_welcome_document_on_first_turn(monk
     assert welcome_patches[0]["welcome_document_sent"] is True
     assert welcome_patches[0]["welcome_document_channel"] == "whatsapp"
     assert len(register_calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_incoming_message_falls_back_to_first_whatsapp_document_when_presentation_missing(
+    monkeypatch,
+) -> None:
+    """Si no existe presentación, el backend toma el primer documento activo disponible."""
+    message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service, "_send_whatsapp_read_indicator", _async_false)
+    monkeypatch.setattr(service, "_send_whatsapp_typing_indicator", _async_false)
+    monkeypatch.setattr(service, "_is_simple_greeting_message", lambda *args, **kwargs: False)
+    background_tasks: list[asyncio.Task[Any]] = []
+
+    def run_background_now(coro: Any) -> None:
+        background_tasks.append(asyncio.create_task(coro))
+
+    monkeypatch.setattr(service, "_schedule_background_coroutine", run_background_now)
+    monkeypatch.setattr(
+        service.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        _async_return(
+            SimpleNamespace(
+                provider="twilio",
+                prompt_version="2",
+                welcome_document_prompt_version="2",
+                prospeccion_prompt_version=None,
+                inactivity_minutes=None,
+                reengage_minutes=None,
+                escalate_minutes=None,
+                assistant_id=None,
+                prompt_id=None,
+                project_id=None,
+                voice_api_key=None,
+            )
+        ),
+    )
+
+    send_calls: list[dict] = []
+    resolve_calls: list[dict] = []
+
+    async def fake_register(**kwargs):
+        if kwargs.get("direction") == "entrante":
+            return {
+                "conversation_id": "conv-1",
+                "contact_id": "contact-1",
+                "openai_conversation_id": None,
+            }
+        return {
+            "conversation_id": "conv-1",
+            "contact_id": "contact-1",
+            "openai_conversation_id": "conv-openai",
+        }
+
+    async def fake_fetch_conversation(conversation_id: str):
+        return {
+            "id": conversation_id,
+            "contact_id": "contact-1",
+            "manual_override": False,
+            "openai_conversation_id": None,
+            "last_response_id": None,
+            "inbox_context": {},
+        }
+
+    async def fake_fetch_persona(contact_id: str):
+        return {"id": contact_id, "organizacion_id": "org-test"}
+
+    async def fake_fetch_persona_identities(contact_id: str):
+        return []
+
+    async def fake_generate(**kwargs):
+        return service.AssistantReply(
+            text="Hola.",
+            openai_conversation_id="conv-openai",
+            response_id="resp-1",
+        )
+
+    async def fake_send(**kwargs):
+        send_calls.append(kwargs)
+        return service.TwilioSendResult(sid="SM-out", status="sent")
+
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object):
+        return {
+            "oportunidad_id": "opp-1",
+            "restart_created": False,
+            "restart_sequence": 1,
+        }
+
+    async def fake_resolve_docs(**kwargs):
+        resolve_calls.append(kwargs)
+        if kwargs.get("category") == "presentacion":
+            return []
+        return [
+            {
+                "id": "doc-2",
+                "title": "porta-mezquite",
+                "channel_scope": "whatsapp",
+                "category": "general",
+                "mime": "application/pdf",
+                "url": "https://example.com/porta-mezquite.pdf",
+                "delivery_url": "https://example.com/porta-mezquite.pdf",
+            }
+        ]
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
+    monkeypatch.setattr(service.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity)
+    monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
+    monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
+    monkeypatch.setattr(service.assistant_document_delivery, "resolve_documents_for_context", fake_resolve_docs)
+
+    await service.handle_incoming_message(message)
+    if background_tasks:
+        await asyncio.gather(*background_tasks)
+
+    assert len(send_calls) == 2
+    assert resolve_calls[0]["category"] == "presentacion"
+    assert resolve_calls[1]["category"] is None
+    assert send_calls[1]["attachments"] and send_calls[1]["attachments"][0]["url"] == "https://example.com/porta-mezquite.pdf"
 
 
 @pytest.mark.asyncio
@@ -1331,23 +1457,24 @@ async def test_send_meta_whatsapp_reply_prefers_inbound_phone_number_id(monkeypa
 async def test_send_meta_whatsapp_reply_sends_attachment_payload(monkeypatch) -> None:
     runtime = SimpleNamespace(
         provider="meta",
-        meta_phone_number_id="1139218909270276",
+        meta_phone_number_id="1230608700141056",
         meta_page_access_token="meta-token",
         meta_graph_api_version="v21.0",
     )
     monkeypatch.setattr(service.tenant_runtime, "get_whatsapp_runtime_settings", _async_return(runtime))
 
-    captured: dict[str, Any] = {}
+    captured: dict[str, Any] = {"urls": []}
 
     class FakeResponse:
         status_code = 200
         text = ""
+        content = b"%PDF-test"
 
         def json(self) -> dict[str, Any]:
             return {"messages": [{"id": "wamid.media.1"}]}
 
     class FakeClient:
-        def __init__(self, timeout: float) -> None:
+        def __init__(self, timeout: float, **_: Any) -> None:
             self.timeout = timeout
 
         async def __aenter__(self) -> "FakeClient":
@@ -1356,11 +1483,24 @@ async def test_send_meta_whatsapp_reply_sends_attachment_payload(monkeypatch) ->
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
-            captured["url"] = url
+        async def get(self, url: str) -> FakeResponse:
+            return FakeResponse()
+
+        async def post(
+            self,
+            url: str,
+            json: dict[str, Any] | None = None,
+            headers: dict[str, str] | None = None,
+            **_: Any,
+        ) -> FakeResponse:
+            captured["urls"].append(url)
             captured["json"] = json
             captured["headers"] = headers
-            return FakeResponse()
+            response = FakeResponse()
+            response.json = lambda: (
+                {"id": "media.1"} if url.endswith("/media") else {"messages": [{"id": "wamid.media.1"}]}
+            )
+            return response
 
     monkeypatch.setattr(service.httpx, "AsyncClient", FakeClient)
 
@@ -1375,13 +1515,18 @@ async def test_send_meta_whatsapp_reply_sends_attachment_payload(monkeypatch) ->
             }
         ],
         organizacion_id=UUID("39e32c05-bfc2-4794-8aab-225873f2bf19"),
+        meta_phone_number_id="1139218909270276",
     )
 
     assert result.provider == "meta"
     assert result.sid == "wamid.media.1"
     assert captured["json"]["type"] == "document"
-    assert captured["json"]["document"]["link"] == "https://cdn.example.com/adjunto.pdf"
+    assert captured["json"]["document"]["id"] == "media.1"
     assert captured["json"]["document"]["filename"] == "adjunto.pdf"
+    assert captured["urls"] == [
+        "https://graph.facebook.com/v21.0/1139218909270276/media",
+        "https://graph.facebook.com/v21.0/1139218909270276/messages",
+    ]
 
 
 @pytest.mark.asyncio
