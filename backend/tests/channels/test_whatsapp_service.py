@@ -1573,7 +1573,7 @@ async def test_generate_assistant_reply_recovers_incomplete_response(monkeypatch
     class FakeResponses:
         async def create(self, **kwargs: Any) -> FakeResponse:
             assert kwargs["tool_choice"] == "none"
-            assert kwargs["max_output_tokens"] == 240
+            assert kwargs["max_output_tokens"] == 800
             assert "prompt" in kwargs
             return FakeResponse()
 
@@ -1664,7 +1664,7 @@ async def test_generate_assistant_reply_uses_clean_retry_when_recovery_is_empty(
             assert "previous_response_id" not in kwargs
             assert "conversation" not in kwargs
             assert kwargs["tool_choice"] == "none"
-            assert kwargs["max_output_tokens"] == 400
+            assert kwargs["max_output_tokens"] == 800
             assert any(item["role"] == "user" for item in kwargs["input"])
             return FakeResponse(
                 {

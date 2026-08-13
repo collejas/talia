@@ -4533,7 +4533,7 @@ async def _generate_assistant_reply(
                 }
             ],
             "store": True,
-            "max_output_tokens": 240,
+            "max_output_tokens": 800,
             "temperature": 0.2,
             "metadata": metadata_payload,
             "tool_choice": "none",
@@ -4574,7 +4574,7 @@ async def _generate_assistant_reply(
                 },
             ],
             "store": True,
-            "max_output_tokens": 400,
+            "max_output_tokens": 800,
             "temperature": 0.2,
             "metadata": metadata_payload,
             "tool_choice": "none",
