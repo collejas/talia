@@ -151,3 +151,83 @@ Tal-IA
 {{4}} 44411111111
 {{5}} sdfjjsdbf@dsf.com
 {{6}} La Lonja
+
+
+# RECORDATORIO VENDEDOR
+
+**Tipo** 
+Utilidad
+
+**Nombre Plantilla**
+event_details_reminder_1
+
+**Idioma**
+es_MX
+
+**Titulo**
+Recordatorio
+
+**Cuerpo**
+Tienes un próximo evento
+Recordatorio:  LLamar a John y Jane de: Lavander.
+
+A las 13:30 en 31/12/2026 no se te olvide!!.
+
+
+Tienes un próximo evento
+Recordatorio:  *{{1}}* a *{{2}}* de: *{{3}}*.
+
+A las *{{4}}* en *{{5}}* no se te olvide!!.
+
+**Pie de página**
+Tal-IA
+
+**Variables**
+{{1}} Llamar
+{{2}} Pedro Parra
+{{3}} Opo - 1
+{{4}} 13:30
+{{5}} 31/12/2026
+
+
+# NOTIFICACION VENDEDOR CON PLANTILLA UTILIDAD
+
+**Tipo** 
+Utilidad
+
+**Nombre Plantilla**
+event_details_reminder_2
+
+**Idioma**
+es_MX
+
+**Titulo**
+Tienes un próximo evento
+
+**Cuerpo**
+Próximo evento
+Recordatorio: Hola *{{1}}*
+
+Se comunico: *{{2}}*.
+*Necesita esto*: {{3}}.
+
+📞 *Teléfono:* {{4}}.
+✉️ *Correo.* {{5}}.
+🏢 *Empresa:* {{6}}.
+
+Quiere que lo contactes antes de una hora⏳.
+
+**Variables**
+{{1}} Pedro Parra
+{{2}} Luis Perez
+{{3}} Ponerse en contacto
+{{4}} 444444444444
+{{5}} fsdfs@sdfs.csd
+{{6}} La Lonja
+
+**Call To Acction**
+Aceptar
+
+**Pie de página**
+Tal-IA
+
