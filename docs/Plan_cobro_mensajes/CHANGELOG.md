@@ -13,6 +13,14 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 
 ## 2026-08-14
 
+### Reparación de KPI Hilos activos — Completado
+
+- Se detectó que la migración de snapshot de categoría Meta reemplazó el RPC de cobro y dejó de mantener `cobro_hilos_resumen`.
+- Se aplicó `supabase/migrations/20260814_160000_message_billing_thread_summary_repair.sql`.
+- Se reconstruyeron 376 resúmenes de hilo existentes y se agregó un trigger idempotente para cargos nuevos.
+- El tenant `3dbb2a99-9d81-4233-8444-0990d53b93b3` quedó con 29 hilos activos en su periodo de agosto.
+- Se verificó que RLS permite al usuario del tenant consultar sus 29 hilos.
+
 ### Filtro global por tenant en Cobro de mensajes — En desarrollo
 
 - La vista del tenant maestro incorpora un selector de tenant con la opción `Todos los tenants`.
