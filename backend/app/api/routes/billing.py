@@ -106,6 +106,22 @@ class BillingMessageListResponse(BaseModel):
     items: list[BillingMessageItem] = Field(default_factory=list)
 
 
+class BillingTenantOption(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    nombre: str | None = None
+    nombre_comercial: str | None = None
+    activo: bool = True
+
+
+class BillingTenantListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    items: list[BillingTenantOption] = Field(default_factory=list)
+
+
 class BillingEffectiveRateResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -211,16 +227,36 @@ async def get_billing_summary(
 
 @router.get("/master/summary", response_model=BillingSummaryResponse)
 async def get_master_billing_summary(
+    organizacion_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> BillingSummaryResponse:
     await _owner_scope(repo)
     try:
-        rows = await repo.list_billing_periods(fecha_inicio=desde, fecha_fin=hasta, limit=120)
+        rows = await repo.list_billing_periods(
+            organizacion_id=organizacion_id,
+            fecha_inicio=desde,
+            fecha_fin=hasta,
+            limit=120,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_master_summary_unavailable") from exc
-    return _summary(scope="master", organizacion_id=None, rows=rows)
+    return _summary(scope="master", organizacion_id=organizacion_id, rows=rows)
+
+
+@router.get("/master/tenants", response_model=BillingTenantListResponse)
+async def list_master_billing_tenants(
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingTenantListResponse:
+    await _owner_scope(repo)
+    try:
+        rows = await repo.list_billing_tenants()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_master_tenants_unavailable") from exc
+    return BillingTenantListResponse(
+        items=[BillingTenantOption.model_validate(row) for row in rows]
+    )
 
 
 @router.get("/messages", response_model=BillingMessageListResponse)

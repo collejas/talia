@@ -7756,6 +7756,20 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar periodos de cobro: {data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_billing_tenants(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,nombre,nombre_comercial,activo",
+            "activo": "eq.true",
+            "order": "nombre.asc",
+        }
+        resp = await self._request_service_role(
+            "GET", "/rest/v1/organizaciones", params=params
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar tenants de cobro: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def list_billing_messages(
         self,
         *,

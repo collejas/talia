@@ -40,12 +40,14 @@ class FakeRepository:
     def __init__(self, *, owner: bool = False) -> None:
         self.owner = owner
         self.requested_org: UUID | None = None
+        self.requested_summary_org: UUID | None = None
 
     async def get_permission_context(self) -> dict[str, object]:
         return {"organizacion_id": str(ORG_ID), "es_owner": self.owner}
 
     async def list_billing_periods(self, **kwargs: object) -> list[dict[str, object]]:
         self.requested_org = kwargs.get("organizacion_id")  # type: ignore[assignment]
+        self.requested_summary_org = kwargs.get("organizacion_id")  # type: ignore[assignment]
         return [_period()]
 
 
@@ -70,3 +72,17 @@ async def test_master_summary_rejects_non_owner() -> None:
 
     assert error.value.status_code == 403
     assert error.value.detail == "owner_required"
+
+
+@pytest.mark.asyncio
+async def test_master_summary_accepts_tenant_filter() -> None:
+    tenant_id = UUID("10000000-0000-0000-0000-000000000010")
+    repo = FakeRepository(owner=True)
+
+    response = await billing.get_master_billing_summary(
+        organizacion_id=tenant_id,
+        repo=repo,
+    )
+
+    assert response.scope == "master"
+    assert repo.requested_summary_org == tenant_id

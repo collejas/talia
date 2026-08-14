@@ -13,6 +13,17 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 
 ## 2026-08-14
 
+### Filtro global por tenant en Cobro de mensajes — En desarrollo
+
+- La vista del tenant maestro incorpora un selector de tenant con la opción `Todos los tenants`.
+- El resumen KPI puede filtrarse por `organizacion_id` sin modificar los históricos.
+- El detalle de mensajes conserva filtros por categoría Meta y dirección, combinables con el tenant seleccionado.
+- Se agregó `GET /billing/master/tenants`, protegido por `es_owner` y contexto del tenant maestro, para cargar únicamente opciones activas.
+- Se documentaron las rutas de consulta:
+  - `GET /api/billing/master/summary?organizacion_id={uuid}`
+  - `GET /api/billing/master/messages?organizacion_id={uuid}`
+- Los tenants normales siguen usando exclusivamente sus endpoints tenant-scoped y no reciben el selector global.
+
 ### Corrección de atribución por tenant en prospección WhatsApp — Completado
 
 - Los mensajes salientes de prospección ahora priorizan siempre el `organizacion_id` del envío/lote.

@@ -71,6 +71,7 @@ type BillingMessage = {
 
 type MessageResponse = { total: number; page: number; page_size: number; items: BillingMessage[] }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
+type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 
 function amount(value: number | string | null | undefined): number {
   const parsed = Number(value)
@@ -110,6 +111,9 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [rate, setRate] = React.useState<Rate | null>(null)
   const [category, setCategory] = React.useState("all")
   const [direction, setDirection] = React.useState("all")
+  const [selectedTenant, setSelectedTenant] = React.useState("all")
+  const [tenantOptions, setTenantOptions] = React.useState<TenantOption[]>([])
+  const [tenantsLoading, setTenantsLoading] = React.useState(false)
   const [page, setPage] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [messageLoading, setMessageLoading] = React.useState(false)
@@ -122,8 +126,29 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
 
   const scopePrefix = isOwner ? "/master" : ""
-  const summaryUrl = `/api/billing${scopePrefix}/summary`
+  const summaryUrl = `/api/billing${scopePrefix}/summary${isOwner && selectedTenant !== "all" ? `?organizacion_id=${encodeURIComponent(selectedTenant)}` : ""}`
   const messagesUrl = `/api/billing${scopePrefix}/messages`
+
+  React.useEffect(() => {
+    if (!isOwner) {
+      setTenantOptions([])
+      setSelectedTenant("all")
+      return
+    }
+    const controller = new AbortController()
+    setTenantsLoading(true)
+    fetch("/api/billing/master/tenants", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await errorText(response, "No se pudieron cargar los tenants."))
+        return response.json() as Promise<{ items?: TenantOption[] }>
+      })
+      .then((data) => setTenantOptions(Array.isArray(data.items) ? data.items : []))
+      .catch((fetchError) => {
+        if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar los tenants.")
+      })
+      .finally(() => setTenantsLoading(false))
+    return () => controller.abort()
+  }, [isOwner, refreshToken])
 
   React.useEffect(() => {
     const controller = new AbortController()
@@ -148,6 +173,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
     const controller = new AbortController()
     setMessageLoading(true)
     const params = new URLSearchParams({ page: String(page), page_size: "25" })
+    if (isOwner && selectedTenant !== "all") params.set("organizacion_id", selectedTenant)
     if (category !== "all") params.set("categoria_meta", category)
     if (direction !== "all") params.set("direccion", direction)
     fetch(`${messagesUrl}?${params.toString()}`, { cache: "no-store", signal: controller.signal })
@@ -159,7 +185,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar el detalle.") })
       .finally(() => setMessageLoading(false))
     return () => controller.abort()
-  }, [category, direction, messagesUrl, page, refreshToken])
+  }, [category, direction, isOwner, messagesUrl, page, refreshToken, selectedTenant])
 
   const saveRate = async (kind: "app" | "provider") => {
     setSaving(true); setSaveMessage(null)
@@ -208,7 +234,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         {saveMessage ? <p className="text-sm text-muted-foreground lg:col-span-2">{saveMessage}</p> : null}
       </CardContent></Card> : null}
 
-      <Card><CardHeader className="flex flex-wrap flex-row items-end justify-between gap-3"><div><CardTitle>Detalle de mensajes</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></div><div className="flex gap-2"><Select value={category} onValueChange={(value) => { setCategory(value); setPage(1) }}><SelectTrigger className="w-40"><SelectValue placeholder="Categoría Meta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las categorías</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="utility">Utility</SelectItem><SelectItem value="authentication">Authentication</SelectItem><SelectItem value="service">Service</SelectItem><SelectItem value="unknown">Sin categoría</SelectItem></SelectContent></Select><Select value={direction} onValueChange={(value) => { setDirection(value); setPage(1) }}><SelectTrigger className="w-36"><SelectValue placeholder="Dirección" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="entrante">Entrantes</SelectItem><SelectItem value="saliente">Salientes</SelectItem></SelectContent></Select></div></CardHeader><CardContent>
+      <Card><CardHeader className="flex flex-wrap flex-row items-end justify-between gap-3"><div><CardTitle>Detalle de mensajes</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></div><div className="flex flex-wrap gap-2">{isOwner ? <><Select value={selectedTenant} onValueChange={(value) => { setSelectedTenant(value); setPage(1) }}><SelectTrigger className="w-56"><SelectValue placeholder="Tenant" /></SelectTrigger><SelectContent><SelectItem value="all">Todos los tenants</SelectItem>{tenantOptions.map((tenant) => <SelectItem key={tenant.id} value={tenant.id}>{tenant.nombre_comercial || tenant.nombre || tenant.id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>{tenantsLoading ? <span className="self-center text-xs text-muted-foreground">Cargando tenants…</span> : null}</> : null}<Select value={category} onValueChange={(value) => { setCategory(value); setPage(1) }}><SelectTrigger className="w-40"><SelectValue placeholder="Categoría Meta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las categorías</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="utility">Utility</SelectItem><SelectItem value="authentication">Authentication</SelectItem><SelectItem value="service">Service</SelectItem><SelectItem value="unknown">Sin categoría</SelectItem></SelectContent></Select><Select value={direction} onValueChange={(value) => { setDirection(value); setPage(1) }}><SelectTrigger className="w-36"><SelectValue placeholder="Dirección" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="entrante">Entrantes</SelectItem><SelectItem value="saliente">Salientes</SelectItem></SelectContent></Select></div></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}
       </CardContent></Card>
     </div>

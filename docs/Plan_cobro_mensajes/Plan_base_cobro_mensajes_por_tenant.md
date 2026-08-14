@@ -878,7 +878,9 @@ Las rutas están bajo `/api/billing` y requieren autenticación:
 | `GET /messages` | Tenant autenticado | Ledger propio paginado, con filtros por periodo, dirección y categoría Meta |
 | `GET /tariff/effective` | Tenant autenticado | Tarifa GEOACTIV efectiva; override particular o tarifa global |
 | `GET /master/summary` | Solo owner | Resumen agregado de todos los tenants |
-| `GET /master/messages` | Solo owner | Ledger global paginado, opcionalmente filtrado por tenant |
+| `GET /master/tenants` | Solo owner | Catálogo de tenants activos para el selector global |
+| `GET /master/summary?organizacion_id={uuid}` | Solo owner | Resumen KPI filtrado por tenant; sin parámetro devuelve el consolidado global |
+| `GET /master/messages` | Solo owner | Ledger global paginado, opcionalmente filtrado por tenant mediante `organizacion_id` |
 | `POST /master/tariff/app` | Solo owner | Crea una nueva tarifa GEOACTIV global o particular y cierra la versión activa anterior |
 | `POST /master/tariff/provider` | Solo owner | Versiona la tarifa informativa del proveedor por canal, país, categoría e iniciador |
 
@@ -886,10 +888,10 @@ El tenant normal no puede solicitar otro `organizacion_id` para ampliar su alcan
 
 ### Fase 4: panel
 
-- visualizador global para tenant maestro. **Primera versión implementada**;
+- visualizador global para tenant maestro. **Implementado con selector Todos los tenants / tenant específico**;
 - visualizador propio para cada tenant. **Primera versión implementada**;
 - resumen de mensajes, hilos, categorías e importes. **Implementado**;
-- detalle auditable por mensaje. **Implementado con paginación y filtros**;
+- detalle auditable por mensaje. **Implementado con paginación, tenant, categoría Meta y dirección**;
 - estados vacío, cargando, error y conciliación pendiente. **Implementados los estados de carga, error y vacío**;
 - edición visual de tarifa GEOACTIV y tarifa informativa Meta para owner. **Primera versión implementada**.
 
