@@ -1,6 +1,10 @@
 # Funciones · Prospección IMLUX WhatsApp
 
+**Vector store asociada:** `Vector_store_Pros_imlux`.
+
 Estas definiciones deben mantenerse alineadas con las funciones realmente habilitadas para el tenant. Todas las funciones que incluyan `conversacion_id` deben recibir el valor proporcionado por el backend.
+
+Las funciones de consulta documental y catálogo deben buscar únicamente en `Vector_store_Pros_imlux`; no deben usar la vector store de atención general ni la de otra empresa.
 
 ```json
 {
@@ -214,4 +218,3 @@ Estas definiciones deben mantenerse alineadas con las funciones realmente habili
 ## Funciones no permitidas
 
 No agregar funciones de agenda, horarios, transferencia, instalación, recomendación técnica automática ni seguimiento autónomo. El cierre de prospección se realiza con `close_lead`.
-

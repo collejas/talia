@@ -1,6 +1,6 @@
 # Vector Store · Prospección IMLUX WhatsApp
 
-Nombre sugerido en OpenAI: `imlux_prospeccion_vs`
+Nombre exacto de la vector store en OpenAI: `Vector_store_Pros_imlux`
 
 Objetivo: apoyar conversaciones breves de prospección para identificar necesidad, categoría de proyecto, producto solicitado y siguiente paso comercial sin inventar especificaciones técnicas.
 
@@ -16,10 +16,9 @@ Objetivo: apoyar conversaciones breves de prospección para identificar necesida
 
 ## Carga recomendada
 
-1. Crear un vector store nuevo con el nombre sugerido.
+1. Crear o utilizar una vector store con el nombre exacto `Vector_store_Pros_imlux`.
 2. Subir los siete archivos.
-3. Vincularlo exclusivamente al prompt de prospección de IMLUX.
+3. Vincularla exclusivamente al prompt y a las funciones de prospección de IMLUX.
 4. Validar que responda breve, haga una sola pregunta y nunca invente datos técnicos.
 
 La plantilla inicial de WhatsApp no debe guardarse como respuesta del vector store ni reproducirse durante la conversación.
-
