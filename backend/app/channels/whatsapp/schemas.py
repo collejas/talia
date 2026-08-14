@@ -120,6 +120,7 @@ class WhatsAppStatusCallback(BaseModel):
 
     message_sid: str
     status: str
+    phone_number_id: str | None = None
     error_code: str | None = None
     timestamp: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
@@ -282,6 +283,7 @@ class MetaWhatsAppStatusCallback(BaseModel):
 
     message_sid: str
     status: str
+    phone_number_id: str | None = None
     error_code: str | None = None
     timestamp: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
@@ -328,6 +330,9 @@ class MetaWhatsAppStatusCallback(BaseModel):
                         cls(
                             message_sid=message_sid,
                             status=status_value,
+                            phone_number_id=_coerce_to_str(
+                                (value.get("metadata") or {}).get("phone_number_id")
+                            ) or None,
                             error_code=error_code,
                             timestamp=_coerce_to_str(status.get("timestamp")) or None,
                             raw_payload={

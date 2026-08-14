@@ -22,7 +22,6 @@ from app.services.high_demand_mode import high_demand_controller
 from app.services import EmailSendError, send_email_detailed, storage, tenant_runtime
 from app.services.metrics import metrics
 from app.services.phone_utils import normalize_phone
-from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 
@@ -668,24 +667,6 @@ async def _log_whatsapp_inbox_message(
     if not telefono:
         return None
     prospecto_id = envio.get("prospecto_id")
-    if prospecto_id:
-        try:
-            await auto_promote_prospecto(
-                prospecto_id=prospecto_id,
-                canal="whatsapp",
-                estado="respondido",
-                repo=repo,
-                force=True,
-            )
-        except Exception as exc:  # pragma: no cover - defensivo, no debe bloquear el log
-            log_event(
-                logger,
-                "prospeccion.sender_force_promote_failed",
-                prospecto_id=str(prospecto_id),
-                envio_id=str(envio.get("id")),
-                error=str(exc),
-            )
-
     persona_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
     conversation_id = await _ensure_whatsapp_conversation(repo=repo, persona_id=persona_id) if persona_id else None
     detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
@@ -798,14 +779,6 @@ async def _log_whatsapp_inbox_message(
                 conversation_id=resolved_conversation_id,
                 error=str(exc),
             )
-    if prospecto_id and resolved_conversation_id:
-        await _bind_prospecto_opportunity_conversation(
-            repo=repo,
-            prospecto_id=prospecto_id,
-            conversation_id=resolved_conversation_id,
-            batch_id=metadata_payload.get("batch_id"),
-            campana_id=metadata_payload.get("campana_id"),
-        )
     return resolved_conversation_id
 
 
@@ -1666,16 +1639,6 @@ class ProspeccionContactSender:
             envio_id=envio_id,
         )
         await repo.worker_insert_contact_logs([log_entry])
-
-        # Flujo prospección WhatsApp (outbound): no crear inbox/conversación/oportunidad
-        # hasta que exista interacción inbound real del prospecto.
-        if is_promotable_estado(update_payload.get("estado")):
-            await auto_promote_prospecto(
-                prospecto_id=envio.get("prospecto_id"),
-                canal=canal,
-                estado=update_payload.get("estado"),
-                repo=repo,
-            )
 
         batch_id = envio.get("batch_id")
         batch_state: str | None = None

@@ -3580,6 +3580,13 @@ async def handle_status_callback(
     organizacion_id: UUID | str | None = None,
 ) -> None:
     """Persistencia básica de los eventos de entrega reportados por el provider."""
+    effective_organizacion_id = organizacion_id
+    if provider == "meta" and callback.phone_number_id:
+        resolved_meta_org = await resolve_whatsapp_organizacion_by_phone_number_id(
+            phone_number_id=callback.phone_number_id,
+        )
+        if resolved_meta_org:
+            effective_organizacion_id = resolved_meta_org
     event = _map_status_to_event(callback.status)
     if not event:
         log_event(
@@ -3598,7 +3605,11 @@ async def handle_status_callback(
             raw_payload=callback.raw_payload,
             error_code=callback.error_code,
             provider_timestamp=callback.timestamp,
-            organizacion_id=str(organizacion_id) if organizacion_id else None,
+            organizacion_id=(
+                str(effective_organizacion_id)
+                if effective_organizacion_id
+                else None
+            ),
         )
     except StorageError as exc:
         logger.warning(
@@ -3849,12 +3860,6 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
                     "envio_id": str(envio_uuid),
                 }
             ]
-        )
-        await auto_promote_prospecto(
-            prospecto_id=envio.get("prospecto_id"),
-            canal="whatsapp",
-            estado=estado_envio,
-            repo=repo,
         )
         batch_state = None
         if estado_envio == "fallido" and batch_id_value:

@@ -11,6 +11,18 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - **Completado:** implementado y verificado.
 - **Bloqueado:** no puede avanzar hasta resolver una dependencia.
 
+## 2026-08-14
+
+### Corrección de callbacks de pricing de Meta — Completado
+
+- Se agregó `phone_number_id` al schema `MetaWhatsAppStatusCallback`.
+- El webhook de estados ya puede resolver correctamente el tenant Meta antes de persistir `eventos_entrega`.
+- Se agregó una aserción de regresión para conservar el `phone_number_id` recibido en `metadata`.
+- Se reinició el servicio activo y se verificó `GET /api/health` en el puerto `8004`.
+- Las pruebas específicas de webhook, schema y servicio pasaron: `9 passed`.
+
+Nota: los callbacks del lote `39a81418-ee27-4e4d-9a30-20b9b2dfa163` llegaron antes de esta corrección y no quedaron persistidos; sus precios reales no pueden recuperarse desde la base actual. Los siguientes envíos deberán probarse nuevamente.
+
 ## 2026-08-13
 
 ### Documentación inicial — Completado
@@ -202,6 +214,14 @@ Pendiente de API:
 - El webhook Meta recibe el `organizacion_id` de su ruta y puede guardar el evento de forma aislada por tenant.
 - Al persistirse después el WAMID, el backend vincula los eventos pendientes y aplica `pricing.billable`, `pricing.category` y `pricing.pricing_model` al ledger.
 - Esta corrección evita perder estados y pricing cuando Meta responde antes que la persistencia local.
+
+### Tenant Meta e Inbox de prospección — 2026-08-14
+
+- Los callbacks de estado Meta ahora resuelven el tenant por `phone_number_id` del payload; el `organizacion_id` de la URL queda como fallback.
+- Se eliminó la promoción automática de prospectos y la vinculación de oportunidades durante el envío o los estados de una campaña saliente.
+- Las conversaciones WhatsApp que solo contienen mensajes salientes ya no se proyectan en Inbox; la proyección se activa al llegar un mensaje entrante.
+- La promoción comercial y la oportunidad quedan reservadas para el flujo de respuesta real del prospecto.
+- Se ajustó la RPC histórica de registro para aceptar el envío saliente sin conversación comercial previa; esto permite conservar cobro y auditoría sin forzar una oportunidad.
 
 ## Próximas fases
 

@@ -135,4 +135,5 @@ def test_meta_whatsapp_status_callback_from_webhook_payload_parses_status():
     callback = callbacks[0]
     assert callback.message_sid == "wamid.TEST"
     assert callback.status == "delivered"
+    assert callback.phone_number_id == "1234567890"
     assert callback.timestamp == "1710000100"

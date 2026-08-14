@@ -7456,9 +7456,10 @@ class CRMRepository:
         message_org_id: str | None = None
         row: dict[str, Any] | None = None
         if message_sid:
+            provider_column = "proveedor_mensaje_id" if provider == "meta" else "twilio_message_sid"
             params = {
                 "select": "id,organizacion_id",
-                "twilio_message_sid": f"eq.{message_sid}",
+                provider_column: f"eq.{message_sid}",
                 "limit": "1",
             }
             resp = await self._request("GET", "/rest/v1/mensajes", params=params)
@@ -7517,13 +7518,15 @@ class CRMRepository:
         *,
         provider_message_id: str,
         organizacion_id: UUID | str,
+        provider: str = "meta",
     ) -> list[dict[str, Any]]:
+        provider_column = "proveedor_mensaje_id" if provider == "meta" else "twilio_message_sid"
         response = await self._request(
             "GET",
             "/rest/v1/mensajes",
             params={
                 "select": "id,organizacion_id",
-                "twilio_message_sid": f"eq.{provider_message_id}",
+                provider_column: f"eq.{provider_message_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "limit": "1",
             },
