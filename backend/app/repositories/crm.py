@@ -15451,34 +15451,54 @@ class CRMRepository:
         project_key: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        params: dict[str, str] = {
-            "order": "estimated_total_cost_usd.desc.nullslast,last_request_at.desc",
-            "limit": str(max(1, min(limit, 500))),
-        }
-        and_parts: list[str] = []
-        if date_from:
-            and_parts.append(f"last_request_at.gte.{date_from}T00:00:00+00:00")
-        if date_to:
-            and_parts.append(f"last_request_at.lte.{date_to}T23:59:59+00:00")
-        if and_parts:
-            params["and"] = f"({','.join(and_parts)})"
-        if channel:
-            params["channel"] = f"eq.{channel}"
-        if feature:
-            params["feature"] = f"eq.{feature}"
-        if project_key:
-            params["openai_project_key"] = f"eq.{project_key}"
-        return await self._fetch_openai_cost_view(
-            view_name="v_openai_costs_by_conversation",
+        return await self._fetch_openai_conversation_costs_rpc(
             usuario_token=usuario_token,
-            select=(
-                "conversation_id,first_request_at,last_request_at,organizacion_id,organizacion_nombre,"
-                "source_tenant_mode,channel,feature,openai_project_key,openai_project_display_name,conversation_display_name,requests_count,models_count,"
-                "models_used,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,"
-                "estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count"
-            ),
-            params=params,
+            date_from=date_from,
+            date_to=date_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+            limit=limit,
         )
+
+    async def _fetch_openai_conversation_costs_rpc(
+        self,
+        *,
+        usuario_token: str | None = None,
+        tenant_id: UUID | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        channel: str | None = None,
+        feature: str | None = None,
+        project_key: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_date_from": date_from,
+            "p_date_to": date_to,
+            "p_channel": channel,
+            "p_feature": feature,
+            "p_project_key": project_key,
+            "p_organizacion_id": str(tenant_id) if tenant_id else None,
+            "p_limit": max(1, min(limit, 500)),
+        }
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/openai_costs_by_conversation_filtered",
+                token=usuario_token,
+                json=payload,
+            )
+        else:
+            resp = await self._request_service_role(
+                "POST",
+                "/rest/v1/rpc/openai_costs_by_conversation_filtered",
+                json=payload,
+            )
+        data = resp.json() or []
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en openai_costs_by_conversation_filtered: {data!r}")
 
     async def openai_costs_by_model(
         self,
@@ -15665,34 +15685,14 @@ class CRMRepository:
         project_key: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        params: dict[str, str] = {
-            "order": "estimated_total_cost_usd.desc.nullslast,last_request_at.desc",
-            "limit": str(max(1, min(limit, 500))),
-        }
-        and_parts: list[str] = []
-        if date_from:
-            and_parts.append(f"last_request_at.gte.{date_from}T00:00:00+00:00")
-        if date_to:
-            and_parts.append(f"last_request_at.lte.{date_to}T23:59:59+00:00")
-        if and_parts:
-            params["and"] = f"({','.join(and_parts)})"
-        if tenant_id:
-            params["organizacion_id"] = f"eq.{tenant_id}"
-        if channel:
-            params["channel"] = f"eq.{channel}"
-        if feature:
-            params["feature"] = f"eq.{feature}"
-        if project_key:
-            params["openai_project_key"] = f"eq.{project_key}"
-        return await self._fetch_openai_cost_view_service_role(
-            view_name="v_openai_costs_by_conversation",
-            select=(
-                "conversation_id,first_request_at,last_request_at,organizacion_id,organizacion_nombre,"
-                "source_tenant_mode,channel,feature,openai_project_key,openai_project_display_name,conversation_display_name,requests_count,models_count,"
-                "models_used,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,"
-                "estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count"
-            ),
-            params=params,
+        return await self._fetch_openai_conversation_costs_rpc(
+            tenant_id=tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+            limit=limit,
         )
 
     async def master_openai_costs_by_model(
