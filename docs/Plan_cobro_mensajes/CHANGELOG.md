@@ -178,6 +178,16 @@ Pendiente de API:
 - Se agregó la protección equivalente en backend: los endpoints `/billing/master/*` requieren propietario y contexto activo del tenant maestro.
 - Se corrigió el identificador provisional de la validación RPC mediante `supabase/migrations/20260813_148000_repair_message_billing_provider_id.sql`.
 
+### Alineación de envíos de prospección WhatsApp — 2026-08-14
+
+- Se confirmó que `prospeccion/contactos` muestra el estado operativo de `prospeccion_contacto_envio`; `leido` no implicaba que existiera un registro en `mensajes` ni en el ledger.
+- El worker de prospección actualizaba el envío y recibía el SID del proveedor, pero no ejecutaba el registro de mensaje WhatsApp ni el cobro asociado.
+- Se conectó el flujo exitoso del worker con el registro existente de WhatsApp, conservando el estado `enviado/entregado/leido` y usando el SID como clave idempotente.
+- La categoría configurada y la plantilla se conservan al registrar el mensaje para que el cargo GEOACTIV y la tarifa Meta se relacionen con el tenant correcto.
+- Se corrigió la inferencia del iniciador: una plantilla saliente `marketing` conserva el carácter iniciado por empresa aunque reutilice una conversación previamente iniciada por el cliente.
+- La misma regla se aplica al callback posterior de pricing Meta, evitando que una conciliación vuelva a dejar el costo en cero.
+- Caso validado y reparado: `SEGI CASAS` del lote `9718faae-dc00-4006-9e90-8662352943cc` quedó relacionado con su mensaje, conversación y ledger; categoría `marketing`, cargo GEOACTIV `$0.0900`, costo Meta `$0.5614`, total `$0.6514`.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado

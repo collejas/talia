@@ -731,7 +731,13 @@ async def _log_whatsapp_inbox_message(
         or payload_meta.get("whatsapp_meta_category_snapshot")
     )
     if meta_category_value:
+        # La campaña se envía por Twilio, pero el costo regulado corresponde
+        # a Meta. Conservamos ambos conceptos: SID/estado del transporte y
+        # proveedor de facturación Meta.
+        metadata_payload["provider"] = "meta"
+        metadata_payload["categoria_meta"] = meta_category_value
         metadata_payload["categoria_meta_configurada"] = meta_category_value
+        metadata_payload["es_plantilla"] = True
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
     persona_record: dict[str, Any] | None = None
@@ -1621,6 +1627,34 @@ class ProspeccionContactSender:
             extra_backoff_seconds=self._extra_backoff_seconds(result),
         )
         await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
+
+        # Un envío de prospección puede llegar a "leido" únicamente por el
+        # callback de estado de Twilio. Persistimos el mensaje aceptado antes
+        # de ese callback para que exista la relación mensaje -> conversación
+        # -> ledger de cobro. El helper es idempotente por el SID del proveedor
+        # y sus errores no cambian el estado operativo del envío.
+        if (
+            canal == "whatsapp"
+            and result.mensaje_id
+            and update_payload.get("estado") in {"enviado", "entregado", "leido", "completado", "respondido"}
+        ):
+            try:
+                await _log_whatsapp_inbox_message(
+                    repo=repo,
+                    envio=envio,
+                    detalle=detalle,
+                    payload=payload,
+                    result=result,
+                )
+            except Exception as exc:  # pragma: no cover - billing/inbox no bloquea el envío
+                log_event(
+                    logger,
+                    "prospeccion.sender_message_registration_failed",
+                    envio_id=str(envio_id),
+                    organizacion_id=str(org_uuid) if org_uuid else None,
+                    provider_message_id=result.mensaje_id,
+                    error=str(exc),
+                )
         if canal in {"correo", "whatsapp", "llamada"} and throttle_key is not None:
             await self._register_backpressure_signal(throttle_key, result)
 
