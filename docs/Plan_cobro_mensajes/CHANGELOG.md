@@ -13,6 +13,14 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 
 ## 2026-08-14
 
+### Corrección de atribución por tenant en prospección WhatsApp — Completado
+
+- Los mensajes salientes de prospección ahora priorizan siempre el `organizacion_id` del envío/lote.
+- Una persona genérica encontrada en el tenant maestro ya no puede arrastrar el mensaje, conversación o cobro al tenant maestro.
+- Se habilitó propagación controlada `ON UPDATE CASCADE` en las FK compuestas de conversación, mensaje, eventos y ledger necesarias para corregir atribuciones sin romper integridad.
+- Se corrigió el lote `090926e8-e725-4da5-8148-ec405cb1950d` del tenant `3dbb2a99-9d81-4233-8444-0990d53b93b3`.
+- Se verificó: 1 envío, 1 mensaje, 1 cobro y 3 eventos bajo el tenant correcto.
+
 ### Corrección de callbacks de pricing de Meta — Completado
 
 - Se agregó `phone_number_id` al schema `MetaWhatsAppStatusCallback`.

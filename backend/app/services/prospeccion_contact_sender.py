@@ -666,6 +666,7 @@ async def _log_whatsapp_inbox_message(
     telefono = normalize_phone(_clean_text(detalle.get("phone")))
     if not telefono:
         return None
+    envio_organizacion_id = _clean_text(envio.get("organizacion_id"))
     prospecto_id = envio.get("prospecto_id")
     persona_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
     conversation_id = await _ensure_whatsapp_conversation(repo=repo, persona_id=persona_id) if persona_id else None
@@ -726,9 +727,20 @@ async def _log_whatsapp_inbox_message(
             persona_record = await storage.fetch_persona(persona_id)
         except StorageError:
             persona_record = None
-    organizacion_hint = await resolve_whatsapp_organizacion(contact=persona_record)
+    # Un envío de prospección es propiedad del tenant que creó el lote. Una
+    # persona genérica encontrada por teléfono puede pertenecer al tenant
+    # maestro; nunca debe arrastrar esa organización al ledger del envío.
+    if (
+        persona_record
+        and envio_organizacion_id
+        and _clean_text(persona_record.get("organizacion_id")) != envio_organizacion_id
+    ):
+        persona_id = None
+        persona_record = None
+        conversation_id = None
+    organizacion_hint = envio_organizacion_id
     if not organizacion_hint:
-        organizacion_hint = _clean_text(envio.get("organizacion_id"))
+        organizacion_hint = await resolve_whatsapp_organizacion(contact=persona_record)
     try:
         storage_result = await storage.register_whatsapp_message(
             direction="saliente",
