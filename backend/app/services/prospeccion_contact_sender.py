@@ -724,6 +724,14 @@ async def _log_whatsapp_inbox_message(
     )
     if template_language_value:
         metadata_payload["meta_template_language"] = template_language_value
+    meta_category_value = _clean_text(
+        detalle_meta.get("meta_category")
+        or payload.get("meta_category")
+        or payload_meta.get("meta_category")
+        or payload_meta.get("whatsapp_meta_category_snapshot")
+    )
+    if meta_category_value:
+        metadata_payload["categoria_meta_configurada"] = meta_category_value
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
     persona_record: dict[str, Any] | None = None
@@ -1147,6 +1155,11 @@ async def _run_envio_whatsapp(
         or metadata.get("template_language")
         or payload.get("template_language")
     )
+    meta_category = _clean_text(
+        payload.get("meta_category")
+        or metadata.get("meta_category")
+        or metadata.get("whatsapp_meta_category_snapshot")
+    )
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
     image_context: dict[str, str] = {}
@@ -1271,6 +1284,7 @@ async def _run_envio_whatsapp(
             "template_language": meta_template_language,
             "meta_template_name": meta_template_name,
             "meta_template_language": meta_template_language,
+            "meta_category": meta_category,
             "twilio_variables": rendered_vars if template_sid else None,
             "body_preview": preview_text,
             "fallback_plaintext_used": fallback_used,

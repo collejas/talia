@@ -15,6 +15,8 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 router = APIRouter(prefix="/billing", tags=["message-billing"])
 
+MASTER_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
+
 
 class BillingPeriodItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -164,9 +166,14 @@ async def _tenant_scope(repo: CRMRepository) -> UUID:
 
 
 async def _owner_scope(repo: CRMRepository) -> None:
-    _, is_owner = await _billing_context(repo)
+    organizacion_id, is_owner = await _billing_context(repo)
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_required")
+    if organizacion_id != MASTER_ORGANIZACION_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="master_tenant_context_required",
+        )
 
 
 def _summary(*, scope: str, organizacion_id: UUID | None, rows: list[dict[str, Any]]) -> BillingSummaryResponse:

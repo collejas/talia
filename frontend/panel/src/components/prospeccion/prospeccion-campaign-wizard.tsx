@@ -328,7 +328,7 @@ export function ProspeccionCampaignWizard({
   }, [open, preset, presetApplied])
 
   const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
-    const template = templates.find((tpl) => tpl.slug === slug)
+    const template = templates.find((tpl) => tpl.slug === slug && tpl.canal === canal)
     if (!template) return
     setChannelState((prev) => {
       const next = { ...prev }
@@ -835,6 +835,7 @@ export function ProspeccionCampaignWizard({
                         .map((tpl) => (
                           <SelectItem key={tpl.slug} value={tpl.slug}>
                             {tpl.nombre}
+                            {option.key === "whatsapp" && tpl.meta_category ? ` · ${tpl.meta_category}` : ""}
                           </SelectItem>
                         ))}
                     </SelectContent>

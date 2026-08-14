@@ -937,3 +937,14 @@ El plan estará listo para operar cuando:
 La base de datos, el primer servicio backend de contabilización y el backfill histórico ya están aplicados para WhatsApp/Meta. Todavía no se activa facturación automática. La regla implementada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.
 
 El backfill histórico insertó 2,018 de 2,603 mensajes. Los 585 excluidos no tenían identificador del proveedor. La información Meta disponible permitió recuperar categorías service y referral_conversion no facturables, pero no permitió identificar mensajes marketing históricos facturables.
+
+## Alineación de plantillas WhatsApp
+
+Las plantillas administradas desde `prospeccion/campanas` son un registro local de una plantilla previamente creada y aprobada en WhatsApp Manager. El nombre técnico, idioma y categoría deben coincidir con Meta.
+
+La tabla `cobro_mensajes` conserva dos conceptos distintos:
+
+- `categoria_meta_configurada`: categoría declarada en el modal y transportada desde la plantilla seleccionada.
+- `categoria_meta`: categoría y pricing confirmados por Meta mediante el callback.
+
+La primera sirve para auditoría y detectar desalineaciones; la segunda es la fuente para determinar facturación/costo Meta. Si Meta todavía no envía la categoría, el registro queda como `unknown` y no se debe inferir un cargo Meta solo por la selección del modal.

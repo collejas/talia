@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { fetchPermissionContext } from "@/lib/auth/permissions"
+import { MASTER_TENANT_ID } from "@/lib/auth/master-tenant"
 
 import { MessageBillingPageClient } from "./page.client"
 
@@ -16,7 +17,9 @@ export default async function MessageBillingPage() {
 
   return (
     <AppViewLayout title="Settings · Cobro de mensajes">
-      <MessageBillingPageClient isOwner={Boolean(context.es_owner)} />
+      <MessageBillingPageClient
+        isOwner={Boolean(context.es_owner && context.organizacion_id === MASTER_TENANT_ID)}
+      />
     </AppViewLayout>
   )
 }

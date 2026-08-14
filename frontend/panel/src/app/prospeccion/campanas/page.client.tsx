@@ -2375,6 +2375,12 @@ ${secondCellHtml}
                                           · <span className="font-medium text-foreground">{metaTemplateLanguage}</span>
                                         </>
                                       ) : null}
+                                      {template.meta_category ? (
+                                        <>
+                                          {" "}
+                                          · <span className="font-medium text-foreground">{template.meta_category}</span>
+                                        </>
+                                      ) : null}
                                     </>
                                   )
                                 }
@@ -2517,7 +2523,7 @@ ${secondCellHtml}
                             <Label>Identificador interno</Label>
                             <Input value={effectiveTemplateSlug} readOnly className="bg-muted/40" />
                             <p className="text-xs text-muted-foreground">
-                              Se genera automáticamente para uso interno.
+                              Se genera automáticamente para uso interno; no sustituye el nombre técnico en Meta.
                             </p>
                           </div>
                         </div>
@@ -2569,8 +2575,12 @@ ${secondCellHtml}
                               <SelectItem value="utility">Utility</SelectItem>
                               <SelectItem value="authentication">Authentication</SelectItem>
                             </SelectContent>
-                          </Select>
-                        </div>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              Debe coincidir con la categoría aprobada en WhatsApp Manager. La categoría facturada se
+                              toma del callback de Meta cuando está disponible.
+                            </p>
+                          </div>
                         <div className="space-y-1">
                           <Label>Estado operativo</Label>
                           <Select

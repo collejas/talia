@@ -30,6 +30,11 @@ def _meta_message_fields(
 ) -> dict[str, Any]:
     fields: dict[str, Any] = {
         "categoria_meta": _text(metadata.get("categoria_meta")) or "unknown",
+        "categoria_meta_configurada": _text(
+            metadata.get("categoria_meta_configurada")
+            or metadata.get("meta_category")
+            or metadata.get("whatsapp_meta_category_snapshot")
+        ),
         "tipo_pricing_meta": _text(metadata.get("tipo_pricing_meta")),
         "billable_meta": metadata.get("billable_meta")
         if isinstance(metadata.get("billable_meta"), bool)

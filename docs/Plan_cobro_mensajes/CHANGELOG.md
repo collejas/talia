@@ -159,6 +159,25 @@ Pendiente de API:
 - No quedaron candidatos elegibles sin ledger y no existen duplicados por mensaje ni por proveedor.
 - No se modificaron filas originales de `mensajes` ni `eventos_entrega`.
 
+### Alineación de plantillas WhatsApp y billing — 2026-08-13
+
+- Se revisó `prospeccion/campanas` y el modal de plantillas WhatsApp.
+- Confirmado: el modal registra en Tal-IA una referencia de una plantilla ya creada/aprobada en WhatsApp Manager; no crea la plantilla en Meta.
+- La categoría seleccionada (`marketing`, `utility` o `authentication`) sí llegaba al lote, pero se perdía al registrar el mensaje de Inbox cuando Meta todavía no había enviado `pricing.category`.
+- Se agregó `cobro_mensajes.categoria_meta_configurada`, separada de `categoria_meta`, que sigue siendo exclusivamente la categoría confirmada por Meta.
+- Se corrigió el selector del wizard para resolver la plantilla por `slug` y `canal`, y se muestra la categoría Meta en la vista de campañas y en el selector de envíos.
+- La categoría configurada no calcula ni inventa el costo Meta; el costo solo se actualiza con el pricing recibido de Meta.
+- Migración aplicada: `supabase/migrations/20260813_146000_message_billing_template_category_snapshot.sql`.
+
+### Corrección de contabilización y aislamiento — 2026-08-13
+
+- Se identificó en logs que `registrar_cobro_mensaje` fallaba por una referencia ambigua a `organizacion_id`; se restauró la directiva de resolución de variables en la función SQL.
+- Se repararon los mensajes recientes que habían quedado sin ledger mediante `supabase/migrations/20260813_147000_message_billing_repair_after_rpc_fix.sql`.
+- La ausencia de costo Meta en los mensajes recientes quedó explicada: Meta los reportó como `service`, `free_customer_service` y `billable=false`; por eso el costo real Meta es `$0.0000` aunque el cargo GEOACTIV sí se registró.
+- Se corrigió el alcance de `/settings/cobro-mensajes`: solo el contexto activo del tenant maestro usa el consolidado global; los demás contextos consultan exclusivamente sus propios datos.
+- Se agregó la protección equivalente en backend: los endpoints `/billing/master/*` requieren propietario y contexto activo del tenant maestro.
+- Se corrigió el identificador provisional de la validación RPC mediante `supabase/migrations/20260813_148000_repair_message_billing_provider_id.sql`.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado
