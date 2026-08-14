@@ -731,9 +731,8 @@ async def _log_whatsapp_inbox_message(
         or payload_meta.get("whatsapp_meta_category_snapshot")
     )
     if meta_category_value:
-        # La campaña se envía por Twilio, pero el costo regulado corresponde
-        # a Meta. Conservamos ambos conceptos: SID/estado del transporte y
-        # proveedor de facturación Meta.
+        # El transporte y el proveedor regulado de la campaña son Meta.
+        # Conservamos la categoría explícita para el ledger y sus KPI.
         metadata_payload["provider"] = "meta"
         metadata_payload["categoria_meta"] = meta_category_value
         metadata_payload["categoria_meta_configurada"] = meta_category_value

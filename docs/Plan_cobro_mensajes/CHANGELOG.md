@@ -195,6 +195,14 @@ Pendiente de API:
 - Se eliminó el fallback de texto libre: si falta la plantilla Meta aprobada o Meta rechaza el envío, queda error controlado para reintento sin duplicar el envío ni cambiar su naturaleza.
 - Los flujos generales del inbox no se modificaron en esta fase; el cambio está limitado al worker de campañas de prospección.
 
+### Reconciliación de callbacks Meta tempranos — 2026-08-14
+
+- Se aplicó `20260814_151000_delivery_event_webhook_race.sql` en Supabase.
+- `eventos_entrega` conserva ahora el `proveedor_mensaje_id` aunque el mensaje local todavía no exista.
+- El webhook Meta recibe el `organizacion_id` de su ruta y puede guardar el evento de forma aislada por tenant.
+- Al persistirse después el WAMID, el backend vincula los eventos pendientes y aplica `pricing.billable`, `pricing.category` y `pricing.pricing_model` al ledger.
+- Esta corrección evita perder estados y pricing cuando Meta responde antes que la persistencia local.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado

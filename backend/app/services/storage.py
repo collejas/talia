@@ -1921,6 +1921,27 @@ async def register_whatsapp_message(
             },
         )
 
+    if (
+        message_sid
+        and str(metadata_payload.get("provider") or "").lower() == "meta"
+        and billing_org
+    ):
+        try:
+            await reconcile_delivery_events_for_message(
+                provider="meta",
+                message_sid=message_sid,
+                organizacion_id=str(billing_org),
+            )
+        except StorageError as exc:
+            logger.warning(
+                "storage.delivery_event_reconciliation_failed",
+                extra={
+                    "message_sid": message_sid,
+                    "organizacion_id": str(billing_org),
+                    "error": str(exc),
+                },
+            )
+
     if direction == "entrante" and conversation_id:
         from app.services import whatsapp_followups as whatsapp_followup_jobs
 
@@ -2821,6 +2842,7 @@ async def record_delivery_event(
     raw_payload: dict[str, Any] | None = None,
     error_code: str | None = None,
     provider_timestamp: str | None = None,
+    organizacion_id: str | None = None,
 ) -> None:
     """Inserta un registro en eventos_entrega vinculado a un mensaje."""
     repo = CRMRepository()
@@ -2832,6 +2854,7 @@ async def record_delivery_event(
             raw_payload=raw_payload,
             error_code=error_code,
             provider_timestamp=provider_timestamp,
+            organizacion_id=organizacion_id,
         )
         if provider == "meta":
             pricing_fields = message_billing.extract_meta_pricing_fields(raw_payload)
@@ -2842,6 +2865,45 @@ async def record_delivery_event(
                     estado_proveedor=event,
                     **pricing_fields,
                 )
+    except (CRMRepositoryError, AttributeError) as exc:
+        raise StorageError(str(exc)) from exc
+
+
+async def reconcile_delivery_events_for_message(
+    *,
+    provider: str,
+    message_sid: str,
+    organizacion_id: str,
+) -> int:
+    """Liga callbacks tempranos y aplica su pricing al ledger del mensaje."""
+    repo = CRMRepository()
+    try:
+        messages = await repo.list_messages_by_provider_id(
+            provider_message_id=message_sid,
+            organizacion_id=organizacion_id,
+        )
+        if not messages:
+            return 0
+        message = messages[0]
+        message_id = str(message.get("id") or "")
+        if not message_id:
+            return 0
+        events = await repo.link_pending_delivery_events(
+            provider=provider,
+            message_sid=message_sid,
+            message_id=message_id,
+            organizacion_id=organizacion_id,
+        )
+        for event in events:
+            pricing_fields = message_billing.extract_meta_pricing_fields(event.get("payload_crudo"))
+            if pricing_fields:
+                await repo.update_billing_meta_message(
+                    proveedor=provider,
+                    proveedor_mensaje_id=message_sid,
+                    estado_proveedor=event.get("evento"),
+                    **pricing_fields,
+                )
+        return len(events)
     except (CRMRepositoryError, AttributeError) as exc:
         raise StorageError(str(exc)) from exc
 

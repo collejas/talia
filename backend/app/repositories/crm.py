@@ -7450,17 +7450,19 @@ class CRMRepository:
         raw_payload: dict[str, Any] | None = None,
         error_code: str | None = None,
         provider_timestamp: str | None = None,
+        organizacion_id: UUID | str | None = None,
     ) -> dict[str, Any]:
         message_id: str | None = None
+        message_org_id: str | None = None
+        row: dict[str, Any] | None = None
         if message_sid:
             params = {
-                "select": "id",
+                "select": "id,organizacion_id",
                 "twilio_message_sid": f"eq.{message_sid}",
                 "limit": "1",
             }
             resp = await self._request("GET", "/rest/v1/mensajes", params=params)
             data = resp.json() or []
-            row: dict[str, Any] | None
             if isinstance(data, list) and data:
                 row = data[0]
             elif isinstance(data, dict):
@@ -7469,25 +7471,24 @@ class CRMRepository:
                 row = None
         if isinstance(row, dict):
             message_id = row.get("id")
+            message_org_id = row.get("organizacion_id")
         payload: dict[str, Any] = {
             "proveedor": provider,
             "evento": event,
             "codigo_error": error_code,
             "payload_crudo": raw_payload or {},
+            "proveedor_mensaje_id": message_sid,
         }
-        if not message_id:
+        effective_org_id = message_org_id or (str(organizacion_id) if organizacion_id else None)
+        if effective_org_id:
+            payload["organizacion_id"] = effective_org_id
+        if message_id:
+            payload["mensaje_id"] = message_id
+        else:
             logger.info(
-                "crm.delivery_event_missing_message_id",
+                "crm.delivery_event_pending_message",
                 extra={"message_sid": message_sid, "event": event, "provider": provider},
             )
-            return {
-                "skipped": True,
-                "reason": "message_id_not_found",
-                "message_sid": message_sid,
-                "event": event,
-                "provider": provider,
-            }
-        payload["mensaje_id"] = message_id
         normalized_timestamp = _normalize_provider_timestamp(provider_timestamp)
         if normalized_timestamp:
             payload["proveedor_ts"] = normalized_timestamp.isoformat()
@@ -7510,6 +7511,55 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al registrar evento: {row!r}")
         return row
+
+    async def list_messages_by_provider_id(
+        self,
+        *,
+        provider_message_id: str,
+        organizacion_id: UUID | str,
+    ) -> list[dict[str, Any]]:
+        response = await self._request(
+            "GET",
+            "/rest/v1/mensajes",
+            params={
+                "select": "id,organizacion_id",
+                "twilio_message_sid": f"eq.{provider_message_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+        data = response.json() or []
+        if isinstance(data, dict):
+            data = [data]
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+    async def link_pending_delivery_events(
+        self,
+        *,
+        provider: str,
+        message_sid: str,
+        message_id: str,
+        organizacion_id: UUID | str,
+    ) -> list[dict[str, Any]]:
+        """Liga callbacks recibidos antes de que existiera el mensaje local."""
+        params = {
+            "select": "id,evento,payload_crudo,codigo_error,proveedor_ts,proveedor_mensaje_id",
+            "proveedor": f"eq.{provider}",
+            "proveedor_mensaje_id": f"eq.{message_sid}",
+            "mensaje_id": "is.null",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/eventos_entrega",
+            params=params,
+            json={"mensaje_id": message_id},
+            prefer="return=representation",
+        )
+        data = response.json() or []
+        if isinstance(data, dict):
+            data = [data]
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
     async def fetch_latest_conversation_summary(
         self,

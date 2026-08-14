@@ -3577,6 +3577,7 @@ async def handle_status_callback(
     callback: schemas.WhatsAppStatusCallback,
     *,
     provider: str = "twilio",
+    organizacion_id: UUID | str | None = None,
 ) -> None:
     """Persistencia básica de los eventos de entrega reportados por el provider."""
     event = _map_status_to_event(callback.status)
@@ -3597,6 +3598,7 @@ async def handle_status_callback(
             raw_payload=callback.raw_payload,
             error_code=callback.error_code,
             provider_timestamp=callback.timestamp,
+            organizacion_id=str(organizacion_id) if organizacion_id else None,
         )
     except StorageError as exc:
         logger.warning(

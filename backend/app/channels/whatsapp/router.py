@@ -84,6 +84,11 @@ async def whatsapp_meta_webhook(
 
     status_callbacks = schemas.MetaWhatsAppStatusCallback.from_webhook_payload(payload)
     for callback in status_callbacks:
-        background_tasks.add_task(service.handle_status_callback, callback, provider="meta")
+        background_tasks.add_task(
+            service.handle_status_callback,
+            callback,
+            provider="meta",
+            organizacion_id=str(organizacion_id),
+        )
 
     return {"status": "accepted"}
