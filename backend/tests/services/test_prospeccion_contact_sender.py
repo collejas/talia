@@ -10,6 +10,10 @@ from app.services.prospeccion_contact_sender import (
 )
 from urllib.parse import parse_qs, urlparse
 
+import pytest
+
+import app.services.prospeccion_contact_sender as sender_module
+
 
 def test_render_twilio_variables_keeps_literal_text_for_variable_6() -> None:
     rendered = _render_twilio_variables(
@@ -161,6 +165,35 @@ def test_apply_tenant_public_base_url_defaults_promotes_public_domain() -> None:
     parsed = urlparse(booking_url)
     assert parsed.netloc == "pui.geoactiv.mx"
     assert parsed.path == "/demo.html"
+
+
+@pytest.mark.asyncio
+async def test_campaign_whatsapp_uses_meta_transport_directly(monkeypatch) -> None:
+    calls = []
+
+    async def fake_meta_send(**kwargs):
+        calls.append(kwargs)
+        return sender_module.TwilioSendResult(
+            sid="wamid.test",
+            status="sent",
+            provider="meta",
+        )
+
+    monkeypatch.setattr(sender_module, "_send_meta_whatsapp_reply", fake_meta_send)
+
+    result = await sender_module._send_whatsapp_message(
+        to_number="5215555555555",
+        body="Hola",
+        content_sid="HISTORICAL_TWILIO_SID",
+        template_name="foto_1",
+        template_language="es_MX",
+    )
+
+    assert result.provider == "meta"
+    assert result.sid == "wamid.test"
+    assert calls[0]["template_name"] == "foto_1"
+    assert calls[0]["template_language"] == "es_MX"
+    assert calls[0]["content_sid"] is None
 
 
 def test_build_envio_update_payload_persists_local_and_provider_message_ids() -> None:

@@ -13,7 +13,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
 from app.channels.voice.service import VoiceCallResult, start_outbound_call
-from app.channels.whatsapp.service import TwilioSendResult, _send_whatsapp_reply
+from app.channels.whatsapp.service import TwilioSendResult, _send_meta_whatsapp_reply
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
@@ -967,12 +967,18 @@ async def _send_whatsapp_message(
     header_image_url: str | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
+    """Envía una campaña por Meta Cloud API.
+
+    ``TwilioSendResult`` se conserva por compatibilidad con el worker histórico;
+    el transporte de esta ruta es siempre Meta.
+    """
     if not body and not content_sid and not template_name:
-        return TwilioSendResult(sid=None, status="skipped", error="empty_body")
-    return await _send_whatsapp_reply(
+        return TwilioSendResult(sid=None, status="skipped", error="empty_body", provider="meta")
+    return await _send_meta_whatsapp_reply(
         to_number=to_number,
         body=body or "",
-        content_sid=content_sid,
+        # Los Content SID son identificadores históricos de Twilio.
+        content_sid=None,
         content_variables=content_variables,
         template_name=template_name,
         template_language=template_language,
@@ -1234,51 +1240,33 @@ async def _run_envio_whatsapp(
 
     wa_result: TwilioSendResult
     preview_text: str | None = None
-    if template_sid:
-        preview_text = _render_template_text(body_template, context).strip()
-        wa_result = await _send_whatsapp_message(
-            to_number=telefono,
-            body=preview_text,
-            content_sid=template_sid,
-            content_variables=rendered_vars,
-            template_name=meta_template_name,
-            template_language=meta_template_language,
-            header_image_url=header_image_url,
-            organizacion_id=organizacion_id,
+    if not meta_template_name or not meta_template_language:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={
+                "reason": "whatsapp_meta_template_required",
+                "template_sid": template_sid,
+                "template_name": meta_template_name,
+                "template_language": meta_template_language,
+            },
+            error="whatsapp_meta_template_required",
         )
-        fallback_used = False
-        fallback_error: str | None = None
-        if wa_result.error and preview_text:
-            fallback_result = await _send_whatsapp_message(
-                to_number=telefono,
-                body=preview_text,
-                organizacion_id=organizacion_id,
-            )
-            if not fallback_result.error:
-                wa_result = fallback_result
-                fallback_used = True
-            else:
-                fallback_error = fallback_result.error
-    else:
-        rendered_body = _render_whatsapp_template_preview(body=body_template, context=context).strip()
-        if not rendered_body and not meta_template_name:
-            return ContactEnvioResult(
-                estado="error",
-                detalle={"reason": "whatsapp_payload_incompleto"},
-                error="whatsapp_payload_incompleto",
-            )
-        wa_result = await _send_whatsapp_message(
-            to_number=telefono,
-            body=rendered_body or None,
-            content_variables=rendered_vars,
-            template_name=meta_template_name,
-            template_language=meta_template_language,
-            header_image_url=header_image_url,
-            organizacion_id=organizacion_id,
-        )
-        preview_text = rendered_body or None
-        fallback_used = False
-        fallback_error = None
+
+    preview_text = _render_template_text(body_template, context).strip()
+    wa_result = await _send_whatsapp_message(
+        to_number=telefono,
+        body=preview_text,
+        content_sid=None,
+        content_variables=rendered_vars,
+        template_name=meta_template_name,
+        template_language=meta_template_language,
+        header_image_url=header_image_url,
+        organizacion_id=organizacion_id,
+    )
+    # Un error de Meta no se convierte en texto libre: la campaña debe
+    # respetar la plantilla aprobada y no generar un segundo envío.
+    fallback_used = False
+    fallback_error: str | None = None
     estado = "enviado" if not wa_result.error else "error"
     return ContactEnvioResult(
         estado=estado,
@@ -1629,7 +1617,7 @@ class ProspeccionContactSender:
         await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
 
         # Un envío de prospección puede llegar a "leido" únicamente por el
-        # callback de estado de Twilio. Persistimos el mensaje aceptado antes
+        # callback de estado de Meta. Persistimos el mensaje aceptado antes
         # de ese callback para que exista la relación mensaje -> conversación
         # -> ledger de cobro. El helper es idempotente por el SID del proveedor
         # y sus errores no cambian el estado operativo del envío.

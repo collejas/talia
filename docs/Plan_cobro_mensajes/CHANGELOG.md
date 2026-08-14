@@ -188,6 +188,13 @@ Pendiente de API:
 - La misma regla se aplica al callback posterior de pricing Meta, evitando que una conciliación vuelva a dejar el costo en cero.
 - Caso validado y reparado: `SEGI CASAS` del lote `9718faae-dc00-4006-9e90-8662352943cc` quedó relacionado con su mensaje, conversación y ledger; categoría `marketing`, cargo GEOACTIV `$0.0900`, costo Meta `$0.5614`, total `$0.6514`.
 
+### Campañas WhatsApp exclusivamente por Meta — 2026-08-14
+
+- La ruta de envíos de `prospeccion/contactos` dejó de invocar el selector histórico que podía elegir Twilio según configuración del runtime.
+- Los envíos de campaña llaman directamente a Meta Cloud API y conservan el WAMID retornado por Meta para relacionar mensaje, estados y pricing.
+- Se eliminó el fallback de texto libre: si falta la plantilla Meta aprobada o Meta rechaza el envío, queda error controlado para reintento sin duplicar el envío ni cambiar su naturaleza.
+- Los flujos generales del inbox no se modificaron en esta fase; el cambio está limitado al worker de campañas de prospección.
+
 ## Próximas fases
 
 ### Fase 1 — Diseño técnico detallado
