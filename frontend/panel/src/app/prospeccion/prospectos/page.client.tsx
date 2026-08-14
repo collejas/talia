@@ -155,6 +155,7 @@ type Filters = {
   enviosVozMax: string
   conScraper: ConScraperFilter
   segmento: string
+  segmentoFilters: string[]
   geoEstado: string
   geoMunicipio: string
   minRating: MinRatingFilter
@@ -314,6 +315,7 @@ const initialFilters: Filters = {
   enviosVozMax: "",
   conScraper: "",
   segmento: "",
+  segmentoFilters: [],
   geoEstado: "",
   geoMunicipio: "",
   minRating: "",
@@ -825,6 +827,11 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["conScraper"]
         : "",
     segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
+    segmentoFilters: Array.isArray(filtersObj["segmentoFilters"])
+      ? (filtersObj["segmentoFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
+      : typeof filtersObj["segmento"] === "string" && filtersObj["segmento"]
+        ? [filtersObj["segmento"]]
+        : [],
     geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
     geoMunicipio: typeof filtersObj["geoMunicipio"] === "string" ? filtersObj["geoMunicipio"] : "",
     minRating:
@@ -1058,6 +1065,9 @@ function ProspectosView() {
   const [activityOptions, setActivityOptions] = useState<string[]>([])
   const [segmentoOptions, setSegmentoOptions] = useState<string[]>([])
   const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
+  const [queryFilterSearch, setQueryFilterSearch] = useState("")
+  const [activityFilterSearch, setActivityFilterSearch] = useState("")
+  const [segmentoFilterSearch, setSegmentoFilterSearch] = useState("")
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
@@ -1134,6 +1144,7 @@ function ProspectosView() {
   const prospectosStreamRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prospectosStreamRefreshInFlightRef = useRef(false)
   const [mounted, setMounted] = useState(false)
+
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1277,6 +1288,23 @@ function ProspectosView() {
         : consolidatedQueryOptions.map((option) => ({ ...option, count: undefined })),
     [consolidatedQueryOptions, metadataCountsAreScoped]
   )
+  const filteredQueryOptions = useMemo(() => {
+    const needle = queryFilterSearch.trim().toLocaleLowerCase("es-MX")
+    if (!needle) return scopedConsolidatedQueryOptions
+    return scopedConsolidatedQueryOptions.filter((option) =>
+      `${option.label} ${option.value}`.toLocaleLowerCase("es-MX").includes(needle)
+    )
+  }, [queryFilterSearch, scopedConsolidatedQueryOptions])
+  const filteredActivityOptions = useMemo(() => {
+    const needle = activityFilterSearch.trim().toLocaleLowerCase("es-MX")
+    if (!needle) return activityOptions
+    return activityOptions.filter((option) => option.toLocaleLowerCase("es-MX").includes(needle))
+  }, [activityFilterSearch, activityOptions])
+  const filteredSegmentoOptions = useMemo(() => {
+    const needle = segmentoFilterSearch.trim().toLocaleLowerCase("es-MX")
+    if (!needle) return segmentoOptions
+    return segmentoOptions.filter((option) => option.toLocaleLowerCase("es-MX").includes(needle))
+  }, [segmentoFilterSearch, segmentoOptions])
   const queryLabelMap = useMemo(() => {
     const map = new Map<string, string>()
     for (const option of scopedConsolidatedQueryOptions) {
@@ -1765,6 +1793,7 @@ function ProspectosView() {
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
           segmento: filters.segmento || undefined,
+          segmentos: filters.segmentoFilters.length ? filters.segmentoFilters : undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
@@ -1854,6 +1883,7 @@ function ProspectosView() {
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
           segmento: filters.segmento || undefined,
+          segmentos: filters.segmentoFilters.length ? filters.segmentoFilters : undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
@@ -1960,6 +1990,10 @@ function ProspectosView() {
         fuente: scope.fuente || undefined,
         dateFrom: scope.dateFrom,
         dateTo: scope.dateTo,
+        conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
+        conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
+        campanaId: filters.campanaId || undefined,
+        ...buildEnvioCountFilters(filters),
       })
       if (requestSeq !== queryMetadataRequestSeqRef.current) {
         return
@@ -1976,11 +2010,13 @@ function ProspectosView() {
       setFilters((prev) => {
         const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
         const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
-        const nextSegmento = prev.segmento && segmentoValues.has(prev.segmento) ? prev.segmento : ""
+        const nextSegmentoFilters = prev.segmentoFilters.filter((value) => segmentoValues.has(value))
+        const nextSegmento = nextSegmentoFilters.length === 1 ? nextSegmentoFilters[0] : ""
         if (
           arraysEqual(nextQueryFilters, prev.queryFilters) &&
           arraysEqual(nextActividadFilters, prev.actividadFilters) &&
-          nextSegmento === prev.segmento
+          nextSegmento === prev.segmento &&
+          arraysEqual(nextSegmentoFilters, prev.segmentoFilters)
         ) {
           return prev
         }
@@ -1989,6 +2025,7 @@ function ProspectosView() {
           queryFilters: nextQueryFilters,
           actividadFilters: nextActividadFilters,
           segmento: nextSegmento,
+          segmentoFilters: nextSegmentoFilters,
         }
       })
     } catch {
@@ -2007,6 +2044,7 @@ function ProspectosView() {
           queryFilters: [],
           actividadFilters: [],
           segmento: "",
+          segmentoFilters: [],
         }
       })
     } finally {
@@ -2014,7 +2052,17 @@ function ProspectosView() {
         setQueryOptionsLoading(false)
       }
     }
-  }, [])
+  }, [
+    filters.campanaId,
+    filters.conEnvioCanales,
+    filters.conEnvioModo,
+    filters.enviosCorreoMax,
+    filters.enviosCorreoMin,
+    filters.enviosVozMax,
+    filters.enviosVozMin,
+    filters.enviosWhatsappMax,
+    filters.enviosWhatsappMin,
+  ])
 
   const loadActivitiesForQueries = useCallback(
     async (selectedQueries: string[]) => {
@@ -2031,6 +2079,10 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           dateFrom,
           dateTo,
+          conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
+          conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
+          campanaId: filters.campanaId || undefined,
+          ...buildEnvioCountFilters(filters),
         })
         if (requestSeq !== activityMetadataRequestSeqRef.current) {
           return
@@ -4550,11 +4602,19 @@ function ProspectosView() {
                     <IconChevronDown className="size-4 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[260px]">
+                <DropdownMenuContent align="start" className="w-[280px]">
+                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+                    <Input
+                      value={queryFilterSearch}
+                      onChange={(event) => setQueryFilterSearch(event.target.value)}
+                      placeholder="Buscar consulta…"
+                      className="h-8 text-xs"
+                    />
+                  </div>
                 {queryOptionsLoading ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
-                ) : scopedConsolidatedQueryOptions.length ? (
-                  scopedConsolidatedQueryOptions.map((option) => (
+                ) : filteredQueryOptions.length ? (
+                  filteredQueryOptions.map((option) => (
                     <DropdownMenuCheckboxItem
                       key={option.value}
                       checked={
@@ -4562,6 +4622,7 @@ function ProspectosView() {
                         option.values.every((value) => filters.queryFilters.includes(value))
                       }
                       onCheckedChange={(checked) => handleQueryFilterToggle(option.values, Boolean(checked))}
+                      onSelect={(event) => event.preventDefault()}
                     >
                       {option.label}
                       {typeof option.count === "number" ? ` (${option.count})` : ""}
@@ -4588,15 +4649,24 @@ function ProspectosView() {
                     <IconChevronDown className="size-4 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[260px]">
+                <DropdownMenuContent align="start" className="w-[280px]">
+                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+                    <Input
+                      value={activityFilterSearch}
+                      onChange={(event) => setActivityFilterSearch(event.target.value)}
+                      placeholder="Buscar actividad…"
+                      className="h-8 text-xs"
+                    />
+                  </div>
                   {activityOptionsLoading ? (
                     <div className="px-3 py-2 text-xs text-muted-foreground">Cargando actividades …</div>
-                  ) : activityOptions.length ? (
-                    activityOptions.map((option) => (
+                  ) : filteredActivityOptions.length ? (
+                    filteredActivityOptions.map((option) => (
                       <DropdownMenuCheckboxItem
                         key={option}
                         checked={filters.actividadFilters.includes(option)}
                         onCheckedChange={(checked) => handleActividadFilterToggle(option, Boolean(checked))}
+                        onSelect={(event) => event.preventDefault()}
                       >
                         {option}
                       </DropdownMenuCheckboxItem>
@@ -4641,27 +4711,52 @@ function ProspectosView() {
             </div>
             <div className="space-y-1">
               <Label>Segmento</Label>
-              <Select
-                value={filters.segmento || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    segmento: value === "all" ? "" : value,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder={queryOptionsLoading ? "Cargando..." : "Todos los segmentos"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {segmentoOptions.map((segmento) => (
-                    <SelectItem key={segmento} value={segmento}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case">
+                    <span className="max-w-[180px] truncate text-left">
+                      {filters.segmentoFilters.length ? filters.segmentoFilters.join(", ") : "Todos los segmentos"}
+                    </span>
+                    <IconChevronDown className="size-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[280px]">
+                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+                    <Input
+                      value={segmentoFilterSearch}
+                      onChange={(event) => setSegmentoFilterSearch(event.target.value)}
+                      placeholder="Buscar segmento…"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <DropdownMenuCheckboxItem
+                    checked={!filters.segmentoFilters.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) setFilters((prev) => ({ ...prev, segmento: "", segmentoFilters: [] }))
+                    }}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    Todos
+                  </DropdownMenuCheckboxItem>
+                  {filteredSegmentoOptions.map((segmento) => (
+                    <DropdownMenuCheckboxItem
+                      key={segmento}
+                      checked={filters.segmentoFilters.includes(segmento)}
+                      onCheckedChange={(checked) => {
+                        setFilters((prev) => {
+                          const next = new Set(prev.segmentoFilters)
+                          if (checked) next.add(segmento)
+                          else next.delete(segmento)
+                          return { ...prev, segmento: next.size === 1 ? Array.from(next)[0] : "", segmentoFilters: Array.from(next) }
+                        })
+                      }}
+                      onSelect={(event) => event.preventDefault()}
+                    >
                       {segmento}
-                    </SelectItem>
+                    </DropdownMenuCheckboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-1">
               <Label>Estado</Label>

@@ -790,6 +790,7 @@ type ListProspectosParams = {
   websiteLookupStatus?: string
   emailDomainRelation?: "same_as_website" | "different_from_website" | "no_website" | "no_email"
   segmento?: string
+  segmentos?: string[]
   carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
@@ -836,6 +837,12 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
     url.searchParams.set("email_domain_relation", params.emailDomainRelation.trim())
   }
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
+  if (params.segmentos?.length) {
+    for (const value of params.segmentos) {
+      const trimmed = value?.trim()
+      if (trimmed) url.searchParams.append("segmentos", trimmed)
+    }
+  }
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
   if (params.order) url.searchParams.set("order", params.order)
   if (params.stage) url.searchParams.set("stage", params.stage)
@@ -979,6 +986,15 @@ function buildProspectosQueryMetadataInflightKey(params?: {
   fuente?: "google_places" | "denue" | "usuario"
   dateFrom?: string
   dateTo?: string
+  conEnvio?: boolean
+  conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
+  campanaId?: string
+  enviosCorreoMin?: number
+  enviosCorreoMax?: number
+  enviosWhatsappMin?: number
+  enviosWhatsappMax?: number
+  enviosVozMin?: number
+  enviosVozMax?: number
 }): string {
   const normalizedQueries = Array.from(
     new Set((params?.queries ?? []).map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
@@ -988,6 +1004,15 @@ function buildProspectosQueryMetadataInflightKey(params?: {
     fuente: params?.fuente ?? "",
     dateFrom: params?.dateFrom ?? "",
     dateTo: params?.dateTo ?? "",
+    conEnvio: params?.conEnvio ?? null,
+    conEnvioCanales: [...(params?.conEnvioCanales ?? [])].sort(),
+    campanaId: params?.campanaId ?? "",
+    enviosCorreoMin: params?.enviosCorreoMin ?? null,
+    enviosCorreoMax: params?.enviosCorreoMax ?? null,
+    enviosWhatsappMin: params?.enviosWhatsappMin ?? null,
+    enviosWhatsappMax: params?.enviosWhatsappMax ?? null,
+    enviosVozMin: params?.enviosVozMin ?? null,
+    enviosVozMax: params?.enviosVozMax ?? null,
   })
 }
 
@@ -996,6 +1021,15 @@ export async function listProspectosQueryMetadata(params?: {
   fuente?: "google_places" | "denue" | "usuario"
   dateFrom?: string
   dateTo?: string
+  conEnvio?: boolean
+  conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
+  campanaId?: string
+  enviosCorreoMin?: number
+  enviosCorreoMax?: number
+  enviosWhatsappMin?: number
+  enviosWhatsappMax?: number
+  enviosVozMin?: number
+  enviosVozMax?: number
 }): Promise<ProspectosQueryMetadataResult> {
   const inflightKey = buildProspectosQueryMetadataInflightKey(params)
   const existingRequest = prospectosQueryMetadataInflight.get(inflightKey)
@@ -1020,6 +1054,22 @@ export async function listProspectosQueryMetadata(params?: {
   }
   if (params?.dateTo) {
     url.searchParams.set("date_to", params.dateTo)
+  }
+  if (typeof params?.conEnvio === "boolean") url.searchParams.set("con_envio", String(params.conEnvio))
+  if (params?.conEnvioCanales?.length) {
+    url.searchParams.set("con_envio_canales", params.conEnvioCanales.join(","))
+  }
+  if (params?.campanaId) url.searchParams.set("campana_id", params.campanaId)
+  const countParams = [
+    ["envios_correo_min", params?.enviosCorreoMin],
+    ["envios_correo_max", params?.enviosCorreoMax],
+    ["envios_whatsapp_min", params?.enviosWhatsappMin],
+    ["envios_whatsapp_max", params?.enviosWhatsappMax],
+    ["envios_voz_min", params?.enviosVozMin],
+    ["envios_voz_max", params?.enviosVozMax],
+  ] as const
+  for (const [key, value] of countParams) {
+    if (typeof value === "number") url.searchParams.set(key, String(value))
   }
   const response = await requestJson<{
     queries: Array<

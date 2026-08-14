@@ -31471,6 +31471,7 @@ async def listar_prospectos(
     envios_voz_max: Annotated[int | None, Query(alias="envios_voz_max")] = None,
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
     actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
+    segmentos: Annotated[list[str] | None, Query(alias="segmentos")] = None,
 ) -> dict[str, Any]:
     """Devuelve prospectos guardados con paginación y filtros básicos."""
 
@@ -31501,6 +31502,7 @@ async def listar_prospectos(
                 website_lookup_status=params.website_lookup_status,
                 email_domain_relation=params.email_domain_relation or None,
                 segmento=params.segmento,
+                segmentos=segmentos,
                 carrier_type=params.carrier_type or None,
                 order=order_value,
                 stage=params.stage or None,
@@ -31628,6 +31630,15 @@ async def listar_prospectos_query_metadata(
     fuente: Annotated[Literal["google_places", "denue", "usuario", ""] | None, Query(alias="fuente")] = None,
     date_from: Annotated[date | None, Query(alias="date_from")] = None,
     date_to: Annotated[date | None, Query(alias="date_to")] = None,
+    con_envio: Annotated[bool | None, Query(alias="con_envio")] = None,
+    con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
+    campana_id: Annotated[UUID | None, Query(alias="campana_id")] = None,
+    envios_correo_min: Annotated[int | None, Query(alias="envios_correo_min", ge=0)] = None,
+    envios_correo_max: Annotated[int | None, Query(alias="envios_correo_max", ge=0)] = None,
+    envios_whatsapp_min: Annotated[int | None, Query(alias="envios_whatsapp_min", ge=0)] = None,
+    envios_whatsapp_max: Annotated[int | None, Query(alias="envios_whatsapp_max", ge=0)] = None,
+    envios_voz_min: Annotated[int | None, Query(alias="envios_voz_min", ge=0)] = None,
+    envios_voz_max: Annotated[int | None, Query(alias="envios_voz_max", ge=0)] = None,
 ) -> dict[str, Any]:
     """Lista nombres de consulta y actividades asociadas para los prospectos guardados."""
 
@@ -31649,6 +31660,15 @@ async def listar_prospectos_query_metadata(
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
+    envio_canales_values = sorted(_parse_con_envio_canales_param(con_envio_canales))
+    envio_ids: set[str] | None = None
+    if campana_id is not None or con_envio is not None or envio_canales_values:
+        envio_ids = await repo._list_prospecto_ids_with_contact_envios(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            campana_id=campana_id,
+            canales=envio_canales_values or None,
+        )
     cache_key = _build_prospecto_queries_cache_key(
         {
             "org": str(organizacion_id),
@@ -31657,6 +31677,17 @@ async def listar_prospectos_query_metadata(
             "date_from": date_from.isoformat() if date_from else "",
             "date_to": date_to.isoformat() if date_to else "",
             "timezone": effective_timezone,
+            "con_envio": con_envio,
+            "con_envio_canales": envio_canales_values,
+            "campana_id": str(campana_id) if campana_id else "",
+            "envio_count_filters": [
+                envios_correo_min,
+                envios_correo_max,
+                envios_whatsapp_min,
+                envios_whatsapp_max,
+                envios_voz_min,
+                envios_voz_max,
+            ],
         }
     )
     inflight_future, is_inflight_leader = await _get_prospecto_queries_inflight_future(cache_key)
@@ -31705,6 +31736,16 @@ async def listar_prospectos_query_metadata(
                 date_from=date_from,
                 date_to=date_to,
                 timezone_name=effective_timezone,
+                con_envio=con_envio,
+                con_envio_canales=envio_canales_values or None,
+                campana_id=campana_id,
+                envio_prospecto_ids=envio_ids,
+                envios_correo_min=envios_correo_min,
+                envios_correo_max=envios_correo_max,
+                envios_whatsapp_min=envios_whatsapp_min,
+                envios_whatsapp_max=envios_whatsapp_max,
+                envios_voz_min=envios_voz_min,
+                envios_voz_max=envios_voz_max,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

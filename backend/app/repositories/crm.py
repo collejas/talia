@@ -18170,6 +18170,7 @@ class CRMRepository:
         website_lookup_status: str | None = None,
         email_domain_relation: str | None = None,
         segmento: str | None = None,
+        segmentos: Sequence[str] | None = None,
         carrier_type: str | None = None,
         order: str | None = None,
         stage: str | None = None,
@@ -18281,6 +18282,10 @@ class CRMRepository:
             params["email_domain_relation"] = f"eq.{email_domain_relation}"
         if segmento:
             params["segmento"] = f"eq.{segmento}"
+        if segmentos:
+            normalized_segmentos = sorted({str(value).strip() for value in segmentos if str(value).strip()})
+            if normalized_segmentos:
+                params["segmento"] = _postgrest_in_clause(normalized_segmentos)
         if carrier_type:
             params["carrier_type"] = f"eq.{carrier_type}"
         if stage:
@@ -19210,6 +19215,16 @@ class CRMRepository:
         date_from: date | None = None,
         date_to: date | None = None,
         timezone_name: str | None = None,
+        con_envio: bool | None = None,
+        con_envio_canales: Sequence[str] | None = None,
+        campana_id: UUID | None = None,
+        envio_prospecto_ids: set[str] | None = None,
+        envios_correo_min: int | None = None,
+        envios_correo_max: int | None = None,
+        envios_whatsapp_min: int | None = None,
+        envios_whatsapp_max: int | None = None,
+        envios_voz_min: int | None = None,
+        envios_voz_max: int | None = None,
     ) -> dict[str, Any]:
         normalized_query_filters: list[str] | None = None
         if query_filters:
@@ -19235,6 +19250,23 @@ class CRMRepository:
         # Fast path: usamos RPCs agregados en DB para evitar scans masivos en Python.
         # Si algo falla (migración faltante o error puntual), se usa fallback legacy.
         try:
+            if (
+                con_envio is not None
+                or con_envio_canales
+                or campana_id is not None
+                or any(
+                    value is not None
+                    for value in (
+                        envios_correo_min,
+                        envios_correo_max,
+                        envios_whatsapp_min,
+                        envios_whatsapp_max,
+                        envios_voz_min,
+                        envios_voz_max,
+                    )
+                )
+            ):
+                raise CRMRepositoryError("metadata_envio_scope_requires_row_filter")
             query_payload: dict[str, Any] = {
                 "p_query_filters": normalized_query_filters,
                 "p_fuente": fuente or None,
@@ -19371,7 +19403,7 @@ class CRMRepository:
             pass
 
         params: dict[str, str] = {
-            "select": "id,actividad,segmento,metadata,creado_en,busqueda_ref",
+            "select": "id,actividad,segmento,metadata,creado_en,busqueda_ref,envios_correo_total,envios_whatsapp_total,envios_voz_total",
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
             "order": "query_sort.asc,actividad.asc,id.asc",
         }
@@ -19425,6 +19457,32 @@ class CRMRepository:
                     seen_row_ids.add(row_id_key)
                 data.append(row)
             scan_offset += len(page)
+        if envio_prospecto_ids is not None:
+            if con_envio is False:
+                data = [row for row in data if str(row.get("id") or "") not in envio_prospecto_ids]
+            else:
+                data = [row for row in data if str(row.get("id") or "") in envio_prospecto_ids]
+        count_filters = (
+            ("envios_correo_total", envios_correo_min, envios_correo_max),
+            ("envios_whatsapp_total", envios_whatsapp_min, envios_whatsapp_max),
+            ("envios_voz_total", envios_voz_min, envios_voz_max),
+        )
+        if any(minimum is not None or maximum is not None for _, minimum, maximum in count_filters):
+            def matches_envio_counts(row: dict[str, Any]) -> bool:
+                for column, minimum, maximum in count_filters:
+                    if minimum is None and maximum is None:
+                        continue
+                    try:
+                        current = int(row.get(column) or 0)
+                    except (TypeError, ValueError):
+                        current = 0
+                    if minimum is not None and current < minimum:
+                        return False
+                    if maximum is not None and current > maximum:
+                        return False
+                return True
+
+            data = [row for row in data if matches_envio_counts(row)]
         selected_queries: set[str] | None = None
         if normalized_query_filters:
             selected_queries = {value.casefold() for value in normalized_query_filters}
