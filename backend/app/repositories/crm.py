@@ -17639,6 +17639,22 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_purge_deleted_busquedas_invalid:{data!r}")
         return data
 
+    async def worker_reconcile_stale_meta_delivery_events(
+        self, *, older_than_minutes: int = 15, limit: int = 500
+    ) -> int:
+        data = await self._rpc(
+            "reconcile_stale_meta_delivery_events",
+            {
+                "p_older_than_minutes": max(1, int(older_than_minutes)),
+                "p_limit": max(1, int(limit)),
+            },
+        )
+        if isinstance(data, int):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], int):
+            return data[0]
+        raise CRMRepositoryError(f"Respuesta inesperada al reconciliar callbacks Meta: {data!r}")
+
     async def list_prospeccion_resultados(
         self,
         *,

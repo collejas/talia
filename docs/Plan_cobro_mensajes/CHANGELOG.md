@@ -31,6 +31,15 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - El ledger mantiene únicamente `canal = whatsapp`; no existe mezcla entre correo y cobro de WhatsApp.
 - Los reportes de faltantes deben filtrar por canal WhatsApp y no interpretar cualquier valor de `mensajes.proveedor_mensaje_id` como un identificador Meta.
 
+### Barrido automático de callbacks no conciliados — Listo para deploy
+
+- Se agregó `supabase/migrations/20260815_231000_reconcile_stale_meta_delivery_events.sql`.
+- La función `reconcile_stale_meta_delivery_events` procesa por lotes callbacks Meta `pendiente` con más de 15 minutos, sin mensaje local y sin coincidencia por organización + WAMID.
+- El proceso es idempotente, usa `SKIP LOCKED`, no crea cargos y solo actualiza el estado de conciliación.
+- Se agregó el worker periódico `meta_delivery_reconciliation_runner`, con intervalo, antigüedad mínima y tamaño de lote configurables.
+- La migración SQL fue aplicada en producción y devolvió `0` filas en la primera ejecución porque no quedan huérfanos antiguos pendientes.
+- Falta desplegar el backend para activar el worker en el servicio.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

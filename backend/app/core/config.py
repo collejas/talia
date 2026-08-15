@@ -819,6 +819,44 @@ class Settings(BaseSettings):
             "TALIA_BUSQUEDAS_PURGE_QUEUE_ENABLED",
         ),
     )
+    meta_delivery_reconciliation_enabled: bool = Field(
+        default=True,
+        description="Activa el cierre periódico de callbacks Meta sin mensaje local.",
+        validation_alias=AliasChoices(
+            "META_DELIVERY_RECONCILIATION_ENABLED",
+            "TALIA_META_DELIVERY_RECONCILIATION_ENABLED",
+        ),
+    )
+    meta_delivery_reconciliation_interval_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Intervalo del worker de conciliación de callbacks Meta.",
+        validation_alias=AliasChoices(
+            "META_DELIVERY_RECONCILIATION_INTERVAL_SECONDS",
+            "TALIA_META_DELIVERY_RECONCILIATION_INTERVAL_SECONDS",
+        ),
+    )
+    meta_delivery_reconciliation_older_than_minutes: int = Field(
+        default=15,
+        ge=15,
+        le=1440,
+        description="Edad mínima para marcar un callback Meta como no conciliado.",
+        validation_alias=AliasChoices(
+            "META_DELIVERY_RECONCILIATION_OLDER_THAN_MINUTES",
+            "TALIA_META_DELIVERY_RECONCILIATION_OLDER_THAN_MINUTES",
+        ),
+    )
+    meta_delivery_reconciliation_batch_size: int = Field(
+        default=500,
+        ge=1,
+        le=5000,
+        description="Máximo de callbacks Meta cerrados por ciclo.",
+        validation_alias=AliasChoices(
+            "META_DELIVERY_RECONCILIATION_BATCH_SIZE",
+            "TALIA_META_DELIVERY_RECONCILIATION_BATCH_SIZE",
+        ),
+    )
     busquedas_purge_runner_interval_seconds: int = Field(
         default=300,
         ge=30,
