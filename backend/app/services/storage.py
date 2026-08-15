@@ -34,6 +34,7 @@ logger = get_logger(__name__)
 
 DEFAULT_CALENDAR_SETTINGS_SLUG = "default"
 INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS = (0.0, 0.5, 1.5, 3.0, 5.0)
+MESSAGE_BILLING_RETRY_DELAYS_SECONDS = (0.5, 1.5, 3.0)
 
 
 class StorageError(RuntimeError):
@@ -53,6 +54,21 @@ def _schedule_background_coroutine(coro: Any, *, label: str) -> None:
             )
 
     task.add_done_callback(_log_task_failure)
+
+
+def _is_transient_message_billing_error(exc: CRMRepositoryError) -> bool:
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "error de red",
+            "statement timeout",
+            "57014",
+            "timed out",
+            "timeout",
+            "temporarily unavailable",
+        )
+    )
 
 
 async def _publish_inbox_realtime_event(
@@ -1897,15 +1913,35 @@ async def register_whatsapp_message(
         or metadata_payload.get("resolved_organizacion_id")
     )
     try:
-        billing_result = await message_billing.register_message_consumption(
-            repo=repo,
-            organizacion_id=str(billing_org or "") or None,
-            mensaje_id=str(result.get("message_id") or "") or None,
-            proveedor_mensaje_id=message_sid,
-            direccion=direction,
-            metadata=metadata_payload,
-            webhook_payload=webhook_payload,
-        )
+        billing_result = None
+        for attempt in range(len(MESSAGE_BILLING_RETRY_DELAYS_SECONDS) + 1):
+            try:
+                billing_result = await message_billing.register_message_consumption(
+                    repo=repo,
+                    organizacion_id=str(billing_org or "") or None,
+                    mensaje_id=str(result.get("message_id") or "") or None,
+                    proveedor_mensaje_id=message_sid,
+                    direccion=direction,
+                    metadata=metadata_payload,
+                    webhook_payload=webhook_payload,
+                )
+                break
+            except CRMRepositoryError as exc:
+                if attempt >= len(MESSAGE_BILLING_RETRY_DELAYS_SECONDS) or not _is_transient_message_billing_error(exc):
+                    raise
+                delay = MESSAGE_BILLING_RETRY_DELAYS_SECONDS[attempt]
+                logger.warning(
+                    "storage.message_billing_retry",
+                    extra={
+                        "message_id": str(result.get("message_id") or ""),
+                        "organizacion_id": str(billing_org or ""),
+                        "attempt": attempt + 1,
+                        "next_attempt": attempt + 2,
+                        "delay_seconds": delay,
+                        "error": str(exc),
+                    },
+                )
+                await asyncio.sleep(delay)
         if billing_result and billing_result.get("duplicado"):
             logger.info(
                 "storage.message_billing_duplicate_ignored",

@@ -268,6 +268,42 @@ async def test_register_whatsapp_message_sets_channel(
 
 
 @pytest.mark.asyncio
+async def test_register_whatsapp_message_retries_transient_billing_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un timeout de billing no debe dejar sin ledger un mensaje ya persistido."""
+    fake_repo = FakeWhatsappRepository()
+    calls = 0
+
+    async def fake_register_message_consumption(**_: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise storage.CRMRepositoryError("Error de red al invocar RPC registrar_cobro_mensaje")
+        return {"duplicado": False}
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(storage, "CRMRepository", lambda: fake_repo)
+    monkeypatch.setattr(storage.message_billing, "register_message_consumption", fake_register_message_consumption)
+    monkeypatch.setattr(storage.asyncio, "sleep", no_sleep)
+
+    result = await storage.register_whatsapp_message(
+        direction="saliente",
+        wa_id="wa-1",
+        phone_e164="+521111111111",
+        body="hola",
+        message_sid="msg-1",
+        metadata={"resolved_organizacion_id": "00000000-0000-0000-0000-000000000001"},
+        organizacion_id="00000000-0000-0000-0000-000000000001",
+    )
+
+    assert result["conversation_id"] == "conv-whatsapp"
+    assert calls == 3
+
+
+@pytest.mark.asyncio
 async def test_upload_whatsapp_attachment_uses_private_bucket(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
