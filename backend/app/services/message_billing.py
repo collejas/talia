@@ -13,7 +13,12 @@ def _text(value: Any) -> str | None:
     return value or None
 
 
-def _provider_from_payload(*, metadata: dict[str, Any], webhook_payload: dict[str, Any] | None) -> str:
+def _provider_from_payload(
+    *,
+    metadata: dict[str, Any],
+    webhook_payload: dict[str, Any] | None,
+    proveedor_mensaje_id: str | None,
+) -> str:
     configured = _text(metadata.get("provider"))
     if configured in {"meta", "twilio"}:
         return configured
@@ -22,6 +27,13 @@ def _provider_from_payload(*, metadata: dict[str, Any], webhook_payload: dict[st
     # payload en billing, solo se usa para identificar el proveedor.
     if isinstance(raw, dict) and ("entry" in raw or "change" in raw or "value" in raw):
         return "meta"
+    # WAMID es la identidad persistida por Meta. Esto cubre los flujos
+    # automáticos que no transportan metadata del envío hasta el ledger.
+    provider_message_id = _text(proveedor_mensaje_id) or ""
+    if provider_message_id.lower().startswith("wamid."):
+        return "meta"
+    if provider_message_id.upper().startswith(("SM", "MM")):
+        return "twilio"
     return "twilio"
 
 
@@ -68,7 +80,11 @@ async def register_message_consumption(
     if not organizacion_id or not mensaje_id or not proveedor_mensaje_id:
         return None
     metadata_payload = dict(metadata or {})
-    provider = _provider_from_payload(metadata=metadata_payload, webhook_payload=webhook_payload)
+    provider = _provider_from_payload(
+        metadata=metadata_payload,
+        webhook_payload=webhook_payload,
+        proveedor_mensaje_id=proveedor_mensaje_id,
+    )
     fields = _meta_message_fields(metadata=metadata_payload, webhook_payload=webhook_payload)
     result = await repo.register_billing_message(
         organizacion_id=str(organizacion_id),

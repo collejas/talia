@@ -49273,6 +49273,7 @@ async def _send_manual_whatsapp_message(
     metadata_payload.setdefault("author_type", "human")
     metadata_payload["channel"] = "whatsapp"
     metadata_payload["delivery_status"] = send_result.status
+    metadata_payload["provider"] = send_result.provider
 
     try:
         await storage.register_whatsapp_message(

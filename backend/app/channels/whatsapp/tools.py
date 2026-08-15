@@ -3623,6 +3623,7 @@ async def _notify_customer_assigned_seller(
                 "automated": True,
                 "trigger": "assigned_seller_data",
                 "seller_id": seller_id,
+                "provider": getattr(send_result, "provider", None) or "meta",
             },
             organizacion_id=str(org_uuid),
         )

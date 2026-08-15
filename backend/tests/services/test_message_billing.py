@@ -75,6 +75,21 @@ async def test_detects_meta_from_incoming_cloud_api_payload_without_storing_payl
 
 
 @pytest.mark.asyncio
+async def test_detects_meta_from_wamid_when_outbound_metadata_is_missing() -> None:
+    repo = FakeRepository()
+
+    await register_message_consumption(
+        repo=repo,  # type: ignore[arg-type]
+        organizacion_id="tenant-1",
+        mensaje_id="message-wamid",
+        proveedor_mensaje_id="wamid.HBg123",
+        direccion="saliente",
+    )
+
+    assert repo.calls[0]["proveedor"] == "meta"
+
+
+@pytest.mark.asyncio
 async def test_skips_message_without_provider_identity() -> None:
     repo = FakeRepository()
 

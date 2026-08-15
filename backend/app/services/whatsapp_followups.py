@@ -659,6 +659,7 @@ async def _send_persona_reengage_message(
         metadata_payload = {
             "reengage": True,
             "trigger": "whatsapp_followup",
+            "provider": getattr(send_result, "provider", None) or "meta",
         }
         try:
             await storage.register_whatsapp_message(

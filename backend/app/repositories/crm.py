@@ -7937,16 +7937,22 @@ class CRMRepository:
     ) -> tuple[list[dict[str, Any]], int]:
         safe_page = max(1, page)
         safe_size = max(1, min(page_size, 100))
+        select_fields = (
+            "id,organizacion_id,periodo_id,mensaje_id,conversacion_id,proveedor,canal,"
+            "proveedor_mensaje_id,direccion,tipo_contenido,origen_mensaje,es_plantilla,"
+            "nombre_plantilla,idioma_plantilla,categoria_meta,tipo_pricing_meta,"
+            "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
+            "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
+            "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
+            "tipo_cargo,fuente_registro,conciliacion_estado,creado_en"
+        )
+        # El ledger histórico puede haberse insertado después del mensaje
+        # original. Los periodos operativos deben filtrar por mensajes.creado_en
+        # para no hacer aparecer backfills antiguos en "Hoy".
+        if fecha_desde or fecha_hasta:
+            select_fields += ",mensaje:mensajes!cobro_mensajes_org_message_fk(creado_en)"
         params: dict[str, Any] = {
-            "select": (
-                "id,organizacion_id,periodo_id,mensaje_id,conversacion_id,proveedor,canal,"
-                "proveedor_mensaje_id,direccion,tipo_contenido,origen_mensaje,es_plantilla,"
-                "nombre_plantilla,idioma_plantilla,categoria_meta,tipo_pricing_meta,"
-                "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
-                "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
-                "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
-                "tipo_cargo,fuente_registro,conciliacion_estado,creado_en"
-            ),
+            "select": select_fields,
             "order": "creado_en.desc",
             "limit": str(safe_size),
             "offset": str((safe_page - 1) * safe_size),
@@ -7955,12 +7961,10 @@ class CRMRepository:
             params["organizacion_id"] = f"eq.{organizacion_id}"
         if periodo_id:
             params["periodo_id"] = f"eq.{periodo_id}"
-        if fecha_desde and fecha_hasta:
-            params["and"] = f"(creado_en.gte.{fecha_desde.isoformat()},creado_en.lt.{fecha_hasta.isoformat()})"
-        elif fecha_desde:
-            params["creado_en"] = f"gte.{fecha_desde.isoformat()}"
-        elif fecha_hasta:
-            params["creado_en"] = f"lt.{fecha_hasta.isoformat()}"
+        if fecha_desde:
+            params["mensaje.creado_en"] = f"gte.{fecha_desde.isoformat()}"
+        if fecha_hasta:
+            params["mensaje.creado_en"] = f"lt.{fecha_hasta.isoformat()}"
         if categoria_meta:
             params["categoria_meta"] = f"eq.{categoria_meta}"
         if direccion:

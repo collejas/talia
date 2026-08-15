@@ -29,6 +29,27 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - El enriquecimiento se realiza por lote durante la exportación para evitar consultas repetidas por página.
 - Validación: backend `6 passed`, TypeScript correcto, `git diff --check` correcto y React Doctor `100/100`.
 
+### Proveedor real en registros WhatsApp — Corregido
+
+- Algunos flujos automáticos y el envío manual no trasladaban al ledger el proveedor devuelto por el transporte y podían caer en el valor histórico `twilio`.
+- Se corrigió el registro para conservar explícitamente `send_result.provider` en esos flujos.
+- Los mensajes nuevos enviados por Meta quedarán registrados como `meta`; los registros históricos no se modifican automáticamente.
+- Validación: `10 passed`, compilación Python y `git diff --check` correctos.
+
+### Reparación de WAMIDs registrados como Twilio — Completado
+
+- Auditoría real del ledger encontró `26` filas recientes con `proveedor = twilio` pero `proveedor_mensaje_id` con formato `wamid.*`; no eran envíos Twilio.
+- Se agregó inferencia defensiva por identidad WAMID para evitar que nuevos mensajes Meta vuelvan a caer en `twilio` cuando falta metadata.
+- Se agregó migración `20260815_235000_repair_meta_provider_billing_rows.sql` para corregir esas filas del ledger y sus eventos de entrega.
+- Se aplicó en Supabase: `26` filas del ledger fueron corregidas a `meta`; no quedaron filas `twilio` con WAMID.
+
+### Filtros de periodo sobre fecha real del mensaje — Corregido
+
+- El detalle filtraba por `cobro_mensajes.creado_en`, que correspondía a la fecha del backfill y hacía aparecer mensajes históricos Twilio en `Hoy`.
+- Ahora, cuando hay rango de fechas, el backend filtra por `mensajes.creado_en` mediante la relación compuesta del ledger.
+- Validación real en Supabase: el rango `2026-08-15` devuelve `2,372` registros y la primera página no contiene proveedor `twilio`.
+- Validación automatizada: `11 passed`, compilación Python y `git diff --check` correctos.
+
 ### Conciliación y separación de callbacks Meta — Completado
 
 - Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.
