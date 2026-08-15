@@ -120,6 +120,14 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - La función SQL fue aplicada en producción, pero no se ejecutó ningún cierre.
 - Falta desplegar backend y panel para habilitar la operación administrativa.
 
+### Cierre manual desde el panel — Listo para deploy
+
+- Se agregó la sección **Cierre manual de periodos** para el owner.
+- El botón solo aparece para periodos vencidos en estado `abierto` o `en_revision`.
+- El periodo actual se muestra como no disponible y nunca se puede cerrar desde la UI.
+- El backend mantiene la validación final, por lo que ocultar el botón no es la única protección.
+- TypeScript y React Doctor: `100/100`.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado
