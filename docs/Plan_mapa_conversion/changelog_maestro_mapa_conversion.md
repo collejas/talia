@@ -30,7 +30,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se creó la migración `supabase/migrations/20260815_090000_web_tracking_tenant_sites.sql` para instalaciones públicas y dominios autorizados.
 - La migración usa columnas explícitas, FK compuesta sitio/tenant, índice global de dominios activos, constraints de normalización y RLS.
 - La migración no usa el trigger genérico que infiere `organizacion_id` desde `metadata`; el tenant queda explícito y protegido por relaciones y políticas.
-- La aplicación y validación contra Supabase quedan pendientes antes de iniciar el endpoint público.
+- La migración `web_tracking_tenant_sites` se aplicó en Supabase el 2026-08-15. Se validaron ambas tablas con RLS habilitado/forzado, 0 registros iniciales, FK tenant–sitio–dominio, constraints de dominio, índice único global de dominio activo y políticas separadas por operación para `authenticated`.
+- La migración complementaria `web_tracking_domains_fk_index` se aplicó el 2026-08-15 para cubrir la FK compuesta con `(tracking_site_id, organizacion_id)`; el advisor de rendimiento ya no reporta esa FK como no indexada.
 
 ## 2026-07-01
 

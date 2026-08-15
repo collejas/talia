@@ -418,8 +418,9 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 
 - [x] Diseñar migración para `tenant_web_tracking_sites`.
 - [x] Diseñar migración para `tenant_web_tracking_domains`.
-- [ ] Aplicar la migración y validarla con una sesión `authenticated` y una sesión `service_role`.
-- [ ] Validar con datos representativos los índices y constraints en Supabase.
+- [x] Aplicar la migración y validar en Supabase la estructura RLS para `authenticated` y `service_role` (2026-08-15); queda pendiente la prueba funcional con JWT representativo.
+- [x] Validar índices y constraints en Supabase (estructura y conteos iniciales validados, 2026-08-15).
+- [x] Cubrir la FK compuesta de dominios con `(tracking_site_id, organizacion_id)` y retirar el índice simple redundante (2026-08-15).
 - [ ] Crear migración para `web_tracking_events` si se habilita historial de páginas.
 - [ ] Agregar foreign keys, constraints, índices y RLS.
 - [ ] Verificar planes con `EXPLAIN` para filtros por tenant, fecha, UTM y dominio.

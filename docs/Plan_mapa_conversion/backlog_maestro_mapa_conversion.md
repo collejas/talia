@@ -60,7 +60,8 @@ Tareas:
 - [x] Documentar las diez correcciones de alineación.
 - [x] Relacionar el mapa con el plan de tracking de `Crear_webchat_tenants`.
 - [x] Diseñar la migración de instalaciones y dominios.
-- [ ] Aplicar y validar la migración de instalaciones y dominios en Supabase.
+- [x] Aplicar y validar la migración de instalaciones y dominios en Supabase (2026-08-15).
+- [x] Cubrir la FK compuesta de dominios con índice compuesto y retirar el índice redundante (2026-08-15).
 - [ ] Cerrar contrato explícito del endpoint de eventos.
 - [ ] Implementar el snippet universal y validar tres tenants.
 
