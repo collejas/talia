@@ -7771,6 +7771,8 @@ class CRMRepository:
         *,
         organizacion_id: UUID | None = None,
         periodo_id: UUID | None = None,
+        fecha_desde: datetime | None = None,
+        fecha_hasta: datetime | None = None,
         categoria_meta: str | None = None,
         direccion: str | None = None,
         page: int = 1,
@@ -7796,6 +7798,12 @@ class CRMRepository:
             params["organizacion_id"] = f"eq.{organizacion_id}"
         if periodo_id:
             params["periodo_id"] = f"eq.{periodo_id}"
+        if fecha_desde and fecha_hasta:
+            params["and"] = f"(creado_en.gte.{fecha_desde.isoformat()},creado_en.lt.{fecha_hasta.isoformat()})"
+        elif fecha_desde:
+            params["creado_en"] = f"gte.{fecha_desde.isoformat()}"
+        elif fecha_hasta:
+            params["creado_en"] = f"lt.{fecha_hasta.isoformat()}"
         if categoria_meta:
             params["categoria_meta"] = f"eq.{categoria_meta}"
         if direccion:

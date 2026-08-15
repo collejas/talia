@@ -72,6 +72,88 @@ type BillingMessage = {
 type MessageResponse = { total: number; page: number; page_size: number; items: BillingMessage[] }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
+type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
+type DateRange = { desde: string; hasta: string } | null
+
+const periodLabels: Record<PeriodPreset, string> = {
+  hoy: "Hoy",
+  ayer: "Ayer",
+  semana_actual: "Semana actual",
+  semana_pasada: "Semana pasada",
+  mes_actual: "Mes actual",
+  bimestre: "Bimestre",
+  trimestre: "Trimestre",
+  semestre: "Semestre",
+  ano_actual: "Año actual",
+  ano_anterior: "Año anterior",
+  manual: "Rango manual",
+}
+
+function localDateValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function localDateStart(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function isoStart(value: string): string {
+  return localDateStart(value).toISOString()
+}
+
+function periodRange(preset: PeriodPreset, manualDesde: string, manualHasta: string, now = new Date()): DateRange {
+  if (preset === "manual") {
+    if (!manualDesde || !manualHasta || manualDesde > manualHasta) return null
+    const end = localDateStart(manualHasta)
+    end.setDate(end.getDate() + 1)
+    return { desde: isoStart(manualDesde), hasta: end.toISOString() }
+  }
+
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const end = new Date(start)
+  if (preset === "hoy") end.setDate(end.getDate() + 1)
+  if (preset === "ayer") {
+    start.setDate(start.getDate() - 1)
+  }
+  if (preset === "semana_actual" || preset === "semana_pasada") {
+    const mondayOffset = (start.getDay() + 6) % 7
+    start.setDate(start.getDate() - mondayOffset + (preset === "semana_pasada" ? -7 : 0))
+    end.setTime(start.getTime())
+    end.setDate(end.getDate() + 7)
+  }
+  if (preset === "mes_actual") {
+    end.setMonth(end.getMonth() + 1, 1)
+  }
+  if (preset === "bimestre") {
+    start.setMonth(Math.floor(start.getMonth() / 2) * 2, 1)
+    end.setTime(start.getTime())
+    end.setMonth(end.getMonth() + 2)
+  }
+  if (preset === "trimestre") {
+    start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1)
+    end.setTime(start.getTime())
+    end.setMonth(end.getMonth() + 3)
+  }
+  if (preset === "semestre") {
+    start.setMonth(start.getMonth() < 6 ? 0 : 6, 1)
+    end.setTime(start.getTime())
+    end.setMonth(end.getMonth() + 6)
+  }
+  if (preset === "ano_actual") {
+    start.setMonth(0, 1)
+    end.setFullYear(end.getFullYear() + 1, 0, 1)
+  }
+  if (preset === "ano_anterior") {
+    start.setFullYear(start.getFullYear() - 1, 0, 1)
+    end.setTime(start.getTime())
+    end.setFullYear(end.getFullYear() + 1)
+  }
+  return { desde: start.toISOString(), hasta: end.toISOString() }
+}
 
 function amount(value: number | string | null | undefined): number {
   const parsed = Number(value)
@@ -109,6 +191,9 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [summary, setSummary] = React.useState<Summary | null>(null)
   const [messages, setMessages] = React.useState<MessageResponse | null>(null)
   const [rate, setRate] = React.useState<Rate | null>(null)
+  const [period, setPeriod] = React.useState<PeriodPreset>("mes_actual")
+  const [manualDesde, setManualDesde] = React.useState("")
+  const [manualHasta, setManualHasta] = React.useState("")
   const [category, setCategory] = React.useState("all")
   const [direction, setDirection] = React.useState("all")
   const [selectedTenant, setSelectedTenant] = React.useState("all")
@@ -125,9 +210,15 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [saving, setSaving] = React.useState(false)
   const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
 
+  const range = React.useMemo(() => periodRange(period, manualDesde, manualHasta), [manualDesde, manualHasta, period])
+  const manualRangeInvalid = period === "manual" && !range
   const scopePrefix = isOwner ? "/master" : ""
   const summaryParams = new URLSearchParams()
   if (isOwner && selectedTenant !== "all") summaryParams.set("organizacion_id", selectedTenant)
+  if (range) {
+    summaryParams.set("desde", range.desde)
+    summaryParams.set("hasta", range.hasta)
+  }
   if (category !== "all") summaryParams.set("categoria_meta", category)
   if (direction !== "all") summaryParams.set("direccion", direction)
   const summaryQuery = summaryParams.toString()
@@ -156,6 +247,11 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   }, [isOwner, refreshToken])
 
   React.useEffect(() => {
+    if (manualRangeInvalid) {
+      setLoading(false)
+      setSummary(null)
+      return
+    }
     const controller = new AbortController()
     setLoading(true)
     Promise.all([
@@ -172,13 +268,22 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar billing.")
     }).finally(() => setLoading(false))
     return () => controller.abort()
-  }, [isOwner, refreshToken, summaryUrl])
+  }, [isOwner, manualRangeInvalid, refreshToken, summaryUrl])
 
   React.useEffect(() => {
+    if (manualRangeInvalid) {
+      setMessageLoading(false)
+      setMessages(null)
+      return
+    }
     const controller = new AbortController()
     setMessageLoading(true)
     const params = new URLSearchParams({ page: String(page), page_size: "25" })
     if (isOwner && selectedTenant !== "all") params.set("organizacion_id", selectedTenant)
+    if (range) {
+      params.set("desde", range.desde)
+      params.set("hasta", range.hasta)
+    }
     if (category !== "all") params.set("categoria_meta", category)
     if (direction !== "all") params.set("direccion", direction)
     fetch(`${messagesUrl}?${params.toString()}`, { cache: "no-store", signal: controller.signal })
@@ -190,7 +295,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar el detalle.") })
       .finally(() => setMessageLoading(false))
     return () => controller.abort()
-  }, [category, direction, isOwner, messagesUrl, page, refreshToken, selectedTenant])
+  }, [category, direction, isOwner, manualRangeInvalid, messagesUrl, page, range?.desde, range?.hasta, refreshToken, selectedTenant])
 
   const saveRate = async (kind: "app" | "provider") => {
     setSaving(true); setSaveMessage(null)
@@ -224,22 +329,34 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
 
       {error ? <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><IconAlertTriangle size={17} />{error}</div> : null}
 
-      {loading ? <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}</div> : s ? <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Mensajes" value={integer(s.mensajes_cantidad)} detail={`${integer(s.mensajes_entrantes_cantidad)} entrantes · ${integer(s.mensajes_salientes_cantidad)} salientes`} icon={IconMessageCircle} />
-        <KpiCard label="Hilos activos" value={integer(s.hilos_con_actividad_cantidad)} detail={`${integer(s.conversiones_cantidad)} conversiones`} icon={IconChartBar} />
-        <KpiCard label="Tarifa efectiva" value={isOwner ? "Global" : money(rate?.precio_mensaje)} detail={isOwner ? "Vista consolidada" : rate?.alcance === "tenant" ? "Override particular" : "Tarifa global"} icon={IconSettings} />
-        <KpiCard label="Cargo GEOACTIV" value={money(s.cargo_app_total)} detail="$0.09 por mensaje según tarifa aplicada" icon={IconCoin} />
-        <KpiCard label="Costo Meta" value={money(s.costo_meta_total)} detail="Informativo; lo paga el tenant a Meta" icon={IconSend} />
-        <KpiCard label="Total consumo" value={money(s.total_consumo)} detail="GEOACTIV + costo Meta" icon={IconCoin} />
-      </div> : null}
-
       {isOwner ? <Card><CardHeader><CardTitle>Configuración de tarifas</CardTitle><CardDescription>Solo el owner puede crear nuevas versiones. Los históricos no se recalculan.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-2">
         <div className="space-y-3 rounded-lg border p-4"><p className="font-medium">Cargo GEOACTIV</p><div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="app-price">Precio por mensaje (MXN)</Label><Input id="app-price" type="number" min="0" step="0.0001" value={appPrice} onChange={(event) => setAppPrice(event.target.value)} /></div><div><Label htmlFor="tenant-override">Tenant particular (opcional)</Label><Input id="tenant-override" placeholder="UUID del tenant" value={tenantOverride} onChange={(event) => setTenantOverride(event.target.value)} /></div></div><Button onClick={() => void saveRate("app")} disabled={saving}>{saving ? "Guardando..." : "Guardar tarifa GEOACTIV"}</Button></div>
         <div className="space-y-3 rounded-lg border p-4"><p className="font-medium">Costo publicado Meta</p><div><Label htmlFor="provider-price">Precio Meta por mensaje (MXN)</Label><Input id="provider-price" type="number" min="0" step="0.0001" value={providerPrice} onChange={(event) => setProviderPrice(event.target.value)} /></div><Button variant="outline" onClick={() => void saveRate("provider")} disabled={saving}>{saving ? "Guardando..." : "Guardar tarifa Meta"}</Button></div>
         {saveMessage ? <p className="text-sm text-muted-foreground lg:col-span-2">{saveMessage}</p> : null}
       </CardContent></Card> : null}
 
-      <Card><CardHeader className="flex flex-wrap flex-row items-end justify-between gap-3"><div><CardTitle>Detalle de mensajes</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></div><div className="flex flex-wrap gap-2">{isOwner ? <><Select value={selectedTenant} onValueChange={(value) => { setSelectedTenant(value); setPage(1) }}><SelectTrigger className="w-56"><SelectValue placeholder="Tenant" /></SelectTrigger><SelectContent><SelectItem value="all">Todos los tenants</SelectItem>{tenantOptions.map((tenant) => <SelectItem key={tenant.id} value={tenant.id}>{tenant.nombre_comercial || tenant.nombre || tenant.id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>{tenantsLoading ? <span className="self-center text-xs text-muted-foreground">Cargando tenants…</span> : null}</> : null}<Select value={category} onValueChange={(value) => { setCategory(value); setPage(1) }}><SelectTrigger className="w-40"><SelectValue placeholder="Categoría Meta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las categorías</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="utility">Utility</SelectItem><SelectItem value="authentication">Authentication</SelectItem><SelectItem value="service">Service</SelectItem><SelectItem value="unknown">Sin categoría</SelectItem></SelectContent></Select><Select value={direction} onValueChange={(value) => { setDirection(value); setPage(1) }}><SelectTrigger className="w-36"><SelectValue placeholder="Dirección" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="entrante">Entrantes</SelectItem><SelectItem value="saliente">Salientes</SelectItem></SelectContent></Select></div></CardHeader><CardContent>
+      <Card>
+        <CardHeader><CardTitle>Filtros</CardTitle><CardDescription>El periodo, tenant, categoría y dirección se aplican simultáneamente a los KPI y al detalle de tarifas.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-2 lg:col-span-2"><Label htmlFor="billing-period">Periodo</Label><Select value={period} onValueChange={(value) => { setPeriod(value as PeriodPreset); setPage(1) }}><SelectTrigger id="billing-period"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(periodLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+          {isOwner ? <div className="space-y-2 lg:col-span-2"><Label htmlFor="billing-tenant">Tenant</Label><Select value={selectedTenant} onValueChange={(value) => { setSelectedTenant(value); setPage(1) }}><SelectTrigger id="billing-tenant"><SelectValue placeholder="Tenant" /></SelectTrigger><SelectContent><SelectItem value="all">Todos los tenants</SelectItem>{tenantOptions.map((tenant) => <SelectItem key={tenant.id} value={tenant.id}>{tenant.nombre_comercial || tenant.nombre || tenant.id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>{tenantsLoading ? <span className="text-xs text-muted-foreground">Cargando tenants…</span> : null}</div> : null}
+          <div className="space-y-2"><Label htmlFor="billing-category">Categoría Meta</Label><Select value={category} onValueChange={(value) => { setCategory(value); setPage(1) }}><SelectTrigger id="billing-category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas las categorías</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="utility">Utility</SelectItem><SelectItem value="authentication">Authentication</SelectItem><SelectItem value="service">Service</SelectItem><SelectItem value="unknown">Sin categoría</SelectItem></SelectContent></Select></div>
+          <div className="space-y-2"><Label htmlFor="billing-direction">Dirección</Label><Select value={direction} onValueChange={(value) => { setDirection(value); setPage(1) }}><SelectTrigger id="billing-direction"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="entrante">Entrantes</SelectItem><SelectItem value="saliente">Salientes</SelectItem></SelectContent></Select></div>
+          {period === "manual" ? <><div className="space-y-2"><Label htmlFor="billing-from">Desde</Label><Input id="billing-from" type="date" value={manualDesde} onChange={(event) => { setManualDesde(event.target.value); setPage(1) }} /></div><div className="space-y-2"><Label htmlFor="billing-to">Hasta</Label><Input id="billing-to" type="date" value={manualHasta} onChange={(event) => { setManualHasta(event.target.value); setPage(1) }} /></div></> : null}
+          <div className="text-xs text-muted-foreground md:col-span-2 lg:col-span-4">{manualRangeInvalid ? "Selecciona un rango manual válido: ambas fechas son obligatorias y Desde no puede ser posterior a Hasta." : range ? `Mostrando ${new Date(range.desde).toLocaleDateString("es-MX")} — ${new Date(new Date(range.hasta).getTime() - 1).toLocaleDateString("es-MX")}` : "Selecciona un rango para consultar los indicadores."}</div>
+        </CardContent>
+      </Card>
+
+      {loading ? <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}</div> : s ? <section aria-labelledby="billing-kpis-title" className="space-y-3"><h2 id="billing-kpis-title" className="text-xl font-semibold">KPI&apos;s</h2><div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <KpiCard label="Mensajes" value={integer(s.mensajes_cantidad)} detail={`${integer(s.mensajes_entrantes_cantidad)} entrantes · ${integer(s.mensajes_salientes_cantidad)} salientes`} icon={IconMessageCircle} />
+        <KpiCard label="Hilos activos" value={integer(s.hilos_con_actividad_cantidad)} detail={`${integer(s.conversiones_cantidad)} conversiones`} icon={IconChartBar} />
+        <KpiCard label="Tarifa efectiva" value={isOwner ? "Global" : money(rate?.precio_mensaje)} detail={isOwner ? "Vista consolidada" : rate?.alcance === "tenant" ? "Override particular" : "Tarifa global"} icon={IconSettings} />
+        <KpiCard label="Cargo GEOACTIV" value={money(s.cargo_app_total)} detail="$0.09 por mensaje según tarifa aplicada" icon={IconCoin} />
+        <KpiCard label="Costo Meta" value={money(s.costo_meta_total)} detail="Informativo; lo paga el tenant a Meta" icon={IconSend} />
+        <KpiCard label="Total consumo" value={money(s.total_consumo)} detail="GEOACTIV + costo Meta" icon={IconCoin} />
+      </div></section> : null}
+
+      <Card><CardHeader><CardTitle>Detalle de tarifas</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}
       </CardContent></Card>
     </div>

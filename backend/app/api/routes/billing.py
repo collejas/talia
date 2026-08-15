@@ -272,6 +272,8 @@ async def list_master_billing_tenants(
 @router.get("/messages", response_model=BillingMessageListResponse)
 async def list_tenant_billing_messages(
     periodo_id: UUID | None = Query(default=None),
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
     categoria_meta: str | None = Query(default=None, max_length=32),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     page: int = Query(default=1, ge=1),
@@ -283,6 +285,8 @@ async def list_tenant_billing_messages(
         rows, total = await repo.list_billing_messages(
             organizacion_id=organizacion_id,
             periodo_id=periodo_id,
+            fecha_desde=desde,
+            fecha_hasta=hasta,
             categoria_meta=categoria_meta,
             direccion=direccion,
             page=page,
@@ -303,6 +307,8 @@ async def list_tenant_billing_messages(
 async def list_master_billing_messages(
     organizacion_id: UUID | None = Query(default=None),
     periodo_id: UUID | None = Query(default=None),
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
     categoria_meta: str | None = Query(default=None, max_length=32),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     page: int = Query(default=1, ge=1),
@@ -314,6 +320,8 @@ async def list_master_billing_messages(
         rows, total = await repo.list_billing_messages(
             organizacion_id=organizacion_id,
             periodo_id=periodo_id,
+            fecha_desde=desde,
+            fecha_hasta=hasta,
             categoria_meta=categoria_meta,
             direccion=direccion,
             page=page,
