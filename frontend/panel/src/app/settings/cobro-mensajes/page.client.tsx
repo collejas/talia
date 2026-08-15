@@ -126,7 +126,12 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
 
   const scopePrefix = isOwner ? "/master" : ""
-  const summaryUrl = `/api/billing${scopePrefix}/summary${isOwner && selectedTenant !== "all" ? `?organizacion_id=${encodeURIComponent(selectedTenant)}` : ""}`
+  const summaryParams = new URLSearchParams()
+  if (isOwner && selectedTenant !== "all") summaryParams.set("organizacion_id", selectedTenant)
+  if (category !== "all") summaryParams.set("categoria_meta", category)
+  if (direction !== "all") summaryParams.set("direccion", direction)
+  const summaryQuery = summaryParams.toString()
+  const summaryUrl = `/api/billing${scopePrefix}/summary${summaryQuery ? `?${summaryQuery}` : ""}`
   const messagesUrl = `/api/billing${scopePrefix}/messages`
 
   React.useEffect(() => {

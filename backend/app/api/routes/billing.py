@@ -213,12 +213,18 @@ def _summary(*, scope: str, organizacion_id: UUID | None, rows: list[dict[str, A
 async def get_billing_summary(
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
+    categoria_meta: str | None = Query(default=None, max_length=32),
+    direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> BillingSummaryResponse:
     organizacion_id = await _tenant_scope(repo)
     try:
         rows = await repo.list_billing_periods(
-            organizacion_id=organizacion_id, fecha_inicio=desde, fecha_fin=hasta
+            organizacion_id=organizacion_id,
+            fecha_inicio=desde,
+            fecha_fin=hasta,
+            categoria_meta=categoria_meta,
+            direccion=direccion,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_summary_unavailable") from exc
@@ -230,6 +236,8 @@ async def get_master_billing_summary(
     organizacion_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
+    categoria_meta: str | None = Query(default=None, max_length=32),
+    direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> BillingSummaryResponse:
     await _owner_scope(repo)
@@ -238,6 +246,8 @@ async def get_master_billing_summary(
             organizacion_id=organizacion_id,
             fecha_inicio=desde,
             fecha_fin=hasta,
+            categoria_meta=categoria_meta,
+            direccion=direccion,
             limit=120,
         )
     except CRMRepositoryError as exc:

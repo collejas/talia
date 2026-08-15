@@ -7731,30 +7731,26 @@ class CRMRepository:
         organizacion_id: UUID | None = None,
         fecha_inicio: datetime | None = None,
         fecha_fin: datetime | None = None,
+        categoria_meta: str | None = None,
+        direccion: str | None = None,
         limit: int = 24,
     ) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {
-            "select": (
-                "id,organizacion_id,fecha_inicio,fecha_fin,estado,mensajes_cantidad,"
-                "mensajes_entrantes_cantidad,mensajes_salientes_cantidad,"
-                "hilos_con_actividad_cantidad,conversiones_cantidad,subtotal_mensajes,"
-                "costo_meta_periodo,costo_mensaje_periodo,ajustes_total,total,moneda,"
-                "cerrado_en,creado_en"
-            ),
-            "order": "fecha_inicio.desc",
-            "limit": str(max(1, min(limit, 120))),
-        }
-        if organizacion_id:
-            params["organizacion_id"] = f"eq.{organizacion_id}"
-        if fecha_inicio:
-            params["fecha_fin"] = f"gte.{fecha_inicio.isoformat()}"
-        if fecha_fin:
-            params["fecha_inicio"] = f"lt.{fecha_fin.isoformat()}"
-        resp = await self._request("GET", "/rest/v1/cobro_periodos", params=params)
-        data = resp.json() or []
+        data = await self._rpc(
+            "obtener_cobro_resumen_filtrado",
+            {
+                "p_organizacion_id": str(organizacion_id) if organizacion_id else None,
+                "p_categoria_meta": categoria_meta,
+                "p_direccion": direccion,
+            },
+        )
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar periodos de cobro: {data!r}")
-        return [row for row in data if isinstance(row, dict)]
+        rows = [row for row in data if isinstance(row, dict)]
+        if fecha_inicio:
+            rows = [row for row in rows if row.get("fecha_fin") and str(row["fecha_fin"]) >= fecha_inicio.isoformat()]
+        if fecha_fin:
+            rows = [row for row in rows if row.get("fecha_inicio") and str(row["fecha_inicio"]) < fecha_fin.isoformat()]
+        return rows[: max(1, min(limit, 120))]
 
     async def list_billing_tenants(self) -> list[dict[str, Any]]:
         params = {
