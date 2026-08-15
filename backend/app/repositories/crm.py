@@ -7829,6 +7829,38 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return [row for row in data if isinstance(row, dict)], total
 
+    async def get_billing_reconciliation_counts(
+        self,
+        *,
+        organizacion_id: UUID | None = None,
+        fecha_desde: datetime | None = None,
+        fecha_hasta: datetime | None = None,
+    ) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for state in ("pendiente", "vinculado", "no_conciliado"):
+            params: dict[str, Any] = {
+                "select": "id",
+                "proveedor": "eq.meta",
+                "conciliacion_estado": f"eq.{state}",
+                "limit": "1",
+            }
+            if organizacion_id:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+            if fecha_desde and fecha_hasta:
+                params["and"] = f"(creado_en.gte.{fecha_desde.isoformat()},creado_en.lt.{fecha_hasta.isoformat()})"
+            elif fecha_desde:
+                params["creado_en"] = f"gte.{fecha_desde.isoformat()}"
+            elif fecha_hasta:
+                params["creado_en"] = f"lt.{fecha_hasta.isoformat()}"
+            response = await self._request(
+                "GET",
+                "/rest/v1/eventos_entrega",
+                params=params,
+                prefer="count=exact",
+            )
+            counts[state] = self._extract_total_count(response.headers.get("content-range")) or 0
+        return counts
+
     async def list_billing_app_rates(
         self, *, organizacion_id: UUID | None = None, active_only: bool = False
     ) -> list[dict[str, Any]]:

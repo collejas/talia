@@ -40,6 +40,16 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - La migración SQL fue aplicada en producción y devolvió `0` filas en la primera ejecución porque no quedan huérfanos antiguos pendientes.
 - Falta desplegar el backend para activar el worker en el servicio.
 
+### Reporte de conciliación en Cobro de mensajes — Listo para deploy
+
+- Se agregaron `/billing/reconciliation` y `/billing/master/reconciliation`.
+- Los tenants normales consultan únicamente sus callbacks; el owner puede filtrar por tenant.
+- El reporte aplica el rango de fechas seleccionado y devuelve solo conteos de `pendiente`, `vinculado` y `no_conciliado`.
+- Se agregó la tarjeta **Conciliación de callbacks Meta** al panel `/settings/cobro-mensajes`.
+- No se exponen payloads crudos, contenido de mensajes ni credenciales del proveedor.
+- Pruebas de billing: `3 passed`; React Doctor: `100/100`.
+- Falta desplegar backend y panel para activar esta visualización.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

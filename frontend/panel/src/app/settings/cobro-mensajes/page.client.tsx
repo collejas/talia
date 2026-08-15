@@ -70,6 +70,7 @@ type BillingMessage = {
 }
 
 type MessageResponse = { total: number; page: number; page_size: number; items: BillingMessage[] }
+type Reconciliation = { scope: "tenant" | "master"; pendiente: number; vinculado: number; no_conciliado: number }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
@@ -190,6 +191,7 @@ function KpiCard({ label, value, detail, icon: Icon }: { label: string; value: s
 export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [summary, setSummary] = React.useState<Summary | null>(null)
   const [messages, setMessages] = React.useState<MessageResponse | null>(null)
+  const [reconciliation, setReconciliation] = React.useState<Reconciliation | null>(null)
   const [rate, setRate] = React.useState<Rate | null>(null)
   const [period, setPeriod] = React.useState<PeriodPreset>("mes_actual")
   const [manualDesde, setManualDesde] = React.useState("")
@@ -224,6 +226,10 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const summaryQuery = summaryParams.toString()
   const summaryUrl = `/api/billing${scopePrefix}/summary${summaryQuery ? `?${summaryQuery}` : ""}`
   const messagesUrl = `/api/billing${scopePrefix}/messages`
+  const reconciliationParams = new URLSearchParams()
+  if (isOwner && selectedTenant !== "all") reconciliationParams.set("organizacion_id", selectedTenant)
+  if (range) { reconciliationParams.set("desde", range.desde); reconciliationParams.set("hasta", range.hasta) }
+  const reconciliationUrl = `/api/billing${scopePrefix}/reconciliation${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
 
   React.useEffect(() => {
     if (!isOwner) {
@@ -259,16 +265,21 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         if (!response.ok) throw new Error(await errorText(response, "No se pudo consultar el resumen."))
         return response.json() as Promise<Summary>
       }),
+      fetch(reconciliationUrl, { cache: "no-store", signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error(await errorText(response, "No se pudo consultar la conciliación."))
+        return response.json() as Promise<Reconciliation>
+      }),
       isOwner ? Promise.resolve(null) : fetch("/api/billing/tariff/effective", { cache: "no-store", signal: controller.signal }).then((response) => response.ok ? response.json() : null),
-    ]).then(([summaryData, rateData]) => {
+    ]).then(([summaryData, reconciliationData, rateData]) => {
       setSummary(summaryData)
+      setReconciliation(reconciliationData)
       setRate(rateData?.tarifa ?? null)
       setError(null)
     }).catch((fetchError) => {
       if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar billing.")
     }).finally(() => setLoading(false))
     return () => controller.abort()
-  }, [isOwner, manualRangeInvalid, refreshToken, summaryUrl])
+  }, [isOwner, manualRangeInvalid, reconciliationUrl, refreshToken, summaryUrl])
 
   React.useEffect(() => {
     if (manualRangeInvalid) {
@@ -357,6 +368,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         <KpiCard label="Costo Meta" value={money(s.costo_meta_total)} detail="Informativo; lo paga el tenant a Meta" icon={IconSend} />
         <KpiCard label="Total consumo" value={money(s.total_consumo)} detail="GEOACTIV + costo Meta" icon={IconCoin} />
       </div></section> : null}
+
+      {reconciliation ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Conciliación de callbacks Meta</CardTitle><CardDescription className="text-xs">Los eventos no generan cargos por sí mismos; solo se contabiliza el mensaje local asociado.</CardDescription></CardHeader><CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0 text-center text-sm"><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Pendientes</p><p className="font-semibold">{integer(reconciliation.pendiente)}</p></div><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Vinculados</p><p className="font-semibold">{integer(reconciliation.vinculado)}</p></div><div className="rounded-md border border-amber-300/60 bg-amber-50/40 p-2 dark:bg-amber-950/20"><p className="text-xs text-muted-foreground">No conciliados</p><p className="font-semibold">{integer(reconciliation.no_conciliado)}</p></div></CardContent></Card> : null}
 
       <Card><CardHeader><CardTitle>Detalle de tarifas</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}

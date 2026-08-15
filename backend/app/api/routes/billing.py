@@ -130,6 +130,17 @@ class BillingEffectiveRateResponse(BaseModel):
     tarifa: dict[str, Any] | None = None
 
 
+class BillingReconciliationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    scope: str
+    organizacion_id: UUID | None = None
+    pendiente: int = 0
+    vinculado: int = 0
+    no_conciliado: int = 0
+
+
 class BillingAppRateCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -266,6 +277,51 @@ async def list_master_billing_tenants(
         raise HTTPException(status_code=502, detail="billing_master_tenants_unavailable") from exc
     return BillingTenantListResponse(
         items=[BillingTenantOption.model_validate(row) for row in rows]
+    )
+
+
+async def _reconciliation_response(
+    *, repo: CRMRepository, scope: str, organizacion_id: UUID | None, desde: datetime | None, hasta: datetime | None
+) -> BillingReconciliationResponse:
+    try:
+        counts = await repo.get_billing_reconciliation_counts(
+            organizacion_id=organizacion_id,
+            fecha_desde=desde,
+            fecha_hasta=hasta,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_reconciliation_unavailable") from exc
+    return BillingReconciliationResponse(
+        scope=scope,
+        organizacion_id=organizacion_id,
+        pendiente=counts.get("pendiente", 0),
+        vinculado=counts.get("vinculado", 0),
+        no_conciliado=counts.get("no_conciliado", 0),
+    )
+
+
+@router.get("/reconciliation", response_model=BillingReconciliationResponse)
+async def get_tenant_billing_reconciliation(
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingReconciliationResponse:
+    organizacion_id = await _tenant_scope(repo)
+    return await _reconciliation_response(
+        repo=repo, scope="tenant", organizacion_id=organizacion_id, desde=desde, hasta=hasta
+    )
+
+
+@router.get("/master/reconciliation", response_model=BillingReconciliationResponse)
+async def get_master_billing_reconciliation(
+    organizacion_id: UUID | None = Query(default=None),
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingReconciliationResponse:
+    await _owner_scope(repo)
+    return await _reconciliation_response(
+        repo=repo, scope="master", organizacion_id=organizacion_id, desde=desde, hasta=hasta
     )
 
 
