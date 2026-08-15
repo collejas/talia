@@ -128,6 +128,13 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - El backend mantiene la validación final, por lo que ocultar el botón no es la única protección.
 - TypeScript y React Doctor: `100/100`.
 
+### Cobertura de operaciones administrativas — Completado
+
+- Se agregaron pruebas para rechazo de owner no autorizado al cerrar periodos.
+- Se agregó prueba para impedir ajustes con importe cero.
+- Se agregó prueba para actualizar el estado de alertas desde el contexto owner.
+- Las pruebas de billing pasaron de `3` a `6` casos.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado
