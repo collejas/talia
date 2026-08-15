@@ -416,8 +416,10 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 
 ### Fase 1: base de datos
 
-- [ ] Crear migración para `tenant_web_tracking_sites`.
-- [ ] Crear migración para `tenant_web_tracking_domains`.
+- [x] Diseñar migración para `tenant_web_tracking_sites`.
+- [x] Diseñar migración para `tenant_web_tracking_domains`.
+- [ ] Aplicar la migración y validarla con una sesión `authenticated` y una sesión `service_role`.
+- [ ] Validar con datos representativos los índices y constraints en Supabase.
 - [ ] Crear migración para `web_tracking_events` si se habilita historial de páginas.
 - [ ] Agregar foreign keys, constraints, índices y RLS.
 - [ ] Verificar planes con `EXPLAIN` para filtros por tenant, fecha, UTM y dominio.
@@ -489,4 +491,3 @@ un script público
 ```
 
 El alias de Webchat debe seguir existiendo para resolver Webchat, pero no debe ser la identidad principal del seguimiento del sitio web.
-

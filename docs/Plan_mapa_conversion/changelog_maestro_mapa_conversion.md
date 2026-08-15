@@ -27,6 +27,10 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se confirmó la separación semántica entre tráfico web, correo, WhatsApp, CTA de WhatsApp y conversiones.
 - Se vinculó el nuevo plan `docs/Crear_webchat_tenants/plan_tracking_web_tenants.md` con el plan integral, adquisición y backlog maestro.
 - Se dejó establecido que no se creará una segunda tabla de sesiones ni un agregado paralelo de UTM.
+- Se creó la migración `supabase/migrations/20260815_090000_web_tracking_tenant_sites.sql` para instalaciones públicas y dominios autorizados.
+- La migración usa columnas explícitas, FK compuesta sitio/tenant, índice global de dominios activos, constraints de normalización y RLS.
+- La migración no usa el trigger genérico que infiere `organizacion_id` desde `metadata`; el tenant queda explícito y protegido por relaciones y políticas.
+- La aplicación y validación contra Supabase quedan pendientes antes de iniciar el endpoint público.
 
 ## 2026-07-01
 
