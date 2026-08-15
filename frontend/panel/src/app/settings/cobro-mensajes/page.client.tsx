@@ -132,6 +132,7 @@ function periodRange(preset: PeriodPreset, manualDesde: string, manualHasta: str
     end.setDate(end.getDate() + 7)
   }
   if (preset === "mes_actual") {
+    start.setDate(1)
     end.setMonth(end.getMonth() + 1, 1)
   }
   if (preset === "bimestre") {

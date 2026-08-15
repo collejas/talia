@@ -13,6 +13,14 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 
 ## 2026-08-15
 
+### Corrección de rango Mes actual — Corregido
+
+- Se detectó que el frontend iniciaba `mes_actual` en el día corriente en vez del primer día del mes.
+- En IMLUX eso excluía sus 82 mensajes del 1 al 14 de agosto y mostraba cero, mientras `semana_actual` sí incluía esos registros.
+- Se corrigió el cálculo para usar `[primer día del mes, primer día del siguiente mes)`.
+- Validación de datos IMLUX: 82 mensajes y `$7.3800 MXN` en agosto; 82 mensajes en semana actual.
+- TypeScript y React Doctor: `100/100`.
+
 ### Conciliación y separación de callbacks Meta — Completado
 
 - Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.
