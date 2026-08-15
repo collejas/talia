@@ -51,3 +51,16 @@ def test_normalize_tracking_url_preserves_encoded_parameter_values() -> None:
     value = "https://talia.mx/?q=uno%26dos&utm_campaign=cold_outreach"
 
     assert normalize_tracking_url(value) == value
+
+
+def test_normalize_tracking_url_deduplicates_tracking_parameters() -> None:
+    value = (
+        "https://talia.mx/?utm_source=prospeccion&utm_medium=email"
+        "&utm_campaign=cold_outreach&cid=campaign-1"
+        "&utm_medium=email&utm_campaign=cold_outreach&cid=campaign-1"
+    )
+
+    assert normalize_tracking_url(value) == (
+        "https://talia.mx/?utm_source=prospeccion&utm_medium=email"
+        "&utm_campaign=cold_outreach&cid=campaign-1"
+    )

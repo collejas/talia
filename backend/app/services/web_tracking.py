@@ -5,13 +5,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import unescape
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import httpx
 
 
 PUBLIC_SITE_ID_PATTERN = re.compile(r"^talia_site_[a-z0-9][a-z0-9_-]{5,127}$")
 HTML_QUERY_SEPARATOR_PATTERN = re.compile(r"&(?:(?:amp|#38);?)?%3[bB]", re.IGNORECASE)
+DEDUPLICATED_TRACKING_QUERY_KEYS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "kw",
+        "cid",
+        "tid",
+        "eid",
+        "pid",
+    }
+)
 
 
 def normalize_tracking_url(value: str | None) -> str | None:
@@ -28,7 +42,35 @@ def normalize_tracking_url(value: str | None) -> str | None:
 
     normalized = unescape(candidate)
     normalized = HTML_QUERY_SEPARATOR_PATTERN.sub("&", normalized)
-    return normalized or None
+    try:
+        parsed = urlparse(normalized)
+        query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    except ValueError:
+        return normalized or None
+
+    seen_tracking_keys: set[str] = set()
+    deduplicated_pairs: list[tuple[str, str]] = []
+    for key, query_value in query_pairs:
+        normalized_key = key.lower()
+        if normalized_key in DEDUPLICATED_TRACKING_QUERY_KEYS:
+            if normalized_key in seen_tracking_keys:
+                continue
+            seen_tracking_keys.add(normalized_key)
+        deduplicated_pairs.append((key, query_value))
+
+    if len(deduplicated_pairs) == len(query_pairs):
+        return normalized or None
+
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            urlencode(deduplicated_pairs, doseq=True),
+            parsed.fragment,
+        )
+    )
 
 
 def normalize_public_site_id(value: str | None) -> str | None:
