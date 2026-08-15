@@ -1134,8 +1134,11 @@ function ProspectosView() {
   const lastQueryScopeRef = useRef("")
   const lastActivitiesScopeRef = useRef("")
   const prospectosRequestSeqRef = useRef(0)
+  const prospectosAbortControllerRef = useRef<AbortController | null>(null)
   const queryMetadataRequestSeqRef = useRef(0)
+  const queryMetadataAbortControllerRef = useRef<AbortController | null>(null)
   const activityMetadataRequestSeqRef = useRef(0)
+  const activityMetadataAbortControllerRef = useRef<AbortController | null>(null)
   const baseActivityOptionsRef = useRef<string[]>([])
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
   const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1757,6 +1760,9 @@ function ProspectosView() {
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       const requestSeq = ++prospectosRequestSeqRef.current
+      prospectosAbortControllerRef.current?.abort()
+      const abortController = new AbortController()
+      prospectosAbortControllerRef.current = abortController
       setLoading(true)
       setError(null)
       try {
@@ -1809,6 +1815,7 @@ function ProspectosView() {
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
           dateFrom,
           dateTo,
+          signal: abortController.signal,
         })
         if (requestSeq !== prospectosRequestSeqRef.current) {
           return
@@ -1832,6 +1839,9 @@ function ProspectosView() {
           return allowed
         })
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return
+        }
         if (requestSeq !== prospectosRequestSeqRef.current) {
           return
         }
@@ -1984,6 +1994,9 @@ function ProspectosView() {
 
   const loadQueryOptions = useCallback(async (scope: { fuente?: FuenteFilter; dateFrom?: string; dateTo?: string }) => {
     const requestSeq = ++queryMetadataRequestSeqRef.current
+    queryMetadataAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    queryMetadataAbortControllerRef.current = abortController
     setQueryOptionsLoading(true)
     try {
       const response = await listProspectosQueryMetadata({
@@ -1994,6 +2007,7 @@ function ProspectosView() {
         conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
         campanaId: filters.campanaId || undefined,
         ...buildEnvioCountFilters(filters),
+        signal: abortController.signal,
       })
       if (requestSeq !== queryMetadataRequestSeqRef.current) {
         return
@@ -2067,6 +2081,9 @@ function ProspectosView() {
   const loadActivitiesForQueries = useCallback(
     async (selectedQueries: string[]) => {
       const requestSeq = ++activityMetadataRequestSeqRef.current
+      activityMetadataAbortControllerRef.current?.abort()
+      const abortController = new AbortController()
+      activityMetadataAbortControllerRef.current = abortController
       setActivityOptionsLoading(true)
       try {
         const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
@@ -2083,6 +2100,7 @@ function ProspectosView() {
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           campanaId: filters.campanaId || undefined,
           ...buildEnvioCountFilters(filters),
+          signal: abortController.signal,
         })
         if (requestSeq !== activityMetadataRequestSeqRef.current) {
           return

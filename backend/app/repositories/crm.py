@@ -18655,11 +18655,6 @@ class CRMRepository:
             and_filters.extend(geo_postgrest_filters)
             geo_filters_pushed = True
 
-        if and_filters:
-            params["and"] = "(" + ",".join(and_filters) + ")"
-
-        include_ids: set[str] | None = None
-        exclude_ids: set[str] = set()
         normalized_con_envio_canales = sorted(
             {
                 str(value or "").strip().lower()
@@ -18668,8 +18663,36 @@ class CRMRepository:
             }
         )
 
+        # Estos contadores se mantienen en prospeccion_prospectos y tienen índices
+        # por organización. Evitamos escanear la vista agregada de envíos para los
+        # filtros más usados de la pantalla.
+        if normalized_con_envio_canales:
+            channel_columns = {
+                "correo": "envios_correo_total",
+                "whatsapp": "envios_whatsapp_total",
+                "llamada": "envios_voz_total",
+            }
+            and_filters.append(
+                "or(" + ",".join(
+                    f"{channel_columns[channel]}.gt.0"
+                    for channel in normalized_con_envio_canales
+                ) + ")"
+            )
+        elif con_envio is True:
+            and_filters.append("envios_total.gt.0")
+        elif con_envio is False:
+            and_filters.append("envios_total.eq.0")
+
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
+
+        include_ids: set[str] | None = None
+        exclude_ids: set[str] = set()
         envio_prospecto_ids: set[str] | None = None
-        if campana_id is not None or con_envio is not None or normalized_con_envio_canales:
+        # Los filtros generales de envío y canal usan los contadores columnarizados
+        # de prospeccion_prospectos. Solo una campaña necesita resolver IDs desde
+        # prospeccion_contacto_envio, porque ese vínculo sigue siendo por batch.
+        if campana_id is not None:
             envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
                 usuario_token=usuario_token,
                 organizacion_id=organizacion_id,
@@ -18679,17 +18702,6 @@ class CRMRepository:
         if campana_id is not None:
             if con_envio is False:
                 return [], 0
-            if not envio_prospecto_ids:
-                return [], 0
-            include_ids = set(envio_prospecto_ids)
-        elif con_envio is True:
-            if not envio_prospecto_ids:
-                return [], 0
-            include_ids = set(envio_prospecto_ids)
-        elif con_envio is False:
-            if envio_prospecto_ids:
-                exclude_ids.update(envio_prospecto_ids)
-        elif normalized_con_envio_canales:
             if not envio_prospecto_ids:
                 return [], 0
             include_ids = set(envio_prospecto_ids)
@@ -19646,6 +19658,47 @@ class CRMRepository:
             if and_filters:
                 params["and"] = "(" + ",".join(and_filters) + ")"
 
+        envio_filters: list[str] = []
+        normalized_channels = {
+            str(value or "").strip().lower()
+            for value in (con_envio_canales or [])
+            if str(value or "").strip().lower() in {"correo", "whatsapp", "llamada"}
+        }
+        channel_columns = {
+            "correo": "envios_correo_total",
+            "whatsapp": "envios_whatsapp_total",
+            "llamada": "envios_voz_total",
+        }
+        if normalized_channels:
+            envio_filters.append(
+                "or(" + ",".join(
+                    f"{channel_columns[channel]}.gt.0"
+                    for channel in sorted(normalized_channels)
+                ) + ")"
+            )
+        elif con_envio is True:
+            envio_filters.append("envios_total.gt.0")
+        elif con_envio is False:
+            envio_filters.append("envios_total.eq.0")
+        count_filter_parts = []
+        for column_name, minimum, maximum in (
+            ("envios_correo_total", envios_correo_min, envios_correo_max),
+            ("envios_whatsapp_total", envios_whatsapp_min, envios_whatsapp_max),
+            ("envios_voz_total", envios_voz_min, envios_voz_max),
+        ):
+            if minimum is not None:
+                count_filter_parts.append(f"{column_name}.gte.{int(minimum)}")
+            if maximum is not None:
+                count_filter_parts.append(f"{column_name}.lte.{int(maximum)}")
+        envio_filters.extend(count_filter_parts)
+        if envio_filters:
+            existing_and = params.get("and")
+            parts = []
+            if existing_and:
+                parts.extend(existing_and.removeprefix("(").removesuffix(")").split(","))
+            parts.extend(envio_filters)
+            params["and"] = "(" + ",".join(parts) + ")"
+
         # Leemos en páginas para evitar recortes silenciosos en tenants con más de 5k prospectos.
         # Esta metadata alimenta los contadores por consulta/lote en UI y debe ser exacta.
         data: list[dict[str, Any]] = []
@@ -19684,27 +19737,6 @@ class CRMRepository:
                 data = [row for row in data if str(row.get("id") or "") not in envio_prospecto_ids]
             else:
                 data = [row for row in data if str(row.get("id") or "") in envio_prospecto_ids]
-        count_filters = (
-            ("envios_correo_total", envios_correo_min, envios_correo_max),
-            ("envios_whatsapp_total", envios_whatsapp_min, envios_whatsapp_max),
-            ("envios_voz_total", envios_voz_min, envios_voz_max),
-        )
-        if any(minimum is not None or maximum is not None for _, minimum, maximum in count_filters):
-            def matches_envio_counts(row: dict[str, Any]) -> bool:
-                for column, minimum, maximum in count_filters:
-                    if minimum is None and maximum is None:
-                        continue
-                    try:
-                        current = int(row.get(column) or 0)
-                    except (TypeError, ValueError):
-                        current = 0
-                    if minimum is not None and current < minimum:
-                        return False
-                    if maximum is not None and current > maximum:
-                        return False
-                return True
-
-            data = [row for row in data if matches_envio_counts(row)]
         selected_queries: set[str] | None = None
         if normalized_query_filters:
             selected_queries = {value.casefold() for value in normalized_query_filters}

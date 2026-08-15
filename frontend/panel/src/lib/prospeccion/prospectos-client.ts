@@ -716,6 +716,9 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       },
     })
   } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error
+    }
     if (retryNetwork) {
       await delay(400)
       return requestJson<T>(input, init, retryAuth, false)
@@ -818,6 +821,7 @@ type ListProspectosParams = {
   enviosVozMin?: number
   enviosVozMax?: number
   includeScraperStatus?: boolean
+  signal?: AbortSignal
 }
 
 function buildProspectosListUrl(basePath: string, params: ListProspectosParams = {}): URL {
@@ -938,7 +942,7 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
 
 export async function listProspectos(params: ListProspectosParams = {}): Promise<ProspectosResponse> {
   const url = buildProspectosListUrl("/api/prospeccion/prospectos", params)
-  return requestJson<ProspectosResponse>(url.toString())
+  return requestJson<ProspectosResponse>(url.toString(), { signal: params.signal })
 }
 
 export async function listProspectosBootstrap(
@@ -1030,6 +1034,7 @@ export async function listProspectosQueryMetadata(params?: {
   enviosWhatsappMax?: number
   enviosVozMin?: number
   enviosVozMax?: number
+  signal?: AbortSignal
 }): Promise<ProspectosQueryMetadataResult> {
   const inflightKey = buildProspectosQueryMetadataInflightKey(params)
   const existingRequest = prospectosQueryMetadataInflight.get(inflightKey)
@@ -1085,7 +1090,7 @@ export async function listProspectosQueryMetadata(params?: {
     >
     activities: string[]
     segmentos?: string[]
-  }>(url.toString(), { cache: "no-store" })
+  }>(url.toString(), { cache: "no-store", signal: params?.signal })
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
       if (typeof item === "string") {

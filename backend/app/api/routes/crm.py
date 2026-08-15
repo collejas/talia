@@ -31669,7 +31669,9 @@ async def listar_prospectos_query_metadata(
     )
     envio_canales_values = sorted(_parse_con_envio_canales_param(con_envio_canales))
     envio_ids: set[str] | None = None
-    if campana_id is not None or con_envio is not None or envio_canales_values:
+    # Los filtros generales de envío se resuelven con los contadores columnarizados
+    # en prospeccion_prospectos. Solo campaña requiere recuperar IDs por batch.
+    if campana_id is not None:
         envio_ids = await repo._list_prospecto_ids_with_contact_envios(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
