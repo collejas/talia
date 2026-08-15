@@ -335,3 +335,15 @@ Como mínimo, el sistema deberá poder responder:
 **No aprobado todavía para cobro automático.**
 
 La trazabilidad operativa existe parcialmente, pero faltan normalización tarifaria, conciliación de tenant, separación entre intento y mensaje facturable, control de duplicados y un ledger inmutable de consumo.
+
+## Addendum — 2026-08-15
+
+El diagnóstico anterior queda actualizado por la implementación del ledger y las verificaciones realizadas en producción:
+
+- Los callbacks Meta huérfanos se conservan en `eventos_entrega` y ahora tienen `conciliacion_estado` explícito: `pendiente`, `vinculado` o `no_conciliado`.
+- Los 103 callbacks antiguos sin mensaje local fueron marcados `no_conciliado` con motivo `mensaje_local_no_encontrado`; no se generaron cargos.
+- Los callbacks que llegan antes que el mensaje se vinculan automáticamente cuando aparece la fila local.
+- Los 160 mensajes históricos sin fila en `cobro_mensajes` son correos entrantes identificados por `datos.channel = correo`; no son faltantes de WhatsApp.
+- Se verificó que no hay mensajes de correo dentro del ledger y que el ledger usa `canal = whatsapp`.
+
+Por lo tanto, el hallazgo de los 160 registros debe interpretarse como una diferencia entre el historial general de `mensajes` y el alcance del cobro WhatsApp, no como mezcla de canales ni como deuda pendiente.

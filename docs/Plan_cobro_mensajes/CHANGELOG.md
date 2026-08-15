@@ -11,6 +11,26 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - **Completado:** implementado y verificado.
 - **Bloqueado:** no puede avanzar hasta resolver una dependencia.
 
+## 2026-08-15
+
+### Conciliación y separación de callbacks Meta — Completado
+
+- Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.
+- Se aplicó `supabase/migrations/20260815_230000_delivery_event_reconciliation_status.sql`.
+- Los `103` callbacks quedaron marcados como `no_conciliado`, con motivo explícito `mensaje_local_no_encontrado`.
+- No se generaron cargos para callbacks sin `mensaje_id`, conversación ni contenido local.
+- Los `3,815` callbacks que sí tienen mensaje local quedaron como `vinculado`.
+- El backend desplegado vincula automáticamente callbacks tempranos cuando posteriormente aparece el mensaje local.
+- Se verificó que no quedaron huérfanos antiguos pendientes y que existen `0` filas de cobro asociadas a los callbacks no conciliados.
+
+### Auditoría de mensajes sin ledger — Aclarado
+
+- Los `160` mensajes históricos que inicialmente aparecían como “sin cobro” son correos entrantes, no mensajes WhatsApp.
+- Se identificaron por `datos.channel = correo` y por identificadores SMTP/Message-ID, no por WAMID ni SID de WhatsApp.
+- Se verificó que `0` mensajes de correo están en `cobro_mensajes`.
+- El ledger mantiene únicamente `canal = whatsapp`; no existe mezcla entre correo y cobro de WhatsApp.
+- Los reportes de faltantes deben filtrar por canal WhatsApp y no interpretar cualquier valor de `mensajes.proveedor_mensaje_id` como un identificador Meta.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado
@@ -114,8 +134,8 @@ Documentos:
 
 **Diseño y documentación:** completado.  
 **Migraciones de cobro:** completado.
-**Backend de cobro:** en desarrollo.
-**Frontend de configuración y reportes:** pendiente.
+**Backend de cobro:** primera versión completada y validada en producción.
+**Frontend de configuración y reportes:** primera versión completada y validada en producción.
 **Activación de cobro:** pendiente.
 
 ### Base de datos — En desarrollo / estructura aplicada
