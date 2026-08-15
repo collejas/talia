@@ -39,7 +39,7 @@ type TrackingSite = {
 
 const COLLECTOR_ENDPOINT =
   process.env.NEXT_PUBLIC_TRACKING_COLLECTOR_URL || "https://talia.mx/api/crm/web/visit"
-const TRACKING_SCRIPT_URL = "https://talia.mx/assets/js/site-tracking.js?v=20260815"
+const TRACKING_SCRIPT_URL = "https://talia.mx/assets/js/site-tracking.js?v=20260815-cors1"
 
 function errorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {

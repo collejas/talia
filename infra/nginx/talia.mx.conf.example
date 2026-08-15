@@ -21,9 +21,27 @@ server {
 
     add_header X-Content-Type-Options "nosniff";
 
+    # Los tenants cargan el tracker como ES module desde sus propios dominios.
+    # Estos assets son públicos y necesitan CORS para que el navegador pueda
+    # importar site-tracking.js y sus módulos.
+    location = /assets/js/site-tracking.js {
+        try_files $uri =404;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "no-cache, must-revalidate";
+        add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
+    }
+
+    location ^~ /assets/js/modules/ {
+        try_files $uri =404;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Cache-Control "no-cache, must-revalidate";
+        add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
+    }
+
     location ^~ /assets/ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin "*" always;
         add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
     }
 

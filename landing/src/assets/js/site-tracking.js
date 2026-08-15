@@ -34,10 +34,11 @@ function resolveEndpointUrl() {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-void resolveTenantAlias().then((tenantAlias) => {
-  initialiseVisitTracking({
-    tenantAlias,
-    publicSiteId: resolvePublicSiteId(),
-    endpointUrl: resolveEndpointUrl(),
+const publicSiteId = resolvePublicSiteId();
+if (publicSiteId) {
+  initialiseVisitTracking({ publicSiteId, endpointUrl: resolveEndpointUrl() });
+} else {
+  void resolveTenantAlias().then((tenantAlias) => {
+    initialiseVisitTracking({ tenantAlias, endpointUrl: resolveEndpointUrl() });
   });
-});
+}

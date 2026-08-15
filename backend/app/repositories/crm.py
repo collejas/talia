@@ -7972,25 +7972,33 @@ class CRMRepository:
         if not tracking_site_id or not organizacion_id:
             return None
 
-        domain_params = {
-            "tracking_site_id": f"eq.{tracking_site_id}",
-            "organizacion_id": f"eq.{organizacion_id}",
-            "domain_normalized": f"eq.{domain_normalized}",
-            "active": "eq.true",
-            "verification_status": "eq.verified",
-            "select": "id,domain_normalized,verification_status",
-            "limit": "1",
-        }
-        domain_response = await self._request(
-            "GET",
-            "/rest/v1/tenant_web_tracking_domains",
-            params=domain_params,
-        )
-        domain_rows = domain_response.json() or []
-        if not isinstance(domain_rows, list) or not domain_rows:
-            return None
-        domain = domain_rows[0]
-        if not isinstance(domain, dict):
+        domain_candidates = [domain_normalized]
+        if domain_normalized.startswith("www."):
+            # El apex verificado también cubre su alias web canónico. No se
+            # aceptan otros subdominios implícitamente.
+            domain_candidates.append(domain_normalized[4:])
+
+        domain: dict[str, Any] | None = None
+        for candidate in domain_candidates:
+            domain_params = {
+                "tracking_site_id": f"eq.{tracking_site_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "domain_normalized": f"eq.{candidate}",
+                "active": "eq.true",
+                "verification_status": "eq.verified",
+                "select": "id,domain_normalized,verification_status",
+                "limit": "1",
+            }
+            domain_response = await self._request(
+                "GET",
+                "/rest/v1/tenant_web_tracking_domains",
+                params=domain_params,
+            )
+            domain_rows = domain_response.json() or []
+            if isinstance(domain_rows, list) and domain_rows and isinstance(domain_rows[0], dict):
+                domain = domain_rows[0]
+                break
+        if domain is None:
             return None
 
         return {
