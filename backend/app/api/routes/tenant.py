@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import secrets
 from typing import Any, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -33,7 +34,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import tenant_runtime
 from app.services import channel_routing
-from app.services.web_tracking import normalize_tracking_domain
+from app.services.web_tracking import normalize_tracking_domain, verify_dns_txt
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 logger = get_logger("app.api.tenant")
@@ -55,7 +56,12 @@ class TenantWebTrackingDomain(BaseModel):
     domain_normalized: str
     verification_method: Literal["dns", "html_file", "manual"]
     verification_status: Literal["pending", "verified", "rejected", "inactive"]
+    verification_token: str | None = None
     verified_at: datetime | None = None
+    verification_last_attempt_at: datetime | None = None
+    verification_attempt_count: int = 0
+    verification_error_code: str | None = None
+    verification_error_message: str | None = None
     active: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -101,7 +107,16 @@ class TenantWebTrackingDomainCreateRequest(BaseModel):
 class TenantWebTrackingDomainUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    active: bool
+    active: bool | None = None
+    verification_method: Literal["dns", "html_file", "manual"] | None = None
+
+
+class TenantWebTrackingVerificationResult(BaseModel):
+    verified: bool
+    verification_status: Literal["pending", "verified", "rejected", "inactive"]
+    error_code: str | None = None
+    message: str
+    domain: TenantWebTrackingDomain
 
 
 def get_crm_repo() -> CRMRepository:
@@ -1065,6 +1080,7 @@ async def create_tenant_web_tracking_domain(
     if not domain_normalized:
         raise HTTPException(status_code=400, detail="domain_invalid")
     repo = CRMRepository(user_token=user_token)
+    verification_token = f"talia_verify_{secrets.token_urlsafe(24)}"
     try:
         row = await repo.create_web_tracking_domain(
             organizacion_id=context.organizacion_id,
@@ -1072,10 +1088,79 @@ async def create_tenant_web_tracking_domain(
             domain=domain_normalized,
             domain_normalized=domain_normalized,
             verification_method=payload.verification_method,
+            verification_token=verification_token,
         )
     except CRMRepositoryError as exc:
         raise _tracking_http_error(exc) from exc
     return TenantWebTrackingDomain.model_validate(row)
+
+
+@router.post(
+    "/me/web-tracking/domains/{domain_id}/verify",
+    response_model=TenantWebTrackingVerificationResult,
+)
+async def verify_tenant_web_tracking_domain(
+    domain_id: UUID,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingVerificationResult:
+    await require_permission(user_token, "settings.manage")
+    repo = CRMRepository(user_token=user_token)
+    try:
+        rows = await repo.list_web_tracking_domains(organizacion_id=context.organizacion_id)
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    domain = next((row for row in rows if str(row.get("id")) == str(domain_id)), None)
+    if not domain:
+        raise HTTPException(status_code=404, detail="web_tracking_domain_not_found")
+
+    verification_method = str(domain.get("verification_method") or "")
+    if verification_method != "dns":
+        raise HTTPException(status_code=400, detail="verification_method_dns_required")
+    token = str(domain.get("verification_token") or "").strip()
+    domain_normalized = str(domain.get("domain_normalized") or "").strip()
+    if not token or not domain_normalized:
+        raise HTTPException(status_code=400, detail="verification_challenge_missing")
+
+    result = await verify_dns_txt(domain=domain_normalized, expected_token=token)
+    attempt_count = int(domain.get("verification_attempt_count") or 0) + 1
+    now = datetime.now().astimezone()
+    updates: dict[str, Any] = {
+        "verification_last_attempt_at": now.isoformat(),
+        "verification_attempt_count": attempt_count,
+        "verification_error_code": result.error_code,
+        "verification_error_message": result.error_message,
+    }
+    if result.verified:
+        updates.update(
+            {
+                "verification_status": "verified",
+                "verified_at": now.isoformat(),
+                "active": True,
+            }
+        )
+        message = "Dominio verificado y activado."
+    else:
+        updates.update({"verification_status": "pending", "active": False})
+        message = result.error_message or "No se pudo verificar el dominio."
+
+    try:
+        updated = await repo.update_web_tracking_domain(
+            organizacion_id=context.organizacion_id,
+            domain_id=domain_id,
+            updates=updates,
+        )
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    if not updated:
+        raise HTTPException(status_code=404, detail="web_tracking_domain_not_found")
+    return TenantWebTrackingVerificationResult(
+        verified=result.verified,
+        verification_status=updated.get("verification_status", "pending"),
+        error_code=result.error_code,
+        message=message,
+        domain=TenantWebTrackingDomain.model_validate(updated),
+    )
 
 
 @router.patch("/me/web-tracking/domains/{domain_id}", response_model=TenantWebTrackingDomain)
@@ -1087,6 +1172,9 @@ async def update_tenant_web_tracking_domain(
 ) -> TenantWebTrackingDomain:
     await require_permission(user_token, "settings.manage")
     repo = CRMRepository(user_token=user_token)
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
     try:
         row = await repo.update_web_tracking_domain(
             organizacion_id=context.organizacion_id,

@@ -37,6 +37,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - `site-tracking.js` y `modules/visit-tracking.js` ya envían `public_site_id`; `tenant_alias` queda como compatibilidad temporal para los tres tenants existentes.
 - Se agregó la pestaña `Página Web` en `settings/variables` con creación de instalaciones, registro/desactivación de dominios, estados de verificación y copia del snippet inicial.
 - Se agregaron endpoints privados tenant-scoped para administrar sitios y dominios; todos requieren autenticación y permisos `settings.view`/`settings.manage`.
+- Se agregó la migración `20260815_180000_web_tracking_domain_verification.sql` con columnas explícitas para token de verificación, intentos, último error y timestamp.
+- La pestaña `Página Web` ahora muestra instrucciones DNS, permite cambiar el método pendiente, ejecuta `Probar DNS`, activa el dominio cuando el TXT coincide y muestra el error operativo cuando no coincide.
+- Se sincronizaron los assets públicos servidos en `/var/www/talia-landing`; `site-tracking.js` y `modules/visit-tracking.js` ya envían el `public_site_id` al endpoint absoluto.
 
 ## 2026-07-01
 

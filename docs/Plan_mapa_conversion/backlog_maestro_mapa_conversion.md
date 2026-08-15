@@ -64,7 +64,8 @@ Tareas:
 - [x] Cubrir la FK compuesta de dominios con índice compuesto y retirar el índice redundante (2026-08-15).
 - [x] Cerrar contrato inicial del endpoint de visitas: `public_site_id` + `Origin/Referer` verificado, con compatibilidad temporal por alias (2026-08-15).
 - [x] Implementar la primera versión del panel `Página Web` y generación del snippet (2026-08-15).
-- [ ] Publicar el artefacto final del snippet y validar tres tenants.
+- [x] Publicar los assets actuales del snippet y validar que `talia.mx` los sirve (2026-08-15).
+- [ ] Publicar el artefacto final autocontenido y validar tres tenants.
 
 ## 3) Epic A · Base de datos
 

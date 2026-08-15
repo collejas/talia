@@ -8073,7 +8073,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verified_at,active,created_at,updated_at",
+            "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verification_token,verified_at,verification_last_attempt_at,verification_attempt_count,verification_error_code,verification_error_message,active,created_at,updated_at",
             "order": "created_at.asc",
         }
         if tracking_site_id:
@@ -8097,6 +8097,7 @@ class CRMRepository:
         domain: str,
         domain_normalized: str,
         verification_method: str,
+        verification_token: str,
     ) -> dict[str, Any]:
         response = await self._request(
             "POST",
@@ -8109,6 +8110,7 @@ class CRMRepository:
                     "domain_normalized": domain_normalized,
                     "verification_method": verification_method,
                     "verification_status": "pending",
+                    "verification_token": verification_token,
                 }
             ],
             prefer="return=representation",
@@ -8132,7 +8134,7 @@ class CRMRepository:
             params={
                 "id": f"eq.{domain_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
-                "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verified_at,active,created_at,updated_at",
+                "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verification_token,verified_at,verification_last_attempt_at,verification_attempt_count,verification_error_code,verification_error_message,active,created_at,updated_at",
             },
             json=updates,
             prefer="return=representation",

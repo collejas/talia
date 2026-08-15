@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from urllib.parse import urlparse
+
+import httpx
 
 
 PUBLIC_SITE_ID_PATTERN = re.compile(r"^talia_site_[a-z0-9][a-z0-9_-]{5,127}$")
@@ -59,3 +62,69 @@ def request_tracking_domain(*, origin: str | None, referer: str | None) -> str |
     """Obtiene el sitio que originó el evento; Origin tiene precedencia."""
 
     return normalize_tracking_domain(origin) or normalize_tracking_domain(referer)
+
+
+@dataclass(frozen=True)
+class DnsVerificationResult:
+    verified: bool
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+async def verify_dns_txt(*, domain: str, expected_token: str) -> DnsVerificationResult:
+    """Comprueba el TXT `_talia-verification` mediante DNS-over-HTTPS."""
+
+    record_name = f"_talia-verification.{domain}"
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            response = await client.get(
+                "https://cloudflare-dns.com/dns-query",
+                params={"name": record_name, "type": "TXT"},
+                headers={"Accept": "application/dns-json"},
+            )
+    except httpx.RequestError:
+        return DnsVerificationResult(
+            verified=False,
+            error_code="dns_provider_unreachable",
+            error_message="No se pudo consultar el proveedor DNS.",
+        )
+
+    if response.status_code != 200:
+        return DnsVerificationResult(
+            verified=False,
+            error_code="dns_provider_error",
+            error_message="El proveedor DNS respondió con error.",
+        )
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return DnsVerificationResult(
+            verified=False,
+            error_code="dns_response_invalid",
+            error_message="La respuesta DNS no tuvo un formato válido.",
+        )
+
+    answers = payload.get("Answer") if isinstance(payload, dict) else None
+    values: list[str] = []
+    if isinstance(answers, list):
+        for answer in answers:
+            if not isinstance(answer, dict) or answer.get("type") != 16:
+                continue
+            data = answer.get("data")
+            if isinstance(data, str):
+                values.append(data.replace('"', "").strip())
+
+    if expected_token in values:
+        return DnsVerificationResult(verified=True)
+    if not values:
+        return DnsVerificationResult(
+            verified=False,
+            error_code="verification_record_not_found",
+            error_message=f"No se encontró el TXT {record_name}.",
+        )
+    return DnsVerificationResult(
+        verified=False,
+        error_code="verification_token_mismatch",
+        error_message="El TXT existe, pero su valor no coincide con el desafío generado.",
+    )

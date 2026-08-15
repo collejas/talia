@@ -19,7 +19,12 @@ type TrackingDomain = {
   domain_normalized: string
   verification_method: VerificationMethod
   verification_status: VerificationStatus
+  verification_token?: string | null
   verified_at?: string | null
+  verification_last_attempt_at?: string | null
+  verification_attempt_count?: number
+  verification_error_code?: string | null
+  verification_error_message?: string | null
   active: boolean
 }
 
@@ -174,6 +179,47 @@ export function TenantWebTrackingPanel() {
     }
   }
 
+  const updateDomain = async (domain: TrackingDomain, updates: { active?: boolean; verification_method?: VerificationMethod }) => {
+    setMessage(null)
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(errorMessage(payload, "No se pudo actualizar el dominio."))
+      setMessage({ type: "success", text: "Método de verificación actualizado." })
+      await loadSites()
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo actualizar el dominio." })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const verifyDomain = async (domain: TrackingDomain) => {
+    setMessage(null)
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`, {
+        method: "POST",
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(errorMessage(payload, "No se pudo probar el dominio."))
+      setMessage({
+        type: payload?.verified ? "success" : "error",
+        text: typeof payload?.message === "string" ? payload.message : "La verificación no fue confirmada.",
+      })
+      await loadSites()
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo probar el dominio." })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const snippetFor = useMemo(
     () => (site: TrackingSite) =>
       `<script type="module" src="${TRACKING_SCRIPT_URL}"\n  data-talia-public-site-id="${site.public_site_id}"\n  data-talia-tracking-endpoint="${COLLECTOR_ENDPOINT}"></script>`,
@@ -293,14 +339,42 @@ export function TenantWebTrackingPanel() {
                 <div className="divide-y rounded-md border">
                   {site.domains.map((domain) => (
                     <div key={domain.id} className="flex flex-col gap-2 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className="truncate font-mono text-xs">{domain.domain_normalized}</span>
                         <Badge variant={statusVariant(domain.verification_status)}>{statusLabel(domain.verification_status)}</Badge>
+                        {domain.verification_status === "pending" ? (
+                          <select
+                            className="border-input bg-background h-7 rounded-md border px-2 text-xs"
+                            value={domain.verification_method}
+                            onChange={(event) => void updateDomain(domain, { verification_method: event.target.value as VerificationMethod })}
+                            disabled={saving}
+                            aria-label={`Método de verificación para ${domain.domain_normalized}`}
+                          >
+                            <option value="dns">DNS</option>
+                            <option value="html_file">Archivo HTML</option>
+                            <option value="manual">Manual</option>
+                          </select>
+                        ) : null}
                       </div>
-                      {domain.active ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => void deactivateDomain(domain)} disabled={saving}>
-                          Desactivar
-                        </Button>
+                      <div className="flex items-center gap-1">
+                        {domain.verification_status === "pending" && domain.verification_method === "dns" ? (
+                          <Button type="button" variant="outline" size="sm" onClick={() => void verifyDomain(domain)} disabled={saving}>
+                            Probar DNS
+                          </Button>
+                        ) : null}
+                        {domain.active ? (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => void deactivateDomain(domain)} disabled={saving}>
+                            Desactivar
+                          </Button>
+                        ) : null}
+                      </div>
+                      {domain.verification_status === "pending" && domain.verification_method === "dns" ? (
+                        <div className="w-full rounded bg-muted/40 p-2 text-xs text-muted-foreground">
+                          <p>En DNS crea un registro TXT:</p>
+                          <p className="mt-1 font-mono">Host: _talia-verification.{domain.domain_normalized}</p>
+                          <p className="font-mono break-all">Valor: {domain.verification_token || "Desafío no disponible; vuelve a registrar el dominio."}</p>
+                          {domain.verification_error_message ? <p className="mt-1 text-destructive">Último intento: {domain.verification_error_message}</p> : null}
+                        </div>
                       ) : null}
                     </div>
                   ))}

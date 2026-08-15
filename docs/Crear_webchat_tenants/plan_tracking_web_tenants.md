@@ -440,7 +440,7 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 - [x] Extender `site-tracking.js` y `modules/visit-tracking.js` para enviar `public_site_id` (2026-08-15).
 - [ ] Publicar `talia-tracking.js` autocontenido como artefacto estable para tenants.
 - [ ] Eliminar dependencia de alias de Webchat en el snippet nuevo.
-- [ ] Usar URL absoluta de ingestión.
+- [x] Usar URL absoluta de ingestión en el snippet inicial (2026-08-15).
 - [ ] Agregar consentimiento y `Do Not Track`.
 - [ ] Validar navegación tradicional y SPA.
 - [ ] Versionar el script con una estrategia de cache busting controlada.
@@ -450,7 +450,7 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 - [x] Agregar pestaña `Página Web` en `settings/variables` (2026-08-15).
 - [x] Crear gestión de instalaciones y dominios activos/inactivos (2026-08-15).
 - [x] Crear generación y copia del snippet universal inicial (2026-08-15).
-- [ ] Crear estado de instalación y diagnóstico.
+- [x] Crear estado de instalación y diagnóstico, incluyendo intento DNS, contador y último error explícitos (2026-08-15).
 - [x] Mostrar instrucciones generales para HTML, WordPress/PHP y SPA (el mismo snippet se puede insertar en sus plantillas globales) (2026-08-15).
 - [x] No colocar secretos en el snippet; solo contiene `public_site_id`, URLs públicas y el endpoint collector (2026-08-15).
 
