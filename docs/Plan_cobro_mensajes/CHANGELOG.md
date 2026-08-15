@@ -59,6 +59,17 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación: rutas de billing `3 passed`; React Doctor `100/100`.
 - Falta desplegar backend y panel para activar esta vista.
 
+### Configuración de límites y alertas por tenant — Listo para deploy
+
+- Se implementaron `GET /billing/configuration` para lectura tenant-scoped.
+- El owner puede consultar y actualizar `GET/PUT /billing/master/configuration?organizacion_id={uuid}`.
+- La configuración usa las columnas explícitas existentes de `cobro_configuracion_tenant`: límite de mensajes, límite de cargo GEOACTIV, límite de costo Meta, porcentaje de alerta y suspensión automática.
+- Se agregó la sección **Límites y alertas del tenant** al panel para el tenant maestro.
+- Los campos vacíos dejan el límite sin aplicar; la suspensión automática permanece desactivada por defecto.
+- Se respetan RLS, contexto master y validaciones de rango.
+- Validación: rutas de billing `3 passed`; React Doctor `100/100`.
+- Falta desplegar backend y panel para activar esta configuración.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

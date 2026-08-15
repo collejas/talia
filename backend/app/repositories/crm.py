@@ -7775,6 +7775,54 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar tenants de cobro: {data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_billing_tenant_configuration(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        response = await self._request(
+            "GET",
+            "/rest/v1/cobro_configuracion_tenant",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "organizacion_id,limite_mensajes_periodo,limite_costo_app_periodo,limite_costo_meta_periodo,porcentaje_alerta_consumo,suspension_automatica_por_limite,creado_en,actualizado_en",
+                "limit": "1",
+            },
+        )
+        data = response.json() or []
+        if isinstance(data, list):
+            return data[0] if data and isinstance(data[0], dict) else None
+        return data if isinstance(data, dict) else None
+
+    async def upsert_billing_tenant_configuration(
+        self,
+        *,
+        organizacion_id: UUID,
+        limite_mensajes_periodo: int | None,
+        limite_costo_app_periodo: Decimal | None,
+        limite_costo_meta_periodo: Decimal | None,
+        porcentaje_alerta_consumo: int,
+        suspension_automatica_por_limite: bool,
+    ) -> dict[str, Any]:
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "limite_mensajes_periodo": limite_mensajes_periodo,
+            "limite_costo_app_periodo": limite_costo_app_periodo,
+            "limite_costo_meta_periodo": limite_costo_meta_periodo,
+            "porcentaje_alerta_consumo": porcentaje_alerta_consumo,
+            "suspension_automatica_por_limite": suspension_automatica_por_limite,
+            "actualizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+        response = await self._request(
+            "POST",
+            "/rest/v1/cobro_configuracion_tenant",
+            params={"on_conflict": "organizacion_id"},
+            json=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = response.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada al guardar configuración de cobro: {data!r}")
+
     async def list_billing_messages(
         self,
         *,

@@ -73,6 +73,7 @@ type MessageResponse = { total: number; page: number; page_size: number; items: 
 type Reconciliation = { scope: "tenant" | "master"; pendiente: number; vinculado: number; no_conciliado: number }
 type UnreconciledEvent = { id: string; organizacion_id: string | null; evento: string; proveedor_mensaje_id: string | null; conciliacion_motivo: string | null; creado_en: string }
 type UnreconciledResponse = { items: UnreconciledEvent[] }
+type BillingConfiguration = { limite_mensajes_periodo: number | null; limite_costo_app_periodo: number | string | null; limite_costo_meta_periodo: number | string | null; porcentaje_alerta_consumo: number; suspension_automatica_por_limite: boolean }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
@@ -214,6 +215,14 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [tenantOverride, setTenantOverride] = React.useState("")
   const [saving, setSaving] = React.useState(false)
   const [saveMessage, setSaveMessage] = React.useState<string | null>(null)
+  const [billingConfiguration, setBillingConfiguration] = React.useState<BillingConfiguration | null>(null)
+  const [limitMessages, setLimitMessages] = React.useState("")
+  const [limitAppCost, setLimitAppCost] = React.useState("")
+  const [limitMetaCost, setLimitMetaCost] = React.useState("")
+  const [alertPercentage, setAlertPercentage] = React.useState("80")
+  const [automaticSuspension, setAutomaticSuspension] = React.useState(false)
+  const [configurationSaving, setConfigurationSaving] = React.useState(false)
+  const [configurationMessage, setConfigurationMessage] = React.useState<string | null>(null)
 
   const range = React.useMemo(() => periodRange(period, manualDesde, manualHasta), [manualDesde, manualHasta, period])
   const manualRangeInvalid = period === "manual" && !range
@@ -255,6 +264,30 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       .finally(() => setTenantsLoading(false))
     return () => controller.abort()
   }, [isOwner, refreshToken])
+
+  React.useEffect(() => {
+    if (!isOwner || selectedTenant === "all") {
+      setBillingConfiguration(null)
+      setConfigurationMessage(null)
+      return
+    }
+    const controller = new AbortController()
+    fetch(`/api/billing/master/configuration?organizacion_id=${encodeURIComponent(selectedTenant)}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await errorText(response, "No se pudo cargar la configuración de límites."))
+        return response.json() as Promise<BillingConfiguration | null>
+      })
+      .then((data) => {
+        setBillingConfiguration(data)
+        setLimitMessages(data?.limite_mensajes_periodo == null ? "" : String(data.limite_mensajes_periodo))
+        setLimitAppCost(data?.limite_costo_app_periodo == null ? "" : String(data.limite_costo_app_periodo))
+        setLimitMetaCost(data?.limite_costo_meta_periodo == null ? "" : String(data.limite_costo_meta_periodo))
+        setAlertPercentage(String(data?.porcentaje_alerta_consumo ?? 80))
+        setAutomaticSuspension(Boolean(data?.suspension_automatica_por_limite))
+      })
+      .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setConfigurationMessage(fetchError instanceof Error ? fetchError.message : "No se pudo cargar la configuración.") })
+    return () => controller.abort()
+  }, [isOwner, selectedTenant, refreshToken])
 
   React.useEffect(() => {
     if (manualRangeInvalid) {
@@ -333,6 +366,29 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
     } finally { setSaving(false) }
   }
 
+  const saveConfiguration = async () => {
+    if (!isOwner || selectedTenant === "all") return
+    setConfigurationSaving(true); setConfigurationMessage(null)
+    try {
+      const response = await fetch(`/api/billing/master/configuration?organizacion_id=${encodeURIComponent(selectedTenant)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limite_mensajes_periodo: limitMessages.trim() ? Number(limitMessages) : null,
+          limite_costo_app_periodo: limitAppCost.trim() ? Number(limitAppCost) : null,
+          limite_costo_meta_periodo: limitMetaCost.trim() ? Number(limitMetaCost) : null,
+          porcentaje_alerta_consumo: Number(alertPercentage),
+          suspension_automatica_por_limite: automaticSuspension,
+        }),
+      })
+      if (!response.ok) throw new Error(await errorText(response, "No se pudo guardar la configuración."))
+      setBillingConfiguration(await response.json() as BillingConfiguration)
+      setConfigurationMessage("Configuración guardada. La suspensión automática solo se aplicará si está habilitada explícitamente.")
+    } catch (saveError) {
+      setConfigurationMessage(saveError instanceof Error ? saveError.message : "No se pudo guardar la configuración.")
+    } finally { setConfigurationSaving(false) }
+  }
+
   const totalPages = Math.max(1, Math.ceil((messages?.total ?? 0) / (messages?.page_size ?? 25)))
   const s = summary
 
@@ -354,6 +410,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         <div className="space-y-3 rounded-lg border p-4"><p className="font-medium">Costo publicado Meta</p><div><Label htmlFor="provider-price">Precio Meta por mensaje (MXN)</Label><Input id="provider-price" type="number" min="0" step="0.0001" value={providerPrice} onChange={(event) => setProviderPrice(event.target.value)} /></div><Button variant="outline" onClick={() => void saveRate("provider")} disabled={saving}>{saving ? "Guardando..." : "Guardar tarifa Meta"}</Button></div>
         {saveMessage ? <p className="text-sm text-muted-foreground lg:col-span-2">{saveMessage}</p> : null}
       </CardContent></Card> : null}
+
+      {isOwner && selectedTenant !== "all" ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Límites y alertas del tenant</CardTitle><CardDescription className="text-xs">Los campos vacíos no aplican límite. Selecciona un tenant específico para configurar esta sección.</CardDescription></CardHeader><CardContent className="grid gap-3 px-3 pb-3 pt-0 md:grid-cols-4"><div><Label className="text-xs" htmlFor="billing-limit-messages">Mensajes por periodo</Label><Input id="billing-limit-messages" type="number" min="0" step="1" value={limitMessages} onChange={(event) => setLimitMessages(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-limit-app">Límite cargo GEOACTIV</Label><Input id="billing-limit-app" type="number" min="0" step="0.0001" value={limitAppCost} onChange={(event) => setLimitAppCost(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-limit-meta">Límite costo Meta</Label><Input id="billing-limit-meta" type="number" min="0" step="0.0001" value={limitMetaCost} onChange={(event) => setLimitMetaCost(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-alert-percent">Alertar al (%)</Label><Input id="billing-alert-percent" type="number" min="1" max="100" step="1" value={alertPercentage} onChange={(event) => setAlertPercentage(event.target.value)} /></div><label className="flex items-center gap-2 text-xs md:col-span-2"><input type="checkbox" checked={automaticSuspension} onChange={(event) => setAutomaticSuspension(event.target.checked)} />Suspensión automática al alcanzar un límite</label><div className="flex items-end gap-2 md:col-span-2"><Button onClick={() => void saveConfiguration()} disabled={configurationSaving}>{configurationSaving ? "Guardando..." : "Guardar límites"}</Button>{billingConfiguration ? <span className="text-xs text-muted-foreground">Actualizado correctamente</span> : null}</div>{configurationMessage ? <p className="text-xs text-muted-foreground md:col-span-4">{configurationMessage}</p> : null}</CardContent></Card> : null}
 
       <Card>
         <CardHeader className="flex flex-row items-center px-2 py-1.5"><CardTitle className="text-sm">Filtros</CardTitle></CardHeader>

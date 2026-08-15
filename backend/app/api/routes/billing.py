@@ -187,6 +187,29 @@ class BillingProviderRateCreate(BaseModel):
     vigente_desde: datetime | None = None
 
 
+class BillingTenantConfiguration(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    organizacion_id: UUID
+    limite_mensajes_periodo: int | None = Field(default=None, ge=0)
+    limite_costo_app_periodo: Decimal | None = Field(default=None, ge=0, decimal_places=4, max_digits=14)
+    limite_costo_meta_periodo: Decimal | None = Field(default=None, ge=0, decimal_places=4, max_digits=14)
+    porcentaje_alerta_consumo: int = Field(default=80, ge=1, le=100)
+    suspension_automatica_por_limite: bool = False
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class BillingTenantConfigurationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    limite_mensajes_periodo: int | None = Field(default=None, ge=0)
+    limite_costo_app_periodo: Decimal | None = Field(default=None, ge=0, decimal_places=4, max_digits=14)
+    limite_costo_meta_periodo: Decimal | None = Field(default=None, ge=0, decimal_places=4, max_digits=14)
+    porcentaje_alerta_consumo: int = Field(default=80, ge=1, le=100)
+    suspension_automatica_por_limite: bool = False
+
+
 def get_billing_repository(user_token: str = Depends(require_user_token)) -> CRMRepository:
     try:
         return CRMRepository(user_token=user_token)
@@ -470,6 +493,52 @@ async def get_effective_billing_tariff(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_tariff_unavailable") from exc
     return BillingEffectiveRateResponse(organizacion_id=organizacion_id, tarifa=tariff)
+
+
+@router.get("/configuration", response_model=BillingTenantConfiguration | None)
+async def get_billing_configuration(
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingTenantConfiguration | None:
+    organizacion_id = await _tenant_scope(repo)
+    try:
+        row = await repo.get_billing_tenant_configuration(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_configuration_unavailable") from exc
+    return BillingTenantConfiguration.model_validate(row) if row else None
+
+
+@router.get("/master/configuration", response_model=BillingTenantConfiguration | None)
+async def get_master_billing_configuration(
+    organizacion_id: UUID = Query(...),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingTenantConfiguration | None:
+    await _owner_scope(repo)
+    try:
+        row = await repo.get_billing_tenant_configuration(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_master_configuration_unavailable") from exc
+    return BillingTenantConfiguration.model_validate(row) if row else None
+
+
+@router.put("/master/configuration", response_model=BillingTenantConfiguration)
+async def update_master_billing_configuration(
+    payload: BillingTenantConfigurationUpdate,
+    organizacion_id: UUID = Query(...),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingTenantConfiguration:
+    await _owner_scope(repo)
+    try:
+        row = await repo.upsert_billing_tenant_configuration(
+            organizacion_id=organizacion_id,
+            limite_mensajes_periodo=payload.limite_mensajes_periodo,
+            limite_costo_app_periodo=payload.limite_costo_app_periodo,
+            limite_costo_meta_periodo=payload.limite_costo_meta_periodo,
+            porcentaje_alerta_consumo=payload.porcentaje_alerta_consumo,
+            suspension_automatica_por_limite=payload.suspension_automatica_por_limite,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_configuration_update_unavailable") from exc
+    return BillingTenantConfiguration.model_validate(row)
 
 
 @router.post("/master/tariff/app", response_model=BillingEffectiveRateResponse)
