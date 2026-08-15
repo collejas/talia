@@ -50,6 +50,15 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Pruebas de billing: `3 passed`; React Doctor: `100/100`.
 - Falta desplegar backend y panel para activar esta visualización.
 
+### Detalle de callbacks no conciliados — Listo para deploy
+
+- Se agregaron `/billing/reconciliation/events` y `/billing/master/reconciliation/events`.
+- El owner puede filtrar el detalle por tenant y ambos alcances respetan el rango de fechas.
+- El panel muestra fecha, evento, WAMID, tenant y motivo de los últimos casos `no_conciliado`.
+- No se exponen `payload_crudo`, texto del mensaje ni datos sensibles del proveedor.
+- Validación: rutas de billing `3 passed`; React Doctor `100/100`.
+- Falta desplegar backend y panel para activar esta vista.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

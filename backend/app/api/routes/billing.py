@@ -141,6 +141,29 @@ class BillingReconciliationResponse(BaseModel):
     no_conciliado: int = 0
 
 
+class BillingUnreconciledEventItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    organizacion_id: UUID | None = None
+    proveedor: str
+    evento: str
+    proveedor_ts: datetime | None = None
+    proveedor_mensaje_id: str | None = None
+    conciliacion_estado: str
+    conciliacion_motivo: str | None = None
+    creado_en: datetime
+
+
+class BillingUnreconciledEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    scope: str
+    organizacion_id: UUID | None = None
+    items: list[BillingUnreconciledEventItem] = Field(default_factory=list)
+
+
 class BillingAppRateCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -321,6 +344,49 @@ async def get_master_billing_reconciliation(
 ) -> BillingReconciliationResponse:
     await _owner_scope(repo)
     return await _reconciliation_response(
+        repo=repo, scope="master", organizacion_id=organizacion_id, desde=desde, hasta=hasta
+    )
+
+
+async def _unreconciled_events_response(
+    *, repo: CRMRepository, scope: str, organizacion_id: UUID | None, desde: datetime | None, hasta: datetime | None
+) -> BillingUnreconciledEventResponse:
+    try:
+        rows = await repo.list_billing_unreconciled_events(
+            organizacion_id=organizacion_id,
+            fecha_desde=desde,
+            fecha_hasta=hasta,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_unreconciled_events_unavailable") from exc
+    return BillingUnreconciledEventResponse(
+        scope=scope,
+        organizacion_id=organizacion_id,
+        items=[BillingUnreconciledEventItem.model_validate(row) for row in rows],
+    )
+
+
+@router.get("/reconciliation/events", response_model=BillingUnreconciledEventResponse)
+async def list_tenant_unreconciled_events(
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingUnreconciledEventResponse:
+    organizacion_id = await _tenant_scope(repo)
+    return await _unreconciled_events_response(
+        repo=repo, scope="tenant", organizacion_id=organizacion_id, desde=desde, hasta=hasta
+    )
+
+
+@router.get("/master/reconciliation/events", response_model=BillingUnreconciledEventResponse)
+async def list_master_unreconciled_events(
+    organizacion_id: UUID | None = Query(default=None),
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingUnreconciledEventResponse:
+    await _owner_scope(repo)
+    return await _unreconciled_events_response(
         repo=repo, scope="master", organizacion_id=organizacion_id, desde=desde, hasta=hasta
     )
 

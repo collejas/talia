@@ -7861,6 +7861,35 @@ class CRMRepository:
             counts[state] = self._extract_total_count(response.headers.get("content-range")) or 0
         return counts
 
+    async def list_billing_unreconciled_events(
+        self,
+        *,
+        organizacion_id: UUID | None = None,
+        fecha_desde: datetime | None = None,
+        fecha_hasta: datetime | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": "id,organizacion_id,proveedor,evento,proveedor_ts,proveedor_mensaje_id,conciliacion_estado,conciliacion_motivo,creado_en",
+            "proveedor": "eq.meta",
+            "conciliacion_estado": "eq.no_conciliado",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 100))),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        if fecha_desde and fecha_hasta:
+            params["and"] = f"(creado_en.gte.{fecha_desde.isoformat()},creado_en.lt.{fecha_hasta.isoformat()})"
+        elif fecha_desde:
+            params["creado_en"] = f"gte.{fecha_desde.isoformat()}"
+        elif fecha_hasta:
+            params["creado_en"] = f"lt.{fecha_hasta.isoformat()}"
+        response = await self._request("GET", "/rest/v1/eventos_entrega", params=params)
+        data = response.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar callbacks no conciliados: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def list_billing_app_rates(
         self, *, organizacion_id: UUID | None = None, active_only: bool = False
     ) -> list[dict[str, Any]]:

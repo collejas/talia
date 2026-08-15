@@ -71,6 +71,8 @@ type BillingMessage = {
 
 type MessageResponse = { total: number; page: number; page_size: number; items: BillingMessage[] }
 type Reconciliation = { scope: "tenant" | "master"; pendiente: number; vinculado: number; no_conciliado: number }
+type UnreconciledEvent = { id: string; organizacion_id: string | null; evento: string; proveedor_mensaje_id: string | null; conciliacion_motivo: string | null; creado_en: string }
+type UnreconciledResponse = { items: UnreconciledEvent[] }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
@@ -192,6 +194,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [summary, setSummary] = React.useState<Summary | null>(null)
   const [messages, setMessages] = React.useState<MessageResponse | null>(null)
   const [reconciliation, setReconciliation] = React.useState<Reconciliation | null>(null)
+  const [unreconciledEvents, setUnreconciledEvents] = React.useState<UnreconciledEvent[]>([])
   const [rate, setRate] = React.useState<Rate | null>(null)
   const [period, setPeriod] = React.useState<PeriodPreset>("mes_actual")
   const [manualDesde, setManualDesde] = React.useState("")
@@ -230,6 +233,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   if (isOwner && selectedTenant !== "all") reconciliationParams.set("organizacion_id", selectedTenant)
   if (range) { reconciliationParams.set("desde", range.desde); reconciliationParams.set("hasta", range.hasta) }
   const reconciliationUrl = `/api/billing${scopePrefix}/reconciliation${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
+  const unreconciledEventsUrl = `/api/billing${scopePrefix}/reconciliation/events${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
 
   React.useEffect(() => {
     if (!isOwner) {
@@ -269,17 +273,22 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         if (!response.ok) throw new Error(await errorText(response, "No se pudo consultar la conciliación."))
         return response.json() as Promise<Reconciliation>
       }),
+      fetch(unreconciledEventsUrl, { cache: "no-store", signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error(await errorText(response, "No se pudo consultar el detalle de conciliación."))
+        return response.json() as Promise<UnreconciledResponse>
+      }),
       isOwner ? Promise.resolve(null) : fetch("/api/billing/tariff/effective", { cache: "no-store", signal: controller.signal }).then((response) => response.ok ? response.json() : null),
-    ]).then(([summaryData, reconciliationData, rateData]) => {
+    ]).then(([summaryData, reconciliationData, unreconciledData, rateData]) => {
       setSummary(summaryData)
       setReconciliation(reconciliationData)
+      setUnreconciledEvents(unreconciledData.items ?? [])
       setRate(rateData?.tarifa ?? null)
       setError(null)
     }).catch((fetchError) => {
       if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar billing.")
     }).finally(() => setLoading(false))
     return () => controller.abort()
-  }, [isOwner, manualRangeInvalid, reconciliationUrl, refreshToken, summaryUrl])
+  }, [isOwner, manualRangeInvalid, reconciliationUrl, refreshToken, summaryUrl, unreconciledEventsUrl])
 
   React.useEffect(() => {
     if (manualRangeInvalid) {
@@ -370,6 +379,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       </div></section> : null}
 
       {reconciliation ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Conciliación de callbacks Meta</CardTitle><CardDescription className="text-xs">Los eventos no generan cargos por sí mismos; solo se contabiliza el mensaje local asociado.</CardDescription></CardHeader><CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0 text-center text-sm"><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Pendientes</p><p className="font-semibold">{integer(reconciliation.pendiente)}</p></div><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Vinculados</p><p className="font-semibold">{integer(reconciliation.vinculado)}</p></div><div className="rounded-md border border-amber-300/60 bg-amber-50/40 p-2 dark:bg-amber-950/20"><p className="text-xs text-muted-foreground">No conciliados</p><p className="font-semibold">{integer(reconciliation.no_conciliado)}</p></div></CardContent></Card> : null}
+
+      {reconciliation?.no_conciliado ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Detalle de no conciliados</CardTitle><CardDescription className="text-xs">Últimos callbacks sin mensaje local. No representan cargos.</CardDescription></CardHeader><CardContent className="px-3 pb-3 pt-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Fecha</TableHead><TableHead>Evento</TableHead><TableHead>WAMID</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader><TableBody>{unreconciledEvents.map((item) => <TableRow key={item.id}>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id?.slice(0, 8) ?? "—"}…</TableCell> : null}<TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell><TableCell>{item.evento}</TableCell><TableCell className="max-w-64 truncate font-mono text-xs">{item.proveedor_mensaje_id ?? "—"}</TableCell><TableCell>{item.conciliacion_motivo ?? "—"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card> : null}
 
       <Card><CardHeader><CardTitle>Detalle de tarifas</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}
