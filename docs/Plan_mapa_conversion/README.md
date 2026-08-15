@@ -5,14 +5,15 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
 ## Orden recomendado de lectura
 
 1. `plan_mapa_conversion_integral.md`
-2. `plan_latencia_mapa_conversion.md`
-3. `plan_mapa_conversion_multicanal.md`
-4. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
-5. `informe_metricas_whatsapp_prospeccion.md`
-6. `plan_integracion_maestra_mapa_conversion.md`
-7. `backlog_maestro_mapa_conversion.md`
-8. `changelog_maestro_mapa_conversion.md`
-9. `avance_mapa_conversion_20260303.md`
+2. `alineacion_tracking_web_tenants_20260815.md`
+3. `plan_latencia_mapa_conversion.md`
+4. `plan_mapa_conversion_multicanal.md`
+5. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
+6. `informe_metricas_whatsapp_prospeccion.md`
+7. `plan_integracion_maestra_mapa_conversion.md`
+8. `backlog_maestro_mapa_conversion.md`
+9. `changelog_maestro_mapa_conversion.md`
+10. `avance_mapa_conversion_20260303.md`
 
 ## Qué cubre cada archivo
 
@@ -20,6 +21,11 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
   - visión general del mapa
   - arquitectura de datos
   - relación entre sesiones, conversaciones y campañas
+
+- `alineacion_tracking_web_tenants_20260815.md`
+  - diez correcciones documentales aplicadas el 2026-08-15
+  - relación con el tracking multi-tenant de `docs/Crear_webchat_tenants`
+  - regla de columnas explícitas para nuevas tablas
 
 - `plan_latencia_mapa_conversion.md`
   - optimización de carga

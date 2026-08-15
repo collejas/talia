@@ -1,5 +1,7 @@
 # Cómo instalar el Webchat en un nuevo tenant
 
+> Para la propuesta de seguimiento de sitios web, instalación del script universal, UTM, referrers, dominios autorizados y reglas de modelado sin `metadata`/`json`/`jsonb`, consultar [Plan de tracking de sitios web por tenant](./plan_tracking_web_tenants.md).
+
 Esta guía general lista los archivos y fragmentos que hay que copiar desde el dominio principal (geoactiv.mx) hacia cualquier nuevo tenant para que el widget Webchat funcione. Incluye: qué HTML/JS insertar, qué CSS aplicar, qué variables del backend ajustar y qué pasos de diagnóstico seguir.
 
 ## 1. Archivos del dominio

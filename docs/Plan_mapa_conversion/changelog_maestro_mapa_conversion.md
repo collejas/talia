@@ -1,6 +1,7 @@
 # Changelog maestro · Mapa de conversion
 
-Fecha: 2026-07-01
+Fecha original: 2026-07-01
+Última actualización: 2026-08-15
 Ruta: `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md`
 
 ## Regla de uso
@@ -13,6 +14,19 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - backend,
 - frontend,
 - o contratos de integracion.
+
+## 2026-08-15
+
+- Se aplicaron diez correcciones documentales para alinear `Plan_mapa_conversion` con el tracking multi-tenant de `docs/Crear_webchat_tenants`.
+- Se confirmó que `public.web_sessions` ya es la fuente canónica de sesiones web, UTM, referrers y atribución de `cid`, `tid` y `eid`.
+- Se corrigió la ruta documentada de ingesta a `POST /api/crm/web/visit`.
+- Se marcó `referrer_host` como implementado en el endpoint de sesiones web y en el resumen v2.
+- Se separó el alias de Webchat del nuevo `public_site_id` para tracking externo.
+- Se prohibió documentar o crear nuevas tablas de tracking con `metadata`, `json`, `jsonb`, `payload`, `config` o equivalentes.
+- Se eliminó la dependencia documental de `metadata` para relacionar sesiones, contactos y conversaciones.
+- Se confirmó la separación semántica entre tráfico web, correo, WhatsApp, CTA de WhatsApp y conversiones.
+- Se vinculó el nuevo plan `docs/Crear_webchat_tenants/plan_tracking_web_tenants.md` con el plan integral, adquisición y backlog maestro.
+- Se dejó establecido que no se creará una segunda tabla de sesiones ni un agregado paralelo de UTM.
 
 ## 2026-07-01
 

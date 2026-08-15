@@ -1,6 +1,7 @@
 # Backlog maestro · Mapa de conversion
 
-Fecha: 2026-07-01
+Fecha original: 2026-07-01
+Última actualización: 2026-08-15
 Ruta: `docs/Plan_mapa_conversion/backlog_maestro_mapa_conversion.md`
 
 ## 1) Regla de uso
@@ -38,6 +39,29 @@ Antes de tocar datos o frontend, la carpeta debe respetar esta frontera:
 - `prospeccion/prospectos` ejecuta envios y seguimiento operativo.
 
 No se debe usar una vista para sustituir la semantica de la otra.
+
+## 2.2 Integración con tracking web por tenant · 2026-08-15
+
+Documentos relacionados:
+
+- `docs/Crear_webchat_tenants/plan_tracking_web_tenants.md`
+- `docs/Plan_mapa_conversion/alineacion_tracking_web_tenants_20260815.md`
+
+Reglas:
+
+- `web_sessions` es la fuente canónica de sesiones web, UTM y referrers.
+- El alias de Webchat no es la identidad del tracking externo.
+- Las instalaciones nuevas usarán `public_site_id` y dominios verificados.
+- Ninguna tabla nueva de esta integración podrá usar `metadata`, `json`, `jsonb`, `payload`, `config` o equivalentes.
+- No se creará otra tabla de sesiones ni otro agregado paralelo de UTM.
+
+Tareas:
+
+- [x] Documentar las diez correcciones de alineación.
+- [x] Relacionar el mapa con el plan de tracking de `Crear_webchat_tenants`.
+- [ ] Diseñar y validar la migración de instalaciones y dominios.
+- [ ] Cerrar contrato explícito del endpoint de eventos.
+- [ ] Implementar el snippet universal y validar tres tenants.
 
 ## 3) Epic A · Base de datos
 

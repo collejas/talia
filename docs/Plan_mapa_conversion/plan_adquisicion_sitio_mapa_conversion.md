@@ -1,6 +1,7 @@
 # Plan de adquisicion del sitio para `Mapa de Conversion`
 
-Fecha: 2026-05-01
+Fecha original: 2026-05-01
+Última actualización: 2026-08-15
 
 Este documento alimenta el backlog maestro:
 
@@ -9,6 +10,11 @@ Este documento alimenta el backlog maestro:
 Y se registra en el changelog maestro:
 
 - `changelog_maestro_mapa_conversion.md`
+
+La instalación del tracking por tenant está especificada en:
+
+- `../Crear_webchat_tenants/plan_tracking_web_tenants.md`
+- `../Crear_webchat_tenants/crear_webchat.md`
 
 ## 1. Objetivo
 
@@ -114,15 +120,19 @@ Ese endpoint debe seguir siendo la fuente del listado de sesiones web.
 
 `GET /crm/visitas/whatsapp/conversaciones` ya cubre el detalle conversacional y no debe duplicarse para esta propuesta.
 
-## 6. Huecos detectados
+## 6. Estado actualizado al 2026-08-15
 
-Hay una pieza que hoy falta para auditar mejor el origen real de entrada:
+`referrer_host` ya está implementado en `web_sessions` y expuesto por `GET /crm/visitas/web-sessions`. El changelog maestro documenta también el agregado de hosts externos en el resumen v2.
 
-- `referrer_host`
+El hueco pendiente ya no es la captura del host, sino terminar la instalación multi-tenant con `public_site_id`, dominios autorizados y un script universal.
 
-La tabla `web_sessions` ya guarda `referrer`, pero el endpoint de detalle no expone `referrer_host`.
+Para la integración nueva:
 
-Eso limita la capacidad de mostrar:
+- `public_site_id`
+- dominio autorizado y verificado
+- endpoint absoluto de Talia
+
+La captura existente permite mostrar:
 
 - dominio exacto de referencia
 - dominios de IA o asistentes
@@ -130,9 +140,9 @@ Eso limita la capacidad de mostrar:
 
 ## 7. Propuesta tecnica
 
-### 7.1 Cambio minimo recomendado
+### 7.1 Cambio mínimo ya resuelto
 
-Extender `GET /crm/visitas/web-sessions` para devolver tambien:
+`GET /crm/visitas/web-sessions` devuelve también:
 
 - `referrer_host`
 
@@ -140,9 +150,19 @@ Opcionalmente, mantener expuesto:
 
 - `source_class`
 
-Eso permite construir la nueva lectura de adquisicion sin crear otro flujo de datos.
+Eso permite construir la lectura de adquisición sin crear otro flujo de datos.
 
-### 7.2 Nueva capa visual en frontend
+### 7.2 Siguiente cambio recomendado: instalación multi-tenant
+
+Implementar el plan relacionado de `docs/Crear_webchat_tenants`:
+
+- instalación `tenant_web_tracking_sites`;
+- dominios `tenant_web_tracking_domains`;
+- script universal con `data-site-id`;
+- CORS por dominios verificados;
+- sin `metadata/json/jsonb` en tablas nuevas.
+
+### 7.3 Nueva capa visual en frontend
 
 Agregar una seccion nueva dentro de `mapa-de-conversion` llamada:
 
@@ -160,7 +180,7 @@ Esa seccion deberia incluir:
 - tabla de top referrers
 - tabla de top UTM
 
-### 7.3 Endpoint nuevo solo si hace falta
+### 7.4 Endpoint nuevo solo si hace falta
 
 No se recomienda crear un endpoint nuevo de entrada para todo desde el inicio.
 
@@ -240,7 +260,7 @@ Eso permite medir:
 
 ### Ajustar
 
-- `GET /crm/visitas/web-sessions` para exponer `referrer_host`
+- El endpoint ya expone `referrer_host`; únicamente debe mantenerse en el contrato y en las pruebas.
 
 ### Crear solo si es necesario
 
@@ -277,8 +297,8 @@ Al cerrar esta fase, `mapa-de-conversion` deberia poder responder:
 
 ## 13. Siguientes pasos
 
-1. Ajustar el endpoint de detalle de sesiones para incluir `referrer_host`.
-2. Diseñar la nueva seccion de `Adquisicion del sitio` en el frontend.
-3. Reusar los agregados existentes para KPIs y top sources.
-4. Definir si hace falta una serie temporal precomputada.
-5. Documentar la implementacion final y dejar el avance en esta misma carpeta.
+1. Diseñar la instalación multi-tenant con `public_site_id` y dominios verificados.
+2. Implementar el snippet universal definido en `docs/Crear_webchat_tenants`.
+3. Reusar los agregados existentes para KPIs, hosts y top sources.
+4. Mantener `referrer_host` en el contrato y en las pruebas de `web-sessions`.
+5. Definir si hace falta una serie temporal precomputada.

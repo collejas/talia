@@ -1,6 +1,7 @@
 # Plan maestro · Mapa de Conversión Integral
 
-Fecha: 2026-03-03
+Fecha original: 2026-03-03
+Última actualización: 2026-08-15
 Ruta: `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
 
 Ruta operativa única:
@@ -14,6 +15,8 @@ Ruta operativa única:
 - `docs/Plan_mapa_conversion/changelog.md`
 - `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
+- `docs/Plan_mapa_conversion/alineacion_tracking_web_tenants_20260815.md`
+- `docs/Crear_webchat_tenants/plan_tracking_web_tenants.md`
 
 Documentos relacionados:
 
@@ -44,9 +47,9 @@ Esto impide medir correctamente tráfico web general y atribución completa de o
 
 Además:
 
-- `referrer` y `landing` se capturan principalmente vía widget webchat.
+- `referrer` y `landing` se capturan mediante la ingesta first-party de `web_sessions`; el Webchat conserva su fuente especializada.
 - La atribución de sesiones UTM en prospección está sesgada a `utm_medium=email`.
-- No existe una entidad unificada de sesión web para todo `talia.mx` fuera del widget.
+- `public.web_sessions` ya es la entidad unificada de sesión web por tenant.
 
 ## 3) Alcance del plan
 
@@ -83,7 +86,7 @@ Este documento mantiene la visión arquitectónica y de datos.
 
 ## 5.1 Nueva capa de datos web
 
-Crear entidad canónica de sesión web para todo sitio:
+Usar la entidad canónica de sesión web ya implementada para todo sitio:
 
 - Tabla propuesta: `public.web_sessions`
   - `id uuid pk`
@@ -115,7 +118,6 @@ Crear entidad canónica de sesión web para todo sitio:
   - `cid uuid null` (campaña prospección)
   - `tid uuid null` (template prospección)
   - `source_class text null` (direct/google/organic_social/paid/referral/prospeccion/etc.)
-  - `metadata jsonb default '{}'::jsonb`
 
 Índices clave:
 
@@ -128,14 +130,14 @@ Crear entidad canónica de sesión web para todo sitio:
 ## 5.2 Relación con entidades existentes
 
 - `webchat_visitantes` se mantiene como fuente especializada de widget.
-- `web_sessions` será la fuente principal para tráfico web general.
+- `web_sessions` es la fuente principal para tráfico web general.
 - Resolver vinculación:
   - `web_sessions.session_id` <-> `webchat_visitantes.session_id` (cuando exista).
-  - `web_sessions` <-> `contactos/conversaciones` vía `identidades_canal` o metadata trazable.
+  - `web_sessions` <-> `contactos/conversaciones` mediante identificadores y relaciones explícitas; no usar metadata para relaciones nuevas.
 
 ## 5.3 Capa agregada para mapa
 
-Crear función nueva (o versión v2):
+Reutilizar la función v2 ya implementada:
 
 - `panel_visitantes_geo_resumen_v2(...)`
 
@@ -147,8 +149,8 @@ Debe devolver, por ubicación:
 - `sesiones_sin_chat_webchat`
 - `conversaciones_whatsapp`
 - `conversaciones_voz`
-- `fuentes_top` (jsonb agregado)
-- `utm_top` (jsonb agregado)
+- `fuentes_top` (agregado en la respuesta de la API; no es una columna JSON nueva)
+- `utm_top` (agregado en la respuesta de la API; no es una columna JSON nueva)
 
 Y separar explícitamente métricas web vs conversación.
 
@@ -158,13 +160,13 @@ Y separar explícitamente métricas web vs conversación.
 
 Agregar script ligero first-party (independiente del widget):
 
-- Endpoint nuevo: `POST /api/web/visit`.
+- Endpoint vigente: `POST /api/crm/web/visit`.
 - Payload mínimo:
   - `session_id`
   - `location_href`
   - `referrer`
   - `user_agent/device/timezone`
-  - `tenant_alias` (si aplica)
+  - `public_site_id` para instalaciones nuevas; el alias queda reservado para Webchat.
 - Enviar en:
   - page load,
   - cambios de ruta (SPA),
@@ -172,8 +174,8 @@ Agregar script ligero first-party (independiente del widget):
 
 ## 6.2 Webchat
 
-- Seguir enviando `/webchat/visit`.
-- Replicar registro también hacia `web_sessions`.
+- Seguir enviando `/api/webchat/visit`.
+- Mantener la compatibilidad con `web_sessions` sin crear una segunda tabla de sesiones.
 - Si existe sesión web previa, reutilizar `session_id` para unir funnels.
 
 ## 6.3 WhatsApp y Voz
