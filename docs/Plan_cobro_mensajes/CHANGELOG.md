@@ -111,6 +111,15 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación: rutas de billing `3 passed`; React Doctor `100/100`.
 - Falta desplegar backend y panel para activar esta función.
 
+### Cierre controlado de periodos — Listo para deploy
+
+- Se agregó `POST /billing/master/periods/{period_id}/close`.
+- Solo el owner puede ejecutarlo y el usuario queda registrado en `cerrado_por_usuario_id`.
+- Solo se pueden cerrar periodos `abierto` o `en_revision` cuya `fecha_fin` ya haya pasado.
+- El endpoint devuelve conflicto para periodos actuales, ya cerrados o no cerrables.
+- La función SQL fue aplicada en producción, pero no se ejecutó ningún cierre.
+- Falta desplegar backend y panel para habilitar la operación administrativa.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

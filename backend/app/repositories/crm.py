@@ -7911,6 +7911,17 @@ class CRMRepository:
             return data
         raise CRMRepositoryError(f"Respuesta inesperada al crear ajuste de cobro: {data!r}")
 
+    async def close_billing_period(self, *, period_id: UUID, user_id: UUID) -> dict[str, Any]:
+        data = await self._rpc(
+            "close_message_billing_period",
+            {"p_periodo_id": str(period_id), "p_usuario_id": str(user_id)},
+        )
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError(f"Respuesta inesperada al cerrar periodo de cobro: {data!r}")
+
     async def list_billing_messages(
         self,
         *,

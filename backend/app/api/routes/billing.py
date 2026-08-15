@@ -702,6 +702,25 @@ async def create_master_billing_adjustment(
     return BillingAdjustmentItem.model_validate(row)
 
 
+@router.post("/master/periods/{period_id}/close", response_model=BillingPeriodItem)
+async def close_master_billing_period(
+    period_id: UUID,
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingPeriodItem:
+    await _owner_scope(repo)
+    try:
+        permission_context = await repo.get_permission_context()
+        usuario_id = UUID(str(permission_context.get("usuario_id")))
+        row = await repo.close_billing_period(period_id=period_id, user_id=usuario_id)
+    except CRMRepositoryError as exc:
+        if "billing_period_not_closable" in str(exc):
+            raise HTTPException(status_code=409, detail="billing_period_not_closable") from exc
+        raise HTTPException(status_code=502, detail="billing_period_close_unavailable") from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="billing_close_user_required") from exc
+    return BillingPeriodItem.model_validate(row)
+
+
 @router.post("/master/tariff/app", response_model=BillingEffectiveRateResponse)
 async def create_master_billing_app_tariff(
     payload: BillingAppRateCreate,
