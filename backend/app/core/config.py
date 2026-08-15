@@ -406,7 +406,7 @@ class Settings(BaseSettings):
         ),
     )
     prospeccion_sender_batch_size: int = Field(
-        default=25,
+        default=10,
         ge=1,
         le=500,
         description="Tamaño de lote por ciclo del worker de envío de prospección.",
@@ -416,7 +416,7 @@ class Settings(BaseSettings):
         ),
     )
     prospeccion_sender_max_concurrency: int = Field(
-        default=5,
+        default=2,
         ge=1,
         le=100,
         description="Concurrencia máxima del worker de envío de prospección por ciclo.",

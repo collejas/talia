@@ -28,7 +28,7 @@ from app.services.storage import StorageError
 logger = get_logger("prospeccion.contact_sender")
 
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
-DEFAULT_SENDER_MAX_CONCURRENCY = 5
+DEFAULT_SENDER_MAX_CONCURRENCY = 2
 DEFAULT_SENDER_PER_MINUTE_LIMIT = 40
 DEFAULT_SENDER_RATE_LIMIT_DEFER_SECONDS = 20
 DEFAULT_SENDER_ERROR_WINDOW_SECONDS = 120
@@ -1817,7 +1817,7 @@ class ProspeccionContactSender:
 
 
 contact_sender = ProspeccionContactSender(
-    batch_size=getattr(settings, "prospeccion_sender_batch_size", 25),
+    batch_size=getattr(settings, "prospeccion_sender_batch_size", 10),
     max_concurrency=getattr(settings, "prospeccion_sender_max_concurrency", DEFAULT_SENDER_MAX_CONCURRENCY),
     per_minute_limit=getattr(settings, "prospeccion_sender_per_minute_limit", DEFAULT_SENDER_PER_MINUTE_LIMIT),
     rate_limit_defer_seconds=getattr(
