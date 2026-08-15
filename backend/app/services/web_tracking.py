@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import unescape
 import re
 from urllib.parse import urlparse
 
@@ -10,6 +11,24 @@ import httpx
 
 
 PUBLIC_SITE_ID_PATTERN = re.compile(r"^talia_site_[a-z0-9][a-z0-9_-]{5,127}$")
+HTML_QUERY_SEPARATOR_PATTERN = re.compile(r"&(?:(?:amp|#38);?)?%3[bB]", re.IGNORECASE)
+
+
+def normalize_tracking_url(value: str | None) -> str | None:
+    """Normaliza URLs recibidas desde enlaces HTML sin alterar sus parámetros.
+
+    Algunos enlaces de correo llegan con separadores codificados como
+    ``&amp%3B``. Se corrige únicamente esa entidad de separador y se
+    conserva el resto de la URL, incluidos valores UTM codificados.
+    """
+
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+
+    normalized = unescape(candidate)
+    normalized = HTML_QUERY_SEPARATOR_PATTERN.sub("&", normalized)
+    return normalized or None
 
 
 def normalize_public_site_id(value: str | None) -> str | None:

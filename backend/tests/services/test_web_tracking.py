@@ -1,6 +1,7 @@
 from app.services.web_tracking import (
     normalize_public_site_id,
     normalize_tracking_domain,
+    normalize_tracking_url,
     request_tracking_domain,
 )
 
@@ -32,3 +33,21 @@ def test_request_tracking_domain_prefers_origin() -> None:
 def test_normalize_tracking_domain_rejects_credentials_and_localhost() -> None:
     assert normalize_tracking_domain("https://user:pass@example.com") is None
     assert normalize_tracking_domain("http://localhost:3000") is None
+
+
+def test_normalize_tracking_url_decodes_html_query_separators() -> None:
+    value = (
+        "https://talia.mx/?utm_source=prospeccion&amp%3Butm_medium=email"
+        "&amp%3Butm_campaign=cold_outreach&utm_content=image"
+    )
+
+    assert normalize_tracking_url(value) == (
+        "https://talia.mx/?utm_source=prospeccion&utm_medium=email"
+        "&utm_campaign=cold_outreach&utm_content=image"
+    )
+
+
+def test_normalize_tracking_url_preserves_encoded_parameter_values() -> None:
+    value = "https://talia.mx/?q=uno%26dos&utm_campaign=cold_outreach"
+
+    assert normalize_tracking_url(value) == value

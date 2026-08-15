@@ -100,6 +100,7 @@ from app.services.channel_routing import resolve_organizacion_id
 from app.services.web_tracking import (
     normalize_public_site_id,
     request_tracking_domain,
+    normalize_tracking_url,
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
@@ -40193,8 +40194,8 @@ async def register_web_visit(
     user_agent = (payload.user_agent or request.headers.get("user-agent") or "").strip() or None
     # Para atribucion web usamos referrer first-party enviado por frontend (document.referrer).
     # El Referer del request HTTP suele apuntar a talia.mx y distorsiona "entrada directa".
-    referrer = (payload.referrer or "").strip() or None
-    landing_url = (payload.landing_url or payload.location_href or "").strip() or None
+    referrer = normalize_tracking_url(payload.referrer)
+    landing_url = normalize_tracking_url(payload.landing_url or payload.location_href)
     device_type = (payload.device_type or _infer_device_type(user_agent) or "").strip() or None
     source_class = _classify_source_class(
         source_class=payload.source_class,
