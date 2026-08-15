@@ -69,6 +69,7 @@ export function TenantWebTrackingPanel() {
   const [saving, setSaving] = useState(false)
   const [domainBySite, setDomainBySite] = useState<Record<string, string>>({})
   const [methodBySite, setMethodBySite] = useState<Record<string, VerificationMethod>>({})
+  const [scriptReadyBySite, setScriptReadyBySite] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [copiedSiteId, setCopiedSiteId] = useState<string | null>(null)
 
@@ -255,8 +256,9 @@ export function TenantWebTrackingPanel() {
           <ol className="list-decimal space-y-1 pl-5">
             <li>Crea una instalación.</li>
             <li>Agrega el dominio exacto que usará el tenant.</li>
-            <li>Completa la verificación DNS, archivo HTML o proceso manual indicado por GEOACTIV.</li>
-            <li>Copia el snippet y colócalo antes de cerrar <code>&lt;/body&gt;</code>.</li>
+            <li>Agrega primero el registro de verificación en el DNS del dominio.</li>
+            <li>Instala el código en todas las páginas públicas del sitio.</li>
+            <li>Regresa a esta pantalla y ejecuta la prueba.</li>
           </ol>
         </CardContent>
       </Card>
@@ -301,8 +303,8 @@ export function TenantWebTrackingPanel() {
           <CardContent className="space-y-5">
             <div className="space-y-3 rounded-lg border border-border/60 p-4">
               <div>
-                <p className="text-sm font-medium">Dominios autorizados</p>
-                <p className="text-xs text-muted-foreground">Solo los dominios verificados podrán atribuir visitas a este tenant.</p>
+                <p className="text-sm font-medium">Paso 1: configura el dominio y su DNS</p>
+                <p className="text-xs text-muted-foreground">Agrega el dominio sin <span className="font-mono">https://</span> ni rutas. Solo los dominios verificados podrán atribuir visitas a este tenant.</p>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_180px_auto] md:items-end">
                 <div className="space-y-1">
@@ -357,11 +359,6 @@ export function TenantWebTrackingPanel() {
                         ) : null}
                       </div>
                       <div className="flex items-center gap-1">
-                        {domain.verification_status === "pending" && domain.verification_method === "dns" ? (
-                          <Button type="button" variant="outline" size="sm" onClick={() => void verifyDomain(domain)} disabled={saving}>
-                            Probar DNS
-                          </Button>
-                        ) : null}
                         {domain.active ? (
                           <Button type="button" variant="ghost" size="sm" onClick={() => void deactivateDomain(domain)} disabled={saving}>
                             Desactivar
@@ -402,8 +399,8 @@ export function TenantWebTrackingPanel() {
             <div className="space-y-3">
               <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                 <div>
-                  <p className="text-sm font-medium">Código de instalación</p>
-                  <p className="text-xs text-muted-foreground">Pégalo una vez en todas las vistas públicas del sitio.</p>
+                  <p className="text-sm font-medium">Paso 2: instala el código en el sitio</p>
+                  <p className="text-xs text-muted-foreground">Pégalo una vez en todas las vistas públicas, antes de cerrar <code>&lt;/body&gt;</code>.</p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={() => void copySnippet(site)}>
                   {copiedSiteId === site.id ? "Copiado" : "Copiar código"}
@@ -412,9 +409,46 @@ export function TenantWebTrackingPanel() {
               <Textarea value={snippetFor(site)} readOnly className="min-h-[112px] font-mono text-xs" aria-label="Código de instalación web" />
             </div>
 
+            <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <div>
+                <p className="text-sm font-medium">Paso 3: prueba la instalación</p>
+                <p className="text-xs text-muted-foreground">
+                  Después de guardar el TXT y publicar el código en el sitio, confirma que terminaste la instalación para habilitar la prueba.
+                </p>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={Boolean(scriptReadyBySite[site.id])}
+                  disabled={saving}
+                  onChange={(event) => setScriptReadyBySite((current) => ({ ...current, [site.id]: event.target.checked }))}
+                />
+                <span>Ya agregué el registro DNS y publiqué el código de instalación en el sitio.</span>
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {site.domains.filter((domain) => domain.verification_status === "pending" && domain.verification_method === "dns").map((domain) => (
+                  <Button
+                    key={domain.id}
+                    type="button"
+                    onClick={() => void verifyDomain(domain)}
+                    disabled={saving || !scriptReadyBySite[site.id]}
+                  >
+                    Probar DNS de {domain.domain_normalized}
+                  </Button>
+                ))}
+                {site.domains.some((domain) => domain.verification_status === "verified") ? (
+                  <p className="text-xs text-emerald-600">El DNS ya está verificado. La recepción de visitas se activará cuando el sitio publique el código.</p>
+                ) : null}
+                {!site.domains.some((domain) => domain.verification_status === "pending" && domain.verification_method === "dns") && !site.domains.some((domain) => domain.verification_status === "verified") ? (
+                  <p className="text-xs text-muted-foreground">Agrega un dominio con verificación DNS para habilitar la prueba.</p>
+                ) : null}
+              </div>
+            </div>
+
             <div className="rounded-lg bg-muted/40 p-4 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">Importante</p>
-              <p className="mt-1">Mientras el dominio esté pendiente, el script podrá cargarse pero sus eventos serán rechazados. La verificación se completa en el siguiente paso operativo.</p>
+              <p className="mt-1">Si el DNS sigue pendiente, la prueba mostrará el motivo exacto. Después de verificarlo, visita el sitio con una URL que incluya UTM para confirmar el evento en Mapa de Conversión.</p>
             </div>
           </CardContent>
         </Card>
