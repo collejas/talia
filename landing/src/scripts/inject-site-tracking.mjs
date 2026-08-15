@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const landingRoot = resolve(scriptDir, '..');
-const scriptTag = '  <script type="module" src="/assets/js/site-tracking.js?v=20260810a"></script>\n';
+const scriptTag = '  <script type="module" src="https://talia.mx/assets/js/site-tracking.js?v=20260815-cors1"\n'
+  + '    data-talia-public-site-id="talia_site_058c3bb887b24340b5d06bc5629e0faf"\n'
+  + '    data-talia-tracking-endpoint="https://talia.mx/api/crm/web/visit"></script>\n';
 
 function findHtmlFiles(directory) {
   const files = [];
