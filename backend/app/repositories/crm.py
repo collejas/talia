@@ -7845,6 +7845,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar alertas de cobro: {data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def update_billing_alert_status(self, *, alert_id: UUID, estado: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {"estado": estado}
+        if estado in {"resuelta", "descartada"}:
+            payload["resuelto_en"] = datetime.now(timezone.utc).isoformat()
+        else:
+            payload["resuelto_en"] = None
+            payload["resuelto_por_usuario_id"] = None
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/cobro_alertas",
+            params={"id": f"eq.{alert_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = response.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada al actualizar alerta de cobro: {data!r}")
+
     async def list_billing_messages(
         self,
         *,

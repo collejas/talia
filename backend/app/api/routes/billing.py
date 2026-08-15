@@ -235,6 +235,13 @@ class BillingAlertResponse(BaseModel):
     items: list[BillingAlertItem] = Field(default_factory=list)
 
 
+class BillingAlertStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    estado: str = Field(pattern="^(acknowledged|resuelta|descartada)$")
+
+
 def get_billing_repository(user_token: str = Depends(require_user_token)) -> CRMRepository:
     try:
         return CRMRepository(user_token=user_token)
@@ -589,6 +596,19 @@ async def list_master_billing_alerts(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_master_alerts_unavailable") from exc
     return BillingAlertResponse(scope="master", organizacion_id=organizacion_id, items=[BillingAlertItem.model_validate(row) for row in rows])
+
+
+@router.put("/master/alerts/status", response_model=BillingAlertItem)
+async def update_master_billing_alert_status(
+    payload: BillingAlertStatusUpdate,
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAlertItem:
+    await _owner_scope(repo)
+    try:
+        row = await repo.update_billing_alert_status(alert_id=payload.id, estado=payload.estado)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_alert_status_update_unavailable") from exc
+    return BillingAlertItem.model_validate(row)
 
 
 @router.post("/master/tariff/app", response_model=BillingEffectiveRateResponse)

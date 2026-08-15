@@ -82,6 +82,15 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación: rutas de billing `3 passed`; React Doctor `100/100`.
 - Falta desplegar backend y panel para activar el evaluador y la visualización.
 
+### Gestión del ciclo de vida de alertas — Listo para deploy
+
+- El owner puede marcar una alerta como `acknowledged` (`Atender`) o `resuelta` (`Resolver`).
+- Los tenants solo pueden consultar sus alertas y no pueden modificar su estado.
+- Las alertas resueltas conservan el registro y la fecha de resolución; no se eliminan.
+- Endpoint agregado: `PUT /billing/master/alerts/status`.
+- Validación: rutas de billing `3 passed`; React Doctor `100/100`.
+- Falta desplegar backend y panel para activar las acciones.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

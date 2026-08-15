@@ -225,6 +225,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [configurationSaving, setConfigurationSaving] = React.useState(false)
   const [configurationMessage, setConfigurationMessage] = React.useState<string | null>(null)
   const [billingAlerts, setBillingAlerts] = React.useState<BillingAlert[]>([])
+  const [alertUpdating, setAlertUpdating] = React.useState<string | null>(null)
 
   const range = React.useMemo(() => periodRange(period, manualDesde, manualHasta), [manualDesde, manualHasta, period])
   const manualRangeInvalid = period === "manual" && !range
@@ -397,6 +398,18 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
     } finally { setConfigurationSaving(false) }
   }
 
+  const updateAlertStatus = async (id: string, estado: "acknowledged" | "resuelta" | "descartada") => {
+    setAlertUpdating(id)
+    try {
+      const response = await fetch("/api/billing/master/alerts/status", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, estado }) })
+      if (!response.ok) throw new Error(await errorText(response, "No se pudo actualizar la alerta."))
+      const updated = await response.json() as BillingAlert
+      setBillingAlerts((items) => items.map((item) => item.id === id ? updated : item))
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "No se pudo actualizar la alerta.")
+    } finally { setAlertUpdating(null) }
+  }
+
   const totalPages = Math.max(1, Math.ceil((messages?.total ?? 0) / (messages?.page_size ?? 25)))
   const s = summary
 
@@ -448,7 +461,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
 
       {reconciliation?.no_conciliado ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Detalle de no conciliados</CardTitle><CardDescription className="text-xs">Últimos callbacks sin mensaje local. No representan cargos.</CardDescription></CardHeader><CardContent className="px-3 pb-3 pt-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Fecha</TableHead><TableHead>Evento</TableHead><TableHead>WAMID</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader><TableBody>{unreconciledEvents.map((item) => <TableRow key={item.id}>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id?.slice(0, 8) ?? "—"}…</TableCell> : null}<TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell><TableCell>{item.evento}</TableCell><TableCell className="max-w-64 truncate font-mono text-xs">{item.proveedor_mensaje_id ?? "—"}</TableCell><TableCell>{item.conciliacion_motivo ?? "—"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card> : null}
 
-      {billingAlerts.length ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Alertas de consumo</CardTitle><CardDescription className="text-xs">Alertas generadas al alcanzar el porcentaje o límite configurado.</CardDescription></CardHeader><CardContent className="space-y-2 px-3 pb-3 pt-0">{billingAlerts.slice(0, 10).map((alert) => <div key={alert.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm"><div><Badge variant={alert.severidad === "critical" ? "destructive" : "secondary"}>{alert.severidad}</Badge><span className="ml-2">{alert.mensaje}</span></div><span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(alert.creado_en).toLocaleString("es-MX")}</span></div>)}</CardContent></Card> : null}
+      {billingAlerts.length ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Alertas de consumo</CardTitle><CardDescription className="text-xs">Alertas generadas al alcanzar el porcentaje o límite configurado.</CardDescription></CardHeader><CardContent className="space-y-2 px-3 pb-3 pt-0">{billingAlerts.slice(0, 10).map((alert) => <div key={alert.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm"><div><Badge variant={alert.severidad === "critical" ? "destructive" : "secondary"}>{alert.severidad}</Badge><Badge variant="outline" className="ml-2">{alert.estado}</Badge><span className="ml-2">{alert.mensaje}</span></div><div className="flex items-center gap-2"><span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(alert.creado_en).toLocaleString("es-MX")}</span>{isOwner && alert.estado === "abierta" ? <><Button variant="ghost" size="sm" disabled={alertUpdating === alert.id} onClick={() => void updateAlertStatus(alert.id, "acknowledged")}>Atender</Button><Button variant="ghost" size="sm" disabled={alertUpdating === alert.id} onClick={() => void updateAlertStatus(alert.id, "resuelta")}>Resolver</Button></> : null}</div></div>)}</CardContent></Card> : null}
 
       <Card><CardHeader><CardTitle>Detalle de tarifas</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}
