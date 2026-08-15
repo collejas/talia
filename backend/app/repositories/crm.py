@@ -7741,6 +7741,8 @@ class CRMRepository:
                 "p_organizacion_id": str(organizacion_id) if organizacion_id else None,
                 "p_categoria_meta": categoria_meta,
                 "p_direccion": direccion,
+                "p_desde": fecha_inicio.isoformat() if fecha_inicio else None,
+                "p_hasta": fecha_fin.isoformat() if fecha_fin else None,
             },
         )
         if not isinstance(data, list):
