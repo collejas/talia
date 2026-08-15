@@ -2880,7 +2880,7 @@ async def record_delivery_event(
     provider_timestamp: str | None = None,
     organizacion_id: str | None = None,
 ) -> None:
-    """Inserta un registro en eventos_entrega vinculado a un mensaje."""
+    """Inserta un callback y conserva su estado explicito de conciliacion."""
     repo = CRMRepository()
     try:
         await repo.record_delivery_event(
@@ -2911,7 +2911,7 @@ async def reconcile_delivery_events_for_message(
     message_sid: str,
     organizacion_id: str,
 ) -> int:
-    """Liga callbacks tempranos y aplica su pricing al ledger del mensaje."""
+    """Liga callbacks tempranos, actualiza conciliacion y aplica pricing."""
     repo = CRMRepository()
     try:
         messages = await repo.list_messages_by_provider_id(

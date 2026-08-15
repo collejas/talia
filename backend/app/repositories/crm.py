@@ -7485,6 +7485,8 @@ class CRMRepository:
             payload["organizacion_id"] = effective_org_id
         if message_id:
             payload["mensaje_id"] = message_id
+            payload["conciliacion_estado"] = "vinculado"
+            payload["conciliado_en"] = datetime.now(timezone.utc).isoformat()
         else:
             logger.info(
                 "crm.delivery_event_pending_message",
@@ -7556,7 +7558,12 @@ class CRMRepository:
             "PATCH",
             "/rest/v1/eventos_entrega",
             params=params,
-            json={"mensaje_id": message_id},
+            json={
+                "mensaje_id": message_id,
+                "conciliacion_estado": "vinculado",
+                "conciliacion_motivo": None,
+                "conciliado_en": datetime.now(timezone.utc).isoformat(),
+            },
             prefer="return=representation",
         )
         data = response.json() or []
