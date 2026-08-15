@@ -97,6 +97,10 @@ from app.services import (
 from app.services.high_demand_mode import high_demand_controller
 from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services.channel_routing import resolve_organizacion_id
+from app.services.web_tracking import (
+    normalize_public_site_id,
+    request_tracking_domain,
+)
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
@@ -5042,6 +5046,7 @@ class WebVisitPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     session_id: str = Field(..., min_length=4, max_length=255)
+    public_site_id: str | None = Field(default=None, max_length=140)
     tenant_alias: str | None = Field(default=None, max_length=120)
     location_href: str | None = Field(default=None, max_length=2048)
     landing_url: str | None = Field(default=None, max_length=2048)
@@ -5069,6 +5074,7 @@ class WebVisitPayload(BaseModel):
 
     @field_validator(
         "session_id",
+        "public_site_id",
         "tenant_alias",
         "location_href",
         "landing_url",
@@ -40139,6 +40145,10 @@ async def register_web_visit(
     raw_metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
     metadata = dict(raw_metadata)
 
+    public_site_id = normalize_public_site_id(payload.public_site_id)
+    if payload.public_site_id and not public_site_id:
+        raise HTTPException(status_code=400, detail="public_site_id_invalid")
+
     tenant_alias = (payload.tenant_alias or "").strip().lower()
     if not tenant_alias:
         meta_alias = raw_metadata.get("tenant_alias")
@@ -40150,7 +40160,30 @@ async def register_web_visit(
             tenant_alias = header_alias.strip().lower()
 
     organizacion_id: str | None = None
-    if tenant_alias:
+    tracking_site: dict[str, Any] | None = None
+    if public_site_id:
+        tracking_domain = request_tracking_domain(
+            origin=request.headers.get("origin"),
+            referer=request.headers.get("referer"),
+        )
+        if not tracking_domain:
+            raise HTTPException(status_code=400, detail="tracking_domain_required")
+        try:
+            tracking_site = await CRMRepository().resolve_web_tracking_site(
+                public_site_id=public_site_id,
+                domain_normalized=tracking_domain,
+            )
+        except CRMRepositoryError as exc:
+            logger.exception(
+                "crm.web.visit_tracking_site_lookup_failed",
+                extra={"public_site_id": public_site_id, "domain": tracking_domain},
+            )
+            raise HTTPException(status_code=502, detail="tracking_site_lookup_failed") from exc
+        if not tracking_site:
+            raise HTTPException(status_code=403, detail="tracking_site_domain_not_verified")
+        organizacion_id = tracking_site["organizacion_id"]
+    elif tenant_alias:
+        # Compatibilidad temporal con los tres tenants que ya envían alias.
         organizacion_id = await resolve_organizacion_id(canal="webchat", clave=tenant_alias)
     # Nunca aceptamos organizacion_id desde metadata pública: sería falsificable
     # y permitiría atribuir tráfico a otro tenant. El alias se resuelve en backend.
@@ -40250,6 +40283,7 @@ async def register_web_visit(
     cvegeo = payload.cvegeo or cvegeo_resolved
 
     metadata.setdefault("tenant_alias", tenant_alias or None)
+    metadata.setdefault("public_site_id", public_site_id)
     metadata.setdefault("request_ip", ip_value)
     metadata.setdefault(
         "request_headers",

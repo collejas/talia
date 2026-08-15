@@ -20,6 +20,17 @@ async function resolveTenantAlias() {
   return null;
 }
 
+function resolvePublicSiteId() {
+  const configured = window.__TALIA_PUBLIC_SITE_ID__;
+  if (typeof configured === 'string' && configured.trim()) return configured.trim();
+  const script = document.querySelector('script[data-talia-public-site-id]');
+  const fromAttribute = script?.getAttribute('data-talia-public-site-id');
+  return typeof fromAttribute === 'string' && fromAttribute.trim() ? fromAttribute.trim() : null;
+}
+
 void resolveTenantAlias().then((tenantAlias) => {
-  initialiseVisitTracking({ tenantAlias });
+  initialiseVisitTracking({
+    tenantAlias,
+    publicSiteId: resolvePublicSiteId(),
+  });
 });

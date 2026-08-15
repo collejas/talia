@@ -7941,6 +7941,65 @@ class CRMRepository:
                     return value.strip()
         return None
 
+    async def resolve_web_tracking_site(
+        self,
+        *,
+        public_site_id: str,
+        domain_normalized: str,
+    ) -> dict[str, Any] | None:
+        """Resuelve una instalación pública solo contra un dominio verificado."""
+
+        site_params = {
+            "public_site_id": f"eq.{public_site_id}",
+            "active": "eq.true",
+            "select": "id,organizacion_id,consent_required",
+            "limit": "1",
+        }
+        site_response = await self._request(
+            "GET",
+            "/rest/v1/tenant_web_tracking_sites",
+            params=site_params,
+        )
+        site_rows = site_response.json() or []
+        if not isinstance(site_rows, list) or not site_rows:
+            return None
+        site = site_rows[0]
+        if not isinstance(site, dict):
+            return None
+
+        tracking_site_id = str(site.get("id") or "").strip()
+        organizacion_id = str(site.get("organizacion_id") or "").strip()
+        if not tracking_site_id or not organizacion_id:
+            return None
+
+        domain_params = {
+            "tracking_site_id": f"eq.{tracking_site_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "domain_normalized": f"eq.{domain_normalized}",
+            "active": "eq.true",
+            "verification_status": "eq.verified",
+            "select": "id,domain_normalized,verification_status",
+            "limit": "1",
+        }
+        domain_response = await self._request(
+            "GET",
+            "/rest/v1/tenant_web_tracking_domains",
+            params=domain_params,
+        )
+        domain_rows = domain_response.json() or []
+        if not isinstance(domain_rows, list) or not domain_rows:
+            return None
+        domain = domain_rows[0]
+        if not isinstance(domain, dict):
+            return None
+
+        return {
+            "tracking_site_id": tracking_site_id,
+            "organizacion_id": organizacion_id,
+            "consent_required": bool(site.get("consent_required", True)),
+            "domain_id": str(domain.get("id") or "").strip() or None,
+        }
+
     async def create_web_session_event(
         self,
         *,

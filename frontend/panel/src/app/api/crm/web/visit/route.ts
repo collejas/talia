@@ -3,10 +3,17 @@ import { NextResponse } from "next/server"
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Tenant-Alias",
   "Access-Control-Max-Age": "86400",
+}
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("origin")
+  return {
+    ...CORS_HEADERS,
+    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
+  }
 }
 
 function buildTargetUrl(request: Request): URL {
@@ -24,10 +31,10 @@ function buildTargetUrl(request: Request): URL {
   return target
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: corsHeaders(request),
   })
 }
 
@@ -63,6 +70,9 @@ export async function POST(request: Request) {
         ...(request.headers.get("referer")
           ? { Referer: request.headers.get("referer") as string }
           : {}),
+        ...(request.headers.get("origin")
+          ? { Origin: request.headers.get("origin") as string }
+          : {}),
         ...(request.headers.get("x-tenant-alias")
           ? { "X-Tenant-Alias": request.headers.get("x-tenant-alias") as string }
           : {}),
@@ -78,7 +88,7 @@ export async function POST(request: Request) {
   if (backendResponse.status === 204) {
     return new NextResponse(null, {
       status: 204,
-      headers: CORS_HEADERS,
+      headers: corsHeaders(request),
     })
   }
 
@@ -86,7 +96,7 @@ export async function POST(request: Request) {
   return new NextResponse(responseText || null, {
     status: backendResponse.status,
     headers: {
-      ...CORS_HEADERS,
+      ...corsHeaders(request),
       "content-type": backendResponse.headers.get("content-type") || "application/json",
     },
   })

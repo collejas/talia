@@ -4,6 +4,7 @@ const defaultConfig = {
   storageSessionKey: 'talia-web-session',
   storageSessionMetaKey: 'talia-web-session-meta',
   linkedSessionStorageKey: 'talia-webchat-session',
+  publicSiteId: null,
   browserGeoStorageKey: 'talia-browser-geo-v1',
   tenantAlias: null,
   sessionTtlMs: 12 * 60 * 60 * 1000,
@@ -246,6 +247,7 @@ function buildPayload(reason, browserGeo = null) {
 
   return {
     session_id: ensureSessionId(),
+    public_site_id: config.publicSiteId || undefined,
     tenant_alias: config.tenantAlias || undefined,
     location_href: context.location_href,
     landing_url: context.location_href,

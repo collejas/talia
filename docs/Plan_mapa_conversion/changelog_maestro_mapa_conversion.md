@@ -32,6 +32,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La migración no usa el trigger genérico que infiere `organizacion_id` desde `metadata`; el tenant queda explícito y protegido por relaciones y políticas.
 - La migración `web_tracking_tenant_sites` se aplicó en Supabase el 2026-08-15. Se validaron ambas tablas con RLS habilitado/forzado, 0 registros iniciales, FK tenant–sitio–dominio, constraints de dominio, índice único global de dominio activo y políticas separadas por operación para `authenticated`.
 - La migración complementaria `web_tracking_domains_fk_index` se aplicó el 2026-08-15 para cubrir la FK compuesta con `(tracking_site_id, organizacion_id)`; el advisor de rendimiento ya no reporta esa FK como no indexada.
+- Se implementó el contrato inicial de `POST /api/crm/web/visit`: el flujo nuevo recibe `public_site_id`, resuelve instalación y tenant en backend, exige dominio activo/verificado y nunca acepta `organizacion_id` público.
+- El proxy Next reenvía `Origin` para conservar la validación del sitio externo. El dominio de autorización se obtiene solo de headers HTTP, nunca del `referrer` incluido en el JSON.
+- `site-tracking.js` y `modules/visit-tracking.js` ya envían `public_site_id`; `tenant_alias` queda como compatibilidad temporal para los tres tenants existentes.
 
 ## 2026-07-01
 

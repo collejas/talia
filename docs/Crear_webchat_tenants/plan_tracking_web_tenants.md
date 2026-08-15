@@ -407,9 +407,9 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 
 ### Fase 0: diseño y contrato
 
-- [ ] Confirmar dominio canónico de la aplicación.
-- [ ] Definir formato de `public_site_id`.
-- [ ] Definir política de normalización de dominios.
+- [x] Confirmar que el collector acepta `Origin` y `Referer` HTTP y no usa el `referrer` del JSON para autorizar el dominio (2026-08-15).
+- [x] Definir formato de `public_site_id`: `talia_site_` más 6–128 caracteres minúsculos alfanuméricos, `_` o `-` (2026-08-15).
+- [x] Definir política de normalización de dominios: hostname ASCII/IDNA, minúsculas, sin puerto, ruta, credenciales ni punto final (2026-08-15).
 - [ ] Definir retención de eventos.
 - [ ] Confirmar permisos y roles.
 - [ ] Revisar CORS actual y proxy de producción.
@@ -428,17 +428,18 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 
 ### Fase 2: backend
 
-- [ ] Crear schemas Pydantic separados para instalación, dominio, evento y respuesta.
-- [ ] Crear repository y service de tracking.
-- [ ] Crear endpoint público de ingestión.
-- [ ] Implementar resolución `public_site_id` → instalación → tenant.
-- [ ] Implementar validación de dominio y rate limit.
-- [ ] Mantener compatibilidad con `POST /api/crm/web/visit` durante la migración.
+- [x] Ampliar el schema Pydantic de visita con `public_site_id` (2026-08-15); los schemas administrativos quedan para la pestaña `Página Web`.
+- [x] Crear helpers y repository de resolución de tracking (2026-08-15).
+- [x] Implementar el contrato nuevo sobre `POST /api/crm/web/visit` (2026-08-15).
+- [x] Implementar resolución `public_site_id` → instalación activa → dominio verificado → tenant (2026-08-15).
+- [ ] Implementar rate limit por IP, dominio y sitio público.
+- [x] Mantener compatibilidad temporal con `POST /api/crm/web/visit` mediante `tenant_alias` para los tenants existentes (2026-08-15).
 
 ### Fase 3: script
 
-- [ ] Crear `talia-tracking.js` autocontenido.
-- [ ] Eliminar dependencia de alias de Webchat para el tracking.
+- [x] Extender `site-tracking.js` y `modules/visit-tracking.js` para enviar `public_site_id` (2026-08-15).
+- [ ] Publicar `talia-tracking.js` autocontenido como artefacto estable para tenants.
+- [ ] Eliminar dependencia de alias de Webchat en el snippet nuevo.
 - [ ] Usar URL absoluta de ingestión.
 - [ ] Agregar consentimiento y `Do Not Track`.
 - [ ] Validar navegación tradicional y SPA.
