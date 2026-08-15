@@ -91,6 +91,18 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación: rutas de billing `3 passed`; React Doctor `100/100`.
 - Falta desplegar backend y panel para activar las acciones.
 
+### Ajustes manuales auditables — Listo para deploy
+
+- Se agregaron consultas tenant-scoped y master para `cobro_ajustes`.
+- El owner puede registrar `credito`, `cargo` o `reversa` para un tenant y periodo explícitos.
+- El motivo es obligatorio y el importe no puede ser cero.
+- Los ajustes no modifican ni eliminan cargos originales; una corrección se registra como otro movimiento.
+- Se aplicó `supabase/migrations/20260815_233000_sync_message_billing_adjustments.sql` para actualizar `ajustes_total` y `total` del periodo en la misma transacción del insert.
+- Se agregó la sección **Ajustes manuales** al panel para el tenant maestro.
+- El registro conserva usuario creador, periodo, referencia, importe y fecha.
+- Validación: rutas de billing `3 passed`; React Doctor `100/100`.
+- Falta desplegar backend y panel para activar esta función.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

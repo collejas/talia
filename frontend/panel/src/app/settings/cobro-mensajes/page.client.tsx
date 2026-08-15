@@ -75,6 +75,7 @@ type UnreconciledEvent = { id: string; organizacion_id: string | null; evento: s
 type UnreconciledResponse = { items: UnreconciledEvent[] }
 type BillingConfiguration = { limite_mensajes_periodo: number | null; limite_costo_app_periodo: number | string | null; limite_costo_meta_periodo: number | string | null; porcentaje_alerta_consumo: number; suspension_automatica_por_limite: boolean }
 type BillingAlert = { id: string; organizacion_id: string; tipo: string; severidad: "info" | "warning" | "critical"; estado: string; umbral: number | string | null; valor_actual: number | string | null; mensaje: string; creado_en: string }
+type BillingAdjustment = { id: string; organizacion_id: string; periodo_id: string; tipo: "credito" | "cargo" | "reversa"; importe: number | string; moneda: string; motivo: string; referencia: string | null; creado_en: string }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
@@ -226,6 +227,13 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [configurationMessage, setConfigurationMessage] = React.useState<string | null>(null)
   const [billingAlerts, setBillingAlerts] = React.useState<BillingAlert[]>([])
   const [alertUpdating, setAlertUpdating] = React.useState<string | null>(null)
+  const [billingAdjustments, setBillingAdjustments] = React.useState<BillingAdjustment[]>([])
+  const [adjustmentPeriodId, setAdjustmentPeriodId] = React.useState("")
+  const [adjustmentType, setAdjustmentType] = React.useState<BillingAdjustment["tipo"]>("credito")
+  const [adjustmentAmount, setAdjustmentAmount] = React.useState("")
+  const [adjustmentReason, setAdjustmentReason] = React.useState("")
+  const [adjustmentSaving, setAdjustmentSaving] = React.useState(false)
+  const [adjustmentMessage, setAdjustmentMessage] = React.useState<string | null>(null)
 
   const range = React.useMemo(() => periodRange(period, manualDesde, manualHasta), [manualDesde, manualHasta, period])
   const manualRangeInvalid = period === "manual" && !range
@@ -247,6 +255,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const reconciliationUrl = `/api/billing${scopePrefix}/reconciliation${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
   const unreconciledEventsUrl = `/api/billing${scopePrefix}/reconciliation/events${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
   const alertsUrl = `/api/billing${scopePrefix}/alerts${isOwner && selectedTenant !== "all" ? `?organizacion_id=${encodeURIComponent(selectedTenant)}` : ""}`
+  const adjustmentsUrl = `/api/billing${scopePrefix}/adjustments${isOwner && selectedTenant !== "all" ? `?organizacion_id=${encodeURIComponent(selectedTenant)}` : ""}`
 
   React.useEffect(() => {
     if (!isOwner) {
@@ -292,6 +301,16 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setConfigurationMessage(fetchError instanceof Error ? fetchError.message : "No se pudo cargar la configuración.") })
     return () => controller.abort()
   }, [isOwner, selectedTenant, refreshToken])
+
+  React.useEffect(() => {
+    if (!isOwner) return
+    const controller = new AbortController()
+    fetch(adjustmentsUrl, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { if (!response.ok) throw new Error(await errorText(response, "No se pudieron consultar los ajustes.")); return response.json() as Promise<{ items?: BillingAdjustment[] }> })
+      .then((data) => setBillingAdjustments(data.items ?? []))
+      .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setAdjustmentMessage(fetchError instanceof Error ? fetchError.message : "No se pudieron consultar los ajustes.") })
+    return () => controller.abort()
+  }, [adjustmentsUrl, isOwner, refreshToken])
 
   React.useEffect(() => {
     if (manualRangeInvalid) {
@@ -410,6 +429,17 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
     } finally { setAlertUpdating(null) }
   }
 
+  const saveAdjustment = async () => {
+    if (!isOwner || selectedTenant === "all" || !adjustmentPeriodId) return
+    setAdjustmentSaving(true); setAdjustmentMessage(null)
+    try {
+      const response = await fetch("/api/billing/master/adjustments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizacion_id: selectedTenant, periodo_id: adjustmentPeriodId, tipo: adjustmentType, importe: Number(adjustmentAmount), motivo: adjustmentReason.trim() }) })
+      if (!response.ok) throw new Error(await errorText(response, "No se pudo registrar el ajuste."))
+      const created = await response.json() as BillingAdjustment
+      setBillingAdjustments((items) => [created, ...items]); setAdjustmentAmount(""); setAdjustmentReason(""); setAdjustmentMessage("Ajuste registrado. Los cargos originales no fueron modificados.")
+    } catch (saveError) { setAdjustmentMessage(saveError instanceof Error ? saveError.message : "No se pudo registrar el ajuste.") } finally { setAdjustmentSaving(false) }
+  }
+
   const totalPages = Math.max(1, Math.ceil((messages?.total ?? 0) / (messages?.page_size ?? 25)))
   const s = summary
 
@@ -433,6 +463,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       </CardContent></Card> : null}
 
       {isOwner && selectedTenant !== "all" ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Límites y alertas del tenant</CardTitle><CardDescription className="text-xs">Los campos vacíos no aplican límite. Selecciona un tenant específico para configurar esta sección.</CardDescription></CardHeader><CardContent className="grid gap-3 px-3 pb-3 pt-0 md:grid-cols-4"><div><Label className="text-xs" htmlFor="billing-limit-messages">Mensajes por periodo</Label><Input id="billing-limit-messages" type="number" min="0" step="1" value={limitMessages} onChange={(event) => setLimitMessages(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-limit-app">Límite cargo GEOACTIV</Label><Input id="billing-limit-app" type="number" min="0" step="0.0001" value={limitAppCost} onChange={(event) => setLimitAppCost(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-limit-meta">Límite costo Meta</Label><Input id="billing-limit-meta" type="number" min="0" step="0.0001" value={limitMetaCost} onChange={(event) => setLimitMetaCost(event.target.value)} /></div><div><Label className="text-xs" htmlFor="billing-alert-percent">Alertar al (%)</Label><Input id="billing-alert-percent" type="number" min="1" max="100" step="1" value={alertPercentage} onChange={(event) => setAlertPercentage(event.target.value)} /></div><label className="flex items-center gap-2 text-xs md:col-span-2"><input type="checkbox" checked={automaticSuspension} onChange={(event) => setAutomaticSuspension(event.target.checked)} />Suspensión automática al alcanzar un límite</label><div className="flex items-end gap-2 md:col-span-2"><Button onClick={() => void saveConfiguration()} disabled={configurationSaving}>{configurationSaving ? "Guardando..." : "Guardar límites"}</Button>{billingConfiguration ? <span className="text-xs text-muted-foreground">Actualizado correctamente</span> : null}</div>{configurationMessage ? <p className="text-xs text-muted-foreground md:col-span-4">{configurationMessage}</p> : null}</CardContent></Card> : null}
+
+      {isOwner && selectedTenant !== "all" ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Ajustes manuales</CardTitle><CardDescription className="text-xs">Créditos, cargos o reversas auditables. No modifican el cargo original.</CardDescription></CardHeader><CardContent className="grid gap-3 px-3 pb-3 pt-0 md:grid-cols-5"><div><Label className="text-xs" htmlFor="billing-adjustment-period">Periodo</Label><Select value={adjustmentPeriodId} onValueChange={setAdjustmentPeriodId}><SelectTrigger id="billing-adjustment-period" className="h-8"><SelectValue placeholder="Selecciona periodo" /></SelectTrigger><SelectContent>{(s?.periodos ?? []).filter((item) => item.organizacion_id === selectedTenant).map((item) => <SelectItem key={item.id} value={item.id}>{new Date(item.fecha_inicio).toLocaleDateString("es-MX")} · {item.estado}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs" htmlFor="billing-adjustment-type">Tipo</Label><Select value={adjustmentType} onValueChange={(value) => setAdjustmentType(value as BillingAdjustment["tipo"])}><SelectTrigger id="billing-adjustment-type" className="h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="credito">Crédito</SelectItem><SelectItem value="cargo">Cargo</SelectItem><SelectItem value="reversa">Reversa</SelectItem></SelectContent></Select></div><div><Label className="text-xs" htmlFor="billing-adjustment-amount">Importe MXN</Label><Input id="billing-adjustment-amount" type="number" step="0.0001" value={adjustmentAmount} onChange={(event) => setAdjustmentAmount(event.target.value)} /></div><div className="md:col-span-2"><Label className="text-xs" htmlFor="billing-adjustment-reason">Motivo obligatorio</Label><div className="flex gap-2"><Input id="billing-adjustment-reason" value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} /><Button onClick={() => void saveAdjustment()} disabled={adjustmentSaving || !adjustmentPeriodId || !adjustmentAmount || !adjustmentReason.trim()}>{adjustmentSaving ? "Guardando..." : "Registrar"}</Button></div></div>{adjustmentMessage ? <p className="text-xs text-muted-foreground md:col-span-5">{adjustmentMessage}</p> : null}{billingAdjustments.slice(0, 5).map((item) => <div key={item.id} className="text-xs text-muted-foreground md:col-span-5">{new Date(item.creado_en).toLocaleString("es-MX")} · {item.tipo} · {money(item.importe)} · {item.motivo}</div>)}</CardContent></Card> : null}
 
       <Card>
         <CardHeader className="flex flex-row items-center px-2 py-1.5"><CardTitle className="text-sm">Filtros</CardTitle></CardHeader>

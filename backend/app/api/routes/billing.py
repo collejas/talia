@@ -242,6 +242,41 @@ class BillingAlertStatusUpdate(BaseModel):
     estado: str = Field(pattern="^(acknowledged|resuelta|descartada)$")
 
 
+class BillingAdjustmentItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    organizacion_id: UUID
+    periodo_id: UUID
+    tipo: str
+    importe: Decimal
+    moneda: str
+    motivo: str
+    referencia: str | None = None
+    creado_por_usuario_id: UUID
+    creado_en: datetime
+
+
+class BillingAdjustmentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    organizacion_id: UUID
+    periodo_id: UUID
+    tipo: str = Field(pattern="^(credito|cargo|reversa)$")
+    importe: Decimal = Field(max_digits=12, decimal_places=4)
+    motivo: str = Field(min_length=3, max_length=1000)
+    referencia: str | None = Field(default=None, max_length=255)
+
+
+class BillingAdjustmentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    scope: str
+    organizacion_id: UUID | None = None
+    items: list[BillingAdjustmentItem] = Field(default_factory=list)
+
+
 def get_billing_repository(user_token: str = Depends(require_user_token)) -> CRMRepository:
     try:
         return CRMRepository(user_token=user_token)
@@ -609,6 +644,62 @@ async def update_master_billing_alert_status(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_alert_status_update_unavailable") from exc
     return BillingAlertItem.model_validate(row)
+
+
+@router.get("/adjustments", response_model=BillingAdjustmentResponse)
+async def list_tenant_billing_adjustments(
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAdjustmentResponse:
+    organizacion_id = await _tenant_scope(repo)
+    try:
+        rows = await repo.list_billing_adjustments(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_adjustments_unavailable") from exc
+    return BillingAdjustmentResponse(scope="tenant", organizacion_id=organizacion_id, items=[BillingAdjustmentItem.model_validate(row) for row in rows])
+
+
+@router.get("/master/adjustments", response_model=BillingAdjustmentResponse)
+async def list_master_billing_adjustments(
+    organizacion_id: UUID | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAdjustmentResponse:
+    await _owner_scope(repo)
+    try:
+        rows = await repo.list_billing_adjustments(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_master_adjustments_unavailable") from exc
+    return BillingAdjustmentResponse(scope="master", organizacion_id=organizacion_id, items=[BillingAdjustmentItem.model_validate(row) for row in rows])
+
+
+@router.post("/master/adjustments", response_model=BillingAdjustmentItem, status_code=status.HTTP_201_CREATED)
+async def create_master_billing_adjustment(
+    payload: BillingAdjustmentCreate,
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAdjustmentItem:
+    await _owner_scope(repo)
+    if payload.importe == 0:
+        raise HTTPException(status_code=400, detail="billing_adjustment_amount_cannot_be_zero")
+    context, _ = await _billing_context(repo)
+    try:
+        permission_context = await repo.get_permission_context()
+        usuario_id = UUID(str(permission_context.get("usuario_id")))
+    except (CRMRepositoryError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="billing_adjustment_user_required") from exc
+    if context is None:
+        raise HTTPException(status_code=403, detail="tenant_context_required")
+    try:
+        row = await repo.create_billing_adjustment(
+            organizacion_id=payload.organizacion_id,
+            periodo_id=payload.periodo_id,
+            tipo=payload.tipo,
+            importe=payload.importe,
+            motivo=payload.motivo,
+            referencia=payload.referencia,
+            creado_por_usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_adjustment_create_unavailable") from exc
+    return BillingAdjustmentItem.model_validate(row)
 
 
 @router.post("/master/tariff/app", response_model=BillingEffectiveRateResponse)

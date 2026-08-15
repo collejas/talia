@@ -7866,6 +7866,51 @@ class CRMRepository:
             return data
         raise CRMRepositoryError(f"Respuesta inesperada al actualizar alerta de cobro: {data!r}")
 
+    async def list_billing_adjustments(self, *, organizacion_id: UUID | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": "id,organizacion_id,periodo_id,tipo,importe,moneda,motivo,referencia,creado_por_usuario_id,creado_en",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        response = await self._request("GET", "/rest/v1/cobro_ajustes", params=params)
+        data = response.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar ajustes de cobro: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_billing_adjustment(
+        self,
+        *,
+        organizacion_id: UUID,
+        periodo_id: UUID,
+        tipo: str,
+        importe: Decimal,
+        motivo: str,
+        referencia: str | None,
+        creado_por_usuario_id: UUID,
+    ) -> dict[str, Any]:
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "periodo_id": str(periodo_id),
+            "tipo": tipo,
+            "importe": importe,
+            "moneda": "MXN",
+            "motivo": motivo,
+            "referencia": referencia,
+            "creado_por_usuario_id": str(creado_por_usuario_id),
+        }
+        response = await self._request(
+            "POST", "/rest/v1/cobro_ajustes", json=payload, prefer="return=representation"
+        )
+        data = response.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada al crear ajuste de cobro: {data!r}")
+
     async def list_billing_messages(
         self,
         *,
