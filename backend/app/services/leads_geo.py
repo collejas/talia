@@ -329,6 +329,8 @@ def _state_code_from_name(name: str | None) -> tuple[str | None, str | None]:
     normalized = _normalize_key(name)
     index = _state_name_index()
     code = index.get(normalized)
+    if not code and normalized.startswith("estadode"):
+        code = index.get(normalized[len("estadode") :])
     if code:
         return code, state_display_name(code)
     aliases = {

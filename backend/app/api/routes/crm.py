@@ -40273,7 +40273,7 @@ async def register_web_visit(
         else (
             str(client_geo.get("country_name"))
             if isinstance(client_geo, dict) and isinstance(client_geo.get("country_name"), str)
-            else None
+            else leads_geo.country_display_name(country_code)
         )
     )
     cve_ent = payload.cve_ent or estado_clave
