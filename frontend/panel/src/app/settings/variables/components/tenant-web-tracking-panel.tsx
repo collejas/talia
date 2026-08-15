@@ -368,12 +368,29 @@ export function TenantWebTrackingPanel() {
                           </Button>
                         ) : null}
                       </div>
-                      {domain.verification_status === "pending" && domain.verification_method === "dns" ? (
-                        <div className="w-full rounded bg-muted/40 p-2 text-xs text-muted-foreground">
-                          <p>En DNS crea un registro TXT:</p>
-                          <p className="mt-1 font-mono">Host: _talia-verification.{domain.domain_normalized}</p>
-                          <p className="font-mono break-all">Valor: {domain.verification_token || "Desafío no disponible; vuelve a registrar el dominio."}</p>
-                          {domain.verification_error_message ? <p className="mt-1 text-destructive">Último intento: {domain.verification_error_message}</p> : null}
+                      {domain.verification_method === "dns" ? (
+                        <div className="w-full rounded-lg border border-amber-500/30 bg-amber-50/60 p-3 text-xs text-muted-foreground dark:bg-amber-950/20">
+                          <p className="font-medium text-foreground">
+                            {domain.verification_status === "verified" ? "Registro DNS de verificación" : "Cómo completar la verificación DNS"}
+                          </p>
+                          {domain.verification_status === "verified" ? (
+                            <p className="mt-1">Este dominio ya está verificado. Conserva este registro si necesitas revisar o migrar la configuración DNS.</p>
+                          ) : null}
+                          <ol className="mt-2 list-decimal space-y-1 pl-5">
+                            <li>Abre el panel DNS del proveedor que administra <span className="font-mono">{domain.domain_normalized}</span>.</li>
+                            <li>Crea un registro de tipo <strong>TXT</strong>.</li>
+                            <li>Si el panel ya muestra la zona <span className="font-mono">{domain.domain_normalized}</span>, captura solo este Host:</li>
+                          </ol>
+                          <div className="mt-2 space-y-1 rounded-md bg-background/80 p-2 font-mono">
+                            <p className="break-all">Host: _talia-verification</p>
+                            <p className="break-all">Valor: {domain.verification_token || "Desafío no disponible; vuelve a registrar el dominio."}</p>
+                          </div>
+                          <p className="mt-2">El resultado completo debe ser <span className="font-mono">_talia-verification.{domain.domain_normalized}</span>.</p>
+                          <p className="mt-1">Si el proveedor solicita un nombre completo, usa ese resultado completo y no agregues el dominio dos veces.</p>
+                          {domain.verification_status !== "verified" ? (
+                            <p className="mt-1">Guarda el registro, espera la propagación y después presiona <strong>Probar DNS</strong>.</p>
+                          ) : null}
+                          {domain.verification_error_message ? <p className="mt-2 text-destructive">Último intento: {domain.verification_error_message}</p> : null}
                         </div>
                       ) : null}
                     </div>
