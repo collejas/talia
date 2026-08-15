@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -32,6 +33,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import tenant_runtime
 from app.services import channel_routing
+from app.services.web_tracking import normalize_tracking_domain
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 logger = get_logger("app.api.tenant")
@@ -42,6 +44,64 @@ class TenantContext(BaseModel):
 
     user_id: UUID
     organizacion_id: UUID
+
+
+class TenantWebTrackingDomain(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    tracking_site_id: UUID
+    domain: str
+    domain_normalized: str
+    verification_method: Literal["dns", "html_file", "manual"]
+    verification_status: Literal["pending", "verified", "rejected", "inactive"]
+    verified_at: datetime | None = None
+    active: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class TenantWebTrackingSite(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    public_site_id: str
+    active: bool
+    consent_required: bool
+    last_event_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    domains: list[TenantWebTrackingDomain] = Field(default_factory=list)
+
+
+class TenantWebTrackingResponse(BaseModel):
+    items: list[TenantWebTrackingSite] = Field(default_factory=list)
+
+
+class TenantWebTrackingSiteCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    consent_required: bool = True
+
+
+class TenantWebTrackingSiteUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active: bool | None = None
+    consent_required: bool | None = None
+
+
+class TenantWebTrackingDomainCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str = Field(..., min_length=1, max_length=253)
+    verification_method: Literal["dns", "html_file", "manual"] = "dns"
+
+
+class TenantWebTrackingDomainUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active: bool
 
 
 def get_crm_repo() -> CRMRepository:
@@ -879,6 +939,165 @@ async def delete_tenant_route(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+def _tracking_site_response(
+    site: dict[str, Any],
+    domains: list[dict[str, Any]],
+) -> TenantWebTrackingSite:
+    site_id = UUID(str(site["id"]))
+    site_domains = [
+        TenantWebTrackingDomain.model_validate(row)
+        for row in domains
+        if str(row.get("tracking_site_id")) == str(site_id)
+    ]
+    return TenantWebTrackingSite(
+        id=site_id,
+        public_site_id=str(site.get("public_site_id") or ""),
+        active=bool(site.get("active")),
+        consent_required=bool(site.get("consent_required")),
+        last_event_at=site.get("last_event_at"),
+        created_at=site.get("created_at"),
+        updated_at=site.get("updated_at"),
+        domains=site_domains,
+    )
+
+
+async def _load_web_tracking_response(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> TenantWebTrackingResponse:
+    sites = await repo.list_web_tracking_sites(organizacion_id=organizacion_id)
+    domains = await repo.list_web_tracking_domains(organizacion_id=organizacion_id)
+    return TenantWebTrackingResponse(
+        items=[_tracking_site_response(site, domains) for site in sites]
+    )
+
+
+def _tracking_http_error(exc: CRMRepositoryError) -> HTTPException:
+    detail = str(exc).lower()
+    if "409" in detail or "duplicate" in detail or "unique" in detail:
+        return HTTPException(status_code=409, detail="web_tracking_conflict")
+    return HTTPException(status_code=502, detail="web_tracking_storage_failed")
+
+
+@router.get("/me/web-tracking", response_model=TenantWebTrackingResponse)
+async def list_tenant_web_tracking(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingResponse:
+    await require_permission(user_token, "settings.view")
+    repo = CRMRepository(user_token=user_token)
+    try:
+        return await _load_web_tracking_response(
+            repo=repo,
+            organizacion_id=context.organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+
+
+@router.post("/me/web-tracking/sites", response_model=TenantWebTrackingSite, status_code=201)
+async def create_tenant_web_tracking_site(
+    payload: TenantWebTrackingSiteCreateRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingSite:
+    await require_permission(user_token, "settings.manage")
+    repo = CRMRepository(user_token=user_token)
+    public_site_id = f"talia_site_{uuid4().hex}"
+    try:
+        site = await repo.create_web_tracking_site(
+            organizacion_id=context.organizacion_id,
+            public_site_id=public_site_id,
+            consent_required=payload.consent_required,
+        )
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    return _tracking_site_response(site, [])
+
+
+@router.patch("/me/web-tracking/sites/{site_id}", response_model=TenantWebTrackingSite)
+async def update_tenant_web_tracking_site(
+    site_id: UUID,
+    payload: TenantWebTrackingSiteUpdateRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingSite:
+    await require_permission(user_token, "settings.manage")
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    repo = CRMRepository(user_token=user_token)
+    try:
+        site = await repo.update_web_tracking_site(
+            organizacion_id=context.organizacion_id,
+            tracking_site_id=site_id,
+            updates=updates,
+        )
+        if not site:
+            raise HTTPException(status_code=404, detail="web_tracking_site_not_found")
+        domains = await repo.list_web_tracking_domains(
+            organizacion_id=context.organizacion_id,
+            tracking_site_id=site_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    return _tracking_site_response(site, domains)
+
+
+@router.post(
+    "/me/web-tracking/sites/{site_id}/domains",
+    response_model=TenantWebTrackingDomain,
+    status_code=201,
+)
+async def create_tenant_web_tracking_domain(
+    site_id: UUID,
+    payload: TenantWebTrackingDomainCreateRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingDomain:
+    await require_permission(user_token, "settings.manage")
+    domain_normalized = normalize_tracking_domain(payload.domain)
+    if not domain_normalized:
+        raise HTTPException(status_code=400, detail="domain_invalid")
+    repo = CRMRepository(user_token=user_token)
+    try:
+        row = await repo.create_web_tracking_domain(
+            organizacion_id=context.organizacion_id,
+            tracking_site_id=site_id,
+            domain=domain_normalized,
+            domain_normalized=domain_normalized,
+            verification_method=payload.verification_method,
+        )
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    return TenantWebTrackingDomain.model_validate(row)
+
+
+@router.patch("/me/web-tracking/domains/{domain_id}", response_model=TenantWebTrackingDomain)
+async def update_tenant_web_tracking_domain(
+    domain_id: UUID,
+    payload: TenantWebTrackingDomainUpdateRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+) -> TenantWebTrackingDomain:
+    await require_permission(user_token, "settings.manage")
+    repo = CRMRepository(user_token=user_token)
+    try:
+        row = await repo.update_web_tracking_domain(
+            organizacion_id=context.organizacion_id,
+            domain_id=domain_id,
+            updates=payload.model_dump(),
+        )
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="web_tracking_domain_not_found")
+    return TenantWebTrackingDomain.model_validate(row)
 
 
 @router.put("/me/config", response_model=TenantConfigResponse)

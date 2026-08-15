@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
 import { fetchCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
+import { TenantWebTrackingPanel } from "./components/tenant-web-tracking-panel"
 
 import {
   TenantSettingsActions,
@@ -412,8 +413,9 @@ export default async function SettingsVariablesPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="webchat">
-                <TabsList className="grid grid-cols-11">
+                <TabsList className="grid grid-cols-12">
                   <TabsTrigger value="webchat">Webchat</TabsTrigger>
+                  <TabsTrigger value="web-tracking">Página Web</TabsTrigger>
                   <TabsTrigger value="calendar">Agenda</TabsTrigger>
                   <TabsTrigger value="mail">Correo</TabsTrigger>
                   <TabsTrigger value="twilio">Twilio</TabsTrigger>
@@ -445,6 +447,9 @@ export default async function SettingsVariablesPage() {
                       webchat_alias: webchatRoute,
                     }}
                   />
+                </TabsContent>
+                <TabsContent value="web-tracking" className="pt-4">
+                  <TenantWebTrackingPanel />
                 </TabsContent>
                 <TabsContent value="calendar" className="pt-4">
                   <TenantCalendarSettings

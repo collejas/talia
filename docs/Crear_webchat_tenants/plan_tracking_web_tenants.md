@@ -447,12 +447,12 @@ Una sesión repetida no equivale a un contacto nuevo ni a una conversión.
 
 ### Fase 4: panel
 
-- [ ] Agregar pestaña `Página Web` en `settings/variables`.
-- [ ] Crear gestión de dominios.
-- [ ] Crear generación y copia del snippet.
+- [x] Agregar pestaña `Página Web` en `settings/variables` (2026-08-15).
+- [x] Crear gestión de instalaciones y dominios activos/inactivos (2026-08-15).
+- [x] Crear generación y copia del snippet universal inicial (2026-08-15).
 - [ ] Crear estado de instalación y diagnóstico.
-- [ ] Mostrar instrucciones por plataforma.
-- [ ] No colocar secretos en el snippet.
+- [x] Mostrar instrucciones generales para HTML, WordPress/PHP y SPA (el mismo snippet se puede insertar en sus plantillas globales) (2026-08-15).
+- [x] No colocar secretos en el snippet; solo contiene `public_site_id`, URLs públicas y el endpoint collector (2026-08-15).
 
 ### Fase 5: mapa y validación
 

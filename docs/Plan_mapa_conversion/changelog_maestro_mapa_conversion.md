@@ -35,6 +35,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se implementó el contrato inicial de `POST /api/crm/web/visit`: el flujo nuevo recibe `public_site_id`, resuelve instalación y tenant en backend, exige dominio activo/verificado y nunca acepta `organizacion_id` público.
 - El proxy Next reenvía `Origin` para conservar la validación del sitio externo. El dominio de autorización se obtiene solo de headers HTTP, nunca del `referrer` incluido en el JSON.
 - `site-tracking.js` y `modules/visit-tracking.js` ya envían `public_site_id`; `tenant_alias` queda como compatibilidad temporal para los tres tenants existentes.
+- Se agregó la pestaña `Página Web` en `settings/variables` con creación de instalaciones, registro/desactivación de dominios, estados de verificación y copia del snippet inicial.
+- Se agregaron endpoints privados tenant-scoped para administrar sitios y dominios; todos requieren autenticación y permisos `settings.view`/`settings.manage`.
 
 ## 2026-07-01
 

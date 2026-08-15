@@ -1,6 +1,7 @@
 const defaultConfig = {
   apiBaseUrl: '/api/crm',
   endpointPath: '/web/visit',
+  endpointUrl: null,
   storageSessionKey: 'talia-web-session',
   storageSessionMetaKey: 'talia-web-session-meta',
   linkedSessionStorageKey: 'talia-webchat-session',
@@ -271,7 +272,8 @@ async function sendVisit(reason, { force = false, browserGeo = null } = {}) {
 
   const payload = buildPayload(reason, browserGeo);
   try {
-    const response = await fetch(`${config.apiBaseUrl}${config.endpointPath}`, {
+    const endpoint = config.endpointUrl || `${config.apiBaseUrl}${config.endpointPath}`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

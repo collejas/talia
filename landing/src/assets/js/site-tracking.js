@@ -28,9 +28,16 @@ function resolvePublicSiteId() {
   return typeof fromAttribute === 'string' && fromAttribute.trim() ? fromAttribute.trim() : null;
 }
 
+function resolveEndpointUrl() {
+  const script = document.querySelector('script[data-talia-tracking-endpoint]');
+  const value = script?.getAttribute('data-talia-tracking-endpoint');
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 void resolveTenantAlias().then((tenantAlias) => {
   initialiseVisitTracking({
     tenantAlias,
     publicSiteId: resolvePublicSiteId(),
+    endpointUrl: resolveEndpointUrl(),
   });
 });

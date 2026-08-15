@@ -8000,6 +8000,149 @@ class CRMRepository:
             "domain_id": str(domain.get("id") or "").strip() or None,
         }
 
+    async def list_web_tracking_sites(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        response = await self._request(
+            "GET",
+            "/rest/v1/tenant_web_tracking_sites",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "id,organizacion_id,public_site_id,active,consent_required,last_event_at,created_at,updated_at",
+                "order": "created_at.asc",
+            },
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list):
+            raise CRMRepositoryError("web_tracking_sites_list_invalid")
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def create_web_tracking_site(
+        self,
+        *,
+        organizacion_id: UUID,
+        public_site_id: str,
+        consent_required: bool,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/tenant_web_tracking_sites",
+            json=[
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "public_site_id": public_site_id,
+                    "consent_required": consent_required,
+                }
+            ],
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            raise CRMRepositoryError("web_tracking_site_create_invalid")
+        return rows[0]
+
+    async def update_web_tracking_site(
+        self,
+        *,
+        organizacion_id: UUID,
+        tracking_site_id: UUID,
+        updates: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/tenant_web_tracking_sites",
+            params={
+                "id": f"eq.{tracking_site_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "id,organizacion_id,public_site_id,active,consent_required,last_event_at,created_at,updated_at",
+            },
+            json=updates,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list) or not rows:
+            return None
+        return rows[0] if isinstance(rows[0], dict) else None
+
+    async def list_web_tracking_domains(
+        self,
+        *,
+        organizacion_id: UUID,
+        tracking_site_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verified_at,active,created_at,updated_at",
+            "order": "created_at.asc",
+        }
+        if tracking_site_id:
+            params["tracking_site_id"] = f"eq.{tracking_site_id}"
+        response = await self._request(
+            "GET",
+            "/rest/v1/tenant_web_tracking_domains",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list):
+            raise CRMRepositoryError("web_tracking_domains_list_invalid")
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def create_web_tracking_domain(
+        self,
+        *,
+        organizacion_id: UUID,
+        tracking_site_id: UUID,
+        domain: str,
+        domain_normalized: str,
+        verification_method: str,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/tenant_web_tracking_domains",
+            json=[
+                {
+                    "tracking_site_id": str(tracking_site_id),
+                    "organizacion_id": str(organizacion_id),
+                    "domain": domain,
+                    "domain_normalized": domain_normalized,
+                    "verification_method": verification_method,
+                    "verification_status": "pending",
+                }
+            ],
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            raise CRMRepositoryError("web_tracking_domain_create_invalid")
+        return rows[0]
+
+    async def update_web_tracking_domain(
+        self,
+        *,
+        organizacion_id: UUID,
+        domain_id: UUID,
+        updates: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/tenant_web_tracking_domains",
+            params={
+                "id": f"eq.{domain_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "id,tracking_site_id,organizacion_id,domain,domain_normalized,verification_method,verification_status,verified_at,active,created_at,updated_at",
+            },
+            json=updates,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list) or not rows:
+            return None
+        return rows[0] if isinstance(rows[0], dict) else None
+
     async def create_web_session_event(
         self,
         *,
