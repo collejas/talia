@@ -21,6 +21,14 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación de datos IMLUX: 82 mensajes y `$7.3800 MXN` en agosto; 82 mensajes en semana actual.
 - TypeScript y React Doctor: `100/100`.
 
+### Reporte y detalle legibles para operación — Completado
+
+- El CSV de cobro prioriza `tenant`, `periodo`, `contacto`, teléfono y correo en lugar de UUIDs técnicos.
+- Los identificadores de mensaje, conversación, periodo y tenant se conservan únicamente como columnas de referencia al final del archivo.
+- La tabla de `settings/cobro-mensajes` ahora muestra nombre del tenant, periodo y contacto con teléfono o correo cuando están disponibles.
+- El enriquecimiento se realiza por lote durante la exportación para evitar consultas repetidas por página.
+- Validación: backend `6 passed`, TypeScript correcto, `git diff --check` correcto y React Doctor `100/100`.
+
 ### Conciliación y separación de callbacks Meta — Completado
 
 - Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.
@@ -134,6 +142,31 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Se agregó prueba para impedir ajustes con importe cero.
 - Se agregó prueba para actualizar el estado de alertas desde el contexto owner.
 - Las pruebas de billing pasaron de `3` a `6` casos.
+
+### Exportación de reportes CSV — Listo para deploy
+
+- Se agregó exportación del detalle filtrado mediante:
+  - `GET /billing/messages/export`
+  - `GET /billing/master/messages/export`
+- El CSV respeta tenant, periodo, categoría Meta y dirección seleccionados.
+- Incluye cargos GEOACTIV, costo Meta, total, estado de proveedor y conciliación.
+- No incluye payloads, texto de mensajes ni información sensible del proveedor.
+- El panel incorpora el botón **Exportar CSV** junto a los filtros actuales.
+- El export tiene límite operativo de 10,000 filas para evitar descargas sin control.
+- Validación: billing `6 passed`, TypeScript correcto y React Doctor `100/100`.
+
+### Corrección de descarga CSV — Corregido
+
+- Se detectó que el proxy Next convertía la respuesta `text/csv` del backend en JSON.
+- El botón parecía no exportar porque la respuesta no conservaba el archivo ni sus headers de descarga.
+- El proxy ahora admite respuestas de texto y conserva `Content-Type` y `Content-Disposition` para CSV.
+- Validación: TypeScript correcto, billing `6 passed` y React Doctor `100/100`.
+
+### Corrección de hidratación del enlace CSV — Corregido
+
+- Se confirmó un mismatch SSR/cliente porque el rango temporal usaba zona horaria del servidor durante el primer render y la del navegador después.
+- El enlace de exportación ahora permanece deshabilitado hasta completar la hidratación y luego usa el rango local correcto.
+- Se eliminó la causa del error que impedía iniciar la descarga en el panel.
 
 ## 2026-08-14
 

@@ -13,7 +13,7 @@ const ALLOWED_QUERY_PARAMS = [
   "organizacion_id",
 ] as const
 
-export async function proxyBillingRequest(request: Request, backendPath: string) {
+export async function proxyBillingRequest(request: Request, backendPath: string, responseType: "json" | "text" = "json") {
   const sourceUrl = new URL(request.url)
   const searchParams: Record<string, string> = {}
   for (const key of ALLOWED_QUERY_PARAMS) {
@@ -36,12 +36,22 @@ export async function proxyBillingRequest(request: Request, backendPath: string)
     searchParams,
     organizacionId: null,
     withUserToken: true,
+    responseType,
   })
   if (!response.ok) {
     return NextResponse.json(
       { error: response.error || "billing_request_failed" },
       { status: response.status ?? 500 },
     )
+  }
+  if (responseType === "text") {
+    return new NextResponse(String(response.data ?? ""), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="cobro-mensajes.csv"',
+      },
+    })
   }
   return NextResponse.json(response.data ?? { ok: true })
 }

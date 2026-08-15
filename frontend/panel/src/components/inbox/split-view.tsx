@@ -174,6 +174,7 @@ function getAttributionBadgeClass(kind: "regla" | "canal" | "campana"): string {
 const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
   minute: "2-digit",
+  hourCycle: "h23",
   timeZone: "UTC",
 });
 const SERVER_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
@@ -318,7 +319,14 @@ function formatThreadTimestampLabel(timestamp: string | null | undefined, hydrat
   const useUtc = !hydrated;
   const sameWeek = isSameCalendarWeek(date, now, useUtc);
   const weekdayFormatter = hydrated ? THREAD_WEEKDAY_FORMAT : new Intl.DateTimeFormat("es-MX", { weekday: "long", timeZone: "UTC" });
-  const timeFormatter = hydrated ? THREAD_TIME_FORMAT : new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+  const timeFormatter = hydrated
+    ? THREAD_TIME_FORMAT
+    : new Intl.DateTimeFormat("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        timeZone: "UTC",
+      });
 
   const time = timeFormatter.format(date);
   if (sameWeek) {

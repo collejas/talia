@@ -17,6 +17,7 @@ type CrmFetchOptions = {
   organizacionId?: string | null;
   usuarioId?: string | null;
   withUserToken?: boolean;
+  responseType?: "json" | "text";
 };
 
 export type CrmResult<T> =
@@ -72,7 +73,7 @@ export async function callCrmApi<T = unknown>(
 
   const method = options.method ?? (options.body ? "POST" : "GET");
   const headers: Record<string, string> = {
-    Accept: "application/json",
+    Accept: options.responseType === "text" ? "text/csv,text/plain" : "application/json",
     Authorization: `Bearer ${token}`,
     ...(options.headers ?? {}),
   };
@@ -236,6 +237,10 @@ export async function callCrmApi<T = unknown>(
   const text = await response.text();
   if (!text.length) {
     return { ok: true, data: ([] as unknown) as T };
+  }
+
+  if (options.responseType === "text") {
+    return { ok: true, data: text as T };
   }
 
   try {

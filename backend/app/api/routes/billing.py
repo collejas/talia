@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.routes.crm import require_user_token
@@ -93,6 +95,11 @@ class BillingMessageItem(BaseModel):
     fuente_registro: str
     conciliacion_estado: str
     creado_en: datetime
+    organizacion_nombre: str | None = None
+    periodo_label: str | None = None
+    contacto_nombre: str | None = None
+    contacto_telefono: str | None = None
+    contacto_correo: str | None = None
 
 
 class BillingMessageListResponse(BaseModel):
@@ -547,6 +554,85 @@ async def list_master_billing_messages(
         page=page,
         page_size=page_size,
         items=[BillingMessageItem.model_validate(row) for row in rows],
+    )
+
+
+def _billing_messages_csv(rows: list[dict[str, Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "fecha", "tenant", "periodo", "contacto", "telefono", "correo", "proveedor", "canal",
+        "direccion", "categoria_meta", "estado_proveedor", "facturable", "cargo_geoactiv_mxn",
+        "costo_meta_mxn", "total_consumo_mxn", "conciliacion_estado", "fuente_registro",
+        "mensaje_id_ref", "conversacion_id_ref", "periodo_id_ref", "tenant_id_ref",
+    ])
+    for row in rows:
+        writer.writerow([
+            row.get("creado_en"), row.get("organizacion_nombre") or "Tenant no identificado",
+            row.get("periodo_label") or "Periodo no disponible", row.get("contacto_nombre") or "Contacto no identificado",
+            row.get("contacto_telefono") or "", row.get("contacto_correo") or "", row.get("proveedor"), row.get("canal"),
+            row.get("direccion"), row.get("categoria_meta"), row.get("estado_proveedor"), row.get("facturable"),
+            row.get("cargo_app_importe"), row.get("costo_meta_importe"), row.get("costo_total_mensaje"),
+            row.get("conciliacion_estado"), row.get("fuente_registro"), row.get("mensaje_id"),
+            row.get("conversacion_id"), row.get("periodo_id"), row.get("organizacion_id"),
+        ])
+    return "\ufeff" + output.getvalue()
+
+
+async def _export_billing_messages_csv(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID | None,
+    desde: datetime | None,
+    hasta: datetime | None,
+    categoria_meta: str | None,
+    direccion: str | None,
+) -> Response:
+    try:
+        rows = await repo.export_billing_messages(
+            organizacion_id=organizacion_id,
+            fecha_desde=desde,
+            fecha_hasta=hasta,
+            categoria_meta=categoria_meta,
+            direccion=direccion,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_export_unavailable") from exc
+    return Response(
+        content=_billing_messages_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="cobro-mensajes.csv"'},
+    )
+
+
+@router.get("/messages/export")
+async def export_tenant_billing_messages(
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    categoria_meta: str | None = Query(default=None, max_length=32),
+    direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> Response:
+    organizacion_id = await _tenant_scope(repo)
+    return await _export_billing_messages_csv(
+        repo=repo, organizacion_id=organizacion_id, desde=desde, hasta=hasta,
+        categoria_meta=categoria_meta, direccion=direccion,
+    )
+
+
+@router.get("/master/messages/export")
+async def export_master_billing_messages(
+    organizacion_id: UUID | None = Query(default=None),
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    categoria_meta: str | None = Query(default=None, max_length=32),
+    direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> Response:
+    await _owner_scope(repo)
+    return await _export_billing_messages_csv(
+        repo=repo, organizacion_id=organizacion_id, desde=desde, hasta=hasta,
+        categoria_meta=categoria_meta, direccion=direccion,
     )
 
 

@@ -7933,6 +7933,7 @@ class CRMRepository:
         direccion: str | None = None,
         page: int = 1,
         page_size: int = 50,
+        enrich: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         safe_page = max(1, page)
         safe_size = max(1, min(page_size, 100))
@@ -7974,7 +7975,106 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar mensajes de cobro: {data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
-        return [row for row in data if isinstance(row, dict)], total
+        rows = [row for row in data if isinstance(row, dict)]
+        if enrich:
+            await self._enrich_billing_message_rows(rows)
+        return rows, total
+
+    async def _enrich_billing_message_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        organization_ids = sorted({str(row.get("organizacion_id")) for row in rows if row.get("organizacion_id")})
+        period_ids = sorted({str(row.get("periodo_id")) for row in rows if row.get("periodo_id")})
+        conversation_ids = sorted({str(row.get("conversacion_id")) for row in rows if row.get("conversacion_id")})
+        organizations: dict[str, dict[str, Any]] = {}
+        periods: dict[str, dict[str, Any]] = {}
+        conversations: dict[str, dict[str, Any]] = {}
+        people: dict[str, dict[str, Any]] = {}
+        try:
+            if organization_ids:
+                response = await self._request("GET", "/rest/v1/organizaciones", params={
+                    "id": f"in.({','.join(organization_ids)})",
+                    "select": "id,nombre,nombre_comercial,razon_social",
+                })
+                data = response.json() or []
+                organizations = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
+            if period_ids:
+                response = await self._request("GET", "/rest/v1/cobro_periodos", params={
+                    "id": f"in.({','.join(period_ids)})",
+                    "select": "id,fecha_inicio,fecha_fin,estado",
+                })
+                data = response.json() or []
+                periods = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
+            if conversation_ids:
+                response = await self._request("GET", "/rest/v1/conversaciones", params={
+                    "id": f"in.({','.join(conversation_ids)})",
+                    "select": "id,persona_id,nombre_remitente,correo_remitente",
+                })
+                data = response.json() or []
+                conversations = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
+            person_ids = sorted({str(row.get("persona_id")) for row in conversations.values() if row.get("persona_id")})
+            if person_ids:
+                response = await self._request("GET", "/rest/v1/personas", params={
+                    "id": f"in.({','.join(person_ids)})",
+                    "select": "id,nombre_completo,telefono_principal_e164,correo_principal,correo",
+                })
+                data = response.json() or []
+                people = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
+        except CRMRepositoryError:
+            # El reporte sigue disponible con referencias técnicas si falla el enriquecimiento.
+            organizations, periods, conversations, people = {}, {}, {}, {}
+
+        for row in rows:
+            organization = organizations.get(str(row.get("organizacion_id")), {})
+            period = periods.get(str(row.get("periodo_id")), {})
+            conversation = conversations.get(str(row.get("conversacion_id")), {})
+            person = people.get(str(conversation.get("persona_id")), {})
+            row["organizacion_nombre"] = (
+                organization.get("nombre_comercial") or organization.get("nombre") or organization.get("razon_social")
+            )
+            start = str(period.get("fecha_inicio") or "")[:10]
+            end = str(period.get("fecha_fin") or "")[:10]
+            row["periodo_label"] = f"{start} a {end}" if start and end else "Periodo no disponible"
+            row["contacto_nombre"] = (
+                person.get("nombre_completo")
+                or conversation.get("nombre_remitente")
+                or conversation.get("correo_remitente")
+                or "Contacto no identificado"
+            )
+            row["contacto_telefono"] = person.get("telefono_principal_e164")
+            row["contacto_correo"] = person.get("correo_principal") or person.get("correo") or conversation.get("correo_remitente")
+
+    async def export_billing_messages(
+        self,
+        *,
+        organizacion_id: UUID | None = None,
+        fecha_desde: datetime | None = None,
+        fecha_hasta: datetime | None = None,
+        categoria_meta: str | None = None,
+        direccion: str | None = None,
+        max_rows: int = 10000,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        page = 1
+        page_size = 100
+        while len(rows) < max_rows:
+            batch, _total = await self.list_billing_messages(
+                organizacion_id=organizacion_id,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                categoria_meta=categoria_meta,
+                direccion=direccion,
+                page=page,
+                page_size=min(page_size, max_rows - len(rows)),
+                enrich=False,
+            )
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            page += 1
+        rows = rows[:max_rows]
+        await self._enrich_billing_message_rows(rows)
+        return rows
 
     async def get_billing_reconciliation_counts(
         self,
