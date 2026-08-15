@@ -36,6 +36,7 @@ from app.services.high_demand_mode import high_demand_mode_runner
 from app.services.activity_reminder_jobs import activity_reminder_jobs_runner
 from app.services.sales_notification_jobs import sales_notification_jobs_runner
 from app.services.meta_delivery_reconciliation_jobs import meta_delivery_reconciliation_runner
+from app.services.message_billing_alert_jobs import message_billing_alert_runner
 from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
 from app.services.webchat_followups import (
     closure_rescue_runner as webchat_closure_rescue_runner,
@@ -78,6 +79,7 @@ async def app_lifespan(_: FastAPI):
     await deleted_busquedas_purge_runner.start()
     await sales_notification_jobs_runner.start()
     await meta_delivery_reconciliation_runner.start()
+    await message_billing_alert_runner.start()
     try:
         yield
     finally:
@@ -97,6 +99,10 @@ async def app_lifespan(_: FastAPI):
             _shutdown_with_timeout(
                 name="meta_delivery_reconciliation_runner",
                 coro=meta_delivery_reconciliation_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="message_billing_alert_runner",
+                coro=message_billing_alert_runner.shutdown(),
             ),
             _shutdown_with_timeout(
                 name="high_demand_mode_runner",

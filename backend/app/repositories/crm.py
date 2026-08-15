@@ -7823,6 +7823,28 @@ class CRMRepository:
             return data
         raise CRMRepositoryError(f"Respuesta inesperada al guardar configuración de cobro: {data!r}")
 
+    async def evaluate_message_billing_limit_alerts(self) -> int:
+        data = await self._rpc("evaluate_message_billing_limit_alerts", {})
+        if isinstance(data, int):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], int):
+            return data[0]
+        raise CRMRepositoryError(f"Respuesta inesperada al evaluar alertas de cobro: {data!r}")
+
+    async def list_billing_alerts(self, *, organizacion_id: UUID | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": "id,organizacion_id,periodo_id,tipo,severidad,estado,umbral,valor_actual,mensaje,creado_en,resuelto_en",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 100))),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        response = await self._request("GET", "/rest/v1/cobro_alertas", params=params)
+        data = response.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar alertas de cobro: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def list_billing_messages(
         self,
         *,

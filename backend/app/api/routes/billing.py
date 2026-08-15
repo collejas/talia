@@ -210,6 +210,31 @@ class BillingTenantConfigurationUpdate(BaseModel):
     suspension_automatica_por_limite: bool = False
 
 
+class BillingAlertItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    organizacion_id: UUID
+    periodo_id: UUID | None = None
+    tipo: str
+    severidad: str
+    estado: str
+    umbral: Decimal | None = None
+    valor_actual: Decimal | None = None
+    mensaje: str
+    creado_en: datetime
+    resuelto_en: datetime | None = None
+
+
+class BillingAlertResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    scope: str
+    organizacion_id: UUID | None = None
+    items: list[BillingAlertItem] = Field(default_factory=list)
+
+
 def get_billing_repository(user_token: str = Depends(require_user_token)) -> CRMRepository:
     try:
         return CRMRepository(user_token=user_token)
@@ -539,6 +564,31 @@ async def update_master_billing_configuration(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="billing_configuration_update_unavailable") from exc
     return BillingTenantConfiguration.model_validate(row)
+
+
+@router.get("/alerts", response_model=BillingAlertResponse)
+async def list_tenant_billing_alerts(
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAlertResponse:
+    organizacion_id = await _tenant_scope(repo)
+    try:
+        rows = await repo.list_billing_alerts(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_alerts_unavailable") from exc
+    return BillingAlertResponse(scope="tenant", organizacion_id=organizacion_id, items=[BillingAlertItem.model_validate(row) for row in rows])
+
+
+@router.get("/master/alerts", response_model=BillingAlertResponse)
+async def list_master_billing_alerts(
+    organizacion_id: UUID | None = Query(default=None),
+    repo: CRMRepository = Depends(get_billing_repository),
+) -> BillingAlertResponse:
+    await _owner_scope(repo)
+    try:
+        rows = await repo.list_billing_alerts(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="billing_master_alerts_unavailable") from exc
+    return BillingAlertResponse(scope="master", organizacion_id=organizacion_id, items=[BillingAlertItem.model_validate(row) for row in rows])
 
 
 @router.post("/master/tariff/app", response_model=BillingEffectiveRateResponse)

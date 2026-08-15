@@ -74,6 +74,7 @@ type Reconciliation = { scope: "tenant" | "master"; pendiente: number; vinculado
 type UnreconciledEvent = { id: string; organizacion_id: string | null; evento: string; proveedor_mensaje_id: string | null; conciliacion_motivo: string | null; creado_en: string }
 type UnreconciledResponse = { items: UnreconciledEvent[] }
 type BillingConfiguration = { limite_mensajes_periodo: number | null; limite_costo_app_periodo: number | string | null; limite_costo_meta_periodo: number | string | null; porcentaje_alerta_consumo: number; suspension_automatica_por_limite: boolean }
+type BillingAlert = { id: string; organizacion_id: string; tipo: string; severidad: "info" | "warning" | "critical"; estado: string; umbral: number | string | null; valor_actual: number | string | null; mensaje: string; creado_en: string }
 type Rate = { precio_mensaje?: number | string; precio_unitario?: number | string; moneda?: string; alcance?: string; categoria_meta?: string }
 type TenantOption = { id: string; nombre: string | null; nombre_comercial: string | null; activo: boolean }
 type PeriodPreset = "hoy" | "ayer" | "semana_actual" | "semana_pasada" | "mes_actual" | "bimestre" | "trimestre" | "semestre" | "ano_actual" | "ano_anterior" | "manual"
@@ -223,6 +224,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [automaticSuspension, setAutomaticSuspension] = React.useState(false)
   const [configurationSaving, setConfigurationSaving] = React.useState(false)
   const [configurationMessage, setConfigurationMessage] = React.useState<string | null>(null)
+  const [billingAlerts, setBillingAlerts] = React.useState<BillingAlert[]>([])
 
   const range = React.useMemo(() => periodRange(period, manualDesde, manualHasta), [manualDesde, manualHasta, period])
   const manualRangeInvalid = period === "manual" && !range
@@ -243,6 +245,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   if (range) { reconciliationParams.set("desde", range.desde); reconciliationParams.set("hasta", range.hasta) }
   const reconciliationUrl = `/api/billing${scopePrefix}/reconciliation${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
   const unreconciledEventsUrl = `/api/billing${scopePrefix}/reconciliation/events${reconciliationParams.toString() ? `?${reconciliationParams}` : ""}`
+  const alertsUrl = `/api/billing${scopePrefix}/alerts${isOwner && selectedTenant !== "all" ? `?organizacion_id=${encodeURIComponent(selectedTenant)}` : ""}`
 
   React.useEffect(() => {
     if (!isOwner) {
@@ -310,18 +313,23 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
         if (!response.ok) throw new Error(await errorText(response, "No se pudo consultar el detalle de conciliación."))
         return response.json() as Promise<UnreconciledResponse>
       }),
+      fetch(alertsUrl, { cache: "no-store", signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error(await errorText(response, "No se pudieron consultar las alertas."))
+        return response.json() as Promise<{ items?: BillingAlert[] }>
+      }),
       isOwner ? Promise.resolve(null) : fetch("/api/billing/tariff/effective", { cache: "no-store", signal: controller.signal }).then((response) => response.ok ? response.json() : null),
-    ]).then(([summaryData, reconciliationData, unreconciledData, rateData]) => {
+    ]).then(([summaryData, reconciliationData, unreconciledData, alertData, rateData]) => {
       setSummary(summaryData)
       setReconciliation(reconciliationData)
       setUnreconciledEvents(unreconciledData.items ?? [])
+      setBillingAlerts(alertData.items ?? [])
       setRate(rateData?.tarifa ?? null)
       setError(null)
     }).catch((fetchError) => {
       if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar billing.")
     }).finally(() => setLoading(false))
     return () => controller.abort()
-  }, [isOwner, manualRangeInvalid, reconciliationUrl, refreshToken, summaryUrl, unreconciledEventsUrl])
+  }, [alertsUrl, isOwner, manualRangeInvalid, reconciliationUrl, refreshToken, summaryUrl, unreconciledEventsUrl])
 
   React.useEffect(() => {
     if (manualRangeInvalid) {
@@ -439,6 +447,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       {reconciliation ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Conciliación de callbacks Meta</CardTitle><CardDescription className="text-xs">Los eventos no generan cargos por sí mismos; solo se contabiliza el mensaje local asociado.</CardDescription></CardHeader><CardContent className="grid grid-cols-3 gap-2 px-3 pb-3 pt-0 text-center text-sm"><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Pendientes</p><p className="font-semibold">{integer(reconciliation.pendiente)}</p></div><div className="rounded-md border p-2"><p className="text-xs text-muted-foreground">Vinculados</p><p className="font-semibold">{integer(reconciliation.vinculado)}</p></div><div className="rounded-md border border-amber-300/60 bg-amber-50/40 p-2 dark:bg-amber-950/20"><p className="text-xs text-muted-foreground">No conciliados</p><p className="font-semibold">{integer(reconciliation.no_conciliado)}</p></div></CardContent></Card> : null}
 
       {reconciliation?.no_conciliado ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Detalle de no conciliados</CardTitle><CardDescription className="text-xs">Últimos callbacks sin mensaje local. No representan cargos.</CardDescription></CardHeader><CardContent className="px-3 pb-3 pt-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Fecha</TableHead><TableHead>Evento</TableHead><TableHead>WAMID</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader><TableBody>{unreconciledEvents.map((item) => <TableRow key={item.id}>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id?.slice(0, 8) ?? "—"}…</TableCell> : null}<TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell><TableCell>{item.evento}</TableCell><TableCell className="max-w-64 truncate font-mono text-xs">{item.proveedor_mensaje_id ?? "—"}</TableCell><TableCell>{item.conciliacion_motivo ?? "—"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card> : null}
+
+      {billingAlerts.length ? <Card><CardHeader className="px-3 py-2"><CardTitle className="text-sm">Alertas de consumo</CardTitle><CardDescription className="text-xs">Alertas generadas al alcanzar el porcentaje o límite configurado.</CardDescription></CardHeader><CardContent className="space-y-2 px-3 pb-3 pt-0">{billingAlerts.slice(0, 10).map((alert) => <div key={alert.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm"><div><Badge variant={alert.severidad === "critical" ? "destructive" : "secondary"}>{alert.severidad}</Badge><span className="ml-2">{alert.mensaje}</span></div><span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(alert.creado_en).toLocaleString("es-MX")}</span></div>)}</CardContent></Card> : null}
 
       <Card><CardHeader><CardTitle>Detalle de tarifas</CardTitle><CardDescription>Registro auditable por mensaje; los eventos de entrega no generan cargos adicionales.</CardDescription></CardHeader><CardContent>
         {messageLoading ? <Skeleton className="h-48 w-full" /> : messages?.items.length ? <><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead>{isOwner ? <TableHead>Tenant</TableHead> : null}<TableHead>Dirección</TableHead><TableHead>Meta</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">GEOACTIV</TableHead><TableHead className="text-right">Meta</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{messages.items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-nowrap">{new Date(item.creado_en).toLocaleString("es-MX")}</TableCell>{isOwner ? <TableCell className="font-mono text-xs">{item.organizacion_id.slice(0, 8)}…</TableCell> : null}<TableCell><Badge variant={item.direccion === "saliente" ? "default" : "secondary"}>{item.direccion}</Badge></TableCell><TableCell><div>{item.categoria_meta}</div><span className="text-xs text-muted-foreground">{item.proveedor} · {item.canal}</span></TableCell><TableCell>{item.estado_proveedor}</TableCell><TableCell className="text-right">{money(item.cargo_app_importe)}</TableCell><TableCell className="text-right">{money(item.costo_meta_importe)}</TableCell><TableCell className="text-right font-medium">{money(item.costo_total_mensaje)}</TableCell></TableRow>)}</TableBody></Table></div><div className="mt-4 flex items-center justify-between text-sm text-muted-foreground"><span>{integer(messages.total)} mensajes</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div></div></> : <div className="py-12 text-center text-sm text-muted-foreground">Aún no hay mensajes contabilizados con estos filtros.</div>}

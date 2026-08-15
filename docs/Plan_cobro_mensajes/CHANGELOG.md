@@ -70,6 +70,18 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación: rutas de billing `3 passed`; React Doctor `100/100`.
 - Falta desplegar backend y panel para activar esta configuración.
 
+### Generación y visualización de alertas de consumo — Listo para deploy
+
+- Se aplicó `supabase/migrations/20260815_232000_message_billing_limit_alerts.sql`.
+- Se agregó evaluación periódica de los periodos abiertos y configuración de cada tenant.
+- Se generan alertas `warning` al alcanzar el porcentaje configurado y `critical` al alcanzar el límite.
+- La generación es idempotente por tenant, periodo y métrica; no duplica alertas por ciclo.
+- Las alertas se muestran en `/settings/cobro-mensajes` y se consultan con `/billing/alerts` o `/billing/master/alerts`.
+- La suspensión automática no se ejecuta todavía; la opción permanece desactivada por defecto.
+- La primera evaluación en producción devolvió `0` alertas, porque no hay límites configurados que hayan sido superados.
+- Validación: rutas de billing `3 passed`; React Doctor `100/100`.
+- Falta desplegar backend y panel para activar el evaluador y la visualización.
+
 ## 2026-08-14
 
 ### Reparación de KPI Hilos activos — Completado

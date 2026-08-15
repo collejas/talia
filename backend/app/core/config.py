@@ -857,6 +857,13 @@ class Settings(BaseSettings):
             "TALIA_META_DELIVERY_RECONCILIATION_BATCH_SIZE",
         ),
     )
+    billing_alerts_interval_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Intervalo para evaluar alertas de límites de cobro.",
+        validation_alias=AliasChoices("BILLING_ALERTS_INTERVAL_SECONDS", "TALIA_BILLING_ALERTS_INTERVAL_SECONDS"),
+    )
     busquedas_purge_runner_interval_seconds: int = Field(
         default=300,
         ge=30,
