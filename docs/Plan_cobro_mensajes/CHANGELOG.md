@@ -50,6 +50,22 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Validación real en Supabase: el rango `2026-08-15` devuelve `2,372` registros y la primera página no contiene proveedor `twilio`.
 - Validación automatizada: `11 passed`, compilación Python y `git diff --check` correctos.
 
+### Cierre manual con RLS — Corregido
+
+- El cierre del periodo `2026-07-01` fallaba aunque estaba vencido y abierto.
+- Se actualizó mediante MCP Supabase la función `close_message_billing_period` para operar con `row_security = off` y validar la fila retornada explícitamente.
+- El periodo solicitado quedó cerrado correctamente en Supabase.
+- Validación: backend `6 passed`, compilación Python y `git diff --check` correctos.
+- La función se dejó como SQL `UPDATE ... RETURNING` para evitar el fallo del bloque PL/pgSQL al resolver la fila.
+- Validación MCP: el periodo `2026-03-01 a 2026-04-01` también quedó cerrado correctamente.
+- Validación MCP adicional: abril, mayo y junio quedaron cerrados correctamente.
+
+### Cierre PUI y warning de hidratación — Corregido
+
+- Se cerraron mediante MCP los periodos vencidos de PUI-Geoactiv de mayo, junio y julio.
+- Se corrigió el botón `Actualizar` para que mantenga el mismo atributo `disabled` durante SSR e hidratación.
+- Validación: TypeScript correcto, React Doctor `100/100`, compilación Python y `git diff --check` correctos.
+
 ### Conciliación y separación de callbacks Meta — Completado
 
 - Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.

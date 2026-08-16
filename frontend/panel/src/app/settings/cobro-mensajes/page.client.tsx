@@ -475,7 +475,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
           <h1 className="text-3xl font-semibold tracking-tight">Cobro de mensajes</h1>
           <p className="max-w-3xl text-sm text-muted-foreground">Cada mensaje entrante o saliente genera el cargo GEOACTIV. El hilo agrupa la actividad; el costo Meta se muestra por separado.</p>
         </div>
-        <div className="flex flex-wrap gap-2"><a className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium ${manualRangeInvalid || !hydrated ? "pointer-events-none opacity-50" : "hover:bg-accent"}`} href={hydrated && !manualRangeInvalid ? exportUrl : "#"} aria-disabled={manualRangeInvalid || !hydrated}><IconSend size={16} /> Exportar CSV</a><Button variant="outline" onClick={() => setRefreshToken((value) => value + 1)} disabled={loading || messageLoading}><IconRefresh size={16} /> Actualizar</Button></div>
+        <div className="flex flex-wrap gap-2"><a className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium ${manualRangeInvalid || !hydrated ? "pointer-events-none opacity-50" : "hover:bg-accent"}`} href={hydrated && !manualRangeInvalid ? exportUrl : "#"} aria-disabled={manualRangeInvalid || !hydrated}><IconSend size={16} /> Exportar CSV</a><Button variant="outline" onClick={() => setRefreshToken((value) => value + 1)} disabled={!hydrated || loading || messageLoading}><IconRefresh size={16} /> Actualizar</Button></div>
       </header>
 
       {error ? <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><IconAlertTriangle size={17} />{error}</div> : null}
