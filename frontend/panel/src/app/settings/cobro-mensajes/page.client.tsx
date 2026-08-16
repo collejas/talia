@@ -510,8 +510,8 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       {loading ? <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}</div> : s ? <section aria-labelledby="billing-kpis-title" className="space-y-3"><h2 id="billing-kpis-title" className="text-xl font-semibold">KPI&apos;s</h2><div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <KpiCard label="Mensajes" value={integer(s.mensajes_cantidad)} detail={`${integer(s.mensajes_entrantes_cantidad)} entrantes · ${integer(s.mensajes_salientes_cantidad)} salientes`} icon={IconMessageCircle} />
         <KpiCard label="Hilos activos" value={integer(s.hilos_con_actividad_cantidad)} detail={`${integer(s.conversiones_cantidad)} conversiones`} icon={IconChartBar} />
-        <KpiCard label="Tarifa efectiva" value={isOwner ? "Global" : money(rate?.precio_mensaje)} detail={isOwner ? "Vista consolidada" : rate?.alcance === "tenant" ? "Override particular" : "Tarifa global"} icon={IconSettings} />
-        <KpiCard label="Cargo GEOACTIV" value={money(s.cargo_app_total)} detail="$0.09 por mensaje según tarifa aplicada" icon={IconCoin} />
+        <KpiCard label="Tarifa efectiva" value={isOwner ? "Global" : `${money(rate?.precio_mensaje)} + IVA`} detail={isOwner ? "Vista consolidada · precio antes de IVA" : rate?.alcance === "tenant" ? "Override particular · precio antes de IVA" : "Tarifa global · precio antes de IVA"} icon={IconSettings} />
+        <KpiCard label="Cargo GEOACTIV" value={money(s.cargo_app_total)} detail="Precio neto; se cobra más IVA" icon={IconCoin} />
         <KpiCard label="Costo Meta" value={money(s.costo_meta_total)} detail="Informativo; lo paga el tenant a Meta" icon={IconSend} />
         <KpiCard label="Total consumo" value={money(s.total_consumo)} detail="GEOACTIV + costo Meta" icon={IconCoin} />
       </div></section> : null}

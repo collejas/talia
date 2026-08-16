@@ -26,7 +26,7 @@ El sistema deberá permitir que:
 
 La regla comercial base es:
 
-- cobrar **$0.09 MXN por cada mensaje entrante o saliente**;
+- cobrar **$0.09 MXN más IVA por cada mensaje entrante o saliente**;
 - cobrar el mismo importe sin importar quién inició el hilo;
 - cobrar el mismo importe sin importar si el mensaje es `marketing`, `utility`, `authentication`, `service` u otra categoría de Meta;
 - no cobrar un importe adicional por crear, abrir, mantener o cerrar un hilo;
@@ -36,7 +36,7 @@ Además, el sistema tendrá dos importes independientes:
 
 ```text
 costo_meta_mxn = tarifa publicada por Meta, pagada directamente por el tenant a Meta
-cargo_app_mxn = cargo propio de GEOACTIV, inicialmente $0.09 MXN por mensaje
+cargo_app_mxn = cargo propio de GEOACTIV, inicialmente $0.09 MXN por mensaje, más IVA
 costo_total_mensaje_mxn = costo_meta_mxn + cargo_app_mxn
 ```
 
@@ -56,8 +56,8 @@ El `cargo_app_mxn` sí será configurable por el dueño de la aplicación:
 La unidad de cobro será un mensaje individual persistido en `mensajes`.
 
 ```text
-mensaje entrante aceptado: $0.09 MXN
-mensaje saliente aceptado: $0.09 MXN
+mensaje entrante aceptado: $0.09 MXN + IVA
+mensaje saliente aceptado: $0.09 MXN + IVA
 ```
 
 Ejemplo de una conversación:
@@ -678,6 +678,8 @@ Reglas:
 ```text
 subtotal_mensajes = mensajes_entrantes_facturables * 0.09
                    + mensajes_salientes_facturables * 0.09
+impuesto_iva = subtotal_mensajes * tasa_iva
+total_con_iva = subtotal_mensajes + impuesto_iva + ajustes_total
 ajustes_total = suma de cobro_ajustes
 total = subtotal_mensajes + ajustes_total
 costo_meta_periodo = suma de costo_meta_importe
@@ -839,7 +841,7 @@ El plan inicial cubre WhatsApp/Meta. Email, Messenger, Webchat y otros canales d
 
 ### Decisión 4: impuestos
 
-Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido. La base debe guardar subtotal, impuesto y total por separado si se requiere facturación fiscal.
+Decisión tomada: los $0.09 MXN son precio antes de IVA y el tenant pagará $0.09 MXN más IVA por mensaje. Cuando se active la facturación fiscal, la base deberá guardar subtotal, impuesto y total por separado.
 
 ## 21. Fases de implementación
 
@@ -849,7 +851,7 @@ Definir si los $0.09 MXN son precio antes de IVA o precio final con IVA incluido
 - aprobar la separación entre costo Meta informativo y cargo de GEOACTIV;
 - confirmar tarifa inicial de Meta de $0.5614 MXN;
 - confirmar fecha de inicio;
-- confirmar precio con o sin IVA.
+- ~~confirmar precio con o sin IVA.~~ Confirmado: precio antes de IVA.
 
 ### Fase 2: base de datos
 
@@ -936,7 +938,7 @@ El plan estará listo para operar cuando:
 
 **Documento base para aprobación comercial y técnica.**
 
-La base de datos, el primer servicio backend de contabilización y el backfill histórico ya están aplicados para WhatsApp/Meta. Todavía no se activa facturación automática. La regla implementada es cobrar $0.09 MXN por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional.
+La base de datos, el primer servicio backend de contabilización y el backfill histórico ya están aplicados para WhatsApp/Meta. Todavía no se activa facturación automática. La regla comercial definida es cobrar $0.09 MXN más IVA por cada mensaje entrante o saliente aceptado por el proveedor; el hilo solamente agrupa los mensajes y no genera un cargo adicional. El ledger actual conserva el cargo neto de $0.09 MXN; el IVA se incorporará al activar la facturación fiscal.
 
 El backfill histórico insertó 2,018 de 2,603 mensajes. Los 585 excluidos no tenían identificador del proveedor. La información Meta disponible permitió recuperar categorías service y referral_conversion no facturables, pero no permitió identificar mensajes marketing históricos facturables.
 

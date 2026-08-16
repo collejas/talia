@@ -534,3 +534,10 @@ Pendiente de API:
 - Se clasificaron `450` mensajes Meta entrantes como conversación sin tarifa Meta; el caso de Alfonso Nava queda correctamente identificado en esta categoría.
 - Se mantuvo el primer envío de prospección como `marketing` con costo Meta `$0.5614` y las respuestas salientes posteriores como `service` sin costo Meta.
 - Los KPI con fecha ahora usan `mensajes.creado_en`, igual que el detalle, para no incluir backfills por su fecha de inserción en el ledger.
+
+## 2026-08-16 — Decisión comercial de IVA
+
+- Confirmado: la tarifa GEOACTIV de `$0.09 MXN` es precio neto y se cobrará `$0.09 MXN + IVA` por mensaje.
+- El ledger actual conserva el cargo neto de `$0.09 MXN`; el IVA no se calcula todavía porque la facturación fiscal está fuera del alcance actual.
+- El panel ahora identifica la tarifa efectiva y el cargo GEOACTIV como importes antes de IVA.
+- Pendiente para la fase de facturación: agregar subtotal, IVA, total fiscal y la tasa aplicable por periodo/documento.
