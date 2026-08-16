@@ -159,7 +159,7 @@ def _extract_plain_text(msg: Message) -> str | None:
     return None
 
 
-def _extract_html_text(msg: Message) -> str | None:
+def _extract_html_value(msg: Message) -> str | None:
     html_value: str | None = None
     if msg.is_multipart():
         for part in msg.walk():
@@ -193,6 +193,11 @@ def _extract_html_text(msg: Message) -> str | None:
                     html_value = payload.decode(charset, errors="replace")
                 except Exception:
                     html_value = payload.decode("utf-8", errors="replace")
+    return html_value or None
+
+
+def _extract_html_text(msg: Message) -> str | None:
+    html_value = _extract_html_value(msg)
     if not html_value:
         return None
     text = HTML_TAG_RE.sub(" ", html_value)
@@ -226,6 +231,7 @@ def _message_to_inbound_event(message_bytes: bytes) -> dict[str, Any] | None:
             received_at = date_header
 
     body_text = _extract_plain_text(parsed) or _extract_html_text(parsed)
+    body_html = _extract_html_value(parsed)
     if not body_text:
         body_text = "(correo entrante sin texto)"
 
@@ -233,6 +239,7 @@ def _message_to_inbound_event(message_bytes: bytes) -> dict[str, Any] | None:
         "from": sender_email,
         "subject": subject,
         "text": body_text,
+        "body_html": body_html,
         "Message-Id": message_id,
         "In-Reply-To": in_reply_to,
         "References": references,
@@ -496,6 +503,7 @@ async def _record_unmatched_inbox_email(
         "in_reply_to": in_reply_to,
         "references": references,
         "received_at": received_at,
+        "body_html": event.get("body_html"),
     }
     message_data = {key: value for key, value in message_data.items() if value not in (None, "")}
     await repo.insert_inbox_message(

@@ -490,6 +490,7 @@ async def _record_inbound_email_message(
         "sender_email": _clean_text(inbound.get("sender_email")),
         "sender_name": _clean_text(inbound.get("sender_name")),
         "received_at": _clean_text(inbound.get("received_at")),
+        "body_html": _clean_text(inbound.get("body_html")),
         "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
         "envio_id": str(envio.get("id")) if envio.get("id") else None,
         "prospecto_id": str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None,

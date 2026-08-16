@@ -819,6 +819,49 @@ function isMessageSetRicher(candidate: InboxMessage[], current: InboxMessage[]):
   return Date.parse(candidateLast) >= Date.parse(currentLast);
 }
 
+function isHtmlEmailBody(value: string): boolean {
+  return /<!doctype\s+html|<\/?[a-z][^>]*>/i.test(value);
+}
+
+function sanitizeEmailHtml(value: string): string | null {
+  if (typeof window === "undefined" || !value.trim() || !isHtmlEmailBody(value)) return null;
+
+  const document = new DOMParser().parseFromString(value, "text/html");
+  document.querySelectorAll("script, iframe, object, embed, form, base, meta[http-equiv]").forEach((node) => {
+    node.remove();
+  });
+  document.querySelectorAll("*").forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+      const attributeValue = attribute.value.trim().toLowerCase();
+      if (name.startsWith("on") || name === "srcdoc") {
+        element.removeAttribute(attribute.name);
+        continue;
+      }
+      if ((name === "href" || name === "src" || name === "action") &&
+        !/^(https?:|mailto:|tel:|data:image\/(?:png|jpe?g|gif|webp);)/i.test(attributeValue)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  });
+
+  return document.body.innerHTML.trim() || null;
+}
+
+function buildEmailFrameDocument(html: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { color: #172033; font: 14px/1.55 Arial, sans-serif; padding: 20px; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+    div, p, span, a, td, th, li { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+    img { max-width: 100% !important; height: auto; }
+    a { color: #2563eb; }
+    table { width: 100% !important; max-width: 100% !important; table-layout: fixed; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style></head><body>${html}</body></html>`;
+}
+
 function mergeMessageHistory(candidate: InboxMessage[], current: InboxMessage[]): InboxMessage[] {
   if (isMessageSetRicher(candidate, current)) {
     return candidate;
@@ -844,6 +887,15 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
   const displayAuthor =
     isAgent && !isHumanAgent ? "Tal-IA" : isHumanAgent ? humanAuthor ?? message.author : message.author;
   const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
+  const subject = typeof metadata?.subject === "string" ? metadata.subject.trim() : "";
+  const rawBody = message.body.join("\n");
+  const isEmail = metadata?.channel === "correo" || isHtmlEmailBody(rawBody);
+  const emailHtmlValue = typeof metadata?.body_html === "string"
+    ? metadata.body_html
+    : typeof metadata?.bodyHtml === "string"
+      ? metadata.bodyHtml
+      : isEmail ? rawBody : "";
+  const sanitizedEmailHtml = isHydrated && isEmail ? sanitizeEmailHtml(emailHtmlValue) : null;
 
   return (
     <div className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
@@ -858,11 +910,22 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
         <span>{timestampLabel || "—"}</span>
       </div>
       <div
-        className={`max-w-xl whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs leading-snug shadow-none ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+        className={`min-w-0 max-w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-xs leading-snug shadow-none ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
       >
-        {message.body.map((paragraph, index) => (
-          <p key={index}>{paragraph}</p>
-        ))}
+        {subject && <div className="mb-2 border-b border-current/15 pb-2 text-[11px] font-semibold">{subject}</div>}
+        {sanitizedEmailHtml ? (
+          <iframe
+            title={subject || "Contenido del correo"}
+            srcDoc={buildEmailFrameDocument(sanitizedEmailHtml)}
+            sandbox=""
+            referrerPolicy="no-referrer"
+            className="h-[420px] w-full min-w-0 rounded-md border-0 bg-white"
+          />
+        ) : (
+          message.body.map((paragraph, index) => (
+            <p key={index} className="max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{paragraph}</p>
+          ))
+        )}
       </div>
       {message.attachments.length ? (
         <div className="mt-1 flex w-full max-w-xl flex-col gap-1 text-[10px]">
