@@ -233,7 +233,7 @@ UUID como información principal.
 - Actualizar entregas desde callbacks.
 - Registrar una sola primera respuesta. **Parcialmente completado:** las respuestas entrantes activan la sincronización por conversación.
 - Enlazar oportunidad y etapa ganada.
-- Crear resumen, exportación y pendientes de conciliación.
+- Crear resumen, exportación y pendientes de conciliación. **Resumen completado:** `GET /crm/demografia/campanas-conversion` devuelve KPI por campaña y totales usando costos reales del ledger.
 
 ### Fase 4 — Frontend
 

@@ -224,3 +224,15 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La función conserva la idempotencia cuando se ejecuta con ventana corta: un envío nuevo solo es inicial si todavía no existe un inicial para esa campaña/conversación.
 - Se actualizó la migración remota de la función para soportar esta ejecución incremental sin cambiar la responsabilidad del ledger.
 - Verificación local: `py_compile` de `storage.py` y `crm.py`, además de `git diff --check`. La suite pytest no pudo ejecutarse porque este entorno no contiene pytest ni `.venv`.
+
+## 2026-08-16 — Resumen backend de conversión por campaña
+
+- Se aplicó `supabase/migrations/20260816_252000_campaign_conversion_summary_rpc.sql`.
+- Se creó `campana_conversion_resumen_rango`, restringida a `service_role`, con filtros de tenant, campaña, rango, límite y offset.
+- El resumen agrupa por campaña y cuenta conversaciones únicas; no cuenta hilos técnicos como conversiones.
+- El costo se calcula sumando los cargos de `cobro_mensajes` de cada conversación atribuida, incluyendo cargos GEOACTIV y Meta existentes.
+- Se agregó `GET /crm/demografia/campanas-conversion` y su BFF `GET /api/crm/mapa-conversion/campaign-conversion`.
+- El contrato devuelve enviados, entregados, conversaciones, respuestas, oportunidades, clientes, costo total, CPO, CAC, tasas y pendientes de cobro.
+- Validación real: master `WHATSAPP` reportó 113 envíos, 3 respuestas, 2 oportunidades y `$86.9282 MXN`; IMLUX reportó 44 envíos, 2 respuestas, 2 oportunidades y `$29.2016 MXN`.
+- Verificación adicional: `py_compile` y `npx tsc --noEmit` pasaron.
+- Pendiente: conectar este contrato con las tarjetas y tabla de `mapa-de-conversion?vista=campaigns`.

@@ -22871,6 +22871,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_campana_whatsapp_metricas_rango_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_campana_conversion_resumen_rango(
+        self,
+        *,
+        organizacion_id: UUID,
+        campana_id: UUID | None = None,
+        date_from_iso: str | None = None,
+        date_to_iso: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Obtiene el resumen comercial de campañas desde el ledger atribuido."""
+        payload: dict[str, Any] = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_campana_id": str(campana_id) if campana_id else None,
+            "p_desde": date_from_iso,
+            "p_hasta": date_to_iso,
+            "p_limite": max(1, min(int(limit), 1000)),
+            "p_offset": max(0, int(offset)),
+        }
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/campana_conversion_resumen_rango",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"campana_conversion_resumen_rango_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

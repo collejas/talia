@@ -4355,6 +4355,18 @@ class ProspeccionMetricasQuery(BaseModel):
     lite: bool = Field(default=False)
 
 
+class CampanaConversionResumenQuery(BaseModel):
+    """Filtros del resumen comercial de campañas WhatsApp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    campana_id: UUID | None = Field(default=None)
+    date_from: date | None = Field(default=None)
+    date_to: date | None = Field(default=None)
+    limit: int = Field(default=100, ge=1, le=1000)
+    offset: int = Field(default=0, ge=0)
+
+
 class ProspeccionCampanaUpdatePayload(BaseModel):
     """Edita una campaña de prospección y su lote más reciente."""
 
@@ -42275,6 +42287,135 @@ async def demografia_campanas_atribucion(
         "ok": True,
         "campaign_rows": campaign_rows,
         "whatsapp_rows": whatsapp_rows,
+    }
+
+
+@router.get("/demografia/campanas-conversion")
+async def demografia_campanas_conversion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    params: CampanaConversionResumenQuery = Depends(),
+) -> dict[str, Any]:
+    """Resumen comercial: conversaciones, conversiones y costo por campaña."""
+    effective_timezone, timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from_dt, date_to_exclusive = local_date_range_to_utc(
+        date_from=params.date_from,
+        date_to=params.date_to,
+        timezone_name=effective_timezone,
+    )
+    date_to_dt = (
+        date_to_exclusive - timedelta(microseconds=1)
+        if date_to_exclusive is not None
+        else None
+    )
+    if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
+        raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
+
+    try:
+        rows = await repo.get_campana_conversion_resumen_rango(
+            organizacion_id=organizacion_id,
+            campana_id=params.campana_id,
+            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+            limit=params.limit,
+            offset=params.offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    def numeric(row: dict[str, Any], key: str) -> float:
+        try:
+            return float(row.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def integer(row: dict[str, Any], key: str) -> int:
+        try:
+            return int(row.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = {
+            "campana_id": str(row.get("campana_id")) if row.get("campana_id") else None,
+            "campana_nombre": _clean_text(row.get("campana_nombre")) or "Sin campaña",
+            "canal": _clean_text(row.get("canal")) or None,
+            "envios": integer(row, "envios"),
+            "entregados": integer(row, "entregados"),
+            "conversaciones": integer(row, "conversaciones"),
+            "respondieron": integer(row, "respondieron"),
+            "oportunidades": integer(row, "oportunidades"),
+            "clientes": integer(row, "clientes"),
+            "costo_total": numeric(row, "costo_total"),
+            "costo_por_oportunidad": numeric(row, "costo_por_oportunidad"),
+            "costo_adquisicion": numeric(row, "costo_adquisicion"),
+            "tasa_entrega_pct": numeric(row, "tasa_entrega_pct"),
+            "tasa_respuesta_pct": numeric(row, "tasa_respuesta_pct"),
+            "tasa_cierre_pct": numeric(row, "tasa_cierre_pct"),
+            "pendientes_cobro": integer(row, "pendientes_cobro"),
+        }
+        items.append(item)
+
+    totals = {
+        "campanas": len(items),
+        "envios": sum(item["envios"] for item in items),
+        "entregados": sum(item["entregados"] for item in items),
+        "conversaciones": sum(item["conversaciones"] for item in items),
+        "respondieron": sum(item["respondieron"] for item in items),
+        "oportunidades": sum(item["oportunidades"] for item in items),
+        "clientes": sum(item["clientes"] for item in items),
+        "costo_total": round(sum(item["costo_total"] for item in items), 4),
+        "pendientes_cobro": sum(item["pendientes_cobro"] for item in items),
+    }
+    totals["costo_por_oportunidad"] = round(
+        totals["costo_total"] / totals["oportunidades"], 4
+        if totals["oportunidades"]
+        else 0,
+    )
+    totals["costo_adquisicion"] = round(
+        totals["costo_total"] / totals["clientes"] if totals["clientes"] else 0,
+        4,
+    )
+    totals["tasa_entrega_pct"] = round(
+        totals["entregados"] / totals["envios"] * 100 if totals["envios"] else 0,
+        2,
+    )
+    totals["tasa_respuesta_pct"] = round(
+        totals["respondieron"] / totals["conversaciones"] * 100
+        if totals["conversaciones"]
+        else 0,
+        2,
+    )
+    totals["tasa_cierre_pct"] = round(
+        totals["clientes"] / totals["oportunidades"] * 100
+        if totals["oportunidades"]
+        else 0,
+        2,
+    )
+
+    return {
+        "ok": True,
+        "items": items,
+        "totales": totals,
+        "range": {
+            "date_from": date_from_dt.isoformat() if date_from_dt else None,
+            "date_to": date_to_dt.isoformat() if date_to_dt else None,
+            "timezone": effective_timezone,
+            "timezone_source": timezone_source,
+        },
+        "pagination": {
+            "limit": params.limit,
+            "offset": params.offset,
+            "returned": len(items),
+        },
     }
 
 
