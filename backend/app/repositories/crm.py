@@ -7996,21 +7996,21 @@ class CRMRepository:
         people: dict[str, dict[str, Any]] = {}
         try:
             if organization_ids:
-                response = await self._request("GET", "/rest/v1/organizaciones", params={
+                response = await self._request_service_role("GET", "/rest/v1/organizaciones", params={
                     "id": f"in.({','.join(organization_ids)})",
                     "select": "id,nombre,nombre_comercial,razon_social",
                 })
                 data = response.json() or []
                 organizations = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
             if period_ids:
-                response = await self._request("GET", "/rest/v1/cobro_periodos", params={
+                response = await self._request_service_role("GET", "/rest/v1/cobro_periodos", params={
                     "id": f"in.({','.join(period_ids)})",
                     "select": "id,fecha_inicio,fecha_fin,estado",
                 })
                 data = response.json() or []
                 periods = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
             if conversation_ids:
-                response = await self._request("GET", "/rest/v1/conversaciones", params={
+                response = await self._request_service_role("GET", "/rest/v1/conversaciones", params={
                     "id": f"in.({','.join(conversation_ids)})",
                     "select": "id,persona_id,nombre_remitente,correo_remitente",
                 })
@@ -8018,15 +8018,17 @@ class CRMRepository:
                 conversations = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
             person_ids = sorted({str(row.get("persona_id")) for row in conversations.values() if row.get("persona_id")})
             if person_ids:
-                response = await self._request("GET", "/rest/v1/personas", params={
+                response = await self._request_service_role("GET", "/rest/v1/personas", params={
                     "id": f"in.({','.join(person_ids)})",
                     "select": "id,nombre_completo,telefono_principal_e164,correo_principal,correo",
                 })
                 data = response.json() or []
                 people = {str(row["id"]): row for row in data if isinstance(row, dict) and row.get("id")}
         except CRMRepositoryError:
-            # El reporte sigue disponible con referencias técnicas si falla el enriquecimiento.
-            organizations, periods, conversations, people = {}, {}, {}, {}
+            # Mantener los enriquecimientos ya obtenidos. Un fallo puntual en
+            # personas o conversaciones no debe borrar el nombre del tenant y
+            # del periodo que sí pudieron resolverse.
+            pass
 
         for row in rows:
             organization = organizations.get(str(row.get("organizacion_id")), {})

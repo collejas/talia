@@ -66,6 +66,20 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - Se corrigió el botón `Actualizar` para que mantenga el mismo atributo `disabled` durante SSR e hidratación.
 - Validación: TypeScript correcto, React Doctor `100/100`, compilación Python y `git diff --check` correctos.
 
+### Enriquecimiento parcial del detalle PUI — Corregido
+
+- La base conserva el tenant `Pui-Geoactiv` y sus relaciones de conversación/persona.
+- El backend ya no elimina todos los nombres resueltos cuando falla una consulta secundaria puntual.
+- Se conservarán tenant y periodo disponibles, y se mostrará el contacto cuando exista la relación.
+- Validación: backend `6 passed`, compilación Python y `git diff --check` correctos.
+
+### Enriquecimiento con RLS para PUI e IMLUX — Corregido
+
+- El ledger se sigue leyendo con el JWT y su alcance tenant-aware.
+- Las consultas secundarias de nombres se ejecutan con service role únicamente sobre los IDs de las filas ya autorizadas, evitando que RLS oculte tenant y contacto.
+- Verificación de datos: IMLUX tiene `82` cargos y PUI tiene `214` cargos con relaciones existentes.
+- Validación: backend `6 passed`, compilación Python y `git diff --check` correctos.
+
 ### Conciliación y separación de callbacks Meta — Completado
 
 - Se confirmó en producción que los `103` callbacks Meta huérfanos no tenían mensaje local recuperable por organización + WAMID.
