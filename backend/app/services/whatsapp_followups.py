@@ -95,6 +95,41 @@ async def schedule_customer_followup(
     )
 
 
+async def schedule_conversation_close(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    organizacion_id: str | None,
+    opportunity_id: str | None = None,
+    reason: str = "close_lead_timeout",
+) -> dict[str, Any] | None:
+    """Programa el cierre diferido de una conversación WhatsApp."""
+
+    conversation_uuid = _safe_uuid(conversation_id)
+    persona_uuid = _safe_uuid(persona_id)
+    org_uuid = _safe_uuid(organizacion_id)
+    if not conversation_uuid or not persona_uuid or not org_uuid:
+        logger.warning(
+            "whatsapp.conversation_close.schedule_invalid_ids",
+            extra={"conversation_id": conversation_id, "reason": reason},
+        )
+        return None
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    due_at = datetime.now(timezone.utc) + timedelta(
+        minutes=max(1, runtime.close_after_lead_minutes)
+    )
+    return await _schedule_next_followup_job(
+        repo=CRMRepository(),
+        organizacion_id=org_uuid,
+        conversation_id=conversation_uuid,
+        persona_id=persona_uuid,
+        opportunity_id=_safe_uuid(opportunity_id),
+        due_at=due_at,
+        next_action="escalate",
+        scheduled_reason=reason,
+    )
+
+
 async def cancel_followup_jobs_for_inbound(*, conversation_id: str, reason: str = "customer_replied") -> int:
     conversation_uuid = _safe_uuid(conversation_id)
     if not conversation_uuid:
@@ -306,6 +341,38 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
         await repo.worker_mark_whatsapp_followup_done(
             job_id=job_id,
             result={"scheduled_reason": "conversation_missing"},
+        )
+        return
+
+    if str(row.get("scheduled_reason") or "").strip().lower() == "close_lead_timeout":
+        conversation_state = str(conversation.get("estado") or "").strip().lower()
+        last_inbound = _parse_ts(conversation.get("ultimo_entrante_en"))
+        job_created_at = _parse_ts(row.get("created_at"))
+        if conversation_state == "cerrada" or (
+            last_inbound is not None
+            and job_created_at is not None
+            and last_inbound > job_created_at
+        ):
+            await repo.worker_mark_whatsapp_followup_done(
+                job_id=job_id,
+                result={"scheduled_reason": "close_canceled_by_activity"},
+            )
+            return
+        try:
+            await storage.update_conversation(
+                str(conversation_id),
+                {"estado": "cerrada"},
+            )
+        except StorageError as exc:
+            await _fail_job(repo=repo, row=row, error=f"conversation_close_failed:{exc}")
+            return
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "conversation_closed"},
+        )
+        logger.info(
+            "whatsapp.conversation.closed_after_lead_timeout",
+            extra={"conversation_id": str(conversation_id), "job_id": str(job_id)},
         )
         return
 

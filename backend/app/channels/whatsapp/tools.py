@@ -2529,9 +2529,9 @@ async def _handle_close_lead(
         profiling_statuses=profiling_statuses,
     )
     try:
-        # En WhatsApp el flujo normal terminó: cerrar la conversación técnica
-        # para que el siguiente contacto inicie un ciclo y oportunidad nuevos.
-        conversation_state = "cerrada" if (context.channel or "").strip().lower() == "whatsapp" else "pendiente"
+        # El cierre del lead es operativo; la conversación queda pendiente
+        # durante la ventana configurable para permitir agenda o continuidad.
+        conversation_state = "pendiente"
         await storage.update_conversation(
             context.conversation_id,
             {"estado": conversation_state},

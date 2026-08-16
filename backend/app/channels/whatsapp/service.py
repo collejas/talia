@@ -1034,12 +1034,26 @@ async def _run_post_send_tasks(
     try:
         from app.services import whatsapp_followups as whatsapp_followup_jobs
 
-        await whatsapp_followup_jobs.schedule_customer_followup(
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            organizacion_id=str(resolved_persona_org) if resolved_persona_org else None,
-            reason="assistant_reply",
+        latest_conversation = await storage.fetch_conversation(conversation_id)
+        followup_organizacion_id = (
+            str(resolved_persona_org)
+            if resolved_persona_org
+            else str(latest_conversation.get("organizacion_id") or "") or None
         )
+        if str(latest_conversation.get("estado") or "").strip().lower() == "pendiente":
+            await whatsapp_followup_jobs.schedule_conversation_close(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                organizacion_id=followup_organizacion_id,
+                reason="close_lead_timeout",
+            )
+        else:
+            await whatsapp_followup_jobs.schedule_customer_followup(
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                organizacion_id=followup_organizacion_id,
+                reason="assistant_reply",
+            )
     except Exception as exc:
         logger.warning(
             "whatsapp.followup.schedule_failed",

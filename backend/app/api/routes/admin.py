@@ -3608,6 +3608,7 @@ def build_validation_report(
         "whatsapp.prompt_version",
         "whatsapp.assistant_id",
         "whatsapp.inactivity_minutes",
+        "whatsapp.close_after_lead_minutes",
         "whatsapp.reengage_minutes",
         "whatsapp.reengage_max_attempts",
         "whatsapp.escalate_minutes",

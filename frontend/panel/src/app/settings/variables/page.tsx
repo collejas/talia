@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
 import { fetchCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
+import { WhatsAppCloseWindowForm } from "@/components/settings/whatsapp-close-window-form"
 import { TenantWebTrackingPanel } from "./components/tenant-web-tracking-panel"
 
 import {
@@ -271,6 +272,7 @@ export default async function SettingsVariablesPage() {
     whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),
     whatsapp_reengage_max_attempts: getNestedNumber(whatsappConfig, "reengage_max_attempts"),
     whatsapp_escalate_minutes: getNestedNumber(whatsappConfig, "escalate_minutes"),
+    whatsapp_close_after_lead_minutes: getNestedNumber(whatsappConfig, "close_after_lead_minutes") ?? 720,
     whatsapp_meta_phone_number_id: getNestedString(getNestedRecord(whatsappConfig, "meta") ?? {}, "phone_number_id"),
     whatsapp_meta_graph_api_version: getNestedString(getNestedRecord(whatsappConfig, "meta") ?? {}, "graph_api_version"),
     whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
@@ -502,6 +504,7 @@ export default async function SettingsVariablesPage() {
                   />
                 </TabsContent>
                 <TabsContent value="close-lead" className="pt-4">
+                  <WhatsAppCloseWindowForm initialMinutes={whatsappInitialValues.whatsapp_close_after_lead_minutes} />
                   {closeLeadPolicies ? (
                     <CloseLeadPolicyPanel
                       initialWhatsapp={closeLeadPolicies[0]}

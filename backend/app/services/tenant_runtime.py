@@ -1275,6 +1275,7 @@ class WhatsappRuntimeSettings:
     welcome_document_prompt_version: str | None
     location_href: str | None
     inactivity_minutes: int
+    close_after_lead_minutes: int
     reengage_minutes: int
     reengage_max_attempts: int
     escalate_minutes: int
@@ -1327,6 +1328,7 @@ class WhatsappRuntimeSettings:
             welcome_document_prompt_version=settings.whatsapp_welcome_document_prompt_version,
             location_href=settings.whatsapp_location_href,
             inactivity_minutes=settings.whatsapp_inactivity_minutes,
+            close_after_lead_minutes=12 * 60,
             reengage_minutes=settings.whatsapp_reengage_minutes,
             reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
             escalate_minutes=settings.whatsapp_escalate_minutes,
@@ -1431,6 +1433,11 @@ async def get_whatsapp_runtime_settings(
     inactivity_value = whatsapp_cfg.get("inactivity_minutes")
     if inactivity_value is not None:
         settings_payload.inactivity_minutes = _coerce_positive_int(inactivity_value, settings_payload.inactivity_minutes)
+
+    settings_payload.close_after_lead_minutes = _coerce_positive_int(
+        whatsapp_cfg.get("close_after_lead_minutes"),
+        settings_payload.close_after_lead_minutes,
+    )
 
     settings_payload.reengage_minutes = _coerce_positive_int(
         whatsapp_cfg.get("reengage_minutes"), settings_payload.reengage_minutes
