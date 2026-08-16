@@ -12614,6 +12614,20 @@ class CRMRepository:
             },
         )
 
+    async def delete_whatsapp_persona_if_safe(
+        self, *, organizacion_id: UUID, persona_id: UUID
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_delete_whatsapp_persona_if_safe",
+            {
+                "p_persona_id": str(persona_id),
+                "p_organizacion_id": str(organizacion_id),
+            },
+        )
+        if not isinstance(result, dict):
+            raise CRMRepositoryError("whatsapp_cleanup_invalid_response")
+        return result
+
     async def delete_contact(
         self,
         *,

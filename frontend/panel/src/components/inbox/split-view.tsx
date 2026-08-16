@@ -1101,7 +1101,7 @@ export function InboxSplitView({
   const inboxStreamRefreshTimeoutRef = React.useRef<number | null>(null);
   const { user: currentUser } = useCurrentUser();
   const { context: permissionContext } = usePermissions();
-  const canDeleteInboxEmail = React.useMemo(() => {
+  const canDeleteInboxData = React.useMemo(() => {
     const roles = Array.isArray(permissionContext.roles) ? permissionContext.roles : [];
     return Boolean(
       permissionContext.es_admin ||
@@ -2327,7 +2327,7 @@ export function InboxSplitView({
   }, [selectedThread, promoteForm]);
 
   const handleDeleteEmail = React.useCallback(async () => {
-    if (!selectedThread || selectedThread.canal.trim().toLowerCase() !== "correo" || !canDeleteInboxEmail) {
+    if (!selectedThread || selectedThread.canal.trim().toLowerCase() !== "correo" || !canDeleteInboxData) {
       return;
     }
     const targetId = selectedThread.id;
@@ -2356,7 +2356,50 @@ export function InboxSplitView({
     } finally {
       setDeletingEmail(false);
     }
-  }, [canDeleteInboxEmail, selectedThread]);
+  }, [canDeleteInboxData, selectedThread]);
+
+  const handleDeleteWhatsapp = React.useCallback(async () => {
+    if (!selectedThread || selectedThread.canal.trim().toLowerCase() !== "whatsapp" || !canDeleteInboxData) {
+      return;
+    }
+    const targetId = selectedThread.id;
+    const contactLabel = selectedThread.contactoNombre || selectedThread.contactoTelefono || "este contacto";
+    if (!window.confirm(`Se eliminará WhatsApp y todos los datos CRM relacionados con ${contactLabel}. Solo se permite si no hay ventas ni es cliente. ¿Continuar?`)) {
+      return;
+    }
+
+    setDeletingEmail(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/inbox/${targetId}/whatsapp`, { method: "DELETE" });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; reason?: string };
+      if (!response.ok) {
+        const reasonLabels: Record<string, string> = {
+          client_exists: "el contacto es cliente",
+          sale_exists: "existe una venta ganada",
+          accepted_quote_exists: "existe una cotización aceptada",
+          active_inventory_reservation_exists: "existe una reserva de inventario activa",
+          other_channel_conversation_exists: "el contacto tiene conversaciones de otros canales",
+        };
+        setDeleteError(
+          reasonLabels[payload.reason ?? ""]
+            ? `No se puede eliminar: ${reasonLabels[payload.reason ?? ""]}.`
+            : payload.error || "No se pudo limpiar WhatsApp y los datos CRM relacionados.",
+        );
+        return;
+      }
+      setThreadItems((current) => current.filter((thread) => thread.id !== targetId));
+      setTotalThreads((current) => Math.max(0, current - 1));
+      setSelectedId(null);
+      setCurrentMessages([]);
+      setDeleteError(null);
+    } catch (error) {
+      console.error("[inbox] whatsapp cleanup failed", error);
+      setDeleteError("Ocurrió un error inesperado al limpiar WhatsApp.");
+    } finally {
+      setDeletingEmail(false);
+    }
+  }, [canDeleteInboxData, selectedThread]);
 
   return (
     <div className="flex min-w-0 gap-2 [&_[data-slot=badge]]:gap-0.5 [&_[data-slot=badge]]:px-1.5 [&_[data-slot=badge]]:py-0 [&_[data-slot=badge]]:text-[9px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:gap-1 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-[10px]">
@@ -2605,7 +2648,20 @@ export function InboxSplitView({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {selectedThread.canal.trim().toLowerCase() === "correo" && canDeleteInboxEmail ? (
+                {selectedThread.canal.trim().toLowerCase() === "whatsapp" && canDeleteInboxData ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-destructive hover:text-destructive"
+                    onClick={() => void handleDeleteWhatsapp()}
+                    disabled={deletingEmail}
+                    aria-label="Eliminar WhatsApp y datos relacionados"
+                  >
+                    <IconTrash className="size-4" />
+                    {deletingEmail ? "Limpiando..." : "Eliminar WhatsApp"}
+                  </Button>
+                ) : null}
+                {selectedThread.canal.trim().toLowerCase() === "correo" && canDeleteInboxData ? (
                   <Button
                     variant="outline"
                     size="sm"

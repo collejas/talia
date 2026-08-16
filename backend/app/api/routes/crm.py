@@ -10954,8 +10954,8 @@ def require_any_permission(permission_codes: list[str]):
     return _dependency
 
 
-def require_inbox_email_delete_access():
-    """Autoriza borrar hilos del Inbox únicamente a los roles administrativos permitidos."""
+def require_inbox_admin_delete_access():
+    """Autoriza borrar datos del Inbox únicamente a los roles administrativos permitidos."""
 
     async def _dependency(user_token: str = Depends(require_user_token)) -> str:
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
@@ -10980,7 +10980,7 @@ def require_inbox_email_delete_access():
             or "admin_operativo" in normalized_roles
         )
         if not allowed:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="inbox_email_delete_forbidden")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="inbox_admin_delete_forbidden")
         return user_token
 
     return _dependency
@@ -26842,7 +26842,7 @@ async def mark_inbox_conversation_read(
 async def delete_inbox_email_conversation(
     *,
     conversacion_id: UUID,
-    user_token: str = Depends(require_inbox_email_delete_access()),
+    user_token: str = Depends(require_inbox_admin_delete_access()),
     organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> dict[str, Any]:
     authorized_repo = CRMRepository(user_token=user_token)
@@ -26897,6 +26897,75 @@ async def delete_inbox_email_conversation(
         extra={"conversation_id": str(conversacion_id), "organizacion_id": str(organizacion_id)},
     )
     return {"ok": True, "conversation_id": str(conversacion_id), "channel": "correo"}
+
+
+@router.delete("/inbox/conversations/{conversacion_id}/whatsapp")
+async def delete_inbox_whatsapp_persona(
+    *,
+    conversacion_id: UUID,
+    user_token: str = Depends(require_inbox_admin_delete_access()),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    authorized_repo = CRMRepository(user_token=user_token)
+    try:
+        conversation = await authorized_repo.get_conversation_with_controls(
+            conversation_id=str(conversacion_id)
+        )
+    except CRMRepositoryError as exc:
+        if "not_found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail="inbox_conversation_not_found") from exc
+        raise HTTPException(status_code=502, detail="inbox_conversation_lookup_failed") from exc
+
+    if str(conversation.get("organizacion_id") or "") != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="inbox_conversation_not_found")
+    channel = str(conversation.get("canal") or "").strip().lower()
+    if channel != "whatsapp":
+        try:
+            latest_messages = await authorized_repo.fetch_recent_messages(
+                conversation_id=str(conversacion_id), limit=1
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="inbox_conversation_lookup_failed") from exc
+        latest = latest_messages[-1] if latest_messages else {}
+        latest_data = latest.get("datos") if isinstance(latest, dict) else None
+        if isinstance(latest_data, str):
+            try:
+                latest_data = json.loads(latest_data)
+            except json.JSONDecodeError:
+                latest_data = None
+        if isinstance(latest_data, dict):
+            channel = str(latest_data.get("channel") or latest_data.get("canal") or "").strip().lower()
+    if channel != "whatsapp":
+        raise HTTPException(status_code=400, detail="inbox_whatsapp_only")
+
+    persona_value = conversation.get("persona_id") or conversation.get("contacto_id")
+    try:
+        persona_id = UUID(str(persona_value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail="inbox_whatsapp_persona_missing") from exc
+
+    try:
+        result = await CRMRepository().delete_whatsapp_persona_if_safe(
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.inbox.whatsapp_cleanup_failed",
+            extra={"conversation_id": str(conversacion_id), "organizacion_id": str(organizacion_id)},
+        )
+        raise HTTPException(status_code=502, detail="inbox_whatsapp_cleanup_failed") from exc
+
+    if result.get("ok") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "inbox_whatsapp_cleanup_blocked", **result},
+        )
+    logger.info(
+        "crm.inbox.whatsapp_cleanup_completed",
+        extra={"conversation_id": str(conversacion_id), "organizacion_id": str(organizacion_id)},
+    )
+    return {"ok": True, "conversation_id": str(conversacion_id), "channel": "whatsapp", **result}
 
 
 @router.post("/inbox/conversations/{conversacion_id}/manual")
