@@ -9,11 +9,12 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
 3. `plan_latencia_mapa_conversion.md`
 4. `plan_mapa_conversion_multicanal.md`
 5. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
-6. `informe_metricas_whatsapp_prospeccion.md`
-7. `plan_integracion_maestra_mapa_conversion.md`
-8. `backlog_maestro_mapa_conversion.md`
-9. `changelog_maestro_mapa_conversion.md`
-10. `avance_mapa_conversion_20260303.md`
+6. `plan_atribucion_campanas_y_cobro.md`
+7. `informe_metricas_whatsapp_prospeccion.md`
+8. `plan_integracion_maestra_mapa_conversion.md`
+9. `backlog_maestro_mapa_conversion.md`
+10. `changelog_maestro_mapa_conversion.md`
+11. `avance_mapa_conversion_20260303.md`
 
 ## Qué cubre cada archivo
 
@@ -41,6 +42,11 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
   - diagnóstico de la separación entre correo, WhatsApp y conversión
   - propuesta de contrato y fuentes por bloque
   - estrategia para no romper el mapa ni el refactor de personas/contactos
+
+- `plan_atribucion_campanas_y_cobro.md`
+  - nueva capa para unir campañas, mensajes, cobros, conversaciones y oportunidades
+  - KPI de entrega, respuesta, CPO, cierre y CAC
+  - frontera entre `mapa-de-conversion` y `Plan_cobro_mensajes`
 
 - `informe_metricas_whatsapp_prospeccion.md`
   - hallazgo real en BD sobre campañas WhatsApp de prospección

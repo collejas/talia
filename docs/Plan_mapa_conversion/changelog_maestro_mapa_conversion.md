@@ -182,3 +182,17 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se definió el objetivo de unir tráfico web, webchat, WhatsApp, voz y prospección en una sola vista de análisis.
 - Se documentó la base técnica para `web_sessions` y el agregado geográfico v2.
 - Se dejó el camino para evolucionar la vista hacia un modelo de atribución más claro y escalable.
+## 2026-08-16 — Plan de atribución de campañas y cobro
+
+- Se creó `plan_atribucion_campanas_y_cobro.md` para unir la ejecución de campañas WhatsApp con conversiones y costos.
+- Se decidió mantener `cobro_mensajes` como ledger financiero y crear una capa de atribución separada.
+- La vista principal será `mapa-de-conversion?vista=campaigns`.
+- `mapa-de-conversion?vista=conversations` conservará el análisis de canales, respuestas y CTAs.
+- CPO y CAC usarán los importes del ledger mediante `cobro_mensaje_id`, sin duplicar cargos.
+
+## 2026-08-16 — Unidad de medición comercial
+
+- Se confirmó que la unidad comercial de `mapa-de-conversion?vista=campaigns` es la conversación, no el hilo técnico.
+- Una conversación cuenta una sola vez aunque contenga varios mensajes o hilos internos.
+- El costo total de la conversación se obtiene sumando los cargos de sus mensajes cobrables, incluido el cargo GEOACTIV de `$0.09 MXN + IVA` por mensaje.
+- Los hilos solo sirven para reconstruir el historial y no se contabilizan como conversiones, oportunidades ni clientes.
