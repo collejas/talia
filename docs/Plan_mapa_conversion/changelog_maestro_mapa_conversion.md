@@ -196,3 +196,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Una conversación cuenta una sola vez aunque contenga varios mensajes o hilos internos.
 - El costo total de la conversación se obtiene sumando los cargos de sus mensajes cobrables, incluido el cargo GEOACTIV de `$0.09 MXN + IVA` por mensaje.
 - Los hilos solo sirven para reconstruir el historial y no se contabilizan como conversiones, oportunidades ni clientes.
+
+## 2026-08-16 — Base de datos de atribución de campañas
+
+- Se aplicó `supabase/migrations/20260816_250000_campaign_attribution_base.sql`.
+- Se crearon `campana_mensaje_atribucion` y `campana_conversion` como capa separada del ledger `cobro_mensajes`.
+- La relación financiera usa `cobro_mensaje_id` y valida que coincidan tenant y `mensaje_id`; no duplica importes ni crea cargos.
+- Se agregaron foreign keys compuestas por `organizacion_id`, constraints de dirección/tipo/estado, índices para campaña, conversación, cobro y pendientes de conciliación, y RLS de lectura para tenant/owner.
+- Las tablas quedaron vacías deliberadamente. No se hizo backfill ni se modificaron mensajes, cobros, conversaciones u oportunidades existentes.
+- Pendiente: crear las funciones idempotentes para poblar la atribución de envíos/respuestas y enlazar las oportunidades reales.
