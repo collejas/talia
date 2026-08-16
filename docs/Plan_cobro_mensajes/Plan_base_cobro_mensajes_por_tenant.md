@@ -866,6 +866,7 @@ Decisión tomada: los $0.09 MXN son precio antes de IVA y el tenant pagará $0.0
 
 - capturar columnas de pricing de Meta. **Implementado para callbacks Cloud API**;
 - registrar consumos de forma idempotente. **Implementado después de la persistencia del mensaje WhatsApp**;
+- registrar también los emisores internos de WhatsApp: recordatorios, notificaciones a vendedores, documentos automáticos y paquetes de información. **Implementado en backend; requiere redeploy y prueba operativa**;
 - separar estado de proveedor y estado de conciliación;
 - crear endpoints tenant y administrador. **Primera versión implementada**;
 - evitar que el cliente controle importes o tenant.

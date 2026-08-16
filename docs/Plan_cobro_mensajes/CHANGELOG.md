@@ -541,3 +541,13 @@ Pendiente de API:
 - El ledger actual conserva el cargo neto de `$0.09 MXN`; el IVA no se calcula todavía porque la facturación fiscal está fuera del alcance actual.
 - El panel ahora identifica la tarifa efectiva y el cargo GEOACTIV como importes antes de IVA.
 - Pendiente para la fase de facturación: agregar subtotal, IVA, total fiscal y la tasa aplicable por periodo/documento.
+
+## 2026-08-16 — Integración de emisores internos al ledger
+
+- Se centralizó el registro posterior al envío aceptado por WhatsApp en `storage.register_sent_whatsapp_message`.
+- Los recordatorios de actividades (`activity_reminder`) ahora registran el mensaje, tenant, plantilla, destinatario y proveedor.
+- Las notificaciones a vendedores desde WhatsApp y Webchat (`sales_notification`) registran la plantilla y los adjuntos enviados.
+- Los documentos automáticos de bienvenida y los paquetes de información enviados por WhatsApp también pasan por el registro canónico.
+- La categoría Meta facturable continúa siendo la confirmada por el callback `pricing`; la categoría configurada solo queda como dato de auditoría.
+- Verificación actual: en los últimos 90 días hay `1,199` mensajes WhatsApp con ledger y `0` sin ledger; hay `0` mensajes internos persistidos sin ledger.
+- La cobertura para nuevos envíos empezará a observarse después del redeploy del backend; no se modificaron cargos históricos ni se generaron registros a partir de callbacks huérfanos.

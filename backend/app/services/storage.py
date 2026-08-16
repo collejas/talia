@@ -2045,6 +2045,48 @@ async def register_whatsapp_message(
     return result
 
 
+async def register_sent_whatsapp_message(
+    *,
+    send_result: Any,
+    to_number: str,
+    organizacion_id: str,
+    body: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    conversation_id: str | None = None,
+    persona_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Persiste y contabiliza un WhatsApp aceptado por el proveedor.
+
+    ``send_manual_message`` solo transporta el mensaje. Los emisores internos
+    (recordatorios y avisos a vendedores) también deben pasar por el mismo
+    registro canónico que usan las respuestas del agente y los follow-ups.
+    """
+    message_sid = str(getattr(send_result, "sid", None) or "").strip()
+    if not message_sid:
+        return None
+
+    provider = str(getattr(send_result, "provider", None) or "meta").strip().lower()
+    status = str(getattr(send_result, "status", None) or "sent").strip().lower()
+    metadata_payload = dict(metadata or {})
+    metadata_payload.setdefault("provider", provider)
+    metadata_payload.setdefault("delivery_status", status)
+
+    phone = str(to_number or "").strip()
+    return await register_whatsapp_message(
+        direction="saliente",
+        wa_id=phone.lstrip("+"),
+        phone_e164=phone,
+        body=body,
+        message_sid=message_sid,
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        metadata=metadata_payload,
+        attachments=attachments,
+        organizacion_id=str(organizacion_id),
+    )
+
+
 async def register_messenger_message(
     *,
     sender_id: str,

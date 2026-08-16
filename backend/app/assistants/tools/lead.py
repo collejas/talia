@@ -1616,6 +1616,27 @@ async def _send_whatsapp_information_documents(
             attachments=[attachment],
             organizacion_id=context.organizacion_id,
         )
+        try:
+            await storage.register_sent_whatsapp_message(
+                send_result=send_result,
+                to_number=persona_phone,
+                organizacion_id=str(context.organizacion_id),
+                body=caption,
+                conversation_id=context.conversation_id,
+                persona_id=context.persona_id,
+                metadata={
+                    "sender": "lead_information_package",
+                    "trigger": "information_package",
+                    "message_role": "attachment",
+                    "attachment_index": index,
+                },
+                attachments=[attachment],
+            )
+        except StorageError as exc:
+            logger.error(
+                "lead_tools.whatsapp_billing_registration_failed",
+                extra={"conversation_id": context.conversation_id, "message_sid": send_result.sid, "error": str(exc)},
+            )
         results.append(
             {
                 "sid": send_result.sid,

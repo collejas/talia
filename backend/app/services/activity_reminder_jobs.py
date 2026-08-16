@@ -12,6 +12,7 @@ from app.channels.whatsapp.service import send_manual_message
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services import storage
 from app.services.tenant_runtime import get_whatsapp_runtime_settings
 from app.services.user_notifications import (
     UserNotificationAction,
@@ -209,6 +210,25 @@ class ActivityReminderJobsRunner:
                 extra={"activity_id": str(activity_id), "status": result.status, "error": result.error},
             )
             return
+        try:
+            await storage.register_sent_whatsapp_message(
+                send_result=result,
+                to_number=phone,
+                organizacion_id=str(organizacion_id),
+                metadata={
+                    "sender": "activity_reminder",
+                    "trigger": "activity_reminder",
+                    "meta_template_name": template_name,
+                    "meta_template_language": template_language,
+                },
+            )
+        except storage.StorageError as exc:
+            # El envío ya fue aceptado; conservar el estado de la actividad y
+            # dejar evidencia para que el incidente pueda reintentarse.
+            logger.error(
+                "activity_reminder.whatsapp_billing_registration_failed",
+                extra={"activity_id": str(activity_id), "message_sid": result.sid, "error": str(exc)},
+            )
         await repo.mark_whatsapp_activity_reminder_sent(
             organizacion_id=organizacion_id,
             activity_id=activity_id,

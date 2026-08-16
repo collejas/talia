@@ -1200,6 +1200,27 @@ async def _send_welcome_document_for_conversation(
 
     document = documents[0]
     try:
+        await storage.register_sent_whatsapp_message(
+            send_result=send_result,
+            to_number=message.from_number,
+            organizacion_id=str(organizacion_id),
+            conversation_id=str(conversation_id),
+            body=None,
+            metadata={
+                "sender": "welcome_document",
+                "trigger": "whatsapp_welcome_document",
+                "message_role": "attachment",
+                "document_id": str(document.get("id") or "") or None,
+                "document_title": str(document.get("title") or "") or None,
+            },
+            attachments=[attachments[0]],
+        )
+    except StorageError as exc:
+        logger.error(
+            "whatsapp.welcome_document_billing_registration_failed",
+            extra={"conversation_id": conversation_id, "message_sid": send_result.sid, "error": str(exc)},
+        )
+    try:
         await storage.merge_conversation_inbox_context(
             conversation_id,
             {

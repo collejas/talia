@@ -615,6 +615,27 @@ async def notify_sales_rep(
 
     message_sid = getattr(send_result, "sid", None) if send_result else None
     status_value = getattr(send_result, "status", None) if send_result else None
+    try:
+        await storage.register_sent_whatsapp_message(
+            send_result=send_result,
+            to_number=seller_phone,
+            organizacion_id=str(org_uuid),
+            body=message_body if not (template_sid or template_name) else None,
+            metadata={
+                "sender": "sales_notification",
+                "trigger": trigger,
+                "conversation_id_origen": context.conversation_id,
+                "meta_template_name": template_name,
+                "meta_template_language": template_language,
+                "message_role": "notification",
+                "notification_channel": "webchat",
+            },
+        )
+    except StorageError as exc:
+        logger.error(
+            "webchat.notify_sales.billing_registration_failed",
+            extra={"trigger": trigger, "message_sid": message_sid, "error": str(exc)},
+        )
     logger.info(
         "webchat.notify_sales.result",
         extra={
