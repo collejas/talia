@@ -551,3 +551,11 @@ Pendiente de API:
 - La categoría Meta facturable continúa siendo la confirmada por el callback `pricing`; la categoría configurada solo queda como dato de auditoría.
 - Verificación actual: en los últimos 90 días hay `1,199` mensajes WhatsApp con ledger y `0` sin ledger; hay `0` mensajes internos persistidos sin ledger.
 - La cobertura para nuevos envíos empezará a observarse después del redeploy del backend; no se modificaron cargos históricos ni se generaron registros a partir de callbacks huérfanos.
+
+## 2026-08-16 — Persistencia robusta de envíos de prospección WhatsApp
+
+- Se confirmó que las filas existentes de `mensajes` originadas por prospección sí conservan `batch_id` y `envio_id` en `mensajes.datos`; la ausencia histórica corresponde a envíos operativos sin fila local de `mensajes`.
+- La causa del defecto era el orden del worker: marcaba el envío como exitoso y después intentaba persistir el mensaje; una excepción de persistencia se capturaba sin reintento ni estado de reparación.
+- El worker ahora persiste antes de cerrar el envío, reintenta sin reenviar el WAMID y marca `mensaje_local_pendiente` si Supabase continúa fallando.
+- Se agregó reparación automática idempotente para esos casos, usando el mismo `mensaje_id`/WAMID y conservando `batch_id`/`envio_id`; no se inventan mensajes ni se reenvían campañas.
+- Validación local: `18` pruebas de servicios relacionadas pasan; producción actualmente reporta `218` mensajes de prospección con ambos identificadores y `0` envíos marcados pendientes de reparación.

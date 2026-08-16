@@ -662,10 +662,10 @@ async def _log_whatsapp_inbox_message(
     detalle: dict[str, Any],
     payload: dict[str, Any],
     result: ContactEnvioResult,
-) -> str | None:
-    telefono = normalize_phone(_clean_text(detalle.get("phone")))
+) -> bool:
+    telefono = normalize_phone(_detail_phone(detalle))
     if not telefono:
-        return None
+        return False
     envio_organizacion_id = _clean_text(envio.get("organizacion_id"))
     prospecto_id = envio.get("prospecto_id")
     persona_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
@@ -760,7 +760,7 @@ async def _log_whatsapp_inbox_message(
             envio_id=str(envio.get("id")),
             error=str(exc),
         )
-        return None
+        raise
 
     resolved_conversation_id = _clean_text(storage_result.get("conversation_id"))
     if resolved_conversation_id:
@@ -791,7 +791,7 @@ async def _log_whatsapp_inbox_message(
                 conversation_id=resolved_conversation_id,
                 error=str(exc),
             )
-    return resolved_conversation_id
+    return True
 
 
 async def _resolve_persona_id_for_prospecto(
@@ -1416,6 +1416,7 @@ class ProspeccionContactSender:
             base_batch_size=self._batch_size,
             base_max_concurrency=self._max_concurrency,
         )
+        await self._repair_pending_local_messages(repo)
         envios = await repo.worker_list_pending_envios(limit=effective_batch_size)
         if not envios:
             return False
@@ -1447,6 +1448,46 @@ class ProspeccionContactSender:
                 raise maybe_error
 
         return len(envios) >= effective_batch_size
+
+    async def _repair_pending_local_messages(self, repo: CRMRepository) -> None:
+        """Reintenta registrar mensajes aceptados por Meta sin reenviarlos."""
+
+        pending = await repo.worker_list_envios_local_message_pending(limit=self._batch_size)
+        for envio in pending:
+            try:
+                estado = _clean_text(envio.get("estado")) or "enviado"
+                mensaje_id = _clean_text(envio.get("mensaje_id"))
+                if not mensaje_id:
+                    continue
+                detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+                payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+                repaired = await _log_whatsapp_inbox_message(
+                    repo=repo,
+                    envio=envio,
+                    detalle=detalle,
+                    payload=payload,
+                    result=ContactEnvioResult(
+                        estado=estado,
+                        detalle=detalle,
+                        mensaje_id=mensaje_id,
+                    ),
+                )
+                if repaired:
+                    repaired_detalle = dict(detalle)
+                    repaired_detalle["mensaje_local_pendiente"] = False
+                    repaired_detalle.pop("mensaje_local_ultimo_error", None)
+                    await repo.worker_complete_envio(
+                        envio_id=UUID(str(envio["id"])),
+                        payload={"detalle": repaired_detalle, "error": None},
+                    )
+            except Exception as exc:
+                log_event(
+                    logger,
+                    "prospeccion.sender_message_repair_failed",
+                    envio_id=str(envio.get("id")),
+                    provider_message_id=envio.get("mensaje_id"),
+                    error=str(exc),
+                )
 
     async def _process_envio(self, repo: CRMRepository, envio: dict[str, Any]) -> None:
         envio_id_value = envio.get("id")
@@ -1598,35 +1639,63 @@ class ProspeccionContactSender:
             max_reintentos=max_reintentos,
             extra_backoff_seconds=self._extra_backoff_seconds(result),
         )
-        await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
 
-        # Un envío de prospección puede llegar a "leido" únicamente por el
-        # callback de estado de Meta. Persistimos el mensaje aceptado antes
-        # de ese callback para que exista la relación mensaje -> conversación
-        # -> ledger de cobro. El helper es idempotente por el SID del proveedor
-        # y sus errores no cambian el estado operativo del envío.
+        # Meta ya aceptó el mensaje; la persistencia local debe reintentarse
+        # sin volver a enviar el WhatsApp. Antes se marcaba el envío como
+        # exitoso y se tragaba esta excepción, dejando solo el WAMID en el
+        # envío operativo y ninguna fila en `mensajes`.
         if (
             canal == "whatsapp"
             and result.mensaje_id
             and update_payload.get("estado") in {"enviado", "entregado", "leido", "completado", "respondido"}
         ):
-            try:
-                await _log_whatsapp_inbox_message(
-                    repo=repo,
-                    envio=envio,
-                    detalle=detalle,
-                    payload=payload,
-                    result=result,
+            persisted = False
+            persistence_error: str | None = None
+            for retry_number, delay_seconds in enumerate((0, 1, 3)):
+                if delay_seconds:
+                    await asyncio.sleep(delay_seconds)
+                try:
+                    persisted = await _log_whatsapp_inbox_message(
+                        repo=repo,
+                        envio=envio,
+                        detalle=detalle,
+                        payload=payload,
+                        result=result,
+                    )
+                    if persisted:
+                        break
+                except Exception as exc:  # pragma: no cover - depende de Supabase/ledger
+                    persistence_error = str(exc)
+                    log_event(
+                        logger,
+                        "prospeccion.sender_message_registration_retry",
+                        envio_id=str(envio_id),
+                        retry=retry_number + 1,
+                        provider_message_id=result.mensaje_id,
+                        error=persistence_error,
+                    )
+            if not persisted:
+                pending_detalle = update_payload.get("detalle")
+                pending_detalle = pending_detalle if isinstance(pending_detalle, dict) else {}
+                pending_detalle = _merge_detalle(
+                    pending_detalle,
+                    {
+                        "mensaje_local_pendiente": True,
+                        "mensaje_local_ultimo_error": persistence_error or "telefono_no_disponible",
+                    },
                 )
-            except Exception as exc:  # pragma: no cover - billing/inbox no bloquea el envío
+                update_payload["detalle"] = pending_detalle
+                update_payload["error"] = "mensaje_local_pendiente"
                 log_event(
                     logger,
-                    "prospeccion.sender_message_registration_failed",
+                    "prospeccion.sender_message_registration_pending",
                     envio_id=str(envio_id),
                     organizacion_id=str(org_uuid) if org_uuid else None,
                     provider_message_id=result.mensaje_id,
-                    error=str(exc),
+                    error=persistence_error,
                 )
+
+        await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
         if canal in {"correo", "whatsapp", "llamada"} and throttle_key is not None:
             await self._register_backpressure_signal(throttle_key, result)
 

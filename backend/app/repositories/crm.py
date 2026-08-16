@@ -22959,6 +22959,31 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_pending_envios_invalid:{data!r}")
         return data
 
+    async def worker_list_envios_local_message_pending(
+        self,
+        *,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Obtiene envíos aceptados cuyo mensaje local requiere reintento."""
+
+        params = {
+            "select": "*",
+            "detalle->>mensaje_local_pendiente": "eq.true",
+            "canal": "eq.whatsapp",
+            "mensaje_id": "not.is.null",
+            "order": "procesado_en.asc.nullsfirst",
+            "limit": str(max(limit, 1)),
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_local_message_pending_invalid:{data!r}")
+        return data
+
     async def worker_count_ready_or_processing_envios(self) -> int:
         """Cuenta backlog operativo para envíos (pendiente listo + procesando)."""
 
