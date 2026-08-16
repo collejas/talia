@@ -518,3 +518,19 @@ Pendiente de API:
 - Aprobar el primer periodo.
 - Activar tenants seleccionados.
 - Comenzar cobro con fecha de corte documentada.
+## 2026-08-16 — Conciliación histórica de categorías Meta `unknown`
+
+- Se agregó la función protegida `reconcile_meta_unknown_billing(integer)` y su migración `20260816_240000_reconcile_meta_unknown_billing.sql`.
+- La conciliación solo toma cargos Meta con `categoria_meta = 'unknown'` y un callback `vinculado` cuyo `status.pricing.category` es válido; no infiere la categoría por dirección, iniciador ni contenido y no crea cargos.
+- Se ejecutó sobre producción: 25 candidatos fueron actualizados. Todos tenían `billable=false` y quedaron clasificados como `service` o `referral_conversion`; el delta de costo Meta fue `$0.0000 MXN`.
+- La operación es idempotente: una segunda ejecución devolvió 0 candidatos pendientes.
+- Resultado posterior: Meta tiene 159 `marketing` con costo Meta, 397 `service`, 200 `referral_conversion` y 476 `unknown` aún sin evidencia suficiente.
+- Los 476 restantes (26 salientes y 450 entrantes) se conservan como `unknown` hasta contar con un callback o persistencia original confiable. Los callbacks huérfanos continúan sin generar cargos.
+
+## 2026-08-16 — Categoría interna para mensajes de conversación sin tarifa Meta
+
+- Se agregó `categoria_interna_cobro = conversacion_sin_tarifa_meta` para separar los mensajes entrantes sin pricing propio de Meta de los casos realmente desconocidos.
+- La clasificación no modifica `categoria_meta`, `billable_meta` ni el costo Meta; solo mejora la lectura operativa y el filtrado de KPI/listado/exportación.
+- Se clasificaron `450` mensajes Meta entrantes como conversación sin tarifa Meta; el caso de Alfonso Nava queda correctamente identificado en esta categoría.
+- Se mantuvo el primer envío de prospección como `marketing` con costo Meta `$0.5614` y las respuestas salientes posteriores como `service` sin costo Meta.
+- Los KPI con fecha ahora usan `mensajes.creado_en`, igual que el detalle, para no incluir backfills por su fecha de inserción en el ledger.

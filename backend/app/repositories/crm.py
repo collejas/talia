@@ -7940,7 +7940,7 @@ class CRMRepository:
         select_fields = (
             "id,organizacion_id,periodo_id,mensaje_id,conversacion_id,proveedor,canal,"
             "proveedor_mensaje_id,direccion,tipo_contenido,origen_mensaje,es_plantilla,"
-            "nombre_plantilla,idioma_plantilla,categoria_meta,tipo_pricing_meta,"
+            "nombre_plantilla,idioma_plantilla,categoria_meta,categoria_interna_cobro,tipo_pricing_meta,"
             "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
             "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
             "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
@@ -7965,7 +7965,9 @@ class CRMRepository:
             params["mensaje.creado_en"] = f"gte.{fecha_desde.isoformat()}"
         if fecha_hasta:
             params["mensaje.creado_en"] = f"lt.{fecha_hasta.isoformat()}"
-        if categoria_meta:
+        if categoria_meta == "conversacion_sin_tarifa_meta":
+            params["categoria_interna_cobro"] = f"eq.{categoria_meta}"
+        elif categoria_meta:
             params["categoria_meta"] = f"eq.{categoria_meta}"
         if direccion:
             params["direccion"] = f"eq.{direccion}"

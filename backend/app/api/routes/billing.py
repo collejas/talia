@@ -78,6 +78,7 @@ class BillingMessageItem(BaseModel):
     nombre_plantilla: str | None = None
     idioma_plantilla: str | None = None
     categoria_meta: str
+    categoria_interna_cobro: str = "sin_clasificar"
     tipo_pricing_meta: str | None = None
     billable_meta: bool | None = None
     estado_proveedor: str
@@ -344,7 +345,7 @@ def _summary(*, scope: str, organizacion_id: UUID | None, rows: list[dict[str, A
 async def get_billing_summary(
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> BillingSummaryResponse:
@@ -367,7 +368,7 @@ async def get_master_billing_summary(
     organizacion_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> BillingSummaryResponse:
@@ -493,7 +494,7 @@ async def list_tenant_billing_messages(
     periodo_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
@@ -528,7 +529,7 @@ async def list_master_billing_messages(
     periodo_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
@@ -562,7 +563,7 @@ def _billing_messages_csv(rows: list[dict[str, Any]]) -> str:
     writer = csv.writer(output)
     writer.writerow([
         "fecha", "tenant", "periodo", "contacto", "telefono", "correo", "proveedor", "canal",
-        "direccion", "categoria_meta", "estado_proveedor", "facturable", "cargo_geoactiv_mxn",
+        "direccion", "categoria_meta", "clasificacion_interna", "estado_proveedor", "facturable", "cargo_geoactiv_mxn",
         "costo_meta_mxn", "total_consumo_mxn", "conciliacion_estado", "fuente_registro",
         "mensaje_id_ref", "conversacion_id_ref", "periodo_id_ref", "tenant_id_ref",
     ])
@@ -571,7 +572,9 @@ def _billing_messages_csv(rows: list[dict[str, Any]]) -> str:
             row.get("creado_en"), row.get("organizacion_nombre") or "Tenant no identificado",
             row.get("periodo_label") or "Periodo no disponible", row.get("contacto_nombre") or "Contacto no identificado",
             row.get("contacto_telefono") or "", row.get("contacto_correo") or "", row.get("proveedor"), row.get("canal"),
-            row.get("direccion"), row.get("categoria_meta"), row.get("estado_proveedor"), row.get("facturable"),
+            row.get("direccion"), row.get("categoria_meta"),
+            "Conversación sin tarifa Meta" if row.get("categoria_interna_cobro") == "conversacion_sin_tarifa_meta" else "",
+            row.get("estado_proveedor"), row.get("facturable"),
             row.get("cargo_app_importe"), row.get("costo_meta_importe"), row.get("costo_total_mensaje"),
             row.get("conciliacion_estado"), row.get("fuente_registro"), row.get("mensaje_id"),
             row.get("conversacion_id"), row.get("periodo_id"), row.get("organizacion_id"),
@@ -609,7 +612,7 @@ async def _export_billing_messages_csv(
 async def export_tenant_billing_messages(
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> Response:
@@ -625,7 +628,7 @@ async def export_master_billing_messages(
     organizacion_id: UUID | None = Query(default=None),
     desde: datetime | None = Query(default=None),
     hasta: datetime | None = Query(default=None),
-    categoria_meta: str | None = Query(default=None, max_length=32),
+    categoria_meta: str | None = Query(default=None, max_length=40, pattern="^(marketing|utility|authentication|service|referral_conversion|unknown|conversacion_sin_tarifa_meta)$"),
     direccion: str | None = Query(default=None, pattern="^(entrante|saliente)$"),
     repo: CRMRepository = Depends(get_billing_repository),
 ) -> Response:
