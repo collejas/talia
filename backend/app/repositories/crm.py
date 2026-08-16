@@ -7732,6 +7732,28 @@ class CRMRepository:
             return data[0]
         return None
 
+    async def sync_campaign_attribution(
+        self,
+        *,
+        organizacion_id: str | UUID,
+        desde: datetime | None = None,
+        limite: int = 500,
+    ) -> dict[str, Any]:
+        """Sincroniza atribución comercial sin crear ni recalcular cobros."""
+        data = await self._rpc(
+            "sync_campana_atribucion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_desde": desde.isoformat() if desde else None,
+                "p_limite": limite,
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError(
+            f"Respuesta inesperada sync_campana_atribucion: {data!r}"
+        )
+
     async def list_billing_periods(
         self,
         *,

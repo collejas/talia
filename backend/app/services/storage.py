@@ -7,7 +7,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -54,6 +54,51 @@ def _schedule_background_coroutine(coro: Any, *, label: str) -> None:
             )
 
     task.add_done_callback(_log_task_failure)
+
+
+async def _sync_campaign_attribution_after_message(
+    *,
+    repo: CRMRepository,
+    organizacion_id: str,
+    direction: str,
+    source: str,
+) -> None:
+    """Actualiza atribución comercial fuera del camino crítico del mensaje."""
+    sync_method = getattr(repo, "sync_campaign_attribution", None)
+    if not callable(sync_method):
+        return
+    try:
+        result = await sync_method(
+            organizacion_id=organizacion_id,
+            # La ventana permite registrar un envío recién persistido sin
+            # reprocesar toda la historia en cada mensaje.
+            desde=datetime.now(timezone.utc) - timedelta(minutes=15),
+            limite=500,
+        )
+        logger.info(
+            "storage.campaign_attribution_synced",
+            extra={
+                "organizacion_id": organizacion_id,
+                "direction": direction,
+                "source": source,
+                "mensajes_campana": result.get("mensajes_campana"),
+                "mensajes_respuesta": result.get("mensajes_respuesta"),
+                "conversiones": result.get("conversiones"),
+                "pendientes_cobro": result.get("pendientes_cobro"),
+            },
+        )
+    except (CRMRepositoryError, AttributeError, TypeError, ValueError) as exc:
+        # La atribución es analítica; nunca debe convertir un mensaje ya
+        # persistido en un error de entrega o de webhook.
+        logger.warning(
+            "storage.campaign_attribution_sync_failed",
+            extra={
+                "organizacion_id": organizacion_id,
+                "direction": direction,
+                "source": source,
+                "error": str(exc),
+            },
+        )
 
 
 def _is_transient_message_billing_error(exc: CRMRepositoryError) -> bool:
@@ -1977,6 +2022,18 @@ async def register_whatsapp_message(
                     "error": str(exc),
                 },
             )
+
+    source_value = str(metadata_payload.get("source") or "").strip().lower()
+    if billing_org and (direction == "entrante" or source_value == "prospeccion"):
+        _schedule_background_coroutine(
+            _sync_campaign_attribution_after_message(
+                repo=repo,
+                organizacion_id=str(billing_org),
+                direction=direction,
+                source=source_value,
+            ),
+            label="sync_campaign_attribution_after_whatsapp_message",
+        )
 
     if direction == "entrante" and conversation_id:
         from app.services import whatsapp_followups as whatsapp_followup_jobs

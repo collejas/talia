@@ -215,3 +215,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Distribución inicial: campaña `WHATSAPP` del master, 113 envíos y 3 respuestas; campaña `WHATSAPP IMLUX AGOSTO`, 44 envíos y 2 respuestas.
 - Costos ledger asociados a los envíos atribuidos: `$73.6082 MXN` para master y `$28.6616 MXN` para IMLUX. Estos importes se leen de `cobro_mensajes` y no se recalculan.
 - Pendiente: integrar esta sincronización en los flujos de envío/callback/respuesta y crear el resumen backend para `mapa-de-conversion?vista=campaigns`.
+
+## 2026-08-16 — Integración de atribución en tiempo real
+
+- Se agregó `CRMRepository.sync_campaign_attribution`, protegido por el RPC `service_role`.
+- Después de persistir un WhatsApp, el backend programa la sincronización fuera del camino crítico: procesa respuestas entrantes y envíos con `source=prospeccion` usando una ventana reciente y límite controlado.
+- La falla de atribución solo se registra en logs; no impide persistir el mensaje, registrar el cobro ni responder al webhook.
+- La función conserva la idempotencia cuando se ejecuta con ventana corta: un envío nuevo solo es inicial si todavía no existe un inicial para esa campaña/conversación.
+- Se actualizó la migración remota de la función para soportar esta ejecución incremental sin cambiar la responsabilidad del ledger.
+- Verificación local: `py_compile` de `storage.py` y `crm.py`, además de `git diff --check`. La suite pytest no pudo ejecutarse porque este entorno no contiene pytest ni `.venv`.

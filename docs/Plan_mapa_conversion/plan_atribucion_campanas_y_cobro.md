@@ -229,9 +229,9 @@ UUID como información principal.
 
 ### Fase 3 — Backend
 
-- Registrar atribución al crear el envío.
+- Registrar atribución al crear el envío. **Parcialmente completado:** el registro de WhatsApp programa sincronización idempotente después de persistir el mensaje.
 - Actualizar entregas desde callbacks.
-- Registrar una sola primera respuesta.
+- Registrar una sola primera respuesta. **Parcialmente completado:** las respuestas entrantes activan la sincronización por conversación.
 - Enlazar oportunidad y etapa ganada.
 - Crear resumen, exportación y pendientes de conciliación.
 

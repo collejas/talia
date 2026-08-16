@@ -103,7 +103,15 @@ begin
         s.persona_id,
         s.direccion,
         'envio_campana',
-        s.envio_orden=1,
+        s.envio_orden=1
+        and not exists (
+            select 1
+            from public.campana_mensaje_atribucion existing_initial
+            where existing_initial.organizacion_id=s.organizacion_id
+              and existing_initial.campana_id=s.campana_id
+              and existing_initial.conversacion_id=s.conversacion_id
+              and existing_initial.es_mensaje_inicial
+        ),
         s.entregado_en,
         'batch_envio_explicito'
     from source_rows s
