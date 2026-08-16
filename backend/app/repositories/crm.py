@@ -8602,6 +8602,29 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_not_found")
         return row
 
+    async def delete_inbox_email_conversation(
+        self, *, conversation_id: str, organizacion_id: UUID
+    ) -> bool:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        response = await self._request(
+            "DELETE",
+            "/rest/v1/conversaciones",
+            params={
+                "id": f"eq.{conversation_key}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "id",
+            },
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() or []
+        return isinstance(data, list) and any(
+            isinstance(row, dict) and str(row.get("id") or "") == conversation_key
+            for row in data
+        )
+
     async def assign_conversation_if_unassigned(
         self,
         *,

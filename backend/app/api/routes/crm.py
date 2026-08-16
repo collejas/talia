@@ -10954,6 +10954,38 @@ def require_any_permission(permission_codes: list[str]):
     return _dependency
 
 
+def require_inbox_email_delete_access():
+    """Autoriza borrar hilos del Inbox únicamente a los roles administrativos permitidos."""
+
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+            return user_token
+        repo = CRMRepository(user_token=user_token)
+        try:
+            context = await repo.get_permission_context()
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
+            raise HTTPException(status_code=502, detail="permission_context_unavailable") from exc
+
+        roles = context.get("roles") if isinstance(context, dict) else []
+        normalized_roles = {
+            str(role).strip().lower()
+            for role in roles
+            if isinstance(roles, list) and str(role).strip()
+        }
+        allowed = (
+            _coerce_bool(context.get("es_admin")) is True
+            or _coerce_bool(context.get("es_owner")) is True
+            or "admin_operativo" in normalized_roles
+        )
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="inbox_email_delete_forbidden")
+        return user_token
+
+    return _dependency
+
+
 def require_owner_only():
     async def _dependency(user_token: str = Depends(require_user_token)) -> str:
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
@@ -26804,6 +26836,67 @@ async def mark_inbox_conversation_read(
         conversacion_id=conversacion_id,
     )
     return {"ok": True, "updated_conversations": updated}
+
+
+@router.delete("/inbox/conversations/{conversacion_id}")
+async def delete_inbox_email_conversation(
+    *,
+    conversacion_id: UUID,
+    user_token: str = Depends(require_inbox_email_delete_access()),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    authorized_repo = CRMRepository(user_token=user_token)
+    try:
+        conversation = await authorized_repo.get_conversation_with_controls(
+            conversation_id=str(conversacion_id)
+        )
+    except CRMRepositoryError as exc:
+        if "not_found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail="inbox_conversation_not_found") from exc
+        raise HTTPException(status_code=502, detail="inbox_conversation_lookup_failed") from exc
+
+    conversation_org = str(conversation.get("organizacion_id") or "")
+    if conversation_org != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="inbox_conversation_not_found")
+    channel = str(conversation.get("canal") or "").strip().lower()
+    if channel != "correo":
+        try:
+            latest_messages = await authorized_repo.fetch_recent_messages(
+                conversation_id=str(conversacion_id), limit=1
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="inbox_conversation_lookup_failed") from exc
+        latest = latest_messages[-1] if latest_messages else {}
+        latest_data = latest.get("datos") if isinstance(latest, dict) else None
+        if isinstance(latest_data, str):
+            try:
+                latest_data = json.loads(latest_data)
+            except json.JSONDecodeError:
+                latest_data = None
+        if isinstance(latest_data, dict):
+            channel = str(latest_data.get("channel") or latest_data.get("canal") or "").strip().lower()
+    if channel != "correo":
+        raise HTTPException(status_code=400, detail="inbox_email_only")
+
+    try:
+        deleted = await CRMRepository().delete_inbox_email_conversation(
+            conversation_id=str(conversacion_id),
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.inbox.email_delete_failed",
+            extra={"conversation_id": str(conversacion_id), "organizacion_id": str(organizacion_id)},
+        )
+        raise HTTPException(status_code=502, detail="inbox_email_delete_failed") from exc
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="inbox_conversation_not_found")
+    logger.info(
+        "crm.inbox.email_deleted",
+        extra={"conversation_id": str(conversacion_id), "organizacion_id": str(organizacion_id)},
+    )
+    return {"ok": True, "conversation_id": str(conversacion_id), "channel": "correo"}
 
 
 @router.post("/inbox/conversations/{conversacion_id}/manual")

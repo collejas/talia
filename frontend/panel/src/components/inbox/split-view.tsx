@@ -12,6 +12,7 @@ import {
   IconRobot,
   IconRobotOff,
   IconTargetArrow,
+  IconTrash,
 } from "@tabler/icons-react";
 
 import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { usePermissions } from "@/hooks/use-permissions";
 import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 import { cn } from "@/lib/utils";
@@ -1051,6 +1053,8 @@ export function InboxSplitView({
   const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
   const [promotingOpportunity, setPromotingOpportunity] = React.useState(false);
   const [promoteError, setPromoteError] = React.useState<string | null>(null);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deletingEmail, setDeletingEmail] = React.useState(false);
   const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
   const [promoteForm, setPromoteForm] = React.useState<InboxPromoteFormState | null>(null);
   const [promoteFormError, setPromoteFormError] = React.useState<string | null>(null);
@@ -1096,6 +1100,15 @@ export function InboxSplitView({
   const inboxStreamConnectedRef = React.useRef(false);
   const inboxStreamRefreshTimeoutRef = React.useRef<number | null>(null);
   const { user: currentUser } = useCurrentUser();
+  const { context: permissionContext } = usePermissions();
+  const canDeleteInboxEmail = React.useMemo(() => {
+    const roles = Array.isArray(permissionContext.roles) ? permissionContext.roles : [];
+    return Boolean(
+      permissionContext.es_admin ||
+        permissionContext.es_owner ||
+        roles.some((role) => role.trim().toLowerCase() === "admin_operativo"),
+    );
+  }, [permissionContext.es_admin, permissionContext.es_owner, permissionContext.roles]);
   const batchLabelMap = React.useMemo(
     () => new Map((batchOptions ?? []).map((item) => [item.value, item.label?.trim() || "Lote"])),
     [batchOptions],
@@ -2313,6 +2326,38 @@ export function InboxSplitView({
     }
   }, [selectedThread, promoteForm]);
 
+  const handleDeleteEmail = React.useCallback(async () => {
+    if (!selectedThread || selectedThread.canal.trim().toLowerCase() !== "correo" || !canDeleteInboxEmail) {
+      return;
+    }
+    const targetId = selectedThread.id;
+    const contactLabel = selectedThread.contactoNombre || selectedThread.contactoCorreo || "este correo";
+    if (!window.confirm(`Se eliminará toda la conversación de correo de ${contactLabel}. Esta acción no se puede deshacer. ¿Continuar?`)) {
+      return;
+    }
+
+    setDeletingEmail(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/inbox/${targetId}`, { method: "DELETE" });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
+      if (!response.ok) {
+        setDeleteError(payload.error || payload.detail || "No se pudo eliminar el correo.");
+        return;
+      }
+      setThreadItems((current) => current.filter((thread) => thread.id !== targetId));
+      setTotalThreads((current) => Math.max(0, current - 1));
+      setSelectedId(null);
+      setCurrentMessages([]);
+      setDeleteError(null);
+    } catch (error) {
+      console.error("[inbox] email delete failed", error);
+      setDeleteError("Ocurrió un error inesperado al eliminar el correo.");
+    } finally {
+      setDeletingEmail(false);
+    }
+  }, [canDeleteInboxEmail, selectedThread]);
+
   return (
     <div className="flex min-w-0 gap-2 [&_[data-slot=badge]]:gap-0.5 [&_[data-slot=badge]]:px-1.5 [&_[data-slot=badge]]:py-0 [&_[data-slot=badge]]:text-[9px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:gap-1 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-[10px]">
       <aside className={cn("flex h-[calc(100vh-10.5rem)] min-h-[320px] flex-col overflow-hidden rounded-md border bg-card transition-[width] duration-300", opportunityDrawerOpen ? "w-[272px]" : "w-[320px]")}>
@@ -2560,6 +2605,19 @@ export function InboxSplitView({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {selectedThread.canal.trim().toLowerCase() === "correo" && canDeleteInboxEmail ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-destructive hover:text-destructive"
+                    onClick={() => void handleDeleteEmail()}
+                    disabled={deletingEmail}
+                    aria-label="Eliminar conversación de correo"
+                  >
+                    <IconTrash className="size-4" />
+                    {deletingEmail ? "Eliminando..." : "Eliminar correo"}
+                  </Button>
+                ) : null}
                 {selectedThread.opportunityId ? (
                   <Button variant="outline" size="sm" className="gap-2" onClick={openOpportunityWorkspace} disabled={opportunityDrawerLoading}>
                     <IconTargetArrow className="size-4" />
@@ -2614,6 +2672,11 @@ export function InboxSplitView({
               {promoteError ? (
                 <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {promoteError}
+                </div>
+              ) : null}
+              {deleteError ? (
+                <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {deleteError}
                 </div>
               ) : null}
               {selectedThread.manualMode ? (
