@@ -246,3 +246,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La UI contempla carga, error y ausencia de datos, y respeta campaña, periodo y tipo de campaña en los indicadores visibles.
 - Validación: `npx tsc --noEmit`, `react-doctor --scope changed` con 100/100, `py_compile` y `git diff --check`.
 - Pendiente: exportación comercial específica de este resumen y desglose opcional por plantilla.
+
+## 2026-08-16 — Corrección de conciliación WhatsApp por teléfono y envío operativo
+
+- Se aplicó `supabase/migrations/20260816_253000_campaign_attribution_normalization.sql`.
+- La atribución normaliza teléfonos por los últimos 10 dígitos para reconciliar los formatos mexicanos `+52` y `+521` entre prospectos, personas, contactos y conversaciones.
+- El envío se toma desde `prospeccion_contacto_envio.creado_en`; `procesado_en` no se usa como fecha de envío porque puede quedar posterior a la respuesta del cliente.
+- La RPC también usa el WAMID del envío para localizar el mensaje local cuando `mensajes.datos` no contiene `batch_id`/`envio_id`; los casos sin mensaje local pueden atribuir respuesta y oportunidad, pero no generan costo.
+- Se deduplican respuestas compartidas por campañas para evitar que una misma respuesta se inserte dos veces.
+- Validación real de la campaña master `WHATSAPP` con plantilla `Plantilla foto`: 46 conversaciones respondieron y 44 tienen oportunidad atribuida; los cinco teléfonos revisados por el usuario quedaron incluidos y suman cinco oportunidades.
+- Los envíos fallidos se excluyen de los enviados válidos y los cobros continúan dependiendo exclusivamente de `cobro_mensajes`.

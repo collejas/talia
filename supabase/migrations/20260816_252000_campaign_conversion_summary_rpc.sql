@@ -64,10 +64,14 @@ begin
         join public.mensajes m
           on m.organizacion_id = a.organizacion_id
          and m.id = a.mensaje_id
+        join public.prospeccion_contacto_envio envio
+          on envio.organizacion_id = a.organizacion_id
+         and envio.id = a.envio_id
         where a.organizacion_id = p_organizacion_id
           and a.tipo_atribucion = 'envio_campana'
           and a.direccion = 'saliente'
           and a.mensaje_id is not null
+          and envio.estado not in ('fallido','failed','error','cancelado')
           and (p_campana_id is null or a.campana_id = p_campana_id)
           and (p_desde is null or m.creado_en >= p_desde)
           and (p_hasta is null or m.creado_en < p_hasta)
@@ -79,6 +83,17 @@ begin
             cm.conversacion_id
         from campaign_messages cm
         where cm.conversacion_id is not null
+        union
+        select distinct
+            conversion.organizacion_id,
+            conversion.campana_id,
+            conversion.conversacion_id
+        from public.campana_conversion conversion
+        where conversion.organizacion_id = p_organizacion_id
+          and conversion.conversacion_id is not null
+          and (p_campana_id is null or conversion.campana_id = p_campana_id)
+          and (p_desde is null or conversion.respondio_en >= p_desde)
+          and (p_hasta is null or conversion.respondio_en < p_hasta)
     ),
     message_totals as (
         select
