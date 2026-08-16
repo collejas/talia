@@ -236,3 +236,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Validación real: master `WHATSAPP` reportó 113 envíos, 3 respuestas, 2 oportunidades y `$86.9282 MXN`; IMLUX reportó 44 envíos, 2 respuestas, 2 oportunidades y `$29.2016 MXN`.
 - Verificación adicional: `py_compile` y `npx tsc --noEmit` pasaron.
 - Pendiente: conectar este contrato con las tarjetas y tabla de `mapa-de-conversion?vista=campaigns`.
+
+## 2026-08-16 — UI comercial de campañas
+
+- Se conectó `DeferredCampaignSummary` al nuevo BFF `campaign-conversion`.
+- `mapa-de-conversion?vista=campaigns` ahora muestra un bloque separado de resultado comercial con enviados, entregados, respuestas, oportunidades, CPO y CAC WhatsApp.
+- Se agregó tabla por campaña con costo total de la conversación, tasas y estado de conciliación.
+- Los hilos técnicos no aparecen como filas ni conversiones; únicamente se consideran dentro del costo acumulado de su conversación.
+- La UI contempla carga, error y ausencia de datos, y respeta campaña, periodo y tipo de campaña en los indicadores visibles.
+- Validación: `npx tsc --noEmit`, `react-doctor --scope changed` con 100/100, `py_compile` y `git diff --check`.
+- Pendiente: exportación comercial específica de este resumen y desglose opcional por plantilla.

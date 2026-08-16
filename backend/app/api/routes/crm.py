@@ -4361,8 +4361,9 @@ class CampanaConversionResumenQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     campana_id: UUID | None = Field(default=None)
-    date_from: date | None = Field(default=None)
-    date_to: date | None = Field(default=None)
+    rango: str | None = Field(default=None, max_length=40)
+    desde: str | None = Field(default=None, max_length=40)
+    hasta: str | None = Field(default=None, max_length=40)
     limit: int = Field(default=100, ge=1, le=1000)
     offset: int = Field(default=0, ge=0)
 
@@ -42305,25 +42306,24 @@ async def demografia_campanas_conversion(
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
-    date_from_dt, date_to_exclusive = local_date_range_to_utc(
-        date_from=params.date_from,
-        date_to=params.date_to,
+    date_from_dt, date_to_dt = _resolve_date_range(
+        params.rango,
+        params.desde,
+        params.hasta,
         timezone_name=effective_timezone,
-    )
-    date_to_dt = (
-        date_to_exclusive - timedelta(microseconds=1)
-        if date_to_exclusive is not None
-        else None
     )
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
+    date_to_query = (
+        date_to_dt + timedelta(microseconds=1) if date_to_dt is not None else None
+    )
 
     try:
         rows = await repo.get_campana_conversion_resumen_rango(
             organizacion_id=organizacion_id,
             campana_id=params.campana_id,
             date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+            date_to_iso=date_to_query.isoformat() if date_to_query else None,
             limit=params.limit,
             offset=params.offset,
         )

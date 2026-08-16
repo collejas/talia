@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { AcquisitionSummary } from "@/components/mapa-conversion/acquisition-summary";
+import { CampaignConversionSummary } from "@/components/mapa-conversion/campaign-conversion-summary.client";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
 import {
   buildDeferredCampaignAttribution,
@@ -55,5 +56,18 @@ export function DeferredCampaignSummary({ summary, filters }: Props) {
     };
   }, [summary, attribution, filters]);
 
-  return <AcquisitionSummary summary={enrichedSummary} mode="campaigns" />;
+  return (
+    <div className="space-y-6">
+      <CampaignConversionSummary
+        filters={{
+          campanaId: filters.campanaId,
+          campanaTipo: filters.campanaTipo,
+          rango: filters.rango,
+          desde: filters.desde,
+          hasta: filters.hasta,
+        }}
+      />
+      <AcquisitionSummary summary={enrichedSummary} mode="campaigns" />
+    </div>
+  );
 }

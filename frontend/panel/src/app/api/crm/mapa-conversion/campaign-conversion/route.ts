@@ -8,8 +8,9 @@ export async function GET(request: Request) {
     withUserToken: true,
     searchParams: {
       campana_id: searchParams.get("campana_id") || undefined,
-      date_from: searchParams.get("date_from") || undefined,
-      date_to: searchParams.get("date_to") || undefined,
+      rango: searchParams.get("rango") || undefined,
+      desde: searchParams.get("desde") || undefined,
+      hasta: searchParams.get("hasta") || undefined,
       limit: searchParams.get("limit") || undefined,
       offset: searchParams.get("offset") || undefined,
     },

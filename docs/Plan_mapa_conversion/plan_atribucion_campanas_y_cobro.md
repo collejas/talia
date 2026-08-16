@@ -234,6 +234,7 @@ UUID como información principal.
 - Registrar una sola primera respuesta. **Parcialmente completado:** las respuestas entrantes activan la sincronización por conversación.
 - Enlazar oportunidad y etapa ganada.
 - Crear resumen, exportación y pendientes de conciliación. **Resumen completado:** `GET /crm/demografia/campanas-conversion` devuelve KPI por campaña y totales usando costos reales del ledger.
+- Conectar tarjetas, tabla y filtros de `vista=campaigns`. **Completado:** la UI consume el BFF de conversión y mantiene separado el análisis web histórico.
 
 ### Fase 4 — Frontend
 
