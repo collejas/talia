@@ -781,6 +781,17 @@ async def _escalate_persona_to_sales(
         )
         return False
 
+    try:
+        await storage.update_conversation(
+            conversation_id,
+            {"estado": "cerrada"},
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.followup.close_conversation_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
     followup_meta["escalate"] = {"sent_at": datetime.now(timezone.utc).isoformat()}
     metadata["whatsapp_followup"] = followup_meta
     org_id = opportunity.get("organizacion_id")

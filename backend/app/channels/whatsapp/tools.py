@@ -2529,9 +2529,13 @@ async def _handle_close_lead(
         profiling_statuses=profiling_statuses,
     )
     try:
-        # Mantener hilo único en inbox: en WhatsApp el cierre operativo del lead
-        # no debe forzar una nueva conversación técnica al siguiente mensaje.
-        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
+        # En WhatsApp el flujo normal terminó: cerrar la conversación técnica
+        # para que el siguiente contacto inicie un ciclo y oportunidad nuevos.
+        conversation_state = "cerrada" if (context.channel or "").strip().lower() == "whatsapp" else "pendiente"
+        await storage.update_conversation(
+            context.conversation_id,
+            {"estado": conversation_state},
+        )
     except StorageError as exc:
         logger.warning(
             "whatsapp.close_lead.conversation_update_failed",
