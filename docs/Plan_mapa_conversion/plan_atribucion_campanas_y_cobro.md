@@ -224,7 +224,8 @@ UUID como información principal.
 
 - Crear `campana_mensaje_atribucion` y `campana_conversion`.
 - Agregar foreign keys, índices, constraints y RLS.
-- Crear funciones idempotentes de atribución.
+- Crear funciones idempotentes de atribución. **Completado:** `sync_campana_atribucion` sincroniza envíos explícitos, primera respuesta y conversión por conversación.
+- Ejecutar y validar una sincronización inicial sin modificar el ledger. **Completado:** 157 envíos, 5 respuestas y 5 conversiones; 5 respuestas quedaron pendientes por ausencia de `cobro_mensaje_id`.
 
 ### Fase 3 — Backend
 

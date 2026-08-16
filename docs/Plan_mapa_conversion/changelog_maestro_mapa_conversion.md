@@ -204,4 +204,14 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La relación financiera usa `cobro_mensaje_id` y valida que coincidan tenant y `mensaje_id`; no duplica importes ni crea cargos.
 - Se agregaron foreign keys compuestas por `organizacion_id`, constraints de dirección/tipo/estado, índices para campaña, conversación, cobro y pendientes de conciliación, y RLS de lectura para tenant/owner.
 - Las tablas quedaron vacías deliberadamente. No se hizo backfill ni se modificaron mensajes, cobros, conversaciones u oportunidades existentes.
-- Pendiente: crear las funciones idempotentes para poblar la atribución de envíos/respuestas y enlazar las oportunidades reales.
+
+## 2026-08-16 — Sincronización inicial de atribución
+
+- Se aplicó `supabase/migrations/20260816_251000_campaign_attribution_sync_rpc.sql` y se publicó `public.sync_campana_atribucion(uuid,timestamptz,integer)` como función `security definer` ejecutable únicamente por `service_role`.
+- La función usa únicamente relaciones explícitas: `source=prospeccion`, `batch_id`, `envio_id` válido dentro del batch, mensaje y conversación; no infiere campañas por teléfono, texto o similitud.
+- La función es idempotente y marca solo el primer envío como inicial por campaña/conversación; los envíos adicionales siguen atribuidos sin crear otra conversión.
+- Se sincronizaron inicialmente 157 envíos de campaña, 5 primeras respuestas y 5 conversiones, en 162 filas de atribución.
+- Las 5 respuestas quedaron pendientes de ledger porque sus mensajes entrantes todavía no tienen `cobro_mensaje_id`; no se inventaron cargos.
+- Distribución inicial: campaña `WHATSAPP` del master, 113 envíos y 3 respuestas; campaña `WHATSAPP IMLUX AGOSTO`, 44 envíos y 2 respuestas.
+- Costos ledger asociados a los envíos atribuidos: `$73.6082 MXN` para master y `$28.6616 MXN` para IMLUX. Estos importes se leen de `cobro_mensajes` y no se recalculan.
+- Pendiente: integrar esta sincronización en los flujos de envío/callback/respuesta y crear el resumen backend para `mapa-de-conversion?vista=campaigns`.
