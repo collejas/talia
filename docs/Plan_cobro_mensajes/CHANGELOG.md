@@ -13,6 +13,16 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 
 ## 2026-08-15
 
+### Bloque 1 — Auditoría final de aceptación en producción — En validación
+
+- Tarifa Meta confirmada por el usuario: `$0.5614 MXN` para México/WhatsApp.
+- No se detectaron duplicados por tenant + proveedor + identificador del mensaje.
+- No quedaron periodos vencidos abiertos; hay `8` periodos cerrados de `10` existentes.
+- El ledger actual contiene `1,232` registros Meta y `1,140` registros históricos Twilio del backfill; estos últimos conservan su identidad histórica y no se mezclan con los rangos basados en la fecha real del mensaje.
+- En agosto hay `159` mensajes `marketing` con costo Meta aplicado; `350` entrantes y `27` salientes permanecen como `unknown` y requieren seguimiento de pricing Meta, sin inferir costo automáticamente.
+- Callbacks Meta: `1,826` vinculados y `106` no conciliados; los no conciliados no generan cargos.
+- Las políticas RLS de las tablas de cobro están presentes; falta completar la prueba funcional con sesiones reales de owner y tenant normal.
+
 ### Corrección de rango Mes actual — Corregido
 
 - Se detectó que el frontend iniciaba `mes_actual` en el día corriente en vez del primer día del mes.
