@@ -22,6 +22,9 @@ Este archivo registra el avance del diseño e implementación del sistema de cob
 - En agosto hay `159` mensajes `marketing` con costo Meta aplicado; `350` entrantes y `27` salientes permanecen como `unknown` y requieren seguimiento de pricing Meta, sin inferir costo automáticamente.
 - Callbacks Meta: `1,826` vinculados y `106` no conciliados; los no conciliados no generan cargos.
 - Las políticas RLS de las tablas de cobro están presentes; falta completar la prueba funcional con sesiones reales de owner y tenant normal.
+- Validación funcional confirmada: el owner puede consultar el consolidado y filtrar tenants correctamente.
+- Validación funcional confirmada: un usuario tenant solo puede consultar sus propios datos.
+- El bloque 1 queda pendiente únicamente por el seguimiento de pricing `unknown` y callbacks Meta no conciliados.
 
 ### Corrección de rango Mes actual — Corregido
 
