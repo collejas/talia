@@ -42375,30 +42375,31 @@ async def demografia_campanas_conversion(
         "costo_total": round(sum(item["costo_total"] for item in items), 4),
         "pendientes_cobro": sum(item["pendientes_cobro"] for item in items),
     }
-    totals["costo_por_oportunidad"] = round(
-        totals["costo_total"] / totals["oportunidades"], 4
-        if totals["oportunidades"]
-        else 0,
+    # Los rangos sin actividad son válidos (por ejemplo, "hoy" al inicio
+    # del día). Evitar evaluar cualquier división antes de comprobar el
+    # denominador para que el resumen devuelva ceros en lugar de 500.
+    oportunidades = totals["oportunidades"]
+    clientes = totals["clientes"]
+    envios = totals["envios"]
+    conversaciones = totals["conversaciones"]
+    totals["costo_por_oportunidad"] = (
+        round(totals["costo_total"] / oportunidades, 4)
+        if oportunidades > 0
+        else 0
     )
-    totals["costo_adquisicion"] = round(
-        totals["costo_total"] / totals["clientes"] if totals["clientes"] else 0,
-        4,
+    totals["costo_adquisicion"] = (
+        round(totals["costo_total"] / clientes, 4) if clientes > 0 else 0
     )
-    totals["tasa_entrega_pct"] = round(
-        totals["entregados"] / totals["envios"] * 100 if totals["envios"] else 0,
-        2,
+    totals["tasa_entrega_pct"] = (
+        round(totals["entregados"] / envios * 100, 2) if envios > 0 else 0
     )
-    totals["tasa_respuesta_pct"] = round(
-        totals["respondieron"] / totals["conversaciones"] * 100
-        if totals["conversaciones"]
-        else 0,
-        2,
+    totals["tasa_respuesta_pct"] = (
+        round(totals["respondieron"] / conversaciones * 100, 2)
+        if conversaciones > 0
+        else 0
     )
-    totals["tasa_cierre_pct"] = round(
-        totals["clientes"] / totals["oportunidades"] * 100
-        if totals["oportunidades"]
-        else 0,
-        2,
+    totals["tasa_cierre_pct"] = (
+        round(clientes / oportunidades * 100, 2) if oportunidades > 0 else 0
     )
 
     return {
