@@ -514,13 +514,67 @@ La generación de una plantilla no debe mezclarse con:
 - Costos de Meta.
 - Atribución comercial de campañas.
 
-### 9.7 Configuración de prompts
+### 9.7 Configuración de prompts desde `settings/variables`
 
-Los dos prompts se administrarán en el proyecto de OpenAI del dueño de la plataforma. Sus identificadores y versiones se mantendrán en configuración segura del backend durante la primera fase.
+Los dos prompts se administrarán en el proyecto de OpenAI del dueño de la plataforma. El `prompt_id` y la versión activa se capturarán desde:
 
-No se creará una tabla de prompts que duplique el dashboard de OpenAI, salvo que posteriormente se requiera una pantalla administrativa para activar, desactivar o asignar versiones.
+```text
+/settings/variables
+```
 
-Si en el futuro se crea esa pantalla, deberá utilizar columnas explícitas como `canal`, `prompt_id`, `prompt_version`, `activo`, `vigente_desde` y `vigente_hasta`; nunca una configuración JSON genérica.
+La sección será visible y editable únicamente cuando el usuario pertenezca al tenant propietario de la plataforma. Los demás tenants no podrán modificar estos valores; únicamente utilizarán la configuración central activa.
+
+La configuración no se guardará dentro de `organizaciones.config`, `metadata` o `jsonb`. Se persistirá en una tabla con columnas explícitas:
+
+```text
+prospeccion_plantilla_ai_prompt_config
+```
+
+Columnas iniciales:
+
+- `id` `uuid` primary key.
+- `organizacion_id` `uuid` not null references la organización propietaria.
+- `canal` `text` not null.
+- `prompt_id` `text` not null.
+- `prompt_version` `text` not null.
+- `activo` `boolean` not null default `true`.
+- `actualizado_por` `uuid` not null.
+- `creado_en` `timestamptz` not null.
+- `actualizado_en` `timestamptz` not null.
+
+Restricciones e índices:
+
+- Unique `(organizacion_id, canal)`.
+- `canal` limitado a `correo` y `whatsapp`.
+- `prompt_id` no vacío y con formato válido para prompts de OpenAI.
+- `prompt_version` no vacío.
+- Foreign key index sobre `organizacion_id`.
+- Índice `(organizacion_id, activo, canal)` para resolver rápidamente la configuración vigente.
+- La aplicación debe garantizar que `organizacion_id` sea el tenant propietario.
+
+La tabla tendrá como máximo dos registros activos para el tenant propietario:
+
+| Canal | Configuración |
+|---|---|
+| `whatsapp` | Prompt y versión del asistente de plantillas WhatsApp |
+| `correo` | Prompt y versión del asistente de plantillas de correo |
+
+La pantalla debe mostrar dos bloques independientes:
+
+- `Prompt IA para plantillas de WhatsApp`.
+- `Prompt IA para plantillas de correo`.
+
+Cada bloque tendrá:
+
+- Campo `prompt_id`.
+- Campo `prompt_version`.
+- Estado activo.
+- Usuario que realizó la última modificación.
+- Fecha de última actualización.
+
+El backend resolverá siempre esta tabla antes de llamar a OpenAI y registrará el `prompt_id` y `prompt_version` usados en `prospeccion_plantilla_ai_generaciones`.
+
+La configuración de base de datos será la fuente principal. Variables de entorno solo podrán existir como fallback de bootstrap o contingencia operativa, nunca como mecanismo normal de edición para el usuario.
 
 ### 9.8 Retención del contenido
 
@@ -530,7 +584,9 @@ El contenido completo solo se conservará si el negocio requiere revisar exactam
 
 ## 10. Configuración de OpenAI
 
-La configuración propuesta es:
+La configuración operativa será administrada por el tenant propietario en `settings/variables` y persistirá en `prospeccion_plantilla_ai_prompt_config`.
+
+Como fallback técnico de bootstrap o recuperación se podrán definir:
 
 ```text
 OPENAI_PROSPECCION_TEMPLATE_WHATSAPP_PROMPT_ID
@@ -538,6 +594,12 @@ OPENAI_PROSPECCION_TEMPLATE_WHATSAPP_PROMPT_VERSION
 OPENAI_PROSPECCION_TEMPLATE_EMAIL_PROMPT_ID
 OPENAI_PROSPECCION_TEMPLATE_EMAIL_PROMPT_VERSION
 ```
+
+Estos valores de entorno no deben sobrescribir silenciosamente una configuración válida guardada desde `settings/variables`. La precedencia será:
+
+1. Configuración activa de `prospeccion_plantilla_ai_prompt_config`.
+2. Fallback de entorno únicamente si no existe configuración de base de datos.
+3. Error controlado si no existe ninguna configuración.
 
 El backend debe usar la integración centralizada existente para construir el cliente OpenAI.
 
@@ -638,8 +700,11 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Preparar casos de prueba de WhatsApp.
 - Documentar ejemplos buenos y malos.
 
-### Fase 1: catálogo y servicio backend
+### Fase 1: configuración, catálogo y servicio backend
 
+- Crear la tabla `prospeccion_plantilla_ai_prompt_config`.
+- Agregar la sección de prompts de plantillas en `settings/variables`.
+- Restringir lectura y escritura al tenant propietario en backend.
 - Crear catálogo backend de variables.
 - Crear schemas Pydantic.
 - Crear servicio de generación.
@@ -647,8 +712,10 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Validar tenant, campaña y permisos.
 - Implementar timeout, errores y rate limit.
 
-### Fase 2: endpoint y validadores
+### Fase 2: migraciones, endpoint y validadores
 
+- Crear las tablas del catálogo, configuración, generaciones y relaciones de variables.
+- Agregar foreign keys, constraints, índices y políticas RLS correspondientes.
 - Crear `POST /api/prospeccion/templates/ai/generate`.
 - Agregar validador de placeholders.
 - Agregar validador de correo.
