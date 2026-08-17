@@ -104,6 +104,22 @@ Los siguientes valores:
 - Capturar los valores reales publicados en OpenAI.
 - Continuar con el catálogo/selector de variables y el endpoint de generación.
 
+## 2026-08-17 — Prompts base para OpenAI
+
+### Agregado
+
+- Se creó `Promps_plantillas/README.md` con instrucciones de copia al dashboard de OpenAI.
+- Se creó `Promps_plantillas/prospeccion_plantilla_whatsapp.md`.
+- Se creó `Promps_plantillas/prospeccion_plantilla_correo.md`.
+- Cada prompt define sus variables de entrada, instrucciones de canal, JSON Schema de salida, caso de prueba y validaciones que permanecen en backend.
+- Se decidió no agregar funciones ejecutables en esta fase: los prompts solo generan borradores estructurados; no guardan, publican, envían ni consultan datos externos.
+
+### Pendiente
+
+- Crear ambos prompts en el dashboard de OpenAI.
+- Publicar una primera versión de cada prompt.
+- Ejecutar los casos de prueba y registrar los `prompt_id`/versiones en `/settings/variables`.
+
 ## Próximos avances
 
 ### Pendiente — Fase 0: prompts en OpenAI
