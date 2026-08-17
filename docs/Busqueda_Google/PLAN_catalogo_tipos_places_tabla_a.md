@@ -11,8 +11,12 @@
 - [x] Validar `included_types` contra el catálogo activo.
 - [x] Crear proxy BFF y cliente TypeScript para consumir el catálogo.
 - [x] Reemplazar el input manual por el selector jerárquico en el panel.
+- [x] Sustituir el catálogo por `google_places_tabla_a_completa_bilingue_corregida.csv`.
+- [x] Agregar y cargar restricciones regionales explícitas del catálogo.
 
 Nota operativa: el endpoint está en el código fuente, pero el proceso `talia-api` activo debe reiniciarse/reconstruirse para que publique `/crm/prospeccion/google/tipos`; mientras use una instancia anterior, el panel recibirá `404`.
+
+La migración de reemplazo aplicada es `supabase/migrations/20260817050710_replace_google_places_types_with_corrected_catalog_v4.sql`. La migración inicial se conserva sin modificar como historial.
 
 ## 1. Objetivo
 
