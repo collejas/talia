@@ -4923,6 +4923,30 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
         return self
 
 
+class GooglePlacesTypeItem(BaseModel):
+    categoria_codigo: str
+    categoria_nombre_en: str
+    categoria_nombre_es: str
+    codigo_google: str
+    nombre_en: str
+    nombre_es: str
+    agregado_en_google: bool
+    tabla_google: Literal["A"]
+    activo: bool
+    orden_categoria: int
+    orden_tipo: int
+    version_catalogo: str
+
+
+class GooglePlacesTypesResponse(BaseModel):
+    ok: bool
+    items: list[GooglePlacesTypeItem]
+    total: int
+    limit: int
+    offset: int
+    version_catalogo: str | None = None
+
+
 class GoogleTrendsPayload(BaseModel):
     """Parámetros de consulta para Google Trends."""
 
@@ -30357,6 +30381,26 @@ async def crear_busqueda_google(
     user_token: str = Depends(require_user_token),
     payload: GoogleProspeccionBusquedaPayload,
 ) -> dict[str, Any]:
+    if payload.strategy == "nearby" and payload.included_types:
+        try:
+            active_codes = await repo.list_active_google_places_type_codes(
+                codes=payload.included_types,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="google_place_types_unavailable") from exc
+        invalid_codes = [code for code in payload.included_types if code not in active_codes]
+        if invalid_codes:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": {
+                        "code": "google_place_type_invalid",
+                        "message": "Una o más clasificaciones de Google Places no son válidas.",
+                        "invalid_types": invalid_codes,
+                    }
+                },
+            )
+
     dense_mode = bool(payload.dense_mode)
     query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
     meta_payload: dict[str, Any] = {
@@ -30424,6 +30468,42 @@ async def crear_busqueda_google(
         "busqueda_id": str(busqueda_uuid),
         "status": "queued",
     }
+
+
+@router.get("/prospeccion/google/tipos", response_model=GooglePlacesTypesResponse)
+async def listar_tipos_google_places(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    search: Annotated[str | None, Query(max_length=100)] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 1000,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GooglePlacesTypesResponse:
+    """Devuelve el catálogo activo de tipos Google Places Tabla A."""
+
+    try:
+        items = await repo.list_google_places_types(
+            search=search,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="google_place_types_unavailable") from exc
+
+    version_values = {
+        str(item.get("version_catalogo")).strip()
+        for item in items
+        if isinstance(item, dict) and str(item.get("version_catalogo") or "").strip()
+    }
+    version_catalogo = next(iter(version_values)) if len(version_values) == 1 else None
+    return GooglePlacesTypesResponse(
+        ok=True,
+        items=[GooglePlacesTypeItem.model_validate(item) for item in items],
+        total=len(items),
+        limit=limit,
+        offset=offset,
+        version_catalogo=version_catalogo,
+    )
 
 
 @router.get("/prospeccion/usage")

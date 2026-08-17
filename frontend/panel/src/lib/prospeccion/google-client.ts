@@ -57,6 +57,30 @@ export type GoogleBusquedasResponse = {
   offset: number;
 };
 
+export type GooglePlacesTypeItem = {
+  categoria_codigo: string;
+  categoria_nombre_en: string;
+  categoria_nombre_es: string;
+  codigo_google: string;
+  nombre_en: string;
+  nombre_es: string;
+  agregado_en_google: boolean;
+  tabla_google: "A";
+  activo: boolean;
+  orden_categoria: number;
+  orden_tipo: number;
+  version_catalogo: string;
+};
+
+export type GooglePlacesTypesResponse = {
+  ok: boolean;
+  items: GooglePlacesTypeItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  version_catalogo?: string | null;
+};
+
 export type GoogleResultadoItem = {
   resultado_id: string;
   busqueda_id: string;
@@ -242,6 +266,18 @@ export async function createGoogleBusqueda(
     method: "POST",
     body,
   });
+}
+
+export async function listGooglePlacesTypes(params: {
+  search?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<GooglePlacesTypesResponse> {
+  const url = buildClientUrl("/api/prospeccion/google/tipos");
+  if (params.search?.trim()) url.searchParams.set("search", params.search.trim());
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit));
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset));
+  return requestJson<GooglePlacesTypesResponse>(url.toString());
 }
 
 function buildClientUrl(path: string): URL {

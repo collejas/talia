@@ -7,8 +7,9 @@
 - [x] Carga inicial verificada: 478 registros, 19 categorías y 478 códigos únicos.
 - [x] RLS habilitado con lectura de registros activos para `authenticated`.
 - [x] Índices y constraint de unicidad sobre `codigo_google` verificados.
-- [ ] Crear endpoint backend para consultar el catálogo.
-- [ ] Validar `included_types` contra el catálogo activo.
+- [x] Crear endpoint backend para consultar el catálogo.
+- [x] Validar `included_types` contra el catálogo activo.
+- [x] Crear proxy BFF y cliente TypeScript para consumir el catálogo.
 - [ ] Reemplazar el input manual por el selector jerárquico en el panel.
 
 ## 1. Objetivo

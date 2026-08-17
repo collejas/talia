@@ -26,6 +26,63 @@ def test_lead_quote_item_rejects_unbounded_description() -> None:
 
 
 @pytest.mark.asyncio
+async def test_google_places_types_endpoint_returns_catalog_items() -> None:
+    repo = AsyncMock()
+    repo.list_google_places_types.return_value = [
+        {
+            "categoria_codigo": "food_and_drink",
+            "categoria_nombre_en": "Food and Drink",
+            "categoria_nombre_es": "Comidas y bebidas",
+            "codigo_google": "restaurant",
+            "nombre_en": "Restaurant",
+            "nombre_es": "Restaurante",
+            "agregado_en_google": False,
+            "tabla_google": "A",
+            "activo": True,
+            "orden_categoria": 8,
+            "orden_tipo": 1,
+            "version_catalogo": "2026-02-12",
+        }
+    ]
+
+    response = await crm_routes.listar_tipos_google_places(repo=repo, search="rest", limit=1000, offset=0)
+
+    assert response.ok is True
+    assert response.total == 1
+    assert response.items[0].codigo_google == "restaurant"
+    repo.list_google_places_types.assert_awaited_once_with(search="rest", limit=1000, offset=0)
+
+
+@pytest.mark.asyncio
+async def test_google_nearby_rejects_type_not_in_active_catalog() -> None:
+    repo = AsyncMock()
+    repo.list_active_google_places_type_codes.return_value = {"restaurant"}
+    payload = crm_routes.GoogleProspeccionBusquedaPayload(
+        lat=19.432608,
+        lng=-99.133209,
+        radio_m=1500,
+        included_types=["restaurant", "not_a_google_type"],
+        strategy="nearby",
+    )
+
+    with pytest.raises(crm_routes.HTTPException) as error:
+        await crm_routes.crear_busqueda_google(
+            repo=repo,
+            _="busquedas.view",
+            __="busquedas.run",
+            user_token="test-token",
+            payload=payload,
+        )
+
+    assert error.value.status_code == 422
+    assert error.value.detail["error"]["code"] == "google_place_type_invalid"
+    assert error.value.detail["error"]["invalid_types"] == ["not_a_google_type"]
+    repo.list_active_google_places_type_codes.assert_awaited_once_with(
+        codes=["restaurant", "not_a_google_type"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_resolve_available_quote_folio_replaces_duplicate() -> None:
     repo = AsyncMock()
     repo.quote_folio_exists.return_value = True

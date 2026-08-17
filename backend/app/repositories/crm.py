@@ -18632,6 +18632,71 @@ class CRMRepository:
             "clase": await self._list_scian_table(table="scian_clase"),
         }
 
+    async def list_google_places_types(
+        self,
+        *,
+        search: str | None = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Devuelve los tipos activos de Google Places Tabla A para el panel."""
+
+        params: dict[str, Any] = {
+            "select": (
+                "categoria_codigo,categoria_nombre_en,categoria_nombre_es,"
+                "codigo_google,nombre_en,nombre_es,agregado_en_google,tabla_google,"
+                "activo,orden_categoria,orden_tipo,version_catalogo"
+            ),
+            "tabla_google": "eq.A",
+            "activo": "eq.true",
+            "order": "orden_categoria.asc,orden_tipo.asc,nombre_es.asc",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        normalized_search = (search or "").strip()
+        if normalized_search:
+            search_literal = _postgrest_ilike_literal(normalized_search[:100])
+            params["or"] = (
+                f"(categoria_nombre_es.ilike.{search_literal},"
+                f"categoria_nombre_en.ilike.{search_literal},"
+                f"nombre_es.ilike.{search_literal},"
+                f"nombre_en.ilike.{search_literal},"
+                f"codigo_google.ilike.{search_literal})"
+            )
+
+        resp = await self._request("GET", "/rest/v1/google_places_types", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"google_places_types_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_active_google_places_type_codes(
+        self,
+        *,
+        codes: Sequence[str],
+    ) -> set[str]:
+        """Obtiene los códigos activos permitidos para nuevas búsquedas Nearby."""
+
+        normalized_codes = sorted({str(code).strip() for code in codes if str(code or "").strip()})
+        if not normalized_codes:
+            return set()
+        params = {
+            "select": "codigo_google",
+            "codigo_google": _postgrest_in_clause(normalized_codes),
+            "tabla_google": "eq.A",
+            "activo": "eq.true",
+            "limit": str(len(normalized_codes)),
+        }
+        resp = await self._request("GET", "/rest/v1/google_places_types", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"google_places_types_validation_invalid_response:{data!r}")
+        return {
+            str(row.get("codigo_google")).strip()
+            for row in data
+            if isinstance(row, dict) and str(row.get("codigo_google") or "").strip()
+        }
+
     async def list_scian_clase_indice(
         self,
         *,
