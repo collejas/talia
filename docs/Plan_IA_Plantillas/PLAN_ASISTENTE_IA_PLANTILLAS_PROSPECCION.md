@@ -247,10 +247,16 @@ Reglas importantes:
 Endpoint sugerido:
 
 ```text
-POST /api/prospeccion/templates/ai/generate
+POST /crm/prospeccion/plantillas/ai/generate
 ```
 
-El endpoint debe requerir autenticación y el permiso que actualmente protege la administración de plantillas de prospección.
+El endpoint debe requerir autenticación y el permiso que actualmente protege la administración de plantillas de prospección. El panel lo consume mediante su BFF de Next.js; el navegador no llama directamente a OpenAI.
+
+Catálogo utilizado por el selector:
+
+```text
+GET /crm/prospeccion/plantillas/ai/variables?canal=correo|whatsapp
+```
 
 ### Request
 

@@ -16,13 +16,14 @@ import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { TemplateAiAssistant, type TemplateAiDraft } from "./components/template-ai-assistant"
 import {
   createCrmCampaign,
   createContactoTemplate,
@@ -2261,6 +2262,7 @@ ${secondCellHtml}
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{campaignFormMode === "create" ? "Crear campaña" : "Editar campaña"}</DialogTitle>
+            <DialogDescription>Define el nombre y el canal de la campaña.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
@@ -2306,6 +2308,9 @@ ${secondCellHtml}
           <div className="flex max-h-[94vh] min-h-[84vh] flex-col">
             <DialogHeader className="border-b px-4 py-3 sm:px-5">
               <DialogTitle className="text-sm font-semibold">Plantillas para {templatesCampanaNombre || "Campaña"}</DialogTitle>
+              <DialogDescription className="text-xs">
+                Crea y revisa borradores de plantillas antes de utilizarlos en la campaña.
+              </DialogDescription>
               <p className="text-xs text-muted-foreground">
                 Este espacio solo sirve para preparar el mensaje base. Después se usará desde Prospectos para enviar
                 automáticamente.
@@ -2446,6 +2451,28 @@ ${secondCellHtml}
                   <div className="mb-3 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {templateError}
                   </div>
+                ) : null}
+
+                {templateForm.canal === "correo" || templateForm.canal === "whatsapp" ? (
+                  <TemplateAiAssistant
+                    canal={templateForm.canal}
+                    campanaId={templatesCampanaId}
+                    onApply={(draft: TemplateAiDraft) => {
+                      setTemplateForm((prev) => ({
+                        ...prev,
+                        nombre: prev.nombre.trim() ? prev.nombre : draft.nombre_sugerido,
+                        descripcion: prev.descripcion.trim() ? prev.descripcion : draft.descripcion,
+                        asunto: draft.asunto ?? prev.asunto,
+                        cuerpoTexto: draft.cuerpo_texto,
+                        cuerpoHtml: draft.cuerpo_html ?? prev.cuerpoHtml,
+                        metaCategory: draft.meta_category_sugerida === "marketing" || draft.meta_category_sugerida === "utility" || draft.meta_category_sugerida === "authentication"
+                          ? draft.meta_category_sugerida
+                          : prev.metaCategory,
+                        metaTemplateLanguage: draft.language_code_sugerido ?? prev.metaTemplateLanguage,
+                      }))
+                      setBanner({ type: "success", message: "Borrador generado. Revisa y edita el contenido antes de guardarlo." })
+                    }}
+                  />
                 ) : null}
 
                 {templateForm.canal === "whatsapp" ? (

@@ -120,16 +120,48 @@ Los siguientes valores:
 - Publicar una primera versión de cada prompt.
 - Ejecutar los casos de prueba y registrar los `prompt_id`/versiones en `/settings/variables`.
 
+## 2026-08-17 — Catálogo y primera generación de borradores
+
+### Agregado
+
+- Se creó `GET /crm/prospeccion/plantillas/ai/variables?canal=...` para cargar el catálogo explícito desde Supabase.
+- Se creó `POST /crm/prospeccion/plantillas/ai/generate` con validación de tenant, campaña, canal, prompt, variables y respuesta.
+- Se agregó el registro de generaciones y variables seleccionadas/utilizadas en las tablas nuevas.
+- Se integró el ledger existente de OpenAI para tokens y costos cuando la respuesta puede correlacionarse.
+- Se agregó el asistente dentro del editor de plantillas de `/prospeccion/campanas`.
+- El usuario selecciona variables, escribe una instrucción y aplica el resultado al editor como borrador editable.
+- No se guarda ni publica automáticamente la plantilla generada.
+
+### Seguridad y validación
+
+- El frontend usa BFF; no llama OpenAI directamente.
+- El backend resuelve la organización desde autenticación y valida que la campaña pertenezca al tenant.
+- Se rechazan variables desconocidas, placeholders no seleccionados y HTML peligroso.
+- Validación ejecutada: `compileall`, ESLint, TypeScript (`tsc --noEmit`), React Doctor (100/100) y consulta real del catálogo Supabase (21 variables por canal).
+
+## 2026-08-17 — Corrección de tenant en el BFF
+
+- Se corrigió el BFF de `/api/prospeccion/plantillas/ai` para conservar el `X-Organizacion-Id` resuelto desde la sesión autenticada.
+- Se eliminó el envío explícito de `organizacionId: null`, que provocaba `422` antes de ejecutar el catálogo.
+- Se agregaron descripciones accesibles a los diálogos de campañas y plantillas.
+- ESLint y TypeScript vuelven a pasar sin errores; permanecen advertencias preexistentes del archivo grande de campañas.
+
+### Pendiente
+
+- Publicar/reiniciar backend y panel para activar las nuevas rutas en el entorno desplegado.
+- Ejecutar una generación autenticada con cada prompt real.
+- Agregar pruebas automatizadas de autorización, respuesta inválida, placeholders y sanitización HTML.
+
 ## Próximos avances
 
 ### Pendiente — Fase 0: prompts en OpenAI
 
-- Crear el prompt productivo de WhatsApp.
-- Crear el prompt productivo de correo.
-- Definir sus variables de entrada.
-- Definir el JSON de salida.
-- Preparar casos de prueba y ejemplos esperados.
-- Registrar los `prompt_id` y versiones iniciales.
+- Crear el prompt productivo de WhatsApp. ✅
+- Crear el prompt productivo de correo. ✅
+- Definir sus variables de entrada. ✅
+- Definir el JSON de salida. ✅
+- Preparar casos de prueba y ejemplos esperados. ✅ documental; pendiente ejecución autenticada
+- Registrar los `prompt_id` y versiones iniciales. ✅ en `/settings/variables`
 
 ### Pendiente — Fase 1: configuración y catálogo
 
@@ -139,23 +171,23 @@ Los siguientes valores:
 - Integrar la sección de configuración en `/settings/variables`. ✅
 - Validar que solo el tenant propietario pueda editar prompts. ✅ backend; pendiente prueba autenticada
 
-### Pendiente — Fase 2: backend
+### Fase 2: backend
 
-- Crear schemas Pydantic.
-- Crear servicio de generación IA.
-- Crear endpoint autenticado.
-- Implementar validadores de variables y respuesta.
-- Implementar sanitización de HTML.
-- Implementar rate limit, timeout y manejo de errores.
-- Crear auditoría de generaciones y variables utilizadas.
+- Crear schemas Pydantic. ✅
+- Crear servicio de generación IA. ✅
+- Crear endpoint autenticado. ✅
+- Implementar validadores de variables y respuesta. ✅
+- Implementar sanitización de HTML. ✅ básica con lista permitida
+- Implementar rate limit, timeout y manejo de errores. ⚠️ timeout implementado; rate limit comercial pendiente
+- Crear auditoría de generaciones y variables utilizadas. ✅
 
-### Pendiente — Fase 3: frontend
+### Fase 3: frontend
 
-- Agregar el asistente al modal de correo.
-- Agregar el asistente al modal de WhatsApp.
-- Cargar variables desde el backend.
-- Mostrar preview, advertencias y resultado generado.
-- Permitir regenerar, aceptar, editar o descartar.
+- Agregar el asistente al modal de correo. ✅
+- Agregar el asistente al modal de WhatsApp. ✅
+- Cargar variables desde el backend. ✅
+- Mostrar resultado generado y aplicar como borrador editable. ✅
+- Mostrar advertencias, regenerar, aceptar, editar o descartar. ⚠️ advertencias y regeneración disponibles; aceptación/descartar se realiza editando o cerrando el editor
 
 ### Pendiente — Fase 4: validación productiva
 

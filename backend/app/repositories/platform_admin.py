@@ -454,6 +454,108 @@ class PlatformRepository:
             raise PlatformRepositoryError("prospeccion_template_ai_prompt_config_upsert_failed")
         return data[0]
 
+    async def list_prospeccion_template_ai_variables(self, *, canal: str) -> list[dict[str, Any]]:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_ai_variable_canales",
+            params={
+                "select": (
+                    "id,canal,permite_asunto,permite_cuerpo_texto,permite_cuerpo_html,"
+                    "permite_header_media,activo,variable:prospeccion_plantilla_ai_variables!inner("
+                    "id,clave,etiqueta,descripcion,tipo_dato,activo,orden)"
+                ),
+                "canal": f"eq.{canal}",
+                "activo": "eq.true",
+                "variable.activo": "eq.true",
+                "order": "variable(orden).asc",
+            },
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("prospeccion_template_ai_variables_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_prospeccion_template_ai_generation(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/prospeccion_plantilla_ai_generaciones",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("prospeccion_template_ai_generation_create_failed")
+        return data[0]
+
+    async def create_prospeccion_template_ai_generation_variables(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        if not rows:
+            return
+        await self._rest(
+            "POST",
+            "/rest/v1/prospeccion_plantilla_ai_generacion_variables",
+            json=rows,
+            prefer="return=minimal",
+        )
+
+    async def update_prospeccion_template_ai_generation(
+        self,
+        *,
+        organizacion_id: UUID,
+        generation_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/prospeccion_plantilla_ai_generaciones",
+            params={
+                "id": f"eq.{generation_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
+    async def update_prospeccion_template_ai_generation_variables(
+        self,
+        *,
+        organizacion_id: UUID,
+        generation_id: UUID,
+        used_variables: list[str],
+        variable_ids: dict[str, UUID],
+    ) -> None:
+        for clave, variable_id in variable_ids.items():
+            await self._rest(
+                "PATCH",
+                "/rest/v1/prospeccion_plantilla_ai_generacion_variables",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "generacion_id": f"eq.{generation_id}",
+                    "variable_id": f"eq.{variable_id}",
+                },
+                json={"utilizada_por_modelo": clave in used_variables},
+                prefer="return=minimal",
+            )
+
+    async def get_openai_usage_by_response_id(self, *, organizacion_id: UUID, response_id: str) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/openai_request_usage",
+            params={
+                "select": "id,estimated_total_cost_usd,input_tokens,output_tokens,total_tokens",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "openai_response_id": f"eq.{response_id}",
+                "limit": "1",
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
     async def list_commercial_plan_defaults(self) -> list[dict[str, Any]]:
         params = {
             "select": "id,plan_id,default_key,default_value,scope,created_at",

@@ -22,6 +22,7 @@ from app.api.routes.public_billing import router as public_billing_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.tenant import router as tenant_router
+from app.api.routes.prospeccion_plantillas_ai import router as prospeccion_plantillas_ai_router
 from app.channels.messenger.router import router as messenger_router
 from app.channels.voice.router import router as voice_router
 from app.channels.webchat.router import router as webchat_router
@@ -175,6 +176,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(admin_router)
     app.include_router(tenant_router)
+    app.include_router(prospeccion_plantillas_ai_router)
     app.include_router(crm_router)
     app.include_router(propuesta_router)
     app.include_router(public_billing_router)
