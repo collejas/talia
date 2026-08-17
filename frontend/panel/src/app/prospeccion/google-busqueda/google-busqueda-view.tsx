@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
   Globe,
   Info,
   ListChecks,
@@ -35,7 +36,9 @@ import {
   type GoogleBusquedaItem,
   type GoogleResultadoItem,
   type GoogleResultadosMapItem,
+  type GooglePlacesTypeItem,
   type GoogleSearchStrategy,
+  listGooglePlacesTypes,
 } from "@/lib/prospeccion/google-client";
 import { guardarProspectos, listProspectosQueryMetadata } from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,18 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -107,6 +122,13 @@ function normalizeBusquedaLabel(value: string | null | undefined): string {
 
 type ContactFilterValue = "any" | "with" | "without";
 type BusquedasSortKey = "busqueda" | "registros" | "radio" | "fecha";
+
+type GooglePlacesCategoryGroup = {
+  codigo: string;
+  nombre_es: string;
+  nombre_en: string;
+  items: GooglePlacesTypeItem[];
+};
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
@@ -160,6 +182,9 @@ export function GoogleBusquedaView() {
     title: "",
     message: "",
   });
+  const [googlePlacesTypes, setGooglePlacesTypes] = useState<GooglePlacesTypeItem[]>([]);
+  const [googlePlacesTypesLoading, setGooglePlacesTypesLoading] = useState(false);
+  const [googlePlacesTypesError, setGooglePlacesTypesError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [busquedas, setBusquedas] = useState<GoogleBusquedaItem[]>([]);
   const busquedasRef = useRef<GoogleBusquedaItem[]>([]);
@@ -213,13 +238,81 @@ export function GoogleBusquedaView() {
     [selectedActividades],
   );
 
+  const selectedGooglePlaceTypeCodes = useMemo(
+    () =>
+      new Set(
+        formValues.includedTypesText
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    [formValues.includedTypesText],
+  );
+
+  const googlePlacesCategoryGroups = useMemo<GooglePlacesCategoryGroup[]>(() => {
+    const groups = new Map<string, GooglePlacesCategoryGroup>();
+    for (const item of googlePlacesTypes) {
+      const current = groups.get(item.categoria_codigo);
+      if (current) {
+        current.items.push(item);
+        continue;
+      }
+      groups.set(item.categoria_codigo, {
+        codigo: item.categoria_codigo,
+        nombre_es: item.categoria_nombre_es,
+        nombre_en: item.categoria_nombre_en,
+        items: [item],
+      });
+    }
+    return Array.from(groups.values());
+  }, [googlePlacesTypes]);
+
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const loadGooglePlacesTypes = useCallback(async () => {
+    setGooglePlacesTypesLoading(true);
+    setGooglePlacesTypesError(null);
+    try {
+      const response = await listGooglePlacesTypes({ limit: 1000 });
+      setGooglePlacesTypes(response.items ?? []);
+    } catch (error) {
+      setGooglePlacesTypes([]);
+      setGooglePlacesTypesError(
+        error instanceof Error ? error.message : "No fue posible cargar las clasificaciones de Google Places.",
+      );
+    } finally {
+      setGooglePlacesTypesLoading(false);
+    }
+  }, []);
+
+  const toggleGooglePlaceType = useCallback(
+    (typeCode: string) => {
+      const next = new Set(selectedGooglePlaceTypeCodes);
+      if (next.has(typeCode)) next.delete(typeCode);
+      else next.add(typeCode);
+      const orderedCodes = googlePlacesTypes
+        .filter((item) => next.has(item.codigo_google))
+        .map((item) => item.codigo_google);
+      const knownCodes = new Set(orderedCodes);
+      const unknownCodes = Array.from(next).filter((code) => !knownCodes.has(code)).sort();
+      updateFormValue("includedTypesText", [...orderedCodes, ...unknownCodes].join(","));
+    },
+    [googlePlacesTypes, selectedGooglePlaceTypeCodes, updateFormValue],
+  );
+
+  const clearGooglePlaceTypes = useCallback(() => {
+    updateFormValue("includedTypesText", "");
+  }, [updateFormValue]);
+
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    void loadGooglePlacesTypes();
+  }, [loadGooglePlacesTypes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,9 +397,23 @@ export function GoogleBusquedaView() {
     setResultReloadToken((current) => current + 1);
     const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
     if (selectedBusqueda) {
+      const selectedMeta = (selectedBusqueda.meta ?? {}) as {
+        strategy?: unknown;
+        included_types?: unknown;
+      };
+      const selectedStrategy = selectedMeta.strategy === "text" || selectedMeta.strategy === "nearby"
+        ? selectedMeta.strategy
+        : null;
+      const selectedTypes = Array.isArray(selectedMeta.included_types)
+        ? selectedMeta.included_types.filter(
+            (value): value is string => typeof value === "string" && value.trim().length > 0,
+          )
+        : [];
       setFormValues((prev) => ({
         ...prev,
+        strategy: selectedStrategy ?? prev.strategy,
         query: selectedBusqueda.query ?? prev.query,
+        includedTypesText: selectedTypes.length ? selectedTypes.join(",") : prev.includedTypesText,
         lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
         lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
         radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
@@ -1336,8 +1443,9 @@ export function GoogleBusquedaView() {
               <CardDescription>Define el centro, el radio y la estrategia antes de consultar Google.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 lg:grid-cols-6">
-                <div className="space-y-2">
+              <div className="grid gap-3 lg:grid-cols-7">
+                <div className="grid gap-3 lg:col-span-2 lg:grid-cols-[max-content_minmax(0,1fr)]">
+                  <div className="space-y-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1358,12 +1466,12 @@ export function GoogleBusquedaView() {
                       <SelectValue placeholder="Selecciona" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="nearby">Cercanía</SelectItem>
+                      <SelectItem value="nearby">Clasificación</SelectItem>
                       <SelectItem value="text">Texto</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
+                  </div>
+                  <div className="space-y-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1389,33 +1497,95 @@ export function GoogleBusquedaView() {
                         : "border-border bg-muted text-muted-foreground",
                     )}
                   />
+                  </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 lg:col-span-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Label htmlFor="types" className="cursor-help">
-                          Clasificaciones
+                        <Label htmlFor="google-place-type-trigger" className="cursor-help">
+                          Clasificaciones de Google Places
                         </Label>
                       </TooltipTrigger>
                       <TooltipContent side="top">
-                        Lista de tipos de Places separados por coma. Aplica cuando usas Cercanía.
+                        Selecciona una o varias clasificaciones oficiales de la Tabla A. Aplica cuando usas Cercanía.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <Input
-                    id="types"
-                    placeholder="restaurant,store"
-                    value={formValues.includedTypesText}
-                    onChange={(event) => updateFormValue("includedTypesText", event.target.value)}
-                    disabled={formValues.strategy !== "nearby"}
-                    className={cn(
-                      "h-9",
-                      formValues.strategy === "nearby"
-                        ? "border-primary/70 bg-primary/5"
-                        : "border-border bg-muted text-muted-foreground",
-                    )}
-                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        id="google-place-type-trigger"
+                        type="button"
+                        variant="outline"
+                        disabled={formValues.strategy !== "nearby" || googlePlacesTypesLoading}
+                        className={cn(
+                          "h-9 w-full justify-between font-normal",
+                          formValues.strategy === "nearby" && "border-primary/70 bg-primary/5",
+                        )}
+                      >
+                        <span className="truncate">
+                          {googlePlacesTypesLoading
+                            ? "Cargando clasificaciones..."
+                            : selectedGooglePlaceTypeCodes.size
+                              ? `${selectedGooglePlaceTypeCodes.size} clasificaciones seleccionadas`
+                              : "Seleccionar clasificaciones"}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="z-[1000] w-[min(22rem,calc(100vw-2rem))]">
+                      <DropdownMenuLabel>Clasificaciones oficiales Tabla A</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {googlePlacesTypesError ? (
+                        <DropdownMenuItem onSelect={() => void loadGooglePlacesTypes()}>
+                          <RefreshCw className="h-4 w-4" />
+                          Reintentar carga del catálogo
+                        </DropdownMenuItem>
+                      ) : googlePlacesCategoryGroups.length ? (
+                        googlePlacesCategoryGroups.map((group) => {
+                          const selectedCount = group.items.filter((item) => selectedGooglePlaceTypeCodes.has(item.codigo_google)).length;
+                          return (
+                            <DropdownMenuSub key={group.codigo}>
+                              <DropdownMenuSubTrigger>
+                                <span className="min-w-0 flex-1 truncate">{group.nombre_es}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {selectedCount ? `${selectedCount}/${group.items.length}` : group.items.length}
+                                </span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="z-[1000] max-h-[min(28rem,70vh)] w-72 overflow-y-auto">
+                                {group.items.map((item) => (
+                                  <DropdownMenuCheckboxItem
+                                    key={item.codigo_google}
+                                    checked={selectedGooglePlaceTypeCodes.has(item.codigo_google)}
+                                    onSelect={(event) => event.preventDefault()}
+                                    onCheckedChange={() => toggleGooglePlaceType(item.codigo_google)}
+                                    className="items-start"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate">{item.nombre_es}</span>
+                                      <span className="block truncate text-[10px] text-muted-foreground">
+                                        {item.codigo_google}
+                                      </span>
+                                    </span>
+                                  </DropdownMenuCheckboxItem>
+                                ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          );
+                        })
+                      ) : (
+                        <DropdownMenuItem disabled>Catálogo no disponible</DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={!selectedGooglePlaceTypeCodes.size}
+                        onSelect={clearGooglePlaceTypes}
+                      >
+                        Limpiar selección
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="radius-range">Radio (m)</Label>

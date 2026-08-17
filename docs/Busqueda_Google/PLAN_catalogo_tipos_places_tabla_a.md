@@ -10,7 +10,9 @@
 - [x] Crear endpoint backend para consultar el catálogo.
 - [x] Validar `included_types` contra el catálogo activo.
 - [x] Crear proxy BFF y cliente TypeScript para consumir el catálogo.
-- [ ] Reemplazar el input manual por el selector jerárquico en el panel.
+- [x] Reemplazar el input manual por el selector jerárquico en el panel.
+
+Nota operativa: el endpoint está en el código fuente, pero el proceso `talia-api` activo debe reiniciarse/reconstruirse para que publique `/crm/prospeccion/google/tipos`; mientras use una instancia anterior, el panel recibirá `404`.
 
 ## 1. Objetivo
 
@@ -306,7 +308,7 @@ No se deben modificar ni recalcular búsquedas anteriores.
 
 ### Fase 5: UI
 
-- Crear el selector jerárquico reutilizable.
+- Implementar un dropdown compacto tipo select, con categorías madre y submenús de tipos hijos.
 - Reemplazar el input manual únicamente para Nearby.
 - Mantener un estado interno como `Set<string>` para los códigos seleccionados.
 - Convertir el conjunto a `included_types` al enviar.
@@ -317,7 +319,7 @@ No se deben modificar ni recalcular búsquedas anteriores.
 - Probar carga del catálogo.
 - Probar selección de una clasificación.
 - Probar selección múltiple.
-- Probar búsqueda y filtrado dentro del selector.
+- Probar apertura del dropdown y selección múltiple sin romper el layout.
 - Probar envío de códigos oficiales.
 - Probar rechazo de un código inválido enviado manualmente.
 - Probar estrategia `text`.
