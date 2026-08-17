@@ -567,3 +567,10 @@ Pendiente de API:
 - Se registraron `353` cargos idempotentes con `fuente_registro = historical_prospeccion_repair`; no se reenviaron mensajes.
 - Se utilizaron las tarifas históricas de `$0.09` GEOACTIV y `$0.5614` Meta según su vigencia. Las tarifas actuales quedaron activas al finalizar.
 - Validación final: `455/455` envíos aceptados tienen mensaje local; quedan `0` envíos sin mensaje y no se generaron duplicados de ledger.
+
+## 2026-08-17 — Separación entre enviado y entregado en mapa de conversión
+
+- Se corrigió la atribución que usaba `aceptado_proveedor_en` como respaldo de entrega; la aceptación de Meta no equivale a entrega al destinatario.
+- `Enviados` cuenta mensajes aceptados por Meta y `Entregados` solo mensajes con estado `entregado`/`leido` o callback de entrega confirmado.
+- La campaña `WHATSAPP` del tenant maestro quedó con `424` enviados y `401` entregados; `23` permanecen únicamente como enviados.
+- El cargo GEOACTIV de `$0.09` continúa aplicando a los mensajes aceptados; no depende de que el KPI de entrega sea 100%.

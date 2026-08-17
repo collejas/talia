@@ -44,7 +44,12 @@ begin
             m.conversacion_id,
             coalesce(cv.persona_id, cv.contacto_id) as persona_id,
             m.direccion,
-            coalesce(delivery.entregado_en, cm.aceptado_proveedor_en) as entregado_en,
+            case
+                when e.estado in ('entregado', 'leido')
+                  or lower(coalesce(e.detalle->>'status', '')) in ('delivered', 'read', 'entregado', 'leido')
+                then coalesce(delivery.entregado_en, e.procesado_en, e.creado_en)
+                else delivery.entregado_en
+            end as entregado_en,
             row_number() over (
                 partition by m.organizacion_id, b.campana_id, m.conversacion_id
                 order by m.creado_en, m.id
@@ -128,10 +133,7 @@ begin
             public.campana_mensaje_atribucion.cobro_mensaje_id,
             excluded.cobro_mensaje_id
         ),
-        entregado_en=coalesce(
-            public.campana_mensaje_atribucion.entregado_en,
-            excluded.entregado_en
-        ),
+        entregado_en=excluded.entregado_en,
         actualizado_en=now();
 
     get diagnostics v_mensajes_campana = row_count;
@@ -556,5 +558,4 @@ grant execute on function public.campana_conversion_resumen_rango(uuid,uuid,time
 
 comment on function public.campana_conversion_resumen_rango(uuid,uuid,timestamptz,timestamptz,integer,integer) is
     'Resumen comercial por campaña: conversaciones únicas, respuestas, oportunidades, clientes y costo total del ledger por conversación.';
-
 
