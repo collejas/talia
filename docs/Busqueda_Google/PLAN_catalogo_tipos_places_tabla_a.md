@@ -1,5 +1,16 @@
 # Plan: catálogo bilingüe de tipos Google Places Tabla A
 
+## Estado actual de implementación
+
+- [x] Migración creada: `supabase/migrations/20260817042103_google_places_types_table_a.sql`.
+- [x] Tabla `public.google_places_types` aplicada en Supabase.
+- [x] Carga inicial verificada: 478 registros, 19 categorías y 478 códigos únicos.
+- [x] RLS habilitado con lectura de registros activos para `authenticated`.
+- [x] Índices y constraint de unicidad sobre `codigo_google` verificados.
+- [ ] Crear endpoint backend para consultar el catálogo.
+- [ ] Validar `included_types` contra el catálogo activo.
+- [ ] Reemplazar el input manual por el selector jerárquico en el panel.
+
 ## 1. Objetivo
 
 Mejorar la vista `/prospeccion/google-busqueda` para que, cuando el usuario seleccione la estrategia **Cercanía / Nearby**, no tenga que escribir manualmente códigos como `restaurant` o `car_dealer`.
