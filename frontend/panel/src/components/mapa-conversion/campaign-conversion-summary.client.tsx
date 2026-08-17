@@ -179,11 +179,12 @@ export function CampaignConversionSummary({ filters }: Props) {
               <CardTitle className="text-base">Embudo consolidado</CardTitle>
               <CardDescription>Resultados de las campañas incluidas en los filtros actuales.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <Metric title="Enviados" value={formatNumber(visibleTotals?.envios)} helper="Mensajes de campaña" />
               <Metric title="Entregados" value={formatNumber(visibleTotals?.entregados)} helper={formatPercent(visibleTotals?.tasa_entrega_pct)} />
               <Metric title="Respuestas" value={formatNumber(visibleTotals?.respondieron)} helper={formatPercent(visibleTotals?.tasa_respuesta_pct)} />
               <Metric title="Oportunidades" value={formatNumber(visibleTotals?.oportunidades)} helper="Conversaciones con oportunidad" />
+              <Metric title="Costo de campaña" value={formatCurrency(visibleTotals?.costo_total)} helper="Gasto acumulado atribuido" />
               <Metric title="CPO" value={formatCurrency(visibleTotals?.costo_por_oportunidad)} helper="Costo por oportunidad" />
               <Metric title="CAC WhatsApp" value={formatCurrency(visibleTotals?.costo_adquisicion)} helper={`${formatNumber(visibleTotals?.clientes)} clientes`} />
             </CardContent>
