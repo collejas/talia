@@ -411,6 +411,7 @@ Columnas iniciales:
 - `permite_asunto` `boolean` not null default `false`.
 - `permite_cuerpo_texto` `boolean` not null default `true`.
 - `permite_cuerpo_html` `boolean` not null default `false`.
+- `permite_header_media` `boolean` not null default `false`.
 - `activo` `boolean` not null default `true`.
 
 Restricciones e índices:
@@ -418,6 +419,7 @@ Restricciones e índices:
 - Unique `(variable_id, canal)`.
 - Foreign key index sobre `variable_id`.
 - `canal` limitado a `correo` y `whatsapp`.
+- Las variables de imagen de WhatsApp utilizan `permite_header_media` y no se fuerzan como texto.
 - Índice compuesto `(canal, activo, variable_id)` para cargar el catálogo visible.
 
 ### 9.4 Historial de generaciones IA

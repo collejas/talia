@@ -134,6 +134,40 @@ Los siguientes valores:
 - Probar una plantilla de WhatsApp en el flujo real de aprobación de Meta.
 - Validar el flujo autenticado completo antes de declarar la funcionalidad terminada.
 
+## 2026-08-17 — Inicio de implementación de base de datos
+
+### Agregado
+
+- Migración `supabase/migrations/20280818_120000_prospeccion_plantillas_ai.sql`.
+- Tabla de configuración central de prompts por canal:
+  - `prospeccion_plantilla_ai_prompt_config`.
+- Catálogo columnar de variables:
+  - `prospeccion_plantilla_ai_variables`.
+  - `prospeccion_plantilla_ai_variable_canales`.
+- Historial de generaciones:
+  - `prospeccion_plantilla_ai_generaciones`.
+  - `prospeccion_plantilla_ai_generacion_variables`.
+- Catálogo inicial de variables de correo y WhatsApp.
+- Registro de `prompt_id`, `prompt_version`, modelo, tokens, costo estimado, duración y estado.
+- Relación opcional con `openai_request_usage` para conservar el ledger central de consumo.
+- Foreign keys compuestas con tenant para campañas, usuarios y plantillas.
+- Índices para tenant, canal, estado, usuario, campaña, plantilla, versión y fecha.
+- Políticas RLS para limitar la configuración de prompts al tenant propietario y el historial al tenant autenticado.
+
+### Validación
+
+- `git diff --check`: correcto.
+- La migración se aplicó correctamente mediante MCP de Supabase.
+- Las cinco tablas existen en Supabase con RLS habilitado.
+- El catálogo quedó sembrado con 21 variables y 42 reglas de canal: 21 para correo y 21 para WhatsApp.
+- Las políticas RLS e índices principales fueron verificados directamente en Supabase.
+- `supabase db lint --local`: no ejecutable en este entorno porque no existe una instancia PostgreSQL local disponible en `127.0.0.1:54322`.
+
+### Pendientes
+
+- Crear la configuración inicial de los dos prompts desde `/settings/variables` después de implementar la pantalla.
+- Validar el acceso autenticado real de owner y tenants cuando se implemente el backend.
+
 ## Reglas para futuras entradas
 
 Cada avance debe registrar:
