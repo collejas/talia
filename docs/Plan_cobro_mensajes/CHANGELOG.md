@@ -559,3 +559,11 @@ Pendiente de API:
 - El worker ahora persiste antes de cerrar el envío, reintenta sin reenviar el WAMID y marca `mensaje_local_pendiente` si Supabase continúa fallando.
 - Se agregó reparación automática idempotente para esos casos, usando el mismo `mensaje_id`/WAMID y conservando `batch_id`/`envio_id`; no se inventan mensajes ni se reenvían campañas.
 - Validación local: `18` pruebas de servicios relacionadas pasan; producción actualmente reporta `218` mensajes de prospección con ambos identificadores y `0` envíos marcados pendientes de reparación.
+
+## 2026-08-16 — Reparación histórica de envíos con WAMID sin mensaje local
+
+- Se identificaron `353` envíos WhatsApp aceptados por Meta con WAMID, teléfono, tenant y fecha, pero sin fila en `mensajes`.
+- Se recrearon de forma controlada en Supabase, conservando la fecha original y los identificadores `batch_id`/`envio_id` en `mensajes.datos`.
+- Se registraron `353` cargos idempotentes con `fuente_registro = historical_prospeccion_repair`; no se reenviaron mensajes.
+- Se utilizaron las tarifas históricas de `$0.09` GEOACTIV y `$0.5614` Meta según su vigencia. Las tarifas actuales quedaron activas al finalizar.
+- Validación final: `455/455` envíos aceptados tienen mensaje local; quedan `0` envíos sin mensaje y no se generaron duplicados de ledger.
