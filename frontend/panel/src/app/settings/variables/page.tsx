@@ -9,6 +9,10 @@ import { fetchCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 import { WhatsAppCloseWindowForm } from "@/components/settings/whatsapp-close-window-form"
 import { TenantWebTrackingPanel } from "./components/tenant-web-tracking-panel"
+import {
+  TenantTemplateAiPromptConfigPanel,
+  type TemplateAiPromptConfig,
+} from "./components/tenant-template-ai-prompt-config-panel"
 
 import {
   TenantSettingsActions,
@@ -101,6 +105,7 @@ type TenantSettingsResponse = {
 
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
+type TemplateAiPromptConfigResponse = { items: TemplateAiPromptConfig[] }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -149,6 +154,13 @@ export default async function SettingsVariablesPage() {
     organizacionId: null,
     withUserToken: true,
   })
+  const data = settingsResp.ok ? settingsResp.data : null
+  const promptConfigResp = data?.organizacion_id === MASTER_TENANT_ID
+    ? await callCrmApi<TemplateAiPromptConfigResponse>("/tenant/me/prospeccion-template-ai-prompts", {
+        organizacionId: null,
+        withUserToken: true,
+      })
+    : null
   const closeLeadPolicies = await Promise.all([
     fetchCloseLeadPolicy("whatsapp"),
     fetchCloseLeadPolicy("webchat"),
@@ -158,8 +170,7 @@ export default async function SettingsVariablesPage() {
   if (!settingsResp.ok) errors.push(settingsResp.error)
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
-
-  const data = settingsResp.ok ? settingsResp.data : null
+  if (promptConfigResp && !promptConfigResp.ok) errors.push(promptConfigResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
@@ -376,6 +387,10 @@ export default async function SettingsVariablesPage() {
         </header>
 
         <SettingsErrorCallout title="No se pudo recuperar la información" messages={errors} />
+
+        {data?.organizacion_id === MASTER_TENANT_ID && promptConfigResp?.ok ? (
+          <TenantTemplateAiPromptConfigPanel initialItems={promptConfigResp.data.items} />
+        ) : null}
 
         <TenantSettingsActionsProvider value={tenantActions}>
           <Card>

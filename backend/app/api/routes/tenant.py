@@ -47,6 +47,33 @@ class TenantContext(BaseModel):
     organizacion_id: UUID
 
 
+MASTER_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
+
+
+class ProspeccionTemplateAiPromptConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "correo"]
+    prompt_id: str = Field(..., min_length=1, max_length=255)
+    prompt_version: str = Field(..., min_length=1, max_length=100)
+    activo: bool
+    actualizado_por: UUID | None = None
+    actualizado_en: datetime | None = None
+
+
+class ProspeccionTemplateAiPromptConfigResponse(BaseModel):
+    items: list[ProspeccionTemplateAiPromptConfig] = Field(default_factory=list)
+
+
+class ProspeccionTemplateAiPromptConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prompt_id: str = Field(..., min_length=1, max_length=255)
+    prompt_version: str = Field(..., min_length=1, max_length=100)
+    activo: bool = True
+
+
 class TenantWebTrackingDomain(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -607,6 +634,75 @@ async def get_tenant_settings(
         row["config"] = saved.get("config") if isinstance(saved.get("config"), dict) else ensured_config
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+def _require_master_tenant(context: TenantContext) -> None:
+    if context.organizacion_id != MASTER_TENANT_ID:
+        raise HTTPException(status_code=403, detail="master_tenant_only")
+
+
+@router.get(
+    "/me/prospeccion-template-ai-prompts",
+    response_model=ProspeccionTemplateAiPromptConfigResponse,
+)
+async def get_prospeccion_template_ai_prompts(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionTemplateAiPromptConfigResponse:
+    await require_permission(user_token, "settings.view")
+    _require_master_tenant(context)
+    try:
+        rows = await platform_repo.list_prospeccion_template_ai_prompt_configs(
+            organizacion_id=MASTER_TENANT_ID,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    by_channel = {str(row.get("canal")): row for row in rows}
+    items: list[ProspeccionTemplateAiPromptConfig] = []
+    for channel in ("whatsapp", "correo"):
+        row = by_channel.get(channel)
+        if row is None:
+            row = {
+                "organizacion_id": MASTER_TENANT_ID,
+                "canal": channel,
+                "prompt_id": "pendiente-configurar",
+                "prompt_version": "pendiente",
+                "activo": False,
+            }
+        items.append(ProspeccionTemplateAiPromptConfig.model_validate(row))
+    return ProspeccionTemplateAiPromptConfigResponse(items=items)
+
+
+@router.put(
+    "/me/prospeccion-template-ai-prompts/{canal}",
+    response_model=ProspeccionTemplateAiPromptConfig,
+)
+async def update_prospeccion_template_ai_prompt(
+    canal: Literal["whatsapp", "correo"],
+    payload: ProspeccionTemplateAiPromptConfigUpdate,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionTemplateAiPromptConfig:
+    await require_permission(user_token, "settings.manage")
+    _require_master_tenant(context)
+    prompt_id = payload.prompt_id.strip()
+    prompt_version = payload.prompt_version.strip()
+    if not prompt_id or not prompt_version:
+        raise HTTPException(status_code=422, detail="prompt_id_and_version_required")
+    try:
+        row = await platform_repo.upsert_prospeccion_template_ai_prompt_config(
+            organizacion_id=MASTER_TENANT_ID,
+            canal=canal,
+            prompt_id=prompt_id,
+            prompt_version=prompt_version,
+            activo=payload.activo,
+            actualizado_por=context.user_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return ProspeccionTemplateAiPromptConfig.model_validate(row)
 
 
 def _extract_contact_catalogs(config: dict[str, Any] | None) -> dict[str, Any]:

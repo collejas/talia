@@ -6,9 +6,9 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 
 ## Estado actual
 
-**Fase:** Diseño y documentación
+**Fase:** Configuración central de prompts
 
-**Estado:** Propuesta aprobada para iniciar implementación
+**Estado:** Migración aplicada e integración inicial en curso
 
 **Última actualización:** 2026-08-17
 
@@ -88,6 +88,22 @@ Los siguientes valores:
 - El `prompt_id` y `prompt_version` activos se registrarán en cada generación IA.
 - Las variables de entorno solo serán fallback de bootstrap o contingencia, no la configuración operativa normal.
 
+## 2026-08-17 — Integración inicial de prompts en `settings/variables`
+
+### Agregado
+
+- Se agregó la lectura y actualización de `prospeccion_plantilla_ai_prompt_config` mediante rutas tenant-scoped específicas.
+- Se incorporó el BFF de Next.js y una sección visible únicamente para el tenant maestro, con configuración independiente para WhatsApp y correo.
+- Cada canal permite capturar `prompt_id`, `prompt_version` y activar/desactivar su uso.
+- El backend valida `settings.view`/`settings.manage` y restringe la operación al tenant maestro.
+- No se reutiliza `organizaciones.config` para estos valores.
+- Validación ejecutada: `compileall`, ESLint, TypeScript (`tsc --noEmit`) y React Doctor (100/100).
+
+### Pendiente
+
+- Capturar los valores reales publicados en OpenAI.
+- Continuar con el catálogo/selector de variables y el endpoint de generación.
+
 ## Próximos avances
 
 ### Pendiente — Fase 0: prompts en OpenAI
@@ -101,11 +117,11 @@ Los siguientes valores:
 
 ### Pendiente — Fase 1: configuración y catálogo
 
-- Crear migración para `prospeccion_plantilla_ai_prompt_config`.
-- Crear migración para el catálogo de variables y reglas por canal.
-- Definir y aplicar RLS.
-- Integrar la sección de configuración en `/settings/variables`.
-- Validar que solo el tenant propietario pueda editar prompts.
+- Crear migración para `prospeccion_plantilla_ai_prompt_config`. ✅
+- Crear migración para el catálogo de variables y reglas por canal. ✅
+- Definir y aplicar RLS. ✅
+- Integrar la sección de configuración en `/settings/variables`. ✅
+- Validar que solo el tenant propietario pueda editar prompts. ✅ backend; pendiente prueba autenticada
 
 ### Pendiente — Fase 2: backend
 

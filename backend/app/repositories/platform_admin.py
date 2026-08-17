@@ -412,6 +412,48 @@ class PlatformRepository:
             "period": periods[0] if periods else None,
         }
 
+    async def list_prospeccion_template_ai_prompt_configs(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_ai_prompt_config",
+            params={
+                "select": "organizacion_id,canal,prompt_id,prompt_version,activo,actualizado_por,actualizado_en",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "canal.asc",
+            },
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("prospeccion_template_ai_prompt_configs_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_prospeccion_template_ai_prompt_config(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: str,
+        prompt_id: str,
+        prompt_version: str,
+        activo: bool,
+        actualizado_por: UUID,
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/prospeccion_plantilla_ai_prompt_config",
+            params={"on_conflict": "organizacion_id,canal"},
+            json={
+                "organizacion_id": str(organizacion_id),
+                "canal": canal,
+                "prompt_id": prompt_id,
+                "prompt_version": prompt_version,
+                "activo": activo,
+                "actualizado_por": str(actualizado_por),
+            },
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("prospeccion_template_ai_prompt_config_upsert_failed")
+        return data[0]
+
     async def list_commercial_plan_defaults(self) -> list[dict[str, Any]]:
         params = {
             "select": "id,plan_id,default_key,default_value,scope,created_at",
@@ -1204,7 +1246,7 @@ class PlatformRepository:
 
     async def _rest(
         self,
-        method: Literal["GET", "POST", "PATCH", "DELETE"],
+        method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"],
         path: str,
         *,
         params: dict[str, Any] | None = None,
