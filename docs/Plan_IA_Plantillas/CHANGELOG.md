@@ -369,3 +369,22 @@ Cada avance debe registrar:
 - Migración: 20280818_130000_prospeccion_plantillas_ai_cta_variables.sql.
 - Aplicada mediante Supabase MCP.
 - Catálogo verificado para website_url, booking_url, whatsapp_url y custom_url en ambos canales.
+
+## 2026-08-18 — Rediseño del prompt visual de correo
+
+### Cambios realizados
+
+- Se ampliaron las instrucciones del prompt de correo con dirección de arte B2B moderna y variación de composiciones.
+- Se definió una estructura visual con encabezado, hero, bloques de contenido, tarjetas, espaciado, jerarquía y CTA.
+- Los CTA deben generarse como enlaces HTML estilizados como botones de email; nunca como elementos button.
+- Se agregaron reglas para tablas compatibles con correo, diseño responsive y escalamiento de imágenes con width, max-width y height auto.
+- Se indicó el uso de CSS inline seguro y la prohibición de flexbox, grid, JavaScript, fuentes externas y URLs inventadas.
+- Se actualizó el backend para conservar estilos inline y atributos seguros de email.
+- Se agregó sanitización de propiedades CSS, dimensiones y atributos estructurales.
+- Se agregaron pruebas para CSS seguro, dimensiones responsivas, URLs por placeholder y eliminación de contenido peligroso.
+
+### Validación
+
+- Pruebas HTML del sanitizador: 2/2 correctas.
+- git diff --check: correcto.
+- El prompt mantiene las ocho variables técnicas requeridas por OpenAI; el diseño se expresa dentro de las instrucciones del mensaje y del catálogo de variables.

@@ -30,6 +30,75 @@ _HTML_TAG_RE = re.compile(r"</?\s*([A-Za-z0-9]+)(?:\s[^>]*)?>")
 _FORBIDDEN_HTML_RE = re.compile(r"<(?:script|iframe|form|object|embed)|\son[a-z]+\s*=|javascript:", re.I)
 _ALLOWED_HTML_TAGS = {"p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "table", "tr", "td", "img"}
 _PLACEHOLDER_VALUE_RE = re.compile(r"^\{\{\s*[A-Za-z0-9_]+\s*\}\}$")
+_ALLOWED_STYLE_PROPERTIES = {
+    "background",
+    "background-color",
+    "border",
+    "border-radius",
+    "box-sizing",
+    "color",
+    "display",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "height",
+    "letter-spacing",
+    "line-height",
+    "margin",
+    "margin-bottom",
+    "margin-top",
+    "max-height",
+    "max-width",
+    "min-height",
+    "padding",
+    "padding-bottom",
+    "padding-left",
+    "padding-right",
+    "padding-top",
+    "text-align",
+    "text-decoration",
+    "vertical-align",
+    "width",
+}
+_SAFE_STYLE_VALUE_RE = re.compile(r"""^[A-Za-z0-9#%(),./'"\s:+_-]+$""")
+_SAFE_DIMENSION_RE = re.compile(r"^(?:0|[1-9][0-9]{0,4})(?:\.[0-9]+)?(?:px|%|em|rem|auto)?$")
+
+
+def _sanitize_inline_style(value: str) -> str:
+    declarations: list[str] = []
+    for declaration in value.split(";"):
+        if ":" not in declaration:
+            continue
+        property_name, property_value = declaration.split(":", 1)
+        property_name = property_name.strip().lower()
+        property_value = property_value.strip()
+        if property_name not in _ALLOWED_STYLE_PROPERTIES:
+            continue
+        if (
+            not property_value
+            or not _SAFE_STYLE_VALUE_RE.fullmatch(property_value)
+            or re.search(r"url\s*\(|expression\s*\(|@import|[{}<>]", property_value, re.I)
+        ):
+            continue
+        declarations.append(f"{property_name}:{property_value}")
+    return ";".join(declarations)
+
+
+def _safe_attribute_value(name: str, value: str) -> str | None:
+    normalized = value.strip()
+    if name in {"width", "height", "cellpadding", "cellspacing", "border"}:
+        return normalized if _SAFE_DIMENSION_RE.fullmatch(normalized) else None
+    if name in {"align", "valign"}:
+        return normalized.lower() if normalized.lower() in {"left", "center", "right", "top", "middle", "bottom"} else None
+    if name == "role":
+        return normalized if normalized == "presentation" else None
+    if name == "target":
+        return normalized if normalized == "_blank" else None
+    if name == "rel":
+        return normalized if normalized in {"noopener", "noopener noreferrer", "noreferrer"} else None
+    if name == "bgcolor":
+        return normalized if re.fullmatch(r"(?:#[0-9A-Fa-f]{3,8}|[A-Za-z]+)", normalized) else None
+    return None
 
 
 class TemplateAiGenerationRequest(BaseModel):
@@ -135,13 +204,23 @@ class _SafeEmailHtmlParser(HTMLParser):
         safe_attrs: list[str] = []
         for name, value in attrs:
             normalized_name = name.lower()
-            if normalized_name not in {"href", "src", "alt", "title"} or value is None:
+            if value is None:
+                continue
+            if normalized_name == "style":
+                safe_style = _sanitize_inline_style(value)
+                if safe_style:
+                    safe_attrs.append(f'style="{escape_html(safe_style, quote=True)}"')
                 continue
             if normalized_name in {"href", "src"} and not (
                 value.lower().startswith("https://") or _PLACEHOLDER_VALUE_RE.fullmatch(value.strip())
             ):
                 continue
-            safe_attrs.append(f'{normalized_name}="{escape_html(value, quote=True)}"')
+            if normalized_name in {"href", "src", "alt", "title"}:
+                safe_attrs.append(f'{normalized_name}="{escape_html(value, quote=True)}"')
+                continue
+            safe_value = _safe_attribute_value(normalized_name, value)
+            if safe_value is not None:
+                safe_attrs.append(f'{normalized_name}="{escape_html(safe_value, quote=True)}"')
         suffix = f" {' '.join(safe_attrs)}" if safe_attrs else ""
         self.parts.append(f"<{tag}{suffix}{' /' if self_closing else ''}>")
 
