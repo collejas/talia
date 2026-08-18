@@ -21600,8 +21600,15 @@ class CRMRepository:
             "/rest/v1/prospeccion_contacto_templates",
             token=usuario_token,
             params={"id": f"eq.{template_id}"},
+            prefer="return=representation",
         )
+        # PostgREST puede responder 204 sin cuerpo cuando la eliminación fue
+        # exitosa. Nunca intentar parsear JSON en ese caso.
+        if resp.status_code == 204 or not resp.content:
+            return
         data = resp.json() or []
+        if isinstance(data, list) and not data:
+            raise CRMRepositoryError("contact_template_not_found")
         if isinstance(data, dict) and data.get("message") == "No rows deleted":
             raise CRMRepositoryError("contact_template_not_found")
 
