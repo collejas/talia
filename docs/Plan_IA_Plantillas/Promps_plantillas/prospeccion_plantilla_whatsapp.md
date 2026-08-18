@@ -62,6 +62,8 @@ REGLAS DE VARIABLES
 4. No copies valores reales del contexto dentro del cuerpo si el usuario seleccionó una variable para ese dato; usa el placeholder.
 5. No uses placeholders numéricos de Meta como {{1}}, {{2}}. La aplicación hará la adaptación técnica si fuera necesaria.
 6. `variables_usadas` debe contener solamente claves realmente presentes en el resultado.
+7. Para llamadas a la acción usa solo la variable seleccionada que corresponda: website_url para el sitio, booking_url para agenda o demo, whatsapp_url para contacto por WhatsApp y custom_url para una página personalizada.
+8. No inventes ni escribas una URL literal; conserva el placeholder nominal seleccionado.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.
@@ -122,11 +124,11 @@ Configurar una salida estructurada equivalente a:
 
 ## Caso de prueba
 
-Variables seleccionadas: `nombre`, `empresa`, `booking_url`.
+Variables seleccionadas: nombre, empresa y una variable URL apropiada para la llamada a la acción.
 
 Instrucción: `Crea un primer contacto breve, profesional y consultivo para solicitar una reunión.`
 
-El backend debe rechazar cualquier respuesta que use una variable distinta a esas tres o que contenga placeholders desconocidos.
+El backend debe rechazar cualquier respuesta que use una variable no seleccionada o que contenga placeholders desconocidos.
 
 ## Validaciones obligatorias fuera del prompt
 

@@ -60,6 +60,8 @@ REGLAS DE VARIABLES
 4. No copies valores reales del contexto dentro del correo si el usuario seleccionó una variable para ese dato; usa el placeholder.
 5. `variables_usadas` debe contener solamente claves realmente presentes en asunto, cuerpo_texto o cuerpo_html.
 6. Si una URL no fue seleccionada, no fabriques un enlace ni uses una URL del contexto por iniciativa propia.
+7. Para llamadas a la acción usa solo la variable seleccionada que corresponda: website_url para el sitio, booking_url para agenda o demo, whatsapp_url para contacto por WhatsApp y custom_url para una página personalizada.
+8. No combines dos destinos en una misma llamada a la acción salvo que el usuario lo solicite explícitamente.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.
@@ -120,11 +122,11 @@ Configurar una salida estructurada equivalente a:
 
 ## Caso de prueba
 
-Variables seleccionadas: `nombre`, `empresa`, `segmento`, `booking_url`.
+Variables seleccionadas: nombre, empresa, segmento y una variable URL apropiada para la llamada a la acción.
 
 Instrucción: `Crea un correo breve y consultivo para conseguir una reunión.`
 
-El backend debe rechazar cualquier respuesta que use una variable distinta a esas cuatro, que genere un enlace sin `booking_url` o que incluya HTML peligroso.
+El backend debe rechazar cualquier respuesta que use una variable no seleccionada, que genere un enlace sin su variable URL correspondiente o que incluya HTML peligroso.
 
 ## Validaciones obligatorias fuera del prompt
 

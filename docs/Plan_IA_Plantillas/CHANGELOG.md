@@ -353,3 +353,19 @@ Cada avance debe registrar:
 - TypeScript: correcto.
 - React Doctor: 100/100, sin hallazgos.
 - git diff --check: correcto.
+
+## 2026-08-18 — Variables IA para llamadas a la acción
+
+### Cambios realizados
+
+- Se confirmó que website_url, booking_url, tracking_url y booking_link_text ya existían en el catálogo IA.
+- Se agregaron las variables columnares whatsapp_url y custom_url para correo y WhatsApp.
+- El asistente deshabilita estas variables hasta que el enlace correspondiente esté configurado en la página.
+- Al aplicar un borrador, whatsapp_url y custom_url se sustituyen por URLs validadas.
+- Se actualizaron los documentos de los prompts de correo y WhatsApp con reglas específicas para llamadas a la acción.
+
+### Base de datos
+
+- Migración: 20280818_130000_prospeccion_plantillas_ai_cta_variables.sql.
+- Aplicada mediante Supabase MCP.
+- Catálogo verificado para website_url, booking_url, whatsapp_url y custom_url en ambos canales.

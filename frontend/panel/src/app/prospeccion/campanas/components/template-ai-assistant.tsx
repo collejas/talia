@@ -34,8 +34,11 @@ export type TemplateAiDraft = {
 type Props = {
   canal: Channel
   campanaId: string | null
+  variableValues?: Record<string, string>
   onApply: (draft: TemplateAiDraft) => void
 }
+
+const EMPTY_VARIABLE_VALUES: Record<string, string> = {}
 
 function payloadError(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -45,7 +48,7 @@ function payloadError(payload: unknown, fallback: string) {
   return fallback
 }
 
-export function TemplateAiAssistant({ canal, campanaId, onApply }: Props) {
+export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_VARIABLE_VALUES, onApply }: Props) {
   const [variables, setVariables] = useState<VariableItem[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [instruction, setInstruction] = useState("")
@@ -81,6 +84,12 @@ export function TemplateAiAssistant({ canal, campanaId, onApply }: Props) {
 
   const selectedSet = useMemo(() => new Set(selected), [selected])
 
+  useEffect(() => {
+    setSelected((current) =>
+      current.filter((key) => !(Object.hasOwn(variableValues, key) && !variableValues[key]?.trim())),
+    )
+  }, [variableValues])
+
   const toggleVariable = (clave: string) => {
     setSelected((current) => (current.includes(clave) ? current.filter((item) => item !== clave) : [...current, clave]))
   }
@@ -114,8 +123,22 @@ export function TemplateAiAssistant({ canal, campanaId, onApply }: Props) {
       if (!response.ok) throw new Error(payloadError(payload, "No se pudo generar el borrador."))
       const draft = payload?.resultado as TemplateAiDraft | undefined
       if (!draft) throw new Error("La respuesta no contiene un borrador válido.")
-      setWarning(Array.isArray(draft.advertencias) ? draft.advertencias : [])
-      onApply(draft)
+      const resolveConfiguredVariables = (value: string | undefined) => {
+        if (!value) return value
+        return Object.entries(variableValues).reduce(
+          (resolved, [key, configuredValue]) =>
+            configuredValue.trim() ? resolved.replaceAll(`{{${key}}}`, configuredValue.trim()) : resolved,
+          value,
+        )
+      }
+      const resolvedDraft: TemplateAiDraft = {
+        ...draft,
+        asunto: resolveConfiguredVariables(draft.asunto),
+        cuerpo_texto: resolveConfiguredVariables(draft.cuerpo_texto) ?? "",
+        cuerpo_html: resolveConfiguredVariables(draft.cuerpo_html),
+      }
+      setWarning(Array.isArray(resolvedDraft.advertencias) ? resolvedDraft.advertencias : [])
+      onApply(resolvedDraft)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo generar el borrador.")
     } finally {
@@ -136,11 +159,22 @@ export function TemplateAiAssistant({ canal, campanaId, onApply }: Props) {
       {variables.length ? (
         <div className="mb-3 grid gap-1.5 sm:grid-cols-2">
           {variables.map((variable) => (
-            <label key={variable.clave} className="flex cursor-pointer items-start gap-2 rounded-md border bg-background/80 px-2 py-1.5 text-[11px]">
-              <input type="checkbox" checked={selectedSet.has(variable.clave)} onChange={() => toggleVariable(variable.clave)} />
+            <label
+              key={variable.clave}
+              className="flex cursor-pointer items-start gap-2 rounded-md border bg-background/80 px-2 py-1.5 text-[11px] has-disabled:cursor-not-allowed has-disabled:opacity-50"
+            >
+              <input
+                type="checkbox"
+                checked={selectedSet.has(variable.clave)}
+                disabled={Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim()}
+                onChange={() => toggleVariable(variable.clave)}
+              />
               <span>
                 <span className="block font-medium">{variable.etiqueta}</span>
                 <span className="block text-[10px] text-muted-foreground">{`{{${variable.clave}}}`} · {variable.tipo_dato}</span>
+                {Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim() ? (
+                  <span className="block text-[10px] text-amber-700">Configura primero este enlace.</span>
+                ) : null}
               </span>
             </label>
           ))}

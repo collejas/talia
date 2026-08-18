@@ -358,6 +358,23 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     return `https://wa.me/${phone}?text=${encodeURIComponent(phrase)}`
   }, [selectedWaRuleId, tenantPhone, waRules])
 
+  const customAiUrl = useMemo(() => {
+    const raw = form.internalLinkUrl.trim()
+    if (!raw) return ""
+    try {
+      const base = normalizeUrl(form.websiteBaseUrl)
+      const url = raw.startsWith("/") ? new URL(raw, base) : new URL(normalizeUrl(raw))
+      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : ""
+    } catch {
+      return ""
+    }
+  }, [form.internalLinkUrl, form.websiteBaseUrl, normalizeUrl])
+
+  const aiVariableValues = useMemo(
+    () => ({ whatsapp_url: waMeUrl, custom_url: customAiUrl }),
+    [customAiUrl, waMeUrl],
+  )
+
   const applyDraft = (draft: TemplateAiDraft) => {
     setForm((previous) => ({
       ...previous,
@@ -1001,7 +1018,12 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         </main>
 
         <aside className="space-y-6 xl:sticky xl:top-4">
-          <TemplateAiAssistant canal={form.canal} campanaId={form.campanaId || null} onApply={applyDraft} />
+          <TemplateAiAssistant
+            canal={form.canal}
+            campanaId={form.campanaId || null}
+            variableValues={aiVariableValues}
+            onApply={applyDraft}
+          />
         </aside>
       </div>
 
