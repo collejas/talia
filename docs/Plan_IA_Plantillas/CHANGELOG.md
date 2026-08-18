@@ -409,3 +409,20 @@ Cada avance debe registrar:
 - TypeScript: correcto.
 - React Doctor: 100/100.
 - git diff --check: correcto.
+
+## 2026-08-18 — Timeout explícito del proveedor IA
+
+### Cambios realizados
+
+- Se identificó que la generación podía permanecer aproximadamente 45 segundos esperando a OpenAI y terminar como `502 template_ai_provider_unavailable`.
+- El tiempo límite ahora es configurable mediante `PROSPECCION_TEMPLATE_AI_TIMEOUT_SECONDS` o `TALIA_PROSPECCION_TEMPLATE_AI_TIMEOUT_SECONDS`, con valor predeterminado de 45 segundos y límites de seguridad de 10 a 120 segundos.
+- Los timeouts se registran en la auditoría como `template_ai_provider_timeout`.
+- La API responde `504 template_ai_provider_timeout` para distinguir una demora del proveedor de una caída general o una respuesta inválida.
+- No se agregó reintento automático, para evitar solicitudes duplicadas y costos duplicados ante una respuesta tardía de OpenAI.
+
+### Validación
+
+- Servicio `talia-api.service` reiniciado y activo.
+- `/api/health`: `200 {"status":"ok"}`.
+- Pruebas IA/HTML: 3/3 correctas.
+- `git diff --check`: correcto.

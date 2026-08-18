@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -96,6 +97,8 @@ async def generate_template_ai_draft(
         raise HTTPException(status_code=502, detail="template_ai_invalid_provider_response") from exc
     except (CRMRepositoryError, PlatformRepositoryError) as exc:
         raise HTTPException(status_code=502, detail="template_ai_persistence_failed") from exc
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="template_ai_provider_timeout") from exc
     except Exception as exc:  # pragma: no cover - proveedor externo
         # OpenAI devuelve este error cuando la versión publicada del prompt
         # no contiene alguna de las variables enviadas por el backend.

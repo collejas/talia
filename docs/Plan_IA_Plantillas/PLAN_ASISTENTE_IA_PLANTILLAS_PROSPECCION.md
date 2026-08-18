@@ -281,6 +281,8 @@ GET /crm/prospeccion/plantillas/ai/variables?canal=correo|whatsapp
 }
 ```
 
+`contexto_empresa` y `sistema_diseno_empresa` son variables internas que el backend construye con la configuración del tenant autenticado; no deben aceptarse como fuente de verdad desde el navegador.
+
 ### Response
 
 ```json
@@ -340,6 +342,88 @@ El backend debe:
 - Asociar cualquier auditoría a `organizacion_id`, usuario y plantilla.
 
 No se necesita una memoria conversacional permanente para este caso. Cada generación debe ser independiente, reproducible y auditable.
+
+### 8.1 Contexto empresarial y sistema visual del tenant
+
+Se agregará una configuración explícita por tenant para que la IA conozca la identidad comercial y visual de la empresa. Esta información no será escrita manualmente por el navegador dentro del prompt: el backend la resolverá desde la organización autenticada y la enviará a los dos prompts centrales.
+
+#### Contexto empresarial
+
+El tenant podrá capturar una explicación autorizada de su empresa, por ejemplo:
+
+- Descripción general de la empresa.
+- Productos o servicios principales.
+- Público objetivo.
+- Propuesta de valor.
+- Diferenciadores.
+- Sectores o segmentos atendidos.
+- Palabras, afirmaciones o temas que deben evitarse.
+
+Estos datos se persistirán como columnas explícitas:
+
+- `descripcion_empresa` `text`.
+- `productos_servicios` `text`.
+- `publico_objetivo` `text`.
+- `propuesta_valor` `text`.
+- `diferenciadores` `text`.
+- `restricciones_comerciales` `text`.
+
+Este contenido se enviará al prompt mediante la variable técnica:
+
+```text
+{{contexto_empresa}}
+```
+
+Los datos básicos actuales de la organización —nombre, nombre comercial, sitio web, ciudad y estado— se conservarán como información complementaria. El nuevo contexto permitirá que el tenant explique su negocio con mayor precisión.
+
+#### Sistema visual de marca
+
+El tenant también podrá configurar su identidad visual para que el asistente genere diseños consistentes, especialmente en plantillas HTML de correo. La información importante se persistirá mediante columnas explícitas, no dentro de `metadata`, `jsonb`, `config` ni estructuras equivalentes.
+
+Columnas propuestas:
+
+- `color_primario` `text`.
+- `color_secundario` `text`.
+- `color_acento` `text`.
+- `color_fondo` `text`.
+- `estilo_visual` `text`.
+- `radio_bordes` `text`.
+- `logo_url` `text`.
+- `actualizado_en` `timestamptz`.
+
+El backend validará los colores como valores hexadecimales válidos, limitará la longitud de los textos y verificará que `logo_url` use HTTPS o una URL interna autorizada del almacenamiento de la plataforma.
+
+La configuración visual se enviará al prompt mediante una variable técnica independiente:
+
+```text
+{{sistema_diseno_empresa}}
+```
+
+Aunque el valor se serialice como objeto para transportarlo a OpenAI, sus datos de negocio permanecerán almacenados en columnas consultables y auditables.
+
+#### Fallback visual oficial de Tal-IA
+
+Cuando el tenant no configure uno o más colores, el backend enviará al prompt la paleta neutral oficial de Tal-IA:
+
+```text
+Fondo exterior: #f4f6f8
+Fondo principal: #ffffff
+Texto principal: #111827
+Texto secundario: #475569
+Acento: #2563eb
+Bordes: #e5e7eb
+```
+
+El prompt deberá indicar expresamente que estos colores son valores de diseño del sistema y no colores oficiales de la empresa. No se deben presentar como identidad de marca del tenant ni inventar colores adicionales cuando no exista configuración.
+
+#### Reglas para los dos prompts
+
+- `prospeccion_plantilla_correo` usará el contexto empresarial para el contenido y el sistema visual para estructura, colores, CTA, contraste y composición HTML.
+- `prospeccion_plantilla_whatsapp` usará el contexto empresarial para tono, propuesta de valor y relevancia del mensaje; el sistema visual solo aplicará a los elementos compatibles con el canal.
+- Las nuevas variables deberán declararse y publicarse en ambos prompts del dashboard de OpenAI.
+- El backend deberá enviar siempre valores completos, aplicando fallback cuando falten colores.
+- El usuario conservará la capacidad de editar el borrador antes de guardar.
+- El asistente no podrá guardar, publicar, enviar mensajes ni modificar directamente la configuración del tenant.
 
 ## 9. Persistencia, tablas y auditoría
 
@@ -714,6 +798,8 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Agregar la sección de prompts de plantillas en `settings/variables`.
 - Restringir lectura y escritura al tenant propietario en backend.
 - Crear catálogo backend de variables.
+- Crear la configuración explícita de contexto empresarial y sistema visual por tenant.
+- Agregar la pantalla de configuración de descripción empresarial, colores, estilo y logotipo.
 - Crear schemas Pydantic.
 - Crear servicio de generación.
 - Integrar `prompt_id` y versión.
@@ -728,6 +814,7 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Agregar validador de placeholders.
 - Agregar validador de correo.
 - Agregar validador de WhatsApp.
+- Validar colores, URL del logotipo, límites de texto y fallback visual oficial.
 - Sanitizar HTML.
 - Registrar uso y costo mínimo necesario.
 
@@ -763,6 +850,8 @@ La funcionalidad podrá considerarse lista cuando:
 - No se expongan secretos en frontend, respuestas o logs.
 - Existan límites de uso y manejo de timeout.
 - Se registre la versión del prompt utilizada.
+- El contexto empresarial y el sistema visual se resolverán exclusivamente desde el tenant autenticado.
+- Los colores faltantes utilizarán el fallback oficial de Tal-IA sin presentarlo como marca del tenant.
 - Existan pruebas backend para autorización, aislamiento, variables y respuesta inválida.
 - Existan pruebas de UI para generación, error, regeneración y aceptación.
 - Se valide el flujo autenticado real antes de declararlo terminado.

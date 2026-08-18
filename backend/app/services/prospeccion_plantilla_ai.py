@@ -15,6 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.assistants.manager import AssistantConfig
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository
 from app.repositories.platform_admin import PlatformRepository
@@ -374,7 +375,7 @@ async def generate_template_draft(
                 prompt={"id": prompt_id, "version": prompt_version, "variables": prompt_variables},
                 text={"format": {"type": "json_schema", "name": f"prospeccion_plantilla_{request.canal}", "strict": True, "schema": _schema(request.canal)}},
             ),
-            timeout=45,
+            timeout=settings.prospeccion_template_ai_timeout_seconds,
         )
         response_payload = response.model_dump()
         await openai_usage_ledger.record_response_usage(
@@ -410,6 +411,8 @@ async def generate_template_draft(
         )
         return {"ok": True, "canal": request.canal, "resultado": result.model_dump(), "auditoria": {"generation_id": str(generation_id), "prompt_version": prompt_version, "request_id": response_payload.get("id")}}
     except Exception as exc:
-        await platform_repo.update_prospeccion_template_ai_generation(organizacion_id=organizacion_id, generation_id=generation_id, payload={"resultado_estado": "respuesta_invalida" if isinstance(exc, (ValueError, json.JSONDecodeError)) else "error", "error_codigo": str(exc)[:120], "finalizado_en": datetime.now(timezone.utc).isoformat()})
-        logger.warning("template_ai_generation_failed", extra={"organizacion_id": str(organizacion_id), "generation_id": str(generation_id), "error": str(exc)})
+        is_timeout = isinstance(exc, asyncio.TimeoutError)
+        error_code = "template_ai_provider_timeout" if is_timeout else str(exc)[:120]
+        await platform_repo.update_prospeccion_template_ai_generation(organizacion_id=organizacion_id, generation_id=generation_id, payload={"resultado_estado": "respuesta_invalida" if isinstance(exc, (ValueError, json.JSONDecodeError)) else "error", "error_codigo": error_code, "finalizado_en": datetime.now(timezone.utc).isoformat()})
+        logger.warning("template_ai_generation_failed", extra={"organizacion_id": str(organizacion_id), "generation_id": str(generation_id), "error": error_code, "timeout_seconds": settings.prospeccion_template_ai_timeout_seconds if is_timeout else None})
         raise

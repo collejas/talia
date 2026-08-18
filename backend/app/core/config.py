@@ -107,6 +107,15 @@ class Settings(BaseSettings):
         ),
     )
     openai_project_id: str | None = None
+    prospeccion_template_ai_timeout_seconds: float = Field(
+        default=45.0,
+        ge=10.0,
+        le=120.0,
+        validation_alias=AliasChoices(
+            "PROSPECCION_TEMPLATE_AI_TIMEOUT_SECONDS",
+            "TALIA_PROSPECCION_TEMPLATE_AI_TIMEOUT_SECONDS",
+        ),
+    )
     openai_model: str = Field(
         default="gpt-4o",
         validation_alias=AliasChoices(
