@@ -181,6 +181,29 @@ Los siguientes valores:
 - Se eliminaron referencias a `uniqueItems` de los JSON Schema documentales para mantener compatibilidad con Structured Outputs.
 - Se indicó publicar una nueva versión después de declarar las variables en el dashboard de OpenAI.
 
+## 2026-08-18 — Editor de plantillas como página completa
+
+### Agregado
+
+- Se creó `/prospeccion/campanas/plantillas/nueva?campana_id=...` para crear plantillas en una página completa.
+- Se creó `/prospeccion/campanas/plantillas/[templateId]/editar` para editar plantillas existentes.
+- El botón `Plantillas` de la vista de campañas ahora navega al editor de página completa.
+- Se incorporó listado lateral de plantillas de la campaña, asistente IA, vista previa y acciones de guardar/cancelar.
+- Correo permite elegir un solo formato: HTML con diseño o texto plano.
+- WhatsApp conserva su registro local con nombre, idioma, categoría y texto de referencia.
+- La vista previa HTML se aisló mediante `iframe sandbox`.
+
+### Validación
+
+- ESLint: correcto en los archivos nuevos.
+- TypeScript (`tsc --noEmit`): correcto.
+- React Doctor: 100/100.
+
+### Pendientes
+
+- Retirar definitivamente el código legacy del modal después de validar el flujo en producción.
+- Agregar pruebas E2E para crear, editar y cambiar formato de correo.
+
 ### Pendiente
 
 - Publicar/reiniciar backend y panel para activar las nuevas rutas en el entorno desplegado.
@@ -279,3 +302,53 @@ Cada avance debe registrar:
 - Pruebas ejecutadas.
 - Riesgos o pendientes.
 - Evidencia de validación productiva cuando aplique.
+
+## 2026-08-18 — Reestructuración de la página de plantillas
+
+### Cambios realizados
+
+- Se eliminó el selector de campañas de la página de creación de plantillas.
+- La campaña ahora se recibe desde la navegación de prospección/campanas y permanece fija durante la creación o edición.
+- Se reorganizó la pantalla en encabezado, contexto de campaña, identidad, contenido, asistente IA, vista previa y otras plantillas.
+- La edición conserva el identificador de campaña en la URL para evitar perder el contexto.
+- En correo se mantiene la selección exclusiva entre HTML y texto plano; solo se persiste el formato elegido.
+
+### Validación
+
+- ESLint de las páginas y el editor: correcto.
+- TypeScript (npx tsc --noEmit): correcto.
+- React Doctor: 100/100, sin hallazgos.
+- git diff --check: correcto.
+
+### Pendiente
+
+- Validar visualmente en navegador los tamaños finales en escritorio y móvil.
+
+## 2026-08-18 — Ampliación de la vista previa
+
+### Cambios realizados
+
+- La vista previa dejó de mostrarse dentro de la columna lateral de 360 px.
+- Se movió a una sección independiente debajo del editor, utilizando todo el ancho disponible.
+- La previsualización HTML ahora tiene hasta 900 px de ancho y 720 px de altura mínima.
+- El panel lateral quedó reservado para el asistente IA y las plantillas relacionadas.
+
+## 2026-08-18 — Recuperación de recursos y enlaces
+
+### Cambios realizados
+
+- El selector de plantillas de la campaña se movió al encabezado, junto al nombre y canal de la campaña.
+- Se restauró la carga de imágenes mediante la galería aislada por tenant.
+- Se agregó una galería visual con selección y asignación para logo, imagen principal, productos y garantía.
+- Las relaciones de imágenes se guardan mediante el arreglo de asignaciones de la plantilla.
+- Se restauró la inserción de variables de personalización.
+- Se restauraron los enlaces al sitio web, agenda de demo, WhatsApp y páginas personalizadas.
+- La vista previa HTML resuelve las imágenes seleccionadas y los enlaces de sitio y agenda.
+- El dominio y teléfono se toman de la configuración del tenant.
+
+### Validación
+
+- ESLint: correcto.
+- TypeScript: correcto.
+- React Doctor: 100/100, sin hallazgos.
+- git diff --check: correcto.

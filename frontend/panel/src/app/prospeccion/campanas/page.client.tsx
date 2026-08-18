@@ -13,6 +13,7 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -243,6 +244,7 @@ function getTemplateMetaValue(metadata: Record<string, unknown>, keys: string[])
 }
 
 export function CampanasMetricsClient() {
+  const router = useRouter()
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
@@ -1471,52 +1473,10 @@ ${secondCellHtml}
   }, [])
 
   const handleManageTemplates = useCallback(
-    async (campanaId: string, campanaNombre?: string | null) => {
-      const campaign = crmCampaigns.find((item) => item.id === campanaId)
-      const canal =
-        campaign?.canal === "correo" || campaign?.canal === "whatsapp" || campaign?.canal === "llamada"
-          ? campaign.canal
-          : null
-      setTemplatesCampanaId(campanaId)
-      setTemplatesCampanaNombre(campanaNombre?.trim() || "Campaña")
-      setTemplatesCampanaCanal(canal)
-      setSelectedLogoUrl("")
-      setTemplateImageIds({})
-      setTemplateImageAssets({})
-      setTemplateForm({
-        id: "",
-        canal: canal ?? "correo",
-        nombre: "",
-        slug: "",
-        descripcion: "",
-        asunto: "",
-        cuerpoTexto: "",
-        cuerpoHtml: "",
-        metaTemplateName: "",
-        metaTemplateLanguage: "",
-        metaCategory: "marketing",
-        templateStatus: "draft",
-        nombreIa: "",
-        nombreEmpresa: "",
-        ctaBaseUrl: "https://talia.mx/",
-        webLinkLabel: "",
-        bookingLinkLabel: "",
-        waRuleId: "",
-        waPhrase: "",
-        waLinkLabel: "",
-      })
-      setTemplatesDialogOpen(true)
-      await loadWaRules()
-      await loadCampaignTemplates(campanaId)
-      const loads: Array<Promise<unknown>> = [loadLogos()]
-      if (canal === "correo") {
-        loads.push(loadBrevoCatalog(canal))
-      } else {
-        setBrevoCatalog([])
-      }
-      await Promise.all(loads)
+    (campanaId: string) => {
+      router.push(`/prospeccion/campanas/plantillas/nueva?campana_id=${encodeURIComponent(campanaId)}`)
     },
-    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates, loadLogos, loadWaRules]
+    [router]
   )
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
@@ -1937,7 +1897,7 @@ ${secondCellHtml}
                   size="sm"
                   disabled={!group.campana_id}
                   onClick={() =>
-                    group.campana_id && void handleManageTemplates(group.campana_id, group.campana_nombre)
+                    group.campana_id && handleManageTemplates(group.campana_id)
                   }
                 >
                   Plantillas
