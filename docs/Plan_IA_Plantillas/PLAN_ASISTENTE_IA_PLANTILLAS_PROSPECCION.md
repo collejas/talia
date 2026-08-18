@@ -428,7 +428,12 @@ El sistema visual de marca y el estilo de diseño serán configuraciones diferen
 - `{{sistema_diseno_empresa}}` define la identidad visual: colores, logotipo, radio de bordes y fallback de Tal-IA.
 - `{{estilo_diseno}}` define la composición o layout que tendrá la plantilla.
 
-En la interfaz, la sección visible se llamará **Estilo de diseño**. El usuario podrá elegir un estilo concreto o seleccionar **Automático**, para que el backend y el modelo determinen la composición más adecuada según la campaña, la instrucción, el tono y la cantidad de contenido.
+En `settings/variables`, ambas configuraciones estarán agrupadas en la pestaña **Imagen empresarial**:
+
+- **Contexto empresarial y sistema visual**.
+- **Estilo de diseño**.
+
+Dentro de **Estilo de diseño**, el usuario podrá elegir un estilo concreto o seleccionar **Automático**, para que el backend y el modelo determinen la composición más adecuada según la campaña, la instrucción, el tono y la cantidad de contenido.
 
 #### Biblioteca inicial de layouts para correo
 

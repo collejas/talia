@@ -483,3 +483,8 @@ Cada avance debe registrar:
 - Cada tenant puede crear, editar, habilitar, deshabilitar y eliminar sus estilos desde `settings/variables`.
 - El prompt recibe únicamente los estilos activos y habilitados de la organización autenticada.
 - Se agregó un trigger para provisionar los estilos base en tenants nuevos.
+
+## 2026-08-18 — Pestaña Imagen empresarial
+
+- Se agruparon las secciones **Contexto empresarial y sistema visual** y **Estilo de diseño** dentro de la pestaña **Imagen empresarial** en `settings/variables`.
+- La pestaña quedó como sección principal de identidad comercial, visual y composiciones disponibles para el asistente.

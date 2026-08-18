@@ -417,27 +417,6 @@ export default async function SettingsVariablesPage() {
           <TenantTemplateAiPromptConfigPanel initialItems={promptConfigResp.data.items} />
         ) : null}
 
-        {data ? (
-          <TenantAiBrandContextPanel
-            initialValues={{
-              ia_descripcion_empresa: data.ia_descripcion_empresa ?? "",
-              ia_productos_servicios: data.ia_productos_servicios ?? "",
-              ia_publico_objetivo: data.ia_publico_objetivo ?? "",
-              ia_propuesta_valor: data.ia_propuesta_valor ?? "",
-              ia_diferenciadores: data.ia_diferenciadores ?? "",
-              ia_restricciones_comerciales: data.ia_restricciones_comerciales ?? "",
-              ia_color_primario: data.ia_color_primario ?? "",
-              ia_color_secundario: data.ia_color_secundario ?? "",
-              ia_color_acento: data.ia_color_acento ?? "",
-              ia_color_fondo: data.ia_color_fondo ?? "",
-              ia_estilo_visual: data.ia_estilo_visual ?? "",
-              ia_radio_bordes: data.ia_radio_bordes ?? "",
-            }}
-          />
-        ) : null}
-
-        {layoutConfigResp?.ok ? <TenantTemplateAiLayoutsPanel initialItems={layoutConfigResp.data.items} /> : null}
-
         <TenantSettingsActionsProvider value={tenantActions}>
           <Card>
             <CardHeader className="space-y-1">
@@ -475,8 +454,9 @@ export default async function SettingsVariablesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="webchat">
-                <TabsList className="grid grid-cols-12">
+              <Tabs defaultValue="brand">
+                <TabsList className="flex h-auto flex-wrap gap-1">
+                  <TabsTrigger value="brand">Imagen empresarial</TabsTrigger>
                   <TabsTrigger value="webchat">Webchat</TabsTrigger>
                   <TabsTrigger value="web-tracking">Página Web</TabsTrigger>
                   <TabsTrigger value="calendar">Agenda</TabsTrigger>
@@ -490,6 +470,27 @@ export default async function SettingsVariablesPage() {
                   <TabsTrigger value="close-lead">Cierre</TabsTrigger>
                   <TabsTrigger value="secrets">Secretos</TabsTrigger>
                 </TabsList>
+                <TabsContent value="brand" className="space-y-6 pt-4">
+                  {data ? (
+                    <TenantAiBrandContextPanel
+                      initialValues={{
+                        ia_descripcion_empresa: data.ia_descripcion_empresa ?? "",
+                        ia_productos_servicios: data.ia_productos_servicios ?? "",
+                        ia_publico_objetivo: data.ia_publico_objetivo ?? "",
+                        ia_propuesta_valor: data.ia_propuesta_valor ?? "",
+                        ia_diferenciadores: data.ia_diferenciadores ?? "",
+                        ia_restricciones_comerciales: data.ia_restricciones_comerciales ?? "",
+                        ia_color_primario: data.ia_color_primario ?? "",
+                        ia_color_secundario: data.ia_color_secundario ?? "",
+                        ia_color_acento: data.ia_color_acento ?? "",
+                        ia_color_fondo: data.ia_color_fondo ?? "",
+                        ia_estilo_visual: data.ia_estilo_visual ?? "",
+                        ia_radio_bordes: data.ia_radio_bordes ?? "",
+                      }}
+                    />
+                  ) : null}
+                  {layoutConfigResp?.ok ? <TenantTemplateAiLayoutsPanel initialItems={layoutConfigResp.data.items} /> : null}
+                </TabsContent>
                 <TabsContent value="webchat" className="pt-4">
                   <TenantWebchatSettings
                     tenantId={tenantId}
