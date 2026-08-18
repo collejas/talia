@@ -85,6 +85,8 @@ async def generate_template_ai_draft(
             "template_ai_prompt_not_configured",
             "template_ai_variable_not_allowed",
             "template_ai_unknown_variable",
+            "template_ai_selected_cta_not_used",
+            "template_ai_booking_link_dependency",
             "html_forbidden_content",
             "html_tag_not_allowed",
             "html_empty",

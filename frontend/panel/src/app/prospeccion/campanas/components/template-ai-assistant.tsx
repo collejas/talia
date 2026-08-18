@@ -39,6 +39,9 @@ type Props = {
 }
 
 const EMPTY_VARIABLE_VALUES: Record<string, string> = {}
+const VARIABLE_DEPENDENCIES: Record<string, string[]> = {
+  booking_link_text: ["booking_url"],
+}
 
 function payloadError(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -91,7 +94,16 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
   }, [variableValues])
 
   const toggleVariable = (clave: string) => {
-    setSelected((current) => (current.includes(clave) ? current.filter((item) => item !== clave) : [...current, clave]))
+    setSelected((current) => {
+      if (current.includes(clave)) {
+        return current.filter(
+          (item) => item !== clave && !(VARIABLE_DEPENDENCIES[item] ?? []).includes(clave),
+        )
+      }
+      return [...current, clave, ...(VARIABLE_DEPENDENCIES[clave] ?? [])].filter(
+        (item, index, items) => items.indexOf(item) === index,
+      )
+    })
   }
 
   const generate = async () => {

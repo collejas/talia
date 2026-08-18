@@ -1,4 +1,11 @@
-from app.services.prospeccion_plantilla_ai import _sanitize_html, _validate_html
+import pytest
+
+from app.services.prospeccion_plantilla_ai import (
+    EmailTemplateAiResult,
+    _sanitize_html,
+    _validate_html,
+    _validate_placeholders,
+)
 
 
 def test_email_html_keeps_safe_inline_design_and_dimensions() -> None:
@@ -31,3 +38,17 @@ def test_email_html_removes_unsafe_styles_and_attributes() -> None:
     assert "javascript:" not in sanitized
     assert "onerror" not in sanitized
     assert 'style="color:red"' in sanitized
+
+
+def test_selected_cta_urls_must_be_used() -> None:
+    result = EmailTemplateAiResult(
+        nombre_sugerido="Demo",
+        descripcion="Demo",
+        asunto="Hola {{nombre}}",
+        cuerpo_texto="Hola {{nombre}} {{booking_link_text}}",
+        cuerpo_html="<p>Hola {{nombre}} {{booking_link_text}}</p>",
+        variables_usadas=["nombre", "booking_link_text"],
+    )
+
+    with pytest.raises(ValueError, match="template_ai_selected_cta_not_used"):
+        _validate_placeholders(result, {"nombre", "website_url", "whatsapp_url", "booking_link_text"}, "correo")

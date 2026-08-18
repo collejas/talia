@@ -28,6 +28,7 @@ Channel = Literal["correo", "whatsapp"]
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 _HTML_TAG_RE = re.compile(r"</?\s*([A-Za-z0-9]+)(?:\s[^>]*)?>")
 _FORBIDDEN_HTML_RE = re.compile(r"<(?:script|iframe|form|object|embed)|\son[a-z]+\s*=|javascript:", re.I)
+_CTA_URL_VARIABLES = {"tracking_url", "website_url", "booking_url", "whatsapp_url", "custom_url"}
 _ALLOWED_HTML_TAGS = {"p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "table", "tr", "td", "img"}
 _PLACEHOLDER_VALUE_RE = re.compile(r"^\{\{\s*[A-Za-z0-9_]+\s*\}\}$")
 _ALLOWED_STYLE_PROPERTIES = {
@@ -265,7 +266,19 @@ def _validate_placeholders(result: TemplateAiGenerationResult, selected: set[str
     used_in_text = {match.group(1) for value in text_values for match in _PLACEHOLDER_RE.finditer(value)}
     declared = set(result.variables_usadas)
     unknown = used_in_text - selected
-    if unknown or not declared.issubset(selected) or not declared.issubset(used_in_text):
+    missing_selected_cta = (selected & _CTA_URL_VARIABLES) - used_in_text
+    booking_text_without_url = "booking_link_text" in used_in_text and "booking_url" not in used_in_text
+    if (
+        unknown
+        or not declared.issubset(selected)
+        or not declared.issubset(used_in_text)
+        or missing_selected_cta
+        or booking_text_without_url
+    ):
+        if missing_selected_cta:
+            raise ValueError("template_ai_selected_cta_not_used")
+        if booking_text_without_url:
+            raise ValueError("template_ai_booking_link_dependency")
         raise ValueError("template_ai_unknown_variable")
 
 

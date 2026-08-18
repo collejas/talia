@@ -17,12 +17,14 @@ import {
   createWhatsProspTemplate,
   listContactoTemplates,
   listCrmCampaigns,
+  listProspectos,
   listWhatsAppAtribucionReglas,
   updateContactoTemplate,
   updateWhatsProspTemplate,
   type ContactoTemplate,
   type ContactoTemplateImagenVariable,
   type CrmCampaign,
+  type ProspectoItem,
   type WhatsAppAtribucionRule,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -53,6 +55,8 @@ const TEMPLATE_VARIABLES = [
   "{{segmento}}",
   "{{canal_origen}}",
 ]
+
+const PREVIEW_VARIABLE_PATTERN = /{{s*([A-Za-z0-9_]+)s*}}/g
 
 type FormState = {
   id: string
@@ -142,6 +146,9 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const [selectedWaRuleId, setSelectedWaRuleId] = useState("")
   const [waLinkLabel, setWaLinkLabel] = useState("Escríbenos por WhatsApp")
   const [tenantPhone, setTenantPhone] = useState("")
+  const [previewProspecto, setPreviewProspecto] = useState<ProspectoItem | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(() => emptyForm())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -262,6 +269,22 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     })()
   }, [loading])
 
+  useEffect(() => {
+    if (loading || previewLoading || previewProspecto) return
+    setPreviewLoading(true)
+    setPreviewError(null)
+    void listProspectos({ limit: 1, offset: 0, order: "creado" })
+      .then((response) => {
+        const item = Array.isArray(response?.items) ? response.items[0] ?? null : null
+        setPreviewProspecto(item)
+        if (!item) setPreviewError("No hay prospectos disponibles para la vista previa.")
+      })
+      .catch((reason) => {
+        setPreviewError(reason instanceof Error ? reason.message : "No se pudo cargar el prospecto de vista previa.")
+      })
+      .finally(() => setPreviewLoading(false))
+  }, [loading, previewLoading, previewProspecto])
+
   const appendToContent = useCallback((value: string) => {
     setForm((previous) => {
       const field = previous.canal === "correo" && previous.emailFormat === "html" ? "cuerpoHtml" : "cuerpoTexto"
@@ -330,26 +353,109 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     setNotice("Enlace insertado en el contenido.")
   }, [appendToContent, form.canal, form.emailFormat])
 
-  const previewHtml = useMemo(() => {
+  const previewVariableValues = useMemo(() => {
+    const prospecto = previewProspecto
+    const website = normalizeUrl(form.websiteBaseUrl)
+    const tracking = (() => {
+      try {
+        const url = new URL(website)
+        url.searchParams.set("utm_source", "prospeccion")
+        url.searchParams.set("utm_medium", "email")
+        url.searchParams.set("utm_campaign", form.campanaId)
+        url.searchParams.set("utm_content", "preview")
+        return url.toString()
+      } catch {
+        return website
+      }
+    })()
+    const booking = (() => {
+      try {
+        const url = new URL("/demo.html", website)
+        url.searchParams.set("utm_source", "prospeccion")
+        url.searchParams.set("utm_medium", "email")
+        url.searchParams.set("utm_campaign", form.campanaId)
+        url.searchParams.set("intent", "demo_booking")
+        return url.toString()
+      } catch {
+        return website
+      }
+    })()
+    const whatsapp = (() => {
+      const phone = tenantPhone.replace(/\D+/g, "")
+      const phrase = waRules.find((rule) => rule.id === selectedWaRuleId)?.frase_objetivo?.trim() ?? ""
+      if (!phone) return ""
+      return phrase
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(phrase)}`
+        : `https://wa.me/${phone}`
+    })()
+    const custom = (() => {
+      const raw = form.internalLinkUrl.trim()
+      if (!raw) return ""
+      try {
+        return raw.startsWith("/") ? new URL(raw, website).toString() : normalizeUrl(raw)
+      } catch {
+        return ""
+      }
+    })()
     const imageUrls = Object.fromEntries(
       IMAGE_SLOTS.map(({ key }) => {
         const asset = logos.find((logo) => logo.id === imageIds[key])
         return [key, asset?.file_url ?? ""]
       }),
     )
-    let html = form.cuerpoHtml
-    for (const [key, value] of Object.entries(imageUrls)) {
-      html = html.replaceAll(`{{${key}}}`, value)
+    return {
+      display_name: prospecto?.display_name?.trim() || "María",
+      nombre: prospecto?.nombre?.trim() || "María",
+      titulo: prospecto?.titulo?.trim() || "Directora",
+      primer_apellido: prospecto?.primer_apellido?.trim() || "García",
+      segundo_apellido: prospecto?.segundo_apellido?.trim() || "",
+      empresa: prospecto?.nombre_comercial?.trim() || prospecto?.segmento?.trim() || "Empresa de ejemplo",
+      email: prospecto?.email?.trim() || prospecto?.correo_principal?.trim() || "contacto@ejemplo.com",
+      telefono: prospecto?.phone_e164?.trim() || prospecto?.phone?.trim() || "5555555555",
+      segmento: prospecto?.segmento?.trim() || prospecto?.actividad?.trim() || "su industria",
+      canal_origen: prospecto?.fuente === "google_places" ? "Google" : prospecto?.fuente === "denue" ? "DENUE" : "Manual",
+      tracking_url: tracking,
+      website_url: website,
+      booking_url: booking,
+      booking_link_text: form.demoLinkLabel || "Agenda tu demo",
+      whatsapp_url: whatsapp,
+      whatsapp_link_text: waLinkLabel || "Escríbenos por WhatsApp",
+      custom_url: custom,
+      website_link_text: form.websiteLinkLabel || "Visitar sitio web",
+      ...imageUrls,
     }
-    const website = normalizeUrl(form.websiteBaseUrl)
-    let demo = ""
-    try {
-      demo = website ? new URL("/demo.html", website).toString() : ""
-    } catch {
-      demo = website
-    }
-    return html.replaceAll("{{website_url}}", website).replaceAll("{{booking_url}}", demo)
-  }, [form.cuerpoHtml, form.websiteBaseUrl, imageIds, logos, normalizeUrl])
+  }, [
+    form.campanaId,
+    form.demoLinkLabel,
+    form.internalLinkUrl,
+    form.websiteBaseUrl,
+    form.websiteLinkLabel,
+    imageIds,
+    logos,
+    normalizeUrl,
+    previewProspecto,
+    selectedWaRuleId,
+    tenantPhone,
+    waLinkLabel,
+    waRules,
+  ])
+
+  const renderPreviewVariables = useCallback((value: string) => {
+    return value.replace(PREVIEW_VARIABLE_PATTERN, (match, key: string) => {
+      const resolved = previewVariableValues[key as keyof typeof previewVariableValues]
+      return resolved == null ? match : String(resolved)
+    })
+  }, [previewVariableValues])
+
+  const previewHtml = useMemo(
+    () => renderPreviewVariables(form.cuerpoHtml),
+    [form.cuerpoHtml, renderPreviewVariables],
+  )
+
+  const previewText = useMemo(
+    () => renderPreviewVariables(form.cuerpoTexto),
+    [form.cuerpoTexto, renderPreviewVariables],
+  )
 
   const waMeUrl = useMemo(() => {
     const phone = tenantPhone.replace(/\D+/g, "")
@@ -1031,10 +1137,20 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Vista previa de la plantilla</CardTitle>
           <CardDescription>
-            Revisa el resultado completo antes de guardar. Esta área utiliza el ancho disponible de la página.
+            Revisa el resultado completo antes de guardar. Las variables se muestran con datos del primer prospecto disponible del tenant.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {previewLoading ? (
+            <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <IconLoader className="size-3.5 animate-spin" /> Cargando datos reales para la vista previa...
+            </p>
+          ) : null}
+          {previewError ? (
+            <p className="mb-3 text-xs text-amber-700">
+              {previewError} Se muestran valores de ejemplo para que puedas revisar el diseño.
+            </p>
+          ) : null}
           {form.canal === "correo" && form.emailFormat === "html" ? (
             <div className="overflow-auto rounded-lg border bg-muted/40 p-3 sm:p-6">
               <iframe
@@ -1050,7 +1166,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
           ) : (
             <div className="rounded-lg border bg-muted/40 p-3 sm:p-6">
               <pre className="mx-auto min-h-64 max-w-4xl whitespace-pre-wrap rounded-md border bg-background p-5 text-sm leading-6 shadow-sm">
-                {form.cuerpoTexto || "El contenido aparecerá aquí."}
+                {previewText || "El contenido aparecerá aquí."}
               </pre>
             </div>
           )}

@@ -388,3 +388,24 @@ Cada avance debe registrar:
 - Pruebas HTML del sanitizador: 2/2 correctas.
 - git diff --check: correcto.
 - El prompt mantiene las ocho variables técnicas requeridas por OpenAI; el diseño se expresa dentro de las instrucciones del mensaje y del catálogo de variables.
+
+## 2026-08-18 — Vista previa con datos y validación de CTA
+
+### Cambios realizados
+
+- La vista previa ahora carga el primer prospecto disponible del tenant y sustituye variables de nombre, apellidos, empresa, segmento, correo, teléfono y canal de origen.
+- Se agregaron a la vista previa URLs de sitio, tracking, agenda/demo, WhatsApp y enlace personalizado.
+- También se resuelven textos de enlace e imágenes asignadas.
+- Si no hay prospectos disponibles, se informa al usuario y se muestran valores de ejemplo.
+- La variable booking_link_text ahora selecciona automáticamente booking_url como dependencia.
+- El backend valida que las variables URL de CTA seleccionadas aparezcan en el resultado generado.
+- El backend valida que booking_link_text no se use sin booking_url.
+- Se actualizaron ambos prompts para exigir el uso de cada URL de CTA seleccionada.
+
+### Validación
+
+- Pruebas IA/HTML: 3/3 correctas.
+- ESLint: correcto.
+- TypeScript: correcto.
+- React Doctor: 100/100.
+- git diff --check: correcto.

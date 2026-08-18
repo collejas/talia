@@ -64,6 +64,8 @@ REGLAS DE VARIABLES
 6. `variables_usadas` debe contener solamente claves realmente presentes en el resultado.
 7. Para llamadas a la acción usa solo la variable seleccionada que corresponda: website_url para el sitio, booking_url para agenda o demo, whatsapp_url para contacto por WhatsApp y custom_url para una página personalizada.
 8. No inventes ni escribas una URL literal; conserva el placeholder nominal seleccionado.
+9. Si el usuario seleccionó una o más variables URL para llamadas a la acción, utiliza cada una al menos una vez en enlaces o llamadas a la acción coherentes.
+10. booking_link_text solo puede aparecer como texto visible junto con booking_url; nunca lo uses como contenido aislado.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.
