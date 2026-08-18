@@ -14,6 +14,19 @@ Documento base para crear el prompt versionado de generación de plantillas de c
 
 Crear estas variables en el dashboard de OpenAI:
 
+```text
+instruccion_usuario
+idioma
+tono
+variables_seleccionadas
+catalogo_variables
+contexto_empresa
+borrador_actual
+restricciones_canal
+```
+
+Los nombres deben coincidir exactamente, sin mayúsculas, espacios ni variables adicionales requeridas. Después de agregarlas, guardar y publicar una nueva versión del prompt.
+
 - `instruccion_usuario`: instrucción escrita por el usuario.
 - `idioma`: idioma y variante solicitada, por ejemplo `es-MX`.
 - `tono`: tono solicitado.
@@ -95,8 +108,7 @@ Configurar una salida estructurada equivalente a:
     "cuerpo_html": { "type": "string", "maxLength": 40000 },
     "variables_usadas": {
       "type": "array",
-      "items": { "type": "string" },
-      "uniqueItems": true
+      "items": { "type": "string" }
     },
     "advertencias": {
       "type": "array",

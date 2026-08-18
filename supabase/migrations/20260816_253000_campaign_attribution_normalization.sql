@@ -82,6 +82,7 @@ begin
               and e.evento in ('entregado','leido')
         ) delivery on true
         where m.direccion='saliente'
+          and m.organizacion_id is not null
           and e.estado not in ('fallido','failed','error','cancelado')
           and b.campana_id is not null
           and (p_organizacion_id is null or m.organizacion_id=p_organizacion_id)
@@ -177,6 +178,7 @@ begin
             ), 10) as phone10
         ) phone
         where e.estado not in ('fallido','failed','error','cancelado')
+          and e.organizacion_id is not null
           and b.campana_id is not null
           and phone.phone10 is not null
           and (p_organizacion_id is null or e.organizacion_id=p_organizacion_id)
@@ -558,4 +560,3 @@ grant execute on function public.campana_conversion_resumen_rango(uuid,uuid,time
 
 comment on function public.campana_conversion_resumen_rango(uuid,uuid,timestamptz,timestamptz,integer,integer) is
     'Resumen comercial por campaña: conversaciones únicas, respuestas, oportunidades, clientes y costo total del ledger por conversación.';
-

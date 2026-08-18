@@ -95,4 +95,8 @@ async def generate_template_ai_draft(
     except (CRMRepositoryError, PlatformRepositoryError) as exc:
         raise HTTPException(status_code=502, detail="template_ai_persistence_failed") from exc
     except Exception as exc:  # pragma: no cover - proveedor externo
+        # OpenAI devuelve este error cuando la versión publicada del prompt
+        # no contiene alguna de las variables enviadas por el backend.
+        if "prompt_variable_unknown" in str(exc):
+            raise HTTPException(status_code=400, detail="template_ai_prompt_variables_not_configured") from exc
         raise HTTPException(status_code=502, detail="template_ai_provider_unavailable") from exc

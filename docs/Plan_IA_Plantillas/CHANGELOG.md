@@ -146,6 +146,41 @@ Los siguientes valores:
 - Se agregaron descripciones accesibles a los diálogos de campañas y plantillas.
 - ESLint y TypeScript vuelven a pasar sin errores; permanecen advertencias preexistentes del archivo grande de campañas.
 
+## 2026-08-17 — Corrección de credencial OpenAI en generación
+
+### Corregido
+
+- Se diagnosticó el `502 Bad Gateway` de `POST /api/prospeccion/plantillas/ai`.
+- El backend sí validaba el tenant, la campaña y persistía la generación, pero intentaba crear el cliente OpenAI únicamente con `OPENAI_API_KEY` del entorno.
+- La generación ahora resuelve la API key y el proyecto desde los secretos seguros del tenant maestro, donde se administra la configuración central de prompts.
+- La llamada al ledger registra también la huella de la credencial y el proyecto utilizados, sin persistir la API key.
+
+### Validación
+
+- `talia-api.service` reiniciado y activo.
+- Rutas activas confirmadas en OpenAPI: variables y generación.
+- Credencial maestra y proyecto disponibles confirmados sin exponer sus valores.
+
+## 2026-08-17 — Corrección de esquema Structured Outputs
+
+- Se diagnosticó un `400` de OpenAI que estaba siendo presentado al frontend como `502`.
+- OpenAI rechazaba `uniqueItems` en el esquema de `variables_usadas`.
+- Se eliminó esa palabra clave del JSON Schema y se conserva la validación de variables permitidas en backend.
+
+## 2026-08-17 — Diagnóstico de variables del prompt publicado
+
+- La API key, el proyecto y el esquema estructurado ya son aceptados por OpenAI.
+- OpenAI devolvió `prompt_variable_unknown` para las ocho variables enviadas por el backend.
+- Se confirmó que la versión configurada del prompt de correo es la `v1`.
+- El backend ahora devuelve `400 template_ai_prompt_variables_not_configured` para distinguir una configuración incompleta del prompt de una indisponibilidad del proveedor.
+- Pendiente: declarar las ocho variables en cada prompt de OpenAI y publicar una nueva versión; después actualizar `prompt_version` en `/settings/variables`.
+
+## 2026-08-17 — Actualización de prompts para publicación
+
+- Se agregaron bloques copiables con los ocho nombres exactos de variables de entrada en los prompts de correo y WhatsApp.
+- Se eliminaron referencias a `uniqueItems` de los JSON Schema documentales para mantener compatibilidad con Structured Outputs.
+- Se indicó publicar una nueva versión después de declarar las variables en el dashboard de OpenAI.
+
 ### Pendiente
 
 - Publicar/reiniciar backend y panel para activar las nuevas rutas en el entorno desplegado.

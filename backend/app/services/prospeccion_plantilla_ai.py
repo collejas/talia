@@ -20,6 +20,7 @@ from app.repositories.crm import CRMRepository
 from app.repositories.platform_admin import PlatformRepository
 from app.services.openai import get_openai_client
 from app.services import openai_usage_ledger
+from app.services.tenant_runtime import MASTER_ORGANIZACION_ID, get_openai_api_key, get_openai_project_id
 
 logger = get_logger("app.services.prospeccion_plantilla_ai")
 
@@ -84,7 +85,9 @@ def _schema(channel: Channel) -> dict[str, Any]:
             "nombre_sugerido": {"type": "string", "maxLength": 120},
             "descripcion": {"type": "string", "maxLength": 300},
             "cuerpo_texto": {"type": "string", "maxLength": 4096},
-            "variables_usadas": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+            # OpenAI Structured Outputs no admite `uniqueItems`; la
+            # validación de variables permitidas se hace en backend.
+            "variables_usadas": {"type": "array", "items": {"type": "string"}},
             "advertencias": {"type": "array", "items": {"type": "string", "maxLength": 300}},
         },
     }
@@ -253,8 +256,17 @@ async def generate_template_draft(
     )
     started = time.perf_counter()
     try:
-        assistant = AssistantConfig(prompt_id=prompt_id, prompt_version=prompt_version)
-        client = get_openai_client(project_id=None)
+        # Los prompts de esta funcionalidad pertenecen al tenant maestro. La
+        # credencial debe resolverse con el mismo mecanismo seguro usado por
+        # el resto de las integraciones OpenAI, no únicamente desde .env.
+        openai_api_key = await get_openai_api_key(organizacion_id=MASTER_ORGANIZACION_ID)
+        openai_project_id = await get_openai_project_id(organizacion_id=MASTER_ORGANIZACION_ID)
+        assistant = AssistantConfig(
+            prompt_id=prompt_id,
+            prompt_version=prompt_version,
+            project_id=openai_project_id,
+        )
+        client = get_openai_client(api_key=openai_api_key, project_id=openai_project_id)
         prompt_variables = {
             "instruccion_usuario": request.instruccion_usuario,
             "idioma": request.idioma,
@@ -281,6 +293,8 @@ async def generate_template_draft(
             response_payload=response_payload,
             request_purpose="template_draft_generation",
             latency_ms=int((time.perf_counter() - started) * 1000),
+            api_key=openai_api_key,
+            project_id=openai_project_id,
             request_metadata={"generation_id": str(generation_id), "campana_id": str(request.campana_id) if request.campana_id else None, "selected_variables_count": len(selected)},
         )
         raw_result = json.loads(_extract_response_text(response))
