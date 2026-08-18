@@ -1060,7 +1060,7 @@ class PlatformRepository:
 
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,ia_descripcion_empresa,ia_productos_servicios,ia_publico_objetivo,ia_propuesta_valor,ia_diferenciadores,ia_restricciones_comerciales,ia_color_primario,ia_color_secundario,ia_color_acento,ia_color_fondo,ia_estilo_visual,ia_radio_bordes,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
             "id": f"eq.{organizacion_id}",
             "limit": "1",
         }

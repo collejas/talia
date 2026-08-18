@@ -13,6 +13,7 @@ import {
   TenantTemplateAiPromptConfigPanel,
   type TemplateAiPromptConfig,
 } from "./components/tenant-template-ai-prompt-config-panel"
+import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
 
 import {
   TenantSettingsActions,
@@ -87,6 +88,18 @@ type TenantSettingsResponse = {
   idioma?: string | null
   moneda?: string | null
   logo_url?: string | null
+  ia_descripcion_empresa?: string | null
+  ia_productos_servicios?: string | null
+  ia_publico_objetivo?: string | null
+  ia_propuesta_valor?: string | null
+  ia_diferenciadores?: string | null
+  ia_restricciones_comerciales?: string | null
+  ia_color_primario?: string | null
+  ia_color_secundario?: string | null
+  ia_color_acento?: string | null
+  ia_color_fondo?: string | null
+  ia_estilo_visual?: string | null
+  ia_radio_bordes?: string | null
   direccion_fiscal?: string | null
   direccion_fiscal_calle?: string | null
   direccion_fiscal_numero_exterior?: string | null
@@ -390,6 +403,25 @@ export default async function SettingsVariablesPage() {
 
         {data?.organizacion_id === MASTER_TENANT_ID && promptConfigResp?.ok ? (
           <TenantTemplateAiPromptConfigPanel initialItems={promptConfigResp.data.items} />
+        ) : null}
+
+        {data ? (
+          <TenantAiBrandContextPanel
+            initialValues={{
+              ia_descripcion_empresa: data.ia_descripcion_empresa ?? "",
+              ia_productos_servicios: data.ia_productos_servicios ?? "",
+              ia_publico_objetivo: data.ia_publico_objetivo ?? "",
+              ia_propuesta_valor: data.ia_propuesta_valor ?? "",
+              ia_diferenciadores: data.ia_diferenciadores ?? "",
+              ia_restricciones_comerciales: data.ia_restricciones_comerciales ?? "",
+              ia_color_primario: data.ia_color_primario ?? "",
+              ia_color_secundario: data.ia_color_secundario ?? "",
+              ia_color_acento: data.ia_color_acento ?? "",
+              ia_color_fondo: data.ia_color_fondo ?? "",
+              ia_estilo_visual: data.ia_estilo_visual ?? "",
+              ia_radio_bordes: data.ia_radio_bordes ?? "",
+            }}
+          />
         ) : null}
 
         <TenantSettingsActionsProvider value={tenantActions}>

@@ -30,6 +30,14 @@ _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 _HTML_TAG_RE = re.compile(r"</?\s*([A-Za-z0-9]+)(?:\s[^>]*)?>")
 _FORBIDDEN_HTML_RE = re.compile(r"<(?:script|iframe|form|object|embed)|\son[a-z]+\s*=|javascript:", re.I)
 _CTA_URL_VARIABLES = {"tracking_url", "website_url", "booking_url", "whatsapp_url", "custom_url"}
+_TALIA_VISUAL_FALLBACK = {
+    "fondo_exterior": "#f4f6f8",
+    "fondo_principal": "#ffffff",
+    "texto_principal": "#111827",
+    "texto_secundario": "#475569",
+    "acento": "#2563eb",
+    "bordes": "#e5e7eb",
+}
 _ALLOWED_HTML_TAGS = {"p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "table", "tr", "td", "img"}
 _PLACEHOLDER_VALUE_RE = re.compile(r"^\{\{\s*[A-Za-z0-9_]+\s*\}\}$")
 _ALLOWED_STYLE_PROPERTIES = {
@@ -320,6 +328,26 @@ async def generate_template_draft(
         "sitio_web": organization.get("sitio_web") or organization.get("dominio_principal"),
         "ciudad": organization.get("ciudad"),
         "estado": organization.get("estado"),
+        "descripcion_empresa": organization.get("ia_descripcion_empresa"),
+        "productos_servicios": organization.get("ia_productos_servicios"),
+        "publico_objetivo": organization.get("ia_publico_objetivo"),
+        "propuesta_valor": organization.get("ia_propuesta_valor"),
+        "diferenciadores": organization.get("ia_diferenciadores"),
+        "restricciones_comerciales": organization.get("ia_restricciones_comerciales"),
+    }
+    design = {
+        "color_primario": organization.get("ia_color_primario") or _TALIA_VISUAL_FALLBACK["acento"],
+        "color_secundario": organization.get("ia_color_secundario") or _TALIA_VISUAL_FALLBACK["texto_secundario"],
+        "color_acento": organization.get("ia_color_acento") or _TALIA_VISUAL_FALLBACK["acento"],
+        "color_fondo": organization.get("ia_color_fondo") or _TALIA_VISUAL_FALLBACK["fondo_principal"],
+        "estilo": organization.get("ia_estilo_visual") or "neutral_sobrio_talia",
+        "logo_url": organization.get("logo_url"),
+        "border_radius": organization.get("ia_radio_bordes") or "12px",
+        "fallback_talia": _TALIA_VISUAL_FALLBACK,
+        "fallback_aplicado": any(
+            not organization.get(key)
+            for key in ("ia_color_primario", "ia_color_secundario", "ia_color_acento", "ia_color_fondo")
+        ),
     }
     prompt_id = str(config.get("prompt_id") or "").strip()
     prompt_version = str(config.get("prompt_version") or "").strip()
@@ -367,6 +395,7 @@ async def generate_template_draft(
             "variables_seleccionadas": json.dumps(request.variables_seleccionadas, ensure_ascii=False),
             "catalogo_variables": json.dumps([variable_map[key] for key in request.variables_seleccionadas], ensure_ascii=False),
             "contexto_empresa": json.dumps(context, ensure_ascii=False),
+            "sistema_diseno_empresa": json.dumps(design, ensure_ascii=False),
             "borrador_actual": request.borrador_actual or "",
             "restricciones_canal": json.dumps({"canal": request.canal, "max_body_chars": 4096}, ensure_ascii=False),
         }

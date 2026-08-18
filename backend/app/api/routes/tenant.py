@@ -246,6 +246,18 @@ class TenantScopedSettings(BaseModel):
     idioma: str | None = None
     moneda: str | None = None
     logo_url: str | None = None
+    ia_descripcion_empresa: str | None = None
+    ia_productos_servicios: str | None = None
+    ia_publico_objetivo: str | None = None
+    ia_propuesta_valor: str | None = None
+    ia_diferenciadores: str | None = None
+    ia_restricciones_comerciales: str | None = None
+    ia_color_primario: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_secundario: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_acento: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_fondo: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_estilo_visual: str | None = None
+    ia_radio_bordes: str | None = Field(default=None, pattern=r"^(0|[1-9][0-9]{0,2})(px|rem|em|%)$")
     direccion_fiscal: str | None = None
     direccion_fiscal_calle: str | None = None
     direccion_fiscal_numero_exterior: str | None = None
@@ -294,6 +306,18 @@ class TenantScopedUpdateRequest(BaseModel):
     idioma: str | None = None
     moneda: str | None = None
     logo_url: str | None = None
+    ia_descripcion_empresa: str | None = Field(default=None, max_length=4000)
+    ia_productos_servicios: str | None = Field(default=None, max_length=4000)
+    ia_publico_objetivo: str | None = Field(default=None, max_length=3000)
+    ia_propuesta_valor: str | None = Field(default=None, max_length=3000)
+    ia_diferenciadores: str | None = Field(default=None, max_length=3000)
+    ia_restricciones_comerciales: str | None = Field(default=None, max_length=3000)
+    ia_color_primario: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_secundario: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_acento: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_color_fondo: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ia_estilo_visual: str | None = Field(default=None, max_length=120)
+    ia_radio_bordes: str | None = Field(default=None, pattern=r"^(0|[1-9][0-9]{0,2})(px|rem|em|%)$")
     direccion_fiscal: str | None = None
     direccion_fiscal_calle: str | None = None
     direccion_fiscal_numero_exterior: str | None = None
@@ -544,6 +568,18 @@ def _apply_organization_fields(target: dict[str, Any], source: Any) -> dict[str,
         ("idioma", "idioma"),
         ("moneda", "moneda"),
         ("logo_url", "logo_url"),
+        ("ia_descripcion_empresa", "ia_descripcion_empresa"),
+        ("ia_productos_servicios", "ia_productos_servicios"),
+        ("ia_publico_objetivo", "ia_publico_objetivo"),
+        ("ia_propuesta_valor", "ia_propuesta_valor"),
+        ("ia_diferenciadores", "ia_diferenciadores"),
+        ("ia_restricciones_comerciales", "ia_restricciones_comerciales"),
+        ("ia_color_primario", "ia_color_primario"),
+        ("ia_color_secundario", "ia_color_secundario"),
+        ("ia_color_acento", "ia_color_acento"),
+        ("ia_color_fondo", "ia_color_fondo"),
+        ("ia_estilo_visual", "ia_estilo_visual"),
+        ("ia_radio_bordes", "ia_radio_bordes"),
     ):
         value = getattr(source, source_name, None)
         if value is not None:
@@ -591,6 +627,18 @@ async def _build_tenant_response(
         "idioma": row.get("idioma"),
         "moneda": row.get("moneda"),
         "logo_url": row.get("logo_url"),
+        "ia_descripcion_empresa": row.get("ia_descripcion_empresa"),
+        "ia_productos_servicios": row.get("ia_productos_servicios"),
+        "ia_publico_objetivo": row.get("ia_publico_objetivo"),
+        "ia_propuesta_valor": row.get("ia_propuesta_valor"),
+        "ia_diferenciadores": row.get("ia_diferenciadores"),
+        "ia_restricciones_comerciales": row.get("ia_restricciones_comerciales"),
+        "ia_color_primario": row.get("ia_color_primario"),
+        "ia_color_secundario": row.get("ia_color_secundario"),
+        "ia_color_acento": row.get("ia_color_acento"),
+        "ia_color_fondo": row.get("ia_color_fondo"),
+        "ia_estilo_visual": row.get("ia_estilo_visual"),
+        "ia_radio_bordes": row.get("ia_radio_bordes"),
         "direccion_fiscal": row.get("direccion_fiscal"),
         "direccion_fiscal_calle": row.get("direccion_fiscal_calle"),
         "direccion_fiscal_numero_exterior": row.get("direccion_fiscal_numero_exterior"),

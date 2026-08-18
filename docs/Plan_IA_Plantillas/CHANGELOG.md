@@ -426,3 +426,22 @@ Cada avance debe registrar:
 - `/api/health`: `200 {"status":"ok"}`.
 - Pruebas IA/HTML: 3/3 correctas.
 - `git diff --check`: correcto.
+
+## 2026-08-18 — Contexto empresarial y sistema visual por tenant
+
+### Cambios realizados
+
+- Se agregaron columnas explícitas en `organizaciones` para descripción empresarial, productos y servicios, público objetivo, propuesta de valor, diferenciadores y restricciones comerciales.
+- Se agregaron columnas explícitas para color primario, color secundario, color de acento, color de fondo, estilo visual y radio de bordes.
+- Se reutiliza el `logo_url` existente de la organización; no se duplica como metadata ni como una columna paralela.
+- `settings/variables` incorpora una sección para editar el contexto empresarial y el sistema visual.
+- El backend valida longitudes, colores hexadecimales y radios de borde, además de aplicar permisos de tenant existentes.
+- La generación IA envía `contexto_empresa` y `sistema_diseno_empresa` resueltos desde el tenant autenticado.
+- Se agregó el fallback neutral oficial de Tal-IA para colores faltantes.
+- Se actualizaron los documentos de los prompts de correo y WhatsApp con la nueva variable `sistema_diseno_empresa`.
+
+### Base de datos
+
+- Migración: `20260818_150000_tenant_ai_business_context_brand.sql`.
+- Aplicada mediante Supabase MCP.
+- La información estructural se mantiene en columnas consultables; no se agregó a `metadata`, `jsonb` ni `config`.

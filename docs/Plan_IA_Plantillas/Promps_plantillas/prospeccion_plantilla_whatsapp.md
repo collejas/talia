@@ -21,6 +21,7 @@ tono
 variables_seleccionadas
 catalogo_variables
 contexto_empresa
+sistema_diseno_empresa
 borrador_actual
 restricciones_canal
 ```
@@ -33,6 +34,7 @@ Los nombres deben coincidir exactamente, sin mayúsculas, espacios ni variables 
 - `variables_seleccionadas`: lista serializada de claves permitidas por el backend.
 - `catalogo_variables`: descripción serializada únicamente de las variables seleccionadas.
 - `contexto_empresa`: contexto autorizado del tenant actual.
+- `sistema_diseno_empresa`: identidad visual autorizada del tenant y fallback oficial de Tal-IA cuando faltan colores.
 - `borrador_actual`: borrador opcional que el usuario quiere mejorar; puede estar vacío.
 - `restricciones_canal`: límites calculados por el backend para la plantilla actual.
 
@@ -52,6 +54,7 @@ CONTEXTO DE LA SOLICITUD
 - Variables seleccionadas: {{variables_seleccionadas}}
 - Catálogo de variables seleccionadas: {{catalogo_variables}}
 - Contexto autorizado de la empresa: {{contexto_empresa}}
+- Sistema visual autorizado de la empresa: {{sistema_diseno_empresa}}
 - Borrador actual: {{borrador_actual}}
 - Restricciones del canal: {{restricciones_canal}}
 
@@ -66,6 +69,8 @@ REGLAS DE VARIABLES
 8. No inventes ni escribas una URL literal; conserva el placeholder nominal seleccionado.
 9. Si el usuario seleccionó una o más variables URL para llamadas a la acción, utiliza cada una al menos una vez en enlaces o llamadas a la acción coherentes.
 10. booking_link_text solo puede aparecer como texto visible junto con booking_url; nunca lo uses como contenido aislado.
+
+11. Usa el sistema visual únicamente cuando el formato o recurso del canal lo permita. Si indica que se aplicó el fallback de Tal-IA, no presentes esos colores como colores oficiales de la empresa.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.

@@ -273,10 +273,6 @@ GET /crm/prospeccion/plantillas/ai/variables?canal=correo|whatsapp
   "instruccion_usuario": "Crea un correo breve y consultivo para conseguir una reunión.",
   "tono": "profesional",
   "idioma": "es-MX",
-  "contexto_empresa": {
-    "nombre": "Nombre de la empresa",
-    "sitio_web": "https://ejemplo.com"
-  },
   "borrador_actual": null
 }
 ```
@@ -391,7 +387,7 @@ Columnas propuestas:
 - `logo_url` `text`.
 - `actualizado_en` `timestamptz`.
 
-El backend validará los colores como valores hexadecimales válidos, limitará la longitud de los textos y verificará que `logo_url` use HTTPS o una URL interna autorizada del almacenamiento de la plataforma.
+El backend validará los colores como valores hexadecimales válidos y limitará la longitud de los textos. Se reutilizará el `logo_url` existente de la organización; su administración seguirá el flujo de identidad visual ya disponible en la plataforma.
 
 La configuración visual se enviará al prompt mediante una variable técnica independiente:
 
