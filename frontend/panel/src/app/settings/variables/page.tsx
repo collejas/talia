@@ -14,6 +14,10 @@ import {
   type TemplateAiPromptConfig,
 } from "./components/tenant-template-ai-prompt-config-panel"
 import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
+import {
+  TenantTemplateAiLayoutsPanel,
+  type TemplateAiLayout,
+} from "./components/tenant-template-ai-layouts-panel"
 
 import {
   TenantSettingsActions,
@@ -119,6 +123,7 @@ type TenantSettingsResponse = {
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
 type TemplateAiPromptConfigResponse = { items: TemplateAiPromptConfig[] }
+type TemplateAiLayoutsResponse = { items: TemplateAiLayout[] }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -174,6 +179,12 @@ export default async function SettingsVariablesPage() {
         withUserToken: true,
       })
     : null
+  const layoutConfigResp = data
+    ? await callCrmApi<TemplateAiLayoutsResponse>("/tenant/me/prospeccion-template-ai-layouts", {
+        organizacionId: null,
+        withUserToken: true,
+      })
+    : null
   const closeLeadPolicies = await Promise.all([
     fetchCloseLeadPolicy("whatsapp"),
     fetchCloseLeadPolicy("webchat"),
@@ -184,6 +195,7 @@ export default async function SettingsVariablesPage() {
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
   if (promptConfigResp && !promptConfigResp.ok) errors.push(promptConfigResp.error)
+  if (layoutConfigResp && !layoutConfigResp.ok) errors.push(layoutConfigResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
@@ -423,6 +435,8 @@ export default async function SettingsVariablesPage() {
             }}
           />
         ) : null}
+
+        {layoutConfigResp?.ok ? <TenantTemplateAiLayoutsPanel initialItems={layoutConfigResp.data.items} /> : null}
 
         <TenantSettingsActionsProvider value={tenantActions}>
           <Card>

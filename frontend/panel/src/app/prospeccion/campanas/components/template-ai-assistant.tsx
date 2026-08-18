@@ -19,12 +19,20 @@ type VariableItem = {
   permite_header_media: boolean
 }
 
+type LayoutItem = {
+  codigo: string
+  nombre: string
+  descripcion: string
+  predeterminado: boolean
+}
+
 export type TemplateAiDraft = {
   nombre_sugerido: string
   descripcion: string
   cuerpo_texto: string
   variables_usadas: string[]
   advertencias: string[]
+  estilo_diseno?: string
   asunto?: string
   cuerpo_html?: string
   meta_category_sugerida?: string
@@ -53,6 +61,8 @@ function payloadError(payload: unknown, fallback: string) {
 
 export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_VARIABLE_VALUES, onApply }: Props) {
   const [variables, setVariables] = useState<VariableItem[]>([])
+  const [layouts, setLayouts] = useState<LayoutItem[]>([])
+  const [designStyle, setDesignStyle] = useState("automatico")
   const [selected, setSelected] = useState<string[]>([])
   const [instruction, setInstruction] = useState("")
   const [loadingVariables, setLoadingVariables] = useState(true)
@@ -65,6 +75,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
     setLoadingVariables(true)
     setError(null)
     setSelected([])
+    setDesignStyle("automatico")
     void fetch(`/api/prospeccion/plantillas/ai?canal=${encodeURIComponent(canal)}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json()
@@ -72,7 +83,10 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         return payload
       })
       .then((payload) => {
-        if (!cancelled) setVariables(Array.isArray(payload?.items) ? (payload.items as VariableItem[]) : [])
+        if (!cancelled) {
+          setVariables(Array.isArray(payload?.items) ? (payload.items as VariableItem[]) : [])
+          setLayouts(canal === "correo" && Array.isArray(payload?.layouts) ? (payload.layouts as LayoutItem[]) : [])
+        }
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "No se pudo cargar el catálogo de variables.")
@@ -129,6 +143,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
           instruccion_usuario: instruction.trim(),
           tono: "profesional",
           idioma: "es-MX",
+          estilo_diseno: canal === "correo" ? designStyle : "automatico",
         }),
       })
       const payload = await response.json()
@@ -148,6 +163,9 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         asunto: resolveConfiguredVariables(draft.asunto),
         cuerpo_texto: resolveConfiguredVariables(draft.cuerpo_texto) ?? "",
         cuerpo_html: resolveConfiguredVariables(draft.cuerpo_html),
+      }
+      if (canal === "correo" && typeof resolvedDraft.estilo_diseno === "string" && resolvedDraft.estilo_diseno.trim()) {
+        setDesignStyle(resolvedDraft.estilo_diseno.trim())
       }
       setWarning(Array.isArray(resolvedDraft.advertencias) ? resolvedDraft.advertencias : [])
       onApply(resolvedDraft)
@@ -190,6 +208,27 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
               </span>
             </label>
           ))}
+        </div>
+      ) : null}
+      {canal === "correo" && layouts.length ? (
+        <div className="mb-3 space-y-1.5">
+          <Label htmlFor="template-ai-design-style">Estilo de diseño</Label>
+          <select
+            id="template-ai-design-style"
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+            value={designStyle}
+            onChange={(event) => setDesignStyle(event.target.value)}
+          >
+            <option value="automatico">Automático</option>
+            {layouts.map((layout) => (
+              <option key={layout.codigo} value={layout.codigo}>
+                {layout.nombre}{layout.predeterminado ? " · predeterminado" : ""}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-muted-foreground">
+            El estilo define la composición; los colores y el logo provienen del sistema visual de marca.
+          </p>
         </div>
       ) : null}
       <div className="space-y-1.5">

@@ -74,6 +74,54 @@ class ProspeccionTemplateAiPromptConfigUpdate(BaseModel):
     activo: bool = True
 
 
+class ProspeccionTemplateAiLayout(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    organizacion_id: UUID
+    id: UUID
+    codigo: str = Field(..., min_length=2, max_length=80)
+    nombre: str = Field(..., min_length=2, max_length=120)
+    descripcion: str = Field(..., max_length=500)
+    instrucciones_composicion: str = Field(..., min_length=10, max_length=6000)
+    canal: Literal["correo", "whatsapp"]
+    activo: bool
+    orden: int = Field(..., ge=0, le=9999)
+    habilitado: bool
+    predeterminado: bool
+    actualizado_por: UUID | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class ProspeccionTemplateAiLayoutsResponse(BaseModel):
+    items: list[ProspeccionTemplateAiLayout] = Field(default_factory=list)
+
+
+class ProspeccionTemplateAiLayoutCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-z][a-z0-9_]{1,79}$")
+    nombre: str = Field(..., min_length=2, max_length=120)
+    descripcion: str = Field(..., max_length=500)
+    instrucciones_composicion: str = Field(..., min_length=10, max_length=6000)
+    canal: Literal["correo"] = "correo"
+    orden: int = Field(default=1000, ge=0, le=9999)
+    habilitado: bool = True
+    predeterminado: bool = False
+
+
+class ProspeccionTemplateAiLayoutUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str | None = Field(default=None, min_length=2, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=500)
+    instrucciones_composicion: str | None = Field(default=None, min_length=10, max_length=6000)
+    orden: int | None = Field(default=None, ge=0, le=9999)
+    activo: bool | None = None
+    habilitado: bool | None = None
+    predeterminado: bool | None = None
+
+
 class TenantWebTrackingDomain(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -751,6 +799,144 @@ async def update_prospeccion_template_ai_prompt(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return ProspeccionTemplateAiPromptConfig.model_validate(row)
+
+
+@router.get(
+    "/me/prospeccion-template-ai-layouts",
+    response_model=ProspeccionTemplateAiLayoutsResponse,
+)
+async def get_prospeccion_template_ai_layouts(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionTemplateAiLayoutsResponse:
+    await require_permission(user_token, "settings.view")
+    try:
+        rows = await platform_repo.list_prospeccion_template_ai_layouts(
+            canal="correo",
+            organizacion_id=context.organizacion_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="prospeccion_template_ai_layouts_unavailable") from exc
+    return ProspeccionTemplateAiLayoutsResponse(
+        items=[ProspeccionTemplateAiLayout.model_validate(row) for row in rows]
+    )
+
+
+@router.post(
+    "/me/prospeccion-template-ai-layouts",
+    response_model=ProspeccionTemplateAiLayout,
+    status_code=201,
+)
+async def create_prospeccion_template_ai_layout(
+    payload: ProspeccionTemplateAiLayoutCreate,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionTemplateAiLayout:
+    await require_permission(user_token, "settings.manage")
+    if payload.predeterminado and not payload.habilitado:
+        raise HTTPException(status_code=422, detail="prospeccion_template_ai_layout_default_disabled")
+    try:
+        rows = await platform_repo.list_prospeccion_template_ai_layouts(
+            canal="correo",
+            organizacion_id=context.organizacion_id,
+        )
+        if payload.predeterminado:
+            await platform_repo.clear_prospeccion_template_ai_layout_defaults(organizacion_id=context.organizacion_id)
+        row = await platform_repo.create_prospeccion_template_ai_layout(
+            organizacion_id=context.organizacion_id,
+            codigo=payload.codigo.strip().lower(),
+            nombre=payload.nombre.strip(),
+            descripcion=payload.descripcion.strip(),
+            instrucciones_composicion=payload.instrucciones_composicion.strip(),
+            canal=payload.canal,
+            orden=payload.orden if payload.orden else (max((int(item.get("orden") or 0) for item in rows), default=0) + 10),
+            habilitado=payload.habilitado,
+            predeterminado=payload.predeterminado,
+            actualizado_por=context.user_id,
+        )
+    except HTTPException:
+        raise
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=409, detail="prospeccion_template_ai_layout_create_failed") from exc
+    return ProspeccionTemplateAiLayout.model_validate(row)
+
+
+@router.put(
+    "/me/prospeccion-template-ai-layouts/{layout_id}",
+    response_model=ProspeccionTemplateAiLayout,
+)
+async def update_prospeccion_template_ai_layout(
+    layout_id: UUID,
+    payload: ProspeccionTemplateAiLayoutUpdate,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProspeccionTemplateAiLayout:
+    await require_permission(user_token, "settings.manage")
+    try:
+        if payload.predeterminado is True and payload.habilitado is False:
+            raise HTTPException(status_code=422, detail="prospeccion_template_ai_layout_default_disabled")
+        rows = await platform_repo.list_prospeccion_template_ai_layouts(canal="correo", organizacion_id=context.organizacion_id)
+        current = next((row for row in rows if str(row.get("id")) == str(layout_id)), None)
+        if current is None:
+            raise HTTPException(status_code=404, detail="prospeccion_template_ai_layout_not_found")
+        update_payload = payload.model_dump(exclude_none=True)
+        if payload.predeterminado is True:
+            await platform_repo.clear_prospeccion_template_ai_layout_defaults(organizacion_id=context.organizacion_id)
+        if payload.predeterminado is False and bool(current.get("predeterminado")):
+            update_payload["predeterminado"] = False
+        if (payload.habilitado is False or payload.activo is False) and bool(current.get("predeterminado")):
+            update_payload["predeterminado"] = False
+        if payload.habilitado is False:
+            enabled_after = [row for row in rows if str(row.get("id")) != str(layout_id) and row.get("habilitado") is True]
+            if not enabled_after:
+                raise HTTPException(status_code=422, detail="prospeccion_template_ai_layout_required")
+        update_payload["actualizado_por"] = str(context.user_id)
+        row = await platform_repo.update_prospeccion_template_ai_layout(
+            organizacion_id=context.organizacion_id,
+            layout_id=layout_id,
+            payload=update_payload,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="prospeccion_template_ai_layout_not_found")
+    except HTTPException:
+        raise
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="prospeccion_template_ai_layout_update_failed") from exc
+    return ProspeccionTemplateAiLayout.model_validate(row)
+
+
+@router.delete("/me/prospeccion-template-ai-layouts/{layout_id}", status_code=204)
+async def delete_prospeccion_template_ai_layout(
+    layout_id: UUID,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> Response:
+    await require_permission(user_token, "settings.manage")
+    try:
+        rows = await platform_repo.list_prospeccion_template_ai_layouts(canal="correo", organizacion_id=context.organizacion_id)
+        current = next((row for row in rows if str(row.get("id")) == str(layout_id)), None)
+        if current is None:
+            raise HTTPException(status_code=404, detail="prospeccion_template_ai_layout_not_found")
+        if len(rows) <= 1:
+            raise HTTPException(status_code=422, detail="prospeccion_template_ai_layout_required")
+        if current.get("habilitado") is True and not any(
+            row.get("habilitado") is True and str(row.get("id")) != str(layout_id) for row in rows
+        ):
+            raise HTTPException(status_code=422, detail="prospeccion_template_ai_layout_required")
+        if not await platform_repo.delete_prospeccion_template_ai_layout(
+            organizacion_id=context.organizacion_id,
+            layout_id=layout_id,
+        ):
+            raise HTTPException(status_code=404, detail="prospeccion_template_ai_layout_not_found")
+    except HTTPException:
+        raise
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="prospeccion_template_ai_layout_delete_failed") from exc
+    return Response(status_code=204)
 
 
 def _extract_contact_catalogs(config: dict[str, Any] | None) -> dict[str, Any]:

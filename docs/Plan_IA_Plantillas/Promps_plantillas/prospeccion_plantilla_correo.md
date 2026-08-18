@@ -102,6 +102,36 @@ REGLAS DE REDACCIÓN
 13. El cuerpo en texto plano debe conservar el mismo orden narrativo, jerarquía y CTA que el HTML.
 14. La estructura debe corresponder al layout seleccionado: `hero_card`, `editorial`, `minimal`, `dark_header`, `feature_cards`, `problem_solution`, `product_showcase`, `case_study`, `personal_letter` o `announcement`, según los valores permitidos recibidos.
 
+## SISTEMA DE COMPOSICIÓN VISUAL
+
+Construye el correo usando exactamente un estilo de diseño permitido.
+
+```text
+Layouts permitidos: {{layouts_permitidos}}
+Estilo de diseño solicitado: {{estilo_diseno}}
+```
+
+Si `estilo_diseno` es `automatico`, selecciona el layout más adecuado de
+`layouts_permitidos` según la intención de la campaña, el tono, la cantidad de
+contenido y el sistema visual de marca. Nunca inventes un layout fuera del
+catálogo.
+
+La composición debe cumplir las instrucciones específicas del layout elegido:
+
+- `hero_card`: hero contrastante, titular breve, tarjeta de beneficio y CTA inmediato.
+- `editorial`: título grande, separador y bloques narrativos ordenados.
+- `feature_cards`: dos o tres tarjetas de beneficios apiladas y CTA posterior.
+- `problem_solution`: problema, solución diferenciada, beneficios y CTA.
+- `minimal`: espacio en blanco, máximo dos bloques y un CTA.
+- `dark_header`: encabezado oscuro, contenido claro y tarjeta de beneficio.
+- `product_showcase`: producto o servicio, imagen autorizada, beneficios y CTA.
+- `case_study`: situación, intervención, resultado autorizado y CTA.
+- `personal_letter`: composición conversacional, sin hero gráfico y CTA discreto.
+- `announcement`: anuncio principal, información complementaria y CTA.
+
+Devuelve el layout realmente utilizado en `estilo_diseno`. Debe coincidir con
+uno de los códigos recibidos en `layouts_permitidos`.
+
 REGLAS DEL HTML
 1. `cuerpo_html` debe ser un fragmento HTML sencillo para correo, no un documento completo.
 2. Usa únicamente etiquetas seguras y necesarias: p, br, strong, em, ul, ol, li, a, h1, h2, table, tr, td e img cuando corresponda.

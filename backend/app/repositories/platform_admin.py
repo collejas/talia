@@ -474,6 +474,101 @@ class PlatformRepository:
             raise PlatformRepositoryError("prospeccion_template_ai_variables_invalid_response")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_prospeccion_template_ai_layouts(
+        self,
+        *,
+        canal: str,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        layouts = await self._rest(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_ai_layouts",
+            params={
+                "select": "id,organizacion_id,codigo,nombre,descripcion,instrucciones_composicion,canal,activo,orden,habilitado,predeterminado,actualizado_por,creado_en,actualizado_en",
+                "canal": f"eq.{canal}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "orden.asc",
+            },
+        )
+        if not isinstance(layouts, list):
+            raise PlatformRepositoryError("prospeccion_template_ai_layouts_invalid_response")
+        return [row for row in layouts if isinstance(row, dict)]
+
+    async def clear_prospeccion_template_ai_layout_defaults(self, *, organizacion_id: UUID) -> None:
+        await self._rest(
+            "PATCH",
+            "/rest/v1/prospeccion_plantilla_ai_layouts",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.correo",
+                "predeterminado": "eq.true",
+            },
+            json={"predeterminado": False},
+            prefer="return=minimal",
+        )
+
+    async def create_prospeccion_template_ai_layout(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+        nombre: str,
+        descripcion: str,
+        instrucciones_composicion: str,
+        canal: str,
+        orden: int,
+        habilitado: bool,
+        predeterminado: bool,
+        actualizado_por: UUID,
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/prospeccion_plantilla_ai_layouts",
+            json={
+                "organizacion_id": str(organizacion_id),
+                "codigo": codigo,
+                "nombre": nombre,
+                "descripcion": descripcion,
+                "instrucciones_composicion": instrucciones_composicion,
+                "canal": canal,
+                "orden": orden,
+                "habilitado": habilitado,
+                "predeterminado": predeterminado,
+                "actualizado_por": str(actualizado_por),
+            },
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("prospeccion_template_ai_layout_create_failed")
+        return data[0]
+
+    async def update_prospeccion_template_ai_layout(
+        self,
+        *,
+        organizacion_id: UUID,
+        layout_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/prospeccion_plantilla_ai_layouts",
+            params={"id": f"eq.{layout_id}", "organizacion_id": f"eq.{organizacion_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
+    async def delete_prospeccion_template_ai_layout(self, *, organizacion_id: UUID, layout_id: UUID) -> bool:
+        data = await self._rest(
+            "DELETE",
+            "/rest/v1/prospeccion_plantilla_ai_layouts",
+            params={"id": f"eq.{layout_id}", "organizacion_id": f"eq.{organizacion_id}"},
+            prefer="return=representation",
+        )
+        return isinstance(data, list) and bool(data)
+
     async def create_prospeccion_template_ai_generation(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
             "POST",

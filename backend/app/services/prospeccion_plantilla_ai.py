@@ -118,6 +118,7 @@ class TemplateAiGenerationRequest(BaseModel):
     instruccion_usuario: str = Field(..., min_length=10, max_length=4000)
     tono: str = Field(default="profesional", min_length=2, max_length=60)
     idioma: str = Field(default="es-MX", min_length=2, max_length=20)
+    estilo_diseno: str = Field(default="automatico", min_length=2, max_length=80)
     borrador_actual: str | None = Field(default=None, max_length=40_000)
 
     @field_validator("variables_seleccionadas")
@@ -128,7 +129,7 @@ class TemplateAiGenerationRequest(BaseModel):
             raise ValueError("variables_seleccionadas_required")
         return normalized
 
-    @field_validator("instruccion_usuario", "tono", "idioma")
+    @field_validator("instruccion_usuario", "tono", "idioma", "estilo_diseno")
     @classmethod
     def strip_text(cls, value: str) -> str:
         cleaned = value.strip()
@@ -153,6 +154,7 @@ class WhatsAppTemplateAiResult(TemplateAiGenerationResult):
 class EmailTemplateAiResult(TemplateAiGenerationResult):
     asunto: str = Field(..., min_length=1, max_length=998)
     cuerpo_html: str = Field(..., min_length=1, max_length=40_000)
+    estilo_diseno: str = Field(default="automatico", min_length=2, max_length=80)
 
 
 def _schema(channel: Channel) -> dict[str, Any]:
@@ -179,11 +181,12 @@ def _schema(channel: Channel) -> dict[str, Any]:
             }
         )
     else:
-        common["required"] += ["asunto", "cuerpo_html"]
+        common["required"] += ["asunto", "cuerpo_html", "estilo_diseno"]
         common["properties"].update(
             {
                 "asunto": {"type": "string", "maxLength": 998},
                 "cuerpo_html": {"type": "string", "maxLength": 40_000},
+                "estilo_diseno": {"type": "string", "maxLength": 80},
             }
         )
     return common
@@ -314,6 +317,20 @@ async def generate_template_draft(
     unknown = selected - variable_map.keys()
     if unknown:
         raise ValueError("template_ai_variable_not_allowed")
+    layout_rows = await platform_repo.list_prospeccion_template_ai_layouts(
+        canal=request.canal,
+        organizacion_id=organizacion_id,
+    )
+    enabled_layouts = [row for row in layout_rows if row.get("activo") is True and row.get("habilitado") is True]
+    enabled_layout_codes = {str(row.get("codigo")) for row in enabled_layouts}
+    requested_layout = request.estilo_diseno.strip().lower()
+    if request.canal == "correo" and requested_layout != "automatico" and requested_layout not in enabled_layout_codes:
+        raise ValueError("template_ai_layout_not_allowed")
+    default_layout = next(
+        (str(row.get("codigo")) for row in enabled_layouts if row.get("predeterminado") is True),
+        None,
+    )
+    resolved_layout_request = default_layout if requested_layout == "automatico" and default_layout else requested_layout
     campaign = None
     if request.campana_id:
         campaign = await crm_repo.get_campaign(organizacion_id=organizacion_id, campana_id=request.campana_id)
@@ -365,6 +382,7 @@ async def generate_template_draft(
             "instruccion_usuario": request.instruccion_usuario,
             "tono": request.tono,
             "idioma": request.idioma,
+            "estilo_diseno_solicitado": resolved_layout_request if request.canal == "correo" else None,
             "resultado_estado": "solicitada",
         }
     )
@@ -399,6 +417,24 @@ async def generate_template_draft(
             "borrador_actual": request.borrador_actual or "",
             "restricciones_canal": json.dumps({"canal": request.canal, "max_body_chars": 4096}, ensure_ascii=False),
         }
+        if request.canal == "correo":
+            prompt_variables.update(
+                {
+                    "estilo_diseno": resolved_layout_request,
+                    "layouts_permitidos": json.dumps(
+                        [
+                            {
+                                "codigo": row.get("codigo"),
+                                "nombre": row.get("nombre"),
+                                "descripcion": row.get("descripcion"),
+                                "instrucciones_composicion": row.get("instrucciones_composicion"),
+                            }
+                            for row in enabled_layouts
+                        ],
+                        ensure_ascii=False,
+                    ),
+                }
+            )
         response = await asyncio.wait_for(
             client.responses.create(
                 prompt={"id": prompt_id, "version": prompt_version, "variables": prompt_variables},
@@ -421,6 +457,14 @@ async def generate_template_draft(
         )
         raw_result = json.loads(_extract_response_text(response))
         result = WhatsAppTemplateAiResult.model_validate(raw_result) if request.canal == "whatsapp" else EmailTemplateAiResult.model_validate(raw_result)
+        if request.canal == "correo":
+            applied_layout = str(result.estilo_diseno).strip().lower()  # type: ignore[union-attr]
+            if applied_layout not in enabled_layout_codes:
+                raise ValueError("template_ai_layout_not_allowed")
+            if requested_layout != "automatico" and applied_layout != requested_layout:
+                raise ValueError("template_ai_layout_mismatch")
+        else:
+            applied_layout = None
         _validate_placeholders(result, selected, request.canal)
         usage = await platform_repo.get_openai_usage_by_response_id(organizacion_id=organizacion_id, response_id=str(response_payload.get("id") or ""))
         update_payload: dict[str, Any] = {
@@ -428,6 +472,7 @@ async def generate_template_draft(
             "finalizado_en": datetime.now(timezone.utc).isoformat(),
             "modelo": str(response_payload.get("model") or "unknown"),
             "openai_request_id": response_payload.get("id"),
+            "estilo_diseno_aplicado": applied_layout,
         }
         if usage:
             update_payload.update({"openai_request_usage_id": usage.get("id"), "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"), "costo_estimado": usage.get("estimated_total_cost_usd")})

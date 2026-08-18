@@ -53,7 +53,26 @@ async def list_template_ai_variables(
                 "permite_header_media": row.get("permite_header_media", False),
             }
         )
-    return {"ok": True, "canal": canal, "items": items}
+    try:
+        layout_rows = await platform_repo.list_prospeccion_template_ai_layouts(
+            canal=canal,
+            organizacion_id=organizacion_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="template_ai_layouts_unavailable") from exc
+    layouts = [
+        {
+            "id": row.get("id"),
+            "codigo": row.get("codigo"),
+            "nombre": row.get("nombre"),
+            "descripcion": row.get("descripcion"),
+            "instrucciones_composicion": row.get("instrucciones_composicion"),
+            "predeterminado": row.get("predeterminado", False),
+        }
+        for row in layout_rows
+        if row.get("activo") is True and row.get("habilitado") is True
+    ]
+    return {"ok": True, "canal": canal, "items": items, "layouts": layouts}
 
 
 @router.post("/generate", status_code=status.HTTP_200_OK)
@@ -88,6 +107,8 @@ async def generate_template_ai_draft(
             "template_ai_unknown_variable",
             "template_ai_selected_cta_not_used",
             "template_ai_booking_link_dependency",
+            "template_ai_layout_not_allowed",
+            "template_ai_layout_mismatch",
             "html_forbidden_content",
             "html_tag_not_allowed",
             "html_empty",

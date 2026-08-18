@@ -456,3 +456,30 @@ Cada avance debe registrar:
 - Se documentó la separación entre composición (`estilo_diseno`) e identidad visual (`sistema_diseno_empresa`).
 - Se propuso una biblioteca inicial para correo: `editorial`, `hero_card`, `minimal`, `dark_header`, `feature_cards`, `problem_solution`, `product_showcase`, `case_study`, `personal_letter` y `announcement`.
 - Se estableció que los layouts HTML de correo no deben enviarse directamente al prompt de WhatsApp; WhatsApp requerirá un catálogo propio de estructuras conversacionales.
+
+## 2026-08-18 — Implementación de estilo de diseño para correo
+
+### Cambios realizados
+
+- Se creó el catálogo global `prospeccion_plantilla_ai_layouts` con diez estilos iniciales para correo.
+- Se creó la relación explícita `prospeccion_plantilla_ai_organizacion_layouts` para habilitar layouts y definir un predeterminado por tenant.
+- Se agregó la sección **Estilo de diseño** en `settings/variables`.
+- Se agregó el selector **Automático** o layout específico dentro del asistente de creación de plantillas.
+- El backend valida que el estilo solicitado y el estilo devuelto por OpenAI pertenezcan al catálogo habilitado del tenant.
+- Se agregaron `estilo_diseno_solicitado` y `estilo_diseno_aplicado` a la auditoría de generaciones IA.
+- Se agregaron `estilo_diseno` y `layouts_permitidos` al contrato del prompt de correo.
+
+### Base de datos
+
+- Migración: `20260818_160000_prospeccion_plantilla_ai_layouts.sql`.
+- Migración: `20260818_161000_prospeccion_plantilla_ai_layout_audit.sql`.
+- Aplicadas mediante Supabase MCP.
+- No se utilizaron columnas `metadata`, `jsonb` ni configuraciones genéricas para la relación tenant-layout.
+
+## 2026-08-18 — Corrección: estilos personalizados por tenant
+
+- La biblioteca base ahora se clona como registros propios de cada tenant.
+- Se eliminó la dependencia operativa de un catálogo global más una relación de habilitación.
+- Cada tenant puede crear, editar, habilitar, deshabilitar y eliminar sus estilos desde `settings/variables`.
+- El prompt recibe únicamente los estilos activos y habilitados de la organización autenticada.
+- Se agregó un trigger para provisionar los estilos base en tenants nuevos.

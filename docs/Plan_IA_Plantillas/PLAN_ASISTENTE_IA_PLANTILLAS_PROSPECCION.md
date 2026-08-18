@@ -432,7 +432,7 @@ En la interfaz, la sección visible se llamará **Estilo de diseño**. El usuari
 
 #### Biblioteca inicial de layouts para correo
 
-Tal-IA mantendrá un catálogo oficial de layouts permitidos para plantillas HTML de correo:
+Tal-IA proporcionará una biblioteca inicial de estilos para plantillas HTML de correo. Estos estilos se clonarán como registros propios dentro de cada tenant:
 
 - `editorial`: encabezado minimalista, título destacado, separador y bloques narrativos.
 - `hero_card`: hero contrastante, beneficio principal en tarjeta y CTA inmediato.
@@ -445,24 +445,24 @@ Tal-IA mantendrá un catálogo oficial de layouts permitidos para plantillas HTM
 - `personal_letter`: apariencia de correo personal premium, conversacional y con CTA discreto.
 - `announcement`: anuncio destacado, mensaje principal, información complementaria y CTA.
 
-Cada layout debe tener una definición controlada de su estructura, jerarquía, cantidad de bloques, tratamiento de imágenes, CTA y compatibilidad con clientes de correo. El modelo no podrá inventar nombres ni estructuras fuera del catálogo.
+Cada estilo debe tener una definición controlada de su estructura, jerarquía, cantidad de bloques, tratamiento de imágenes, CTA y compatibilidad con clientes de correo. El tenant podrá editar esas instrucciones, crear nuevos estilos y eliminar los que no necesite. El modelo no podrá inventar nombres ni estructuras fuera de los estilos habilitados del tenant.
 
 #### Persistencia y configuración por tenant
 
-Los layouts no se almacenarán como una lista dentro de `metadata`, `jsonb`, `config` o una columna genérica. Se propone:
+Los estilos no se almacenarán como una lista dentro de `metadata`, `jsonb`, `config` o una columna genérica. Se implementó:
 
-- Un catálogo global de layouts con columnas explícitas para código, nombre, descripción, canal, orden y estado activo.
-- Una relación tenant-layout con columnas explícitas para organización, layout, habilitado, predeterminado y fechas de auditoría.
-- Un único layout predeterminado de correo por tenant, cuando el tenant no utilice el modo automático.
+- La tabla `prospeccion_plantilla_ai_layouts` con `organizacion_id` y columnas explícitas para código, nombre, descripción, instrucciones, canal, orden, estado, habilitado y predeterminado.
+- La biblioteca inicial se clonó para los siete tenants existentes y se agregó un trigger para crearla automáticamente en nuevos tenants.
+- Un único estilo predeterminado de correo por tenant, cuando el tenant no utilice el modo automático.
 
-El tenant podrá habilitar o deshabilitar layouts y definir su predeterminado. El backend siempre filtrará el catálogo por canal y por los layouts permitidos para la organización autenticada.
+El tenant podrá crear, editar, eliminar, habilitar, deshabilitar y definir el estilo predeterminado. El backend siempre filtrará los estilos por canal y por la organización autenticada.
 
 #### Selección desde el creador
 
-El creador de plantillas mostrará un selector **Estilo de diseño** con estas opciones:
+El creador de plantillas muestra un selector **Estilo de diseño** con estas opciones:
 
 - `Automático`.
-- Los layouts habilitados para el tenant.
+- Los estilos habilitados y personalizados del tenant.
 
 La selección se enviará como `estilo_diseno`. Si el usuario elige `Automático`, el backend enviará al prompt los layouts habilitados y el modelo podrá seleccionar uno de ellos. Si el usuario elige un layout específico, el backend lo validará y solicitará ese layout al modelo.
 
@@ -474,7 +474,7 @@ El valor seleccionado o resuelto deberá conservarse en la respuesta estructurad
 }
 ```
 
-La respuesta no debe contener un layout no permitido. Si el modelo devuelve uno inválido, el backend debe rechazarlo o aplicar una corrección controlada; nunca debe guardarse silenciosamente como un layout válido.
+La respuesta no debe contener un estilo no permitido. Si el modelo devuelve uno inválido, el backend debe rechazarlo; nunca debe guardarse silenciosamente como un estilo válido.
 
 #### Instrucciones para el prompt de correo
 
