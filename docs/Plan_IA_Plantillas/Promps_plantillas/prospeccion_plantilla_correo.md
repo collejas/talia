@@ -22,6 +22,8 @@ variables_seleccionadas
 catalogo_variables
 contexto_empresa
 sistema_diseno_empresa
+estilo_diseno
+layouts_permitidos
 borrador_actual
 restricciones_canal
 ```
@@ -35,6 +37,8 @@ Los nombres deben coincidir exactamente, sin mayúsculas, espacios ni variables 
 - `catalogo_variables`: descripción serializada únicamente de las variables seleccionadas.
 - `contexto_empresa`: contexto autorizado del tenant actual.
 - `sistema_diseno_empresa`: identidad visual autorizada del tenant y fallback oficial de Tal-IA cuando faltan colores.
+- `estilo_diseno`: estilo de diseño solicitado o `automatico`; el backend valida que pertenezca al catálogo permitido.
+- `layouts_permitidos`: catálogo serializado de layouts que el tenant puede utilizar.
 - `borrador_actual`: borrador opcional que el usuario quiere mejorar; puede estar vacío.
 - `restricciones_canal`: límites calculados por el backend para asunto, texto y HTML.
 
@@ -53,6 +57,8 @@ CONTEXTO DE LA SOLICITUD
 - Catálogo de variables seleccionadas: {{catalogo_variables}}
 - Contexto autorizado de la empresa: {{contexto_empresa}}
 - Sistema visual autorizado de la empresa: {{sistema_diseno_empresa}}
+- Estilo de diseño solicitado: {{estilo_diseno}}
+- Layouts permitidos: {{layouts_permitidos}}
 - Borrador actual: {{borrador_actual}}
 - Restricciones del canal: {{restricciones_canal}}
 
@@ -69,6 +75,7 @@ REGLAS DE VARIABLES
 10. booking_link_text solo puede aparecer como texto visible junto con booking_url; nunca lo uses como enlace ni como contenido aislado.
 
 11. Usa `sistema_diseno_empresa` para orientar colores, contraste, radio de bordes, logotipo y estilo visual. Si indica que se aplicó el fallback de Tal-IA, no presentes esos colores como colores oficiales de la empresa.
+12. Usa exactamente un layout de `layouts_permitidos`. Si `estilo_diseno` es `automatico`, selecciona el layout más adecuado de esa lista. Nunca inventes un layout fuera del catálogo.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.
@@ -93,6 +100,7 @@ REGLAS DE REDACCIÓN
 11. Diseña primero para móvil: textos legibles, bloques apilables, padding moderado y sin depender de columnas estrechas.
 12. Usa border-radius y sombras sutiles solo cuando sean compatibles con correo. Evita saturar con colores, degradados o adornos.
 13. El cuerpo en texto plano debe conservar el mismo orden narrativo, jerarquía y CTA que el HTML.
+14. La estructura debe corresponder al layout seleccionado: `hero_card`, `editorial`, `minimal`, `dark_header`, `feature_cards`, `problem_solution`, `product_showcase`, `case_study`, `personal_letter` o `announcement`, según los valores permitidos recibidos.
 
 REGLAS DEL HTML
 1. `cuerpo_html` debe ser un fragmento HTML sencillo para correo, no un documento completo.
@@ -124,6 +132,7 @@ Configurar una salida estructurada equivalente a:
     "asunto",
     "cuerpo_texto",
     "cuerpo_html",
+    "estilo_diseno",
     "variables_usadas",
     "advertencias"
   ],
@@ -133,6 +142,7 @@ Configurar una salida estructurada equivalente a:
     "asunto": { "type": "string", "maxLength": 998 },
     "cuerpo_texto": { "type": "string", "maxLength": 20000 },
     "cuerpo_html": { "type": "string", "maxLength": 40000 },
+    "estilo_diseno": { "type": "string", "maxLength": 80 },
     "variables_usadas": {
       "type": "array",
       "items": { "type": "string" }

@@ -445,3 +445,14 @@ Cada avance debe registrar:
 - Migración: `20260818_150000_tenant_ai_business_context_brand.sql`.
 - Aplicada mediante Supabase MCP.
 - La información estructural se mantiene en columnas consultables; no se agregó a `metadata`, `jsonb` ni `config`.
+
+## 2026-08-18 — Propuesta de estilo de diseño y biblioteca de layouts
+
+### Documentación
+
+- Se documentó la sección visible **Estilo de diseño** para que el usuario pueda elegir un layout o utilizar el modo automático.
+- Se definió la variable técnica `{{estilo_diseno}}` para representar el layout solicitado o resuelto.
+- Se definió `{{layouts_permitidos}}` para que el backend limite las opciones del modelo al catálogo habilitado para el tenant.
+- Se documentó la separación entre composición (`estilo_diseno`) e identidad visual (`sistema_diseno_empresa`).
+- Se propuso una biblioteca inicial para correo: `editorial`, `hero_card`, `minimal`, `dark_header`, `feature_cards`, `problem_solution`, `product_showcase`, `case_study`, `personal_letter` y `announcement`.
+- Se estableció que los layouts HTML de correo no deben enviarse directamente al prompt de WhatsApp; WhatsApp requerirá un catálogo propio de estructuras conversacionales.

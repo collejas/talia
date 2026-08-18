@@ -10,7 +10,7 @@ Esta carpeta contiene los dos prompts que se crearán en el proyecto de OpenAI d
 1. Crear un prompt independiente en el dashboard de OpenAI para cada canal.
 2. Copiar la sección `INSTRUCCIONES DEL PROMPT` del archivo correspondiente.
 3. Crear las variables de entrada con los nombres indicados en cada archivo.
-   Cada prompt debe declarar también `contexto_empresa` y `sistema_diseno_empresa`; ambas son variables internas que el backend resuelve por tenant.
+   Cada prompt debe declarar también `contexto_empresa` y `sistema_diseno_empresa`; el prompt de correo debe declarar además `estilo_diseno` y `layouts_permitidos`. Estas variables son resueltas y validadas por el backend.
 4. Configurar una salida estructurada equivalente al JSON Schema documentado.
 5. Probar los casos incluidos antes de publicar una versión.
 6. Capturar el `prompt_id` y la versión publicada en `/settings/variables` del tenant maestro.

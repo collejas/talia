@@ -421,6 +421,89 @@ El prompt deberá indicar expresamente que estos colores son valores de diseño 
 - El usuario conservará la capacidad de editar el borrador antes de guardar.
 - El asistente no podrá guardar, publicar, enviar mensajes ni modificar directamente la configuración del tenant.
 
+### 8.2 Estilo de diseño y biblioteca de layouts
+
+El sistema visual de marca y el estilo de diseño serán configuraciones diferentes:
+
+- `{{sistema_diseno_empresa}}` define la identidad visual: colores, logotipo, radio de bordes y fallback de Tal-IA.
+- `{{estilo_diseno}}` define la composición o layout que tendrá la plantilla.
+
+En la interfaz, la sección visible se llamará **Estilo de diseño**. El usuario podrá elegir un estilo concreto o seleccionar **Automático**, para que el backend y el modelo determinen la composición más adecuada según la campaña, la instrucción, el tono y la cantidad de contenido.
+
+#### Biblioteca inicial de layouts para correo
+
+Tal-IA mantendrá un catálogo oficial de layouts permitidos para plantillas HTML de correo:
+
+- `editorial`: encabezado minimalista, título destacado, separador y bloques narrativos.
+- `hero_card`: hero contrastante, beneficio principal en tarjeta y CTA inmediato.
+- `minimal`: mucho espacio en blanco, pocos bloques y un CTA prominente.
+- `dark_header`: encabezado oscuro, contenido claro y tarjeta central de beneficio.
+- `feature_cards`: introducción breve y dos o tres tarjetas de beneficios apiladas.
+- `problem_solution`: problema principal, solución diferenciada, beneficios y CTA.
+- `product_showcase`: presentación visual de un producto o servicio con beneficios y CTA.
+- `case_study`: situación, solución, resultado o evidencia autorizada y CTA.
+- `personal_letter`: apariencia de correo personal premium, conversacional y con CTA discreto.
+- `announcement`: anuncio destacado, mensaje principal, información complementaria y CTA.
+
+Cada layout debe tener una definición controlada de su estructura, jerarquía, cantidad de bloques, tratamiento de imágenes, CTA y compatibilidad con clientes de correo. El modelo no podrá inventar nombres ni estructuras fuera del catálogo.
+
+#### Persistencia y configuración por tenant
+
+Los layouts no se almacenarán como una lista dentro de `metadata`, `jsonb`, `config` o una columna genérica. Se propone:
+
+- Un catálogo global de layouts con columnas explícitas para código, nombre, descripción, canal, orden y estado activo.
+- Una relación tenant-layout con columnas explícitas para organización, layout, habilitado, predeterminado y fechas de auditoría.
+- Un único layout predeterminado de correo por tenant, cuando el tenant no utilice el modo automático.
+
+El tenant podrá habilitar o deshabilitar layouts y definir su predeterminado. El backend siempre filtrará el catálogo por canal y por los layouts permitidos para la organización autenticada.
+
+#### Selección desde el creador
+
+El creador de plantillas mostrará un selector **Estilo de diseño** con estas opciones:
+
+- `Automático`.
+- Los layouts habilitados para el tenant.
+
+La selección se enviará como `estilo_diseno`. Si el usuario elige `Automático`, el backend enviará al prompt los layouts habilitados y el modelo podrá seleccionar uno de ellos. Si el usuario elige un layout específico, el backend lo validará y solicitará ese layout al modelo.
+
+El valor seleccionado o resuelto deberá conservarse en la respuesta estructurada y en la auditoría de generación:
+
+```json
+{
+  "estilo_diseno": "hero_card"
+}
+```
+
+La respuesta no debe contener un layout no permitido. Si el modelo devuelve uno inválido, el backend debe rechazarlo o aplicar una corrección controlada; nunca debe guardarse silenciosamente como un layout válido.
+
+#### Instrucciones para el prompt de correo
+
+El prompt debe incluir una sección específica de composición visual:
+
+```text
+SISTEMA DE COMPOSICIÓN VISUAL
+
+Construye el correo usando exactamente un estilo de diseño permitido.
+
+Layouts permitidos:
+{{layouts_permitidos}}
+
+Estilo de diseño solicitado:
+{{estilo_diseno}}
+
+Si el estilo solicitado es automático, selecciona únicamente uno de los layouts
+permitidos según la intención de la campaña, el tono, la cantidad de contenido
+y el sistema visual de marca.
+
+Nunca inventes un layout fuera del catálogo.
+```
+
+La estructura visual debe combinarse con `{{sistema_diseno_empresa}}`: el layout define la composición y el sistema visual define la apariencia. El resultado debe seguir siendo HTML compatible con correo, responsive, accesible y editable antes de guardarse.
+
+#### Alcance para WhatsApp
+
+Los layouts HTML no se aplicarán directamente a WhatsApp. El prompt de WhatsApp podrá recibir `{{estilo_diseno}}` únicamente si se define un catálogo específico de estructuras conversacionales, como `directo`, `consultivo`, `seguimiento`, `presentacion`, `agenda` o `recuperacion`. No se deben enviar layouts visuales de correo al canal WhatsApp.
+
 ## 9. Persistencia, tablas y auditoría
 
 Las tablas no existirán para duplicar la plantilla final. Tendrán tres propósitos concretos:
