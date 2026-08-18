@@ -340,6 +340,7 @@ Cada avance debe registrar:
 - El selector de plantillas de la campaña se movió al encabezado, junto al nombre y canal de la campaña.
 - Se restauró la carga de imágenes mediante la galería aislada por tenant.
 - Se agregó una galería visual con selección y asignación para logo, imagen principal, productos y garantía.
+- Los selectores de asignación muestran la miniatura de la imagen seleccionada y miniaturas dentro de cada opción.
 - Las relaciones de imágenes se guardan mediante el arreglo de asignaciones de la plantilla.
 - Se restauró la inserción de variables de personalización.
 - Se restauraron los enlaces al sitio web, agenda de demo, WhatsApp y páginas personalizadas.

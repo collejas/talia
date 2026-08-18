@@ -825,29 +825,64 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {IMAGE_SLOTS.map((slot) => (
-                  <div key={slot.key} className="space-y-2 rounded-lg border p-3">
-                    <Label>{slot.label}</Label>
-                    <Select
-                      value={imageIds[slot.key] || "__none__"}
-                      onValueChange={(value) =>
-                        setImageIds((previous) => ({
-                          ...previous,
-                          [slot.key]: value === "__none__" ? undefined : value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Sin imagen</SelectItem>
-                        {logos.map((logo) => (
-                          <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="font-mono text-xs text-muted-foreground">{`{{${slot.key}}}`}</p>
-                  </div>
-                ))}
+                {IMAGE_SLOTS.map((slot) => {
+                  const assignedLogo = logos.find((logo) => logo.id === imageIds[slot.key]) ?? null
+                  return (
+                    <div key={slot.key} className="space-y-2 rounded-lg border p-3">
+                      <Label>{slot.label}</Label>
+                      <Select
+                        value={imageIds[slot.key] || "__none__"}
+                        onValueChange={(value) =>
+                          setImageIds((previous) => ({
+                            ...previous,
+                            [slot.key]: value === "__none__" ? undefined : value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-12 w-full">
+                          {assignedLogo ? (
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-white">
+                                <Image
+                                  src={assignedLogo.file_url}
+                                  alt=""
+                                  width={64}
+                                  height={64}
+                                  unoptimized
+                                  className="max-h-full w-auto max-w-full object-contain"
+                                />
+                              </span>
+                              <span className="truncate">{assignedLogo.nombre}</span>
+                            </span>
+                          ) : (
+                            <SelectValue placeholder="Sin imagen" />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent className="min-w-[280px]">
+                          <SelectItem value="__none__">Sin imagen</SelectItem>
+                          {logos.map((logo) => (
+                            <SelectItem key={logo.id} value={logo.id} textValue={logo.nombre} className="py-2">
+                              <span className="flex min-w-0 items-center gap-3">
+                                <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded border bg-white">
+                                  <Image
+                                    src={logo.file_url}
+                                    alt=""
+                                    width={80}
+                                    height={80}
+                                    unoptimized
+                                    className="max-h-full w-auto max-w-full object-contain"
+                                  />
+                                </span>
+                                <span className="truncate">{logo.nombre}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="font-mono text-xs text-muted-foreground">{`{{${slot.key}}}`}</p>
+                    </div>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
