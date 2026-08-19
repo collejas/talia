@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 import { callCrmApi } from "@/lib/api/crm"
-import type { AgendaActionResponse } from "@/lib/agenda/data"
+import type { AgendaActionResponse, AgendaBookingsResponse } from "@/lib/agenda/data"
 
 type BookingCreatePayload = {
   persona_id?: string
@@ -16,6 +16,24 @@ type BookingCreatePayload = {
   start_at?: string
   notes?: string
   canal?: string
+}
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams
+  const oportunidadId = searchParams.get("oportunidad_id")?.trim()
+  const response = await callCrmApi<AgendaBookingsResponse>("/crm/agenda/bookings", {
+    searchParams: oportunidadId ? { oportunidad_id: oportunidadId } : undefined,
+    withUserToken: true,
+  })
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { error: response.error || "booking_list_failed" },
+      { status: response.status ?? 502 },
+    )
+  }
+
+  return NextResponse.json(response.data)
 }
 
 export async function POST(request: NextRequest) {

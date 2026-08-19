@@ -136,6 +136,8 @@ type CalendarBookingResponseRow = {
   notes: string | null;
   metadata: Record<string, unknown> | null;
   tarjeta_id?: string | null;
+  meeting_url?: string | null;
+  external_join_url?: string | null;
 };
 
 export type ScheduleLeadDemoInput = {

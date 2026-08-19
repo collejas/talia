@@ -59,10 +59,14 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
+import { toast } from "sonner";
+import type { AgendaApiItem, AgendaBookingsResponse } from "@/lib/agenda/data";
 import {
   IconAlertTriangle,
   IconBrandWhatsapp,
   IconCalendarEvent,
+  IconCheck,
+  IconClipboard,
   IconChecklist,
   IconEye,
   IconDownload,
@@ -844,6 +848,8 @@ export function LeadDrawer({
     [initialStagePrepRaw, drawerDefinitions],
   );
   const [stagePrep, setStagePrep] = useState<StagePrepState>(initialStagePrepState);
+  const [opportunityBookings, setOpportunityBookings] = useState<AgendaApiItem[]>([]);
+  const [opportunityBookingsLoading, setOpportunityBookingsLoading] = useState(false);
 
   const initialStagePrepPayload = useMemo(
     () => buildStagePrepPayload(initialStagePrepState, drawerDefinitions),
@@ -858,6 +864,33 @@ export function LeadDrawer({
     () => computeStageLocks(upcomingStageGroups, stagePrep),
     [upcomingStageGroups, stagePrep],
   );
+  const demoStageForScheduling = useMemo(
+    () =>
+      allStages.find((stage) => isDemoStageCode(stage.codigo)) ??
+      (currentStage && isDemoStageCode(currentStage.codigo) ? currentStage : null),
+    [allStages, currentStage],
+  );
+
+  const loadOpportunityBookings = useCallback(async () => {
+    if (!open || !card?.oportunidadId || isCreateMode) return;
+    setOpportunityBookingsLoading(true);
+    try {
+      const response = await fetch(`/api/agenda/bookings?oportunidad_id=${encodeURIComponent(card.oportunidadId)}`, {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => ({}))) as Partial<AgendaBookingsResponse> & { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudieron cargar las citas.");
+      setOpportunityBookings(Array.isArray(body.items) ? body.items : []);
+    } catch {
+      setOpportunityBookings([]);
+    } finally {
+      setOpportunityBookingsLoading(false);
+    }
+  }, [card?.oportunidadId, isCreateMode, open]);
+
+  useEffect(() => {
+    void loadOpportunityBookings();
+  }, [loadOpportunityBookings]);
   const autoStageSummary = useMemo(() => {
     if (!card?.autoStage) {
       return null;
@@ -3680,6 +3713,51 @@ export function LeadDrawer({
                 </section>
               ) : null}
 
+              {!isCreateMode && card ? (
+                <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">Citas de esta oportunidad</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Puedes agendar varias citas para acompañar el cierre de la venta.
+                      </p>
+                    </div>
+                    {onScheduleDemo && demoStageForScheduling ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1"
+                        onClick={() =>
+                          onScheduleDemo({
+                            card,
+                            originStage: currentStage,
+                            targetStage: demoStageForScheduling,
+                          })
+                        }
+                        disabled={isBusy}
+                      >
+                        <IconCalendarEvent className="size-4" />
+                        Nueva cita
+                      </Button>
+                    ) : null}
+                  </div>
+                  {opportunityBookingsLoading ? (
+                    <p className="text-xs text-muted-foreground">Cargando citas...</p>
+                  ) : opportunityBookings.length ? (
+                    <div className="space-y-2">
+                      {opportunityBookings.map((booking) => (
+                        <OpportunityBookingRow key={booking.id} booking={booking} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-muted-foreground/40 p-3 text-xs text-muted-foreground">
+                      Aún no hay citas registradas para esta oportunidad.
+                    </p>
+                  )}
+                </section>
+              ) : null}
+
               {hasUpcomingSections ? (
                 <section className="space-y-4">
                   <div className="space-y-1">
@@ -5873,6 +5951,65 @@ function describeHistoryEntry(entry: LeadHistoryEntry): string {
   }
 
   return "Movimiento del lead";
+}
+
+function OpportunityBookingRow({ booking }: { booking: AgendaApiItem }) {
+  const [copied, setCopied] = useState(false);
+  const meetingHref = booking.meeting_url || booking.external_join_url || null;
+  const dateLabel = formatBookingDate(booking.start_at, booking.timezone);
+
+  async function handleCopy() {
+    if (!meetingHref) return;
+    try {
+      await navigator.clipboard.writeText(meetingHref);
+      setCopied(true);
+      toast.success("Enlace de reunión copiado.");
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("No se pudo copiar el enlace.");
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 p-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium text-foreground">{dateLabel}</span>
+        <Badge variant={booking.estado === "cancelada" ? "destructive" : "secondary"}>
+          {booking.estado === "cancelada" ? "Cancelada" : "Confirmada"}
+        </Badge>
+      </div>
+      {meetingHref ? (
+        <>
+          <p className="break-all text-muted-foreground">{meetingHref}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild type="button" size="sm" variant="outline" className="gap-1">
+              <a href={meetingHref} target="_blank" rel="noopener noreferrer">
+                Abrir enlace
+              </a>
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={handleCopy}>
+              {copied ? <IconCheck className="size-3.5" /> : <IconClipboard className="size-3.5" />}
+              {copied ? "Copiado" : "Copiar enlace"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-muted-foreground">Sin enlace de reunión.</p>
+      )}
+    </div>
+  );
+}
+
+function formatBookingDate(value: string, timezone: string | null): string {
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: timezone || "UTC",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
 }
 
 function mapQuoteEntry(input: unknown): LeadQuoteEntry {

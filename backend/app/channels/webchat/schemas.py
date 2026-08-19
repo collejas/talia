@@ -222,3 +222,5 @@ class CalendarBookingResponse(BaseModel):
     notes: str | None = None
     metadata: dict[str, Any] | None = None
     tarjeta_id: str | None = None
+    meeting_url: str | None = None
+    external_join_url: str | None = None

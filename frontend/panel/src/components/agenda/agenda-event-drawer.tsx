@@ -1,5 +1,8 @@
 'use client'
 
+import * as React from "react"
+import { toast } from "sonner"
+
 import { AgendaItem } from "@/lib/agenda/data"
 import { getAgendaItemTitle } from "@/lib/agenda/title"
 import {
@@ -13,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { IconCheck, IconClipboard } from "@tabler/icons-react"
 
 type AgendaEventDrawerProps = {
   open: boolean
@@ -33,6 +37,7 @@ export function AgendaEventDrawer({
   const estadoNormalized = item?.estado?.toLowerCase() ?? ""
   const isCancelled = estadoNormalized === "cancelada"
   const zoom = extractZoomObservability(item?.metadata)
+  const meetingHref = item?.meetingUrl || item?.externalJoinUrl || null
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
@@ -65,13 +70,7 @@ export function AgendaEventDrawer({
               <p className="leading-relaxed">{item.notes}</p>
             </section>
           ) : null}
-          {item?.meetingUrl ? (
-            <Button asChild variant="secondary" className="w-full">
-              <a href={item.meetingUrl} target="_blank" rel="noopener noreferrer">
-                Abrir enlace de reunión
-              </a>
-            </Button>
-          ) : null}
+          {meetingHref ? <MeetingLinkActions href={meetingHref} /> : null}
           <Separator />
           <div className="flex flex-col gap-2 text-sm text-muted-foreground">
             {item?.asunto ? (
@@ -105,6 +104,41 @@ export function AgendaEventDrawer({
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
+  )
+}
+
+function MeetingLinkActions({ href }: { href: string }) {
+  const [copied, setCopied] = React.useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(href)
+      setCopied(true)
+      toast.success("Enlace de reunión copiado.")
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      toast.error("No se pudo copiar el enlace.")
+    }
+  }
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-3">
+      <div>
+        <p className="text-muted-foreground text-xs uppercase tracking-wide">Enlace de reunión</p>
+        <p className="mt-1 break-all text-sm leading-relaxed text-foreground">{href}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button asChild variant="secondary" className="flex-1">
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            Abrir enlace de reunión
+          </a>
+        </Button>
+        <Button type="button" variant="outline" className="flex-1" onClick={handleCopy}>
+          {copied ? <IconCheck className="size-4" /> : <IconClipboard className="size-4" />}
+          {copied ? "Copiado" : "Copiar enlace"}
+        </Button>
+      </div>
+    </section>
   )
 }
 

@@ -597,6 +597,8 @@ def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResp
         notes=data.get("notes"),
         metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
         tarjeta_id=data.get("tarjeta_id"),
+        meeting_url=data.get("meeting_url"),
+        external_join_url=data.get("external_join_url"),
     )
 
 
@@ -623,6 +625,8 @@ def _build_booking_response_from_db_row(row: dict[str, Any]) -> schemas.Calendar
         "metadata": metadata or None,
         "tarjeta_id": row.get("tarjeta_id"),
         "status": row.get("status"),
+        "meeting_url": row.get("meeting_url"),
+        "external_join_url": row.get("external_join_url"),
     }
     if not payload["resource_id"]:
         payload["resource_id"] = settings.webchat_calendar_resource_id

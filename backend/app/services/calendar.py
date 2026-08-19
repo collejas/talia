@@ -216,6 +216,8 @@ async def confirm_slot(
         "hold_id": hold_id,
         "tarjeta_id": row.get("tarjeta_id"),
         "metadata": row.get("metadata"),
+        "meeting_url": meeting_url,
+        "external_join_url": external_join_url,
     }
 
 

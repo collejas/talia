@@ -28123,6 +28123,7 @@ async def list_agenda_bookings(
     assigned: list[str] | None = Query(default=None),
     provider: list[str] | None = Query(default=None),
     search: str | None = Query(default=None),
+    oportunidad_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
     cursor: Annotated[int, Query(ge=0)] = 0,
 ) -> dict[str, Any]:
@@ -28130,7 +28131,7 @@ async def list_agenda_bookings(
     offset = max(cursor, 0)
 
     date_from, date_to = _resolve_date_range(rango, fecha_desde, fecha_hasta)
-    if not date_from and not date_to:
+    if not date_from and not date_to and not oportunidad_id:
         now = datetime.now(timezone.utc)
         date_from = now - timedelta(days=30)
         date_to = now + timedelta(days=30)
@@ -28160,6 +28161,8 @@ async def list_agenda_bookings(
         and_filters.append(f"start_at.lte.{_format_utc(date_to)}")
     if and_filters:
         params["and"] = f"({','.join(and_filters)})"
+    if oportunidad_id:
+        params["tarjeta_id"] = f"eq.{oportunidad_id}"
 
     estado_filters = {
         value.strip().lower()
