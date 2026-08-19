@@ -76,14 +76,21 @@ type PipelineCardResponse = {
   card: PipelineBoardCard;
 };
 
+type PipelineStageResponse = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  orden: number;
+  categoria: string;
+  metadata?: Record<string, unknown> | null;
+};
+
 export async function loadLeadWorkspace(opportunityId: string): Promise<LeadWorkspaceResult> {
   const normalizedId = opportunityId.trim();
   if (!normalizedId) return { ok: false, error: "La oportunidad no es válida." };
-  const [cardResult, boardResult] = await Promise.all([
+  const [cardResult, stagesResult] = await Promise.all([
     callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${normalizedId}`),
-    callCrmApi<{ stages?: PipelineBoardStage[] }>("/crm/pipeline/board", {
-      searchParams: { limit: "1" },
-    }),
+    callCrmApi<PipelineStageResponse[]>("/crm/etapas", { withUserToken: true }),
   ]);
   if (!cardResult.ok) {
     return { ok: false, error: cardResult.error || "No se pudo cargar la oportunidad." };
@@ -91,8 +98,17 @@ export async function loadLeadWorkspace(opportunityId: string): Promise<LeadWork
   if (!cardResult.data?.card || !cardResult.data.stage) {
     return { ok: false, error: "La respuesta de la oportunidad está incompleta." };
   }
-  const stages = (boardResult.ok && Array.isArray(boardResult.data?.stages) ? boardResult.data.stages : [])
-    .map((stage) => adaptStage(stage, parseMetadatos(stage.metadatos)));
+  const stages = (stagesResult.ok && Array.isArray(stagesResult.data) ? stagesResult.data : []).map((stage) =>
+    adaptStage(
+      {
+        ...stage,
+        tablero_id: null,
+        metadatos: stage.metadata ?? null,
+        tarjetas: [],
+      },
+      parseMetadatos(stage.metadata),
+    ),
+  );
   const currentStage = adaptStage(cardResult.data.stage, parseMetadatos(cardResult.data.stage.metadatos));
   if (!stages.some((stage) => stage.id === currentStage.id)) stages.push(currentStage);
   const card = adaptCard(cardResult.data.card);
