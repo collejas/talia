@@ -133,9 +133,18 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     contactOrigin,
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
-    nombreNombres: null,
-    apellidoPaterno: null,
-    apellidoMaterno: null,
+    nombreNombres:
+      typeof card.nombre_nombres === "string" && card.nombre_nombres.trim().length
+        ? card.nombre_nombres.trim()
+        : null,
+    apellidoPaterno:
+      typeof card.apellido_paterno === "string" && card.apellido_paterno.trim().length
+        ? card.apellido_paterno.trim()
+        : null,
+    apellidoMaterno:
+      typeof card.apellido_materno === "string" && card.apellido_materno.trim().length
+        ? card.apellido_materno.trim()
+        : null,
     contactoProfileName: resolvedProfileName,
     correo: resolvedCorreo,
     telefono: resolvedTelefono,

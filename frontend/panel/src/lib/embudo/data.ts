@@ -125,6 +125,9 @@ export type PipelineBoardCard = {
   origen?: string | null;
   titulo?: string | null;
   nombre?: string | null;
+  nombre_nombres?: string | null;
+  apellido_paterno?: string | null;
+  apellido_materno?: string | null;
   contacto_profile_name?: string | null;
   correo: string | null;
   telefono: string | null;

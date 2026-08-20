@@ -280,6 +280,15 @@ function patchCardFromLeadPayload(
     const value = sanitizeNullableString(contactoPayload.nombre_completo);
     patched.nombre = value;
   }
+  if ("nombre_nombres" in contactoPayload) {
+    patched.nombreNombres = sanitizeNullableString(contactoPayload.nombre_nombres);
+  }
+  if ("apellido_paterno" in contactoPayload) {
+    patched.apellidoPaterno = sanitizeNullableString(contactoPayload.apellido_paterno);
+  }
+  if ("apellido_materno" in contactoPayload) {
+    patched.apellidoMaterno = sanitizeNullableString(contactoPayload.apellido_materno);
+  }
   if ("correo" in contactoPayload) {
     const value = sanitizeNullableString(contactoPayload.correo);
     patched.correo = value;

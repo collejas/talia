@@ -1111,6 +1111,18 @@ export function EmbudoBoardClient({
         const nextName = contactPayload.nombre_completo;
         patchedCard.nombre = typeof nextName === "string" ? nextName || null : null;
       }
+      if ("nombre_nombres" in contactPayload) {
+        const nextName = contactPayload.nombre_nombres;
+        patchedCard.nombreNombres = typeof nextName === "string" ? nextName || null : null;
+      }
+      if ("apellido_paterno" in contactPayload) {
+        const nextSurname = contactPayload.apellido_paterno;
+        patchedCard.apellidoPaterno = typeof nextSurname === "string" ? nextSurname || null : null;
+      }
+      if ("apellido_materno" in contactPayload) {
+        const nextSurname = contactPayload.apellido_materno;
+        patchedCard.apellidoMaterno = typeof nextSurname === "string" ? nextSurname || null : null;
+      }
       if ("correo" in contactPayload) {
         const nextEmail = contactPayload.correo;
         patchedCard.correo = typeof nextEmail === "string" ? nextEmail || null : null;

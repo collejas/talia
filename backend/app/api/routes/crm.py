@@ -16896,6 +16896,9 @@ class CRMPipelineBoardCard(BaseModel):
     codigo_oportunidad: str | None = None
     titulo: str
     nombre: str | None = None
+    nombre_nombres: str | None = None
+    apellido_paterno: str | None = None
+    apellido_materno: str | None = None
     contacto_profile_name: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -48182,6 +48185,9 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         codigo_oportunidad=_clean_text(row.get("codigo_oportunidad")) or None,
         titulo=titulo_value,
         nombre=nombre,
+        nombre_nombres=_clean_text(contacto.get("nombre_nombres") or contacto.get("nombre")) or None,
+        apellido_paterno=_clean_text(contacto.get("apellido_paterno")) or None,
+        apellido_materno=_clean_text(contacto.get("apellido_materno")) or None,
         contacto_profile_name=contacto_profile_name,
         correo=contacto_correo,
         telefono=contacto_telefono,
