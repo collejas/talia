@@ -4329,17 +4329,6 @@ export function LeadDrawer({
                   <Button type="button" size="sm" variant="outline" onClick={handleSaveQuoteDraft} disabled={quotePending}>
                     Guardar borrador
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-1"
-                    variant={quoteChannel === "email" ? "default" : "outline"}
-                    onClick={() => handleQuoteChannelChange("email")}
-                    disabled={quotePending}
-                  >
-                    <IconMail className="size-4" />
-                    Correo
-                  </Button>
                   <Button type="button" size="sm" onClick={handleSendQuote} disabled={quotePending}>
                     {quotePending ? "Enviando..." : "Enviar cotización"}
                   </Button>
