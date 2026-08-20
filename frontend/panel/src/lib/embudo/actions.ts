@@ -146,6 +146,7 @@ export type ScheduleLeadDemoInput = {
   contactoId?: string | null;
   oportunidadId?: string | null;
   canal?: string | null;
+  modalidad?: "virtual" | "presencial" | "hibrida" | null;
   startAt: string;
   notes?: string | null;
   sessionId?: string | null;
@@ -360,6 +361,7 @@ export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<Sc
     contacto_id: input.personaId ?? input.contactoId ?? undefined,
     oportunidad_id: input.oportunidadId ?? undefined,
     canal: input.canal ?? undefined,
+    modalidad: input.modalidad ?? undefined,
     start_at: input.startAt,
     notes: input.notes ?? undefined,
     session_id: input.sessionId ?? undefined,

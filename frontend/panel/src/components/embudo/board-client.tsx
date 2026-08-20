@@ -139,11 +139,18 @@ type SalesRepOption = {
 };
 
 const DEMO_STAGE_CODE = "demo";
+type DemoFormat = "virtual" | "presencial" | "hibrida";
 const DEMO_FORMAT_OPTIONS = [
   { value: "virtual", label: "Virtual" },
   { value: "presencial", label: "Presencial" },
   { value: "hibrida", label: "Híbrida" },
 ];
+
+function normalizeDemoFormat(value: unknown): DemoFormat | undefined {
+  return DEMO_FORMAT_OPTIONS.some((option) => option.value === value)
+    ? (value as DemoFormat)
+    : undefined;
+}
 
 const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
   demo: [],
@@ -948,6 +955,7 @@ export function EmbudoBoardClient({
         contactoId: sanitizeString(scheduleContext.card.contactoId),
         oportunidadId: scheduleContext.card.oportunidadId,
         canal: sanitizeString(scheduleContext.card.canal),
+        modalidad: normalizeDemoFormat(scheduleFormat.trim()),
         startAt: isoValue,
       });
 
@@ -1263,6 +1271,7 @@ export function EmbudoBoardClient({
             contactoId: sanitizeString(selectedCard.contactoId),
             oportunidadId: selectedCard.oportunidadId,
             canal: sanitizeString(selectedCard.canal),
+            modalidad: normalizeDemoFormat(extraFields?.demo_format),
             startAt: isoValue,
           });
           if (!bookingResult.ok) {
