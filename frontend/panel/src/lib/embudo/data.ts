@@ -43,6 +43,10 @@ export type EmbudoCard = {
   nombreNombres: string | null;
   apellidoPaterno: string | null;
   apellidoMaterno: string | null;
+  personaFisicaMoral: string | null;
+  razonSocial: string | null;
+  rfc: string | null;
+  regimenCapital: string | null;
   contactoProfileName: string | null;
   correo: string | null;
   telefono: string | null;
@@ -128,6 +132,10 @@ export type PipelineBoardCard = {
   nombre_nombres?: string | null;
   apellido_paterno?: string | null;
   apellido_materno?: string | null;
+  persona_fisica_moral?: string | null;
+  razon_social?: string | null;
+  rfc?: string | null;
+  regimen_capital?: string | null;
   contacto_profile_name?: string | null;
   correo: string | null;
   telefono: string | null;

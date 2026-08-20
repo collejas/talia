@@ -826,10 +826,13 @@ export function LeadDrawer({
       telefono: card?.telefono ?? "",
       telefonoTipo: "movil",
       empresa: card?.empresa ?? "",
-      tipoPersonaEmpresa: "moral",
-      razonSocial: "",
-      rfc: "",
-      regimenCapital: "",
+      tipoPersonaEmpresa:
+        card?.personaFisicaMoral === "fisica" || card?.personaFisicaMoral === "pfea"
+          ? "pfea"
+          : "moral",
+      razonSocial: card?.razonSocial ?? "",
+      rfc: card?.rfc ?? "",
+      regimenCapital: card?.regimenCapital ?? "",
       monto: formatCurrencyInputValue(parseNumberInput(monto), card?.moneda ?? "MXN"),
       moneda: card?.moneda ?? "",
       probabilidad: formatPercentInputValue(parseNumberInput(probabilidad)),

@@ -1236,7 +1236,7 @@ class CRMRepository:
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo,necesidad_proposito)",
+            "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,tipo,razon_social,rfc,regimen_capital,telefono,correo,necesidad_proposito)",
         ]
     )
 
@@ -5580,6 +5580,15 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inválida al obtener oportunidad del pipeline: {row!r}"
             )
+        await self._attach_contact_rows(
+            organizacion_id=organizacion_id,
+            rows=[row],
+            source_fields=("contacto_principal_id",),
+        )
+        await self._attach_pipeline_contact_accounts(
+            organizacion_id=organizacion_id,
+            rows=[row],
+        )
         return row
 
     async def get_pipeline_opportunity_by_id(
@@ -9352,6 +9361,11 @@ class CRMRepository:
                 rows=results,
                 source_fields=("contacto_principal_id",),
             )
+        if results:
+            await self._attach_pipeline_contact_accounts(
+                organizacion_id=organizacion_id,
+                rows=results,
+            )
         if tiene_cita:
             target = str(tiene_cita).strip().lower()
             if target in ("con_cita", "sin_cita"):
@@ -9416,6 +9430,83 @@ class CRMRepository:
                 results = filtered
         total = len(results)
         return results, total
+
+    async def _attach_pipeline_contact_accounts(
+        self,
+        *,
+        organizacion_id: UUID,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Completar cuentas activas de contactos en una carga agrupada."""
+        persona_ids = list({
+            str(row.get("contacto_principal_id")).strip()
+            for row in rows
+            if row.get("contacto_principal_id")
+        })
+        if not persona_ids:
+            return rows
+
+        relation_resp = await self._request(
+            "GET",
+            "/rest/v1/cuenta_personas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "persona_id": _postgrest_in_clause(persona_ids),
+                "activo": "eq.true",
+                "order": "es_contacto_principal.desc,es_representante_legal.desc,creado_en.asc",
+                "select": "persona_id,cuenta_id",
+                "limit": str(min(2000, len(persona_ids) * 3)),
+            },
+        )
+        relation_data = relation_resp.json()
+        if not isinstance(relation_data, list):
+            return rows
+
+        account_by_persona: dict[str, str] = {}
+        account_ids: list[str] = []
+        for relation in relation_data:
+            if not isinstance(relation, dict):
+                continue
+            persona_id = str(relation.get("persona_id") or "").strip()
+            account_id = str(relation.get("cuenta_id") or "").strip()
+            if not persona_id or not account_id or persona_id in account_by_persona:
+                continue
+            account_by_persona[persona_id] = account_id
+            if account_id not in account_ids:
+                account_ids.append(account_id)
+        if not account_ids:
+            return rows
+
+        account_resp = await self._request(
+            "GET",
+            "/rest/v1/cuentas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": _postgrest_in_clause(account_ids),
+                "select": "id,nombre,tipo,razon_social,rfc,regimen_capital,telefono,correo,necesidad_proposito",
+                "limit": str(min(1000, len(account_ids))),
+            },
+        )
+        account_data = account_resp.json()
+        if not isinstance(account_data, list):
+            return rows
+        account_map = {
+            str(account.get("id")): account
+            for account in account_data
+            if isinstance(account, dict) and account.get("id")
+        }
+        for row in rows:
+            account_id = account_by_persona.get(str(row.get("contacto_principal_id") or "").strip())
+            account = account_map.get(account_id) if account_id else None
+            if not account:
+                continue
+            existing_account = row.get("cuenta")
+            row["cuenta"] = (
+                {**account, **existing_account}
+                if isinstance(existing_account, dict)
+                else account
+            )
+        return rows
 
     async def list_supervised_sales_reps(
         self,

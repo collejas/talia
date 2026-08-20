@@ -49,6 +49,19 @@ export function parseMetadatos(input: Record<string, unknown> | null | undefined
   return input;
 }
 
+function normalizePersonaFisicaMoral(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (["fisica", "pfae", "pfea", "persona_fisica_actividad_empresarial"].includes(normalized)) {
+    return "fisica";
+  }
+  if (["moral", "empresa", "persona_moral"].includes(normalized)) {
+    return "moral";
+  }
+  return normalized;
+}
+
 export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const metadata = parseMetadatos(card.metadata);
   const etapaCodigo = typeof card.etapa_codigo === "string" ? card.etapa_codigo : null;
@@ -144,6 +157,16 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     apellidoMaterno:
       typeof card.apellido_materno === "string" && card.apellido_materno.trim().length
         ? card.apellido_materno.trim()
+        : null,
+    personaFisicaMoral: normalizePersonaFisicaMoral(card.persona_fisica_moral),
+    razonSocial:
+      typeof card.razon_social === "string" && card.razon_social.trim().length
+        ? card.razon_social.trim()
+        : null,
+    rfc: typeof card.rfc === "string" && card.rfc.trim().length ? card.rfc.trim() : null,
+    regimenCapital:
+      typeof card.regimen_capital === "string" && card.regimen_capital.trim().length
+        ? card.regimen_capital.trim()
         : null,
     contactoProfileName: resolvedProfileName,
     correo: resolvedCorreo,

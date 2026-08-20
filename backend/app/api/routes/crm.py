@@ -16899,6 +16899,10 @@ class CRMPipelineBoardCard(BaseModel):
     nombre_nombres: str | None = None
     apellido_paterno: str | None = None
     apellido_materno: str | None = None
+    persona_fisica_moral: str | None = None
+    razon_social: str | None = None
+    rfc: str | None = None
+    regimen_capital: str | None = None
     contacto_profile_name: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -48104,6 +48108,40 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     contacto = _ensure_dict(row.get("contacto"), default={})
     cuenta = _ensure_dict(row.get("cuenta"), default={})
     asignado = _ensure_dict(row.get("asignado"), default={})
+
+    account_person_type = _clean_text(cuenta.get("tipo"))
+    contact_person_type = _clean_text(contacto.get("persona_fisica_moral"))
+    contact_person_data = _ensure_dict(contacto.get("persona_datos"), default={})
+    contact_metadata = _ensure_dict(contacto.get("metadata"), default={})
+    context_person_type = (
+        _clean_text(contact_person_data.get("contexto_modo"))
+        or _clean_text(contact_metadata.get("contexto_modo"))
+    )
+    normalized_account_type = (account_person_type or "").strip().lower()
+    normalized_contact_type = (contact_person_type or "").strip().lower()
+    normalized_context_type = (context_person_type or "").strip().lower()
+    if normalized_context_type in {
+        "persona_fisica_actividad_empresarial",
+        "persona_fisica",
+        "pfae",
+        "pfea",
+        "fisica",
+    }:
+        pipeline_person_type = "fisica"
+    elif normalized_context_type in {"empresa_nueva", "empresa", "moral", "persona_moral"}:
+        pipeline_person_type = "moral"
+    elif normalized_contact_type in {
+        "persona_fisica_actividad_empresarial",
+        "persona_fisica",
+        "pfae",
+        "pfea",
+        "fisica",
+    }:
+        pipeline_person_type = "fisica"
+    elif normalized_contact_type in {"empresa", "moral", "persona_moral"}:
+        pipeline_person_type = "moral"
+    else:
+        pipeline_person_type = None
     stored_project_name = metadata.get("project_name")
     raw_title = None
     if isinstance(stored_project_name, str) and stored_project_name.strip():
@@ -48188,6 +48226,18 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         nombre_nombres=_clean_text(contacto.get("nombre_nombres") or contacto.get("nombre")) or None,
         apellido_paterno=_clean_text(contacto.get("apellido_paterno")) or None,
         apellido_materno=_clean_text(contacto.get("apellido_materno")) or None,
+        persona_fisica_moral=pipeline_person_type,
+        razon_social=(
+            _clean_text(contacto.get("razon_social"))
+            or _clean_text(cuenta.get("razon_social"))
+            or None
+        ),
+        rfc=_clean_text(contacto.get("rfc")) or _clean_text(cuenta.get("rfc")) or None,
+        regimen_capital=(
+            _clean_text(contacto.get("regimen_capital"))
+            or _clean_text(cuenta.get("regimen_capital"))
+            or None
+        ),
         contacto_profile_name=contacto_profile_name,
         correo=contacto_correo,
         telefono=contacto_telefono,

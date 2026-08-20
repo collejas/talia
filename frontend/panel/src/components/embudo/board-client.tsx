@@ -1123,6 +1123,22 @@ export function EmbudoBoardClient({
         const nextSurname = contactPayload.apellido_materno;
         patchedCard.apellidoMaterno = typeof nextSurname === "string" ? nextSurname || null : null;
       }
+      if ("persona_fisica_moral" in contactPayload) {
+        const nextType = contactPayload.persona_fisica_moral;
+        patchedCard.personaFisicaMoral = typeof nextType === "string" ? nextType || null : null;
+      }
+      if ("razon_social" in contactPayload) {
+        const nextCompanyName = contactPayload.razon_social;
+        patchedCard.razonSocial = typeof nextCompanyName === "string" ? nextCompanyName || null : null;
+      }
+      if ("rfc" in contactPayload) {
+        const nextRfc = contactPayload.rfc;
+        patchedCard.rfc = typeof nextRfc === "string" ? nextRfc || null : null;
+      }
+      if ("regimen_capital" in contactPayload) {
+        const nextRegimen = contactPayload.regimen_capital;
+        patchedCard.regimenCapital = typeof nextRegimen === "string" ? nextRegimen || null : null;
+      }
       if ("correo" in contactPayload) {
         const nextEmail = contactPayload.correo;
         patchedCard.correo = typeof nextEmail === "string" ? nextEmail || null : null;

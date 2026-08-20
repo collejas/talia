@@ -289,6 +289,18 @@ function patchCardFromLeadPayload(
   if ("apellido_materno" in contactoPayload) {
     patched.apellidoMaterno = sanitizeNullableString(contactoPayload.apellido_materno);
   }
+  if ("persona_fisica_moral" in contactoPayload) {
+    patched.personaFisicaMoral = sanitizeNullableString(contactoPayload.persona_fisica_moral);
+  }
+  if ("razon_social" in contactoPayload) {
+    patched.razonSocial = sanitizeNullableString(contactoPayload.razon_social);
+  }
+  if ("rfc" in contactoPayload) {
+    patched.rfc = sanitizeNullableString(contactoPayload.rfc);
+  }
+  if ("regimen_capital" in contactoPayload) {
+    patched.regimenCapital = sanitizeNullableString(contactoPayload.regimen_capital);
+  }
   if ("correo" in contactoPayload) {
     const value = sanitizeNullableString(contactoPayload.correo);
     patched.correo = value;
