@@ -2581,6 +2581,7 @@ export function LeadDrawer({
   const quoteClientContact = card?.nombre?.trim() || card?.contactoProfileName?.trim() || "Sin contacto";
   const quoteClientPhone = card?.telefono?.trim() || "Sin teléfono";
   const quoteClientEmail = card?.correo?.trim() || "Sin email";
+  const quoteClientRfc = card?.rfc?.trim() || "Sin RFC";
   const quoteProjectNeeds = card?.proyectoNecesidades?.trim() || card?.necesidadProposito?.trim() || "Sin necesidades";
   const quoteAssignedVendorName =
     quoteAssignedVendor?.nombre_completo?.trim() || card?.asignadoNombre?.trim() || "Sin vendedor";
@@ -4430,7 +4431,7 @@ export function LeadDrawer({
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">RFC</span>
-                          <span className="font-medium text-foreground">Sin RFC</span>
+                          <span className="font-medium text-foreground">{quoteClientRfc}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-muted-foreground">Email</span>
