@@ -974,7 +974,9 @@ export function EmbudoBoardClient({
       oportunidadId: scheduleContext.card.oportunidadId,
       etapaDestino: destinationStage.id,
       fuente: "humano",
-      expectedEtapa: scheduleContext.card.etapaId,
+      // La creación de la cita promueve automáticamente a Demo desde Agenda.
+      // Después de esa promoción no debemos comparar contra la etapa anterior.
+      expectedEtapa: bookingId ? undefined : scheduleContext.card.etapaId,
       metadata: {
         stage_prep: stagePrep,
       },
@@ -1283,7 +1285,8 @@ export function EmbudoBoardClient({
         oportunidadId: selectedCard.oportunidadId,
         etapaDestino: targetStage.id,
         fuente: "humano",
-        expectedEtapa: selectedCard.etapaId,
+        // Agenda puede haber promovido la oportunidad al crear la cita.
+        expectedEtapa: bookingId ? undefined : selectedCard.etapaId,
         metadata: {
           stage_prep: demoStagePrep,
         },

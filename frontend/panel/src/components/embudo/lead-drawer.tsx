@@ -2027,11 +2027,11 @@ export function LeadDrawer({
       !isCreateMode && card && advanceStage
         ? demoTargetStage ?? findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep)
         : null;
+    // El avance automático se ejecuta después del guardado mediante
+    // advanceStage. No incluir etapa_id aquí: hacerlo provoca dos PATCH
+    // consecutivos con expected_etapa_id distinto y un 409 de conflicto.
     const shouldPersistTargetStageOnSave =
-      Boolean(targetStage && card && targetStage.id !== card.etapaId);
-    if (shouldPersistTargetStageOnSave && targetStage) {
-      oportunidadUpdates.etapa_id = targetStage.id;
-    }
+      false;
     console.info("[LeadDrawer] submit-auto-advance", {
       opportunityId: card?.oportunidadId,
       currentStageCode: currentStage?.codigo ?? null,
