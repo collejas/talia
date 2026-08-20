@@ -67,13 +67,26 @@ const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "
   procesando: "secondary",
   enviado: "default",
   entregado: "default",
-  fallido: "destructive",
-  error: "destructive",
+  fallido: "outline",
+  error: "outline",
   omitido: "outline",
 }
 
 const RETRYABLE_ESTADOS = new Set(["error", "fallido", "omitido"])
 const TERMINAL_BATCH_STATES = new Set(["completado", "cancelado", "error", "fallido"])
+const SUCCESSFUL_ENVIO_STATES = new Set(["enviado", "entregado", "leido", "completado", "respondido"])
+const envioEstadoLabel: Record<string, string> = {
+  fallido: "No enviado",
+  error: "No enviado",
+  omitido: "No enviado",
+}
+
+function countSuccessfulEnvios(totales: Record<string, number>): number {
+  return Object.entries(totales).reduce(
+    (total, [estado, count]) => total + (SUCCESSFUL_ENVIO_STATES.has(estado) ? Number(count || 0) : 0),
+    0
+  )
+}
 
 export default function ContactosPageClient() {
   const [batches, setBatches] = useState<ContactoBatch[]>([])
@@ -96,7 +109,7 @@ export default function ContactosPageClient() {
     setBatchLoading(true)
     setBatchError(null)
     try {
-      const response = await listContactoBatches({ limit: 20 })
+      const response = await listContactoBatches({ limit: 20, include_resumen: true })
       setBatches(response.items ?? [])
       if (!selectedBatchId && response.items?.length) {
         setSelectedBatchId(response.items[0].id)
@@ -363,7 +376,7 @@ export default function ContactosPageClient() {
                 <TableRow>
                   <TableHead>Lote</TableHead>
                   <TableHead>Canales</TableHead>
-                  <TableHead>Total</TableHead>
+                  <TableHead>Enviados</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Creado</TableHead>
                 </TableRow>
@@ -405,9 +418,14 @@ export default function ContactosPageClient() {
                             </Badge>
                           ))}
                         </TableCell>
-                        <TableCell>{batch.total_prospectos}</TableCell>
                         <TableCell>
-                          <Badge variant={estadoVariant[batch.estado] ?? "default"}>{batch.estado}</Badge>
+                          <span className="font-medium">{batch.envios_enviados ?? 0}/{batch.total_envios && batch.total_envios > 0 ? batch.total_envios : batch.total_prospectos}</span>
+                          <span className="ml-1 text-xs text-muted-foreground">enviados</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={batch.estado === "error" ? "outline" : estadoVariant[batch.estado] ?? "default"}>
+                            {batch.estado === "error" ? "Completado con no enviados" : batch.estado}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{formatDate(batch.creado_en)}</TableCell>
                       </TableRow>
@@ -547,11 +565,11 @@ export default function ContactosPageClient() {
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {Object.entries(batchSummary.totales).map(([estado, count]) => (
                 <Badge key={estado} variant={envioEstadoVariant[estado] ?? "outline"}>
-                  {estado}: {count}
+                  {envioEstadoLabel[estado] ?? estado}: {count}
                 </Badge>
               ))}
               <span className="text-xs text-muted-foreground">
-                Total envíos: {batchSummary.total_envios}
+                Enviados: {countSuccessfulEnvios(batchSummary.totales)}/{batchSummary.total_envios}
               </span>
             </div>
           ) : null}
@@ -600,7 +618,9 @@ export default function ContactosPageClient() {
                             <Badge variant="outline">{canalLabel[envio.canal] ?? envio.canal}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>{envio.estado}</Badge>
+                            <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>
+                              {envioEstadoLabel[envio.estado] ?? envio.estado}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {getEnvioDetailReason(envio)}

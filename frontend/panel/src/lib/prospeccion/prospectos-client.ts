@@ -497,6 +497,7 @@ export type ContactoBatch = {
   programacion?: Record<string, unknown> | null
   totales?: Record<string, number> | null
   total_envios?: number | null
+  envios_enviados?: number | null
 }
 
 export type ContactoEnvio = {
@@ -1545,12 +1546,14 @@ export async function listContactoBatches(params: {
   offset?: number
   estado?: string
   order?: "reciente" | "antiguo"
+  include_resumen?: boolean
 } = {}): Promise<{ ok: boolean; items: ContactoBatch[]; total: number; limit: number; offset: number }> {
   const url = buildClientUrl("/api/prospeccion/contacto/batches")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
   if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
   if (params.order) url.searchParams.set("order", params.order)
+  if (params.include_resumen) url.searchParams.set("include_resumen", "true")
   return requestJson(url.toString())
 }
 

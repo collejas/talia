@@ -4673,6 +4673,7 @@ class ContactBatchQuery(BaseModel):
     offset: int = Field(default=0, ge=0, le=10_000)
     estado: str | None = Field(default=None, max_length=40)
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
+    include_resumen: bool = Field(default=False)
 
 
 class ContactEnvioQuery(BaseModel):
@@ -32582,6 +32583,24 @@ async def listar_batches_prospeccion_contacto_legacy(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if params.include_resumen and rows:
+        batch_ids = [UUID(str(row["id"])) for row in rows if row.get("id")]
+        try:
+            resumenes = await repo.summarize_envios_por_batches(
+                usuario_token=user_token,
+                batch_ids=batch_ids,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        for row in rows:
+            resumen = resumenes.get(str(row.get("id")), {})
+            row["totales"] = resumen
+            row["total_envios"] = sum(int(value or 0) for value in resumen.values())
+            row["envios_enviados"] = sum(
+                int(value or 0)
+                for estado, value in resumen.items()
+                if estado in {"enviado", "entregado", "leido", "completado", "respondido"}
+            )
     return {
         "ok": True,
         "items": rows,
