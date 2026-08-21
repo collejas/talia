@@ -32,6 +32,19 @@ Implementado y verificado:
 
 La migración no recupera cambios ocurridos antes de su aplicación; el historial completo comienza a partir de este punto.
 
+### 1.2 Incidente de compatibilidad documentado
+
+El 2026-08-21 se corrigió una regresión introducida durante el trabajo local de esta funcionalidad. Un bloque de mantenimiento de precios fue insertado accidentalmente en `list_contact_envios_by_ids`, una función de lectura del CRM que no pertenece al dominio de listas de precios.
+
+La corrección fue deliberadamente mínima:
+
+- se eliminó únicamente el bloque accidental de `backend/app/repositories/crm.py`;
+- no se cambiaron migraciones, tablas, contratos de precios, permisos, snapshots ni componentes de cotización;
+- no se ejecutaron eliminaciones de datos en Supabase;
+- se verificó que el endpoint de visitas web y sus exportaciones pudieran volver a ejecutarse después de reiniciar el API.
+
+Regla de compatibilidad para las siguientes fases: la lógica de listas de precios debe permanecer en sus endpoints, servicios, repositorios y migraciones propios. Las funciones de lectura de tráfico, conversaciones y conversiones no deben contener sincronizaciones ni limpiezas del catálogo.
+
 En progreso local:
 
 - Endpoints protegidos para administrar listas, permisos, precios por item e historial.

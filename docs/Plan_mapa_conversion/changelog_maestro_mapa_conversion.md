@@ -256,3 +256,13 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se deduplican respuestas compartidas por campañas para evitar que una misma respuesta se inserte dos veces.
 - Validación real de la campaña master `WHATSAPP` con plantilla `Plantilla foto`: 46 conversaciones respondieron y 44 tienen oportunidad atribuida; los cinco teléfonos revisados por el usuario quedaron incluidos y suman cinco oportunidades.
 - Los envíos fallidos se excluyen de los enviados válidos y los cobros continúan dependiendo exclusivamente de `cobro_mensajes`.
+
+## 2026-08-21 — Corrección de regresión en visitas web y exportaciones
+
+- Se identificó que una modificación local relacionada con listas de precios había insertado lógica de mantenimiento de catálogo dentro de `list_contact_envios_by_ids`, una función de lectura del CRM.
+- La referencia a `item_id` no definido provocaba `NameError` y HTTP 500 en `GET /api/crm/visitas/web-sessions` cuando se solicitaba el primer bloque de filas.
+- El mismo error afectaba las exportaciones `GET /api/crm/demografia/mapa-v2/export/xlsx` y `GET /api/crm/demografia/mapa-v2/export/html`, porque reutilizan la lectura de sesiones web.
+- Se eliminó únicamente el bloque accidental del repositorio CRM. No se modificó la fuente canónica `public.web_sessions`, la atribución, las tablas de conversaciones, las campañas ni el contrato visual de las tres lecturas.
+- No se ejecutó ningún `DELETE` de catálogo ni se modificó la base de datos como parte de la corrección.
+- Validación: servicio API activo, health local HTTP 200, prueba específica de catálogo aprobada y compilación/diff correctos.
+- Invariante agregado: las lecturas y exportaciones de `mapa-de-conversion` deben ser de solo lectura y no pueden ejecutar sincronizaciones o limpiezas de listas de precios.

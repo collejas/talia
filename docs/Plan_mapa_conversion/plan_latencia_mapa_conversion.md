@@ -218,7 +218,22 @@ Se agregó medición real del endpoint de tablas:
 
 Esto permite validar si la separación por secciones está reduciendo de verdad la latencia percibida y cuál de las dos tablas sigue siendo el cuello.
 
-## 14) Idea de mejora visible para el usuario
+## 14) Incidente de disponibilidad documentado
+
+Fecha: 2026-08-21
+
+Se detectó una regresión de código, no un problema primario de latencia: una función de lectura de envíos del CRM contenía accidentalmente lógica de listas de precios y fallaba por una variable inexistente. El fallo en el primer bloque de sesiones provocaba HTTP 500 en `web-sessions` y en las exportaciones del mapa.
+
+Corrección aplicada:
+
+- retirar el bloque ajeno al flujo de lectura en `backend/app/repositories/crm.py`;
+- reiniciar el servicio API;
+- comprobar health, compilación y diff;
+- mantener sin cambios el diseño de carga diferida, la cache, las fuentes de `web_sessions` y la separación entre tráfico, conversaciones y campañas.
+
+Aprendizaje operativo: cualquier mejora de listas de precios debe probarse de forma aislada y no debe introducir escrituras o limpieza de catálogo en rutas de analítica. Para cerrar una incidencia similar se deben comprobar por separado la respuesta inicial de `web-sessions` y las dos exportaciones.
+
+## 15) Idea de mejora visible para el usuario
 
 Objetivo:
 

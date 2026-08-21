@@ -4,6 +4,16 @@ Registro de avances, cambios aplicados, verificaciones y pendientes de la funcio
 
 ## 2026-08-21
 
+### Corrección de regresión de compatibilidad — completado
+
+- Durante la implementación local de listas de precios se detectó una inserción accidental en `backend/app/repositories/crm.py`, dentro de `list_contact_envios_by_ids`.
+- Esa función es de solo lectura para recuperar envíos de contactos, pero contenía lógica de limpieza de `catalog_item_lista_precios` y referenciaba `item_id`, una variable inexistente.
+- El error provocaba `NameError` y respuestas HTTP 500 en la carga de `GET /api/crm/visitas/web-sessions` y en las exportaciones XLSX/HTML del mapa de conversión.
+- Se retiró únicamente ese bloque accidental. No se modificaron tablas, migraciones, endpoints, permisos, snapshots ni componentes de listas de precios.
+- No se ejecutó ninguna operación destructiva sobre datos de catálogo; el bloque fallaba antes de llegar al `DELETE`.
+- Verificaciones posteriores: prueba específica de catálogo `2 passed`, compilación Python, `git diff --check`, reinicio correcto del servicio API y health local HTTP 200.
+- La suite amplia mantiene fallos previos del doble de pruebas `DummyCRMRepository`; no corresponden a precios ni a esta corrección.
+
 ### Base de datos — completado
 
 - Se revisó el esquema real de Supabase para productos, precios, cotizaciones, usuarios, roles, empleados, permisos y auditoría.
