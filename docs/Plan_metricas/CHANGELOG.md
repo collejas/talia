@@ -93,6 +93,16 @@ entre las vistas de prospección y mapa de conversión.
 - Las tres secciones continúan funcionando correctamente después del ajuste
   del payload.
 
+## 2026-08-21 · Retiro de consumidor interno legacy
+
+- Se eliminaron del cliente del panel el tipo `ContactoMetrics` y la función
+  `getContactoMetrics`, que ya no tenían consumidores activos.
+- Se conserva temporalmente el BFF y el endpoint backend
+  `/prospeccion/contacto/metrics` para compatibilidad externa y documentación
+  histórica.
+- El flujo activo de métricas usa `prospeccion/metricas`; `contactos` conserva
+  únicamente operación de lotes y envíos.
+
 ## 2026-08-21 · Segundo corte en `prospeccion/campanas`
 
 ### Cambios realizados

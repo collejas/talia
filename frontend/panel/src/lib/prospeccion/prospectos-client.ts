@@ -1810,32 +1810,6 @@ export async function cancelarContactoBatch(batchId: string) {
   )
 }
 
-export type ContactoMetrics = {
-  ok: boolean
-  canales: Record<
-    string,
-    {
-      totales: number
-      por_estado: Record<string, number>
-    }
-  >
-  conversion_por_fuente?: Array<{
-    fuente: string
-    total_prospectos: number
-    prospectos_contactados: number
-    envios_totales: number
-    envios_enviados: number
-    prospectos_convertidos: number
-    conversion_contacto_pct: number
-    conversion_convertido_pct: number
-  }>
-  brevo_eventos?: Array<{
-    evento: string
-    total: number
-    ultimo_evento_en?: string | null
-  }>
-}
-
 export type BrevoQuotaSnapshot = {
   ok: boolean
   configured: boolean
@@ -2068,10 +2042,6 @@ export type LandingCtaEventsResponse = {
     path?: string | null
     referrer?: string | null
   }>
-}
-
-export async function getContactoMetrics() {
-  return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
 }
 
 export async function getBrevoQuota() {
