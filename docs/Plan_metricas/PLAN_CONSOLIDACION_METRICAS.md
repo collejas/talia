@@ -20,6 +20,19 @@ contexto necesario para su flujo.
 Este documento es la referencia transversal. Los planes específicos deben
 enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
 
+## Estado de implementación
+
+### 2026-08-21 · Primer corte seguro
+
+- `prospeccion/contactos` ya no solicita ni renderiza salud global, conversión
+  por fuente ni eventos globales de correo.
+- Se conservaron lotes, estados, envíos, errores, reintentos, cancelaciones y
+  bitácora del lote seleccionado.
+- Se agregó un enlace contextual a `prospeccion/metricas`.
+- El endpoint legacy de métricas permanece temporalmente para compatibilidad
+  con integraciones y documentación histórica; ya no participa en la carga de
+  esta vista.
+
 ## 2. Diagnóstico validado
 
 ### 2.1 Correo

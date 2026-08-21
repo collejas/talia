@@ -11,7 +11,6 @@ import {
   cancelarContactoEnvio,
   cancelarContactoBatch,
   getContactoBatchResumen,
-  getContactoMetrics,
   listContactoBatches,
   listContactoEnvios,
   listContactoLogs,
@@ -21,7 +20,6 @@ import {
   type ContactoBatchResumen,
   type ContactoEnvio,
   type ContactoLog,
-  type ContactoMetrics,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
 
@@ -36,30 +34,6 @@ const canalLabel: Record<string, string> = {
   correo: "Correo",
   whatsapp: "WhatsApp",
   llamada: "Llamada",
-}
-
-const fuenteLabel: Record<string, string> = {
-  google_places: "Google Places",
-  denue: "DENUE",
-  usuario: "Usuario",
-}
-
-const brevoEventLabel: Record<string, string> = {
-  request: "Enviado",
-  processed: "Procesado",
-  deferred: "Diferido",
-  delivered: "Entregado",
-  opened: "Apertura",
-  unique_opened: "Primera apertura",
-  click: "Clic",
-  unique_click: "Primer clic",
-  soft_bounce: "Rebote suave",
-  hard_bounce: "Rebote duro",
-  blocked: "Bloqueado",
-  spam: "Spam",
-  invalid: "Inválido",
-  error: "Error",
-  unsubscribe: "Unsubscribe",
 }
 
 const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
@@ -130,8 +104,6 @@ export default function ContactosPageClient() {
     }
   }, [selectedBatchId])
 
-  const [metrics, setMetrics] = useState<ContactoMetrics | null>(null)
-  const [metricsError, setMetricsError] = useState<string | null>(null)
   const [logs, setLogs] = useState<ContactoLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
@@ -149,17 +121,6 @@ export default function ContactosPageClient() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cargar el resumen del lote."
       setSummaryError(message)
-    }
-  }, [])
-
-  const fetchMetrics = useCallback(async () => {
-    try {
-      const response = await getContactoMetrics()
-      setMetrics(response)
-      setMetricsError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudieron cargar las métricas."
-      setMetricsError(message)
     }
   }, [])
 
@@ -185,8 +146,7 @@ export default function ContactosPageClient() {
 
   useEffect(() => {
     void fetchBatches()
-    void fetchMetrics()
-  }, [fetchBatches, fetchMetrics])
+  }, [fetchBatches])
 
   useEffect(() => {
     let cancelled = false
@@ -287,7 +247,6 @@ export default function ContactosPageClient() {
         await fetchEnvios(selectedBatchId)
         await fetchBatchSummary(selectedBatchId)
         await fetchLogs(selectedBatchId)
-        await fetchMetrics()
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo cancelar el envío."
         setEnvioError(message)
@@ -295,7 +254,7 @@ export default function ContactosPageClient() {
         setCancelingEnvioId(null)
       }
     },
-    [fetchBatchSummary, fetchEnvios, fetchLogs, fetchMetrics, selectedBatchId]
+    [fetchBatchSummary, fetchEnvios, fetchLogs, selectedBatchId]
   )
 
   useEffect(() => {
@@ -330,7 +289,6 @@ export default function ContactosPageClient() {
         }
         lastHandledTerminalBatchEventRef.current = dedupeKey
         void fetchBatches()
-        void fetchMetrics()
       } catch {
         return
       }
@@ -344,7 +302,7 @@ export default function ContactosPageClient() {
     return () => {
       source.close()
     }
-  }, [fetchBatchSummary, fetchEnvios, fetchLogs, fetchBatches, fetchMetrics, selectedBatchId])
+  }, [fetchBatchSummary, fetchEnvios, fetchLogs, fetchBatches, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [
     batches,
@@ -353,19 +311,14 @@ export default function ContactosPageClient() {
   const canCancelBatch =
     selectedBatch && !["completado", "cancelado"].includes(selectedBatch.estado ?? "")
 
-  const metricEntries = metrics?.canales ? Object.entries(metrics.canales) : []
-  const conversionEntries = useMemo(() => {
-    const rows = metrics?.conversion_por_fuente ?? []
-    const sourceOrder = ["google_places", "denue", "usuario"]
-    return [...rows].sort((a, b) => sourceOrder.indexOf(a.fuente) - sourceOrder.indexOf(b.fuente))
-  }, [metrics?.conversion_por_fuente])
-  const brevoEntries = useMemo(() => metrics?.brevo_eventos ?? [], [metrics?.brevo_eventos])
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base font-semibold">Lotes recientes</CardTitle>
+          <a className="text-sm text-primary underline-offset-4 hover:underline" href="/prospeccion/metricas">
+            Ver métricas globales
+          </a>
           <Button variant="ghost" size="sm" onClick={() => void fetchBatches()} disabled={batchLoading}>
             <IconRefresh className={cn("mr-1.5 size-4", batchLoading && "animate-spin")} />
             Actualizar
@@ -444,100 +397,6 @@ export default function ContactosPageClient() {
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Salud por canal</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {metricsError ? (
-            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              <IconAlertTriangle className="size-4" />
-              <span>{metricsError}</span>
-            </div>
-          ) : null}
-          {metricEntries.length ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              {metricEntries.map(([canal, data]) => (
-                <div key={canal} className="rounded-lg border p-4">
-                  <div className="text-sm font-semibold">{canalLabel[canal] ?? canal}</div>
-                  <div className="text-2xl font-bold">{data.totales}</div>
-                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {Object.entries(data.por_estado).map(([estado, count]) => (
-                      <div key={estado} className="flex items-center justify-between">
-                        <span>{estado}</span>
-                        <span>{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Aún no hay métricas registradas.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Conversión por fuente</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {conversionEntries.length ? (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fuente</TableHead>
-                    <TableHead className="text-right">Prospectos</TableHead>
-                    <TableHead className="text-right">Contactados</TableHead>
-                    <TableHead className="text-right">% Contacto</TableHead>
-                    <TableHead className="text-right">Convertidos</TableHead>
-                    <TableHead className="text-right">% Conversión</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {conversionEntries.map((item) => (
-                    <TableRow key={item.fuente}>
-                      <TableCell className="font-medium">{fuenteLabel[item.fuente] ?? item.fuente}</TableCell>
-                      <TableCell className="text-right">{item.total_prospectos}</TableCell>
-                      <TableCell className="text-right">{item.prospectos_contactados}</TableCell>
-                      <TableCell className="text-right">{formatPercent(item.conversion_contacto_pct)}</TableCell>
-                      <TableCell className="text-right">{item.prospectos_convertidos}</TableCell>
-                      <TableCell className="text-right">{formatPercent(item.conversion_convertido_pct)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Aún no hay datos de conversión por fuente.</p>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Eventos Correo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {brevoEntries.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {brevoEntries.map((item) => (
-                <div key={item.evento} className="rounded-lg border p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {brevoEventLabel[item.evento] ?? item.evento}
-                  </p>
-                  <p className="text-xl font-bold">{item.total}</p>
-                  <p className="text-xs text-muted-foreground">Último: {formatDate(item.ultimo_evento_en)}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Aún no hay eventos Correo registrados.</p>
-          )}
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base font-semibold">
@@ -794,11 +653,6 @@ function getEnvioDetailReason(envio: ContactoEnvio): string {
     return ""
   }
   return reason
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0%"
-  return `${value.toFixed(2)}%`
 }
 
 function formatLogMessage(detalle?: Record<string, unknown> | null): string {
