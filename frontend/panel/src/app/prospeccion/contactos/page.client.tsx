@@ -81,6 +81,14 @@ const envioEstadoLabel: Record<string, string> = {
   omitido: "No enviado",
 }
 
+// Algunos eventos de estado de Meta llegan únicamente con el código. Este
+// catálogo sirve como respaldo visual; la descripción recibida de Meta tiene
+// prioridad cuando existe.
+const META_WHATSAPP_ERROR_CATALOG: Record<string, string> = {
+  "130472": "El número del usuario forma parte de un experimento de Meta; el mensaje de marketing no fue entregado.",
+  "131049": "Meta no entregó el mensaje para mantener la salud del ecosistema; suele corresponder a límites dinámicos de mensajes de marketing.",
+}
+
 function countSuccessfulEnvios(totales: Record<string, number>): number {
   return Object.entries(totales).reduce(
     (total, [estado, count]) => total + (SUCCESSFUL_ENVIO_STATES.has(estado) ? Number(count || 0) : 0),
@@ -695,7 +703,7 @@ export default function ContactosPageClient() {
           {selectedBatchId ? (
             logs.length ? (
               <ol className="space-y-3">
-                {logs.map((log) => (
+                {collapseDuplicateContactLogs(logs).map((log) => (
                   <li key={log.id} className="rounded-lg border bg-muted/40 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -704,7 +712,7 @@ export default function ContactosPageClient() {
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant={envioEstadoVariant[log.estado] ?? "outline"} className="capitalize">
-                          {log.estado}
+                          {envioEstadoLabel[log.estado] ?? log.estado}
                         </Badge>
                         <span>{formatDate(log.creado_en)}</span>
                       </div>
@@ -718,7 +726,10 @@ export default function ContactosPageClient() {
                       </p>
                     ) : null}
                     {log.error ? (
-                      <p className="mt-1 text-xs text-destructive">Error: {log.error}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {log.canal === "whatsapp" ? "Meta: " : "Error: "}
+                        {formatLogError(log)}
+                      </p>
                     ) : null}
                     <div className="mt-2 flex flex-wrap gap-2">
                       {extractLogHighlights(log.detalle).map((item) => (
@@ -803,6 +814,70 @@ function formatLogMessage(detalle?: Record<string, unknown> | null): string {
     return `Estado reportado: ${status.trim()}`
   }
   return ""
+}
+
+function formatLogError(log: ContactoLog): string {
+  const raw = String(log.error || "").trim()
+  if (!raw) return "No se recibió una descripción del proveedor."
+
+  const detail = log.detalle && typeof log.detalle === "object" ? log.detalle : {}
+  const value = (key: string): string | null => {
+    const candidate = detail[key]
+    if (typeof candidate === "number") return String(candidate)
+    return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null
+  }
+  const code =
+    value("meta_error_code") ||
+    value("error_code") ||
+    raw.match(/(?:code|codigo)\s*[=:]\s*([0-9]+)/i)?.[1] ||
+    raw.match(/\b1[0-9]{5}\b/)?.[0]
+  const message = value("meta_error_message") || raw.match(/message\s*[=:]\s*([^|]+)/i)?.[1]?.trim()
+  const details = value("meta_error_details") || raw.match(/details\s*[=:]\s*([^|]+)/i)?.[1]?.trim()
+  const description = details || message || (code ? META_WHATSAPP_ERROR_CATALOG[code] : null)
+
+  if (code && description) return `${code} — ${description}`
+  if (code) return `${code} — Meta no proporcionó una descripción en este evento.`
+  if (description) return description
+  if (/^#+$/.test(raw)) return "Meta no proporcionó una descripción legible."
+  return raw
+}
+
+function collapseDuplicateContactLogs(logs: ContactoLog[]): ContactoLog[] {
+  const result: ContactoLog[] = []
+  const indexByKey = new Map<string, number>()
+
+  logs.forEach((log) => {
+    const errorCode = extractLogErrorCode(log)
+    const key = log.envio_id && errorCode
+      ? `${log.envio_id}|${log.canal}|${log.estado}|${errorCode}`
+      : null
+    if (!key) {
+      result.push(log)
+      return
+    }
+    const existingIndex = indexByKey.get(key)
+    if (existingIndex === undefined) {
+      indexByKey.set(key, result.length)
+      result.push(log)
+      return
+    }
+    const existing = result[existingIndex]
+    const existingTime = existing.creado_en ? new Date(existing.creado_en).getTime() : 0
+    const currentTime = log.creado_en ? new Date(log.creado_en).getTime() : 0
+    if (currentTime > existingTime) result[existingIndex] = log
+  })
+
+  return result
+}
+
+function extractLogErrorCode(log: ContactoLog): string | null {
+  const detail = log.detalle && typeof log.detalle === "object" ? log.detalle : {}
+  const detailCode = detail["meta_error_code"] || detail["error_code"]
+  if (typeof detailCode === "number" || (typeof detailCode === "string" && detailCode.trim())) {
+    return String(detailCode).trim()
+  }
+  const rawCode = String(log.error || "").match(/(?:code|codigo)\s*[=:]\s*([0-9]+)/i)?.[1]
+  return rawCode || String(log.error || "").match(/\b1[0-9]{5}\b/)?.[0] || null
 }
 
 function extractLogHighlights(detalle?: Record<string, unknown> | null) {

@@ -1401,6 +1401,12 @@ async def test_send_meta_whatsapp_reply_includes_graph_error_details(monkeypatch
     assert "http_400" in result.error
     assert "code=132000" in result.error
     assert "template expects 6 parameters" in result.error
+    assert result.error_details == {
+        "code": 132000,
+        "type": "OAuthException",
+        "message": "(#132000) Number of parameters does not match the expected number of params",
+        "details": "template expects 6 parameters but 5 were provided",
+    }
 
 
 @pytest.mark.asyncio

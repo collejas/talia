@@ -285,6 +285,11 @@ class MetaWhatsAppStatusCallback(BaseModel):
     status: str
     phone_number_id: str | None = None
     error_code: str | None = None
+    error_title: str | None = None
+    error_message: str | None = None
+    error_details: str | None = None
+    error_type: str | None = None
+    error_subcode: str | None = None
     timestamp: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
 
@@ -311,6 +316,13 @@ class MetaWhatsAppStatusCallback(BaseModel):
                 statuses = value.get("statuses") or []
                 if not isinstance(statuses, list):
                     continue
+                value_errors = value.get("errors")
+                if not isinstance(value_errors, list):
+                    value_errors = []
+                messages_payload = value.get("messages")
+                messages_errors = messages_payload.get("errors") if isinstance(messages_payload, dict) else []
+                if not isinstance(messages_errors, list):
+                    messages_errors = []
                 for status in statuses:
                     if not isinstance(status, dict):
                         continue
@@ -319,13 +331,26 @@ class MetaWhatsAppStatusCallback(BaseModel):
                     if not message_sid or not status_value:
                         continue
                     error_code: str | None = None
+                    error_title: str | None = None
+                    error_message: str | None = None
+                    error_details: str | None = None
+                    error_type: str | None = None
+                    error_subcode: str | None = None
+                    # Meta documenta errores síncronos y asíncronos en
+                    # value.errors, value.messages.errors o statuses.errors.
                     errors = status.get("errors")
+                    if not isinstance(errors, list) or not errors:
+                        errors = value_errors or messages_errors
                     if isinstance(errors, list) and errors and isinstance(errors[0], dict):
-                        error_code = _coerce_to_str(
-                            errors[0].get("code")
-                            or errors[0].get("title")
-                            or errors[0].get("message")
-                        ).strip() or None
+                        error = errors[0]
+                        error_code = _coerce_to_str(error.get("code")).strip() or None
+                        error_title = _coerce_to_str(error.get("title")).strip() or None
+                        error_message = _coerce_to_str(error.get("message")).strip() or None
+                        error_type = _coerce_to_str(error.get("type")).strip() or None
+                        error_subcode = _coerce_to_str(error.get("error_subcode")).strip() or None
+                        error_data = error.get("error_data")
+                        if isinstance(error_data, dict):
+                            error_details = _coerce_to_str(error_data.get("details")).strip() or None
                     callbacks.append(
                         cls(
                             message_sid=message_sid,
@@ -334,6 +359,11 @@ class MetaWhatsAppStatusCallback(BaseModel):
                                 (value.get("metadata") or {}).get("phone_number_id")
                             ) or None,
                             error_code=error_code,
+                            error_title=error_title,
+                            error_message=error_message,
+                            error_details=error_details,
+                            error_type=error_type,
+                            error_subcode=error_subcode,
                             timestamp=_coerce_to_str(status.get("timestamp")) or None,
                             raw_payload={
                                 "entry": entry,

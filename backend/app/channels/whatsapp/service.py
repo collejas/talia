@@ -309,6 +309,7 @@ class TwilioSendResult:
     error: str | None = None
     from_number: str | None = None
     provider: str = "twilio"
+    error_details: dict[str, Any] | None = None
 
 
 def _summarize_meta_error_response(response: Any) -> tuple[str, dict[str, Any]]:
@@ -322,12 +323,18 @@ def _summarize_meta_error_response(response: Any) -> tuple[str, dict[str, Any]]:
     error_payload = payload.get("error") if isinstance(payload, dict) else {}
     if isinstance(error_payload, dict):
         code = error_payload.get("code")
+        subcode = error_payload.get("error_subcode")
+        fbtrace_id = _trim_text(error_payload.get("fbtrace_id") or payload.get("fbtrace_id"))
         message = _trim_text(error_payload.get("message"))
         error_type = _trim_text(error_payload.get("type"))
         error_data = error_payload.get("error_data") if isinstance(error_payload.get("error_data"), dict) else {}
         details = _trim_text(error_data.get("details")) if isinstance(error_data, dict) else None
         if code is not None:
             summary["code"] = code
+        if subcode is not None:
+            summary["subcode"] = subcode
+        if fbtrace_id:
+            summary["fbtrace_id"] = fbtrace_id
         if error_type:
             summary["type"] = error_type
         if message:
@@ -341,6 +348,8 @@ def _summarize_meta_error_response(response: Any) -> tuple[str, dict[str, Any]]:
             parts.append(f"code={summary['code']}")
         if "type" in summary:
             parts.append(f"type={summary['type']}")
+        if "subcode" in summary:
+            parts.append(f"subcode={summary['subcode']}")
         if "message" in summary:
             parts.append(f"message={summary['message']}")
         if "details" in summary:
@@ -3855,6 +3864,15 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
         "timestamp": callback.timestamp,
         "error_code": callback.error_code,
     }
+    meta_error_fields = {
+        "meta_error_code": getattr(callback, "error_code", None),
+        "meta_error_title": getattr(callback, "error_title", None),
+        "meta_error_message": getattr(callback, "error_message", None),
+        "meta_error_details": getattr(callback, "error_details", None),
+        "meta_error_type": getattr(callback, "error_type", None),
+        "meta_error_subcode": getattr(callback, "error_subcode", None),
+    }
+    merged_detalle.update({key: value for key, value in meta_error_fields.items() if value})
     payload = {
         "estado": estado_envio,
         "detalle": merged_detalle,
@@ -3889,6 +3907,12 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
                     "detalle": {
                         "status": callback.status,
                         "timestamp": callback.timestamp,
+                        "error_code": callback.error_code,
+                        **{
+                            key: value
+                            for key, value in meta_error_fields.items()
+                            if value
+                        },
                     },
                     "error": callback.error_code if estado_envio == "fallido" else None,
                     "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
@@ -5084,6 +5108,7 @@ async def _send_meta_whatsapp_reply(
             status="failed",
             error=f"http_{response.status_code}: {error_summary}",
             provider="meta",
+            error_details=error_details,
         )
 
     response_payload: dict[str, Any] = {}

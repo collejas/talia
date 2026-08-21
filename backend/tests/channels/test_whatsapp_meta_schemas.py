@@ -137,3 +137,55 @@ def test_meta_whatsapp_status_callback_from_webhook_payload_parses_status():
     assert callback.status == "delivered"
     assert callback.phone_number_id == "1234567890"
     assert callback.timestamp == "1710000100"
+
+
+def test_meta_whatsapp_status_callback_preserves_error_description():
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "metadata": {"phone_number_id": "1234567890"},
+                    "statuses": [{
+                        "id": "wamid.FAILED",
+                        "status": "failed",
+                        "errors": [{
+                            "code": 131026,
+                            "title": "Message undeliverable",
+                            "message": "Message undeliverable",
+                            "error_data": {"details": "Recipient is not a WhatsApp user"},
+                        }],
+                    }],
+                }
+            }]
+        }]
+    }
+
+    callback = MetaWhatsAppStatusCallback.from_webhook_payload(payload)[0]
+
+    assert callback.error_code == "131026"
+    assert callback.error_title == "Message undeliverable"
+    assert callback.error_message == "Message undeliverable"
+    assert callback.error_details == "Recipient is not a WhatsApp user"
+
+
+def test_meta_whatsapp_status_callback_reads_value_errors():
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "errors": [{
+                        "code": 131049,
+                        "message": "(#131049) Message not delivered",
+                        "error_data": {"details": "This message was not delivered to maintain healthy ecosystem engagement."},
+                    }],
+                    "statuses": [{"id": "wamid.FAILED", "status": "failed"}],
+                }
+            }]
+        }]
+    }
+
+    callback = MetaWhatsAppStatusCallback.from_webhook_payload(payload)[0]
+
+    assert callback.error_code == "131049"
+    assert callback.error_message == "(#131049) Message not delivered"
+    assert callback.error_details == "This message was not delivered to maintain healthy ecosystem engagement."

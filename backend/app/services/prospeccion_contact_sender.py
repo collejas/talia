@@ -1267,6 +1267,18 @@ async def _run_envio_whatsapp(
             "body_preview": preview_text,
             "fallback_plaintext_used": fallback_used,
             "fallback_error": fallback_error,
+            **(
+                {
+                    "meta_error_code": wa_result.error_details.get("code"),
+                    "meta_error_type": wa_result.error_details.get("type"),
+                    "meta_error_subcode": wa_result.error_details.get("subcode"),
+                    "meta_error_message": wa_result.error_details.get("message"),
+                    "meta_error_details": wa_result.error_details.get("details"),
+                    "meta_error_fbtrace_id": wa_result.error_details.get("fbtrace_id"),
+                }
+                if wa_result.error_details
+                else {}
+            ),
         },
         error=wa_result.error,
         mensaje_id=wa_result.sid,
