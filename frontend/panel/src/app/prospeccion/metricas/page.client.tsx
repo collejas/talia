@@ -1217,17 +1217,50 @@ export default function ProspeccionMetricasPageClient() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 bg-gradient-to-r from-slate-50 via-white to-emerald-50/40">
-        <CardHeader className="gap-3">
+      <Card className="border-slate-200 shadow-none">
+        <CardHeader className="gap-3 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Vistas de métricas
-              </p>
-              <CardTitle className="text-xl">{activeViewMeta[activeTab].title}</CardTitle>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Detalle del canal</p>
+              <CardTitle className="text-lg">{activeViewMeta[activeTab].title}</CardTitle>
               <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              {activeTab === "campanas_whatsapp" ? (
+                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("campanas_whatsapp")}
+                    className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-slate-950 shadow-sm"
+                  >
+                    Campañas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("frases")}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-950"
+                  >
+                    Atribución
+                  </button>
+                </div>
+              ) : activeTab === "frases" ? (
+                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("campanas_whatsapp")}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-950"
+                  >
+                    Campañas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("frases")}
+                    className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-slate-950 shadow-sm"
+                  >
+                    Atribución
+                  </button>
+                </div>
+              ) : null}
               <Button
                 variant="outline"
                 onClick={exportActiveCsv}
@@ -1243,34 +1276,6 @@ export default function ProspeccionMetricasPageClient() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {(Object.entries(activeViewMeta) as Array<
-            ["campanas" | "campanas_whatsapp" | "frases", (typeof activeViewMeta)["campanas"]]
-          >).map(([key, meta]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveTab(key)}
-              className={`rounded-xl border p-4 text-left transition ${
-                activeTab === key
-                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className={`text-sm font-semibold ${activeTab === key ? "text-white" : "text-slate-900"}`}>
-                    {meta.title}
-                  </p>
-                  <p className={`mt-1 text-sm ${activeTab === key ? "text-slate-200" : "text-muted-foreground"}`}>
-                    {meta.description}
-                  </p>
-                </div>
-                <Badge variant={activeTab === key ? "secondary" : "outline"}>{meta.badge}</Badge>
-              </div>
-            </button>
-          ))}
-        </CardContent>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

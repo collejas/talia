@@ -26,6 +26,9 @@ entre las vistas de prospección y mapa de conversión.
 - Se agregó al encabezado superior un selector compacto de periodo con rangos
   preconfigurados y opción personalizada mediante calendario, sin crear una
   sección adicional ni aumentar la altura normal de la vista.
+- Se simplificó la cabecera de las subvistas de canal y se sustituyó la
+  navegación duplicada por un selector secundario compacto para Campañas y
+  Atribución de WhatsApp.
 - Validación: ESLint del componente y TypeScript del panel correctos.
 
 ## 2026-08-21 · Primer corte seguro en `prospeccion/contactos`

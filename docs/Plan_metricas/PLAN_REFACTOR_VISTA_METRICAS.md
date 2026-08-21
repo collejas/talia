@@ -256,10 +256,16 @@ proteger las métricas, filtros y exportaciones durante la transición.
 
 ### Fase 3 · Selector y vistas por canal
 
-- Convertir las secciones actuales en vistas internas de canal.
+- Convertir las secciones actuales en vistas internas de canal. **Primer corte
+  implementado.**
 - Reubicar campañas WhatsApp y frases dentro de WhatsApp.
 - Mantener campañas correo dentro de Correo.
 - Preparar Voz sin inventar métricas cuando todavía no exista fuente completa.
+
+El primer corte reemplaza el bloque grande de navegación duplicada dentro del
+detalle por una cabecera compacta. WhatsApp conserva una navegación secundaria
+entre `Campañas` y `Atribución`, sin retirar sus tablas, métricas ni
+exportaciones.
 
 ### Fase 4 · Filtros y exportaciones
 
