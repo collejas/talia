@@ -112,7 +112,7 @@ export default function ProspeccionMetricasPageClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
-  const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas"]["timeseries"]>([])
+  const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas_correo"]["timeseries"]>([])
   const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
   const [whatsappTimeseries, setWhatsappTimeseries] = useState<ProspeccionMetricasResponse["frases_whatsapp"]["timeseries"]>([])
   const [whatsappTimeseriesLoading, setWhatsappTimeseriesLoading] = useState(false)
@@ -230,7 +230,7 @@ export default function ProspeccionMetricasPageClient() {
       const response = await getProspeccionMetricas({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        canal,
+        canal: "correo",
         campana_id: campanaId !== "todos" ? campanaId : undefined,
         campana_publicitaria: campanaPublicitaria.trim() || undefined,
         regla_id: reglaId !== "todos" ? reglaId : undefined,
@@ -240,13 +240,13 @@ export default function ProspeccionMetricasPageClient() {
         include_whatsapp_channels: false,
         lite: false,
       })
-      setCampaignTimeseries(response.campanas.timeseries ?? [])
+      setCampaignTimeseries(response.campanas_correo?.timeseries ?? response.campanas.timeseries ?? [])
     } catch {
       setCampaignTimeseries([])
     } finally {
       setCampaignTimeseriesLoading(false)
     }
-  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+  }, [dateFrom, dateTo, campanaId, campanaPublicitaria, reglaId])
 
   useEffect(() => {
     setCampaignTimeseries([])
@@ -299,7 +299,11 @@ export default function ProspeccionMetricasPageClient() {
     void loadBrevoQuota()
   }, [loadBrevoQuota])
 
-  const summaryCampaign = data?.campanas.summary
+  const campaignItems = useMemo(
+    () => data?.campanas_correo?.items ?? data?.campanas.items ?? [],
+    [data?.campanas_correo?.items, data?.campanas.items],
+  )
+  const summaryCampaign = data?.campanas_correo?.summary ?? data?.campanas.summary
   const summaryWhatsappCampaigns = data?.campanas_whatsapp?.summary
   const summaryPhrases = data?.frases_whatsapp.summary
   const activeViewMeta: Record<
@@ -307,8 +311,8 @@ export default function ProspeccionMetricasPageClient() {
     { title: string; description: string; badge: string }
   > = {
     campanas: {
-      title: "Campañas",
-      description: "Ejecución general de campañas por canal: correo, WhatsApp y voz.",
+      title: "Campañas correo",
+      description: "Rendimiento de envíos de correo: entrega, aperturas, clics y sesiones atribuidas.",
       badge: number.format(summaryCampaign?.envios_totales ?? 0),
     },
     campanas_whatsapp: {
@@ -396,7 +400,7 @@ export default function ProspeccionMetricasPageClient() {
         },
       )
     } else {
-      const items = data?.campanas.items ?? []
+      const items = campaignItems
       const byChannel = items.reduce(
         (acc, item) => {
           const channel = (item.canal || "").trim().toLowerCase()
@@ -458,10 +462,10 @@ export default function ProspeccionMetricasPageClient() {
       })
     }
     return cards
-  }, [summaryCampaign, summaryWhatsappCampaigns, summaryPhrases, data?.campanas.items, canal])
+  }, [summaryCampaign, summaryWhatsappCampaigns, summaryPhrases, campaignItems, canal])
 
   const topCampaigns = useMemo(() => {
-    const items = data?.campanas.items ?? []
+    const items = campaignItems
     const campaignNameMap = new Map<string, string>()
     campaigns.forEach((c) => {
       if (c.id) campaignNameMap.set(c.id, c.nombre)
@@ -547,10 +551,10 @@ export default function ProspeccionMetricasPageClient() {
       byBounceWhatsapp: byChannelBounce(byBounce, "whatsapp"),
       byBounce,
     }
-  }, [data?.campanas.items, campaigns])
+  }, [campaignItems, campaigns])
 
   const channelSummary = useMemo(() => {
-    const items = data?.campanas.items ?? []
+    const items = campaignItems
     const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
     const channels: Array<"correo" | "whatsapp" | "llamada"> = ["correo", "whatsapp", "llamada"]
     const labelMap: Record<typeof channels[number], string> = {
@@ -654,7 +658,7 @@ export default function ProspeccionMetricasPageClient() {
     return rows
       .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
       .sort((a, b) => (channelOrder[a.canal] ?? 99) - (channelOrder[b.canal] ?? 99))
-  }, [data?.campanas.items, summaryWhatsappCampaigns])
+  }, [campaignItems, summaryWhatsappCampaigns])
 
   const whatsappChannelSummary = useMemo(() => {
     if (canal !== "whatsapp") return []
@@ -687,7 +691,7 @@ export default function ProspeccionMetricasPageClient() {
   }, [data?.frases_whatsapp.by_rule])
 
   const sortedCampaignItems = useMemo(() => {
-    const items = [...(data?.campanas.items ?? [])]
+    const items = [...campaignItems]
     const dir = tableSort.dir === "asc" ? 1 : -1
     const key = tableSort.key
     const getVal = (item: typeof items[number]) => {
@@ -750,10 +754,10 @@ export default function ProspeccionMetricasPageClient() {
       }
       return (Number(av) - Number(bv)) * dir
     })
-  }, [data?.campanas.items, tableSort])
+  }, [campaignItems, tableSort])
 
   const campaignTotals = useMemo(() => {
-    const items = data?.campanas.items ?? []
+    const items = campaignItems
     const totals = items.reduce(
       (acc, item) => {
         acc.envios_totales += item.envios_totales || 0
@@ -776,7 +780,7 @@ export default function ProspeccionMetricasPageClient() {
       },
     )
     return totals
-  }, [data?.campanas.items])
+  }, [campaignItems])
 
   const toggleSort = useCallback((key: string) => {
     setTableSort((prev) => {
@@ -813,7 +817,7 @@ export default function ProspeccionMetricasPageClient() {
           "tasa_respuesta_pct",
           "click_to_session_pct",
         ],
-        (data.campanas.items ?? []).map((item) => [
+        campaignItems.map((item) => [
           item.campana_id,
           item.campana_nombre,
           item.canal,
@@ -940,7 +944,7 @@ export default function ProspeccionMetricasPageClient() {
       [...byChannelRows, ...byRuleRows],
     )
     downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
-  }, [activeTab, data])
+  }, [activeTab, data, campaignItems])
 
   const exportXlsx = useCallback(async () => {
     try {

@@ -44,6 +44,26 @@ entre las vistas de prospección y mapa de conversión.
   `mapa-de-conversion` a adquisición y conversión.
 - Validar filtros, exportaciones, permisos tenant-aware y datos reales.
 
+## 2026-08-21 · Contrato explícito de correo en `prospeccion/metricas`
+
+### Cambios realizados
+
+- El endpoint `GET /prospeccion/metricas` ahora expone el bloque
+  `campanas_correo` con resumen, detalle y series de correo.
+- Se conserva `campanas` temporalmente como contrato compatible para otros
+  consumidores.
+- La pestaña principal se presenta como `Campañas correo` y consume el bloque
+  explícito de correo cuando está disponible.
+- Se mantienen separados `campanas_whatsapp` y `frases_whatsapp`.
+
+### Validación
+
+- `python3 -m py_compile backend/app/api/routes/crm.py`: correcto.
+- TypeScript del panel: correcto.
+- ESLint de métricas: sin errores; las advertencias restantes son de hooks y
+  código preexistente del módulo.
+- `git diff --check`: correcto.
+
 ## 2026-08-21 · Segundo corte en `prospeccion/campanas`
 
 ### Cambios realizados

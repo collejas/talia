@@ -43,6 +43,14 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
 - Se retiraron los estados, tipos, carga de detalle y helpers que solo existían
   para el árbol jerárquico duplicado.
 
+### 2026-08-21 · Contrato explícito de correo
+
+- `prospeccion/metricas` ahora dispone del bloque `campanas_correo` para
+  resumen, detalle y series del canal correo.
+- `campanas_whatsapp` y `frases_whatsapp` permanecen como bloques separados.
+- `campanas` se conserva temporalmente como compatibilidad y no debe usarse
+  para crear nuevas pantallas.
+
 ## 2. Diagnóstico validado
 
 ### 2.1 Correo

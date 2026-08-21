@@ -34655,27 +34655,35 @@ async def prospeccion_metricas_dashboard(
             2,
         )
 
-    campaign_summary = {
-        "envios_totales": sum(int(item["envios_totales"]) for item in campaign_items),
-        "envios_enviados": sum(int(item["envios_enviados"]) for item in campaign_items),
-        "envios_entregados": sum(int(item["envios_entregados"]) for item in campaign_items),
-        "envios_respondidos": sum(int(item["envios_respondidos"]) for item in campaign_items),
-        "brevo_aperturas": sum(int(item["brevo_aperturas"]) for item in campaign_items),
-        "brevo_clicks": sum(int(item["brevo_clicks"]) for item in campaign_items),
-        "sesiones_utm": sum(int(item["sesiones_utm"]) for item in campaign_items),
-    }
-    campaign_summary["tasa_entrega_pct"] = round(
-        (campaign_summary["envios_entregados"] / campaign_summary["envios_totales"] * 100)
-        if campaign_summary["envios_totales"] > 0
-        else 0.0,
-        2,
-    )
-    campaign_summary["tasa_respuesta_pct"] = round(
-        (campaign_summary["envios_respondidos"] / campaign_summary["envios_totales"] * 100)
-        if campaign_summary["envios_totales"] > 0
-        else 0.0,
-        2,
-    )
+    def summarize_campaign_items(items: list[dict[str, Any]]) -> dict[str, Any]:
+        summary = {
+            "envios_totales": sum(int(item["envios_totales"]) for item in items),
+            "envios_enviados": sum(int(item["envios_enviados"]) for item in items),
+            "envios_entregados": sum(int(item["envios_entregados"]) for item in items),
+            "envios_respondidos": sum(int(item["envios_respondidos"]) for item in items),
+            "brevo_aperturas": sum(int(item["brevo_aperturas"]) for item in items),
+            "brevo_clicks": sum(int(item["brevo_clicks"]) for item in items),
+            "sesiones_utm": sum(int(item["sesiones_utm"]) for item in items),
+        }
+        summary["tasa_entrega_pct"] = round(
+            (summary["envios_entregados"] / summary["envios_totales"] * 100)
+            if summary["envios_totales"] > 0
+            else 0.0,
+            2,
+        )
+        summary["tasa_respuesta_pct"] = round(
+            (summary["envios_respondidos"] / summary["envios_totales"] * 100)
+            if summary["envios_totales"] > 0
+            else 0.0,
+            2,
+        )
+        return summary
+
+    campaign_summary = summarize_campaign_items(campaign_items)
+    campaign_email_items = [
+        item for item in campaign_items if _clean_text(item.get("canal")) == "correo"
+    ]
+    campaign_email_summary = summarize_campaign_items(campaign_email_items)
     campaign_timeseries: list[dict[str, Any]] = []
     if params.include_campaign_timeseries and not params.lite:
         campaign_timeseries_raw: dict[str, dict[str, int]] = defaultdict(
@@ -35079,6 +35087,11 @@ async def prospeccion_metricas_dashboard(
             "summary": campaign_summary,
             "items": campaign_items,
             "timeseries": campaign_timeseries,
+        },
+        "campanas_correo": {
+            "summary": campaign_email_summary,
+            "items": campaign_email_items,
+            "timeseries": campaign_timeseries if params.canal == "correo" else [],
         },
         "campanas_whatsapp": {
             "summary": whatsapp_campaign_summary,

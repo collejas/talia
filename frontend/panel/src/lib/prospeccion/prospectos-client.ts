@@ -1968,6 +1968,11 @@ export type ProspeccionMetricasResponse = {
     items: ProspeccionCampanaAtribucionItem[]
     timeseries: ProspeccionMetricasCampanaTimeseriesItem[]
   }
+  campanas_correo: {
+    summary: ProspeccionMetricasCampanaSummary
+    items: ProspeccionCampanaAtribucionItem[]
+    timeseries: ProspeccionMetricasCampanaTimeseriesItem[]
+  }
   campanas_whatsapp: {
     summary: ProspeccionMetricasWhatsAppCampanaSummary
     items: ProspeccionMetricasWhatsAppCampanaItem[]
