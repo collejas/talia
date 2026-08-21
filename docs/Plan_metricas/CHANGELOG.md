@@ -84,6 +84,15 @@ entre las vistas de prospección y mapa de conversión.
 - ESLint de los componentes de atribución: correcto.
 - `git diff --check`: correcto.
 
+### Validación funcional reportada
+
+- El usuario verificó la vista `mapa-de-conversion` en sus tres secciones:
+  - Tráfico web.
+  - Conversaciones.
+  - Campañas.
+- Las tres secciones continúan funcionando correctamente después del ajuste
+  del payload.
+
 ## 2026-08-21 · Segundo corte en `prospeccion/campanas`
 
 ### Cambios realizados

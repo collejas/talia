@@ -59,6 +59,9 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
   entregabilidad.
 - El mapa no debe duplicar aperturas, clics, rebotes o bloqueos de correo.
 
+Validación funcional: las tres secciones de `mapa-de-conversion` fueron
+revisadas y continúan operativas después del ajuste del payload.
+
 ## 2. Diagnóstico validado
 
 ### 2.1 Correo
