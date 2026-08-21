@@ -28,6 +28,14 @@ Y se registra en el changelog unico:
 
 - `changelog_maestro_mapa_conversion.md`
 
+La definición transversal de responsabilidades, fuentes canónicas y
+deduplicación vive en:
+
+- `../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md`
+
+Este documento conserva el detalle específico de campañas WhatsApp y su
+relación con el mapa; no redefine el tablero global de métricas.
+
 El detalle forense del caso real de WhatsApp de prospeccion se documenta en:
 
 - `informe_metricas_whatsapp_prospeccion.md`

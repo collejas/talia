@@ -266,3 +266,9 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - No se ejecutó ningún `DELETE` de catálogo ni se modificó la base de datos como parte de la corrección.
 - Validación: servicio API activo, health local HTTP 200, prueba específica de catálogo aprobada y compilación/diff correctos.
 - Invariante agregado: las lecturas y exportaciones de `mapa-de-conversion` deben ser de solo lectura y no pueden ejecutar sincronizaciones o limpiezas de listas de precios.
+
+## 2026-08-21 — Plan transversal de consolidación de métricas
+
+- Se creó `docs/Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md` como referencia única para separar operación de envíos, rendimiento de campañas y conversión.
+- Se enlazó desde los planes de mapa de conversión, latencia, personas/contactos y listas de precios.
+- Se estableció que `prospeccion/metricas` es el tablero global de rendimiento; `contactos` y `campanas` conservan operación/configuración; `mapa-de-conversion` conserva adquisición, sesiones, conversaciones y conversión.

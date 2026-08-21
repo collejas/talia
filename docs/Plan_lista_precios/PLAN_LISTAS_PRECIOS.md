@@ -6,6 +6,11 @@ Ampliar el catálogo actual de productos para que cada tenant pueda definir vari
 
 El flujo existente del modal de cotización ya permite seleccionar productos. La ampliación consiste en permitir que el usuario autorizado seleccione la lista de precios que se aplicará a cada línea de la cotización.
 
+La consolidación de métricas del CRM se documenta por separado en
+`../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md`. Las listas de precios,
+cotizaciones y sus snapshots no deben incorporar lógica de métricas de correo,
+campañas o mapa de conversión.
+
 Ejemplos de listas:
 
 - Precio distribuidor.

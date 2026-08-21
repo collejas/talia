@@ -1,8 +1,12 @@
 # Plan de mejora de latencia
 
 - [Workspace de oportunidad en Inbox](06_workspace_oportunidad_inbox.md)
+- [Plan transversal de consolidación de métricas](../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
+
+La consolidación de métricas debe reutilizar agregados canónicos y eliminar
+consultas repetidas entre vistas antes de introducir nuevas cachés o tablas.
 
 ## Archivos
 

@@ -4,17 +4,18 @@ Carpeta con la documentación de la vista `mapa-de-conversion`.
 
 ## Orden recomendado de lectura
 
-1. `plan_mapa_conversion_integral.md`
-2. `alineacion_tracking_web_tenants_20260815.md`
-3. `plan_latencia_mapa_conversion.md`
-4. `plan_mapa_conversion_multicanal.md`
-5. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
-6. `plan_atribucion_campanas_y_cobro.md`
-7. `informe_metricas_whatsapp_prospeccion.md`
-8. `plan_integracion_maestra_mapa_conversion.md`
-9. `backlog_maestro_mapa_conversion.md`
-10. `changelog_maestro_mapa_conversion.md`
-11. `avance_mapa_conversion_20260303.md`
+1. `../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md` (documento transversal)
+2. `plan_mapa_conversion_integral.md`
+3. `alineacion_tracking_web_tenants_20260815.md`
+4. `plan_latencia_mapa_conversion.md`
+5. `plan_mapa_conversion_multicanal.md`
+6. `plan_metrica_campanas_whatsapp_y_mapa_conversion.md`
+7. `plan_atribucion_campanas_y_cobro.md`
+8. `informe_metricas_whatsapp_prospeccion.md`
+9. `plan_integracion_maestra_mapa_conversion.md`
+10. `backlog_maestro_mapa_conversion.md`
+11. `changelog_maestro_mapa_conversion.md`
+12. `avance_mapa_conversion_20260303.md`
 
 ## Qué cubre cada archivo
 

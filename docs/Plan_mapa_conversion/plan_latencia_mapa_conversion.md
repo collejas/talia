@@ -15,6 +15,8 @@ Documentos relacionados:
 
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_multicanal.md`
+- `docs/Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md` — evita requests y
+  payloads duplicados entre el mapa y los tableros de prospección.
 
 ## 1) Objetivo
 

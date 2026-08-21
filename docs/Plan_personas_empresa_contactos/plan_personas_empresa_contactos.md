@@ -24,6 +24,14 @@ Nota de archivo:
 - el plan específico para separar direcciones fiscales, operativas y sucursales vive en:
   - `docs/Plan_personas_empresa_contactos/plan_direcciones_cuentas_y_sucursales.md`
 
+La consolidación de métricas relacionada con este refactor se documenta en:
+
+- `../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md`
+
+La compatibilidad `persona_id`/`contacto_id` debe conservarse como invariante
+de identidad en los agregados, pero la lógica de KPI no debe duplicarse en este
+plan ni en las vistas de personas/contactos.
+
 Ver progreso detallado en:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
 

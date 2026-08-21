@@ -21,6 +21,11 @@ La meta es que el refactor del ecosistema de mapa de conversion avance de forma 
 - compatibilidad con personas/contactos,
 - ni cambios de frontend antes de cerrar el contrato de datos.
 
+La frontera transversal de métricas y la responsabilidad de cada vista se
+define en:
+
+- `../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md`
+
 ### Ruta corta recomendada
 
 Si vamos a ejecutar el plan sin dispersarnos, el orden debe ser este:
