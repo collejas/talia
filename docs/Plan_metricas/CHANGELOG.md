@@ -43,3 +43,29 @@ entre las vistas de prospección y mapa de conversión.
 - Reducir el payload de atribución de campañas usado por
   `mapa-de-conversion` a adquisición y conversión.
 - Validar filtros, exportaciones, permisos tenant-aware y datos reales.
+
+## 2026-08-21 · Segundo corte en `prospeccion/campanas`
+
+### Cambios realizados
+
+- Se detuvo la solicitud automática de atribución jerárquica al entrar a
+  `prospeccion/campanas`.
+- Se retiró de la experiencia visible el tablero duplicado de métricas
+  campaña → plantilla → lote → envío.
+- Se agregó un enlace contextual hacia `prospeccion/metricas` desde la sección
+  de administración de campañas.
+- Se conservaron la creación, edición, eliminación, plantillas, reglas y
+  acciones operativas de campañas.
+
+### Pendiente controlado
+
+- La limpieza estructural del código interno que construía el árbol jerárquico
+  queda separada para una siguiente revisión, después de validar el flujo de
+  campañas y plantillas en panel.
+
+### Validación
+
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- ESLint del componente: sin errores; conserva advertencias preexistentes del
+  módulo.
+- `git diff --check`: correcto.

@@ -33,6 +33,16 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
   con integraciones y documentación histórica; ya no participa en la carga de
   esta vista.
 
+### 2026-08-21 · Segundo corte seguro
+
+- `prospeccion/campanas` dejó de solicitar automáticamente la atribución
+  jerárquica al cargar.
+- El tablero duplicado quedó fuera de la experiencia visible y se agregó un
+  enlace a `prospeccion/metricas`.
+- La administración de campañas, plantillas y reglas permanece sin cambios.
+- La limpieza estructural del código retirado queda como tarea controlada tras
+  validar el flujo operativo.
+
 ## 2. Diagnóstico validado
 
 ### 2.1 Correo

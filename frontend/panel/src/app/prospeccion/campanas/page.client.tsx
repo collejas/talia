@@ -32,7 +32,6 @@ import {
   deleteContactoTemplate,
   deleteWhatsProspTemplate,
   deleteProspeccionCampana,
-  getProspeccionCampanaAtribucion,
   importBrevoContactoTemplate,
   listWhatsAppAtribucionReglas,
   listContactoEnvios,
@@ -248,14 +247,14 @@ export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
-  const [atribucionItems, setAtribucionItems] = useState<ProspeccionCampanaAtribucionItem[]>([])
-  const [atribucionLoading, setAtribucionLoading] = useState(false)
-  const [atribucionError, setAtribucionError] = useState<string | null>(null)
+  const [atribucionItems] = useState<ProspeccionCampanaAtribucionItem[]>([])
+  const [atribucionLoading] = useState(false)
+  const [atribucionError] = useState<string | null>(null)
   const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({})
   const [expandedTemplates, setExpandedTemplates] = useState<Record<string, boolean>>({})
   const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({})
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetailState>>({})
-  const [metricCanalFilter, setMetricCanalFilter] = useState<"todos" | "correo" | "whatsapp" | "llamada">("todos")
+  const [metricCanalFilter] = useState<"todos" | "correo" | "whatsapp" | "llamada">("todos")
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [crmCampaigns, setCrmCampaigns] = useState<CrmCampaign[]>([])
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
@@ -368,25 +367,6 @@ export function CampanasMetricsClient() {
   useEffect(() => {
     void fetchCampanas()
   }, [fetchCampanas])
-
-  const fetchAtribucion = useCallback(async () => {
-    setAtribucionLoading(true)
-    setAtribucionError(null)
-    try {
-      const response = await getProspeccionCampanaAtribucion({ limit: 250 })
-      setAtribucionItems(Array.isArray(response?.items) ? response.items : [])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo cargar la atribución por plantilla."
-      setAtribucionError(message)
-      setAtribucionItems([])
-    } finally {
-      setAtribucionLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchAtribucion()
-  }, [fetchAtribucion])
 
   const loadBatchDetails = useCallback(async (batchId: string) => {
     const existing = batchDetails[batchId]
@@ -1831,10 +1811,15 @@ ${secondCellHtml}
               Crea campañas y administra sus plantillas. La ejecución se hace desde `prospeccion/prospectos`.
             </p>
           </div>
-          <Button onClick={handleNewCampaign}>
-            <IconTargetArrow className="mr-2 size-4" />
-            Crear campaña
-          </Button>
+          <div className="flex items-center gap-3">
+            <a className="text-sm text-primary underline-offset-4 hover:underline" href="/prospeccion/metricas">
+              Ver rendimiento
+            </a>
+            <Button onClick={handleNewCampaign}>
+              <IconTargetArrow className="mr-2 size-4" />
+              Crear campaña
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 text-sm text-muted-foreground md:grid-cols-3">
           <div>
@@ -1939,31 +1924,11 @@ ${secondCellHtml}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="hidden">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base font-semibold">Métricas jerárquicas de campaña</CardTitle>
             <p className="text-sm text-muted-foreground">Campaña → plantilla → envío/lote → contacto/prospecto.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={metricCanalFilter}
-              onValueChange={(value) => setMetricCanalFilter(value as "todos" | "correo" | "whatsapp" | "llamada")}
-            >
-              <SelectTrigger className="h-8 w-[170px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Canal: Todos</SelectItem>
-                <SelectItem value="correo">Canal: Correo</SelectItem>
-                <SelectItem value="whatsapp">Canal: WhatsApp</SelectItem>
-                <SelectItem value="llamada">Canal: Llamada</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={() => void fetchAtribucion()} disabled={atribucionLoading}>
-              <IconRefresh className={cn("mr-2 size-4", atribucionLoading && "animate-spin")} />
-              Actualizar
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
