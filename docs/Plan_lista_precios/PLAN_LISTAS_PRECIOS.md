@@ -30,7 +30,15 @@ Implementado y verificado:
 - Snapshot inicial de 1,702 precios base existentes.
 - Prueba reversible de trigger para creación de precio de lista y actualización de `Precio base`.
 
-La migración no recupera cambios ocurridos antes de su aplicación; el historial completo comienza a partir de este punto. Aún no se han implementado los endpoints, el CRUD de listas, la captura de precios en items ni el selector del modal de cotización.
+La migración no recupera cambios ocurridos antes de su aplicación; el historial completo comienza a partir de este punto.
+
+En progreso local:
+
+- Endpoints protegidos para administrar listas, permisos, precios por item e historial.
+- CRUD visual de nombres de listas en `settings/account`.
+- Asignación visual de una lista a roles, usuarios y empleados.
+
+Aún falta la captura de precios en items, el selector del modal de cotización y la validación del precio seleccionado al guardar y enviar.
 
 ## 2. Alcance funcional
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { CatalogItemsPanel } from "@/components/settings/catalog-items-panel"
 import { fetchCatalogItems } from "@/app/settings/catalogo/actions"
+import { fetchCatalogPriceLists } from "@/app/settings/catalogo/actions"
 import {
   fetchFamiliasDeProductos,
   fetchLineasDeNegocio,
@@ -12,12 +13,13 @@ import {
 } from "@/app/settings/productos/actions"
 
 export default async function SettingsProductosItemsPage() {
-  const [items, lineas, familias, modelos, unidadesMedida] = await Promise.all([
+  const [items, lineas, familias, modelos, unidadesMedida, priceLists] = await Promise.all([
     fetchCatalogItems({ includeInactive: true }),
     fetchLineasDeNegocio({ includeInactive: true }),
     fetchFamiliasDeProductos({ includeInactive: true }),
     fetchModelosProductos({ includeInactive: true }),
     fetchUnidadesMedida({ includeInactive: true }),
+    fetchCatalogPriceLists(),
   ])
   return (
     <AppViewLayout title="Settings · Productos y servicios">
@@ -60,6 +62,7 @@ export default async function SettingsProductosItemsPage() {
           familias={familias}
           modelos={modelos}
           unidadesMedida={unidadesMedida}
+          priceLists={priceLists}
         />
       </div>
     </AppViewLayout>

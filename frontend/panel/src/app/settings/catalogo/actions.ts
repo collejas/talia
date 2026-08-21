@@ -124,6 +124,19 @@ function normalizeString(value: unknown): string | null {
   return null
 }
 
+export type CatalogPriceList = {
+  id: string
+  nombre: string
+  activo: boolean
+  moneda: string
+}
+
+export type CatalogItemPriceListValue = {
+  listaPrecioId: string
+  precio: number
+  moneda: string
+}
+
 function normalizeNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value
@@ -328,6 +341,58 @@ export async function fetchCatalogItems(options?: FetchOptions): Promise<Catalog
   }
 
   return response.data.map((row) => normalizeCatalogItem(row));
+}
+
+export async function fetchCatalogPriceLists(): Promise<CatalogPriceList[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>("/crm/catalog/price-lists", {
+    searchParams: { include_inactive: "false" },
+  })
+  if (!response.ok || !Array.isArray(response.data)) return []
+  return response.data
+    .map((row) => ({
+      id: String(row.id ?? ""),
+      nombre: String(row.nombre ?? "").trim(),
+      activo: row.activo !== false,
+      moneda: String(row.moneda ?? DEFAULT_MONEDA).toUpperCase(),
+    }))
+    .filter((row) => row.id && row.nombre && row.activo)
+}
+
+export async function fetchCatalogItemPriceLists(itemId: string): Promise<CatalogItemPriceListValue[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>(`/crm/catalog/items/${itemId}/price-lists`, {})
+  if (!response.ok || !Array.isArray(response.data)) return []
+  return response.data.flatMap((row) => {
+    const listaPrecioId = String(row.lista_precio_id ?? "")
+    const precio = Number(row.precio)
+    if (!listaPrecioId || !Number.isFinite(precio)) return []
+    return [{ listaPrecioId, precio, moneda: String(row.moneda ?? DEFAULT_MONEDA).toUpperCase() }]
+  })
+}
+
+export async function saveCatalogItemPriceLists(
+  itemId: string,
+  values: CatalogItemPriceListValue[],
+): Promise<CatalogItemPriceListValue[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>(`/crm/catalog/items/${itemId}/price-lists`, {
+    method: "PUT",
+    body: {
+      values: values.map((value) => ({
+        lista_precio_id: value.listaPrecioId,
+        precio: value.precio,
+        moneda: value.moneda,
+        activo: true,
+      })),
+    },
+  })
+  if (!response.ok || !Array.isArray(response.data)) {
+    throw new Error(response.ok ? "No se pudo guardar los precios por lista." : response.error || "No se pudo guardar los precios por lista.")
+  }
+  return response.data.flatMap((row) => {
+    const listaPrecioId = String(row.lista_precio_id ?? "")
+    const precio = Number(row.precio)
+    if (!listaPrecioId || !Number.isFinite(precio)) return []
+    return [{ listaPrecioId, precio, moneda: String(row.moneda ?? DEFAULT_MONEDA).toUpperCase() }]
+  })
 }
 
 export async function createCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {

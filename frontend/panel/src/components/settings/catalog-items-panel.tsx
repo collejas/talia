@@ -32,8 +32,11 @@ import {
 import {
   type CatalogItem,
   type CatalogItemInput,
+  type CatalogPriceList,
   createCatalogItem,
   deleteCatalogItem,
+  fetchCatalogItemPriceLists,
+  saveCatalogItemPriceLists,
   fetchCatalogItems,
   updateCatalogItem,
 } from "@/app/settings/catalogo/actions"
@@ -634,12 +637,14 @@ export function CatalogItemsPanel({
   familias,
   modelos,
   unidadesMedida,
+  priceLists,
 }: {
   initialItems: CatalogItem[]
   lineas: LineaOption[]
   familias: FamiliaOption[]
   modelos: ModeloOption[]
   unidadesMedida: UnidadMedidaOption[]
+  priceLists: CatalogPriceList[]
   }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [search, setSearch] = useState("")
@@ -660,6 +665,8 @@ export function CatalogItemsPanel({
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [priceListValues, setPriceListValues] = useState<Record<string, string>>({})
+  const [loadingPriceLists, setLoadingPriceLists] = useState(false)
   const [newMetadataKey, setNewMetadataKey] = useState("")
   const [newMetadataValue, setNewMetadataValue] = useState("")
   const [mounted, setMounted] = useState(false)
@@ -937,6 +944,7 @@ export function CatalogItemsPanel({
     setEditing(null)
     setMetadataSeed({})
     setMediaItems([])
+    setPriceListValues({})
   }, [form])
 
   const openCreateSheet = useCallback(() => {
@@ -945,7 +953,7 @@ export function CatalogItemsPanel({
   }, [resetForm])
 
   const openEditSheet = useCallback(
-    (item: CatalogItem) => {
+    async (item: CatalogItem) => {
       setEditing(item)
       form.reset(mapItemToFormValues(item))
       const baseMetadata =
@@ -954,6 +962,16 @@ export function CatalogItemsPanel({
           : {}
       setMetadataSeed(baseMetadata)
       setMediaItems(normalizeMediaList(baseMetadata))
+      setLoadingPriceLists(true)
+      try {
+        const values = await fetchCatalogItemPriceLists(item.id)
+        setPriceListValues(Object.fromEntries(values.map((value) => [value.listaPrecioId, String(value.precio)])))
+      } catch (error) {
+        console.warn("[catalog] No se pudieron cargar los precios por lista", error)
+        setPriceListValues({})
+      } finally {
+        setLoadingPriceLists(false)
+      }
       setSheetOpen(true)
     },
     [form],
@@ -991,8 +1009,15 @@ export function CatalogItemsPanel({
       const payload = formValuesToInput(values, editing?.impuestos, metadataPayload)
       const action = editing ? updateCatalogItem(editing.id, payload) : createCatalogItem(payload)
       action
-        .then((item) => {
+        .then(async (item) => {
           upsertItem(item)
+          const priceValues = priceLists.flatMap((list) => {
+            const raw = priceListValues[list.id]?.trim() ?? ""
+            if (!raw) return []
+            const precio = parseCurrencyInput(raw)
+            return precio >= 0 ? [{ listaPrecioId: list.id, precio, moneda: list.moneda }] : []
+          })
+          await saveCatalogItemPriceLists(item.id, priceValues)
           setFeedback({
             type: "success",
             message: editing ? "Producto actualizado correctamente." : "Producto creado correctamente.",
@@ -1593,6 +1618,38 @@ const handleDelete = useCallback(
                 </Select>
               </div>
             </div>
+            {priceLists.length ? (
+              <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold">Precios por lista</p>
+                  <p className="text-xs text-muted-foreground">
+                    Captura el precio que tendrá este producto en cada lista activa. Déjalo vacío si todavía no aplica.
+                  </p>
+                </div>
+                {loadingPriceLists ? (
+                  <p className="text-sm text-muted-foreground">Cargando precios guardados…</p>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {priceLists.map((list) => (
+                      <div key={list.id} className="space-y-2">
+                        <Label htmlFor={`catalog-price-list-${list.id}`}>{list.nombre}</Label>
+                        <Input
+                          id={`catalog-price-list-${list.id}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={priceListValues[list.id] ?? ""}
+                          onChange={(event) =>
+                            setPriceListValues((current) => ({ ...current, [list.id]: event.target.value }))
+                          }
+                          placeholder={`Precio en ${list.moneda}`}
+                          disabled={isPending || loadingPriceLists}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="catalog-unidad">Unidad</Label>

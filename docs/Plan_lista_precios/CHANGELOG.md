@@ -34,10 +34,30 @@ Registro de avances, cambios aplicados, verificaciones y pendientes de la funcio
   - registro del precio anterior, nuevo valor, acción y origen.
 - Las pruebas reversibles terminaron con `ROLLBACK` y no dejaron datos de prueba.
 
+### Panel `settings/account` — en progreso local
+
+- Se agregó el CRUD visual de nombres de listas de precios en `settings/account`.
+- Se permite crear, editar, activar y desactivar listas sin borrar su historial.
+- Se agregó la administración visual de permisos por lista para roles, usuarios y empleados.
+- La pantalla consume los endpoints protegidos del backend y conserva el tenant del contexto autenticado.
+- Se actualizó el encabezado de la vista para identificarla como `Cuenta`.
+- Validaciones locales realizadas:
+  - `npx eslint` sobre los tres archivos nuevos/modificados: correcto.
+  - `npx tsc --noEmit`: correcto.
+  - `react-doctor --scope changed`: 100/100, sin hallazgos.
+- Esta parte todavía no está desplegada ni probada con usuarios reales en producción.
+
+### Captura de precios en `settings/productos/items` — en progreso local
+
+- La página carga las listas activas del tenant de forma dinámica.
+- El formulario de creación y edición muestra un campo por cada lista activa, además del `Precio base`.
+- Los valores se guardan mediante `PUT /crm/catalog/items/{item_id}/price-lists`.
+- Al editar se recuperan los precios existentes por item.
+- Al limpiar un campo, el reemplazo omite esa relación; el backend registra el cambio mediante el trigger de historial.
+- Validaciones locales: ESLint, TypeScript, `git diff --check` y React Doctor 100/100.
+
 ### Alcance todavía no implementado
 
-- CRUD visual de listas en `settings/account`.
-- Administración visual de permisos por lista.
 - Campos dinámicos de precios en `settings/productos/items`.
 - Selector de lista por línea en el modal de cotización.
 - Validación completa del precio seleccionado al guardar y enviar una cotización.

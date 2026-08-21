@@ -4693,6 +4693,20 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         values = [str(value or "").strip() for value in envio_ids]
         values = [value for value in values if value]
+        delete_params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "catalog_item_id": f"eq.{item_id}",
+        }
+        if values:
+            retained_ids = ",".join(str(value["lista_precio_id"]) for value in values)
+            delete_params["lista_precio_id"] = f"not.in.({retained_ids})"
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/catalog_item_lista_precios",
+            params=delete_params,
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
         if not values:
             return []
         params = {
