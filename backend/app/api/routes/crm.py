@@ -14236,6 +14236,102 @@ class CRMCatalogDeleteResponse(BaseModel):
     hard_deleted: bool = False
 
 
+class CRMPriceList(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    activo: bool
+    creado_por_usuario_id: UUID | None = None
+    actualizado_por_usuario_id: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMPriceListCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=120)
+    activo: bool = True
+
+    @field_validator("nombre")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("El nombre de la lista es obligatorio")
+        return normalized
+
+
+class CRMPriceListUpdate(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=120)
+    activo: bool | None = None
+
+    @field_validator("nombre")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("El nombre de la lista es obligatorio")
+        return normalized
+
+
+class CRMItemPriceListValue(BaseModel):
+    lista_precio_id: UUID
+    precio: float = Field(..., ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    activo: bool = True
+
+    @field_validator("moneda")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class CRMItemPriceListValueRead(CRMItemPriceListValue):
+    id: UUID
+    organizacion_id: UUID
+    catalog_item_id: UUID
+    lista_precio_nombre: str | None = None
+    creado_por_usuario_id: UUID | None = None
+    actualizado_por_usuario_id: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMItemPriceListsReplace(BaseModel):
+    values: list[CRMItemPriceListValue] = Field(default_factory=list, max_length=500)
+
+
+class CRMPriceListPermissionsUpdate(BaseModel):
+    role_ids: list[UUID] = Field(default_factory=list, max_length=500)
+    user_ids: list[UUID] = Field(default_factory=list, max_length=500)
+    employee_user_ids: list[UUID] = Field(default_factory=list, max_length=500)
+
+
+class CRMPriceListPermissionsRead(BaseModel):
+    role_ids: list[UUID] = Field(default_factory=list)
+    user_ids: list[UUID] = Field(default_factory=list)
+    employee_user_ids: list[UUID] = Field(default_factory=list)
+
+
+class CRMPriceHistoryRead(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    catalog_item_id: UUID | None = None
+    lista_precio_id: UUID | None = None
+    tipo_precio: Literal["base", "lista"]
+    producto_nombre: str
+    lista_precio_nombre: str | None = None
+    precio_anterior: float | None = None
+    precio_nuevo: float | None = None
+    moneda_anterior: str | None = None
+    moneda_nueva: str | None = None
+    accion: str
+    origen_cambio: str
+    cambiado_por_usuario_id: UUID | None = None
+    cambiado_en: datetime
+
+
 class CRMBulkDeleteRequest(BaseModel):
     ids: list[str] = Field(..., min_length=1, max_length=500)
 
@@ -19176,6 +19272,276 @@ async def pipeline_revert_opportunity_stage(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
     )
+
+
+@router.get("/catalog/price-lists", response_model=list[CRMPriceList])
+async def list_price_lists(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
+    include_inactive: bool = Query(default=False),
+    search: str | None = Query(default=None, max_length=120),
+) -> list[CRMPriceList]:
+    try:
+        rows = await repo.list_price_lists(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            search=search,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_lists_unavailable") from exc
+    return [CRMPriceList.model_validate(row) for row in rows]
+
+
+@router.post("/catalog/price-lists", response_model=CRMPriceList, status_code=status.HTTP_201_CREATED)
+async def create_price_list(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMPriceListCreate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMPriceList:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body["creado_por_usuario_id"] = str(usuario_id) if usuario_id else None
+    body["actualizado_por_usuario_id"] = str(usuario_id) if usuario_id else None
+    try:
+        row = await repo.create_price_list(organizacion_id=organizacion_id, payload=body)
+    except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "listas_precios_org_nombre_key" in detail or "duplicate key" in detail:
+            raise HTTPException(status_code=409, detail="price_list_name_already_exists") from exc
+        raise HTTPException(status_code=502, detail="price_list_create_failed") from exc
+    return CRMPriceList.model_validate(row)
+
+
+@router.patch("/catalog/price-lists/{lista_precio_id}", response_model=CRMPriceList)
+async def update_price_list(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    lista_precio_id: UUID,
+    payload: CRMPriceListUpdate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMPriceList:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    if usuario_id:
+        body["actualizado_por_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.update_price_list(
+            organizacion_id=organizacion_id,
+            lista_precio_id=lista_precio_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "price_list_not_found" in detail:
+            raise HTTPException(status_code=404, detail="price_list_not_found") from exc
+        if "listas_precios_org_nombre_key" in detail or "duplicate key" in detail:
+            raise HTTPException(status_code=409, detail="price_list_name_already_exists") from exc
+        raise HTTPException(status_code=502, detail="price_list_update_failed") from exc
+    return CRMPriceList.model_validate(row)
+
+
+@router.delete("/catalog/price-lists/{lista_precio_id}", response_model=CRMPriceList)
+async def deactivate_price_list(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    lista_precio_id: UUID,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMPriceList:
+    try:
+        row = await repo.update_price_list(
+            organizacion_id=organizacion_id,
+            lista_precio_id=lista_precio_id,
+            payload={
+                "activo": False,
+                "actualizado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+    except CRMRepositoryError as exc:
+        if "price_list_not_found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail="price_list_not_found") from exc
+        raise HTTPException(status_code=502, detail="price_list_deactivate_failed") from exc
+    return CRMPriceList.model_validate(row)
+
+
+@router.get(
+    "/catalog/price-lists/{lista_precio_id}/permissions",
+    response_model=CRMPriceListPermissionsRead,
+)
+async def get_price_list_permissions(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    lista_precio_id: UUID,
+) -> CRMPriceListPermissionsRead:
+    try:
+        permissions = await repo.get_price_list_permissions(
+            organizacion_id=organizacion_id,
+            lista_precio_id=lista_precio_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_list_permissions_unavailable") from exc
+    return CRMPriceListPermissionsRead(
+        role_ids=[UUID(str(row["rol_id"])) for row in permissions.get("roles", []) if row.get("rol_id")],
+        user_ids=[UUID(str(row["usuario_id"])) for row in permissions.get("usuarios", []) if row.get("usuario_id")],
+        employee_user_ids=[
+            UUID(str(row["empleado_usuario_id"]))
+            for row in permissions.get("empleados", [])
+            if row.get("empleado_usuario_id")
+        ],
+    )
+
+
+@router.put(
+    "/catalog/price-lists/{lista_precio_id}/permissions",
+    response_model=CRMPriceListPermissionsRead,
+)
+async def replace_price_list_permissions(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    lista_precio_id: UUID,
+    payload: CRMPriceListPermissionsUpdate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMPriceListPermissionsRead:
+    try:
+        await repo.replace_price_list_permissions(
+            organizacion_id=organizacion_id,
+            lista_precio_id=lista_precio_id,
+            role_ids=payload.role_ids,
+            user_ids=payload.user_ids,
+            employee_user_ids=payload.employee_user_ids,
+            asignado_por_usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_list_permissions_update_failed") from exc
+    return CRMPriceListPermissionsRead(
+        role_ids=payload.role_ids,
+        user_ids=payload.user_ids,
+        employee_user_ids=payload.employee_user_ids,
+    )
+
+
+@router.get(
+    "/catalog/items/{item_id}/price-lists",
+    response_model=list[CRMItemPriceListValueRead],
+)
+async def list_item_price_lists(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
+    item_id: UUID,
+    include_inactive: bool = Query(default=False),
+) -> list[CRMItemPriceListValueRead]:
+    try:
+        values, lists = await asyncio.gather(
+            repo.list_item_price_lists(
+                organizacion_id=organizacion_id,
+                item_id=item_id,
+                include_inactive=include_inactive,
+            ),
+            repo.list_price_lists(organizacion_id=organizacion_id, include_inactive=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="item_price_lists_unavailable") from exc
+    list_names = {str(row.get("id")): row.get("nombre") for row in lists}
+    return [
+        CRMItemPriceListValueRead(
+            **row,
+            lista_precio_nombre=list_names.get(str(row.get("lista_precio_id"))),
+        )
+        for row in values
+    ]
+
+
+@router.put(
+    "/catalog/items/{item_id}/price-lists",
+    response_model=list[CRMItemPriceListValueRead],
+)
+async def upsert_item_price_lists(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    item_id: UUID,
+    payload: CRMItemPriceListsReplace,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> list[CRMItemPriceListValueRead]:
+    try:
+        item = await repo.get_catalog_item(organizacion_id=organizacion_id, item_id=item_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="catalog_item_not_found")
+        available_lists = await repo.list_price_lists(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+        )
+        available_by_id = {str(row.get("id")): row for row in available_lists}
+        values: list[dict[str, Any]] = []
+        for value in payload.values:
+            list_row = available_by_id.get(str(value.lista_precio_id))
+            if not list_row:
+                raise HTTPException(status_code=404, detail="price_list_not_found")
+            if not list_row.get("activo"):
+                raise HTTPException(status_code=409, detail="price_list_inactive")
+            values.append({
+                **value.model_dump(mode="json"),
+                "creado_por_usuario_id": str(usuario_id) if usuario_id else None,
+                "actualizado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            })
+        rows = await repo.upsert_item_price_lists(
+            organizacion_id=organizacion_id,
+            item_id=item_id,
+            values=values,
+        )
+        list_names = {str(row.get("id")): row.get("nombre") for row in available_lists}
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="item_price_lists_update_failed") from exc
+    return [
+        CRMItemPriceListValueRead(
+            **row,
+            lista_precio_nombre=list_names.get(str(row.get("lista_precio_id"))),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/catalog/price-history", response_model=list[CRMPriceHistoryRead])
+async def list_price_history(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["audit.view", "settings.view"])),
+    item_id: UUID | None = Query(default=None),
+    lista_precio_id: UUID | None = Query(default=None),
+    tipo_precio: Literal["base", "lista"] | None = Query(default=None),
+    cambiado_por_usuario_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMPriceHistoryRead]:
+    try:
+        rows = await repo.list_price_history(
+            organizacion_id=organizacion_id,
+            item_id=item_id,
+            lista_precio_id=lista_precio_id,
+            tipo_precio=tipo_precio,
+            cambiado_por_usuario_id=cambiado_por_usuario_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_history_unavailable") from exc
+    return [CRMPriceHistoryRead.model_validate(row) for row in rows]
 
 
 @router.get("/catalog/items", response_model=list[CRMCatalogItem])

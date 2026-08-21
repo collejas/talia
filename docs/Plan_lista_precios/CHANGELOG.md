@@ -39,11 +39,24 @@ Registro de avances, cambios aplicados, verificaciones y pendientes de la funcio
 - CRUD visual de listas en `settings/account`.
 - Administración visual de permisos por lista.
 - Campos dinámicos de precios en `settings/productos/items`.
-- APIs para listas, permisos y precios por producto.
 - Selector de lista por línea en el modal de cotización.
 - Validación completa del precio seleccionado al guardar y enviar una cotización.
 - Snapshot de lista y precio en `cotizacion_items`.
 - Integración final con PDF, correo, WhatsApp y reenvíos.
+
+### Backend/API — en progreso local
+
+- Se agregaron schemas Pydantic para listas, precios por item, permisos e historial.
+- Se agregaron endpoints para:
+  - listar, crear, editar y desactivar listas;
+  - consultar y reemplazar asignaciones por rol, usuario y empleado;
+  - consultar y guardar precios de un item por lista;
+  - consultar el historial de precios con filtros.
+- Se agregaron métodos de repositorio con filtros explícitos por `organizacion_id`.
+- Las escrituras usan autorización FastAPI y el actor se toma del contexto autenticado, no del body del cliente.
+- Se validó sintaxis, carga de FastAPI y registro de rutas.
+- La suite completa existente de CRM presenta fallos no relacionados en `DummyCRMRepository`; aún falta una suite específica para estos endpoints.
+- Esta fase todavía no está desplegada ni verificada en el servicio backend de producción.
 
 ### Nota histórica
 

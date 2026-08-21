@@ -12953,6 +12953,264 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
         return row
 
+    async def list_price_lists(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        search: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search and search.strip():
+            sanitized = search.strip().replace("%", "").replace("*", "")
+            params["nombre"] = f"ilike.*{sanitized}*"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/listas_precios",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar listas de precios: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_price_list(
+        self,
+        *,
+        organizacion_id: UUID,
+        lista_precio_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/listas_precios",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{lista_precio_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar lista de precios: {data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
+    async def create_price_list(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/listas_precios",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("Supabase no devolvió la lista de precios creada")
+        return data[0]
+
+    async def update_price_list(
+        self,
+        *,
+        organizacion_id: UUID,
+        lista_precio_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "PATCH",
+            "/rest/v1/listas_precios",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{lista_precio_id}",
+            },
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("price_list_not_found")
+        return data[0]
+
+    async def list_item_price_lists(
+        self,
+        *,
+        organizacion_id: UUID,
+        item_id: UUID,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "catalog_item_id": f"eq.{item_id}",
+            "order": "lista_precio_id.asc",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/catalog_item_lista_precios",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar precios del item: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_item_price_lists(
+        self,
+        *,
+        organizacion_id: UUID,
+        item_id: UUID,
+        values: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not values:
+            return []
+        payload = [
+            {
+                "organizacion_id": str(organizacion_id),
+                "catalog_item_id": str(item_id),
+                **value,
+            }
+            for value in values
+        ]
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/catalog_item_lista_precios",
+            params={"on_conflict": "organizacion_id,catalog_item_id,lista_precio_id"},
+            json=_align_postgrest_bulk_items(payload),
+            prefer="resolution=merge-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al guardar precios del item: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_price_history(
+        self,
+        *,
+        organizacion_id: UUID,
+        item_id: UUID | None = None,
+        lista_precio_id: UUID | None = None,
+        tipo_precio: str | None = None,
+        cambiado_por_usuario_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "cambiado_en.desc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if item_id:
+            params["catalog_item_id"] = f"eq.{item_id}"
+        if lista_precio_id:
+            params["lista_precio_id"] = f"eq.{lista_precio_id}"
+        if tipo_precio:
+            params["tipo_precio"] = f"eq.{tipo_precio}"
+        if cambiado_por_usuario_id:
+            params["cambiado_por_usuario_id"] = f"eq.{cambiado_por_usuario_id}"
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/catalog_price_history",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar historial de precios: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def replace_price_list_permissions(
+        self,
+        *,
+        organizacion_id: UUID,
+        lista_precio_id: UUID,
+        role_ids: list[UUID],
+        user_ids: list[UUID],
+        employee_user_ids: list[UUID],
+        asignado_por_usuario_id: UUID | None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        base_filter = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "lista_precio_id": f"eq.{lista_precio_id}",
+        }
+        for table in (
+            "listas_precios_roles",
+            "listas_precios_usuarios",
+            "listas_precios_empleados",
+        ):
+            await self._request_service_role(
+                "DELETE",
+                f"/rest/v1/{table}",
+                params=base_filter,
+                organizacion_id=organizacion_id,
+            )
+
+        common = {
+            "organizacion_id": str(organizacion_id),
+            "lista_precio_id": str(lista_precio_id),
+            "asignado_por_usuario_id": str(asignado_por_usuario_id) if asignado_por_usuario_id else None,
+        }
+        rows_by_table = {
+            "roles": [dict(common, rol_id=str(role_id)) for role_id in role_ids],
+            "usuarios": [dict(common, usuario_id=str(user_id)) for user_id in user_ids],
+            "empleados": [dict(common, empleado_usuario_id=str(user_id)) for user_id in employee_user_ids],
+        }
+        result: dict[str, list[dict[str, Any]]] = {}
+        for suffix, rows in rows_by_table.items():
+            if not rows:
+                result[suffix] = []
+                continue
+            table = f"listas_precios_{suffix}"
+            resp = await self._request_service_role(
+                "POST",
+                f"/rest/v1/{table}",
+                json=_align_postgrest_bulk_items(rows),
+                prefer="return=representation",
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al guardar permisos de lista: {data!r}")
+            result[suffix] = [row for row in data if isinstance(row, dict)]
+        return result
+
+    async def get_price_list_permissions(
+        self,
+        *,
+        organizacion_id: UUID,
+        lista_precio_id: UUID,
+    ) -> dict[str, list[dict[str, Any]]]:
+        filters = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "lista_precio_id": f"eq.{lista_precio_id}",
+        }
+        result: dict[str, list[dict[str, Any]]] = {}
+        for suffix in ("roles", "usuarios", "empleados"):
+            resp = await self._request_service_role(
+                "GET",
+                f"/rest/v1/listas_precios_{suffix}",
+                params={**filters, "limit": "500"},
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json()
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al leer permisos de lista: {data!r}")
+            result[suffix] = [row for row in data if isinstance(row, dict)]
+        return result
+
     async def get_linea_de_negocio(
         self,
         *,
