@@ -106,8 +106,32 @@ function downloadBlob(filename: string, blob: Blob) {
   URL.revokeObjectURL(url)
 }
 
+type PeriodPreset = "actual" | "7" | "30" | "90" | "mes" | "personalizado"
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function getPeriodDates(preset: Exclude<PeriodPreset, "personalizado">) {
+  if (preset === "actual") return { from: "", to: "" }
+  const today = new Date()
+  const to = formatDateInput(today)
+  const fromDate = new Date(today)
+  if (preset === "mes") {
+    fromDate.setDate(1)
+  } else {
+    fromDate.setDate(today.getDate() - (Number(preset) - 1))
+  }
+  return { from: formatDateInput(fromDate), to }
+}
+
 export default function ProspeccionMetricasPageClient() {
   const [activeTab, setActiveTab] = useState<"campanas" | "campanas_whatsapp" | "frases">("campanas")
+  const [isSummaryView, setIsSummaryView] = useState(true)
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("actual")
   const [hydrated, setHydrated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -964,8 +988,163 @@ export default function ProspeccionMetricasPageClient() {
     }
   }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
 
+  const summaryChannelRows = useMemo(
+    () =>
+      channelSummary.map((row) => ({
+        ...row,
+        resultLabel: row.canal === "correo" ? "Entregados" : row.canal === "whatsapp" ? "Conversaciones" : "Contestadas",
+        resultValue: row.canal === "whatsapp" ? row.envios_respondidos : row.envios_entregados,
+        responseLabel: row.canal === "correo" ? "Aperturas" : "Respuestas",
+        responseValue: row.canal === "correo" ? Math.round((row.open_rate / 100) * row.envios_entregados) : row.envios_respondidos,
+      })),
+    [channelSummary],
+  )
+
+  const openChannel = (channel: "correo" | "whatsapp" | "llamada") => {
+    setIsSummaryView(false)
+    setCanal(channel)
+    setActiveTab(channel === "whatsapp" ? "campanas_whatsapp" : "campanas")
+  }
+
+  const handlePeriodChange = (value: PeriodPreset) => {
+    setPeriodPreset(value)
+    if (value === "personalizado") return
+    const dates = getPeriodDates(value)
+    setDateFrom(dates.from)
+    setDateTo(dates.to)
+  }
+
   return (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-slate-950 px-5 py-6 text-white shadow-sm md:px-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Prospección</p>
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Métricas</h1>
+            <p className="max-w-xl text-sm text-slate-300">
+              Un resumen claro del rendimiento y acceso directo al canal que necesita revisar.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={periodPreset} onValueChange={(value) => handlePeriodChange(value as PeriodPreset)}>
+              <SelectTrigger className="h-9 w-[172px] border-slate-700 bg-slate-900 text-xs text-white hover:bg-slate-800">
+                <SelectValue placeholder="Periodo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="actual">Periodo actual</SelectItem>
+                <SelectItem value="7">Últimos 7 días</SelectItem>
+                <SelectItem value="30">Últimos 30 días</SelectItem>
+                <SelectItem value="90">Últimos 90 días</SelectItem>
+                <SelectItem value="mes">Este mes</SelectItem>
+                <SelectItem value="personalizado">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+            {periodPreset === "personalizado" ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  aria-label="Fecha inicial"
+                  className="h-9 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                />
+                <span className="text-xs text-slate-400">→</span>
+                <Input
+                  aria-label="Fecha final"
+                  className="h-9 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  type="date"
+                  min={dateFrom || undefined}
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                />
+              </div>
+            ) : null}
+            {loading ? <IconLoader className="h-4 w-4 animate-spin text-slate-300" aria-label="Actualizando" /> : null}
+          </div>
+        </div>
+      </section>
+
+      <nav aria-label="Navegación de métricas" className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => { setIsSummaryView(true); setCanal("todos") }}
+          className={`rounded-xl px-4 py-3 text-left text-sm transition ${isSummaryView ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+        >
+          <span className="block font-semibold">Resumen general</span>
+          <span className={`mt-1 block text-xs ${isSummaryView ? "text-slate-300" : "text-slate-400"}`}>Todos los canales</span>
+        </button>
+        {([
+          ["correo", "Correo", "Envíos, aperturas y clics"],
+          ["whatsapp", "WhatsApp", "Mensajes y conversaciones"],
+          ["llamada", "Voz", "Llamadas y resultados"],
+        ] as const).map(([value, label, description]) => {
+          const active = !isSummaryView && canal === value
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => openChannel(value)}
+              className={`rounded-xl px-4 py-3 text-left text-sm transition ${active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-300" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              <span className="block font-semibold">{label}</span>
+              <span className="mt-1 block text-xs text-slate-400">{description}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {isSummaryView ? (
+        <section className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Actividad registrada", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_totales, 0), hint: "Mensajes y envíos del periodo" },
+              { label: "Resultados efectivos", value: summaryChannelRows.reduce((sum, row) => sum + row.resultValue, 0), hint: "Entregas o conversaciones" },
+              { label: "Respuestas", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_respondidos, 0), hint: "Interacciones atribuidas" },
+              { label: "Oportunidades", value: summaryWhatsappCampaigns?.oportunidades_total ?? summaryPhrases?.oportunidades_creadas ?? 0, hint: "Atribuidas a campañas" },
+            ].map((item) => (
+              <Card key={item.label} className="border-slate-200 shadow-none">
+                <CardContent className="p-5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{number.format(item.value)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card className="border-slate-200 shadow-none">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-base">Rendimiento por canal</CardTitle>
+              <p className="text-sm text-muted-foreground">Selecciona un canal para consultar su detalle.</p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-100">
+                {summaryChannelRows.map((row) => (
+                  <button
+                    key={row.canal}
+                    type="button"
+                    onClick={() => openChannel(row.canal)}
+                    className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 md:grid-cols-[1.2fr_repeat(4,1fr)_auto] md:items-center md:px-6"
+                  >
+                    <span>
+                      <span className="block font-medium text-slate-950">{row.canal_label}</span>
+                      <span className="text-xs text-muted-foreground">{number.format(row.envios_totales)} de actividad</span>
+                    </span>
+                    <span><span className="block text-xs text-muted-foreground">{row.resultLabel}</span><span className="font-semibold">{number.format(row.resultValue)}</span></span>
+                    <span><span className="block text-xs text-muted-foreground">{row.responseLabel}</span><span className="font-semibold">{number.format(row.responseValue)}</span></span>
+                    <span><span className="block text-xs text-muted-foreground">Entrega</span><span className="font-semibold">{row.envios_totales ? `${row.entrega_pct}%` : "—"}</span></span>
+                    <span><span className="block text-xs text-muted-foreground">Respuesta</span><span className="font-semibold">{row.envios_totales ? `${row.respuesta_pct}%` : "—"}</span></span>
+                    <span className="text-sm font-medium text-slate-500">Ver detalle →</span>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
+
+      {!isSummaryView ? (
+        <>
       <Card>
         <CardHeader>
           <CardTitle>Filtros globales</CardTitle>
@@ -1975,6 +2154,8 @@ export default function ProspeccionMetricasPageClient() {
           </Card>
         </div>
       )}
+      </>
+      ) : null}
     </div>
   )
 }

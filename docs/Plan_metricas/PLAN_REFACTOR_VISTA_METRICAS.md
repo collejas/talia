@@ -243,9 +243,16 @@ Contrato de responsabilidad:
 
 ### Fase 2 · Resumen general
 
-- Crear el estado inicial de la vista como resumen.
+- Crear el estado inicial de la vista como resumen. **Primer corte
+  implementado.**
 - Incorporar comparación por canal.
 - Evitar mostrar detalle de aperturas, frases o lotes en este nivel.
+
+El primer corte implementado en `frontend/panel/src/app/prospeccion/metricas`
+incluye un encabezado visual nuevo, navegación de cuatro estados (resumen,
+Correo, WhatsApp y Voz) y una tabla compacta de rendimiento por canal. Los
+detalles existentes se mantienen accesibles al seleccionar un canal para
+proteger las métricas, filtros y exportaciones durante la transición.
 
 ### Fase 3 · Selector y vistas por canal
 
@@ -290,5 +297,7 @@ Contrato de responsabilidad:
   claramente más simple que la actual.
 - El usuario puede identificar periodo, canal, resultado y siguiente acción
   sin recorrer bloques técnicos innecesarios.
+- El encabezado superior permite seleccionar periodos preconfigurados o un
+  periodo personalizado mediante calendario, sin agregar una sección aparte.
 - Los estados de carga, vacío, error y datos parciales conservan la misma
   estructura visual y no generan saltos confusos en la pantalla.

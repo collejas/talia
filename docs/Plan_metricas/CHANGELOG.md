@@ -14,6 +14,20 @@ entre las vistas de prospección y mapa de conversión.
 - Se incorporó como objetivo un rediseño integral de la vista y sus subvistas,
   con una experiencia minimalista, limpia, accesible y enfocada en decisiones.
 
+### Primer corte implementado
+
+- La vista abre ahora con un resumen general enfocado en actividad, resultados,
+  respuestas y oportunidades.
+- Se agregó navegación principal para Resumen general, Correo, WhatsApp y Voz.
+- Se agregó una tabla compacta de rendimiento por canal con acceso directo al
+  detalle.
+- Se conservaron los contratos de datos, filtros, exportaciones y detalles
+  existentes detrás de la navegación para permitir una transición segura.
+- Se agregó al encabezado superior un selector compacto de periodo con rangos
+  preconfigurados y opción personalizada mediante calendario, sin crear una
+  sección adicional ni aumentar la altura normal de la vista.
+- Validación: ESLint del componente y TypeScript del panel correctos.
+
 ## 2026-08-21 · Primer corte seguro en `prospeccion/contactos`
 
 ### Cambios realizados
