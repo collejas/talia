@@ -16,6 +16,49 @@ específico:
 La vista debe ayudar a comparar y decidir rápidamente, sin mezclar métricas
 operativas de WhatsApp, Correo y Voz en los mismos bloques.
 
+El refactor también contempla un rediseño integral de la vista y sus
+subvistas. No se busca únicamente reacomodar pestañas: se replantearán la
+jerarquía visual, la navegación, la densidad de información y la presentación
+de cada estado para lograr una experiencia minimalista, limpia y rápida de
+interpretar.
+
+## 1.1 Dirección visual y UX
+
+El nuevo diseño deberá:
+
+- Priorizar el resumen y la decisión principal sobre el detalle técnico.
+- Usar una jerarquía visual clara: título, periodo, resultado, tendencia y
+  detalle.
+- Reducir tarjetas, bordes, colores y elementos decorativos que no ayuden a
+  interpretar o actuar.
+- Mantener una sola acción principal visible por contexto: revisar resumen,
+  cambiar canal, filtrar o exportar.
+- Separar visualmente navegación, filtros, indicadores, gráficas y tablas.
+- Usar espaciado, tipografía y estados consistentes en todas las subvistas.
+- Presentar estados de carga, vacío, error y datos parciales sin romper el
+  layout.
+
+La vista deberá responder inmediatamente estas preguntas:
+
+1. ¿Qué periodo y canal estoy viendo?
+2. ¿Cuál fue el resultado principal?
+3. ¿Qué cambió o requiere atención?
+4. ¿Dónde puedo profundizar?
+
+### Estructura visual objetivo
+
+1. Encabezado compacto con título, periodo y acciones.
+2. Resumen general con pocos indicadores prioritarios.
+3. Navegación de canales como selector principal.
+4. Subvista del canal con métricas, tendencia y detalle operativo.
+5. Información secundaria dentro de secciones colapsables o tablas simples,
+   solo cuando aporte contexto.
+
+El rediseño debe conservar accesibilidad, responsive design, contraste,
+lectura rápida y consistencia con los componentes existentes de shadcn/ui y
+Radix UI. No se agregarán gráficas o tarjetas solo por llenar espacio: cada
+elemento deberá justificar qué decisión facilita.
+
 ## 2. Problema actual
 
 La vista actual presenta pestañas y bloques con responsabilidades mezcladas:
@@ -243,3 +286,9 @@ Contrato de responsabilidad:
 - No se duplican aperturas, clics, conversaciones u oportunidades.
 - Se mantienen permisos tenant-aware y estados de carga/error/vacío.
 - La vista se valida con datos reales antes de retirar compatibilidad.
+- La vista y sus subvistas tienen una jerarquía visual nueva, consistente y
+  claramente más simple que la actual.
+- El usuario puede identificar periodo, canal, resultado y siguiente acción
+  sin recorrer bloques técnicos innecesarios.
+- Los estados de carga, vacío, error y datos parciales conservan la misma
+  estructura visual y no generan saltos confusos en la pantalla.

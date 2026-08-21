@@ -11,6 +11,8 @@ entre las vistas de prospección y mapa de conversión.
 - Se separaron las responsabilidades de WhatsApp, Correo y Voz.
 - Se estableció que el resumen general debe comparar canales sin mezclar
   unidades incompatibles.
+- Se incorporó como objetivo un rediseño integral de la vista y sus subvistas,
+  con una experiencia minimalista, limpia, accesible y enfocada en decisiones.
 
 ## 2026-08-21 · Primer corte seguro en `prospeccion/contactos`
 
