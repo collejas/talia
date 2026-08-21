@@ -64,10 +64,13 @@ revisadas y continúan operativas después del ajuste del payload.
 
 ### Endpoint legacy
 
-El cliente del panel ya no contiene consumidor ni tipo de respuesta para
-`/prospeccion/contacto/metrics`. El BFF y el endpoint backend permanecen de
-forma temporal para no romper integraciones externas no visibles; su retiro
-requiere una verificación de consumidores fuera del repositorio.
+El cliente del panel ya no contenía consumidor ni tipo de respuesta para
+`/prospeccion/contacto/metrics`. El BFF y el endpoint backend se conservaron
+temporalmente mientras se verificaban consumidores externos.
+
+La verificación fue realizada y no mostró consumidores activos ni accesos en
+los logs disponibles. Por ello, el BFF y la ruta backend fueron retirados el
+2026-08-21. Las métricas globales quedan en `prospeccion/metricas`.
 
 ## 2. Diagnóstico validado
 

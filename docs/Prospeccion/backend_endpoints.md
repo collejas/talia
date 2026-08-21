@@ -85,9 +85,10 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `POST /crm/prospeccion/contacto/listas`
 - `PATCH /crm/prospeccion/contacto/listas/{lista_id}`
 - `DELETE /crm/prospeccion/contacto/listas/{lista_id}`
-- `GET /crm/prospeccion/contacto/metrics`
-  - Incluye `conversion_por_fuente` (`google_places`, `denue`, `usuario`) con base persistente vía RPC SQL.
-  - Incluye `brevo_eventos` agregados desde logs persistentes de prospección.
+- El endpoint legacy `GET /crm/prospeccion/contacto/metrics` fue retirado el
+  2026-08-21. Las métricas globales viven en
+  `GET /crm/prospeccion/metricas`; el detalle operativo vive en los endpoints
+  de lotes, envíos y logs.
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `GET /crm/prospeccion/whatsapp/atribucion/reglas`
   - Soporta `include_historial=true` para incluir versiones cerradas (`vigente_hasta` no nulo).

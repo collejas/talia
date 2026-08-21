@@ -103,6 +103,28 @@ entre las vistas de prospección y mapa de conversión.
 - El flujo activo de métricas usa `prospeccion/metricas`; `contactos` conserva
   únicamente operación de lotes y envíos.
 
+## 2026-08-21 · Retiro del endpoint legacy
+
+### Evidencia previa
+
+- No quedaron consumidores del endpoint dentro del panel ni del backend.
+- No se encontraron referencias activas fuera de documentación histórica.
+- La búsqueda de logs de Nginx no mostró accesos al endpoint en los archivos
+  disponibles.
+
+### Cambios realizados
+
+- Se eliminó el BFF `frontend/panel/src/app/api/prospeccion/contacto/metrics/route.ts`.
+- Se eliminó la ruta backend `/prospeccion/contacto/metrics`.
+- Se eliminó el import del contador in-memory que solo utilizaba esa ruta.
+- Se actualizó la documentación activa de endpoints.
+
+### Protección
+
+- No se tocaron los endpoints de lotes, envíos, logs, cuota Brevo ni métricas
+  globales.
+- No se modificaron datos, migraciones, precios ni mapa de conversión.
+
 ## 2026-08-21 · Segundo corte en `prospeccion/campanas`
 
 ### Cambios realizados

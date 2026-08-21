@@ -126,7 +126,6 @@ from app.services.catalog_fraccionamientos import (
 )
 from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
 from app.services.demografia_service import DemografiaServiceError
-from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
@@ -37666,68 +37665,6 @@ async def cancelar_batch_contacto_legacy(
         "ok": True,
         "batch": updated_batch,
         "envios_cancelados": len(cancelled_envios),
-    }
-
-
-@router.get("/prospeccion/contacto/metrics")
-async def obtener_metrics_prospeccion_contacto_legacy(
-    *,
-    repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
-) -> dict[str, Any]:
-    """Snapshot simple de envíos por canal y estado."""
-
-    snapshot = contact_metrics.snapshot()
-    transformado = {
-        canal: {"totales": sum(counter.values()), "por_estado": dict(counter)}
-        for canal, counter in snapshot.por_canal.items()
-    }
-    conversion_rows: list[dict[str, Any]] = []
-    try:
-        conversion_rows = await repo.get_prospeccion_conversion_fuente(usuario_token=user_token)
-    except CRMRepositoryError as exc:
-        logger.warning("prospeccion.metrics.conversion_fuente_failed", extra={"error": str(exc)})
-    brevo_rows: list[dict[str, Any]] = []
-    try:
-        brevo_rows = await repo.get_prospeccion_brevo_eventos_resumen(usuario_token=user_token)
-    except CRMRepositoryError as exc:
-        logger.warning("prospeccion.metrics.brevo_eventos_failed", extra={"error": str(exc)})
-
-    conversion_por_fuente: list[dict[str, Any]] = []
-    for row in conversion_rows:
-        fuente = _clean_text(row.get("fuente")) or "desconocido"
-        conversion_por_fuente.append(
-            {
-                "fuente": fuente,
-                "total_prospectos": int(row.get("total_prospectos") or 0),
-                "prospectos_contactados": int(row.get("prospectos_contactados") or 0),
-                "envios_totales": int(row.get("envios_totales") or 0),
-                "envios_enviados": int(row.get("envios_enviados") or 0),
-                "prospectos_convertidos": int(row.get("prospectos_convertidos") or 0),
-                "conversion_contacto_pct": float(row.get("conversion_contacto_pct") or 0),
-                "conversion_convertido_pct": float(row.get("conversion_convertido_pct") or 0),
-            }
-        )
-
-    brevo_eventos: list[dict[str, Any]] = []
-    for row in brevo_rows:
-        evento = _clean_text(row.get("evento"))
-        if not evento:
-            continue
-        brevo_eventos.append(
-            {
-                "evento": evento,
-                "total": int(row.get("total") or 0),
-                "ultimo_evento_en": row.get("ultimo_evento_en"),
-            }
-        )
-
-    return {
-        "ok": True,
-        "canales": transformado,
-        "conversion_por_fuente": conversion_por_fuente,
-        "brevo_eventos": brevo_eventos,
     }
 
 
