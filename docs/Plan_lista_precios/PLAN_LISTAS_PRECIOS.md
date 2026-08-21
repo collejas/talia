@@ -13,6 +13,25 @@ Ejemplos de listas:
 - Precio especial.
 - Cualquier otra lista definida por el tenant.
 
+## 1.1 Estado de implementación
+
+La fundación de base de datos de esta funcionalidad ya fue aplicada en Supabase mediante la migración:
+
+`supabase/migrations/20280821_120000_listas_precios_foundation.sql`
+
+Implementado y verificado:
+
+- Catálogo tenant-aware de `listas_precios`.
+- Asignaciones explícitas por rol, usuario y empleado.
+- Relación de precio vigente por item y lista.
+- Historial explícito para `Precio base` y precios de listas.
+- Triggers para registrar creación y cambios de precios.
+- RLS, foreign keys, constraints e índices multi-tenant.
+- Snapshot inicial de 1,702 precios base existentes.
+- Prueba reversible de trigger para creación de precio de lista y actualización de `Precio base`.
+
+La migración no recupera cambios ocurridos antes de su aplicación; el historial completo comienza a partir de este punto. Aún no se han implementado los endpoints, el CRUD de listas, la captura de precios en items ni el selector del modal de cotización.
+
 ## 2. Alcance funcional
 
 ### 2.1 Administración en `settings/account`
