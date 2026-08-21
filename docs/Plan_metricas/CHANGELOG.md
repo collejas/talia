@@ -64,6 +64,26 @@ entre las vistas de prospección y mapa de conversión.
   código preexistente del módulo.
 - `git diff --check`: correcto.
 
+## 2026-08-21 · Payload de campañas reducido en `mapa-de-conversion`
+
+### Cambios realizados
+
+- `GET /demografia/campanas-atribucion` ahora devuelve para correo únicamente
+  identificadores de campaña/plantilla, `envios_enviados` y `sesiones_utm`.
+- Para WhatsApp devuelve únicamente campaña, canal, conversaciones y
+  oportunidades atribuidas.
+- Se eliminaron del payload del mapa campos de entregabilidad, aperturas,
+  clics, rebotes y estados operativos que pertenecen a `prospeccion/metricas`.
+- Se conserva `web_sessions` como fuente de visitas web y no se modifica la
+  atribución comercial ni la UI de las tres lecturas del mapa.
+
+### Validación
+
+- `python3 -m py_compile`: correcto.
+- TypeScript del panel: correcto.
+- ESLint de los componentes de atribución: correcto.
+- `git diff --check`: correcto.
+
 ## 2026-08-21 · Segundo corte en `prospeccion/campanas`
 
 ### Cambios realizados

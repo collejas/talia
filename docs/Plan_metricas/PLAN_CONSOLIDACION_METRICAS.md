@@ -51,6 +51,14 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
 - `campanas` se conserva temporalmente como compatibilidad y no debe usarse
   para crear nuevas pantallas.
 
+### 2026-08-21 · Payload de campañas del mapa
+
+- `mapa-de-conversion` recibe de la atribución solo sesiones web y contexto de
+  campaña/plantilla para correo.
+- Para WhatsApp recibe conversaciones y oportunidades, sin el detalle de
+  entregabilidad.
+- El mapa no debe duplicar aperturas, clics, rebotes o bloqueos de correo.
+
 ## 2. Diagnóstico validado
 
 ### 2.1 Correo

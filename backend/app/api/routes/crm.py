@@ -42842,10 +42842,40 @@ async def demografia_campanas_atribucion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    mapa_campaign_rows: list[dict[str, Any]] = []
+    for row in campaign_rows:
+        canal = _clean_text(row.get("canal")) or "correo"
+        if canal != "correo":
+            continue
+        mapa_campaign_rows.append(
+            {
+                "campana_id": row.get("campana_id"),
+                "campana_nombre": row.get("campana_nombre"),
+                "canal": canal,
+                "template_id": row.get("template_id"),
+                "template_slug": row.get("template_slug"),
+                "template_nombre": row.get("template_nombre"),
+                "envios_enviados": int(row.get("envios_enviados") or 0),
+                "sesiones_utm": int(row.get("sesiones_utm") or 0),
+            }
+        )
+
+    mapa_whatsapp_rows: list[dict[str, Any]] = []
+    for row in whatsapp_rows:
+        mapa_whatsapp_rows.append(
+            {
+                "campana_id": row.get("campana_id"),
+                "campana_nombre": row.get("campana_nombre"),
+                "canal": _clean_text(row.get("canal")) or "whatsapp",
+                "oportunidades_total": int(row.get("oportunidades_total") or 0),
+                "conversaciones_total": int(row.get("conversaciones_total") or 0),
+            }
+        )
+
     return {
         "ok": True,
-        "campaign_rows": campaign_rows,
-        "whatsapp_rows": whatsapp_rows,
+        "campaign_rows": mapa_campaign_rows,
+        "whatsapp_rows": mapa_whatsapp_rows,
     }
 
 
