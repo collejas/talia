@@ -40,8 +40,8 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
 - El tablero duplicado quedó fuera de la experiencia visible y se agregó un
   enlace a `prospeccion/metricas`.
 - La administración de campañas, plantillas y reglas permanece sin cambios.
-- La limpieza estructural del código retirado queda como tarea controlada tras
-  validar el flujo operativo.
+- Se retiraron los estados, tipos, carga de detalle y helpers que solo existían
+  para el árbol jerárquico duplicado.
 
 ## 2. Diagnóstico validado
 

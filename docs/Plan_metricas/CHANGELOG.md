@@ -57,11 +57,12 @@ entre las vistas de prospección y mapa de conversión.
 - Se conservaron la creación, edición, eliminación, plantillas, reglas y
   acciones operativas de campañas.
 
-### Pendiente controlado
+### Limpieza estructural
 
-- La limpieza estructural del código interno que construía el árbol jerárquico
-  queda separada para una siguiente revisión, después de validar el flujo de
-  campañas y plantillas en panel.
+- Se retiraron estados, tipos, carga de detalle y helpers que solo existían para
+  el árbol jerárquico duplicado.
+- Se conservaron los componentes y contratos usados por administración de
+  campañas, plantillas y reglas.
 
 ### Validación
 
