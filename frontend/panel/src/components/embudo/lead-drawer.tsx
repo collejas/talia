@@ -269,6 +269,8 @@ type LeadQuoteItemEntry = {
   taxes: number | null;
   total: number | null;
   currency: string | null;
+  listaPrecioId: string | null;
+  listaPrecioNombre: string | null;
 };
 
 type QuoteItemForm = {
@@ -281,6 +283,15 @@ type QuoteItemForm = {
   cantidad: string;
   precioUnitario: string;
   descuento: string;
+  moneda: string;
+  listaPrecioId: string | null;
+  listaPrecioNombre: string | null;
+};
+
+type QuotePriceOption = {
+  id: string;
+  nombre: string;
+  precio: number;
   moneda: string;
 };
 
@@ -1022,6 +1033,7 @@ export function LeadDrawer({
   const [quoteCatalogPickerOpen, setQuoteCatalogPickerOpen] = useState(false);
   const [quoteCatalogPickerSearch, setQuoteCatalogPickerSearch] = useState("");
   const [quoteCatalogSelection, setQuoteCatalogSelection] = useState<string[]>([]);
+  const [quotePriceOptions, setQuotePriceOptions] = useState<Record<string, QuotePriceOption[]>>({});
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -1559,6 +1571,24 @@ export function LeadDrawer({
     }
   }, []);
 
+  const loadQuotePriceOptions = useCallback(async (catalogItemId: string): Promise<QuotePriceOption[]> => {
+    if (!catalogItemId) return [];
+    const response = await fetch(`/api/catalog/items/${catalogItemId}/price-lists`, { cache: "no-store" });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "No se pudieron cargar los precios.");
+    const rows = Array.isArray(body?.items) ? body.items : [];
+    const options = rows.flatMap((row: unknown) => {
+      if (!isRecord(row)) return [];
+      const id = typeof row.lista_precio_id === "string" ? row.lista_precio_id : "";
+      const nombre = typeof row.lista_precio_nombre === "string" ? row.lista_precio_nombre : "";
+      const precio = toNumber(row.precio);
+      if (!id || !nombre || precio == null) return [];
+      return [{ id, nombre, precio, moneda: typeof row.moneda === "string" ? row.moneda.toUpperCase() : "MXN" }];
+    });
+    setQuotePriceOptions((current) => ({ ...current, [catalogItemId]: options }));
+    return options;
+  }, []);
+
   useEffect(() => {
     if (!open || !card?.oportunidadId) return;
     if (activeTab === "notas") {
@@ -1600,6 +1630,14 @@ export function LeadDrawer({
       void loadCatalogItems();
     }
   }, [quoteDialogOpen, quoteCatalogPickerOpen, catalogState.status, loadCatalogItems]);
+
+  useEffect(() => {
+    if (!quoteDialogOpen) return;
+    const ids = Array.from(new Set(quoteItems.map((item) => item.catalogItemId).filter((id): id is string => Boolean(id))));
+    for (const id of ids) {
+      if (!quotePriceOptions[id]) void loadQuotePriceOptions(id).catch(() => undefined);
+    }
+  }, [loadQuotePriceOptions, quoteDialogOpen, quoteItems, quotePriceOptions]);
 
   useEffect(() => {
     if (card?.moneda) {
@@ -2167,7 +2205,8 @@ export function LeadDrawer({
   }, [onRevertStage]);
 
   const handleAddCatalogItem = useCallback(
-    (option: CatalogItemOption) => {
+    async (option: CatalogItemOption) => {
+      await loadQuotePriceOptions(option.id).catch(() => []);
       const nextItem = catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN");
       setQuoteItems((prev) => {
         const cleaned = prev.filter((item) => !isBlankQuoteItem(item));
@@ -2176,13 +2215,16 @@ export function LeadDrawer({
       setQuoteError(null);
       setCatalogSearch("");
     },
-    [quoteMoneda],
+    [loadQuotePriceOptions, quoteMoneda],
   );
 
   const handleAddCatalogItems = useCallback(
-    (options: CatalogItemOption[]) => {
+    async (options: CatalogItemOption[]) => {
       if (!options.length) return;
-      const nextItems = options.map((option) => catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"));
+      const nextItems = await Promise.all(options.map(async (option) => {
+        await loadQuotePriceOptions(option.id).catch(() => []);
+        return catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN");
+      }));
       setQuoteItems((prev) => {
         const cleaned = prev.filter((item) => !isBlankQuoteItem(item));
         return cleaned.length ? [...cleaned, ...nextItems] : nextItems;
@@ -2193,7 +2235,7 @@ export function LeadDrawer({
       setQuoteCatalogPickerSearch("");
       setCatalogSearch("");
     },
-    [quoteMoneda],
+    [loadQuotePriceOptions, quoteMoneda],
   );
 
   const handleAddEmptyItem = useCallback(() => {
@@ -2231,7 +2273,12 @@ export function LeadDrawer({
   );
 
   const handleUnlinkCatalogItem = useCallback((index: number) => {
-    setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, catalogItemId: null } : item)));
+    setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? {
+      ...item,
+      catalogItemId: null,
+      listaPrecioId: null,
+      listaPrecioNombre: null,
+    } : item)));
   }, []);
 
   const handleOpenCatalogPicker = useCallback(() => {
@@ -2255,16 +2302,6 @@ export function LeadDrawer({
     },
     [catalogSearchSuggestions, handleAddCatalogItem],
   );
-
-  const handleQuoteChannelChange = (nextChannel: QuoteChannel) => {
-    setQuoteChannel(nextChannel);
-    if (nextChannel === "email" && !quoteEmailTo && card?.correo) {
-      setQuoteEmailTo(card.correo);
-    }
-    if (nextChannel === "whatsapp" && !quoteWhatsappTo && card?.telefono) {
-      setQuoteWhatsappTo(card.telefono);
-    }
-  };
 
   const handleQuoteAttachmentTrigger = () => {
     quoteAttachmentInputRef.current?.click();
@@ -2424,6 +2461,8 @@ export function LeadDrawer({
                           fotoUrl: typeof item.fotoUrl === "string" ? item.fotoUrl : null,
                           nombre: typeof item.nombre === "string" ? item.nombre : "",
                           descripcion: typeof item.descripcion === "string" ? item.descripcion : "",
+                          listaPrecioId: typeof item.listaPrecioId === "string" ? item.listaPrecioId : null,
+                          listaPrecioNombre: typeof item.listaPrecioNombre === "string" ? item.listaPrecioNombre : null,
                           unidad: typeof item.unidad === "string" ? item.unidad : "unidad",
                       cantidad: typeof item.cantidad === "string" ? item.cantidad : "1",
                       precioUnitario: typeof item.precioUnitario === "string" ? item.precioUnitario : "",
@@ -4609,14 +4648,55 @@ export function LeadDrawer({
                                   className={quoteCompactInputClass}
                                 />
                                 {item.catalogItemId ? (
-                                  <button
-                                    type="button"
-                                    className="text-[10px] font-medium text-emerald-600 hover:underline"
-                                    onClick={() => handleUnlinkCatalogItem(index)}
-                                    disabled={quotePending}
-                                  >
-                                    Vinculado al catálogo
-                                  </button>
+                                  <div className="space-y-1">
+                                    <button
+                                      type="button"
+                                      className="text-[10px] font-medium text-emerald-600 hover:underline"
+                                      onClick={() => handleUnlinkCatalogItem(index)}
+                                      disabled={quotePending}
+                                    >
+                                      Vinculado al catálogo
+                                    </button>
+                                    <Select
+                                      value={item.listaPrecioId ?? "__precio_base__"}
+                                      onValueChange={(value) => {
+                                        const base = catalogItemsById.get(item.catalogItemId ?? "");
+                                        const selected = (quotePriceOptions[item.catalogItemId ?? ""] ?? []).find((price) => price.id === value);
+                                        setQuoteItems((prev) => prev.map((entry, entryIndex) => {
+                                          if (entryIndex !== index) return entry;
+                                          if (!selected) {
+                                            return {
+                                              ...entry,
+                                              listaPrecioId: null,
+                                              listaPrecioNombre: null,
+                                              precioUnitario: base?.precioBase != null ? String(base.precioBase) : entry.precioUnitario,
+                                              moneda: base?.moneda || entry.moneda,
+                                            };
+                                          }
+                                          return {
+                                            ...entry,
+                                            listaPrecioId: selected.id,
+                                            listaPrecioNombre: selected.nombre,
+                                            precioUnitario: String(selected.precio),
+                                            moneda: selected.moneda,
+                                          };
+                                        }));
+                                      }}
+                                      disabled={quotePending || !(quotePriceOptions[item.catalogItemId ?? ""] ?? []).length}
+                                    >
+                                      <SelectTrigger className="h-7 w-full text-[10px]">
+                                        <SelectValue placeholder="Precio base" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__precio_base__">Precio base</SelectItem>
+                                        {(quotePriceOptions[item.catalogItemId ?? ""] ?? []).map((price) => (
+                                          <SelectItem key={price.id} value={price.id}>
+                                            {price.nombre} · {formatQuoteCurrency(price.precio, price.moneda)}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 ) : null}
                               </div>
                               <Input
@@ -6043,6 +6123,8 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
   return {
     id: String(row.id ?? generateLocalId()),
     catalogItemId: typeof row.catalog_item_id === "string" ? row.catalog_item_id : null,
+    listaPrecioId: typeof row.lista_precio_id === "string" ? row.lista_precio_id : null,
+    listaPrecioNombre: typeof row.lista_precio_nombre === "string" ? row.lista_precio_nombre : null,
     fotoUrl:
       typeof row.fotoUrl === "string"
         ? row.fotoUrl
@@ -6072,7 +6154,11 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     total: toNumber(row.total),
-    currency: typeof row.moneda === "string" ? row.moneda : null,
+    currency: typeof row.moneda_aplicada === "string"
+      ? row.moneda_aplicada
+      : typeof row.moneda === "string"
+        ? row.moneda
+        : null,
   };
 }
 
@@ -6263,6 +6349,8 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
     precioUnitario: formatPresetNumberString(initial?.precioUnitario),
     descuento: initial?.descuento ?? "",
     moneda: (initial?.moneda ?? "MXN").toUpperCase(),
+    listaPrecioId: initial?.listaPrecioId ?? null,
+    listaPrecioNombre: initial?.listaPrecioNombre ?? null,
   };
 }
 
@@ -6277,7 +6365,11 @@ function isBlankQuoteItem(item: QuoteItemForm): boolean {
   );
 }
 
-function catalogOptionToQuoteItem(option: CatalogItemOption, fallbackCurrency: string): QuoteItemForm {
+function catalogOptionToQuoteItem(
+  option: CatalogItemOption,
+  fallbackCurrency: string,
+  priceOption?: QuotePriceOption,
+): QuoteItemForm {
   return createQuoteItemForm({
     catalogItemId: option.id,
     fotoUrl: option.fotoUrl,
@@ -6285,8 +6377,10 @@ function catalogOptionToQuoteItem(option: CatalogItemOption, fallbackCurrency: s
     descripcion: option.descripcion,
     unidad: option.unidad,
     cantidad: "1",
-    precioUnitario: option.precioBase != null ? String(option.precioBase) : "",
-    moneda: option.moneda || fallbackCurrency,
+    precioUnitario: priceOption ? String(priceOption.precio) : option.precioBase != null ? String(option.precioBase) : "",
+    moneda: priceOption?.moneda || option.moneda || fallbackCurrency,
+    listaPrecioId: priceOption?.id ?? null,
+    listaPrecioNombre: priceOption?.nombre ?? null,
   });
 }
 
@@ -6371,6 +6465,8 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
         descuento: discount ?? null,
         total,
         moneda: form.moneda.trim().slice(0, 3).toUpperCase(),
+        lista_precio_id: form.listaPrecioId,
+        lista_precio_nombre: form.listaPrecioNombre,
         orden: index + 1,
         metadatos: form.fotoUrl ? { fotoUrl: form.fotoUrl } : undefined,
       };
@@ -6397,6 +6493,8 @@ function quoteEntryToItemForms(
         precioUnitario: item.unitPrice != null ? String(item.unitPrice) : "",
         descuento: item.discount != null ? String(item.discount) : "",
         moneda: item.currency ?? fallbackCurrency,
+        listaPrecioId: item.listaPrecioId,
+        listaPrecioNombre: item.listaPrecioNombre,
       }),
     );
   }
@@ -6436,6 +6534,8 @@ function convertConceptsToItemForms(
         cantidad: "1",
         precioUnitario: total != null ? String(total) : "",
         moneda: fallbackCurrency,
+        listaPrecioId: null,
+        listaPrecioNombre: null,
         fotoUrl:
           typeof record.fotoUrl === "string"
             ? record.fotoUrl

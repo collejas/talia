@@ -1542,6 +1542,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_unidades_invalid_response:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_usable_price_lists(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        rows = await self.list_price_lists(organizacion_id=organizacion_id, include_inactive=False)
+        if not rows:
+            return []
+
+        async def is_usable(row: dict[str, Any]) -> dict[str, Any] | None:
+            lista_id = row.get("id")
+            if not lista_id:
+                return None
+            result = await self._rpc(
+                "puede_usar_lista_precio",
+                {"p_lista_precio_id": str(lista_id)},
+            )
+            allowed = result is True or result == {"puede_usar_lista_precio": True}
+            return row if allowed else None
+
+        usable = await asyncio.gather(*(is_usable(row) for row in rows))
+        return [row for row in usable if row is not None]
+
     async def create_propiedad_unidad_movimiento(
         self,
         *,

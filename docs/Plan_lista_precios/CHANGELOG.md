@@ -56,13 +56,20 @@ Registro de avances, cambios aplicados, verificaciones y pendientes de la funcio
 - Al limpiar un campo, el reemplazo omite esa relación; el backend registra el cambio mediante el trigger de historial.
 - Validaciones locales: ESLint, TypeScript, `git diff --check` y React Doctor 100/100.
 
+### Modal de cotización — en progreso local
+
+- Se agregó el selector de lista de precios por línea en el modal usado desde Embudo/Inbox.
+- Al elegir un producto se consultan únicamente sus precios de listas visibles para el usuario autenticado.
+- El backend valida nuevamente que el usuario pueda usar la lista y reemplaza el precio enviado por el precio vigente autorizado.
+- Las líneas guardan `lista_precio_id`, `lista_precio_nombre` y `moneda_aplicada` como columnas explícitas en `cotizacion_items`.
+- Se aplicó y verificó remotamente la migración `supabase/migrations/20280821_130000_quote_price_snapshot.sql`.
+- Las cotizaciones existentes recibieron `moneda_aplicada` desde la moneda de su encabezado; las listas históricas quedan nulas porque antes no existía esa selección.
+- Validaciones locales: compilación Python, TypeScript, ESLint y `git diff --check` correctos. ESLint mantiene una advertencia preexistente sobre `handleQuoteChannelChange` sin uso.
+
 ### Alcance todavía no implementado
 
-- Campos dinámicos de precios en `settings/productos/items`.
-- Selector de lista por línea en el modal de cotización.
-- Validación completa del precio seleccionado al guardar y enviar una cotización.
-- Snapshot de lista y precio en `cotizacion_items`.
 - Integración final con PDF, correo, WhatsApp y reenvíos.
+- Validación viva con usuarios representativos y despliegue del backend/panel.
 
 ### Backend/API — en progreso local
 

@@ -8386,6 +8386,9 @@ def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
         catalog_id = raw_item.get("catalog_item_id")
         if catalog_id:
             entry["catalog_item_id"] = str(catalog_id)
+        lista_precio_id = raw_item.get("lista_precio_id")
+        if lista_precio_id:
+            entry["lista_precio_id"] = str(lista_precio_id)
         for key in ("titulo", "descripcion", "unidad"):
             value = _clean_text(raw_item.get(key))
             if value:
@@ -8413,6 +8416,45 @@ def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
             entry["orden"] = idx
         normalized.append(entry)
     return normalized
+
+
+async def _resolve_authorized_quote_price_lists(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    resolved: list[dict[str, Any]] = []
+    for item in items:
+        lista_id = item.get("lista_precio_id")
+        if not lista_id:
+            resolved.append(item)
+            continue
+        catalog_item_id = _safe_uuid(item.get("catalog_item_id"))
+        if catalog_item_id is None:
+            raise HTTPException(status_code=400, detail="price_list_requires_catalog_item")
+        values = await repo.list_item_price_lists(
+            organizacion_id=organizacion_id,
+            item_id=catalog_item_id,
+            include_inactive=False,
+        )
+        selected = next((row for row in values if str(row.get("lista_precio_id")) == str(lista_id)), None)
+        if not selected:
+            raise HTTPException(status_code=403, detail="price_list_not_authorized_or_unpriced")
+        selected_list_id = _safe_uuid(selected.get("lista_precio_id"))
+        if selected_list_id is None:
+            raise HTTPException(status_code=502, detail="price_list_reference_invalid")
+        price_list = await repo.get_price_list(
+            organizacion_id=organizacion_id,
+            lista_precio_id=selected_list_id,
+        )
+        resolved_item = dict(item)
+        resolved_item["lista_precio_id"] = str(selected["lista_precio_id"])
+        resolved_item["lista_precio_nombre"] = str((price_list or {}).get("nombre") or "") or None
+        resolved_item["precio_unitario"] = float(selected["precio"])
+        resolved_item["moneda"] = str(selected.get("moneda") or item.get("moneda") or "MXN").upper()
+        resolved.append(resolved_item)
+    return resolved
 
 
 def _decimal_from_value(value: Any) -> Decimal | None:
@@ -8566,6 +8608,8 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
                 cotizacion_id=entry.get("cotizacion_id"),
                 catalog_item_id=catalog_item_id,
                 catalog_item=catalog_item,
+                lista_precio_id=_safe_uuid(entry.get("lista_precio_id")),
+                lista_precio_nombre=_clean_text(entry.get("lista_precio_nombre")) or None,
                 titulo=metadata_dict.get("titulo")
                 or entry.get("titulo")
                 or entry.get("descripcion")
@@ -8582,7 +8626,7 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
                 subtotal=_as_number(entry.get("subtotal")),
                 impuestos=_as_number(metadata_dict.get("impuestos") or entry.get("impuestos")),
                 total=_as_number(metadata_dict.get("total") or entry.get("total")),
-                moneda=metadata_dict.get("moneda") or entry.get("moneda"),
+                moneda=entry.get("moneda_aplicada") or metadata_dict.get("moneda") or entry.get("moneda"),
                 orden=metadata_dict.get("orden") or entry.get("orden"),
                 metadatos=metadata_dict if metadata_dict else None,
                 creado_en=_parse_timestamp(entry.get("creado_en")),
@@ -8700,6 +8744,9 @@ def _quote_items_to_repository_payload(
                 "descuento_porcentaje": None,
                 "subtotal": _as_number(item.get("subtotal")) or _as_number(item.get("total")),
                 "metadata": metadata,
+                "lista_precio_id": item.get("lista_precio_id"),
+                "lista_precio_nombre": item.get("lista_precio_nombre"),
+                "moneda_aplicada": item.get("moneda") or "MXN",
             }
         )
     return repository_items
@@ -15565,6 +15612,7 @@ LEAD_QUOTE_ITEM_DESCRIPTION_MAX_LENGTH = 20_000
 
 class LeadQuoteItemPayload(BaseModel):
     catalog_item_id: UUID | None = None
+    lista_precio_id: UUID | None = None
     titulo: str | None = Field(default=None, max_length=200)
     descripcion: str | None = Field(
         default=None,
@@ -15586,6 +15634,8 @@ class LeadQuoteItem(BaseModel):
     id: UUID
     cotizacion_id: UUID
     catalog_item_id: UUID | None = None
+    lista_precio_id: UUID | None = None
+    lista_precio_nombre: str | None = None
     catalog_item: CRMCatalogItem | None = None
     titulo: str | None = None
     descripcion: str | None = None
@@ -19281,13 +19331,18 @@ async def list_price_lists(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     include_inactive: bool = Query(default=False),
+    usable_only: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=120),
 ) -> list[CRMPriceList]:
     try:
-        rows = await repo.list_price_lists(
-            organizacion_id=organizacion_id,
-            include_inactive=include_inactive,
-            search=search,
+        rows = await (
+            repo.list_usable_price_lists(organizacion_id=organizacion_id)
+            if usable_only
+            else repo.list_price_lists(
+                organizacion_id=organizacion_id,
+                include_inactive=include_inactive,
+                search=search,
+            )
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="price_lists_unavailable") from exc
@@ -29647,9 +29702,14 @@ async def create_lead_quote(
     )
     body = _quote_payload_from_body(payload)
     metadata = _quote_metadata_from_payload(body)
-    repo_items = _quote_items_to_repository_payload(body.pop("items", None))
     currency = (body.get("moneda") or "MXN").upper()
-    normalized_items = _normalize_quote_items(payload.items or [])
+    normalized_items = await _resolve_authorized_quote_price_lists(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        items=_normalize_quote_items(payload.items or []),
+    )
+    body["items"] = normalized_items
+    repo_items = _quote_items_to_repository_payload(body.pop("items", None))
     totals = _quote_totals_from_items(normalized_items)
     if totals:
         body["subtotal"] = totals["subtotal"]
@@ -29801,7 +29861,12 @@ async def preview_lead_quote_pdf(
         raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
     currency = base_payload.moneda or opportunity_row.get("moneda") or "MXN"
-    normalized_items = _normalize_quote_items(base_payload.items or [])
+    normalized_items = await _resolve_authorized_quote_price_lists(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        items=_normalize_quote_items(base_payload.items or []),
+    )
+    base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)
     if totals:
         base_payload.subtotal = totals["subtotal"]
@@ -29987,7 +30052,12 @@ async def send_lead_quote(
         exclude_none=True,
     )
     base_payload = LeadQuoteCreatePayload(**base_payload_data)
-    normalized_items = _normalize_quote_items(base_payload.items or [])
+    normalized_items = await _resolve_authorized_quote_price_lists(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        items=_normalize_quote_items(base_payload.items or []),
+    )
+    base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)
     if totals:
         base_payload.subtotal = totals["subtotal"]

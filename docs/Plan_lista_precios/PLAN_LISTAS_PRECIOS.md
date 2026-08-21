@@ -37,8 +37,11 @@ En progreso local:
 - Endpoints protegidos para administrar listas, permisos, precios por item e historial.
 - CRUD visual de nombres de listas en `settings/account`.
 - Asignación visual de una lista a roles, usuarios y empleados.
+- Selector de lista de precios por línea en el modal de cotización del flujo de Embudo/Inbox.
+- Validación backend de autorización y precio vigente antes de crear, previsualizar o enviar.
+- Snapshot explícito de lista, nombre y moneda aplicada en `cotizacion_items`.
 
-Aún falta la captura de precios en items, el selector del modal de cotización y la validación del precio seleccionado al guardar y enviar.
+Aún falta la validación viva con usuarios representativos, el despliegue del backend/panel y la revisión de la representación PDF para mostrar el nombre de la lista cuando el negocio lo requiera.
 
 ## 2. Alcance funcional
 
