@@ -6,6 +6,7 @@ evitar duplicidad entre prospección, campañas y mapa de conversión.
 ## Documento maestro
 
 - [Plan de consolidación de métricas](PLAN_CONSOLIDACION_METRICAS.md)
+- [Plan de refactor de la vista de métricas](PLAN_REFACTOR_VISTA_METRICAS.md)
 - [Changelog del refactor](CHANGELOG.md)
 
 ## Regla de lectura

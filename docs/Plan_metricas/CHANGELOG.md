@@ -3,6 +3,15 @@
 Registro de cambios del refactor para consolidar métricas y evitar duplicidad
 entre las vistas de prospección y mapa de conversión.
 
+## 2026-08-21 · Plan de refactor de navegación y UX
+
+- Se creó `PLAN_REFACTOR_VISTA_METRICAS.md`.
+- Se definió una navegación de tres niveles: resumen general, selección de
+  canal y detalle especializado.
+- Se separaron las responsabilidades de WhatsApp, Correo y Voz.
+- Se estableció que el resumen general debe comparar canales sin mezclar
+  unidades incompatibles.
+
 ## 2026-08-21 · Primer corte seguro en `prospeccion/contactos`
 
 ### Cambios realizados
