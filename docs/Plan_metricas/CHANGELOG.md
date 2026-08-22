@@ -322,3 +322,20 @@ duplicar información ni mezclar fuentes de medición.
 - Se restituyó el ancho completo anterior de cada botón dentro de su columna.
 - El selector de periodo permanece en la zona derecha del encabezado, sin
   cambiar su posición.
+
+## 2026-08-22 · Compatibilidad con temas visuales
+
+- Se reemplazaron colores fijos del encabezado, navegación, tarjetas y estados
+  por tokens semánticos del tema: fondo, foreground, card, muted, border y
+  primary.
+- La vista ya no depende de fondos claros u oscuros fijos que oculten texto al
+  cambiar el tema desde el selector global.
+- Se adaptaron también divisores, tablas, estados de navegación y gráficas;
+  las series ahora usan `--chart-1` a `--chart-5` del tema activo.
+
+## 2026-08-22 · Compactación del encabezado de detalle WhatsApp
+
+- En la vista de detalle de WhatsApp se retiraron el título `Campañas WhatsApp`
+  y su descripción repetitiva.
+- El encabezado ahora muestra únicamente `Detalle del canal` en negritas para
+  reducir el alto del bloque.

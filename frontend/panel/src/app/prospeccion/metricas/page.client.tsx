@@ -730,8 +730,8 @@ export default function ProspeccionMetricasPageClient() {
     () =>
       channelSummary.map((row) => ({
         ...row,
-        resultLabel: row.canal === "correo" ? "Entregados" : row.canal === "whatsapp" ? "Conversaciones" : "Contestadas",
-        resultValue: row.canal === "whatsapp" ? row.envios_respondidos : row.envios_entregados,
+        resultLabel: row.canal === "llamada" ? "Contestadas" : "Entregados",
+        resultValue: row.envios_entregados,
         responseLabel: row.canal === "correo" ? "Aperturas" : "Respuestas",
         responseValue: row.canal === "correo" ? Math.round((row.open_rate / 100) * row.envios_entregados) : row.envios_respondidos,
       })),
@@ -754,17 +754,17 @@ export default function ProspeccionMetricasPageClient() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-slate-950 px-5 py-6 text-white shadow-sm md:px-7">
+      <section className="rounded-2xl border border-border bg-card px-5 py-6 text-foreground shadow-sm md:px-7">
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_180px] lg:items-center">
           <div className="text-right">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Prospección</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Prospección</p>
             <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Métricas</h1>
           </div>
           <div className="grid w-full min-w-0 max-w-[520px] grid-cols-4 justify-self-center gap-2">
             <button
               type="button"
               onClick={() => { setIsSummaryView(true); setCanal("todos") }}
-              className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${isSummaryView ? "bg-white text-slate-950 shadow-sm" : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"}`}
+              className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${isSummaryView ? "bg-primary text-primary-foreground shadow-sm" : "border border-border bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground"}`}
             >
               Resumen general
             </button>
@@ -779,7 +779,7 @@ export default function ProspeccionMetricasPageClient() {
                   key={value}
                   type="button"
                   onClick={() => openChannel(value)}
-                  className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${active ? "bg-white text-slate-950 shadow-sm" : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"}`}
+                  className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${active ? "bg-primary text-primary-foreground shadow-sm" : "border border-border bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                 >
                   {label}
                 </button>
@@ -788,7 +788,7 @@ export default function ProspeccionMetricasPageClient() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={periodPreset} onValueChange={(value) => handlePeriodChange(value as PeriodPreset)}>
-              <SelectTrigger className="h-10 w-[172px] border-slate-700 bg-slate-900 text-xs text-white hover:bg-slate-800">
+            <SelectTrigger className="h-10 w-[172px] border-border bg-background text-xs text-foreground hover:bg-muted">
                 <SelectValue placeholder="Periodo" />
               </SelectTrigger>
               <SelectContent>
@@ -804,15 +804,15 @@ export default function ProspeccionMetricasPageClient() {
               <div className="flex items-center gap-1">
                 <Input
                   aria-label="Fecha inicial"
-                  className="h-10 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  className="h-10 w-[132px] border-border bg-background text-xs text-foreground [color-scheme:dark]"
                   type="date"
                   value={dateFrom}
                   onChange={(event) => setDateFrom(event.target.value)}
                 />
-                <span className="text-xs text-slate-400">→</span>
+                <span className="text-xs text-muted-foreground">→</span>
                 <Input
                   aria-label="Fecha final"
-                  className="h-10 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  className="h-10 w-[132px] border-border bg-background text-xs text-foreground [color-scheme:dark]"
                   type="date"
                   min={dateFrom || undefined}
                   value={dateTo}
@@ -820,7 +820,7 @@ export default function ProspeccionMetricasPageClient() {
                 />
               </div>
             ) : null}
-            {loading ? <IconLoader className="h-4 w-4 animate-spin text-slate-300" aria-label="Actualizando" /> : null}
+            {loading ? <IconLoader className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Actualizando" /> : null}
           </div>
 
         </div>
@@ -835,39 +835,39 @@ export default function ProspeccionMetricasPageClient() {
               { label: "Respuestas", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_respondidos, 0), hint: "Interacciones atribuidas" },
               { label: "Oportunidades", value: commercialSummary?.oportunidades ?? summaryPhrases?.oportunidades_creadas ?? 0, hint: "Atribuidas a campañas" },
             ].map((item) => (
-              <Card key={item.label} className="border-slate-200 shadow-none">
+              <Card key={item.label} className="border-border shadow-none">
                 <CardContent className="p-5">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{number.format(item.value)}</p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{number.format(item.value)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          <Card className="border-slate-200 shadow-none">
-            <CardHeader className="border-b border-slate-100 pb-4">
+          <Card className="border-border shadow-none">
+            <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base">Rendimiento por canal</CardTitle>
               <p className="text-sm text-muted-foreground">Selecciona un canal para consultar su detalle.</p>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border/60">
                 {summaryChannelRows.map((row) => (
                   <button
                     key={row.canal}
                     type="button"
                     onClick={() => openChannel(row.canal)}
-                    className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 md:grid-cols-[1.2fr_repeat(4,1fr)_auto] md:items-center md:px-6"
+                    className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-muted/50 md:grid-cols-[1.2fr_repeat(4,1fr)_auto] md:items-center md:px-6"
                   >
                     <span>
-                      <span className="block font-medium text-slate-950">{row.canal_label}</span>
+                      <span className="block font-medium text-foreground">{row.canal_label}</span>
                       <span className="text-xs text-muted-foreground">{number.format(row.envios_totales)} de actividad</span>
                     </span>
                     <span><span className="block text-xs text-muted-foreground">{row.resultLabel}</span><span className="font-semibold">{number.format(row.resultValue)}</span></span>
                     <span><span className="block text-xs text-muted-foreground">{row.responseLabel}</span><span className="font-semibold">{number.format(row.responseValue)}</span></span>
                     <span><span className="block text-xs text-muted-foreground">Entrega</span><span className="font-semibold">{row.envios_totales ? `${row.entrega_pct}%` : "—"}</span></span>
                     <span><span className="block text-xs text-muted-foreground">Respuesta</span><span className="font-semibold">{row.envios_totales ? `${row.respuesta_pct}%` : "—"}</span></span>
-                    <span className="text-sm font-medium text-slate-500">Ver detalle →</span>
+                    <span className="text-sm font-medium text-muted-foreground">Ver detalle →</span>
                   </button>
                 ))}
               </div>
@@ -878,45 +878,51 @@ export default function ProspeccionMetricasPageClient() {
 
       {!isSummaryView ? (
         <>
-      <Card className="border-slate-200 shadow-none">
-        <CardHeader className="gap-3 py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <Card className="border-border shadow-none">
+        <CardHeader className="gap-1 py-1">
+          <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Detalle del canal</p>
-              <CardTitle className="text-lg">{activeViewMeta[activeTab].title}</CardTitle>
-              <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
+              {activeTab === "campanas_whatsapp" ? (
+                <CardTitle className="text-base font-semibold">Detalle del canal</CardTitle>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Detalle del canal</p>
+                  <CardTitle className="text-lg">{activeViewMeta[activeTab].title}</CardTitle>
+                  <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               {activeTab === "campanas_whatsapp" ? (
-                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <div className="flex rounded-lg border border-border bg-muted/30 p-0.5">
                   <button
                     type="button"
                     onClick={() => setActiveTab("campanas_whatsapp")}
-                    className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-slate-950 shadow-sm"
+                    className="rounded-md bg-background px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm"
                   >
                     Campañas
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab("frases")}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-950"
+                    className="rounded-md px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                   >
                     Atribución
                   </button>
                 </div>
               ) : activeTab === "frases" ? (
-                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <div className="flex rounded-lg border border-border bg-muted/30 p-0.5">
                   <button
                     type="button"
                     onClick={() => setActiveTab("campanas_whatsapp")}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-950"
+                    className="rounded-md px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                   >
                     Campañas
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab("frases")}
-                    className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-slate-950 shadow-sm"
+                    className="rounded-md bg-background px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm"
                   >
                     Atribución
                   </button>
@@ -924,14 +930,15 @@ export default function ProspeccionMetricasPageClient() {
               ) : null}
               <Button
                 variant="outline"
+                className="h-8 px-2 text-xs"
                 onClick={exportActiveCsv}
                 disabled={Boolean(!hydrated || loading || !data)}
               >
-                <IconDownload className="mr-2 h-4 w-4" />
+                <IconDownload className="mr-1.5 h-3.5 w-3.5" />
                 Exportar CSV
               </Button>
-              <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
-                <IconFileSpreadsheet className="mr-2 h-4 w-4" />
+              <Button className="h-8 px-2 text-xs" variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
+                <IconFileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
                 Exportar XLSX
               </Button>
             </div>
@@ -976,16 +983,22 @@ export default function ProspeccionMetricasPageClient() {
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={campaignChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="fecha_label" tickMargin={8} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip formatter={(value) => number.format(Number(value) || 0)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="envios_totales" stroke="#0f766e" strokeWidth={2} dot={false} name="Envíos totales" />
-                    <Line type="monotone" dataKey="envios_entregados" stroke="#2563eb" strokeWidth={2} dot={false} name="Entregados" />
-                    <Line type="monotone" dataKey="envios_respondidos" stroke="#ea580c" strokeWidth={2} dot={false} name="Respondidos" />
-                    <Line type="monotone" dataKey="envios_fallidos" stroke="#dc2626" strokeWidth={2} dot={false} name="Fallidos" />
-                    <Line type="monotone" dataKey="envios_omitidos" stroke="#6b7280" strokeWidth={2} dot={false} name="Omitidos" />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha_label" tickMargin={8} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
+                    <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
+                    <Tooltip
+                      formatter={(value) => number.format(Number(value) || 0)}
+                      contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "0.5rem", color: "var(--foreground)" }}
+                      labelStyle={{ color: "var(--foreground)" }}
+                      itemStyle={{ color: "var(--foreground)" }}
+                      cursor={{ fill: "var(--muted)" }}
+                    />
+                    <Legend wrapperStyle={{ color: "var(--muted-foreground)" }} />
+                    <Line type="monotone" dataKey="envios_totales" stroke="var(--chart-1)" strokeWidth={2} dot={false} name="Envíos totales" />
+                    <Line type="monotone" dataKey="envios_entregados" stroke="var(--chart-2)" strokeWidth={2} dot={false} name="Entregados" />
+                    <Line type="monotone" dataKey="envios_respondidos" stroke="var(--chart-3)" strokeWidth={2} dot={false} name="Respondidos" />
+                    <Line type="monotone" dataKey="envios_fallidos" stroke="var(--chart-4)" strokeWidth={2} dot={false} name="Fallidos" />
+                    <Line type="monotone" dataKey="envios_omitidos" stroke="var(--chart-5)" strokeWidth={2} dot={false} name="Omitidos" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -1166,7 +1179,7 @@ export default function ProspeccionMetricasPageClient() {
         </div>
       ) : activeTab === "campanas_whatsapp" ? (
         <div className="space-y-4">
-          <Card className="border-emerald-200 bg-emerald-50/30 shadow-none">
+          <Card className="border-primary/20 bg-primary/5 shadow-none">
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -1176,7 +1189,7 @@ export default function ProspeccionMetricasPageClient() {
                   </p>
                 </div>
                 {commercialSummary?.costo_estado === "pendiente_conciliacion" ? (
-                  <Badge variant="outline" className="w-fit border-amber-300 bg-amber-50 text-amber-800">
+                  <Badge variant="outline" className="w-fit border-border bg-muted text-muted-foreground">
                     {number.format(commercialSummary.pendientes_cobro)} pendientes de conciliación
                   </Badge>
                 ) : null}
@@ -1222,16 +1235,16 @@ export default function ProspeccionMetricasPageClient() {
                   hint: "Costo por cliente ganado",
                 },
               ].map((card) => (
-                <div key={card.title} className="rounded-xl border border-emerald-100 bg-white/80 p-4">
+                <div key={card.title} className="rounded-xl border border-border bg-background/80 p-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.title}</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-950">{card.value}</p>
+                  <p className="mt-2 text-xl font-semibold text-foreground">{card.value}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
                 </div>
               ))}
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-none">
+          <Card className="border-border shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Resultado por campaña</CardTitle>
               <p className="text-xs text-muted-foreground">El mismo embudo comercial que muestra el mapa de conversión.</p>
@@ -1293,21 +1306,25 @@ export default function ProspeccionMetricasPageClient() {
                   <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={phrasesChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="fecha_label" tickMargin={8} />
-                    <YAxis yAxisId="left" allowDecimals={false} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => money.format(Number(value) || 0)} />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha_label" tickMargin={8} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
+                    <YAxis yAxisId="left" allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => money.format(Number(value) || 0)} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
                     <Tooltip
                       formatter={(value, name) =>
                         name === "Monto estimado"
                           ? money.format(Number(value) || 0)
                           : number.format(Number(value) || 0)
                       }
+                      contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "0.5rem", color: "var(--foreground)" }}
+                      labelStyle={{ color: "var(--foreground)" }}
+                      itemStyle={{ color: "var(--foreground)" }}
+                      cursor={{ fill: "var(--muted)" }}
                     />
-                    <Legend />
-                    <Line type="monotone" yAxisId="left" dataKey="conversaciones_atribuidas" stroke="#0f766e" strokeWidth={2} dot={false} name="Conversaciones" />
-                    <Line type="monotone" yAxisId="left" dataKey="oportunidades_creadas" stroke="#2563eb" strokeWidth={2} dot={false} name="Oportunidades" />
-                    <Line type="monotone" yAxisId="right" dataKey="monto_estimado_total" stroke="#ea580c" strokeWidth={2} dot={false} name="Monto estimado" />
+                    <Legend wrapperStyle={{ color: "var(--muted-foreground)" }} />
+                    <Line type="monotone" yAxisId="left" dataKey="conversaciones_atribuidas" stroke="var(--chart-1)" strokeWidth={2} dot={false} name="Conversaciones" />
+                    <Line type="monotone" yAxisId="left" dataKey="oportunidades_creadas" stroke="var(--chart-2)" strokeWidth={2} dot={false} name="Oportunidades" />
+                    <Line type="monotone" yAxisId="right" dataKey="monto_estimado_total" stroke="var(--chart-3)" strokeWidth={2} dot={false} name="Monto estimado" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
