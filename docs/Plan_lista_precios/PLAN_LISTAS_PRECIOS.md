@@ -59,6 +59,11 @@ En progreso local:
 - Validación backend de autorización y precio vigente antes de crear, previsualizar o enviar.
 - Snapshot explícito de lista, nombre y moneda aplicada en `cotizacion_items`.
 
+Pendiente de implementación:
+
+- Límites de descuento configurables por tipo de precio (`Precio base` o lista), rol,
+  usuario y empleado.
+
 Aún falta la validación viva con usuarios representativos, el despliegue del backend/panel y la revisión de la representación PDF para mostrar el nombre de la lista cuando el negocio lo requiera.
 
 ## 2. Alcance funcional
@@ -92,7 +97,38 @@ Debe distinguirse entre:
 
 La interfaz puede ocultar acciones no permitidas, pero la autorización definitiva debe ejecutarse en backend y en la base de datos cuando aplique.
 
-### 2.3 CRUD de productos en `settings/productos/items`
+### 2.3 Límites de descuento por tipo de precio
+
+Además del permiso para utilizar una lista, el tenant podrá establecer el porcentaje
+máximo de descuento que puede aplicar cada rol, usuario o empleado. Esta regla será
+independiente del permiso de uso de la lista: tener acceso a una lista no implica poder
+aplicar cualquier descuento.
+
+El límite se configurará por tipo de precio:
+
+- `Precio base`, usando `catalog_items.precio_base` como precio de referencia.
+- Cada lista de precios activa del tenant.
+
+El descuento siempre se calculará sobre el precio vigente de la lista seleccionada en
+la línea de la cotización. Cuando la selección sea `Precio base`, se calculará sobre el
+precio base vigente del producto.
+
+La configuración debe permitir reglas para:
+
+- Un rol.
+- Un usuario específico.
+- Un empleado específico, conforme al modelo de identidad existente.
+
+La interfaz deberá mostrar el límite configurado, permitir crearlo o modificarlo y
+distinguir entre una regla inexistente y un límite de descuento de `0%`. La autorización
+definitiva y el límite efectivo deben validarse en backend; no se debe confiar en el
+porcentaje enviado por el frontend.
+
+La prioridad entre reglas de usuario, empleado y rol deberá definirse antes de
+implementar la migración. La regla seleccionada debe ser determinista, auditable y
+aplicarse igual desde Embudo e Inbox.
+
+### 2.4 CRUD de productos en `settings/productos/items`
 
 En el formulario de creación y edición de cada producto:
 
@@ -105,12 +141,14 @@ En el formulario de creación y edición de cada producto:
 
 La sección de precios debe ser dinámica: al crear una nueva lista en `settings/account`, debe aparecer para los productos sin tener que crear columnas nuevas ni modificar código por cada lista.
 
-### 2.4 Modal de cotización desde Embudo e Inbox
+### 2.5 Modal de cotización desde Embudo e Inbox
 
 Conservar el comportamiento actual de selección de productos y agregar por cada línea:
 
 - Selector de lista de precios autorizada.
 - Precio obtenido de la combinación producto + lista.
+- Campo de descuento, limitado por la regla autorizada para el tipo de precio seleccionado.
+- Precio final después del descuento.
 - Cantidad.
 - Subtotal calculado con el precio seleccionado.
 - Indicador cuando no existe precio para esa combinación.
@@ -124,7 +162,7 @@ El flujo debe funcionar de forma equivalente cuando la oportunidad se abre desde
 - Vista de Embudo.
 - Inbox.
 
-### 2.5 Generación y envío de la cotización
+### 2.6 Generación y envío de la cotización
 
 Revisar el flujo completo posterior al modal:
 
@@ -132,6 +170,7 @@ Revisar el flujo completo posterior al modal:
 - Generación de PDF o representación utilizada actualmente.
 - Envío por correo, WhatsApp u otros canales existentes.
 - Visualización de la lista aplicada y del precio final por línea cuando corresponda.
+- Visualización del precio de lista, descuento aplicado y precio final cuando corresponda.
 - Reenvío y consulta de cotizaciones anteriores.
 
 La cotización enviada debe mostrar el precio aplicado, no recalcularlo desde el precio vigente del producto.
@@ -194,19 +233,54 @@ Reutilizar primero el modelo de permisos existente. Si no existe una relación e
 
 No guardar asignaciones de autorización dentro de JSON. Deben poder consultarse, auditarse y filtrarse con columnas y relaciones reales.
 
-### 3.4 Historial de cotización
+### 3.4 Límites de descuento
+
+Se debe agregar una relación explícita para conservar los límites de descuento por
+tenant y por sujeto autorizado. El nombre final debe adaptarse al esquema existente,
+por ejemplo `listas_precios_limites_descuento`.
+
+Columnas conceptuales esperadas:
+
+- `id` UUID, primary key.
+- `organizacion_id`, foreign key al tenant.
+- `tipo_precio`, con valores explícitos `base` o `lista`.
+- `lista_precio_id`, foreign key nullable; debe ser nulo para `base` y obligatorio para `lista`.
+- `rol_id`, `usuario_id` y `empleado_id`, todos nullable según el sujeto de la regla.
+- `descuento_maximo_porcentaje`, tipo numérico adecuado para porcentaje.
+- `activo`.
+- `creado_por_usuario_id`, si existe auditoría equivalente.
+- `created_at` y `updated_at`.
+
+Constraints e índices:
+
+- El porcentaje debe estar entre `0` y `100`.
+- `tipo_precio = base` exige `lista_precio_id IS NULL`.
+- `tipo_precio = lista` exige `lista_precio_id IS NOT NULL`.
+- Exactamente uno de `rol_id`, `usuario_id` o `empleado_id` debe estar informado.
+- La lista, el rol, el usuario y el empleado deben pertenecer al tenant autenticado.
+- Unicidad por tenant, tipo de precio, lista y sujeto autorizado.
+- Índices para resolver rápidamente el límite por tenant, tipo de precio, lista y sujeto.
+
+La regla no debe guardarse en `metadata`, `json` o `jsonb`. Debe poder consultarse,
+filtrarse, auditarse y validarse mediante columnas y relaciones reales.
+
+### 3.5 Historial de cotización
 
 Revisar si las líneas actuales ya guardan una instantánea del nombre y precio. Si no la guardan, agregar campos explícitos en la línea de cotización, como:
 
 - `lista_precio_id`, nullable para compatibilidad histórica cuando aplique.
 - `lista_precio_nombre` o equivalente histórico.
 - `precio_unitario_aplicado`.
+- `precio_lista_unitario`, es decir, el precio antes del descuento.
+- `descuento_porcentaje_aplicado`.
+- `limite_descuento_autorizado`.
+- `precio_unitario_final`.
 - `moneda_aplicada`, si aplica.
 - `cantidad` y `subtotal` según el modelo existente.
 
 La línea debe conservar el valor utilizado al momento de guardar la cotización. La foreign key a la lista no debe ser la única fuente histórica, porque la lista puede cambiar de nombre o desactivarse.
 
-### 3.5 Historial de cambios de precios
+### 3.6 Historial de cambios de precios
 
 Agregar una auditoría explícita para conservar cada cambio de precio, incluyendo:
 
@@ -301,10 +375,40 @@ Al guardar la cotización, el servicio debe:
 2. Validar acceso del usuario a la lista seleccionada.
 3. Consultar el precio vigente del producto para esa lista.
 4. Validar que exista y que el producto esté disponible.
-5. Calcular o verificar cantidad, subtotal y total en servidor.
-6. Persistir la instantánea histórica de la línea.
+5. Resolver el límite de descuento efectivo para el tipo de precio seleccionado y el
+   rol, usuario o empleado autenticado.
+6. Validar que el descuento solicitado no supere el límite autorizado.
+7. Calcular en servidor el descuento, precio final, cantidad, subtotal y total sobre el
+   precio de la lista seleccionada.
+8. Persistir la instantánea histórica de la línea, incluyendo precio antes del
+   descuento, descuento y precio final.
 
 Si una lista deja de estar permitida entre la carga del modal y el envío, la operación debe rechazarse con un error claro y no guardar una cotización parcialmente autorizada.
+
+El backend debe rechazar también la operación cuando el descuento exceda el límite
+vigente, aunque el frontend haya mostrado un valor permitido al cargar el modal.
+
+### 4.4 Límites de descuento
+
+Contrato conceptual para consultar y administrar límites:
+
+```text
+GET    /api/.../listas-precios/{id}/limites-descuento
+PUT    /api/.../listas-precios/{id}/limites-descuento
+GET    /api/.../precios-base/limites-descuento
+PUT    /api/.../precios-base/limites-descuento
+```
+
+Los schemas deben representar explícitamente el sujeto (`rol`, `usuario` o
+`empleado`), el tipo de precio y `descuento_maximo_porcentaje`. El backend debe:
+
+- Validar tenant y ownership de todas las relaciones.
+- Separar el permiso para administrar límites del permiso para utilizar precios.
+- Resolver una única regla efectiva según la prioridad definida para usuario,
+  empleado y rol.
+- Rechazar porcentajes fuera de `0` a `100`.
+- No aceptar como autoridad el límite ni el precio enviados por el cliente.
+- Registrar auditoría de creación, modificación, activación y desactivación de límites.
 
 ## 5. UI/UX propuesta
 
@@ -316,6 +420,7 @@ Agregar una sección titulada **Listas de precios** con:
 - Crear y editar mediante formulario simple.
 - Confirmación para eliminar o desactivar.
 - Acceso claro a permisos.
+- Configuración visible de límites de descuento por lista y para `Precio base`.
 - Estados de carga, vacío, error y éxito.
 - Advertencia cuando una lista tenga productos o cotizaciones relacionadas.
 
@@ -336,7 +441,9 @@ En cada línea seleccionada:
 
 - Producto.
 - Lista de precios.
-- Precio unitario resultante.
+- Precio unitario de la lista.
+- Descuento permitido y descuento aplicado.
+- Precio unitario final.
 - Cantidad.
 - Subtotal.
 - Acción para eliminar la línea.
@@ -357,6 +464,12 @@ Debe existir un estado vacío útil cuando:
 - Validar permiso de administración de listas para crear, editar, desactivar o eliminar.
 - Validar permiso de edición de precios para modificar precios de productos.
 - Validar permiso de uso de lista al crear, actualizar, enviar o reenviar una cotización.
+- Validar el límite de descuento para el tipo de precio seleccionado al crear,
+  actualizar, enviar o reenviar una cotización.
+- Calcular el descuento exclusivamente sobre el precio vigente de la lista seleccionada;
+  para `Precio base`, usar `catalog_items.precio_base`.
+- No permitir que el cliente altere el precio de lista, el límite autorizado ni el
+  precio final calculado por el servidor.
 - Revisar RLS y cualquier RPC `SECURITY DEFINER` existente.
 - Aplicar autorización dentro de la consulta o servicio que materializa la cotización; no depender de filtros visuales.
 - Evitar que un usuario obtenga precios de otra lista cambiando un UUID en la petición.
@@ -382,6 +495,7 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 - Localizar el modal de cotización y sus entradas desde Embudo e Inbox.
 - Trazar frontend, BFF, FastAPI, repositorios, tablas, RPC/RLS y generación/envío.
 - Confirmar el modelo actual de roles, permisos, usuarios y empleados.
+- Definir la prioridad entre reglas de descuento de usuario, empleado y rol.
 - Revisar compatibilidad con cotizaciones existentes.
 
 ### Fase 2: base de datos
@@ -389,8 +503,10 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 - Crear catálogo tenant-aware de listas de precios.
 - Crear relación producto-lista-precio.
 - Crear o ajustar relaciones de permisos.
+- Crear la relación explícita de límites de descuento por tipo de precio y sujeto.
 - Agregar constraints, foreign keys e índices.
-- Agregar columnas de snapshot en líneas de cotización si faltan.
+- Agregar columnas de snapshot de precio, descuento y precio final en líneas de
+  cotización si faltan.
 - Crear pruebas de aislamiento entre tenants.
 
 ### Fase 3: backend y APIs
@@ -400,6 +516,8 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 - Extender productos con precios por lista.
 - Extender cotización para aceptar lista por línea.
 - Calcular y validar precios en servidor.
+- Implementar consulta y administración de límites de descuento.
+- Resolver y validar el límite efectivo sobre el precio de la lista seleccionada.
 - Persistir snapshot histórico.
 - Agregar errores consistentes y autorización en cada operación.
 
@@ -407,6 +525,8 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 
 - Implementar sección de listas en `settings/account`.
 - Implementar permisos de listas.
+- Implementar configuración de límites por lista, `Precio base`, rol, usuario y
+  empleado.
 - Implementar sección de precios por lista en items.
 - Extender el modal de cotización existente.
 - Mantener el flujo de Embudo e Inbox.
@@ -454,6 +574,21 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 - Usuario sin listas autorizadas.
 - Revocación de permiso antes de enviar la cotización.
 
+### Límites de descuento
+
+- Configurar un límite distinto para `Precio base` y para una lista específica.
+- Permitir límites independientes para rol, usuario y empleado.
+- Diferenciar una regla inexistente de una regla explícita de `0%`.
+- Rechazar descuentos superiores al límite autorizado.
+- Calcular el descuento sobre el precio de la lista seleccionada.
+- Calcular el descuento sobre `catalog_items.precio_base` cuando se seleccione
+  `Precio base`.
+- Verificar que el precio final y el descuento guardados coincidan con el cálculo del
+  servidor.
+- Probar la prioridad definida cuando existan reglas para usuario, empleado y rol.
+- Revocar o cambiar un límite antes de enviar una cotización y verificar la nueva
+  validación.
+
 ### Cotización
 
 - Seleccionar productos desde Embudo.
@@ -483,6 +618,8 @@ La funcionalidad estará terminada cuando:
 
 - El tenant pueda administrar nombres de listas desde `settings/account`.
 - Los permisos controlen administración, edición y uso de forma independiente.
+- El tenant pueda configurar límites de descuento por lista y para `Precio base`.
+- El límite efectivo se resuelva por rol, usuario o empleado y se valide en backend.
 - Los usuarios autorizados puedan capturar precios por lista desde `settings/productos/items`.
 - El modal existente conserve la selección de productos y permita escoger una lista por línea.
 - Embudo e Inbox utilicen el mismo contrato seguro de cotización.
@@ -502,5 +639,9 @@ La funcionalidad estará terminada cuando:
 - Si los permisos de empleados usan la misma identidad que usuarios o una entidad separada.
 - Si la cotización debe mostrar siempre el nombre de la lista al cliente final.
 - Si se permitirá editar manualmente el precio por línea con un permiso adicional.
+- Prioridad exacta entre una regla de descuento de usuario, empleado y rol cuando
+  existan varias para el mismo tipo de precio.
+- Si el límite se manejará únicamente como porcentaje o si en el futuro también se
+  requerirá un límite monetario.
 
 Estas decisiones deben resolverse durante la fase de descubrimiento antes de crear la migración definitiva.
