@@ -349,6 +349,17 @@ columna del detalle comercial por campaña para evitar duplicidad conceptual.
 El resumen general, el gráfico y las exportaciones CSV respetan la misma
 separación de fuentes.
 
+La vista de detalle no incluye una sección adicional de `Filtros globales`.
+El periodo se selecciona desde el encabezado y el canal desde la navegación
+principal, manteniendo la pantalla compacta.
+
+La navegación de canales también está integrada dentro del encabezado de
+`Métricas`; no se presenta como una sección independiente. Los botones usan
+una fila completa con cuatro columnas iguales, mayor altura y padding uniforme,
+para quedar centrados y distribuidos en una zona central más amplia. El
+encabezado se divide en periodo a la izquierda, navegación al centro y título
+alineado a la derecha.
+
 ### Fase 4 · Filtros y exportaciones
 
 - Aplicar periodo y campaña de forma consistente.

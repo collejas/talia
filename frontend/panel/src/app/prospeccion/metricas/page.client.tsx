@@ -21,19 +21,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   getProspeccionMetricas,
   listContactoTemplates,
-  listCrmCampaigns,
-  listWhatsAppAtribucionReglas,
   downloadProspeccionMetricasXlsx,
   type ContactoTemplate,
-  type CrmCampaign,
   type ProspeccionMetricasResponse,
   type ProspeccionCampanaAtribucionItem,
-  type WhatsAppAtribucionRule,
 } from "@/lib/prospeccion/prospectos-client"
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
@@ -117,16 +112,11 @@ export default function ProspeccionMetricasPageClient() {
   const [whatsappTimeseries, setWhatsappTimeseries] = useState<ProspeccionMetricasResponse["frases_whatsapp"]["timeseries"]>([])
   const [whatsappTimeseriesLoading, setWhatsappTimeseriesLoading] = useState(false)
 
-  const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
-  const [rules, setRules] = useState<WhatsAppAtribucionRule[]>([])
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
 
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [canal, setCanal] = useState<"todos" | "correo" | "whatsapp" | "llamada">("todos")
-  const [campanaId, setCampanaId] = useState("todos")
-  const [campanaPublicitaria, setCampanaPublicitaria] = useState("")
-  const [reglaId, setReglaId] = useState("todos")
   const [tableSort, setTableSort] = useState<{ key: string; dir: "asc" | "desc" }>({
     key: "envios_totales",
     dir: "desc",
@@ -139,20 +129,12 @@ export default function ProspeccionMetricasPageClient() {
     let cancelled = false
     const loadFilters = async () => {
       try {
-        const [crmCampaigns, templatesResponse, reglasResponse] = await Promise.all([
-          listCrmCampaigns(),
-          listContactoTemplates(),
-          listWhatsAppAtribucionReglas({ limit: 500, offset: 0 }),
-        ])
+        const templatesResponse = await listContactoTemplates()
         if (cancelled) return
-        setCampaigns(crmCampaigns ?? [])
         setTemplates(Array.isArray(templatesResponse.items) ? templatesResponse.items : [])
-        setRules(Array.isArray(reglasResponse.items) ? reglasResponse.items : [])
       } catch {
         if (!cancelled) {
-          setCampaigns([])
           setTemplates([])
-          setRules([])
         }
       }
     }
@@ -192,9 +174,6 @@ export default function ProspeccionMetricasPageClient() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         canal,
-        campana_id: campanaId !== "todos" ? campanaId : undefined,
-        campana_publicitaria: campanaPublicitaria.trim() || undefined,
-        regla_id: reglaId !== "todos" ? reglaId : undefined,
         limit: 500,
         include_campaign_timeseries: false,
         include_whatsapp_timeseries: false,
@@ -209,7 +188,7 @@ export default function ProspeccionMetricasPageClient() {
     } finally {
       setLoading(false)
     }
-  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+  }, [dateFrom, dateTo, canal])
 
   useEffect(() => {
     void loadMetrics()
@@ -222,9 +201,6 @@ export default function ProspeccionMetricasPageClient() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         canal: "correo",
-        campana_id: campanaId !== "todos" ? campanaId : undefined,
-        campana_publicitaria: campanaPublicitaria.trim() || undefined,
-        regla_id: reglaId !== "todos" ? reglaId : undefined,
         limit: 500,
         include_campaign_timeseries: true,
         include_whatsapp_timeseries: false,
@@ -237,7 +213,7 @@ export default function ProspeccionMetricasPageClient() {
     } finally {
       setCampaignTimeseriesLoading(false)
     }
-  }, [dateFrom, dateTo, campanaId, campanaPublicitaria, reglaId])
+  }, [dateFrom, dateTo])
 
   useEffect(() => {
     setCampaignTimeseries([])
@@ -251,9 +227,6 @@ export default function ProspeccionMetricasPageClient() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         canal,
-        campana_id: campanaId !== "todos" ? campanaId : undefined,
-        campana_publicitaria: campanaPublicitaria.trim() || undefined,
-        regla_id: reglaId !== "todos" ? reglaId : undefined,
         limit: 500,
         include_campaign_timeseries: false,
         include_whatsapp_timeseries: true,
@@ -266,7 +239,7 @@ export default function ProspeccionMetricasPageClient() {
     } finally {
       setWhatsappTimeseriesLoading(false)
     }
-  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+  }, [dateFrom, dateTo, canal])
 
   useEffect(() => {
     setWhatsappTimeseries([])
@@ -744,9 +717,6 @@ export default function ProspeccionMetricasPageClient() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         canal,
-        campana_id: campanaId !== "todos" ? campanaId : undefined,
-        campana_publicitaria: campanaPublicitaria.trim() || undefined,
-        regla_id: reglaId !== "todos" ? reglaId : undefined,
         limit: 2000,
       })
       downloadBlob(result.filename, result.blob)
@@ -754,7 +724,7 @@ export default function ProspeccionMetricasPageClient() {
       const message = err instanceof Error ? err.message : "No se pudo exportar el XLSX."
       setError(message)
     }
-  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+  }, [dateFrom, dateTo, canal])
 
   const summaryChannelRows = useMemo(
     () =>
@@ -785,17 +755,40 @@ export default function ProspeccionMetricasPageClient() {
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-slate-200 bg-slate-950 px-5 py-6 text-white shadow-sm md:px-7">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
+        <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_180px] lg:items-center">
+          <div className="text-right">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Prospección</p>
             <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Métricas</h1>
-            <p className="max-w-xl text-sm text-slate-300">
-              Un resumen claro del rendimiento y acceso directo al canal que necesita revisar.
-            </p>
+          </div>
+          <div className="grid w-full min-w-0 max-w-[520px] grid-cols-4 justify-self-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setIsSummaryView(true); setCanal("todos") }}
+              className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${isSummaryView ? "bg-white text-slate-950 shadow-sm" : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"}`}
+            >
+              Resumen general
+            </button>
+            {([
+              ["correo", "Correo"],
+              ["whatsapp", "WhatsApp"],
+              ["llamada", "Voz"],
+            ] as const).map(([value, label]) => {
+              const active = !isSummaryView && canal === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => openChannel(value)}
+                  className={`flex h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition ${active ? "bg-white text-slate-950 shadow-sm" : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"}`}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={periodPreset} onValueChange={(value) => handlePeriodChange(value as PeriodPreset)}>
-              <SelectTrigger className="h-9 w-[172px] border-slate-700 bg-slate-900 text-xs text-white hover:bg-slate-800">
+              <SelectTrigger className="h-10 w-[172px] border-slate-700 bg-slate-900 text-xs text-white hover:bg-slate-800">
                 <SelectValue placeholder="Periodo" />
               </SelectTrigger>
               <SelectContent>
@@ -811,7 +804,7 @@ export default function ProspeccionMetricasPageClient() {
               <div className="flex items-center gap-1">
                 <Input
                   aria-label="Fecha inicial"
-                  className="h-9 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  className="h-10 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
                   type="date"
                   value={dateFrom}
                   onChange={(event) => setDateFrom(event.target.value)}
@@ -819,7 +812,7 @@ export default function ProspeccionMetricasPageClient() {
                 <span className="text-xs text-slate-400">→</span>
                 <Input
                   aria-label="Fecha final"
-                  className="h-9 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
+                  className="h-10 w-[132px] border-slate-700 bg-slate-900 text-xs text-white [color-scheme:dark]"
                   type="date"
                   min={dateFrom || undefined}
                   value={dateTo}
@@ -829,37 +822,9 @@ export default function ProspeccionMetricasPageClient() {
             ) : null}
             {loading ? <IconLoader className="h-4 w-4 animate-spin text-slate-300" aria-label="Actualizando" /> : null}
           </div>
+
         </div>
       </section>
-
-      <nav aria-label="Navegación de métricas" className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => { setIsSummaryView(true); setCanal("todos") }}
-          className={`rounded-xl px-4 py-3 text-left text-sm transition ${isSummaryView ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-        >
-          <span className="block font-semibold">Resumen general</span>
-          <span className={`mt-1 block text-xs ${isSummaryView ? "text-slate-300" : "text-slate-400"}`}>Todos los canales</span>
-        </button>
-        {([
-          ["correo", "Correo", "Envíos, aperturas y clics"],
-          ["whatsapp", "WhatsApp", "Mensajes y conversaciones"],
-          ["llamada", "Voz", "Llamadas y resultados"],
-        ] as const).map(([value, label, description]) => {
-          const active = !isSummaryView && canal === value
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => openChannel(value)}
-              className={`rounded-xl px-4 py-3 text-left text-sm transition ${active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-300" : "text-slate-600 hover:bg-slate-50"}`}
-            >
-              <span className="block font-semibold">{label}</span>
-              <span className="mt-1 block text-xs text-slate-400">{description}</span>
-            </button>
-          )
-        })}
-      </nav>
 
       {isSummaryView ? (
         <section className="space-y-4">
@@ -913,77 +878,6 @@ export default function ProspeccionMetricasPageClient() {
 
       {!isSummaryView ? (
         <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros globales</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <div className="space-y-1">
-            <Label>Desde</Label>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Hasta</Label>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Canal</Label>
-            <Select value={canal} onValueChange={(value) => setCanal(value as typeof canal)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="correo">Correo</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="llamada">Llamada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Campaña CRM</Label>
-            <Select value={campanaId} onValueChange={setCampanaId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas</SelectItem>
-                {campaigns.map((campaign) => (
-                  <SelectItem key={campaign.id} value={campaign.id}>{campaign.nombre}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Campaña publicitaria</Label>
-            <Input
-              placeholder="Meta Ads Febrero"
-              value={campanaPublicitaria}
-              onChange={(event) => setCampanaPublicitaria(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Regla</Label>
-            <Select value={reglaId} onValueChange={setReglaId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas</SelectItem>
-                {rules.map((rule) => (
-                  <SelectItem key={rule.id} value={rule.id}>{rule.nombre_regla}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-3 lg:col-span-6">
-            <Button
-              onClick={() => {
-                void loadMetrics()
-              }}
-              disabled={loading}
-            >
-              {loading ? <IconLoader className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Actualizar métricas
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card className="border-slate-200 shadow-none">
         <CardHeader className="gap-3 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

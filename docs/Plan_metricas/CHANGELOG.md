@@ -294,3 +294,31 @@ duplicar información ni mezclar fuentes de medición.
   como oportunidad.
 - También se eliminó la columna `Respuestas` de `Resultado por campaña`; la
   vista comercial queda enfocada en oportunidades, clientes y costos.
+
+## 2026-08-22 · Retiro de filtros globales duplicados
+
+- Se eliminó por completo la sección `Filtros globales` de la vista de detalle.
+- Se conserva el selector compacto de periodo en el encabezado y la
+  navegación por canal como mecanismos principales de exploración.
+- Se retiraron las cargas y estados que solo alimentaban los controles de
+  campaña, campaña publicitaria y regla de esa sección.
+
+## 2026-08-22 · Integración de navegación en el encabezado
+
+- Se eliminó la sección separada de botones `Resumen general`, `Correo`,
+  `WhatsApp` y `Voz`.
+- Los cuatro botones ahora viven dentro del encabezado de `Métricas`, con
+  dimensiones compactas y estados activo/inactivo visibles.
+- Se eliminó el texto introductorio redundante del encabezado.
+- El selector de periodo y el calendario personalizado se conservaron en la
+  misma franja superior.
+- El grupo de botones quedó en la misma línea del título `Métricas`, con el
+  selector de periodo a la derecha y comportamiento responsive.
+- El encabezado se organizó en tres zonas: periodo, navegación central amplia
+  y título alineado a la derecha.
+
+### Corrección posterior
+
+- Se restituyó el ancho completo anterior de cada botón dentro de su columna.
+- El selector de periodo permanece en la zona derecha del encabezado, sin
+  cambiar su posición.
