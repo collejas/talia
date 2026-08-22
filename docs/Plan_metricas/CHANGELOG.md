@@ -3,6 +3,41 @@
 Registro de cambios del refactor para consolidar métricas y evitar duplicidad
 entre las vistas de prospección y mapa de conversión.
 
+## 2026-08-22 · Refactor completo de campañas WhatsApp
+
+- La subvista WhatsApp ahora analiza campañas de mercadotecnia usando
+  `resultado_comercial_whatsapp` como fuente principal.
+- Las tarjetas, el resumen general, el gráfico y la tabla principal muestran
+  enviados, entregados, respuestas, oportunidades, clientes y conversión de
+  campaña.
+- La exportación CSV de WhatsApp ahora corresponde al resultado atribuido por
+  campaña.
+- Las métricas de lotes, eventos y mensajes del contexto operativo quedaron en
+  un bloque colapsado de diagnóstico y ya no se presentan como KPI principales.
+- Se corrigieron los agregados del resumen general para no sumar `787` como si
+  fuera el total de mensajes de WhatsApp del tenant.
+
+## 2026-08-22 · Corrección de estados operativos WhatsApp
+
+- Se corrigió la RPC `prospeccion_campana_whatsapp_metricas_rango` para que
+  `mensajes_entregados` incluya mensajes que posteriormente fueron leídos.
+- Se conservó `mensajes_con_evento_entrega` como métrica de trazabilidad y no
+  como sinónimo de entregados.
+- `mensajes_fallidos` conserva el último estado fallido observado para evitar
+  presentar como fallido un mensaje que después fue entregado.
+- Se aclararon las etiquetas de la subvista WhatsApp: lotes, mensajes
+  salientes, entregados acumulados, leídos y fallidos.
+- No se modificó el bloque `resultado_comercial_whatsapp` ni la fuente del
+  mapa de conversión.
+
+### Validación semántica
+
+- Un mensaje leído ahora también cuenta como entregado.
+- La tasa de entrega se calcula sobre entregados acumulados / mensajes
+  salientes.
+- Los mensajes salientes siguen siendo una métrica operativa del flujo y no se
+  comparan directamente con los envíos atribuidos del resultado comercial.
+
 ## 2026-08-22 · Resultado comercial compartido de campañas WhatsApp
 
 - Se documentó que `prospeccion/metricas` debe mostrar oportunidades, clientes

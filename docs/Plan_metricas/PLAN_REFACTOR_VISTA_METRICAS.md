@@ -315,6 +315,20 @@ La subvista WhatsApp muestra ahora el resultado comercial sin reemplazar el
 detalle operativo de envíos. Si existen cobros pendientes, los costos se
 presentan como `Pendiente`; nunca se interpretan como cero conciliado.
 
+### Fase 3.2 · Refactor de análisis de campañas WhatsApp
+
+**Implementado.** La subvista se define como tablero de rendimiento de
+campañas de mercadotecnia. Su fuente principal es `resultado_comercial_whatsapp`
+y sus KPI son enviados, entregados, respuestas, oportunidades, clientes,
+conversión y costos cuando estén conciliados.
+
+Los datos de `campanas_whatsapp` se conservan únicamente para diagnóstico de
+ejecución: lotes, eventos del proveedor y trazabilidad. No deben mezclarse con
+el total facturable del tenant ni usarse como KPI de campaña.
+
+El resumen general, el gráfico y las exportaciones CSV respetan la misma
+separación de fuentes.
+
 ### Fase 4 · Filtros y exportaciones
 
 - Aplicar periodo y campaña de forma consistente.

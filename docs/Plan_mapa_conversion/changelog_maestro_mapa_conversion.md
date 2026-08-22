@@ -1,7 +1,7 @@
 # Changelog maestro · Mapa de conversion
 
 Fecha original: 2026-07-01
-Última actualización: 2026-08-15
+Última actualización: 2026-08-22
 Ruta: `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md`
 
 ## Regla de uso
@@ -9,11 +9,18 @@ Ruta: `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md`
 Este es el unico changelog operativo de la carpeta.
 
 Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando afecten:
-
 - datos,
 - backend,
 - frontend,
 - o contratos de integracion.
+
+## 2026-08-22 · Estados acumulativos de entrega WhatsApp
+
+- Se agregó una RPC aditiva para que los mensajes leídos también cuenten como
+  entregados acumulados en la métrica operativa de WhatsApp.
+- El resultado comercial del mapa de conversión no fue modificado.
+- La métrica de trazabilidad (`mensajes_con_evento_entrega`) queda separada de
+  la métrica de entregados.
 
 ## 2026-08-22 · Resultado comercial compartido con métricas
 
