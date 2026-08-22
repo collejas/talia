@@ -394,3 +394,16 @@ La compatibilidad temporal solo debe existir internamente para lectura o backfil
 5. cambiar runtime de prospección a `template_id`;
 6. snapshotear en batch/envío;
 7. retirar contrato viejo de `SID` en `Whats-Prosp`.
+
+### 12.1 Integración con métricas y resultado comercial
+
+Los contratos de ejecución de `Whats-Prosp` deben conservar las llaves
+necesarias para que el agregado compartido relacione campaña, lote, mensaje,
+conversación, oportunidad y cobro. Ese agregado será consumido por:
+
+- `prospeccion/metricas`, para rendimiento y eficiencia de campaña;
+- `mapa-de-conversion`, para adquisición, atribución y conversión.
+
+No se deben copiar costos ni oportunidades a una segunda tabla de reportes.
+Cuando el costo no esté conciliado mediante `cobro_mensaje_id`, el contrato de
+métricas debe conservar el estado pendiente y la UI no debe presentar cero.

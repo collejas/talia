@@ -36,6 +36,15 @@ deduplicación vive en:
 Este documento conserva el detalle específico de campañas WhatsApp y su
 relación con el mapa; no redefine el tablero global de métricas.
 
+La relación de este plan con `prospeccion/metricas` queda definida así:
+
+- `mapa-de-conversion` conserva adquisición, tráfico, conversaciones,
+  atribución y contexto del resultado comercial.
+- `prospeccion/metricas` muestra la eficiencia operativa y comercial de la
+  campaña: envíos, respuestas, oportunidades, clientes y costos.
+- Ambas vistas deben consumir el mismo agregado canónico de atribución y
+  cobro; no deben recalcular CPO, CAC u oportunidades por separado.
+
 El detalle forense del caso real de WhatsApp de prospeccion se documenta en:
 
 - `informe_metricas_whatsapp_prospeccion.md`
@@ -344,6 +353,29 @@ Lo que si puede hacerse es mejorar la lectura visual para que el usuario entiend
 - `campañas enviadas` no es lo mismo que `atribucion de frases`,
 - `conversaciones` no es lo mismo que `oportunidades`.
 
+### 8.1 Publicación del resultado comercial en métricas
+
+El resultado comercial de campañas WhatsApp también debe estar disponible en
+`prospeccion/metricas`, principalmente dentro de la subvista WhatsApp y luego
+en el resumen general cuando los indicadores sean comparables.
+
+Indicadores compartidos:
+
+- conversaciones atribuidas;
+- oportunidades atribuidas;
+- clientes ganados;
+- costo total conciliado;
+- costo por conversación;
+- costo por oportunidad;
+- CAC cuando existan clientes atribuidos.
+
+Esto no convierte al mapa en un tablero de envíos ni elimina su sección de
+campañas. El mapa presenta el resultado dentro del recorrido de adquisición;
+`prospeccion/metricas` lo presenta como rendimiento de campaña.
+
+Si el ledger de costo no está conciliado, la UI debe mostrar `Pendiente de
+conciliación` o `No disponible`, nunca cero implícito.
+
 ## 9) Plan de implementacion sugerido
 
 ### Fase 1. Definir contrato
@@ -351,6 +383,7 @@ Lo que si puede hacerse es mejorar la lectura visual para que el usuario entiend
 Actividades:
 
 - documentar el nuevo contrato de respuesta de metricas,
+- definir el bloque compartido de resultado comercial y costo WhatsApp,
 - definir que bloque vive en `prospeccion/metricas` y cual en `mapa-de-conversion`,
 - fijar nombres explicitos de bloques y series.
 
@@ -384,6 +417,8 @@ Actividades:
 
 - comparar totales por campaña,
 - comparar respuestas vs oportunidades,
+- comparar costo conciliado, CPO y CAC entre el agregado compartido y ambas
+  vistas,
 - revisar que `mapa-de-conversion` siga mostrando lo que debe mostrar,
 - confirmar que no se rompio ningun flujo del plan de personas/contactos.
 

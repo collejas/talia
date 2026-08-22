@@ -186,10 +186,24 @@ atribución. No duplicará CPO ni CAC.
 Podrá mostrar un resumen agregado consumiendo el mismo endpoint, sin duplicar
 fórmulas.
 
+### `prospeccion/metricas`
+
+La subvista WhatsApp consumirá el mismo agregado de atribución y cobro para
+mostrar el rendimiento comercial de campañas: conversaciones, oportunidades,
+clientes, costo total, CPO y CAC cuando corresponda. Esta vista no sustituye al
+mapa; presenta la misma verdad desde la perspectiva de eficiencia de campaña.
+
+No se copiarán importes ni se crearán cálculos alternos en el frontend. Los
+costos incompletos se marcarán como pendientes de conciliación.
+
 ## 9. Backend y consultas
 
 Crear un resumen específico de atribución que acepte tenant, campaña, plantilla,
 periodo predefinido/rango manual y canal WhatsApp, respetando RLS.
+
+El resumen debe ser reutilizable por `mapa-de-conversion` y
+`prospeccion/metricas`, incluyendo resultado comercial y costos derivados del
+ledger mediante `cobro_mensaje_id`.
 
 La consulta unirá:
 

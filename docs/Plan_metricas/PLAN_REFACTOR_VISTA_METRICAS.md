@@ -191,6 +191,34 @@ Contrato de responsabilidad:
 - Voz: resultados de llamadas y conversiones cuando el origen esté disponible.
 - `resumen_general`: comparación de indicadores compatibles entre canales.
 
+### 4.1 Resultado comercial y costo de WhatsApp
+
+El bloque de WhatsApp debe incluir el resultado comercial directo de las
+campañas, porque completa la lectura de rendimiento y costo:
+
+- conversaciones atribuidas;
+- oportunidades atribuidas;
+- clientes ganados, cuando exista etapa comercial confiable;
+- costo total conciliado;
+- costo por conversación (CPC);
+- costo por oportunidad (CPO);
+- CAC WhatsApp, cuando existan clientes atribuidos.
+
+Este bloque debe usar el mismo agregado canónico de atribución y cobro que
+`mapa-de-conversion`. La duplicidad visual es aceptable cuando cada vista
+responde una pregunta distinta; queda prohibido duplicar fórmulas o crear una
+segunda fuente de datos.
+
+Responsabilidades:
+
+- `prospeccion/metricas`: eficiencia operativa y comercial de campañas por
+  canal, periodo y campaña.
+- `mapa-de-conversion`: adquisición, tráfico, conversaciones, atribución y
+  contexto del resultado comercial.
+
+Los costos incompletos no deben mostrarse como cero: deben indicar pendiente
+de conciliación o no disponible.
+
 ## 5. Reglas de presentación
 
 - Toda tarjeta debe indicar canal y unidad cuando exista posibilidad de

@@ -16,6 +16,15 @@ Aquí se debe registrar cualquier cambio relevante que afecte:
 - migraciones,
 - o decisiones del refactor de `Whats-Prosp`.
 
+## 2026-08-22 · Integración con rendimiento comercial
+
+- Se documentó que los contratos de ejecución deben conservar las relaciones
+  necesarias para compartir atribución, oportunidades y cobro con
+  `prospeccion/metricas` y `mapa-de-conversion`.
+- Se prohibió copiar costos u oportunidades en una segunda fuente de reportes.
+- Los costos no conciliados deben conservar estado pendiente y no mostrarse
+  como cero.
+
 ## 2026-07-16
 
 - Se descartó continuar con la solución anterior basada en dualidad Twilio/Meta dentro de `settings/variables`.

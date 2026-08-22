@@ -3,6 +3,15 @@
 Registro de cambios del refactor para consolidar métricas y evitar duplicidad
 entre las vistas de prospección y mapa de conversión.
 
+## 2026-08-22 · Resultado comercial compartido de campañas WhatsApp
+
+- Se documentó que `prospeccion/metricas` debe mostrar oportunidades, clientes
+  y costos de WhatsApp como parte del rendimiento directo de campañas.
+- Se estableció que CPO, CAC y costo por conversación solo deben mostrarse con
+  costo conciliado; nunca debe tratarse un costo incompleto como cero.
+- Se definió un agregado canónico compartido con `mapa-de-conversion`, evitando
+  duplicar fórmulas o crear una segunda fuente de verdad.
+
 ## 2026-08-21 · Plan de refactor de navegación y UX
 
 - Se creó `PLAN_REFACTOR_VISTA_METRICAS.md`.

@@ -130,7 +130,7 @@ deduplicación.
 | --- | --- | --- |
 | `prospeccion/contactos` | lotes, contactos, estados de envío, errores, reintentos y logs del lote seleccionado | salud global, conversión por fuente y eventos globales de correo |
 | `prospeccion/campanas` | configuración de campañas, plantillas, canal, audiencia y acciones | tabla completa de KPI repetida por campaña/plantilla/lote/envío |
-| `prospeccion/metricas` | tablero global de rendimiento: correo, WhatsApp, conversiones y exportaciones | —; es la vista principal de rendimiento |
+| `prospeccion/metricas` | tablero global de rendimiento: correo, WhatsApp, conversiones, costos y exportaciones | —; es la vista principal de rendimiento |
 | `mapa-de-conversion` | tráfico web, conversaciones, atribución y conversiones | entregabilidad global, aperturas, rebotes y bloqueos como KPI propios |
 
 ### Enlaces de navegación
@@ -151,6 +151,14 @@ El tablero global debe separar visual y semánticamente:
    costo cuando exista.
 3. `conversion`: sesiones atribuidas, conversaciones, oportunidades, clientes,
    tasas y valor.
+
+4. `resultado_comercial_whatsapp`: oportunidades, clientes, costo conciliado,
+   CPO y CAC cuando existan datos suficientes.
+
+`resultado_comercial_whatsapp` debe ser un agregado compartido con
+`mapa-de-conversion`; no debe calcularse de forma independiente en cada UI.
+En el mapa conserva el contexto de adquisición y atribución. En
+`prospeccion/metricas` se presenta como resultado y eficiencia de campaña.
 
 Los estados no necesariamente son excluyentes. La UI debe documentar el
 denominador de cada tasa y evitar sumar aperturas o clics como si fueran

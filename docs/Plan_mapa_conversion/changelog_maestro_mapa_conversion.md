@@ -15,6 +15,18 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - frontend,
 - o contratos de integracion.
 
+## 2026-08-22 · Resultado comercial compartido con métricas
+
+- Se documentó que el resultado comercial de campañas WhatsApp también debe
+  estar disponible en `prospeccion/metricas`.
+- `mapa-de-conversion` conserva el contexto de adquisición, atribución y
+  conversión; `prospeccion/metricas` presenta eficiencia operativa y comercial
+  de campaña.
+- Se estableció un agregado canónico compartido para oportunidades, clientes,
+  costos, CPO y CAC, sin duplicar fórmulas entre vistas.
+- Los costos sin conciliación deben mostrarse como pendientes o no disponibles,
+  nunca como cero.
+
 ## 2026-08-15
 
 - Se aplicaron diez correcciones documentales para alinear `Plan_mapa_conversion` con el tracking multi-tenant de `docs/Crear_webchat_tenants`.
