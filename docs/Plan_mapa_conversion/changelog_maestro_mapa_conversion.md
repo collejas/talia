@@ -293,3 +293,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Se creó `docs/Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md` como referencia única para separar operación de envíos, rendimiento de campañas y conversión.
 - Se enlazó desde los planes de mapa de conversión, latencia, personas/contactos y listas de precios.
 - Se estableció que `prospeccion/metricas` es el tablero global de rendimiento; `contactos` y `campanas` conservan operación/configuración; `mapa-de-conversion` conserva adquisición, sesiones, conversaciones y conversión.
+
+## 2026-08-22 — Simplificación del resultado comercial de campañas
+
+- Se retiró `Respuestas` del `Embudo consolidado` de la sección `Campañas`.
+- Se retiró también la columna `Respuestas` de `Detalle por campaña`.
+- La sección conserva enviados, entregados, oportunidades, clientes y costos,
+  alineada con la lectura comercial simplificada de `prospeccion/metricas`.
+- `Oportunidades` muestra ahora su porcentaje sobre conversaciones atribuidas,
+  tanto en el embudo consolidado como en el detalle por campaña.

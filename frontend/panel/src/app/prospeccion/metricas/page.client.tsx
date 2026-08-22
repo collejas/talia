@@ -2,18 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  IconBrandWhatsapp,
   IconDownload,
   IconFileSpreadsheet,
   IconLoader,
-  IconMail,
-  IconPhoneCall,
 } from "@tabler/icons-react"
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   Line,
   LineChart,
@@ -31,12 +25,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   getProspeccionMetricas,
-  getBrevoQuota,
   listContactoTemplates,
   listCrmCampaigns,
   listWhatsAppAtribucionReglas,
   downloadProspeccionMetricasXlsx,
-  type BrevoQuotaSnapshot,
   type ContactoTemplate,
   type CrmCampaign,
   type ProspeccionMetricasResponse,
@@ -48,23 +40,6 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
 const moneyPrecise = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 4, maximumFractionDigits: 4 })
 const number = new Intl.NumberFormat("es-MX")
 const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
-const CHANNEL_TOTAL_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
-  whatsapp: { fill: "#25D366", stroke: "#1FAF57", label: "WhatsApp" },
-  correo: { fill: "#2563EB", stroke: "#1D4ED8", label: "Correo" },
-  llamada: { fill: "#F59E0B", stroke: "#D97706", label: "Voz" },
-}
-
-function getChannelTotalStyle(canal?: string | null) {
-  return CHANNEL_TOTAL_STYLE[(canal || "").toLowerCase()] ?? { fill: "#0f172a", stroke: "#0f172a", label: "Canal" }
-}
-
-function getChannelIcon(canal?: string | null) {
-  const normalized = (canal || "").toLowerCase()
-  if (normalized === "whatsapp") return IconBrandWhatsapp
-  if (normalized === "correo") return IconMail
-  if (normalized === "llamada") return IconPhoneCall
-  return IconPhoneCall
-}
 
 function stripHtmlToText(value: string) {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
@@ -141,8 +116,6 @@ export default function ProspeccionMetricasPageClient() {
   const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
   const [whatsappTimeseries, setWhatsappTimeseries] = useState<ProspeccionMetricasResponse["frases_whatsapp"]["timeseries"]>([])
   const [whatsappTimeseriesLoading, setWhatsappTimeseriesLoading] = useState(false)
-  const [brevoQuota, setBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
-  const [brevoQuotaLoading, setBrevoQuotaLoading] = useState(false)
 
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
   const [rules, setRules] = useState<WhatsAppAtribucionRule[]>([])
@@ -158,13 +131,6 @@ export default function ProspeccionMetricasPageClient() {
     key: "envios_totales",
     dir: "desc",
   })
-  const legendItems = [
-    { label: "Enviados", color: "#fbbf24", order: 0 },
-    { label: "Fallidos", color: "#ef4444", order: 1 },
-    { label: "Omitidos", color: "#9ca3af", order: 2 },
-    { label: "Otros estados", color: "#a78bfa", order: 3 },
-  ]
-
   useEffect(() => {
     setHydrated(true)
   }, [])
@@ -308,29 +274,15 @@ export default function ProspeccionMetricasPageClient() {
     void loadWhatsappTimeseries()
   }, [activeTab, loadWhatsappTimeseries])
 
-  const loadBrevoQuota = useCallback(async () => {
-    setBrevoQuotaLoading(true)
-    try {
-      const response = await getBrevoQuota()
-      setBrevoQuota(response)
-    } catch {
-      setBrevoQuota(null)
-    } finally {
-      setBrevoQuotaLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadBrevoQuota()
-  }, [loadBrevoQuota])
-
   const campaignItems = useMemo(
     () => data?.campanas_correo?.items ?? data?.campanas.items ?? [],
     [data?.campanas_correo?.items, data?.campanas.items],
   )
   const summaryCampaign = data?.campanas_correo?.summary ?? data?.campanas.summary
-  const summaryWhatsappCampaigns = data?.campanas_whatsapp?.summary
   const commercialSummary = data?.resultado_comercial_whatsapp?.summary
+  const commercialOpportunityRate = commercialSummary?.conversaciones
+    ? (commercialSummary.oportunidades / commercialSummary.conversaciones) * 100
+    : 0
   const commercialItems = useMemo(
     () => data?.resultado_comercial_whatsapp?.items ?? [],
     [data?.resultado_comercial_whatsapp?.items],
@@ -377,33 +329,7 @@ export default function ProspeccionMetricasPageClient() {
     const cards: Array<{ title: string; value: string; hint: string }> = []
     const isWhatsappFilter = canal === "whatsapp"
     if (isWhatsappFilter) {
-      cards.push(
-        {
-          title: "Campañas WhatsApp",
-          value: number.format(commercialSummary?.campanas ?? 0),
-          hint: "Campañas con atribución en el periodo",
-        },
-        {
-          title: "Enviados",
-          value: number.format(commercialSummary?.envios ?? 0),
-          hint: "Mensajes atribuidos a campañas",
-        },
-        {
-          title: "Entregados",
-          value: number.format(commercialSummary?.entregados ?? 0),
-          hint: `${(commercialSummary?.tasa_entrega_pct ?? 0).toFixed(2)}% de los enviados`,
-        },
-        {
-          title: "Respuestas",
-          value: number.format(commercialSummary?.respondieron ?? 0),
-          hint: "Conversaciones con respuesta",
-        },
-        {
-          title: "Oportunidades",
-          value: number.format(commercialSummary?.oportunidades ?? 0),
-          hint: "Resultado atribuido a campañas",
-        },
-      )
+      return cards
     } else if (canal === "todos") {
       const totalEnvios = (summaryCampaign?.envios_totales ?? 0) + (commercialSummary?.envios ?? 0)
       const totalRespondidos = (summaryCampaign?.envios_respondidos ?? 0) + (commercialSummary?.respondieron ?? 0)
@@ -498,95 +424,6 @@ export default function ProspeccionMetricasPageClient() {
     }
     return cards
   }, [summaryCampaign, commercialSummary, summaryPhrases, campaignItems, canal])
-
-  const topCampaigns = useMemo(() => {
-    const items = campaignItems
-    const campaignNameMap = new Map<string, string>()
-    campaigns.forEach((c) => {
-      if (c.id) campaignNameMap.set(c.id, c.nombre)
-    })
-    const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
-    // Agrupar por campaña para que el Top 5 muestre campañas únicas (no plantillas del mismo envío)
-    const byCampaignMap = new Map<
-      string,
-      { nombre: string; canal: string | null | undefined; envios_totales: number }
-    >()
-    items.forEach((item, idx) => {
-      const key =
-        item.campana_id ||
-        item.campana_nombre ||
-        item.template_id ||
-        item.template_slug ||
-        item.twilio_content_sid ||
-        `${item.canal ?? "canal"}-${idx}`
-      const prev = byCampaignMap.get(key)
-      const envios = item.envios_totales || 0
-      const bestName =
-        (item.campana_id ? campaignNameMap.get(item.campana_id) : undefined) ||
-        item.campana_nombre ||
-        item.template_nombre ||
-        item.template_slug ||
-        item.twilio_content_sid ||
-        key ||
-        `Campaña ${item.canal ?? "general"}`
-      if (prev) {
-        prev.envios_totales += envios
-        if (prev.nombre === "Sin nombre" && bestName !== "Sin nombre") {
-          prev.nombre = bestName
-        }
-      } else {
-        byCampaignMap.set(key, {
-          nombre: bestName,
-          canal: item.canal,
-          envios_totales: envios,
-        })
-      }
-    })
-    const byEnvios = [...byCampaignMap.values()]
-      .sort((a, b) => (b.envios_totales || 0) - (a.envios_totales || 0))
-      .slice(0, 5)
-    const byOpenRate = [...items]
-      .filter((item) => normalize(item.canal) === "correo" && (item.envios_entregados || 0) > 0)
-      .map((item) => ({
-        ...item,
-        open_rate: (item.brevo_aperturas || 0) / (item.envios_entregados || 1),
-      }))
-      .sort((a, b) => (b.open_rate || 0) - (a.open_rate || 0))
-      .slice(0, 5)
-    const byResponseRate = [...items]
-      .filter((item) => (item.envios_entregados || 0) > 0)
-      .map((item) => ({
-        ...item,
-        response_rate: (item.envios_respondidos || 0) / (item.envios_entregados || 1),
-      }))
-    const byBounce = [...items]
-      .filter((item) => (item.envios_totales || 0) > 0 && (item.envios_fallidos || 0) > 0)
-      .map((item) => ({
-        ...item,
-        bounce_rate: (item.envios_fallidos || 0) / (item.envios_totales || 1),
-      }))
-      .sort((a, b) => (b.bounce_rate || 0) - (a.bounce_rate || 0))
-      .slice(0, 5)
-    const byChannelTop = (rows: typeof byResponseRate, canal: "correo" | "whatsapp") =>
-      rows
-        .filter((item) => normalize(item.canal) === canal)
-        .sort((a, b) => (b.response_rate || 0) - (a.response_rate || 0))
-        .slice(0, 5)
-    const byChannelBounce = (rows: typeof byBounce, canal: "correo" | "whatsapp") =>
-      rows
-        .filter((item) => normalize(item.canal) === canal)
-        .sort((a, b) => (b.bounce_rate || 0) - (a.bounce_rate || 0))
-        .slice(0, 5)
-    return {
-      byEnvios,
-      byOpenRate,
-      byResponseRateCorreo: byChannelTop(byResponseRate, "correo"),
-      byResponseRateWhatsapp: byChannelTop(byResponseRate, "whatsapp"),
-      byBounceCorreo: byChannelBounce(byBounce, "correo"),
-      byBounceWhatsapp: byChannelBounce(byBounce, "whatsapp"),
-      byBounce,
-    }
-  }, [campaignItems, campaigns])
 
   const channelSummary = useMemo(() => {
     const items = campaignItems
@@ -687,33 +524,6 @@ export default function ProspeccionMetricasPageClient() {
       .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
       .sort((a, b) => (channelOrder[a.canal] ?? 99) - (channelOrder[b.canal] ?? 99))
   }, [campaignItems, commercialSummary])
-
-  const whatsappChannelSummary = useMemo(() => {
-    if (canal !== "whatsapp") return []
-    const summary = commercialSummary
-    if (!summary) return []
-    return [
-      {
-        canal: "whatsapp",
-        canal_label: "WhatsApp",
-        campanas_total: summary.campanas ?? 0,
-        envios: summary.envios ?? 0,
-        entregados: summary.entregados ?? 0,
-        respondieron: summary.respondieron ?? 0,
-        oportunidades: summary.oportunidades ?? 0,
-        clientes: summary.clientes ?? 0,
-      },
-    ]
-  }, [canal, commercialSummary])
-
-
-  const topWhatsappRules = useMemo(() => {
-    const rules = data?.frases_whatsapp.by_rule ?? []
-    const byConversations = [...rules].sort((a, b) => (b.conversaciones_atribuidas || 0) - (a.conversaciones_atribuidas || 0)).slice(0, 5)
-    const byOpportunities = [...rules].sort((a, b) => (b.oportunidades_creadas || 0) - (a.oportunidades_creadas || 0)).slice(0, 5)
-    const byAmount = [...rules].sort((a, b) => (b.monto_estimado_total || 0) - (a.monto_estimado_total || 0)).slice(0, 5)
-    return { byConversations, byOpportunities, byAmount }
-  }, [data?.frases_whatsapp.by_rule])
 
   const sortedCampaignItems = useMemo(() => {
     const items = [...campaignItems]
@@ -1164,7 +974,6 @@ export default function ProspeccionMetricasPageClient() {
             <Button
               onClick={() => {
                 void loadMetrics()
-                void loadBrevoQuota()
               }}
               disabled={loading}
             >
@@ -1236,456 +1045,21 @@ export default function ProspeccionMetricasPageClient() {
         </CardHeader>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {topCards.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{card.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">{card.value}</p>
-              <p className="text-xs text-muted-foreground">{card.hint}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Campañas destacadas (Top 5)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid gap-2 lg:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Por volumen</p>
-                <ul className="space-y-1">
-                  {topCampaigns.byEnvios.map((item, idx) => (
-                    <li key={`${item.nombre}-${idx}`} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{item.nombre}</span>
-                      <Badge variant="outline">{number.format(item.envios_totales)} envíos</Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground" suppressHydrationWarning>
-                  Open rate (correo)
-                </p>
-                <ul className="space-y-1">
-                  {topCampaigns.byOpenRate.map((item, idx) => (
-                    <li key={`${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                      <span
-                        className="truncate"
-                        title={resolveTemplateTooltip(item)}
-                      >
-                        {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
-                      </span>
-                      <Badge variant="outline">
-                        {Math.round(((item.brevo_aperturas || 0) / (item.envios_entregados || 1)) * 100)}% open
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="grid gap-2 lg:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Por respuesta</p>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Correo</p>
-                    <ul className="space-y-1">
-                      {topCampaigns.byResponseRateCorreo.map((item, idx) => (
-                        <li key={`correo-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                          <span
-                            className="truncate"
-                            title={resolveTemplateTooltip(item)}
-                          >
-                            {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
-                          </span>
-                          <Badge variant="outline">
-                            {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">WhatsApp</p>
-                    <ul className="space-y-1">
-                      {topCampaigns.byResponseRateWhatsapp.map((item, idx) => (
-                        <li key={`wa-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                          <span
-                            className="truncate"
-                            title={resolveTemplateTooltip(item)}
-                          >
-                            {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
-                          </span>
-                          <Badge variant="outline">
-                            {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Mayor rebote (global)</p>
-                <ul className="space-y-1">
-                  {topCampaigns.byBounce.map((item, idx) => (
-                    <li
-                      key={`bounce-${idx}-${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? "row"}`}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span
-                        className="truncate"
-                        title={resolveTemplateTooltip(item)}
-                      >
-                        {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
-                      </span>
-                      <Badge variant="destructive">
-                        {Math.round(((item.envios_fallidos || 0) / (item.envios_totales || 1)) * 100)}% rebote
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              {canal === "whatsapp" ? "Resumen operativo de WhatsApp" : "Resumen por canal de campañas"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                {canal === "whatsapp" ? (
-                  <BarChart data={whatsappChannelSummary} barGap={12} barCategoryGap="20%">
-                    <XAxis dataKey="canal_label" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip
-                      shared={false}
-                      cursor={false}
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload || payload.length === 0) return null
-                        const row = payload[0]?.payload as (typeof whatsappChannelSummary)[number]
-                        if (!row) return null
-                        const swatch = (color: string) => (
-                          <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
-                        )
-                        return (
-                          <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                            <div className="mb-1 font-semibold">{label}</div>
-                            <div className="space-y-1">
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#0f172a")}Campañas</span>
-                                <span>{number.format(row.campanas_total)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#2563eb")}Enviados</span>
-                                <span>{number.format(row.envios)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#22c55e")}Entregados</span>
-                                <span>{number.format(row.entregados)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#f59e0b")}Respuestas</span>
-                                <span>{number.format(row.respondieron)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#ef4444")}Oportunidades</span>
-                                <span>{number.format(row.oportunidades)}</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#6b7280")}Clientes</span>
-                                <span>{number.format(row.clientes)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend
-                      content={() => (
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
-                            Campañas
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
-                            Enviados
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                            Entregados
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
-                            Respuestas
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#ef4444" }} />
-                            Oportunidades
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#6b7280" }} />
-                            Clientes
-                          </span>
-                        </div>
-                      )}
-                    />
-                    <Bar dataKey="campanas_total" fill="#0f172a" name="Campañas" />
-                    <Bar dataKey="envios" fill="#2563eb" name="Enviados" />
-                    <Bar dataKey="entregados" fill="#22c55e" name="Entregados" />
-                    <Bar dataKey="respondieron" fill="#f59e0b" name="Respuestas" />
-                    <Bar dataKey="oportunidades" fill="#ef4444" name="Oportunidades" />
-                    <Bar dataKey="clientes" fill="#6b7280" name="Clientes" />
-                  </BarChart>
-                ) : (
-                  <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
-                    <XAxis
-                      dataKey="canal_label"
-                      tickLine={false}
-                      tick={({ x, y, payload }) => {
-                        const row = channelSummary.find((item) => item.canal_label === payload.value)
-                        const style = getChannelTotalStyle(row?.canal)
-                        const ChannelIcon = getChannelIcon(row?.canal)
-                        return (
-                          <g transform={`translate(${x},${y})`}>
-                            <foreignObject x={-54} y={8} width={120} height={24}>
-                              <div className="flex items-center gap-1 text-[11px] text-foreground">
-                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: style.fill }} />
-                                <ChannelIcon size={12} />
-                                <span>{payload.value}</span>
-                              </div>
-                            </foreignObject>
-                          </g>
-                        )
-                      }}
-                    />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip
-                      shared={false}
-                      cursor={false}
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload || payload.length === 0) return null
-                        const row = payload[0]?.payload as typeof channelSummary[number]
-                        if (!row) return null
-                        const total = row.envios_totales_stack || 0
-                        const entregados = row.envios_entregados || 0
-                        const pctTotal = (count: number) => (total > 0 ? ((count / total) * 100).toFixed(2) : "0.00")
-                        const pctEnt = (count: number) => (entregados > 0 ? ((count / entregados) * 100).toFixed(2) : "0.00")
-                        const swatch = (color: string) => (
-                          <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
-                        )
-                        return (
-                          <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                            <div className="mb-1 font-semibold">{label}</div>
-                            <div className="space-y-1">
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">
-                                  {swatch(getChannelTotalStyle(row.canal).fill)}
-                                  Envíos totales
-                                </span>
-                                <span>{number.format(total)} (100.00%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#fbbf24")}Enviados</span>
-                                <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center pl-3">{swatch("#60a5fa")}Sin respuesta</span>
-                                <span>{number.format(row.envios_sin_respuesta || 0)} ({pctEnt(row.envios_sin_respuesta || 0)}%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center pl-3">{swatch("#22c55e")}Respondidos</span>
-                                <span>{number.format(row.envios_respondidos || 0)} ({pctEnt(row.envios_respondidos || 0)}%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#ef4444")}Fallidos</span>
-                                <span>{number.format(row.envios_fallidos || 0)} ({pctTotal(row.envios_fallidos || 0)}%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#9ca3af")}Omitidos</span>
-                                <span>{number.format(row.envios_omitidos || 0)} ({pctTotal(row.envios_omitidos || 0)}%)</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="flex items-center">{swatch("#a78bfa")}Otros estados</span>
-                                <span>{number.format(row.envios_otros_estados || 0)} ({pctTotal(row.envios_otros_estados || 0)}%)</span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend
-                      content={() => (
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          {legendItems.map((item) => (
-                            <span
-                              key={item.label}
-                              className="inline-flex items-center gap-2"
-                              style={{ order: item.order }}
-                            >
-                              <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: item.color }} />
-                              {item.label}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    />
-                    <Bar
-                      dataKey="envios_totales_stack"
-                      fill="#0f172a"
-                      fillOpacity={0.18}
-                      stroke="#0f172a"
-                      strokeWidth={4}
-                      barSize={30}
-                      name="Envíos totales"
-                      legendType="none"
-                    >
-                      {channelSummary.map((row, idx) => {
-                        const style = getChannelTotalStyle(row.canal)
-                        return (
-                          <Cell
-                            key={`totales-${row.canal}-${idx}`}
-                            fill={style.fill}
-                            stroke={style.stroke}
-                            fillOpacity={0.18}
-                          />
-                        )
-                      })}
-                    </Bar>
-                    <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
-                    <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
-                    <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
-                    <Bar dataKey="envios_otros_estados" stackId="breakdown" fill="#a78bfa" name="Otros estados" barSize={22} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              {canal === "whatsapp" ? (
-                <>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#0f172a" }} />
-                    Campañas
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#2563eb" }} />
-                    Enviados
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                    Entregados
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#f59e0b" }} />
-                    Respuestas
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm border-[3px] border-slate-900 bg-slate-900/20" />
-                    Envíos totales = Enviados + Fallidos + Omitidos + Otros estados
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#fbbf24" }} />
-                    Enviados =
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#60a5fa" }} />
-                    Sin respuesta +
-                    <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
-                    Respondidos
-                  </span>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Enlaces / reglas WA (Top 5)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid gap-2 lg:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Por conversaciones</p>
-                <ul className="space-y-1">
-                  {topWhatsappRules.byConversations.map((item, idx) => (
-                    <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{item.regla_nombre}</span>
-                      <Badge variant="outline">{number.format(item.conversaciones_atribuidas)} conv</Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Por oportunidades</p>
-                <ul className="space-y-1">
-                  {topWhatsappRules.byOpportunities.map((item, idx) => (
-                    <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{item.regla_nombre}</span>
-                      <Badge variant="outline">{number.format(item.oportunidades_creadas)} opps</Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground">Por monto estimado</p>
-              <ul className="space-y-1">
-                {topWhatsappRules.byAmount.map((item, idx) => (
-                  <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
-                    <span className="truncate">{item.regla_nombre}</span>
-                    <Badge variant="outline">{money.format(item.monto_estimado_total || 0)}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Brevo hoy</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
-          {brevoQuotaLoading ? (
-            <p className="text-muted-foreground">Consultando cuota diaria...</p>
-          ) : brevoQuota?.configured === false ? (
-            <p className="text-muted-foreground">Brevo no configurado para esta organización.</p>
-          ) : brevoQuota?.available ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="outline">
-                Enviados: {number.format(brevoQuota.sent_today ?? 0)}
-                {brevoQuota.daily_limit !== null ? ` / ${number.format(brevoQuota.daily_limit)}` : ""}
-              </Badge>
-              <Badge variant={brevoQuota.remaining !== null && brevoQuota.remaining <= 0 ? "destructive" : "secondary"}>
-                Restantes: {brevoQuota.remaining ?? "N/D"}
-              </Badge>
-              {brevoQuota.usage_pct !== null ? (
-                <span className="text-muted-foreground">Uso: {brevoQuota.usage_pct}%</span>
-              ) : null}
-              {brevoQuota.date_local ? (
-                <span className="text-muted-foreground">Fecha: {brevoQuota.date_local}</span>
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">No se pudo consultar la cuota de Brevo.</p>
-          )}
-        </CardContent>
-      </Card>
+      {topCards.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {topCards.map((card) => (
+            <Card key={card.title}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">{card.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold">{card.value}</p>
+                <p className="text-xs text-muted-foreground">{card.hint}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
       {error ? (
         <Card>
@@ -1917,9 +1291,16 @@ export default function ProspeccionMetricasPageClient() {
             <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               {[
                 { title: "Enviados", value: number.format(commercialSummary?.envios ?? 0), hint: "Mensajes de campaña" },
-                { title: "Entregados", value: number.format(commercialSummary?.entregados ?? 0), hint: "Mensajes con entrega" },
-                { title: "Respuestas", value: number.format(commercialSummary?.respondieron ?? 0), hint: "Conversaciones con primera respuesta" },
-                { title: "Oportunidades", value: number.format(commercialSummary?.oportunidades ?? 0), hint: "Resultado comercial" },
+                {
+                  title: "Entregados",
+                  value: number.format(commercialSummary?.entregados ?? 0),
+                  hint: `${(commercialSummary?.tasa_entrega_pct ?? 0).toFixed(2)}% de los enviados`,
+                },
+                {
+                  title: "Oportunidades",
+                  value: number.format(commercialSummary?.oportunidades ?? 0),
+                  hint: `${commercialOpportunityRate.toFixed(2)}% de las conversaciones`,
+                },
                 { title: "Clientes ganados", value: number.format(commercialSummary?.clientes ?? 0), hint: "Oportunidades ganadas" },
                 {
                   title: "Costo total",
@@ -1970,7 +1351,6 @@ export default function ProspeccionMetricasPageClient() {
                         <th className="px-2 py-2">Campaña</th>
                         <th className="px-2 py-2">Enviados</th>
                         <th className="px-2 py-2">Entregados</th>
-                        <th className="px-2 py-2">Respuestas</th>
                         <th className="px-2 py-2">Oportunidades</th>
                         <th className="px-2 py-2">Clientes</th>
                         <th className="px-2 py-2">Costo</th>
@@ -1986,7 +1366,6 @@ export default function ProspeccionMetricasPageClient() {
                             <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
                             <td className="px-2 py-2">{number.format(item.envios)}</td>
                             <td className="px-2 py-2">{number.format(item.entregados)}</td>
-                            <td className="px-2 py-2">{number.format(item.respondieron)}</td>
                             <td className="px-2 py-2">{number.format(item.oportunidades)}</td>
                             <td className="px-2 py-2">{number.format(item.clientes)}</td>
                             <td className="px-2 py-2">{costsPending ? "Pendiente" : moneyPrecise.format(item.costo_total)}</td>
@@ -2004,105 +1383,6 @@ export default function ProspeccionMetricasPageClient() {
             </CardContent>
           </Card>
 
-          <details className="rounded-xl border border-slate-200 bg-slate-50/60">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700">
-              Diagnóstico técnico de ejecución
-            </summary>
-            <div className="space-y-4 border-t border-slate-200 p-4">
-              <p className="text-xs text-muted-foreground">
-                Estas métricas sirven para diagnosticar lotes y entregabilidad; no representan el total facturable del tenant ni sustituyen el resultado atribuido de campaña.
-              </p>
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            {[
-              { title: "Sin traza", value: summaryWhatsappCampaigns?.mensajes_sin_evento_entrega ?? 0 },
-              { title: "Batches completados", value: summaryWhatsappCampaigns?.batches_completados ?? 0 },
-              { title: "Batches error", value: summaryWhatsappCampaigns?.batches_error ?? 0 },
-              { title: "Destinatarios", value: summaryWhatsappCampaigns?.prospectos_total ?? 0 },
-              { title: "Conversaciones con respuesta", value: summaryWhatsappCampaigns?.conversaciones_respondidas ?? 0 },
-              { title: "Oportunidades atribuidas", value: summaryWhatsappCampaigns?.oportunidades_total ?? 0 },
-              { title: "Respuestas entrantes", value: summaryWhatsappCampaigns?.mensajes_entrantes ?? 0 },
-              { title: "% Respuesta", value: (summaryWhatsappCampaigns?.tasa_respuesta_pct ?? 0).toFixed(2), suffix: "%" },
-              { title: "% Oportunidad", value: (summaryWhatsappCampaigns?.tasa_oportunidad_pct ?? 0).toFixed(2), suffix: "%" },
-            ].map((card) => (
-              <Card key={card.title}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">{card.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xl font-semibold">
-                    {typeof card.value === "number" ? number.format(card.value) : card.value}
-                    {card.suffix ?? ""}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-              <Card>
-            <CardHeader>
-              <CardTitle>Detalle de campañas WhatsApp</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1720px] text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2">Campaña</th>
-                      <th className="px-2 py-2">Plantilla</th>
-                      <th className="px-2 py-2">Batches</th>
-                      <th className="px-2 py-2">Salientes</th>
-                      <th className="px-2 py-2">Con evento</th>
-                      <th className="px-2 py-2">Entregados acumulados</th>
-                      <th className="px-2 py-2">Leídos</th>
-                      <th className="px-2 py-2">Fallidos</th>
-                      <th className="px-2 py-2">Sin traza</th>
-                      <th className="px-2 py-2">Entrantes</th>
-                      <th className="px-2 py-2">Conversaciones</th>
-                      <th className="px-2 py-2">Respondidas</th>
-                      <th className="px-2 py-2">Sin respuesta</th>
-                      <th className="px-2 py-2">Oportunidades</th>
-                      <th className="px-2 py-2">Abiertas</th>
-                      <th className="px-2 py-2">Ganadas</th>
-                      <th className="px-2 py-2">Perdidas</th>
-                      <th className="px-2 py-2">Monto</th>
-                      <th className="px-2 py-2">% Resp.</th>
-                      <th className="px-2 py-2">% Oport.</th>
-                      <th className="px-2 py-2">% Cierre</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.campanas_whatsapp?.items ?? []).map((item, idx) => (
-                      <tr key={`${item.campana_id ?? "wa"}-${idx}`} className="border-b">
-                        <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
-                        <td className="px-2 py-2">{item.template_nombre ?? "Sin plantilla"}</td>
-                        <td className="px-2 py-2">{number.format(item.batches_total)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_con_evento_entrega)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_entregados)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_leidos)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_fallidos)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_sin_evento_entrega)}</td>
-                        <td className="px-2 py-2">{number.format(item.mensajes_entrantes)}</td>
-                        <td className="px-2 py-2">{number.format(item.conversaciones_total)}</td>
-                        <td className="px-2 py-2">{number.format(item.conversaciones_respondidas)}</td>
-                        <td className="px-2 py-2">{number.format(item.conversaciones_sin_respuesta)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_total)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_abiertas)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_ganadas)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_perdidas)}</td>
-                        <td className="px-2 py-2">{money.format(item.monto_estimado_total)}</td>
-                        <td className="px-2 py-2">{item.tasa_respuesta_pct.toFixed(2)}%</td>
-                        <td className="px-2 py-2">{item.tasa_oportunidad_pct.toFixed(2)}%</td>
-                        <td className="px-2 py-2">{item.tasa_cierre_pct.toFixed(2)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-            </div>
-          </details>
         </div>
       ) : (
         <div className="space-y-4">

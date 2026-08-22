@@ -17,6 +17,13 @@ entre las vistas de prospección y mapa de conversión.
 - Se corrigieron los agregados del resumen general para no sumar `787` como si
   fuera el total de mensajes de WhatsApp del tenant.
 
+### Ajuste posterior
+
+- Se retiró por completo el bloque `Diagnóstico técnico de ejecución` de esta
+  vista para evitar mezclar métricas operativas con rendimiento de campañas.
+- El detalle de lotes y eventos debe consultarse en las vistas operativas de
+  prospección, no en el tablero de resultados de mercadotecnia.
+
 ## 2026-08-22 · Corrección de estados operativos WhatsApp
 
 - Se corrigió la RPC `prospeccion_campana_whatsapp_metricas_rango` para que
@@ -244,3 +251,46 @@ entre las vistas de prospección y mapa de conversión.
 - ESLint del componente: sin errores; conserva advertencias preexistentes del
   módulo.
 - `git diff --check`: correcto.
+
+## 2026-08-22 · Simplificación adicional de la vista de campañas
+
+### Cambios realizados
+
+- Se eliminaron por completo de `prospeccion/metricas` los bloques:
+  - `Campañas destacadas (Top 5)`.
+  - `Resumen operativo de WhatsApp`.
+  - `Enlaces / reglas WA (Top 5)`.
+  - `Brevo hoy`.
+- Se retiraron sus cálculos, estados y solicitudes exclusivas para evitar
+  lógica y consultas sin consumidor visible.
+- Se conservaron la selección de periodo, filtros, exportaciones y el
+  resultado comercial por campaña de WhatsApp.
+
+### Criterio
+
+La vista queda enfocada en resultados comparables y detalle de campañas; los
+diagnósticos operativos y cuotas quedan fuera del tablero principal para no
+duplicar información ni mezclar fuentes de medición.
+
+## 2026-08-22 · Eliminación de KPI duplicados de WhatsApp
+
+- Se retiraron del encabezado de la subvista `Campañas WhatsApp` los KPI de
+  campañas, enviados, entregados, respuestas y oportunidades.
+- Esos valores permanecen únicamente dentro de `Resultado comercial`, junto
+  con clientes ganados, costo, CPO y CAC.
+- El resumen general y las vistas de Correo y Voz conservan sus KPI propios.
+
+## 2026-08-22 · Porcentajes del resultado comercial WhatsApp
+
+- `Entregados` muestra su porcentaje sobre los mensajes enviados.
+- `Respuestas` muestra su porcentaje sobre las conversaciones atribuidas.
+- `Oportunidades` muestra su porcentaje sobre las conversaciones atribuidas,
+  siguiendo la definición canónica de conversión comercial.
+
+## 2026-08-22 · Retiro del KPI de respuestas WhatsApp
+
+- Se eliminó la tarjeta KPI `Respuestas` de `Resultado comercial` para evitar
+  presentar como resultado separado una respuesta que el flujo comercial trata
+  como oportunidad.
+- También se eliminó la columna `Respuestas` de `Resultado por campaña`; la
+  vista comercial queda enfocada en oportunidades, clientes y costos.

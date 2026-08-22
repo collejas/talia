@@ -326,6 +326,26 @@ Los datos de `campanas_whatsapp` se conservan únicamente para diagnóstico de
 ejecución: lotes, eventos del proveedor y trazabilidad. No deben mezclarse con
 el total facturable del tenant ni usarse como KPI de campaña.
 
+El diagnóstico técnico no se muestra dentro de esta subvista; los datos
+operativos deben permanecer en las vistas de operación de prospección.
+
+Como parte de la simplificación posterior, también se retiraron del layout de
+campañas los bloques `Campañas destacadas (Top 5)`, `Resumen operativo de
+WhatsApp`, `Enlaces / reglas WA (Top 5)` y `Brevo hoy`. La subvista conserva
+únicamente los filtros, el resultado comercial y el detalle útil para evaluar
+campañas.
+
+Los KPI superiores específicos de WhatsApp tampoco se duplican: campañas,
+enviados, entregados, respuestas y oportunidades se presentan exclusivamente
+en `Resultado comercial`.
+
+Dentro de ese bloque, las tasas conservan denominadores explícitos: entrega /
+envíos, respuestas / conversaciones y oportunidades / conversaciones.
+
+La tarjeta KPI independiente de `Respuestas` se retiró porque, para este flujo,
+la respuesta de prospección se considera oportunidad. También se retiró esa
+columna del detalle comercial por campaña para evitar duplicidad conceptual.
+
 El resumen general, el gráfico y las exportaciones CSV respetan la misma
 separación de fuentes.
 

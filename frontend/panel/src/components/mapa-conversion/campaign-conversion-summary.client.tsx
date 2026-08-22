@@ -71,6 +71,11 @@ function formatPercent(value: number | undefined): string {
   return `${number(value).toFixed(1)}%`;
 }
 
+function opportunityRate(opportunities: number | undefined, conversations: number | undefined): number {
+  const denominator = number(conversations);
+  return denominator > 0 ? (number(opportunities) / denominator) * 100 : 0;
+}
+
 function Metric({ title, value, helper }: { title: string; value: string; helper: string }) {
   return (
     <div className="rounded-xl border bg-muted/30 p-3">
@@ -182,8 +187,11 @@ export function CampaignConversionSummary({ filters }: Props) {
             <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <Metric title="Enviados" value={formatNumber(visibleTotals?.envios)} helper="Mensajes de campaña" />
               <Metric title="Entregados" value={formatNumber(visibleTotals?.entregados)} helper={formatPercent(visibleTotals?.tasa_entrega_pct)} />
-              <Metric title="Respuestas" value={formatNumber(visibleTotals?.respondieron)} helper={formatPercent(visibleTotals?.tasa_respuesta_pct)} />
-              <Metric title="Oportunidades" value={formatNumber(visibleTotals?.oportunidades)} helper="Conversaciones con oportunidad" />
+              <Metric
+                title="Oportunidades"
+                value={formatNumber(visibleTotals?.oportunidades)}
+                helper={formatPercent(opportunityRate(visibleTotals?.oportunidades, visibleTotals?.conversaciones))}
+              />
               <Metric title="Costo de campaña" value={formatCurrency(visibleTotals?.costo_total)} helper="Gasto acumulado atribuido" />
               <Metric title="CPO" value={formatCurrency(visibleTotals?.costo_por_oportunidad)} helper="Costo por oportunidad" />
               <Metric title="CAC WhatsApp" value={formatCurrency(visibleTotals?.costo_adquisicion)} helper={`${formatNumber(visibleTotals?.clientes)} clientes`} />
@@ -202,7 +210,6 @@ export function CampaignConversionSummary({ filters }: Props) {
                     <TableHead>Campaña</TableHead>
                     <TableHead className="text-right">Enviados</TableHead>
                     <TableHead className="text-right">Entregados</TableHead>
-                    <TableHead className="text-right">Respuestas</TableHead>
                     <TableHead className="text-right">Oportunidades</TableHead>
                     <TableHead className="text-right">Clientes</TableHead>
                     <TableHead className="text-right">Costo</TableHead>
@@ -219,8 +226,9 @@ export function CampaignConversionSummary({ filters }: Props) {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(item.envios)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(item.entregados)} · {formatPercent(item.tasa_entrega_pct)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(item.respondieron)} · {formatPercent(item.tasa_respuesta_pct)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(item.oportunidades)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatNumber(item.oportunidades)} · {formatPercent(opportunityRate(item.oportunidades, item.conversaciones))}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(item.clientes)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(item.costo_total)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(item.costo_por_oportunidad)}</TableCell>
