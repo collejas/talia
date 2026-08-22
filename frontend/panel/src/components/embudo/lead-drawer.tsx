@@ -2238,29 +2238,12 @@ export function LeadDrawer({
     [loadQuotePriceOptions, quoteMoneda],
   );
 
-  const handleAddEmptyItem = useCallback(() => {
-    setQuoteItems((prev) => [...prev, createQuoteItemForm({ moneda: quoteMoneda || "MXN" })]);
-  }, [quoteMoneda]);
-
   const handleItemFieldChange = useCallback(
     (index: number, field: keyof QuoteItemForm, value: string) => {
       setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
     },
     [],
   );
-
-  const handleItemPriceBlur = useCallback((index: number) => {
-    setQuoteItems((prev) =>
-      prev.map((item, idx) => {
-        if (idx !== index) return item;
-        const formatted = formatPresetNumberString(item.precioUnitario);
-        if (formatted === item.precioUnitario) {
-          return item;
-        }
-        return { ...item, precioUnitario: formatted };
-      }),
-    );
-  }, []);
 
   const handleRemoveItem = useCallback(
     (index: number) => {
@@ -4595,10 +4578,6 @@ export function LeadDrawer({
                           Edita aquí los conceptos ya agregados a la cotización.
                         </p>
                       </div>
-                      <Button type="button" size="sm" variant="outline" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
-                        <IconPlus className="size-4" />
-                        Línea en blanco
-                      </Button>
                     </div>
 
                     <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border/40 bg-muted/20">
@@ -4715,10 +4694,11 @@ export function LeadDrawer({
                               />
                               <Input
                                 value={item.precioUnitario}
-                                onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
-                                onBlur={() => handleItemPriceBlur(index)}
                                 disabled={quotePending}
+                                readOnly
+                                aria-readonly="true"
                                 placeholder="0.00"
+                                title="El precio se modifica únicamente desde el producto del catálogo."
                                 className={quoteCompactInputClass}
                               />
                               <Input

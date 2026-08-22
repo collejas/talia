@@ -145,6 +145,7 @@ La sección de precios debe ser dinámica: al crear una nueva lista en `settings
 
 Conservar el comportamiento actual de selección de productos y agregar por cada línea:
 
+- Producto obligatorio del catálogo; no se permitirán líneas manuales sin `catalog_item_id`.
 - Selector de lista de precios autorizada.
 - Precio obtenido de la combinación producto + lista.
 - Campo de descuento, limitado por la regla autorizada para el tipo de precio seleccionado.
@@ -154,6 +155,12 @@ Conservar el comportamiento actual de selección de productos y agregar por cada
 - Indicador cuando no existe precio para esa combinación.
 
 El usuario podrá usar listas diferentes en líneas diferentes de la misma cotización, siempre que tenga permiso para todas ellas.
+
+El precio unitario será de solo lectura en el módulo de cotizaciones. No se aceptará
+un precio manual enviado por el cliente ni se permitirá modificarlo desde Embudo o
+Inbox. El único lugar para cambiar el precio de un producto será su ficha en
+`settings/productos/items`; la cotización solo resolverá el precio base o de la lista
+seleccionada y aplicará el descuento autorizado.
 
 Al guardar o enviar la cotización, se debe conservar una instantánea de la lista y del precio aplicados en cada línea. Los cambios futuros del catálogo no deben alterar una cotización histórica.
 
@@ -473,6 +480,8 @@ Debe existir un estado vacío útil cuando:
 - Revisar RLS y cualquier RPC `SECURITY DEFINER` existente.
 - Aplicar autorización dentro de la consulta o servicio que materializa la cotización; no depender de filtros visuales.
 - Evitar que un usuario obtenga precios de otra lista cambiando un UUID en la petición.
+- No permitir líneas manuales ni aceptar un precio unitario distinto al precio vigente
+  del producto o de la lista seleccionada.
 - Registrar auditoría de cambios relevantes sin guardar tokens ni payloads sensibles.
 
 ## 7. Compatibilidad y migración
@@ -573,6 +582,9 @@ La migración debe ser reversible cuando sea posible y no debe modificar precios
 - Usuario con varias listas autorizadas.
 - Usuario sin listas autorizadas.
 - Revocación de permiso antes de enviar la cotización.
+- Mostrar el precio unitario como solo lectura en Embudo e Inbox.
+- Rechazar una línea sin producto del catálogo.
+- Rechazar un precio unitario manipulado en la petición.
 
 ### Límites de descuento
 
@@ -622,6 +634,8 @@ La funcionalidad estará terminada cuando:
 - El límite efectivo se resuelva por rol, usuario o empleado y se valide en backend.
 - Los usuarios autorizados puedan capturar precios por lista desde `settings/productos/items`.
 - El modal existente conserve la selección de productos y permita escoger una lista por línea.
+- El precio del producto sea solo lectura en cotizaciones y solo pueda cambiarse desde
+  `settings/productos/items`.
 - Embudo e Inbox utilicen el mismo contrato seguro de cotización.
 - El backend valide tenant, permisos, producto, lista y precio.
 - Las cotizaciones guarden el precio y la lista aplicados históricamente.

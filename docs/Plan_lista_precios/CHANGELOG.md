@@ -20,6 +20,14 @@ Registro de avances, cambios aplicados, verificaciones y pendientes de la funcio
 - La migración remota fue aplicada y se verificaron las tablas y columnas nuevas.
 - Pendiente: despliegue del backend/panel y pruebas vivas con usuarios representativos.
 
+### Precio de cotización solo lectura — implementado localmente
+
+- Se eliminó la opción de agregar líneas manuales en el modal de cotización.
+- El precio unitario quedó como solo lectura en el panel.
+- El backend rechaza líneas sin producto del catálogo y precios unitarios alterados.
+- El precio solo puede modificarse desde la ficha del producto; la cotización resuelve
+  precio base o lista autorizada y aplica descuentos.
+
 ## 2026-08-21
 
 ### Corrección de regresión de compatibilidad — completado

@@ -8428,8 +8428,7 @@ async def _resolve_authorized_quote_price_lists(
     for item in items:
         catalog_item_id = _safe_uuid(item.get("catalog_item_id"))
         if catalog_item_id is None:
-            resolved.append(item)
-            continue
+            raise HTTPException(status_code=400, detail="quote_catalog_item_required")
         lista_id = _safe_uuid(item.get("lista_precio_id"))
         catalog_item = await repo.get_catalog_item(
             organizacion_id=organizacion_id,
@@ -8464,6 +8463,9 @@ async def _resolve_authorized_quote_price_lists(
             tipo_precio = "base"
         if price is None:
             raise HTTPException(status_code=409, detail="catalog_item_price_missing")
+        submitted_price = _decimal_from_value(item.get("precio_unitario"))
+        if submitted_price is not None and _round_currency_decimal(submitted_price) != price:
+            raise HTTPException(status_code=409, detail="quote_price_must_match_catalog")
         quantity = _decimal_from_value(item.get("cantidad")) or Decimal("1")
         requested_discount = _decimal_from_value(item.get("descuento")) or Decimal("0")
         gross = _round_currency_decimal(quantity * price)
