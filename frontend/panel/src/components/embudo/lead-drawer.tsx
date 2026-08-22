@@ -265,6 +265,8 @@ type LeadQuoteItemEntry = {
   quantity: number | null;
   unitPrice: number | null;
   discount: number | null;
+  discountPercent: number | null;
+  discountLimitPercent: number | null;
   subtotal: number | null;
   taxes: number | null;
   total: number | null;
@@ -283,6 +285,7 @@ type QuoteItemForm = {
   cantidad: string;
   precioUnitario: string;
   descuento: string;
+  descuentoPorcentaje: string;
   moneda: string;
   listaPrecioId: string | null;
   listaPrecioNombre: string | null;
@@ -1037,6 +1040,7 @@ export function LeadDrawer({
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteDiscountWarning, setQuoteDiscountWarning] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [quoteVendorSettings, setQuoteVendorSettings] = useState<QuoteVendorSettings>(
     DEFAULT_QUOTE_VENDOR_SETTINGS,
@@ -2240,7 +2244,23 @@ export function LeadDrawer({
 
   const handleItemFieldChange = useCallback(
     (index: number, field: keyof QuoteItemForm, value: string) => {
-      setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
+      setQuoteItems((prev) => prev.map((item, idx) => {
+        if (idx !== index) return item;
+        if (field !== "descuento" && field !== "descuentoPorcentaje") {
+          return { ...item, [field]: value };
+        }
+        const quantity = parseNumberInput(item.cantidad) ?? 1;
+        const unitPrice = parseNumberInput(item.precioUnitario) ?? 0;
+        const gross = quantity * unitPrice;
+        const parsed = parseNumberInput(value);
+        if (field === "descuentoPorcentaje") {
+          const amount = parsed != null && gross > 0 ? Number((gross * parsed / 100).toFixed(2)) : 0;
+          return { ...item, descuentoPorcentaje: value, descuento: parsed == null ? "" : formatNumberInputValue(amount) };
+        }
+        const percent = parsed != null && gross > 0 ? Number((parsed / gross * 100).toFixed(2)) : 0;
+        return { ...item, descuento: value, descuentoPorcentaje: parsed == null ? "" : formatNumberInputValue(percent) };
+      }));
+      setQuoteDiscountWarning(null);
     },
     [],
   );
@@ -2464,6 +2484,7 @@ export function LeadDrawer({
         }
       }
       setQuoteError(null);
+      setQuoteDiscountWarning(null);
       setQuoteSuccess(null);
       setQuoteDialogOpen(true);
     },
@@ -2618,8 +2639,25 @@ export function LeadDrawer({
     if (quoteItems.some((item) => !item.nombre.trim() || !item.precioUnitario.trim())) {
       alerts.push("Hay partidas incompletas.");
     }
+    if (quoteItems.some((item) => {
+      const quantity = parseNumberInput(item.cantidad) ?? 1;
+      const price = parseNumberInput(item.precioUnitario) ?? 0;
+      const amount = parseNumberInput(item.descuento) ?? 0;
+      const percent = parseNumberInput(item.descuentoPorcentaje) ?? 0;
+      return amount < 0 || amount > quantity * price || percent < 0 || percent > 100;
+    })) {
+      alerts.push("El descuento debe estar entre 0% y el importe de la partida.");
+    }
+    if (quoteDiscountWarning) alerts.push(quoteDiscountWarning);
     return alerts;
-  }, [quoteChannel, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
+  }, [quoteChannel, quoteDiscountWarning, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
+  const quoteDiscountBlocked = Boolean(quoteDiscountWarning) || quoteItems.some((item) => {
+    const quantity = parseNumberInput(item.cantidad) ?? 1;
+    const price = parseNumberInput(item.precioUnitario) ?? 0;
+    const amount = parseNumberInput(item.descuento) ?? 0;
+    const percent = parseNumberInput(item.descuentoPorcentaje) ?? 0;
+    return amount < 0 || amount > quantity * price || percent < 0 || percent > 100;
+  });
   const quoteRecentHistory = quotesState.data.slice(0, 4);
   const quoteCompactInputClass =
     "h-8 border-0 bg-muted/35 px-2 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
@@ -2629,7 +2667,7 @@ export function LeadDrawer({
     () => buildQuoteVendorSettingsPayload(quoteVendorSettings),
     [quoteVendorSettings],
   );
-  const quoteActionsDisabled = quotePending || quoteVendorSettingsLoading;
+  const quoteActionsDisabled = quotePending || quoteVendorSettingsLoading || Boolean(quoteDiscountWarning);
 
   const handleQuoteVendorConditionChange = (
     index: number,
@@ -2842,6 +2880,11 @@ export function LeadDrawer({
         });
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
+          if (responseBody?.error === "quote_discount_limit_exceeded") {
+            setQuoteDiscountWarning("No tienes permitido aplicar ese descuento para esta lista de precios.");
+            setQuoteError(null);
+            return;
+          }
           const message =
             typeof responseBody?.error === "string" && responseBody.error ? responseBody.error : `Error ${response.status}`;
           setQuoteError(message);
@@ -2924,6 +2967,11 @@ export function LeadDrawer({
         });
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
+          if (responseBody?.error === "quote_discount_limit_exceeded") {
+            setQuoteDiscountWarning("No tienes permitido aplicar ese descuento para esta lista de precios.");
+            setQuoteError(null);
+            return;
+          }
           const message =
             typeof responseBody?.error === "string" && responseBody.error ? responseBody.error : `Error ${response.status}`;
           setQuoteError(message);
@@ -3686,6 +3734,32 @@ export function LeadDrawer({
                               <p className="text-xs text-muted-foreground">
                                 Total: {formatQuoteCurrency(quote.total, quote.currency)}
                               </p>
+                              {quote.items?.length ? (
+                                <div className="mt-2 overflow-x-auto rounded-md border border-border/40">
+                                  <table className="w-full min-w-[520px] text-[11px]">
+                                    <thead className="bg-muted/40 text-left text-muted-foreground">
+                                      <tr>
+                                        <th className="px-2 py-1.5 font-medium">Producto</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Precio lista</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Desc.</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">%</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {quote.items.map((item) => (
+                                        <tr key={item.id} className="border-t border-border/30">
+                                          <td className="max-w-[220px] truncate px-2 py-1.5 text-foreground">{item.title || "Sin concepto"}</td>
+                                          <td className="px-2 py-1.5 text-right">{formatQuoteCurrency(item.unitPrice, item.currency)}</td>
+                                          <td className="px-2 py-1.5 text-right">{formatQuoteCurrency(item.discount, item.currency)}</td>
+                                          <td className="px-2 py-1.5 text-right">{formatPercentInputValue(item.discountPercent)}</td>
+                                          <td className="px-2 py-1.5 text-right font-medium">{formatQuoteCurrency(item.total, item.currency)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : null}
                               <p className="text-[11px] text-muted-foreground">
                                 PDF disponible para vista previa y descarga.
                               </p>
@@ -4581,13 +4655,14 @@ export function LeadDrawer({
                     </div>
 
                     <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border/40 bg-muted/20">
-                      <div className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <div className="grid grid-cols-[40px_minmax(0,1.45fr)_60px_72px_90px_72px_64px_84px_40px] gap-2 border-b border-border/40 px-2 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <span>Img.</span>
                         <span>Concepto</span>
                         <span>Cant.</span>
                         <span>Unidad</span>
                         <span>Precio</span>
                         <span>Desc.</span>
+                        <span>%</span>
                         <span>Total</span>
                         <span className="text-right"> </span>
                       </div>
@@ -4601,7 +4676,7 @@ export function LeadDrawer({
                             return (
                             <div
                               key={item.key}
-                              className="grid grid-cols-[40px_minmax(0,1.45fr)_72px_82px_96px_72px_84px_40px] items-start gap-2 rounded-md bg-background px-2 py-2"
+                              className="grid grid-cols-[40px_minmax(0,1.45fr)_60px_72px_90px_72px_64px_84px_40px] items-start gap-2 rounded-md bg-background px-2 py-2"
                             >
                               <div
                                 className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border/40 bg-muted/30 bg-center bg-cover"
@@ -4706,6 +4781,14 @@ export function LeadDrawer({
                                 onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
                                 disabled={quotePending}
                                 placeholder="0.00"
+                                className={quoteCompactInputClass}
+                              />
+                              <Input
+                                value={item.descuentoPorcentaje}
+                                onChange={(event) => handleItemFieldChange(index, "descuentoPorcentaje", event.target.value)}
+                                disabled={quotePending}
+                                placeholder="0"
+                                aria-label="Porcentaje de descuento"
                                 className={quoteCompactInputClass}
                               />
                               <div className="flex items-center justify-end px-1 pt-1 text-xs font-medium text-foreground">
@@ -5058,10 +5141,10 @@ export function LeadDrawer({
                         <Button type="button" variant="outline" onClick={handleOpenQuotePreview} disabled={quoteActionsDisabled}>
                           Vista previa PDF
                         </Button>
-                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quoteActionsDisabled}>
+                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked}>
                           {quotePending ? "Creando..." : quoteVendorSettingsLoading ? "Cargando..." : "Crear cotización"}
                         </Button>
-                        <Button type="button" onClick={handleSendQuote} disabled={quoteActionsDisabled}>
+                        <Button type="button" onClick={handleSendQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked}>
                           {quotePending ? "Enviando..." : quoteVendorSettingsLoading ? "Cargando..." : "Enviar cotización"}
                         </Button>
                         <Button type="button" variant="ghost" onClick={handleSaveQuoteDraft} disabled={quoteVendorSettingsLoading}>
@@ -6131,6 +6214,8 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
     quantity: toNumber(row.cantidad),
     unitPrice: toNumber(row.precio_unitario ?? row.precioUnitario),
     discount: toNumber(row.descuento),
+    discountPercent: toNumber(row.descuento_porcentaje_aplicado ?? row.descuento_porcentaje),
+    discountLimitPercent: toNumber(row.limite_descuento_porcentaje),
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     total: toNumber(row.total),
@@ -6328,6 +6413,7 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
     cantidad: initial?.cantidad ?? "1",
     precioUnitario: formatPresetNumberString(initial?.precioUnitario),
     descuento: initial?.descuento ?? "",
+    descuentoPorcentaje: initial?.descuentoPorcentaje ?? "",
     moneda: (initial?.moneda ?? "MXN").toUpperCase(),
     listaPrecioId: initial?.listaPrecioId ?? null,
     listaPrecioNombre: initial?.listaPrecioNombre ?? null,
@@ -6443,6 +6529,7 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
         cantidad: quantity ?? null,
         precio_unitario: unitPrice ?? null,
         descuento: discount ?? null,
+        descuento_porcentaje: parseNumberInput(form.descuentoPorcentaje),
         total,
         moneda: form.moneda.trim().slice(0, 3).toUpperCase(),
         lista_precio_id: form.listaPrecioId,
@@ -6472,6 +6559,7 @@ function quoteEntryToItemForms(
         cantidad: item.quantity != null ? String(item.quantity) : "1",
         precioUnitario: item.unitPrice != null ? String(item.unitPrice) : "",
         descuento: item.discount != null ? String(item.discount) : "",
+        descuentoPorcentaje: item.discountPercent != null ? String(item.discountPercent) : "",
         moneda: item.currency ?? fallbackCurrency,
         listaPrecioId: item.listaPrecioId,
         listaPrecioNombre: item.listaPrecioNombre,

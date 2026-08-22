@@ -8398,6 +8398,7 @@ def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
             "cantidad",
             "precio_unitario",
             "descuento",
+            "descuento_porcentaje",
             "subtotal",
             "impuestos",
             "total",
@@ -8467,8 +8468,21 @@ async def _resolve_authorized_quote_price_lists(
         if submitted_price is not None and _round_currency_decimal(submitted_price) != price:
             raise HTTPException(status_code=409, detail="quote_price_must_match_catalog")
         quantity = _decimal_from_value(item.get("cantidad")) or Decimal("1")
-        requested_discount = _decimal_from_value(item.get("descuento")) or Decimal("0")
         gross = _round_currency_decimal(quantity * price)
+        requested_discount_input = _decimal_from_value(item.get("descuento"))
+        requested_percent_input = _decimal_from_value(item.get("descuento_porcentaje"))
+        if requested_percent_input is not None:
+            if requested_percent_input < 0 or requested_percent_input > 100:
+                raise HTTPException(status_code=400, detail="quote_discount_percent_invalid")
+            requested_discount = _round_currency_decimal(gross * requested_percent_input / Decimal("100"))
+            if requested_discount_input is not None and abs(requested_discount_input - requested_discount) > Decimal("0.02"):
+                raise HTTPException(status_code=400, detail="quote_discount_values_mismatch")
+            requested_percent = requested_percent_input
+        else:
+            requested_discount = requested_discount_input or Decimal("0")
+            requested_percent = (
+                (requested_discount / gross * Decimal("100")) if gross > 0 else Decimal("0")
+            )
         if requested_discount < 0 or requested_discount > gross:
             raise HTTPException(status_code=400, detail="quote_discount_amount_invalid")
         limit_row = None
@@ -8482,9 +8496,6 @@ async def _resolve_authorized_quote_price_lists(
         limit = _decimal_from_value(
             limit_row.get("descuento_maximo_porcentaje") if limit_row else None
         ) or Decimal("0")
-        requested_percent = (
-            (requested_discount / gross * Decimal("100")) if gross > 0 else Decimal("0")
-        )
         if requested_percent > limit + Decimal("0.01"):
             raise HTTPException(status_code=403, detail="quote_discount_limit_exceeded")
         final_unit_price = _round_currency_decimal(
@@ -8497,6 +8508,7 @@ async def _resolve_authorized_quote_price_lists(
         resolved_item["precio_unitario"] = float(price)
         resolved_item["precio_lista_unitario"] = float(price)
         resolved_item["descuento"] = float(requested_discount)
+        resolved_item["descuento_porcentaje"] = float(requested_percent.quantize(Decimal("0.01")))
         resolved_item["descuento_porcentaje_aplicado"] = float(requested_percent.quantize(Decimal("0.01")))
         resolved_item["limite_descuento_porcentaje"] = float(limit)
         resolved_item["precio_unitario_final"] = float(final_unit_price)
@@ -15726,6 +15738,7 @@ class LeadQuoteItemPayload(BaseModel):
     cantidad: float | None = Field(default=None, gt=0)
     precio_unitario: float | None = Field(default=None, ge=0)
     descuento: float | None = Field(default=None, ge=0)
+    descuento_porcentaje: float | None = Field(default=None, ge=0, le=100)
     subtotal: float | None = Field(default=None, ge=0)
     impuestos: float | None = Field(default=None, ge=0)
     total: float | None = Field(default=None, ge=0)
