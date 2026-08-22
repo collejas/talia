@@ -25,6 +25,28 @@ export type PriceListPermissionOptions = {
   usuarios: { id: string; nombre: string; correo: string; esEmpleado: boolean }[]
 }
 
+export type DiscountLimit = {
+  id: string
+  organizacionId: string
+  tipoPrecio: "base" | "lista"
+  listaPrecioId: string | null
+  rolId: string | null
+  usuarioId: string | null
+  empleadoUsuarioId: string | null
+  descuentoMaximoPorcentaje: number
+  activo: boolean
+}
+
+export type DiscountLimitInput = {
+  tipo_precio: "base" | "lista"
+  lista_precio_id: string | null
+  rol_id: string | null
+  usuario_id: string | null
+  empleado_usuario_id: string | null
+  descuento_maximo_porcentaje: number
+  activo: boolean
+}
+
 type CrmRow = Record<string, unknown>
 
 function normalizeString(value: unknown): string {
@@ -45,6 +67,20 @@ function transformPriceList(row: CrmRow): PriceList {
     activo: normalizeBoolean(row.activo),
     creadoEn: normalizeString(row.creado_en ?? row.creadoEn),
     actualizadoEn: normalizeString(row.actualizado_en ?? row.actualizadoEn),
+  }
+}
+
+function transformDiscountLimit(row: CrmRow): DiscountLimit {
+  return {
+    id: normalizeString(row.id),
+    organizacionId: normalizeString(row.organizacion_id),
+    tipoPrecio: row.tipo_precio === "lista" ? "lista" : "base",
+    listaPrecioId: normalizeString(row.lista_precio_id) || null,
+    rolId: normalizeString(row.rol_id) || null,
+    usuarioId: normalizeString(row.usuario_id) || null,
+    empleadoUsuarioId: normalizeString(row.empleado_usuario_id) || null,
+    descuentoMaximoPorcentaje: Number(row.descuento_maximo_porcentaje ?? 0),
+    activo: normalizeBoolean(row.activo),
   }
 }
 
@@ -119,6 +155,36 @@ export async function fetchPriceListPermissions(id: string): Promise<PriceListPe
       ? response.data.employee_user_ids.filter((value): value is string => typeof value === "string")
       : [],
   }
+}
+
+export async function fetchDiscountLimits(target: { tipoPrecio: "base" | "lista"; listaPrecioId?: string }): Promise<DiscountLimit[]> {
+  const path = target.tipoPrecio === "base"
+    ? "/crm/catalog/base-price/discount-limits"
+    : `/crm/catalog/price-lists/${target.listaPrecioId}/discount-limits`
+  const response = await callCrmApi<{ values?: CrmRow[] }>(path, { withUserToken: true })
+  if (!response.ok || !response.data || !Array.isArray(response.data.values)) {
+    throw new Error(getErrorMessage(response, "No se pudieron consultar los límites de descuento."))
+  }
+  return response.data.values.map(transformDiscountLimit)
+}
+
+export async function updateDiscountLimitsAction(
+  target: { tipoPrecio: "base" | "lista"; listaPrecioId?: string },
+  values: DiscountLimitInput[],
+): Promise<DiscountLimit[]> {
+  const path = target.tipoPrecio === "base"
+    ? "/crm/catalog/base-price/discount-limits"
+    : `/crm/catalog/price-lists/${target.listaPrecioId}/discount-limits`
+  const response = await callCrmApi<{ values?: CrmRow[] }>(path, {
+    method: "PUT",
+    body: { values },
+    withUserToken: true,
+  })
+  if (!response.ok || !response.data || !Array.isArray(response.data.values)) {
+    throw new Error(getErrorMessage(response, "No se pudieron guardar los límites de descuento."))
+  }
+  revalidatePath("/settings/account")
+  return response.data.values.map(transformDiscountLimit)
 }
 
 export async function updatePriceListPermissionsAction(

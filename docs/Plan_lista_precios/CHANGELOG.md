@@ -2,6 +2,24 @@
 
 Registro de avances, cambios aplicados, verificaciones y pendientes de la funcionalidad de listas de precios.
 
+## 2026-08-22
+
+### Límites de descuento por tipo de precio — implementado localmente y migrado
+
+- Se agregó la migración `supabase/migrations/20280822_120000_discount_limits.sql`.
+- El tenant puede configurar límites porcentuales para `Precio base` y para cada lista,
+  asignados a roles, usuarios o empleados.
+- La precedencia efectiva es usuario específico, empleado y después rol.
+- Se agregaron constraints, foreign keys, índices, RLS y una bitácora explícita de
+  cambios de límites.
+- Las líneas de cotización conservan precio de lista, descuento monetario, porcentaje
+  autorizado y precio final.
+- El backend recalcula el precio base o de lista y rechaza descuentos que superen el
+  límite vigente antes de guardar, previsualizar o enviar.
+- Se agregó la configuración visual en `settings/account`.
+- La migración remota fue aplicada y se verificaron las tablas y columnas nuevas.
+- Pendiente: despliegue del backend/panel y pruebas vivas con usuarios representativos.
+
 ## 2026-08-21
 
 ### Corrección de regresión de compatibilidad — completado

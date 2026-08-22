@@ -8422,36 +8422,86 @@ async def _resolve_authorized_quote_price_lists(
     repo: CRMRepository,
     organizacion_id: UUID,
     items: list[dict[str, Any]],
+    usuario_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     resolved: list[dict[str, Any]] = []
     for item in items:
-        lista_id = item.get("lista_precio_id")
-        if not lista_id:
-            resolved.append(item)
-            continue
         catalog_item_id = _safe_uuid(item.get("catalog_item_id"))
         if catalog_item_id is None:
-            raise HTTPException(status_code=400, detail="price_list_requires_catalog_item")
-        values = await repo.list_item_price_lists(
+            resolved.append(item)
+            continue
+        lista_id = _safe_uuid(item.get("lista_precio_id"))
+        catalog_item = await repo.get_catalog_item(
             organizacion_id=organizacion_id,
             item_id=catalog_item_id,
-            include_inactive=False,
         )
-        selected = next((row for row in values if str(row.get("lista_precio_id")) == str(lista_id)), None)
-        if not selected:
-            raise HTTPException(status_code=403, detail="price_list_not_authorized_or_unpriced")
-        selected_list_id = _safe_uuid(selected.get("lista_precio_id"))
-        if selected_list_id is None:
-            raise HTTPException(status_code=502, detail="price_list_reference_invalid")
-        price_list = await repo.get_price_list(
-            organizacion_id=organizacion_id,
-            lista_precio_id=selected_list_id,
+        if not catalog_item:
+            raise HTTPException(status_code=404, detail="catalog_item_not_found")
+        selected_list = None
+        if lista_id is not None:
+            values = await repo.list_item_price_lists(
+                organizacion_id=organizacion_id,
+                item_id=catalog_item_id,
+                include_inactive=False,
+            )
+            selected_list = next(
+                (row for row in values if str(row.get("lista_precio_id")) == str(lista_id)),
+                None,
+            )
+            if not selected_list:
+                raise HTTPException(status_code=403, detail="price_list_not_authorized_or_unpriced")
+            price = _decimal_from_value(selected_list.get("precio"))
+            currency = str(selected_list.get("moneda") or item.get("moneda") or "MXN").upper()
+            price_list = await repo.get_price_list(
+                organizacion_id=organizacion_id,
+                lista_precio_id=lista_id,
+            )
+            tipo_precio = "lista"
+        else:
+            price = _decimal_from_value(catalog_item.get("precio_base"))
+            currency = str(catalog_item.get("moneda") or item.get("moneda") or "MXN").upper()
+            price_list = None
+            tipo_precio = "base"
+        if price is None:
+            raise HTTPException(status_code=409, detail="catalog_item_price_missing")
+        quantity = _decimal_from_value(item.get("cantidad")) or Decimal("1")
+        requested_discount = _decimal_from_value(item.get("descuento")) or Decimal("0")
+        gross = _round_currency_decimal(quantity * price)
+        if requested_discount < 0 or requested_discount > gross:
+            raise HTTPException(status_code=400, detail="quote_discount_amount_invalid")
+        limit_row = None
+        if requested_discount > 0:
+            limit_row = await repo.resolve_discount_limit(
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+                tipo_precio=tipo_precio,
+                lista_precio_id=lista_id,
+            )
+        limit = _decimal_from_value(
+            limit_row.get("descuento_maximo_porcentaje") if limit_row else None
+        ) or Decimal("0")
+        requested_percent = (
+            (requested_discount / gross * Decimal("100")) if gross > 0 else Decimal("0")
         )
+        if requested_percent > limit + Decimal("0.01"):
+            raise HTTPException(status_code=403, detail="quote_discount_limit_exceeded")
+        final_unit_price = _round_currency_decimal(
+            price - (requested_discount / quantity if quantity > 0 else Decimal("0"))
+        )
+        final_total = _round_currency_decimal(gross - requested_discount)
         resolved_item = dict(item)
-        resolved_item["lista_precio_id"] = str(selected["lista_precio_id"])
+        resolved_item["lista_precio_id"] = str(lista_id) if lista_id else None
         resolved_item["lista_precio_nombre"] = str((price_list or {}).get("nombre") or "") or None
-        resolved_item["precio_unitario"] = float(selected["precio"])
-        resolved_item["moneda"] = str(selected.get("moneda") or item.get("moneda") or "MXN").upper()
+        resolved_item["precio_unitario"] = float(price)
+        resolved_item["precio_lista_unitario"] = float(price)
+        resolved_item["descuento"] = float(requested_discount)
+        resolved_item["descuento_porcentaje_aplicado"] = float(requested_percent.quantize(Decimal("0.01")))
+        resolved_item["limite_descuento_porcentaje"] = float(limit)
+        resolved_item["precio_unitario_final"] = float(final_unit_price)
+        resolved_item["descuento_monto_aplicado"] = float(requested_discount)
+        resolved_item["subtotal"] = float(final_total)
+        resolved_item["total"] = float(final_total)
+        resolved_item["moneda"] = currency
         resolved.append(resolved_item)
     return resolved
 
@@ -8621,7 +8671,12 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
                 or catalog_unit,
                 cantidad=_as_number(entry.get("cantidad")),
                 precio_unitario=_as_number(entry.get("precio_unitario")),
+                precio_lista_unitario=_as_number(entry.get("precio_lista_unitario")),
                 descuento=_as_number(metadata_dict.get("descuento") or entry.get("descuento")),
+                descuento_monto_aplicado=_as_number(entry.get("descuento_monto_aplicado")),
+                descuento_porcentaje_aplicado=_as_number(entry.get("descuento_porcentaje")),
+                limite_descuento_porcentaje=_as_number(entry.get("limite_descuento_porcentaje")),
+                precio_unitario_final=_as_number(entry.get("precio_unitario_final")),
                 subtotal=_as_number(entry.get("subtotal")),
                 impuestos=_as_number(metadata_dict.get("impuestos") or entry.get("impuestos")),
                 total=_as_number(metadata_dict.get("total") or entry.get("total")),
@@ -8740,12 +8795,16 @@ def _quote_items_to_repository_payload(
                 "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
                 "cantidad": _as_number(item.get("cantidad")) or 1,
                 "precio_unitario": _as_number(item.get("precio_unitario")),
-                "descuento_porcentaje": None,
+                "descuento_porcentaje": _as_number(item.get("descuento_porcentaje_aplicado")),
                 "subtotal": _as_number(item.get("subtotal")) or _as_number(item.get("total")),
                 "metadata": metadata,
                 "lista_precio_id": item.get("lista_precio_id"),
                 "lista_precio_nombre": item.get("lista_precio_nombre"),
                 "moneda_aplicada": item.get("moneda") or "MXN",
+                "precio_lista_unitario": _as_number(item.get("precio_lista_unitario")),
+                "descuento_monto_aplicado": _as_number(item.get("descuento_monto_aplicado")),
+                "limite_descuento_porcentaje": _as_number(item.get("limite_descuento_porcentaje")),
+                "precio_unitario_final": _as_number(item.get("precio_unitario_final")),
             }
         )
     return repository_items
@@ -14360,6 +14419,50 @@ class CRMPriceListPermissionsRead(BaseModel):
     employee_user_ids: list[UUID] = Field(default_factory=list)
 
 
+class CRMDiscountLimit(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    tipo_precio: Literal["base", "lista"]
+    lista_precio_id: UUID | None = None
+    rol_id: UUID | None = None
+    usuario_id: UUID | None = None
+    empleado_usuario_id: UUID | None = None
+    descuento_maximo_porcentaje: float = Field(..., ge=0, le=100)
+    activo: bool
+    creado_por_usuario_id: UUID | None = None
+    actualizado_por_usuario_id: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMDiscountLimitInput(BaseModel):
+    tipo_precio: Literal["base", "lista"]
+    lista_precio_id: UUID | None = None
+    rol_id: UUID | None = None
+    usuario_id: UUID | None = None
+    empleado_usuario_id: UUID | None = None
+    descuento_maximo_porcentaje: float = Field(..., ge=0, le=100)
+    activo: bool = True
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "CRMDiscountLimitInput":
+        if self.tipo_precio == "base" and self.lista_precio_id is not None:
+            raise ValueError("El Precio base no puede tener lista de precios")
+        if self.tipo_precio == "lista" and self.lista_precio_id is None:
+            raise ValueError("La lista de precios es obligatoria")
+        if sum(value is not None for value in (self.rol_id, self.usuario_id, self.empleado_usuario_id)) != 1:
+            raise ValueError("El límite debe asignarse a un rol, usuario o empleado")
+        return self
+
+
+class CRMDiscountLimitsReplace(BaseModel):
+    values: list[CRMDiscountLimitInput] = Field(default_factory=list, max_length=500)
+
+
+class CRMDiscountLimitsRead(BaseModel):
+    values: list[CRMDiscountLimit] = Field(default_factory=list)
+
+
 class CRMPriceHistoryRead(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -15641,7 +15744,12 @@ class LeadQuoteItem(BaseModel):
     unidad: str | None = None
     cantidad: float | None = None
     precio_unitario: float | None = None
+    precio_lista_unitario: float | None = None
     descuento: float | None = None
+    descuento_monto_aplicado: float | None = None
+    descuento_porcentaje_aplicado: float | None = None
+    limite_descuento_porcentaje: float | None = None
+    precio_unitario_final: float | None = None
     subtotal: float | None = None
     impuestos: float | None = None
     total: float | None = None
@@ -19483,6 +19591,142 @@ async def replace_price_list_permissions(
         role_ids=payload.role_ids,
         user_ids=payload.user_ids,
         employee_user_ids=payload.employee_user_ids,
+    )
+
+
+async def _read_discount_limits(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    tipo_precio: Literal["base", "lista"],
+    lista_precio_id: UUID | None,
+) -> CRMDiscountLimitsRead:
+    try:
+        rows = await repo.list_discount_limits(
+            organizacion_id=organizacion_id,
+            tipo_precio=tipo_precio,
+            lista_precio_id=lista_precio_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="discount_limits_unavailable") from exc
+    return CRMDiscountLimitsRead(values=[CRMDiscountLimit.model_validate(row) for row in rows])
+
+
+async def _replace_discount_limits(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    tipo_precio: Literal["base", "lista"],
+    lista_precio_id: UUID | None,
+    payload: CRMDiscountLimitsReplace,
+    usuario_id: UUID | None,
+) -> CRMDiscountLimitsRead:
+    if tipo_precio == "base" and lista_precio_id is not None:
+        raise HTTPException(status_code=400, detail="base_price_cannot_have_list")
+    if tipo_precio == "lista" and lista_precio_id is None:
+        raise HTTPException(status_code=400, detail="price_list_required")
+    for value in payload.values:
+        if value.tipo_precio != tipo_precio or value.lista_precio_id != lista_precio_id:
+            raise HTTPException(status_code=400, detail="discount_limit_target_mismatch")
+    if tipo_precio == "lista":
+        try:
+            price_list = await repo.get_price_list(
+                organizacion_id=organizacion_id,
+                lista_precio_id=lista_precio_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="price_list_unavailable") from exc
+        if not price_list:
+            raise HTTPException(status_code=404, detail="price_list_not_found")
+    subjects = [
+        (value.rol_id, value.usuario_id, value.empleado_usuario_id)
+        for value in payload.values
+    ]
+    if len(subjects) != len(set(subjects)):
+        raise HTTPException(status_code=409, detail="discount_limit_subject_duplicated")
+    try:
+        rows = await repo.replace_discount_limits(
+            organizacion_id=organizacion_id,
+            tipo_precio=tipo_precio,
+            lista_precio_id=lista_precio_id,
+            values=[
+                value.model_dump(mode="json", exclude={"tipo_precio", "lista_precio_id"})
+                for value in payload.values
+            ],
+            usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="discount_limits_update_failed") from exc
+    return CRMDiscountLimitsRead(values=[CRMDiscountLimit.model_validate(row) for row in rows])
+
+
+@router.get("/catalog/price-lists/{lista_precio_id}/discount-limits", response_model=CRMDiscountLimitsRead)
+async def get_price_list_discount_limits(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    lista_precio_id: UUID,
+) -> CRMDiscountLimitsRead:
+    return await _read_discount_limits(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        tipo_precio="lista",
+        lista_precio_id=lista_precio_id,
+    )
+
+
+@router.put("/catalog/price-lists/{lista_precio_id}/discount-limits", response_model=CRMDiscountLimitsRead)
+async def replace_price_list_discount_limits(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    lista_precio_id: UUID,
+    payload: CRMDiscountLimitsReplace,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMDiscountLimitsRead:
+    return await _replace_discount_limits(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        tipo_precio="lista",
+        lista_precio_id=lista_precio_id,
+        payload=payload,
+        usuario_id=usuario_id,
+    )
+
+
+@router.get("/catalog/base-price/discount-limits", response_model=CRMDiscountLimitsRead)
+async def get_base_price_discount_limits(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+) -> CRMDiscountLimitsRead:
+    return await _read_discount_limits(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        tipo_precio="base",
+        lista_precio_id=None,
+    )
+
+
+@router.put("/catalog/base-price/discount-limits", response_model=CRMDiscountLimitsRead)
+async def replace_base_price_discount_limits(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMDiscountLimitsReplace,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMDiscountLimitsRead:
+    return await _replace_discount_limits(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        tipo_precio="base",
+        lista_precio_id=None,
+        payload=payload,
+        usuario_id=usuario_id,
     )
 
 
@@ -29706,6 +29950,7 @@ async def create_lead_quote(
         repo=repo,
         organizacion_id=organizacion_id,
         items=_normalize_quote_items(payload.items or []),
+        usuario_id=usuario_id,
     )
     body["items"] = normalized_items
     repo_items = _quote_items_to_repository_payload(body.pop("items", None))
@@ -29864,6 +30109,7 @@ async def preview_lead_quote_pdf(
         repo=repo,
         organizacion_id=organizacion_id,
         items=_normalize_quote_items(base_payload.items or []),
+        usuario_id=usuario_id,
     )
     base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)
@@ -30055,6 +30301,7 @@ async def send_lead_quote(
         repo=repo,
         organizacion_id=organizacion_id,
         items=_normalize_quote_items(base_payload.items or []),
+        usuario_id=usuario_id,
     )
     base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)

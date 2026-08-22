@@ -13234,6 +13234,130 @@ class CRMRepository:
             result[suffix] = [row for row in data if isinstance(row, dict)]
         return result
 
+    async def list_discount_limits(
+        self,
+        *,
+        organizacion_id: UUID,
+        tipo_precio: str,
+        lista_precio_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "tipo_precio": f"eq.{tipo_precio}",
+            "activo": "eq.true",
+            "order": "creado_en.asc",
+            "limit": "500",
+        }
+        params["lista_precio_id"] = f"eq.{lista_precio_id}" if lista_precio_id else "is.null"
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/listas_precios_limites_descuento",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar límites de descuento: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def replace_discount_limits(
+        self,
+        *,
+        organizacion_id: UUID,
+        tipo_precio: str,
+        lista_precio_id: UUID | None,
+        values: list[dict[str, Any]],
+        usuario_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        target_filter = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "tipo_precio": f"eq.{tipo_precio}",
+            "lista_precio_id": f"eq.{lista_precio_id}" if lista_precio_id else "is.null",
+        }
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/listas_precios_limites_descuento",
+            params=target_filter,
+            organizacion_id=organizacion_id,
+        )
+        if not values:
+            return []
+        payload = [
+            {
+                "organizacion_id": str(organizacion_id),
+                "tipo_precio": tipo_precio,
+                "lista_precio_id": str(lista_precio_id) if lista_precio_id else None,
+                **value,
+                "creado_por_usuario_id": str(usuario_id) if usuario_id else None,
+                "actualizado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            }
+            for value in values
+        ]
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/listas_precios_limites_descuento",
+            json=_align_postgrest_bulk_items(payload),
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al guardar límites de descuento: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def resolve_discount_limit(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID | None,
+        tipo_precio: str,
+        lista_precio_id: UUID | None,
+    ) -> dict[str, Any] | None:
+        rows = await self.list_discount_limits(
+            organizacion_id=organizacion_id,
+            tipo_precio=tipo_precio,
+            lista_precio_id=lista_precio_id,
+        )
+        if not rows or usuario_id is None:
+            return None
+        roles_resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "select": "rol_id",
+                "limit": "100",
+            },
+            organizacion_id=organizacion_id,
+        )
+        roles_data = roles_resp.json()
+        role_ids = {str(row.get("rol_id")) for row in roles_data if isinstance(row, dict)}
+        employee_resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/empleados",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "select": "usuario_id",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        employee_data = employee_resp.json()
+        is_employee = isinstance(employee_data, list) and bool(employee_data)
+        user_key = str(usuario_id)
+        candidates = [
+            (0, row) for row in rows if str(row.get("usuario_id")) == user_key
+        ]
+        if is_employee:
+            candidates.extend((1, row) for row in rows if str(row.get("empleado_usuario_id")) == user_key)
+        candidates.extend((2, row) for row in rows if str(row.get("rol_id")) in role_ids)
+        if not candidates:
+            return None
+        candidates.sort(key=lambda pair: (pair[0], str(pair[1].get("id"))))
+        return candidates[0][1]
+
     async def get_linea_de_negocio(
         self,
         *,

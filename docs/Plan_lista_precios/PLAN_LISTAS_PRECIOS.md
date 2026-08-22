@@ -59,7 +59,7 @@ En progreso local:
 - Validación backend de autorización y precio vigente antes de crear, previsualizar o enviar.
 - Snapshot explícito de lista, nombre y moneda aplicada en `cotizacion_items`.
 
-Pendiente de implementación:
+Implementado localmente y migrado a Supabase:
 
 - Límites de descuento configurables por tipo de precio (`Precio base` o lista), rol,
   usuario y empleado.
@@ -124,8 +124,8 @@ distinguir entre una regla inexistente y un límite de descuento de `0%`. La aut
 definitiva y el límite efectivo deben validarse en backend; no se debe confiar en el
 porcentaje enviado por el frontend.
 
-La prioridad entre reglas de usuario, empleado y rol deberá definirse antes de
-implementar la migración. La regla seleccionada debe ser determinista, auditable y
+La prioridad implementada para resolver una regla efectiva es: usuario específico,
+empleado y finalmente rol. La regla seleccionada debe ser determinista, auditable y
 aplicarse igual desde Embudo e Inbox.
 
 ### 2.4 CRUD de productos en `settings/productos/items`
@@ -639,8 +639,6 @@ La funcionalidad estará terminada cuando:
 - Si los permisos de empleados usan la misma identidad que usuarios o una entidad separada.
 - Si la cotización debe mostrar siempre el nombre de la lista al cliente final.
 - Si se permitirá editar manualmente el precio por línea con un permiso adicional.
-- Prioridad exacta entre una regla de descuento de usuario, empleado y rol cuando
-  existan varias para el mismo tipo de precio.
 - Si el límite se manejará únicamente como porcentaje o si en el futuro también se
   requerirá un límite monetario.
 
