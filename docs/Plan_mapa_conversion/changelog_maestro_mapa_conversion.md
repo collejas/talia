@@ -26,6 +26,8 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   costos, CPO y CAC, sin duplicar fórmulas entre vistas.
 - Los costos sin conciliación deben mostrarse como pendientes o no disponibles,
   nunca como cero.
+- Primer corte implementado en `prospeccion/metricas`: consumo del RPC
+  `campana_conversion_resumen_rango` mediante `resultado_comercial_whatsapp`.
 
 ## 2026-08-15
 

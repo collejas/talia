@@ -359,9 +359,14 @@ El resultado comercial de campañas WhatsApp también debe estar disponible en
 `prospeccion/metricas`, principalmente dentro de la subvista WhatsApp y luego
 en el resumen general cuando los indicadores sean comparables.
 
+**Primer corte implementado:** `prospeccion/metricas` consume el RPC
+`campana_conversion_resumen_rango` mediante el bloque
+`resultado_comercial_whatsapp`, sin crear una tabla ni una fórmula paralela.
+
 Indicadores compartidos:
 
 - conversaciones atribuidas;
+- respuestas o conversaciones con primera respuesta;
 - oportunidades atribuidas;
 - clientes ganados;
 - costo total conciliado;
@@ -375,6 +380,11 @@ campañas. El mapa presenta el resultado dentro del recorrido de adquisición;
 
 Si el ledger de costo no está conciliado, la UI debe mostrar `Pendiente de
 conciliación` o `No disponible`, nunca cero implícito.
+
+La comparación entre vistas debe respetar esta semántica: el cohorte técnico de
+`conversaciones` no debe presentarse como KPI principal; `respuestas` representa
+las conversaciones con primera respuesta y es el indicador comercial visible
+del embudo. Los costos deben conservar cuatro decimales.
 
 ## 9) Plan de implementacion sugerido
 

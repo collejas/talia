@@ -197,6 +197,7 @@ El bloque de WhatsApp debe incluir el resultado comercial directo de las
 campañas, porque completa la lectura de rendimiento y costo:
 
 - conversaciones atribuidas;
+- respuestas o conversaciones con primera respuesta;
 - oportunidades atribuidas;
 - clientes ganados, cuando exista etapa comercial confiable;
 - costo total conciliado;
@@ -218,6 +219,13 @@ Responsabilidades:
 
 Los costos incompletos no deben mostrarse como cero: deben indicar pendiente
 de conciliación o no disponible.
+
+La interfaz debe distinguir explícitamente el cohorte técnico de
+`conversaciones` respecto de `respuestas`. El cohorte no debe presentarse como
+el KPI principal de evaluación de campaña. El embudo visible debe usar
+enviados, entregados, respuestas, oportunidades y clientes. Los importes de
+costo, CPO y CAC deben conservar precisión contable de cuatro decimales para
+coincidir con el mapa de conversión.
 
 ## 5. Reglas de presentación
 
@@ -295,6 +303,18 @@ detalle por una cabecera compacta. WhatsApp conserva una navegación secundaria
 entre `Campañas` y `Atribución`, sin retirar sus tablas, métricas ni
 exportaciones.
 
+### Fase 3.1 · Resultado comercial compartido de WhatsApp
+
+**Primer corte implementado.** El endpoint existente
+`GET /prospeccion/metricas` incorpora `resultado_comercial_whatsapp` usando el
+RPC canónico `campana_conversion_resumen_rango`. El bloque incluye resumen y
+detalle por campaña con conversaciones, oportunidades, clientes, costo, CPO,
+CAC y estado de conciliación.
+
+La subvista WhatsApp muestra ahora el resultado comercial sin reemplazar el
+detalle operativo de envíos. Si existen cobros pendientes, los costos se
+presentan como `Pendiente`; nunca se interpretan como cero conciliado.
+
 ### Fase 4 · Filtros y exportaciones
 
 - Aplicar periodo y campaña de forma consistente.
@@ -324,6 +344,10 @@ exportaciones.
 - Las tasas tienen denominadores claros.
 - Los filtros funcionan igual en resumen y canal.
 - Las exportaciones corresponden al canal y periodo seleccionados.
+- La subvista WhatsApp muestra resultado comercial por campaña y distingue
+  costos conciliados de costos pendientes.
+- El resultado por campaña usa el mismo embudo visible del mapa: enviados,
+  entregados, respuestas, oportunidades, clientes y costos.
 - No se duplican aperturas, clics, conversaciones u oportunidades.
 - Se mantienen permisos tenant-aware y estados de carga/error/vacío.
 - La vista se valida con datos reales antes de retirar compatibilidad.

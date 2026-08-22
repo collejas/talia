@@ -22,6 +22,12 @@ enlazarlo, pero no redefinir sus KPI ni crear una segunda fuente de verdad.
 
 ## Estado de implementación
 
+- `resultado_comercial_whatsapp` ya se expone en `GET /prospeccion/metricas`
+  reutilizando `campana_conversion_resumen_rango`.
+- La UI de WhatsApp muestra resultado por campaña y estado de conciliación.
+- La exportación específica del nuevo bloque y la validación visual en
+  producción quedan pendientes del siguiente corte.
+
 ### 2026-08-21 · Primer corte seguro
 
 - `prospeccion/contactos` ya no solicita ni renderiza salud global, conversión

@@ -34654,6 +34654,129 @@ async def prospeccion_metricas_dashboard(
             2,
         )
 
+    commercial_items: list[dict[str, Any]] = []
+    commercial_summary: dict[str, Any] = {
+        "campanas": 0,
+        "envios": 0,
+        "entregados": 0,
+        "conversaciones": 0,
+        "respondieron": 0,
+        "oportunidades": 0,
+        "clientes": 0,
+        "costo_total": 0.0,
+        "costo_por_conversacion": None,
+        "costo_por_oportunidad": None,
+        "costo_adquisicion": None,
+        "pendientes_cobro": 0,
+        "costo_estado": "sin_datos",
+        "tasa_entrega_pct": 0.0,
+        "tasa_respuesta_pct": 0.0,
+        "tasa_cierre_pct": 0.0,
+    }
+    if params.include_whatsapp_channels and params.canal in ("todos", "whatsapp"):
+        try:
+            commercial_rows = await repo.get_campana_conversion_resumen_rango(
+                organizacion_id=organizacion_id,
+                campana_id=params.campana_id,
+                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                date_to_iso=date_to_exclusive.isoformat() if date_to_exclusive else None,
+                limit=min(params.limit, 1000),
+                offset=0,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        def commercial_int(row: dict[str, Any], key: str) -> int:
+            try:
+                return int(row.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        def commercial_float(row: dict[str, Any], key: str) -> float:
+            try:
+                return float(row.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        for row in commercial_rows:
+            if _clean_text(row.get("canal")) != "whatsapp":
+                continue
+            commercial_items.append(
+                {
+                    "campana_id": str(row.get("campana_id")) if row.get("campana_id") else None,
+                    "campana_nombre": _clean_text(row.get("campana_nombre")) or "Sin campaña",
+                    "canal": "whatsapp",
+                    "envios": commercial_int(row, "envios"),
+                    "entregados": commercial_int(row, "entregados"),
+                    "conversaciones": commercial_int(row, "conversaciones"),
+                    "respondieron": commercial_int(row, "respondieron"),
+                    "oportunidades": commercial_int(row, "oportunidades"),
+                    "clientes": commercial_int(row, "clientes"),
+                    "costo_total": round(commercial_float(row, "costo_total"), 4),
+                    "costo_por_conversacion": (
+                        round(
+                            commercial_float(row, "costo_total") / commercial_int(row, "conversaciones"),
+                            4,
+                        )
+                        if commercial_int(row, "conversaciones") > 0
+                        and commercial_int(row, "pendientes_cobro") == 0
+                        else None
+                    ),
+                    "costo_por_oportunidad": commercial_float(row, "costo_por_oportunidad"),
+                    "costo_adquisicion": commercial_float(row, "costo_adquisicion"),
+                    "pendientes_cobro": commercial_int(row, "pendientes_cobro"),
+                    "tasa_entrega_pct": commercial_float(row, "tasa_entrega_pct"),
+                    "tasa_respuesta_pct": commercial_float(row, "tasa_respuesta_pct"),
+                    "tasa_cierre_pct": commercial_float(row, "tasa_cierre_pct"),
+                }
+            )
+
+        commercial_summary["campanas"] = len(commercial_items)
+        for key in ("envios", "entregados", "conversaciones", "respondieron", "oportunidades", "clientes", "pendientes_cobro"):
+            commercial_summary[key] = sum(int(item[key]) for item in commercial_items)
+        commercial_summary["costo_total"] = round(
+            sum(float(item["costo_total"]) for item in commercial_items),
+            4,
+        )
+        commercial_summary["tasa_entrega_pct"] = round(
+            commercial_summary["entregados"] / commercial_summary["envios"] * 100
+            if commercial_summary["envios"] > 0
+            else 0.0,
+            2,
+        )
+        commercial_summary["tasa_respuesta_pct"] = round(
+            commercial_summary["respondieron"] / commercial_summary["conversaciones"] * 100
+            if commercial_summary["conversaciones"] > 0
+            else 0.0,
+            2,
+        )
+        commercial_summary["tasa_cierre_pct"] = round(
+            commercial_summary["clientes"] / commercial_summary["oportunidades"] * 100
+            if commercial_summary["oportunidades"] > 0
+            else 0.0,
+            2,
+        )
+        has_pending_costs = commercial_summary["pendientes_cobro"] > 0
+        commercial_summary["costo_estado"] = (
+            "pendiente_conciliacion" if has_pending_costs else "conciliado"
+        )
+        if not has_pending_costs:
+            if commercial_summary["conversaciones"] > 0:
+                commercial_summary["costo_por_conversacion"] = round(
+                    commercial_summary["costo_total"] / commercial_summary["conversaciones"],
+                    4,
+                )
+            if commercial_summary["oportunidades"] > 0:
+                commercial_summary["costo_por_oportunidad"] = round(
+                    commercial_summary["costo_total"] / commercial_summary["oportunidades"],
+                    4,
+                )
+            if commercial_summary["clientes"] > 0:
+                commercial_summary["costo_adquisicion"] = round(
+                    commercial_summary["costo_total"] / commercial_summary["clientes"],
+                    4,
+                )
+
     def summarize_campaign_items(items: list[dict[str, Any]]) -> dict[str, Any]:
         summary = {
             "envios_totales": sum(int(item["envios_totales"]) for item in items),
@@ -35095,6 +35218,11 @@ async def prospeccion_metricas_dashboard(
         "campanas_whatsapp": {
             "summary": whatsapp_campaign_summary,
             "items": whatsapp_campaign_items,
+        },
+        "resultado_comercial_whatsapp": {
+            "summary": commercial_summary,
+            "items": commercial_items,
+            "timeseries": [],
         },
         "frases_whatsapp": {
             "summary": {

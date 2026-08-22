@@ -12,6 +12,27 @@ entre las vistas de prospección y mapa de conversión.
 - Se definió un agregado canónico compartido con `mapa-de-conversion`, evitando
   duplicar fórmulas o crear una segunda fuente de verdad.
 
+### Primer corte implementado
+
+- `GET /prospeccion/metricas` ahora expone `resultado_comercial_whatsapp` con
+  resumen y detalle por campaña.
+- La subvista WhatsApp muestra conversaciones, oportunidades, clientes, costo
+  total, CPO y CAC.
+- Los costos pendientes de conciliación se muestran como `Pendiente`.
+- Validación de datos: 705 mensajes salientes atribuidos, 60 conversiones, 56
+  oportunidades y 0 envíos atribuidos sin cobro.
+- Validación técnica: `py_compile`, ESLint, TypeScript y `git diff --check`.
+
+### 2026-08-22 · Alineación de conversaciones, respuestas y costos
+
+- Se corrigió la lectura visual de WhatsApp para separar 508 conversaciones
+  atribuidas de 53 conversaciones con primera respuesta.
+- Se ajustó la precisión de costo, CPO y CAC a cuatro decimales para coincidir
+  con `mapa-de-conversion`.
+- Se corrigió el resultado comercial para no presentar el cohorte técnico de
+  conversaciones como KPI principal; ahora usa el embudo de enviados,
+  entregados, respuestas, oportunidades y clientes.
+
 ## 2026-08-21 · Plan de refactor de navegación y UX
 
 - Se creó `PLAN_REFACTOR_VISTA_METRICAS.md`.

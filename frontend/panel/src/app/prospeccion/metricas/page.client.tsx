@@ -45,6 +45,7 @@ import {
 } from "@/lib/prospeccion/prospectos-client"
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
+const moneyPrecise = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 4, maximumFractionDigits: 4 })
 const number = new Intl.NumberFormat("es-MX")
 const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
 const CHANNEL_TOTAL_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
@@ -329,6 +330,8 @@ export default function ProspeccionMetricasPageClient() {
   )
   const summaryCampaign = data?.campanas_correo?.summary ?? data?.campanas.summary
   const summaryWhatsappCampaigns = data?.campanas_whatsapp?.summary
+  const commercialSummary = data?.resultado_comercial_whatsapp?.summary
+  const commercialItems = data?.resultado_comercial_whatsapp?.items ?? []
   const summaryPhrases = data?.frases_whatsapp.summary
   const activeViewMeta: Record<
     "campanas" | "campanas_whatsapp" | "frases",
@@ -1959,6 +1962,112 @@ export default function ProspeccionMetricasPageClient() {
               </Card>
             ))}
           </div>
+
+          <Card className="border-emerald-200 bg-emerald-50/30 shadow-none">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <CardTitle className="text-base">Resultado comercial</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Oportunidades, clientes y costo atribuidos a campañas WhatsApp.
+                  </p>
+                </div>
+                {commercialSummary?.costo_estado === "pendiente_conciliacion" ? (
+                  <Badge variant="outline" className="w-fit border-amber-300 bg-amber-50 text-amber-800">
+                    {number.format(commercialSummary.pendientes_cobro)} pendientes de conciliación
+                  </Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+              {[
+                { title: "Enviados", value: number.format(commercialSummary?.envios ?? 0), hint: "Mensajes de campaña" },
+                { title: "Entregados", value: number.format(commercialSummary?.entregados ?? 0), hint: "Mensajes con entrega" },
+                { title: "Respuestas", value: number.format(commercialSummary?.respondieron ?? 0), hint: "Conversaciones con primera respuesta" },
+                { title: "Oportunidades", value: number.format(commercialSummary?.oportunidades ?? 0), hint: "Resultado comercial" },
+                { title: "Clientes ganados", value: number.format(commercialSummary?.clientes ?? 0), hint: "Oportunidades ganadas" },
+                {
+                  title: "Costo total",
+                  value: commercialSummary?.costo_estado === "conciliado"
+                    ? moneyPrecise.format(commercialSummary.costo_total)
+                    : commercialSummary?.costo_estado === "sin_datos" ? "—" : "Pendiente",
+                  hint: commercialSummary?.costo_estado === "conciliado" ? "Costo conciliado" : commercialSummary?.costo_estado === "sin_datos" ? "Sin datos" : "Requiere conciliación",
+                },
+                {
+                  title: "CPO",
+                  value: commercialSummary?.costo_estado === "sin_datos"
+                    ? "—"
+                    : commercialSummary?.costo_por_oportunidad !== null && commercialSummary?.costo_por_oportunidad !== undefined
+                    ? moneyPrecise.format(commercialSummary.costo_por_oportunidad)
+                    : "Pendiente",
+                  hint: "Costo por oportunidad",
+                },
+                {
+                  title: "CAC",
+                  value: commercialSummary?.costo_estado === "sin_datos"
+                    ? "—"
+                    : commercialSummary?.costo_adquisicion !== null && commercialSummary?.costo_adquisicion !== undefined
+                    ? moneyPrecise.format(commercialSummary.costo_adquisicion)
+                    : "Pendiente",
+                  hint: "Costo por cliente ganado",
+                },
+              ].map((card) => (
+                <div key={card.title} className="rounded-xl border border-emerald-100 bg-white/80 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.title}</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-950">{card.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-none">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Resultado por campaña</CardTitle>
+              <p className="text-xs text-muted-foreground">El mismo embudo comercial que muestra el mapa de conversión.</p>
+            </CardHeader>
+            <CardContent>
+              {commercialItems.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[780px] text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-2">Campaña</th>
+                        <th className="px-2 py-2">Enviados</th>
+                        <th className="px-2 py-2">Entregados</th>
+                        <th className="px-2 py-2">Respuestas</th>
+                        <th className="px-2 py-2">Oportunidades</th>
+                        <th className="px-2 py-2">Clientes</th>
+                        <th className="px-2 py-2">Costo</th>
+                        <th className="px-2 py-2">CPO</th>
+                        <th className="px-2 py-2">CAC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {commercialItems.map((item) => {
+                        const costsPending = (item.pendientes_cobro ?? 0) > 0
+                        return (
+                          <tr key={item.campana_id ?? item.campana_nombre ?? "sin-campana"} className="border-b last:border-0">
+                            <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
+                            <td className="px-2 py-2">{number.format(item.envios)}</td>
+                            <td className="px-2 py-2">{number.format(item.entregados)}</td>
+                            <td className="px-2 py-2">{number.format(item.respondieron)}</td>
+                            <td className="px-2 py-2">{number.format(item.oportunidades)}</td>
+                            <td className="px-2 py-2">{number.format(item.clientes)}</td>
+                            <td className="px-2 py-2">{costsPending ? "Pendiente" : moneyPrecise.format(item.costo_total)}</td>
+                            <td className="px-2 py-2">{costsPending ? "Pendiente" : moneyPrecise.format(item.costo_por_oportunidad ?? 0)}</td>
+                            <td className="px-2 py-2">{costsPending ? "Pendiente" : moneyPrecise.format(item.costo_adquisicion ?? 0)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay resultado comercial para este periodo.</p>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {[

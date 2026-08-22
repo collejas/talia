@@ -1881,6 +1881,32 @@ export type ProspeccionMetricasWhatsAppCampanaItem = ProspeccionMetricasWhatsApp
   twilio_content_sid?: string | null
 }
 
+export type ProspeccionResultadoComercialWhatsAppSummary = {
+  campanas: number
+  envios: number
+  entregados: number
+  conversaciones: number
+  respondieron: number
+  oportunidades: number
+  clientes: number
+  costo_total: number
+  costo_por_conversacion: number | null
+  costo_por_oportunidad: number | null
+  costo_adquisicion: number | null
+  pendientes_cobro: number
+  costo_estado: "sin_datos" | "conciliado" | "pendiente_conciliacion" | string
+  tasa_entrega_pct: number
+  tasa_respuesta_pct: number
+  tasa_cierre_pct: number
+}
+
+export type ProspeccionResultadoComercialWhatsAppItem =
+  Omit<ProspeccionResultadoComercialWhatsAppSummary, "campanas"> & {
+    campana_id?: string | null
+    campana_nombre?: string | null
+    canal?: string | null
+  }
+
 export type ProspeccionMetricasFrasesSummary = {
   conversaciones_atribuidas: number
   contactos_unicos: number
@@ -1956,6 +1982,11 @@ export type ProspeccionMetricasResponse = {
     by_channel: ProspeccionMetricasFrasesByChannel[]
     by_rule: ProspeccionMetricasFrasesByRule[]
     timeseries: ProspeccionMetricasFrasesTimeseriesItem[]
+  }
+  resultado_comercial_whatsapp?: {
+    summary: ProspeccionResultadoComercialWhatsAppSummary
+    items: ProspeccionResultadoComercialWhatsAppItem[]
+    timeseries: Array<Record<string, unknown>>
   }
 }
 
