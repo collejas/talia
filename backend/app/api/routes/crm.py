@@ -8426,7 +8426,7 @@ async def _resolve_authorized_quote_price_lists(
     usuario_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     resolved: list[dict[str, Any]] = []
-    for item in items:
+    for item_index, item in enumerate(items):
         catalog_item_id = _safe_uuid(item.get("catalog_item_id"))
         if catalog_item_id is None:
             raise HTTPException(status_code=400, detail="quote_catalog_item_required")
@@ -8475,8 +8475,6 @@ async def _resolve_authorized_quote_price_lists(
             if requested_percent_input < 0 or requested_percent_input > 100:
                 raise HTTPException(status_code=400, detail="quote_discount_percent_invalid")
             requested_discount = _round_currency_decimal(gross * requested_percent_input / Decimal("100"))
-            if requested_discount_input is not None and abs(requested_discount_input - requested_discount) > Decimal("0.02"):
-                raise HTTPException(status_code=400, detail="quote_discount_values_mismatch")
             requested_percent = requested_percent_input
         else:
             requested_discount = requested_discount_input or Decimal("0")
@@ -8497,7 +8495,19 @@ async def _resolve_authorized_quote_price_lists(
             limit_row.get("descuento_maximo_porcentaje") if limit_row else None
         ) or Decimal("0")
         if requested_percent > limit + Decimal("0.01"):
-            raise HTTPException(status_code=403, detail="quote_discount_limit_exceeded")
+            max_discount_amount = _round_currency_decimal(gross * limit / Decimal("100"))
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "quote_discount_limit_exceeded"
+                    f":line_index={item_index}"
+                    f":max_percent={limit.quantize(Decimal('0.01'))}"
+                    f":max_amount={max_discount_amount}"
+                ),
+            )
+        if requested_percent_input is not None and requested_discount_input is not None:
+            if abs(requested_discount_input - requested_discount) > Decimal("0.02"):
+                raise HTTPException(status_code=400, detail="quote_discount_values_mismatch")
         final_unit_price = _round_currency_decimal(
             price - (requested_discount / quantity if quantity > 0 else Decimal("0"))
         )
@@ -14477,6 +14487,10 @@ class CRMDiscountLimitsRead(BaseModel):
     values: list[CRMDiscountLimit] = Field(default_factory=list)
 
 
+class CRMEffectiveDiscountLimitRead(BaseModel):
+    descuento_maximo_porcentaje: float | None = None
+
+
 class CRMPriceHistoryRead(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -19723,6 +19737,32 @@ async def get_base_price_discount_limits(
         organizacion_id=organizacion_id,
         tipo_precio="base",
         lista_precio_id=None,
+    )
+
+
+@router.get("/catalog/discount-limits/effective", response_model=CRMEffectiveDiscountLimitRead)
+async def get_effective_discount_limit(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    tipo_precio: Literal["base", "lista"],
+    lista_precio_id: UUID | None = None,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMEffectiveDiscountLimitRead:
+    if tipo_precio == "base" and lista_precio_id is not None:
+        raise HTTPException(status_code=400, detail="base_price_cannot_have_list")
+    if tipo_precio == "lista" and lista_precio_id is None:
+        raise HTTPException(status_code=400, detail="price_list_required")
+    row = await repo.resolve_discount_limit(
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        tipo_precio=tipo_precio,
+        lista_precio_id=lista_precio_id,
+    )
+    value = _decimal_from_value(row.get("descuento_maximo_porcentaje") if row else None)
+    return CRMEffectiveDiscountLimitRead(
+        descuento_maximo_porcentaje=float(value) if value is not None else None,
     )
 
 

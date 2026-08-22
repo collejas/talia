@@ -1037,10 +1037,16 @@ export function LeadDrawer({
   const [quoteCatalogPickerSearch, setQuoteCatalogPickerSearch] = useState("");
   const [quoteCatalogSelection, setQuoteCatalogSelection] = useState<string[]>([]);
   const [quotePriceOptions, setQuotePriceOptions] = useState<Record<string, QuotePriceOption[]>>({});
+  const [quoteDiscountLimits, setQuoteDiscountLimits] = useState<Record<string, number | null>>({});
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [quotePreviewError, setQuotePreviewError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteDiscountWarning, setQuoteDiscountWarning] = useState<string | null>(null);
+  const [quoteDiscountLineNotice, setQuoteDiscountLineNotice] = useState<{
+    index: number;
+    maxPercent: string;
+    maxAmount: string;
+  } | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [quoteVendorSettings, setQuoteVendorSettings] = useState<QuoteVendorSettings>(
     DEFAULT_QUOTE_VENDOR_SETTINGS,
@@ -1593,6 +1599,21 @@ export function LeadDrawer({
     return options;
   }, []);
 
+  const loadQuoteDiscountLimit = useCallback(async (key: string, listaPrecioId: string | null) => {
+    if (key in quoteDiscountLimits) return;
+    const params = new URLSearchParams({ tipo_precio: listaPrecioId ? "lista" : "base" });
+    if (listaPrecioId) params.set("lista_precio_id", listaPrecioId);
+    try {
+      const response = await fetch(`/api/catalog/discount-limits/effective?${params.toString()}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      const limit = toNumber(body?.descuento_maximo_porcentaje);
+      setQuoteDiscountLimits((current) => ({ ...current, [key]: limit }));
+    } catch {
+      // El backend sigue validando el límite aunque la consulta anticipada falle.
+    }
+  }, [quoteDiscountLimits]);
+
   useEffect(() => {
     if (!open || !card?.oportunidadId) return;
     if (activeTab === "notas") {
@@ -1642,6 +1663,18 @@ export function LeadDrawer({
       if (!quotePriceOptions[id]) void loadQuotePriceOptions(id).catch(() => undefined);
     }
   }, [loadQuotePriceOptions, quoteDialogOpen, quoteItems, quotePriceOptions]);
+
+  useEffect(() => {
+    if (!quoteDialogOpen) return;
+    const priceTypes = new Map<string, string | null>();
+    for (const item of quoteItems) {
+      const key = item.listaPrecioId ? `lista:${item.listaPrecioId}` : "base";
+      priceTypes.set(key, item.listaPrecioId);
+    }
+    for (const [key, listaPrecioId] of priceTypes) {
+      void loadQuoteDiscountLimit(key, listaPrecioId);
+    }
+  }, [loadQuoteDiscountLimit, quoteDialogOpen, quoteItems]);
 
   useEffect(() => {
     if (card?.moneda) {
@@ -2261,6 +2294,7 @@ export function LeadDrawer({
         return { ...item, descuento: value, descuentoPorcentaje: parsed == null ? "" : formatNumberInputValue(percent) };
       }));
       setQuoteDiscountWarning(null);
+      setQuoteDiscountLineNotice(null);
     },
     [],
   );
@@ -2485,6 +2519,7 @@ export function LeadDrawer({
       }
       setQuoteError(null);
       setQuoteDiscountWarning(null);
+      setQuoteDiscountLineNotice(null);
       setQuoteSuccess(null);
       setQuoteDialogOpen(true);
     },
@@ -2648,7 +2683,6 @@ export function LeadDrawer({
     })) {
       alerts.push("El descuento debe estar entre 0% y el importe de la partida.");
     }
-    if (quoteDiscountWarning) alerts.push(quoteDiscountWarning);
     return alerts;
   }, [quoteChannel, quoteDiscountWarning, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
   const quoteDiscountBlocked = Boolean(quoteDiscountWarning) || quoteItems.some((item) => {
@@ -2656,7 +2690,10 @@ export function LeadDrawer({
     const price = parseNumberInput(item.precioUnitario) ?? 0;
     const amount = parseNumberInput(item.descuento) ?? 0;
     const percent = parseNumberInput(item.descuentoPorcentaje) ?? 0;
-    return amount < 0 || amount > quantity * price || percent < 0 || percent > 100;
+    const limitKey = item.listaPrecioId ? `lista:${item.listaPrecioId}` : "base";
+    const configuredLimit = quoteDiscountLimits[limitKey];
+    return amount < 0 || amount > quantity * price || percent < 0 || percent > 100 ||
+      (configuredLimit != null && percent > configuredLimit);
   });
   const quoteRecentHistory = quotesState.data.slice(0, 4);
   const quoteCompactInputClass =
@@ -2784,6 +2821,21 @@ export function LeadDrawer({
     };
   };
 
+  const showDiscountLimitNotice = (errorValue: unknown) => {
+    const errorText = typeof errorValue === "string" ? errorValue : "";
+    if (!errorText.startsWith("quote_discount_limit_exceeded")) return false;
+    const maxPercent = errorText.match(/max_percent=([0-9.]+)/)?.[1] ?? "0";
+    const maxAmount = errorText.match(/max_amount=([0-9.]+)/)?.[1] ?? "0";
+    const currency = (quoteMoneda || card?.moneda || "MXN").trim().toUpperCase();
+    const formattedAmount = formatQuoteCurrency(Number(maxAmount), currency);
+    const message = `No tienes permitido aplicar ese descuento. El máximo autorizado es ${formattedAmount} (${maxPercent}%).`;
+    const lineIndex = Number(errorText.match(/line_index=(\d+)/)?.[1] ?? "-1");
+    setQuoteDiscountLineNotice({ index: lineIndex, maxPercent, maxAmount });
+    setQuoteDiscountWarning(message);
+    setQuoteError(null);
+    return true;
+  };
+
   const fetchRenderedQuotePdf = useCallback(async (body: Record<string, unknown>) => {
     if (!card) {
       throw new Error("No hay oportunidad activa.");
@@ -2880,9 +2932,7 @@ export function LeadDrawer({
         });
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (responseBody?.error === "quote_discount_limit_exceeded") {
-            setQuoteDiscountWarning("No tienes permitido aplicar ese descuento para esta lista de precios.");
-            setQuoteError(null);
+          if (showDiscountLimitNotice(responseBody?.error)) {
             return;
           }
           const message =
@@ -2967,9 +3017,7 @@ export function LeadDrawer({
         });
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (responseBody?.error === "quote_discount_limit_exceeded") {
-            setQuoteDiscountWarning("No tienes permitido aplicar ese descuento para esta lista de precios.");
-            setQuoteError(null);
+          if (showDiscountLimitNotice(responseBody?.error)) {
             return;
           }
           const message =
@@ -4673,6 +4721,19 @@ export function LeadDrawer({
                               ? catalogItemsById.get(item.catalogItemId)?.fotoUrl ?? null
                               : null;
                             const imageUrl = item.fotoUrl || catalogImageUrl;
+                            const discountLimitKey = item.listaPrecioId ? `lista:${item.listaPrecioId}` : "base";
+                            const configuredLimit = quoteDiscountLimits[discountLimitKey];
+                            const enteredPercent = parseNumberInput(item.descuentoPorcentaje) ?? 0;
+                            const grossAmount = (parseNumberInput(item.cantidad) ?? 1) * (parseNumberInput(item.precioUnitario) ?? 0);
+                            const localDiscountNotice = configuredLimit != null && enteredPercent > configuredLimit
+                              ? {
+                                  maxPercent: configuredLimit.toFixed(2),
+                                  maxAmount: (grossAmount * configuredLimit / 100).toFixed(2),
+                                }
+                              : null;
+                            const discountNotice = quoteDiscountLineNotice?.index === index
+                              ? quoteDiscountLineNotice
+                              : localDiscountNotice;
                             return (
                             <div
                               key={item.key}
@@ -4781,16 +4842,24 @@ export function LeadDrawer({
                                 onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
                                 disabled={quotePending}
                                 placeholder="0.00"
-                                className={quoteCompactInputClass}
+                                className={`${quoteCompactInputClass} ${discountNotice ? "border border-red-500 bg-red-50 text-red-900" : ""}`}
                               />
-                              <Input
-                                value={item.descuentoPorcentaje}
-                                onChange={(event) => handleItemFieldChange(index, "descuentoPorcentaje", event.target.value)}
-                                disabled={quotePending}
-                                placeholder="0"
-                                aria-label="Porcentaje de descuento"
-                                className={quoteCompactInputClass}
-                              />
+                              <div className="relative">
+                                <Input
+                                  value={item.descuentoPorcentaje}
+                                  onChange={(event) => handleItemFieldChange(index, "descuentoPorcentaje", event.target.value)}
+                                  disabled={quotePending}
+                                  placeholder="0"
+                                  aria-label="Porcentaje de descuento"
+                                  title={discountNotice ? `Máximo autorizado: ${discountNotice.maxPercent}%` : undefined}
+                                  className={`${quoteCompactInputClass} ${discountNotice ? "border border-red-500 bg-red-50 text-red-900" : ""}`}
+                                />
+                                {discountNotice ? (
+                                  <span className="absolute left-0 top-full z-20 mt-1 w-max max-w-[180px] rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-800 shadow-sm">
+                                    Máximo autorizado: {discountNotice.maxPercent}% ({formatQuoteCurrency(Number(discountNotice.maxAmount), item.moneda || quoteSummaryCurrency)})
+                                  </span>
+                                ) : null}
+                              </div>
                               <div className="flex items-center justify-end px-1 pt-1 text-xs font-medium text-foreground">
                                 {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteSummaryCurrency)}
                               </div>

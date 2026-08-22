@@ -346,6 +346,9 @@ async function mapResponseError(response: Response): Promise<string> {
           if (detail === "authorization_invalid" || detail.startsWith("auth_user_invalid")) {
             return "Tu sesión caducó. Vuelve a iniciar sesión.";
           }
+          if (detail.startsWith("quote_discount_limit_exceeded:")) {
+            return detail;
+          }
           if (
             detail === "forbidden" ||
             detail === "owner_required" ||
