@@ -339,3 +339,19 @@ duplicar información ni mezclar fuentes de medición.
   y su descripción repetitiva.
 - El encabezado ahora muestra únicamente `Detalle del canal` en negritas para
   reducir el alto del bloque.
+
+## 2026-08-23 · Diseño de atribución por frase/CTA
+
+- Se documentó la estructura de `WhatsApp > Atribución` separada de
+  `Campañas WhatsApp`.
+- El resultado se organizará por campaña publicitaria con desglose expandible
+  por frase/CTA.
+- La tabla prevista incluye campaña, canal, frase/CTA, oportunidades, clientes,
+  gasto, CPO y CAC.
+- El gasto exacto, CPO y CAC pertenecen a la campaña publicitaria; cuando una
+  campaña tenga varias frases, el costo de frase será prorrateado y marcado
+  explícitamente como tal.
+- No se mezclará costo de mensajería outbound con gasto publicitario inbound.
+- Se alineó la estructura visual con `WhatsApp > Campañas`: `Resultado
+  comercial` para el agregado y `Resultado por campaña/frase` para el detalle
+  jerárquico de campañas y frases/CTA.

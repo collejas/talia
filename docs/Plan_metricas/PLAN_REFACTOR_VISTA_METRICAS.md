@@ -349,6 +349,90 @@ columna del detalle comercial por campaña para evitar duplicidad conceptual.
 El resumen general, el gráfico y las exportaciones CSV respetan la misma
 separación de fuentes.
 
+### Fase 3.3 · Resultado de atribución por frase/CTA
+
+**Decisión de producto pendiente de implementación.** La subvista `WhatsApp >
+Atribución` medirá el rendimiento de las frases o CTA inbound que activan una
+regla de atribución. Este flujo es independiente de `Campañas WhatsApp`: no
+lee mensajes outbound de la empresa ni mezcla costos de mensajería.
+
+La estructura visible será:
+
+```text
+Resultado por frase
+Campaña | Canal | Frase/CTA | Oportunidades | Clientes | Gasto | CPO | CAC
+```
+
+La lectura principal se organizará por campaña publicitaria, con un desglose
+expandible de sus frases/CTA:
+
+```text
+Campaña publicitaria
+├── Resultado de campaña
+└── Resultado por frase
+    ├── Frase/CTA A
+    ├── Frase/CTA B
+    └── Frase/CTA C
+```
+
+Reglas de costo:
+
+- El gasto real pertenece a la campaña publicitaria y se registra por separado
+  del costo de mensajes de `Campañas WhatsApp`.
+- En el resumen de campaña, `Gasto`, `CPO` y `CAC` son exactos:
+  `CPO = gasto real / oportunidades` y `CAC = gasto real / clientes`.
+- Si una campaña contiene varias frases, el gasto no se repetirá completo en
+  cada fila de frase.
+- El desglose por frase podrá mostrar gasto, CPO y CAC prorrateados, siempre
+  identificados como prorrateados. Si no existe una regla de distribución
+  aprobada, se mostrará el resultado de la frase sin presentar un costo exacto.
+- Una campaña con una sola frase puede conservar el gasto exacto de campaña.
+
+La regla de atribución será:
+
+```text
+Frase inbound → regla → campaña publicitaria → conversación → oportunidad → cliente
+```
+
+La pantalla `prospeccion/whatsapp-atribucion` deberá permitir asociar la regla
+con la campaña publicitaria y registrar su presupuesto y gasto real conciliado.
+El costo deberá modelarse como dato explícito de la campaña, no dentro de la
+frase ni en `metadata`.
+
+La estructura visual de `WhatsApp > Atribución` seguirá el mismo patrón que
+`WhatsApp > Campañas`, pero con las unidades propias de atribución:
+
+### Resultado comercial
+
+Resumen agregado del periodo con:
+
+- Oportunidades.
+- Clientes.
+- Gasto publicitario.
+- CPO.
+- CAC.
+
+### Resultado por campaña/frase
+
+El detalle se presentará como una tabla jerárquica o expandible:
+
+```text
+Campaña publicitaria
+└── Frase/CTA
+```
+
+Columnas:
+
+```text
+Campaña | Canal | Frase/CTA | Oportunidades | Clientes | Gasto | CPO | CAC
+```
+
+La fila de campaña mostrará el gasto publicitario exacto y sus indicadores.
+Las frases mostrarán sus resultados atribuidos y, cuando corresponda, costos
+prorrateados identificados explícitamente. Esta sección conservará su propia
+fuente de datos y nunca mezclará el costo publicitario con el costo de mensajes
+de `WhatsApp > Campañas`.
+
 La vista de detalle no incluye una sección adicional de `Filtros globales`.
 El periodo se selecciona desde el encabezado y el canal desde la navegación
 principal, manteniendo la pantalla compacta.
