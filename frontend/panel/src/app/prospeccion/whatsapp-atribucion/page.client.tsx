@@ -12,10 +12,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   createWhatsAppAtribucionRegla,
+  createWhatsAppAtribucionGasto,
+  deleteWhatsAppAtribucionGasto,
+  listWhatsAppAtribucionGastos,
   deleteWhatsAppAtribucionRegla,
   listWhatsAppAtribucionReglas,
   simulateWhatsAppAtribucionRegla,
+  updateWhatsAppAtribucionGasto,
   updateWhatsAppAtribucionRegla,
+  type WhatsAppAtribucionGasto,
   type WhatsAppAtribucionRule,
   type WhatsAppAtribucionTipoMatch,
 } from "@/lib/prospeccion/prospectos-client"
@@ -33,6 +38,20 @@ type RuleFormState = {
   activo: boolean
 }
 
+type ExpenseFormState = {
+  id?: string
+  canal_publicitario: string
+  campana_publicitaria: string
+  fecha_inicio: string
+  fecha_fin: string
+  gasto_real: string
+  moneda: string
+  estado: "estimado" | "conciliado" | "cancelado"
+  proveedor: string
+  referencia_externa: string
+  notas: string
+}
+
 const EMPTY_FORM: RuleFormState = {
   nombre_regla: "",
   canal_publicitario: "",
@@ -43,6 +62,19 @@ const EMPTY_FORM: RuleFormState = {
   anuncio: "",
   prioridad: 100,
   activo: true,
+}
+
+const EMPTY_EXPENSE_FORM: ExpenseFormState = {
+  canal_publicitario: "Meta Ads",
+  campana_publicitaria: "",
+  fecha_inicio: "",
+  fecha_fin: "",
+  gasto_real: "",
+  moneda: "MXN",
+  estado: "conciliado",
+  proveedor: "",
+  referencia_externa: "",
+  notas: "",
 }
 
 function toForm(rule: WhatsAppAtribucionRule): RuleFormState {
@@ -69,6 +101,11 @@ export default function WhatsAppAtribucionPageClient() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const [form, setForm] = useState<RuleFormState>(EMPTY_FORM)
+  const [expenses, setExpenses] = useState<WhatsAppAtribucionGasto[]>([])
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(EMPTY_EXPENSE_FORM)
+  const [expenseLoading, setExpenseLoading] = useState(false)
+  const [expenseSaving, setExpenseSaving] = useState(false)
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
 
   const [filterCanal, setFilterCanal] = useState<string>("todos")
   const [filterEstado, setFilterEstado] = useState<string>("todos")
@@ -84,6 +121,7 @@ export default function WhatsAppAtribucionPageClient() {
   } | null>(null)
 
   const isEditing = Boolean(form.id)
+  const isEditingExpense = Boolean(expenseForm.id)
 
   const loadRules = useCallback(async () => {
     setLoading(true)
@@ -108,6 +146,23 @@ export default function WhatsAppAtribucionPageClient() {
     void loadRules()
   }, [loadRules])
 
+  const loadExpenses = useCallback(async () => {
+    setExpenseLoading(true)
+    try {
+      const response = await listWhatsAppAtribucionGastos({ limit: 500 })
+      setExpenses(Array.isArray(response.items) ? response.items : [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar los gastos publicitarios."
+      setError(message)
+    } finally {
+      setExpenseLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadExpenses()
+  }, [loadExpenses])
+
   const channels = useMemo(() => {
     const values = new Set<string>()
     for (const rule of rules) {
@@ -121,6 +176,10 @@ export default function WhatsAppAtribucionPageClient() {
 
   const resetForm = () => {
     setForm(EMPTY_FORM)
+  }
+
+  const resetExpenseForm = () => {
+    setExpenseForm(EMPTY_EXPENSE_FORM)
   }
 
   const submitForm = async () => {
@@ -153,6 +212,59 @@ export default function WhatsAppAtribucionPageClient() {
       setError(message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const submitExpenseForm = async () => {
+    if (!expenseForm.campana_publicitaria.trim() || !expenseForm.fecha_inicio || !expenseForm.fecha_fin) return
+    setExpenseSaving(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const payload = {
+        canal_publicitario: expenseForm.canal_publicitario.trim(),
+        campana_publicitaria: expenseForm.campana_publicitaria.trim(),
+        fecha_inicio: expenseForm.fecha_inicio,
+        fecha_fin: expenseForm.fecha_fin,
+        gasto_real: Number(expenseForm.gasto_real || 0),
+        moneda: expenseForm.moneda.trim().toUpperCase(),
+        estado: expenseForm.estado,
+        proveedor: expenseForm.proveedor.trim() || null,
+        referencia_externa: expenseForm.referencia_externa.trim() || null,
+        notas: expenseForm.notas.trim() || null,
+      }
+      if (expenseForm.id) {
+        await updateWhatsAppAtribucionGasto(expenseForm.id, payload)
+        setNotice("Gasto publicitario actualizado.")
+      } else {
+        await createWhatsAppAtribucionGasto(payload)
+        setNotice("Gasto publicitario registrado.")
+      }
+      resetExpenseForm()
+      await loadExpenses()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo guardar el gasto publicitario."
+      setError(message)
+    } finally {
+      setExpenseSaving(false)
+    }
+  }
+
+  const handleDeleteExpense = async (expense: WhatsAppAtribucionGasto) => {
+    if (!window.confirm(`Eliminar el gasto de "${expense.campana_publicitaria}"?`)) return
+    setDeletingExpenseId(expense.id)
+    setError(null)
+    setNotice(null)
+    try {
+      await deleteWhatsAppAtribucionGasto(expense.id)
+      setNotice("Gasto publicitario eliminado.")
+      await loadExpenses()
+      if (expenseForm.id === expense.id) resetExpenseForm()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo eliminar el gasto publicitario."
+      setError(message)
+    } finally {
+      setDeletingExpenseId(null)
     }
   }
 
@@ -293,6 +405,110 @@ export default function WhatsAppAtribucionPageClient() {
                 Cancelar edición
               </Button>
             ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{isEditingExpense ? "Editar gasto publicitario" : "Registrar gasto publicitario"}</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Gasto de la plataforma publicitaria de la campaña. No corresponde a mensajes enviados por la empresa.
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Canal publicitario</Label>
+            <Input value={expenseForm.canal_publicitario} onChange={(event) => setExpenseForm((prev) => ({ ...prev, canal_publicitario: event.target.value }))} placeholder="Meta Ads" />
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Campaña publicitaria</Label>
+            <Input value={expenseForm.campana_publicitaria} onChange={(event) => setExpenseForm((prev) => ({ ...prev, campana_publicitaria: event.target.value }))} placeholder="Campaña Febrero MX" />
+          </div>
+          <div className="space-y-2">
+            <Label>Proveedor</Label>
+            <Input value={expenseForm.proveedor} onChange={(event) => setExpenseForm((prev) => ({ ...prev, proveedor: event.target.value }))} placeholder="Meta" />
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha inicial</Label>
+            <Input type="date" value={expenseForm.fecha_inicio} onChange={(event) => setExpenseForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha final</Label>
+            <Input type="date" value={expenseForm.fecha_fin} onChange={(event) => setExpenseForm((prev) => ({ ...prev, fecha_fin: event.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Gasto real</Label>
+            <Input type="number" min={0} step="0.0001" value={expenseForm.gasto_real} onChange={(event) => setExpenseForm((prev) => ({ ...prev, gasto_real: event.target.value }))} placeholder="0.0000" />
+          </div>
+          <div className="space-y-2">
+            <Label>Moneda / estado</Label>
+            <div className="flex gap-2">
+              <Input className="w-24" value={expenseForm.moneda} onChange={(event) => setExpenseForm((prev) => ({ ...prev, moneda: event.target.value.toUpperCase() }))} maxLength={3} />
+              <Select value={expenseForm.estado} onValueChange={(value) => setExpenseForm((prev) => ({ ...prev, estado: value as ExpenseFormState["estado"] }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="conciliado">Conciliado</SelectItem>
+                  <SelectItem value="estimado">Estimado</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Referencia externa</Label>
+            <Input value={expenseForm.referencia_externa} onChange={(event) => setExpenseForm((prev) => ({ ...prev, referencia_externa: event.target.value }))} placeholder="Folio o ID del reporte de Meta" />
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Notas</Label>
+            <Input value={expenseForm.notas} onChange={(event) => setExpenseForm((prev) => ({ ...prev, notas: event.target.value }))} placeholder="Observaciones opcionales" />
+          </div>
+          <div className="flex items-end gap-2 lg:col-span-4">
+            <Button onClick={() => void submitExpenseForm()} disabled={expenseSaving || !expenseForm.campana_publicitaria.trim() || !expenseForm.fecha_inicio || !expenseForm.fecha_fin}>
+              {expenseSaving ? <IconLoader className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isEditingExpense ? "Guardar gasto" : "Registrar gasto"}
+            </Button>
+            {isEditingExpense ? <Button variant="outline" onClick={resetExpenseForm} disabled={expenseSaving}>Cancelar edición</Button> : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Gastos publicitarios registrados</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2">Campaña</th>
+                  <th className="px-2 py-2">Canal</th>
+                  <th className="px-2 py-2">Periodo</th>
+                  <th className="px-2 py-2">Gasto</th>
+                  <th className="px-2 py-2">Estado</th>
+                  <th className="px-2 py-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((expense) => (
+                  <tr key={expense.id} className="border-b align-top">
+                    <td className="px-2 py-2 font-medium">{expense.campana_publicitaria}<div className="text-xs text-muted-foreground">{expense.proveedor || "Sin proveedor"}</div></td>
+                    <td className="px-2 py-2">{expense.canal_publicitario}</td>
+                    <td className="px-2 py-2">{expense.fecha_inicio} → {expense.fecha_fin}</td>
+                    <td className="px-2 py-2">{expense.moneda} {Number(expense.gasto_real || 0).toFixed(4)}</td>
+                    <td className="px-2 py-2"><Badge variant={expense.estado === "conciliado" ? "default" : "secondary"}>{expense.estado}</Badge></td>
+                    <td className="px-2 py-2">
+                      <div className="flex justify-end gap-2">
+                        <Button size="icon" variant="outline" onClick={() => setExpenseForm({ id: expense.id, canal_publicitario: expense.canal_publicitario, campana_publicitaria: expense.campana_publicitaria, fecha_inicio: expense.fecha_inicio, fecha_fin: expense.fecha_fin, gasto_real: String(expense.gasto_real ?? ""), moneda: expense.moneda, estado: expense.estado as ExpenseFormState["estado"], proveedor: expense.proveedor ?? "", referencia_externa: expense.referencia_externa ?? "", notas: expense.notas ?? "" })} title="Editar gasto"><IconPencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="outline" onClick={() => void handleDeleteExpense(expense)} disabled={deletingExpenseId === expense.id} title="Eliminar gasto">{deletingExpenseId === expense.id ? <IconLoader className="h-4 w-4 animate-spin" /> : <IconTrash className="h-4 w-4" />}</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!expenseLoading && expenses.length === 0 ? <tr><td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={6}>No hay gastos publicitarios registrados.</td></tr> : null}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

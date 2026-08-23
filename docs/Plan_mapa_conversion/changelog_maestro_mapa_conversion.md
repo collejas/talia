@@ -302,3 +302,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   alineada con la lectura comercial simplificada de `prospeccion/metricas`.
 - `Oportunidades` muestra ahora su porcentaje sobre conversaciones atribuidas,
   tanto en el embudo consolidado como en el detalle por campaña.
+
+## 2026-08-23 — Gasto separado para atribución inbound por frases
+
+- Se agregó el ledger explícito `prospeccion_whatsapp_atribucion_gastos` para
+  registrar gasto de plataforma por campaña publicitaria y periodo.
+- Este gasto pertenece a `WhatsApp > Atribución` y es independiente de
+  `cobro_mensajes`, que conserva la fuente de verdad del costo outbound.
+- La definición de producto y el contrato de métricas quedan centralizados en
+  `docs/Plan_metricas/PLAN_REFACTOR_VISTA_METRICAS.md`.

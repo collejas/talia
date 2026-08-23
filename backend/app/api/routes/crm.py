@@ -4791,6 +4791,20 @@ class WhatsAppAtribucionRuleQuery(BaseModel):
     include_historial: bool = Field(default=False)
 
 
+class WhatsAppAtribucionGastoQuery(BaseModel):
+    """Filtros del ledger de gasto publicitario inbound."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    canal_publicitario: str | None = Field(default=None, max_length=120)
+    campana_publicitaria: str | None = Field(default=None, max_length=200)
+    estado: Literal["estimado", "conciliado", "cancelado"] | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+
+
 class WhatsAppAtribucionRulePayload(BaseModel):
     """Regla de atribución de publicidad por frase para WhatsApp inbound."""
 
@@ -4828,6 +4842,56 @@ class WhatsAppAtribucionRuleUpdatePayload(BaseModel):
     def _ensure_changes(self) -> "WhatsAppAtribucionRuleUpdatePayload":
         if not self.model_dump(exclude_unset=True):
             raise ValueError("whatsapp_atribucion_rule_update_required")
+        return self
+
+
+class WhatsAppAtribucionGastoPayload(BaseModel):
+    """Gasto real de una campaña publicitaria inbound de WhatsApp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canal_publicitario: str = Field(..., min_length=2, max_length=120)
+    campana_publicitaria: str = Field(..., min_length=1, max_length=200)
+    fecha_inicio: date
+    fecha_fin: date
+    gasto_real: Decimal = Field(..., ge=Decimal("0"), decimal_places=4, max_digits=14)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    estado: Literal["estimado", "conciliado", "cancelado"] = Field(default="conciliado")
+    proveedor: str | None = Field(default=None, max_length=120)
+    referencia_externa: str | None = Field(default=None, max_length=200)
+    notas: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _validate_period_and_currency(self) -> "WhatsAppAtribucionGastoPayload":
+        if self.fecha_fin < self.fecha_inicio:
+            raise ValueError("whatsapp_atribucion_gasto_invalid_period")
+        if self.moneda.upper() != self.moneda:
+            raise ValueError("whatsapp_atribucion_gasto_currency_uppercase_required")
+        return self
+
+
+class WhatsAppAtribucionGastoUpdatePayload(BaseModel):
+    """Campos editables del gasto publicitario inbound."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canal_publicitario: str | None = Field(default=None, min_length=2, max_length=120)
+    campana_publicitaria: str | None = Field(default=None, min_length=1, max_length=200)
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    gasto_real: Decimal | None = Field(default=None, ge=Decimal("0"), decimal_places=4, max_digits=14)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    estado: Literal["estimado", "conciliado", "cancelado"] | None = None
+    proveedor: str | None = Field(default=None, max_length=120)
+    referencia_externa: str | None = Field(default=None, max_length=200)
+    notas: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "WhatsAppAtribucionGastoUpdatePayload":
+        if not self.model_fields_set:
+            raise ValueError("whatsapp_atribucion_gasto_update_required")
+        if self.moneda is not None and self.moneda.upper() != self.moneda:
+            raise ValueError("whatsapp_atribucion_gasto_currency_uppercase_required")
         return self
 
 
@@ -33564,6 +33628,105 @@ async def listar_whatsapp_atribucion_reglas(
     }
 
 
+@router.get("/prospeccion/whatsapp/atribucion/gastos")
+async def listar_whatsapp_atribucion_gastos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    params: WhatsAppAtribucionGastoQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista gasto publicitario registrado para campañas inbound."""
+
+    if params.date_from and params.date_to and params.date_to < params.date_from:
+        raise HTTPException(status_code=422, detail="whatsapp_atribucion_gasto_invalid_period")
+    try:
+        rows, total = await repo.list_whatsapp_atribucion_gastos(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            canal_publicitario=_clean_text(params.canal_publicitario),
+            campana_publicitaria=_clean_text(params.campana_publicitaria),
+            estado=params.estado,
+            date_from=params.date_from.isoformat() if params.date_from else None,
+            date_to=params.date_to.isoformat() if params.date_to else None,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": rows, "total": total, "limit": params.limit, "offset": params.offset}
+
+
+@router.post("/prospeccion/whatsapp/atribucion/gastos")
+async def crear_whatsapp_atribucion_gasto(
+    *,
+    payload: WhatsAppAtribucionGastoPayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Registra gasto publicitario conciliado o estimado de una campaña inbound."""
+
+    body = payload.model_dump(mode="json")
+    body["moneda"] = body["moneda"].upper()
+    try:
+        row = await repo.create_whatsapp_atribucion_gasto(usuario_token=user_token, payload=body)
+    except CRMRepositoryError as exc:
+        if "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="whatsapp_atribucion_gasto_duplicate_period") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "gasto": row}
+
+
+@router.patch("/prospeccion/whatsapp/atribucion/gastos/{gasto_id}")
+async def actualizar_whatsapp_atribucion_gasto(
+    *,
+    gasto_id: UUID,
+    payload: WhatsAppAtribucionGastoUpdatePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Actualiza un registro de gasto publicitario inbound."""
+
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if "moneda" in body and body["moneda"] is not None:
+        body["moneda"] = body["moneda"].upper()
+    if "fecha_inicio" in body and "fecha_fin" in body and body["fecha_inicio"] and body["fecha_fin"]:
+        if body["fecha_fin"] < body["fecha_inicio"]:
+            raise HTTPException(status_code=422, detail="whatsapp_atribucion_gasto_invalid_period")
+    body = {key: value for key, value in body.items() if value is not None or key in {"proveedor", "referencia_externa", "notas"}}
+    try:
+        row = await repo.update_whatsapp_atribucion_gasto(
+            usuario_token=user_token,
+            gasto_id=gasto_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="whatsapp_atribucion_gasto_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "gasto": row}
+
+
+@router.delete("/prospeccion/whatsapp/atribucion/gastos/{gasto_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_whatsapp_atribucion_gasto(
+    *,
+    gasto_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> Response:
+    """Elimina un registro de gasto publicitario inbound."""
+
+    try:
+        await repo.delete_whatsapp_atribucion_gasto(usuario_token=user_token, gasto_id=gasto_id)
+    except CRMRepositoryError as exc:
+        if "not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="whatsapp_atribucion_gasto_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/prospeccion/whatsapp/atribucion/reglas")
 async def crear_whatsapp_atribucion_regla(
     *,
@@ -35296,6 +35459,7 @@ async def prospeccion_metricas_dashboard(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     rule_name_map: dict[str, str] = {}
+    rule_phrase_map: dict[str, str] = {}
     try:
         rules_for_map, _ = await repo.list_whatsapp_atribucion_reglas(
             usuario_token=user_token,
@@ -35310,6 +35474,50 @@ async def prospeccion_metricas_dashboard(
         rule_name = _clean_text(rule.get("nombre_regla"))
         if rule_id_value and rule_name:
             rule_name_map[rule_id_value] = rule_name
+            rule_phrase_map[rule_id_value] = _clean_text(rule.get("frase_objetivo"))
+
+    advertising_spend_rows: list[dict[str, Any]] = []
+    try:
+        advertising_spend_rows, _ = await repo.list_whatsapp_atribucion_gastos(
+            usuario_token=user_token,
+            limit=500,
+            offset=0,
+            date_from=date_from_dt.date().isoformat() if date_from_dt else None,
+            date_to=date_to_dt.date().isoformat() if date_to_dt else None,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.metricas.whatsapp_atribucion_gastos_failed", extra={"error": str(exc)})
+        advertising_spend_rows = []
+
+    spend_by_campaign: dict[str, dict[str, Any]] = {}
+    for spend_row in advertising_spend_rows:
+        if _clean_text(spend_row.get("estado")).lower() == "cancelado":
+            continue
+        channel_value = _clean_text(spend_row.get("canal_publicitario")) or "sin_canal"
+        campaign_value = _clean_text(spend_row.get("campana_publicitaria")) or "sin_campana"
+        spend_key = f"{channel_value.casefold()}::{campaign_value.casefold()}"
+        spend_bucket = spend_by_campaign.setdefault(
+            spend_key,
+            {
+                "canal_publicitario": channel_value,
+                "campana_publicitaria": campaign_value,
+                "gasto_conciliado": 0.0,
+                "gasto_estimado": 0.0,
+                "monedas": set(),
+                "tiene_estimado": False,
+            },
+        )
+        try:
+            amount = float(spend_row.get("gasto_real") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        currency = _clean_text(spend_row.get("moneda")) or "MXN"
+        spend_bucket["monedas"].add(currency)
+        if _clean_text(spend_row.get("estado")).lower() == "estimado":
+            spend_bucket["gasto_estimado"] += amount
+            spend_bucket["tiene_estimado"] = True
+        else:
+            spend_bucket["gasto_conciliado"] += amount
 
     conversation_ids = {
         _clean_text(row.get("conversacion_id"))
@@ -35369,6 +35577,7 @@ async def prospeccion_metricas_dashboard(
                 "conversaciones": set(),
                 "contactos": set(),
                 "oportunidades": set(),
+                "clientes": set(),
                 "monto_estimado_total": 0.0,
             },
         )
@@ -35382,6 +35591,7 @@ async def prospeccion_metricas_dashboard(
                 "conversaciones": set(),
                 "contactos": set(),
                 "oportunidades": set(),
+                "clientes": set(),
                 "monto_estimado_total": 0.0,
             },
         )
@@ -35397,6 +35607,10 @@ async def prospeccion_metricas_dashboard(
         if opportunity and conversation_id_value:
             channel_bucket["oportunidades"].add(conversation_id_value)
             rule_bucket["oportunidades"].add(conversation_id_value)
+            cliente_id_value = _clean_text(opportunity.get("cliente_id"))
+            if cliente_id_value:
+                channel_bucket["clientes"].add(cliente_id_value)
+                rule_bucket["clientes"].add(cliente_id_value)
             try:
                 monto = float(opportunity.get("monto_estimado") or 0)
             except (TypeError, ValueError):
@@ -35423,24 +35637,45 @@ async def prospeccion_metricas_dashboard(
                 }
             )
 
+    campaign_opportunity_totals: dict[str, int] = defaultdict(int)
+    for bucket in by_rule.values():
+        campaign_key = f"{str(bucket['canal_publicitario']).casefold()}::{str(bucket['campana_publicitaria'] or 'sin_campana').casefold()}"
+        campaign_opportunity_totals[campaign_key] += len(bucket["oportunidades"])
+
     by_rule_items: list[dict[str, Any]] = []
     for bucket in by_rule.values():
         conversaciones = len(bucket["conversaciones"])
         oportunidades_count = len(bucket["oportunidades"])
+        clientes_count = len(bucket["clientes"])
+        campaign_value = bucket["campana_publicitaria"] or "sin_campana"
+        campaign_key = f"{str(bucket['canal_publicitario']).casefold()}::{str(campaign_value).casefold()}"
+        spend_bucket = spend_by_campaign.get(campaign_key, {})
+        campaign_spend = float(spend_bucket.get("gasto_conciliado") or 0)
+        campaign_opportunities = campaign_opportunity_totals.get(campaign_key, 0)
+        phrase_spend = campaign_spend * oportunidades_count / campaign_opportunities if campaign_opportunities else 0.0
+        spend_currency = next(iter(spend_bucket.get("monedas") or {"MXN"}))
+        spend_state = "estimado" if spend_bucket.get("tiene_estimado") and not campaign_spend else "conciliado" if campaign_spend else "sin_datos"
         by_rule_items.append(
             {
                 "regla_id": bucket["regla_id"],
                 "regla_nombre": bucket["regla_nombre"],
+                "frase_objetivo": rule_phrase_map.get(bucket["regla_id"] or "") or None,
                 "canal_publicitario": bucket["canal_publicitario"],
                 "campana_publicitaria": bucket["campana_publicitaria"],
                 "conversaciones_atribuidas": conversaciones,
                 "contactos_unicos": len(bucket["contactos"]),
                 "oportunidades_creadas": oportunidades_count,
+                "clientes": clientes_count,
                 "tasa_conversacion_oportunidad_pct": round(
                     (oportunidades_count / conversaciones * 100) if conversaciones > 0 else 0.0,
                     2,
                 ),
                 "monto_estimado_total": round(float(bucket["monto_estimado_total"]), 2),
+                "gasto_publicitario": round(phrase_spend, 4),
+                "moneda_gasto": spend_currency,
+                "gasto_estado": spend_state,
+                "cpo": round(phrase_spend / oportunidades_count, 4) if phrase_spend and oportunidades_count else None,
+                "cac": round(phrase_spend / clientes_count, 4) if phrase_spend and clientes_count else None,
             }
         )
 
@@ -35456,6 +35691,37 @@ async def prospeccion_metricas_dashboard(
         }
     )
     total_opportunities = len(opp_by_conversation)
+    total_clients = len(
+        {
+            _clean_text(opportunity.get("cliente_id"))
+            for opportunity in opp_by_conversation.values()
+            if _clean_text(opportunity.get("cliente_id"))
+        }
+    )
+    attributed_campaign_keys = {
+        f"{str(bucket['canal_publicitario']).casefold()}::{str(bucket['campana_publicitaria'] or 'sin_campana').casefold()}"
+        for bucket in by_rule.values()
+    }
+    total_advertising_spend = round(
+        sum(
+            float(spend_by_campaign[key].get("gasto_conciliado") or 0)
+            for key in attributed_campaign_keys
+            if key in spend_by_campaign
+        ),
+        4,
+    )
+    has_estimated_advertising_spend = any(
+        bool(spend_by_campaign[key].get("tiene_estimado"))
+        for key in attributed_campaign_keys
+        if key in spend_by_campaign
+    )
+    advertising_spend_state = (
+        "estimado"
+        if has_estimated_advertising_spend and total_advertising_spend == 0
+        else "conciliado"
+        if total_advertising_spend > 0
+        else "sin_datos"
+    )
     total_amount = round(
         float(sum(float(item["monto_estimado_total"]) for item in by_channel_items)),
         2,
@@ -35531,11 +35797,21 @@ async def prospeccion_metricas_dashboard(
                 "conversaciones_atribuidas": total_conversations,
                 "contactos_unicos": total_contacts,
                 "oportunidades_creadas": total_opportunities,
+                "clientes": total_clients,
                 "tasa_conversacion_oportunidad_pct": round(
                     (total_opportunities / total_conversations * 100) if total_conversations > 0 else 0.0,
                     2,
                 ),
                 "monto_estimado_total": total_amount,
+                "gasto_publicitario": total_advertising_spend,
+                "moneda_gasto": "MXN",
+                "gasto_estado": advertising_spend_state,
+                "cpo": round(total_advertising_spend / total_opportunities, 4)
+                if total_advertising_spend and total_opportunities
+                else None,
+                "cac": round(total_advertising_spend / total_clients, 4)
+                if total_advertising_spend and total_clients
+                else None,
             },
             "by_channel": by_channel_items,
             "by_rule": by_rule_items,
@@ -35640,8 +35916,14 @@ async def prospeccion_metricas_export_xlsx(
         "conversaciones_atribuidas",
         "contactos_unicos",
         "oportunidades_creadas",
+        "clientes",
         "tasa_conversacion_oportunidad_pct",
         "monto_estimado_total",
+        "gasto_publicitario",
+        "moneda_gasto",
+        "gasto_estado",
+        "cpo",
+        "cac",
     ):
         summary_sheet.append(["frases_whatsapp", key, frases_summary.get(key)])
 
@@ -35823,13 +36105,20 @@ async def prospeccion_metricas_export_xlsx(
         [
             "regla_id",
             "regla_nombre",
+            "frase_objetivo",
             "canal_publicitario",
             "campana_publicitaria",
             "conversaciones_atribuidas",
             "contactos_unicos",
             "oportunidades_creadas",
+            "clientes",
             "tasa_conversacion_oportunidad_pct",
             "monto_estimado_total",
+            "gasto_publicitario",
+            "moneda_gasto",
+            "gasto_estado",
+            "cpo",
+            "cac",
         ]
     )
     frases_by_rule = _ensure_dict(payload.get("frases_whatsapp"), default={}).get("by_rule")
@@ -35841,13 +36130,20 @@ async def prospeccion_metricas_export_xlsx(
             [
                 row.get("regla_id"),
                 row.get("regla_nombre"),
+                row.get("frase_objetivo"),
                 row.get("canal_publicitario"),
                 row.get("campana_publicitaria"),
                 row.get("conversaciones_atribuidas"),
                 row.get("contactos_unicos"),
                 row.get("oportunidades_creadas"),
+                row.get("clientes"),
                 row.get("tasa_conversacion_oportunidad_pct"),
                 row.get("monto_estimado_total"),
+                row.get("gasto_publicitario"),
+                row.get("moneda_gasto"),
+                row.get("gasto_estado"),
+                row.get("cpo"),
+                row.get("cac"),
             ]
         )
 

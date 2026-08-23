@@ -22618,6 +22618,116 @@ class CRMRepository:
         if isinstance(data, dict) and data.get("message") == "No rows deleted":
             raise CRMRepositoryError("whatsapp_atribucion_regla_not_found")
 
+    async def list_whatsapp_atribucion_gastos(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        canal_publicitario: str | None = None,
+        campana_publicitaria: str | None = None,
+        estado: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista gasto publicitario inbound con filtros tenant-safe."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(max(1, min(limit, 500))),
+            "offset": str(max(0, offset)),
+            "order": "fecha_inicio.desc,fecha_fin.desc,creado_en.desc",
+        }
+        if canal_publicitario:
+            params["canal_publicitario"] = f"eq.{_postgrest_eq_literal(canal_publicitario.strip())}"
+        if campana_publicitaria:
+            params["campana_publicitaria"] = f"eq.{_postgrest_eq_literal(campana_publicitaria.strip())}"
+        if estado:
+            params["estado"] = f"eq.{_postgrest_eq_literal(estado.strip())}"
+        if date_from:
+            params["fecha_inicio"] = f"gte.{date_from}"
+        if date_to:
+            params["fecha_fin"] = f"lte.{date_to}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_gastos",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_gastos_invalid:{data!r}")
+        rows = [row for row in data if isinstance(row, dict)]
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(rows)
+        return rows, total
+
+    async def create_whatsapp_atribucion_gasto(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Registra gasto publicitario inbound."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_whatsapp_atribucion_gastos",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whatsapp_atribucion_gasto_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_gasto_create_invalid:{row!r}")
+        return row
+
+    async def update_whatsapp_atribucion_gasto(
+        self,
+        *,
+        usuario_token: str,
+        gasto_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza gasto publicitario inbound."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_whatsapp_atribucion_gastos",
+            token=usuario_token,
+            params={"id": f"eq.{gasto_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whatsapp_atribucion_gasto_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_gasto_update_invalid:{row!r}")
+        return row
+
+    async def delete_whatsapp_atribucion_gasto(
+        self,
+        *,
+        usuario_token: str,
+        gasto_id: UUID,
+    ) -> None:
+        """Elimina gasto publicitario inbound."""
+
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_whatsapp_atribucion_gastos",
+            token=usuario_token,
+            params={"id": f"eq.{gasto_id}"},
+        )
+        data = resp.json() or []
+        if isinstance(data, dict) and data.get("message") == "No rows deleted":
+            raise CRMRepositoryError("whatsapp_atribucion_gasto_not_found")
+
     async def list_active_whatsapp_atribucion_reglas(
         self,
         *,
@@ -22962,7 +23072,7 @@ class CRMRepository:
         )
         in_clause = _postgrest_in_clause(safe_ids)
         params = {
-            "select": "id,monto_estimado,metadata,creado_en,asignado_a_usuario_id",
+            "select": "id,cliente_id,monto_estimado,metadata,creado_en,asignado_a_usuario_id",
             "organizacion_id": f"eq.{organizacion_id}",
             "or": f"(metadata->>conversation_id.{in_clause},metadata->>conversacion_id.{in_clause})",
             "order": "creado_en.desc",

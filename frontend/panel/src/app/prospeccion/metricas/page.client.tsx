@@ -240,6 +240,8 @@ export default function ProspeccionMetricasPageClient() {
         canal: string
         conversaciones: number
         oportunidades: number
+        clientes: number
+        gasto: number
         frases: NonNullable<ProspeccionMetricasResponse["frases_whatsapp"]["by_rule"]>
       }
     >()
@@ -251,16 +253,27 @@ export default function ProspeccionMetricasPageClient() {
         canal: item.canal_publicitario || "Sin canal",
         conversaciones: 0,
         oportunidades: 0,
+        clientes: 0,
+        gasto: 0,
         frases: [],
       }
       current.conversaciones += item.conversaciones_atribuidas
       current.oportunidades += item.oportunidades_creadas
+      current.clientes += item.clientes
+      current.gasto += item.gasto_publicitario
       current.frases.push(item)
       groups.set(campana, current)
     }
 
     return Array.from(groups.values()).sort((left, right) => right.oportunidades - left.oportunidades)
   }, [data?.frases_whatsapp.by_rule])
+  const phraseSpendValue = summaryPhrases?.gasto_estado === "conciliado"
+    ? moneyPrecise.format(summaryPhrases.gasto_publicitario)
+    : summaryPhrases?.gasto_estado === "estimado"
+    ? "Estimado"
+    : "—"
+  const phraseCpoValue = summaryPhrases?.cpo != null ? moneyPrecise.format(summaryPhrases.cpo) : "—"
+  const phraseCacValue = summaryPhrases?.cac != null ? moneyPrecise.format(summaryPhrases.cac) : "—"
   const activeViewMeta: Record<
     "campanas" | "campanas_whatsapp" | "frases",
     { title: string; description: string; badge: string }
@@ -664,17 +677,17 @@ export default function ProspeccionMetricasPageClient() {
       return
     }
     const phraseRows = phraseCampaignGroups.flatMap((group) => [
-      ["campana", group.campana, "", group.canal, group.oportunidades, "", "", "", ""],
+      ["campana", group.campana, "", group.canal, group.oportunidades, group.clientes, group.gasto, group.oportunidades ? group.gasto / group.oportunidades : "", group.clientes ? group.gasto / group.clientes : ""],
       ...group.frases.map((item) => [
         "frase",
         group.campana,
-        item.regla_nombre,
+        item.frase_objetivo || item.regla_nombre,
         item.canal_publicitario,
         item.oportunidades_creadas,
-        "",
-        "",
-        "",
-        "",
+        item.clientes,
+        item.gasto_publicitario,
+        item.cpo ?? "",
+        item.cac ?? "",
       ]),
     ])
     const csv = buildCsv(
@@ -1297,18 +1310,18 @@ export default function ProspeccionMetricasPageClient() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Clientes</p>
-                  <p className="mt-1 text-xl font-semibold">—</p>
-                  <p className="text-xs text-muted-foreground">No disponible en atribución</p>
+                  <p className="mt-1 text-xl font-semibold">{number.format(summaryPhrases?.clientes ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground">Oportunidades ganadas</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Gasto publicitario</p>
-                  <p className="mt-1 text-xl font-semibold">—</p>
-                  <p className="text-xs text-muted-foreground">Pendiente de registro</p>
+                  <p className="mt-1 text-xl font-semibold">{phraseSpendValue}</p>
+                  <p className="text-xs text-muted-foreground">{summaryPhrases?.moneda_gasto || "MXN"} · plataforma</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">CPO / CAC</p>
-                  <p className="mt-1 text-xl font-semibold">—</p>
-                  <p className="text-xs text-muted-foreground">Requiere gasto publicitario</p>
+                  <p className="mt-1 text-sm font-semibold">{phraseCpoValue} / {phraseCacValue}</p>
+                  <p className="text-xs text-muted-foreground">Costo por oportunidad / cliente</p>
                 </div>
               </div>
               <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
@@ -1346,20 +1359,20 @@ export default function ProspeccionMetricasPageClient() {
                             <td className="px-2 py-2">{group.campana}</td>
                             <td className="px-2 py-2">{group.canal}</td>
                             <td className="px-2 py-2">{number.format(group.oportunidades)}</td>
-                            <td className="px-2 py-2">—</td>
-                            <td className="px-2 py-2">—</td>
-                            <td className="px-2 py-2">—</td>
-                            <td className="px-2 py-2">—</td>
+                            <td className="px-2 py-2">{number.format(group.clientes)}</td>
+                            <td className="px-2 py-2">{group.gasto ? moneyPrecise.format(group.gasto) : "—"}</td>
+                            <td className="px-2 py-2">{group.gasto && group.oportunidades ? moneyPrecise.format(group.gasto / group.oportunidades) : "—"}</td>
+                            <td className="px-2 py-2">{group.gasto && group.clientes ? moneyPrecise.format(group.gasto / group.clientes) : "—"}</td>
                           </tr>
                           {group.frases.map((item, index) => (
                             <tr key={`${item.regla_id ?? item.regla_nombre}-${index}`} className="border-b last:border-0">
-                              <td className="px-2 py-2 pl-6 text-muted-foreground">↳ {item.regla_nombre}</td>
+                              <td className="px-2 py-2 pl-6 text-muted-foreground">↳ {item.frase_objetivo || item.regla_nombre}</td>
                               <td className="px-2 py-2">{item.canal_publicitario}</td>
                               <td className="px-2 py-2">{number.format(item.oportunidades_creadas)}</td>
-                              <td className="px-2 py-2">—</td>
-                              <td className="px-2 py-2">—</td>
-                              <td className="px-2 py-2">—</td>
-                              <td className="px-2 py-2">—</td>
+                              <td className="px-2 py-2">{number.format(item.clientes)}</td>
+                              <td className="px-2 py-2">{item.gasto_publicitario ? moneyPrecise.format(item.gasto_publicitario) : "—"}</td>
+                              <td className="px-2 py-2">{item.cpo != null ? moneyPrecise.format(item.cpo) : "—"}</td>
+                              <td className="px-2 py-2">{item.cac != null ? moneyPrecise.format(item.cac) : "—"}</td>
                             </tr>
                           ))}
                         </Fragment>

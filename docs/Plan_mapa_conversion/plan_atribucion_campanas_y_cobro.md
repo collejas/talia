@@ -277,3 +277,14 @@ UUID como información principal.
 | CPO y CAC | atribución + ledger de cobro |
 
 Regla final: el mapa consume costos existentes; no crea ni recalcula cargos.
+
+### Atribución inbound por frases/CTA
+
+La atribución de frases de WhatsApp es un flujo distinto al cobro de mensajes
+outbound. Su gasto se registra en
+`prospeccion_whatsapp_atribucion_gastos`, por campaña publicitaria, canal,
+periodo, moneda y estado de conciliación. `prospeccion/metricas` usa ese ledger
+para CPO y CAC de `WhatsApp > Atribución`; nunca lo mezcla con `cobro_mensajes`.
+
+La implementación y el contrato detallado están documentados en
+`docs/Plan_metricas/PLAN_REFACTOR_VISTA_METRICAS.md`.

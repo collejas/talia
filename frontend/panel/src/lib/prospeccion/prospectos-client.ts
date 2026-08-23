@@ -622,6 +622,24 @@ export type WhatsAppAtribucionRuleInput = {
 
 export type WhatsAppAtribucionRuleUpdateInput = Partial<WhatsAppAtribucionRuleInput>
 
+export type WhatsAppAtribucionGasto = {
+  id: string
+  canal_publicitario: string
+  campana_publicitaria: string
+  fecha_inicio: string
+  fecha_fin: string
+  gasto_real: number
+  moneda: string
+  estado: "estimado" | "conciliado" | "cancelado" | string
+  proveedor?: string | null
+  referencia_externa?: string | null
+  notas?: string | null
+  creado_en?: string | null
+  actualizado_en?: string | null
+}
+
+export type WhatsAppAtribucionGastoInput = Omit<WhatsAppAtribucionGasto, "id" | "creado_en" | "actualizado_en">
+
 export type WhatsAppAtribucionSimulation = {
   ok: boolean
   match: boolean
@@ -1458,6 +1476,44 @@ export async function simulateWhatsAppAtribucionRegla(payload: { frase: string; 
   })
 }
 
+export async function listWhatsAppAtribucionGastos(params: {
+  limit?: number
+  offset?: number
+  canal_publicitario?: string
+  campana_publicitaria?: string
+  estado?: "estimado" | "conciliado" | "cancelado"
+  date_from?: string
+  date_to?: string
+} = {}) {
+  const url = buildClientUrl("/api/prospeccion/whatsapp/atribucion/gastos")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (params.canal_publicitario?.trim()) url.searchParams.set("canal_publicitario", params.canal_publicitario.trim())
+  if (params.campana_publicitaria?.trim()) url.searchParams.set("campana_publicitaria", params.campana_publicitaria.trim())
+  if (params.estado) url.searchParams.set("estado", params.estado)
+  if (params.date_from) url.searchParams.set("date_from", params.date_from)
+  if (params.date_to) url.searchParams.set("date_to", params.date_to)
+  return requestJson<{ ok: boolean; items: WhatsAppAtribucionGasto[]; total: number; limit: number; offset: number }>(url.toString())
+}
+
+export async function createWhatsAppAtribucionGasto(payload: WhatsAppAtribucionGastoInput) {
+  return requestJson<{ ok: boolean; gasto: WhatsAppAtribucionGasto }>("/api/prospeccion/whatsapp/atribucion/gastos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateWhatsAppAtribucionGasto(gastoId: string, payload: Partial<WhatsAppAtribucionGastoInput>) {
+  return requestJson<{ ok: boolean; gasto: WhatsAppAtribucionGasto }>(
+    `/api/prospeccion/whatsapp/atribucion/gastos/${gastoId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  )
+}
+
+export async function deleteWhatsAppAtribucionGasto(gastoId: string) {
+  await requestJson(`/api/prospeccion/whatsapp/atribucion/gastos/${gastoId}`, { method: "DELETE" })
+}
+
 export async function getProspeccionCampanaPreset(campanaId: string) {
   return requestJson<{ ok: boolean } & ProspeccionCampanaDuplicateDefaults>(
     `/api/prospeccion/campanas/${campanaId}/duplicar`
@@ -1911,8 +1967,14 @@ export type ProspeccionMetricasFrasesSummary = {
   conversaciones_atribuidas: number
   contactos_unicos: number
   oportunidades_creadas: number
+  clientes: number
   tasa_conversacion_oportunidad_pct: number
   monto_estimado_total: number
+  gasto_publicitario: number
+  moneda_gasto: string
+  gasto_estado: "sin_datos" | "estimado" | "conciliado" | string
+  cpo: number | null
+  cac: number | null
 }
 
 export type ProspeccionMetricasFrasesByChannel = {
@@ -1927,13 +1989,20 @@ export type ProspeccionMetricasFrasesByChannel = {
 export type ProspeccionMetricasFrasesByRule = {
   regla_id?: string | null
   regla_nombre: string
+  frase_objetivo?: string | null
   canal_publicitario: string
   campana_publicitaria?: string | null
   conversaciones_atribuidas: number
   contactos_unicos: number
   oportunidades_creadas: number
+  clientes: number
   tasa_conversacion_oportunidad_pct: number
   monto_estimado_total: number
+  gasto_publicitario: number
+  moneda_gasto: string
+  gasto_estado: "sin_datos" | "estimado" | "conciliado" | string
+  cpo: number | null
+  cac: number | null
 }
 
 export type ProspeccionMetricasCampanaTimeseriesItem = {

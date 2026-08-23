@@ -370,3 +370,18 @@ duplicar información ni mezclar fuentes de medición.
 - El contrato actual todavía entrega el nombre de la regla, no el texto literal
   de `frase_objetivo`, y todavía no entrega clientes ni gasto publicitario; no
   se inventan esos valores en la UI.
+
+## 2026-08-23 · Ledger de gasto publicitario para atribución inbound
+
+- Se creó `prospeccion_whatsapp_atribucion_gastos` para registrar el gasto de
+  plataforma por canal, campaña, periodo, moneda y estado de conciliación.
+- El ledger es independiente de `cobro_mensajes` y no recibe ni agrega mensajes
+  enviados por la empresa.
+- `prospeccion/whatsapp-atribucion` ahora permite registrar, editar y eliminar
+  el gasto de una campaña, incluyendo proveedor y referencia externa.
+- El contrato de `frases_whatsapp` ahora devuelve frase literal, clientes,
+  gasto publicitario, moneda, estado, CPO y CAC.
+- El gasto de una campaña se prorratea entre frases según sus oportunidades
+  atribuidas; el gasto total no se repite completo en cada frase.
+- Los clientes se cuentan desde `oportunidades.cliente_id` y no desde un dato
+  calculado en frontend.

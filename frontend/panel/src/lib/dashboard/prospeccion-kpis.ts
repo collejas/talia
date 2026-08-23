@@ -47,8 +47,14 @@ export type ProspeccionMetricasSummary = {
     conversaciones_atribuidas: number;
     contactos_unicos: number;
     oportunidades_creadas: number;
+    clientes: number;
     tasa_conversacion_oportunidad_pct: number;
     monto_estimado_total: number;
+    gasto_publicitario: number;
+    moneda_gasto: string;
+    gasto_estado: string;
+    cpo: number | null;
+    cac: number | null;
   };
 };
 
@@ -138,13 +144,20 @@ export type ProspeccionTimeseries = {
 export type ProspeccionFraseByRule = {
   regla_id?: string | null;
   regla_nombre: string;
+  frase_objetivo?: string | null;
   canal_publicitario: string;
   campana_publicitaria?: string | null;
   conversaciones_atribuidas: number;
   contactos_unicos: number;
   oportunidades_creadas: number;
+  clientes: number;
   tasa_conversacion_oportunidad_pct: number;
   monto_estimado_total: number;
+  gasto_publicitario: number;
+  moneda_gasto: string;
+  gasto_estado: string;
+  cpo: number | null;
+  cac: number | null;
 };
 
 export async function fetchProspeccionMetricas(
@@ -210,8 +223,14 @@ function emptyFrasesSummary(): ProspeccionMetricasSummary["frases_whatsapp"] {
     conversaciones_atribuidas: 0,
     contactos_unicos: 0,
     oportunidades_creadas: 0,
+    clientes: 0,
     tasa_conversacion_oportunidad_pct: 0,
     monto_estimado_total: 0,
+    gasto_publicitario: 0,
+    moneda_gasto: "MXN",
+    gasto_estado: "sin_datos",
+    cpo: null,
+    cac: null,
   };
 }
 

@@ -394,8 +394,11 @@ La regla de atribución será:
 Frase inbound → regla → campaña publicitaria → conversación → oportunidad → cliente
 ```
 
-La pantalla `prospeccion/whatsapp-atribucion` deberá permitir asociar la regla
-con la campaña publicitaria y registrar su presupuesto y gasto real conciliado.
+La pantalla `prospeccion/whatsapp-atribucion` permite asociar la regla con la
+campaña publicitaria y registrar su gasto real conciliado mediante el ledger
+explícito `prospeccion_whatsapp_atribucion_gastos`. El presupuesto diario sigue
+siendo un dato de la plataforma publicitaria y no se mezcla con el costo de
+mensajería outbound.
 El costo deberá modelarse como dato explícito de la campaña, no dentro de la
 frase ni en `metadata`.
 
@@ -413,6 +416,10 @@ Resumen agregado del periodo con:
 - Gasto publicitario.
 - CPO.
 - CAC.
+
+El primer corte ya entrega clientes desde `oportunidades.cliente_id`, gasto
+conciliado por campaña y sus derivados. Los registros en estado `estimado` se
+conservan para control operativo, pero no se presentan como costo exacto.
 
 ### Resultado por campaña/frase
 
