@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import {
   IconDownload,
   IconFileSpreadsheet,
@@ -109,8 +109,6 @@ export default function ProspeccionMetricasPageClient() {
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
   const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas_correo"]["timeseries"]>([])
   const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
-  const [whatsappTimeseries, setWhatsappTimeseries] = useState<ProspeccionMetricasResponse["frases_whatsapp"]["timeseries"]>([])
-  const [whatsappTimeseriesLoading, setWhatsappTimeseriesLoading] = useState(false)
 
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
 
@@ -220,33 +218,6 @@ export default function ProspeccionMetricasPageClient() {
     void loadCampaignTimeseries()
   }, [loadCampaignTimeseries])
 
-  const loadWhatsappTimeseries = useCallback(async () => {
-    setWhatsappTimeseriesLoading(true)
-    try {
-      const response = await getProspeccionMetricas({
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        canal,
-        limit: 500,
-        include_campaign_timeseries: false,
-        include_whatsapp_timeseries: true,
-        include_whatsapp_channels: false,
-        lite: false,
-      })
-      setWhatsappTimeseries(response.frases_whatsapp.timeseries ?? [])
-    } catch {
-      setWhatsappTimeseries([])
-    } finally {
-      setWhatsappTimeseriesLoading(false)
-    }
-  }, [dateFrom, dateTo, canal])
-
-  useEffect(() => {
-    setWhatsappTimeseries([])
-    if (activeTab !== "frases") return
-    void loadWhatsappTimeseries()
-  }, [activeTab, loadWhatsappTimeseries])
-
   const campaignItems = useMemo(
     () => data?.campanas_correo?.items ?? data?.campanas.items ?? [],
     [data?.campanas_correo?.items, data?.campanas.items],
@@ -261,6 +232,35 @@ export default function ProspeccionMetricasPageClient() {
     [data?.resultado_comercial_whatsapp?.items],
   )
   const summaryPhrases = data?.frases_whatsapp.summary
+  const phraseCampaignGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        campana: string
+        canal: string
+        conversaciones: number
+        oportunidades: number
+        frases: NonNullable<ProspeccionMetricasResponse["frases_whatsapp"]["by_rule"]>
+      }
+    >()
+
+    for (const item of data?.frases_whatsapp.by_rule ?? []) {
+      const campana = item.campana_publicitaria?.trim() || "Sin campaña publicitaria"
+      const current = groups.get(campana) ?? {
+        campana,
+        canal: item.canal_publicitario || "Sin canal",
+        conversaciones: 0,
+        oportunidades: 0,
+        frases: [],
+      }
+      current.conversaciones += item.conversaciones_atribuidas
+      current.oportunidades += item.oportunidades_creadas
+      current.frases.push(item)
+      groups.set(campana, current)
+    }
+
+    return Array.from(groups.values()).sort((left, right) => right.oportunidades - left.oportunidades)
+  }, [data?.frases_whatsapp.by_rule])
   const activeViewMeta: Record<
     "campanas" | "campanas_whatsapp" | "frases",
     { title: string; description: string; badge: string }
@@ -289,15 +289,6 @@ export default function ProspeccionMetricasPageClient() {
       })),
     [campaignTimeseries],
   )
-  const phrasesChartData = useMemo(
-    () =>
-      (whatsappTimeseries ?? []).map((item) => ({
-        ...item,
-        fecha_label: shortDate.format(new Date(`${item.fecha}T00:00:00`)),
-      })),
-    [whatsappTimeseries],
-  )
-
   const topCards = useMemo(() => {
     const cards: Array<{ title: string; value: string; hint: string }> = []
     const isWhatsappFilter = canal === "whatsapp"
@@ -672,44 +663,36 @@ export default function ProspeccionMetricasPageClient() {
       downloadCsv(`prospeccion_metricas_resultado_whatsapp_${timestamp}.csv`, csv)
       return
     }
-    const byChannelRows = (data.frases_whatsapp.by_channel ?? []).map((item) => [
-      "por_canal",
-      "",
-      item.canal_publicitario,
-      "",
-      item.conversaciones_atribuidas,
-      item.contactos_unicos,
-      item.oportunidades_creadas,
-      item.tasa_conversacion_oportunidad_pct,
-      item.monto_estimado_total,
-    ])
-    const byRuleRows = (data.frases_whatsapp.by_rule ?? []).map((item) => [
-      "por_regla",
-      item.regla_id ?? "",
-      item.canal_publicitario,
-      item.campana_publicitaria ?? "",
-      item.conversaciones_atribuidas,
-      item.contactos_unicos,
-      item.oportunidades_creadas,
-      item.tasa_conversacion_oportunidad_pct,
-      item.monto_estimado_total,
+    const phraseRows = phraseCampaignGroups.flatMap((group) => [
+      ["campana", group.campana, "", group.canal, group.oportunidades, "", "", "", ""],
+      ...group.frases.map((item) => [
+        "frase",
+        group.campana,
+        item.regla_nombre,
+        item.canal_publicitario,
+        item.oportunidades_creadas,
+        "",
+        "",
+        "",
+        "",
+      ]),
     ])
     const csv = buildCsv(
       [
-        "seccion",
-        "regla_id",
-        "canal_publicitario",
+        "nivel",
         "campana_publicitaria",
-        "conversaciones_atribuidas",
-        "contactos_unicos",
+        "frase_cta",
+        "canal_publicitario",
         "oportunidades_creadas",
-        "tasa_conversacion_oportunidad_pct",
-        "monto_estimado_total",
+        "clientes",
+        "gasto_publicitario",
+        "cpo",
+        "cac",
       ],
-      [...byChannelRows, ...byRuleRows],
+      phraseRows,
     )
     downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
-  }, [activeTab, data, campaignItems, commercialItems])
+  }, [activeTab, data, campaignItems, commercialItems, phraseCampaignGroups])
 
   const exportXlsx = useCallback(async () => {
     try {
@@ -1293,113 +1276,100 @@ export default function ProspeccionMetricasPageClient() {
         </div>
       ) : (
         <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    Tendencia diaria de frases WhatsApp
-                    {whatsappTimeseriesLoading ? (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">cargando...</span>
-                    ) : null}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={phrasesChartData}>
-                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="fecha_label" tickMargin={8} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
-                    <YAxis yAxisId="left" allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => money.format(Number(value) || 0)} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--border)" }} tickLine={{ stroke: "var(--border)" }} />
-                    <Tooltip
-                      formatter={(value, name) =>
-                        name === "Monto estimado"
-                          ? money.format(Number(value) || 0)
-                          : number.format(Number(value) || 0)
-                      }
-                      contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "0.5rem", color: "var(--foreground)" }}
-                      labelStyle={{ color: "var(--foreground)" }}
-                      itemStyle={{ color: "var(--foreground)" }}
-                      cursor={{ fill: "var(--muted)" }}
-                    />
-                    <Legend wrapperStyle={{ color: "var(--muted-foreground)" }} />
-                    <Line type="monotone" yAxisId="left" dataKey="conversaciones_atribuidas" stroke="var(--chart-1)" strokeWidth={2} dot={false} name="Conversaciones" />
-                    <Line type="monotone" yAxisId="left" dataKey="oportunidades_creadas" stroke="var(--chart-2)" strokeWidth={2} dot={false} name="Oportunidades" />
-                    <Line type="monotone" yAxisId="right" dataKey="monto_estimado_total" stroke="var(--chart-3)" strokeWidth={2} dot={false} name="Monto estimado" />
-                  </LineChart>
-                </ResponsiveContainer>
+          <Card>
+            <CardHeader>
+              <CardTitle>Resultado comercial</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Oportunidades atribuidas a frases y CTA de campañas publicitarias.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Conversaciones</p>
+                  <p className="mt-1 text-xl font-semibold">{number.format(summaryPhrases?.conversaciones_atribuidas ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground">Atribuidas por frase</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Oportunidades</p>
+                  <p className="mt-1 text-xl font-semibold">{number.format(summaryPhrases?.oportunidades_creadas ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground">Resultado atribuido</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Clientes</p>
+                  <p className="mt-1 text-xl font-semibold">—</p>
+                  <p className="text-xs text-muted-foreground">No disponible en atribución</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Gasto publicitario</p>
+                  <p className="mt-1 text-xl font-semibold">—</p>
+                  <p className="text-xs text-muted-foreground">Pendiente de registro</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">CPO / CAC</p>
+                  <p className="mt-1 text-xl font-semibold">—</p>
+                  <p className="text-xs text-muted-foreground">Requiere gasto publicitario</p>
+                </div>
+              </div>
+              <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                Esta sección solo mide la atribución de conversaciones y oportunidades. No mezcla el costo de mensajes enviados por la empresa.
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Frases por canal publicitario</CardTitle>
+              <CardTitle>Resultado por campaña/frase</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Desglose de la campaña publicitaria y la regla o frase que originó la atribución.
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2">Canal</th>
-                      <th className="px-2 py-2">Conversaciones</th>
-                      <th className="px-2 py-2">Contactos</th>
-                      <th className="px-2 py-2">Oportunidades</th>
-                      <th className="px-2 py-2">Tasa conv→opp</th>
-                      <th className="px-2 py-2">Monto estimado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.frases_whatsapp.by_channel ?? []).map((item) => (
-                      <tr key={item.canal_publicitario} className="border-b">
-                        <td className="px-2 py-2">{item.canal_publicitario}</td>
-                        <td className="px-2 py-2">{number.format(item.conversaciones_atribuidas)}</td>
-                        <td className="px-2 py-2">{number.format(item.contactos_unicos)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_creadas)}</td>
-                        <td className="px-2 py-2">{item.tasa_conversacion_oportunidad_pct}%</td>
-                        <td className="px-2 py-2">{money.format(item.monto_estimado_total)}</td>
+              {phraseCampaignGroups.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-2">Campaña / frase CTA</th>
+                        <th className="px-2 py-2">Canal</th>
+                        <th className="px-2 py-2">Oportunidades</th>
+                        <th className="px-2 py-2">Clientes</th>
+                        <th className="px-2 py-2">Gasto</th>
+                        <th className="px-2 py-2">CPO</th>
+                        <th className="px-2 py-2">CAC</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Frases por regla</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2">Regla</th>
-                      <th className="px-2 py-2">Canal</th>
-                      <th className="px-2 py-2">Campaña publicitaria</th>
-                      <th className="px-2 py-2">Conversaciones</th>
-                      <th className="px-2 py-2">Contactos</th>
-                      <th className="px-2 py-2">Oportunidades</th>
-                      <th className="px-2 py-2">Tasa conv→opp</th>
-                      <th className="px-2 py-2">Monto estimado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.frases_whatsapp.by_rule ?? []).map((item, idx) => (
-                      <tr key={`${item.regla_id ?? item.regla_nombre}-${idx}`} className="border-b">
-                        <td className="px-2 py-2">{item.regla_nombre}</td>
-                        <td className="px-2 py-2">{item.canal_publicitario}</td>
-                        <td className="px-2 py-2">{item.campana_publicitaria ?? "-"}</td>
-                        <td className="px-2 py-2">{number.format(item.conversaciones_atribuidas)}</td>
-                        <td className="px-2 py-2">{number.format(item.contactos_unicos)}</td>
-                        <td className="px-2 py-2">{number.format(item.oportunidades_creadas)}</td>
-                        <td className="px-2 py-2">{item.tasa_conversacion_oportunidad_pct}%</td>
-                        <td className="px-2 py-2">{money.format(item.monto_estimado_total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {phraseCampaignGroups.map((group) => (
+                        <Fragment key={group.campana}>
+                          <tr className="border-b bg-muted/30 font-medium">
+                            <td className="px-2 py-2">{group.campana}</td>
+                            <td className="px-2 py-2">{group.canal}</td>
+                            <td className="px-2 py-2">{number.format(group.oportunidades)}</td>
+                            <td className="px-2 py-2">—</td>
+                            <td className="px-2 py-2">—</td>
+                            <td className="px-2 py-2">—</td>
+                            <td className="px-2 py-2">—</td>
+                          </tr>
+                          {group.frases.map((item, index) => (
+                            <tr key={`${item.regla_id ?? item.regla_nombre}-${index}`} className="border-b last:border-0">
+                              <td className="px-2 py-2 pl-6 text-muted-foreground">↳ {item.regla_nombre}</td>
+                              <td className="px-2 py-2">{item.canal_publicitario}</td>
+                              <td className="px-2 py-2">{number.format(item.oportunidades_creadas)}</td>
+                              <td className="px-2 py-2">—</td>
+                              <td className="px-2 py-2">—</td>
+                              <td className="px-2 py-2">—</td>
+                              <td className="px-2 py-2">—</td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay frases atribuidas en este periodo.</p>
+              )}
             </CardContent>
           </Card>
         </div>

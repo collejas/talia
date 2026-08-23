@@ -351,8 +351,8 @@ separación de fuentes.
 
 ### Fase 3.3 · Resultado de atribución por frase/CTA
 
-**Decisión de producto pendiente de implementación.** La subvista `WhatsApp >
-Atribución` medirá el rendimiento de las frases o CTA inbound que activan una
+**Primer corte implementado; contrato comercial pendiente.** La subvista
+`WhatsApp > Atribución` medirá el rendimiento de las frases o CTA inbound que activan una
 regla de atribución. Este flujo es independiente de `Campañas WhatsApp`: no
 lee mensajes outbound de la empresa ni mezcla costos de mensajería.
 
@@ -399,8 +399,10 @@ con la campaña publicitaria y registrar su presupuesto y gasto real conciliado.
 El costo deberá modelarse como dato explícito de la campaña, no dentro de la
 frase ni en `metadata`.
 
-La estructura visual de `WhatsApp > Atribución` seguirá el mismo patrón que
-`WhatsApp > Campañas`, pero con las unidades propias de atribución:
+La estructura visual de `WhatsApp > Atribución` ya sigue el mismo patrón que
+`WhatsApp > Campañas`, pero con las unidades propias de atribución. En el
+primer corte, los campos de clientes y gasto muestran estado no disponible
+hasta que el backend y la base de datos incorporen esos datos explícitos:
 
 ### Resultado comercial
 

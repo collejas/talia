@@ -355,3 +355,18 @@ duplicar información ni mezclar fuentes de medición.
 - Se alineó la estructura visual con `WhatsApp > Campañas`: `Resultado
   comercial` para el agregado y `Resultado por campaña/frase` para el detalle
   jerárquico de campañas y frases/CTA.
+
+## 2026-08-23 · Primer corte implementado de atribución por frase/CTA
+
+- La pestaña `WhatsApp > Atribución` dejó de mostrar tres bloques separados de
+  tendencia, canal y regla.
+- Se implementó `Resultado comercial` con conversaciones y oportunidades
+  atribuidas, además de estados explícitos para clientes, gasto, CPO y CAC.
+- Se implementó `Resultado por campaña/frase` con jerarquía visual de campaña
+  publicitaria y sus reglas/frases atribuidas.
+- Se conserva la distinción entre atribución inbound y costo de mensajes
+  outbound: el gasto, CPO y CAC muestran `—` hasta que exista un registro de
+  gasto publicitario asociado a la campaña.
+- El contrato actual todavía entrega el nombre de la regla, no el texto literal
+  de `frase_objetivo`, y todavía no entrega clientes ni gasto publicitario; no
+  se inventan esos valores en la UI.
