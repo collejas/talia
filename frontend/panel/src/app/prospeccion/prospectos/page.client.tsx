@@ -909,7 +909,7 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   timeZone: getActiveTimeZone(),
 })
 
-type FlowStepKey = "discover" | "prepare" | "launch" | "evaluate"
+type FlowStepKey = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
 type FlowStepDefinition = {
   key: FlowStepKey
   title: string
@@ -4043,7 +4043,8 @@ function ProspectosView() {
             </div>
           </div>
           {savedViewsLoading ? <p className="text-xs text-muted-foreground">Cargando vistas guardadas...</p> : null}
-          <div className="flex flex-wrap gap-4">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Fuente</Label>
               <Select
@@ -4140,6 +4141,8 @@ function ProspectosView() {
                 </SelectContent>
               </Select>
             </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Campaña</Label>
               <Select
@@ -4267,51 +4270,6 @@ function ProspectosView() {
               </DropdownMenu>
             </div>
             <div className="space-y-1">
-              <Label>Envíos por canal</Label>
-              <div className="flex flex-wrap gap-2">
-                {(["correo", "whatsapp", "voz"] as const).map((channel) => {
-                  const config = ENVIO_COUNT_FILTER_FIELDS[channel]
-                  const minValue = filters[config.min] as string
-                  const maxValue = filters[config.max] as string
-                  return (
-                    <div key={channel} className="flex items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">{envioCountChannelLabel[channel]}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        inputMode="numeric"
-                        placeholder="Mín"
-                        value={minValue}
-                        onChange={(event) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            [config.min]: event.target.value,
-                          }))
-                        }
-                        className="h-9 w-[76px]"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        inputMode="numeric"
-                        placeholder="Máx"
-                        value={maxValue}
-                        onChange={(event) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            [config.max]: event.target.value,
-                          }))
-                        }
-                        className="h-9 w-[76px]"
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="space-y-1">
               <Label>Con scraper</Label>
               <Select
                 value={filters.conScraper || "all"}
@@ -4332,6 +4290,48 @@ function ProspectosView() {
                 </SelectContent>
               </Select>
             </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {(["correo", "whatsapp", "voz"] as const).map((channel) => {
+              const config = ENVIO_COUNT_FILTER_FIELDS[channel]
+              const minValue = filters[config.min] as string
+              const maxValue = filters[config.max] as string
+              return (
+                <div key={channel} className="space-y-1">
+                  <Label>{envioCountChannelLabel[channel]}</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      placeholder="Mín"
+                      value={minValue}
+                      onChange={(event) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          [config.min]: event.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      placeholder="Máx"
+                      value={maxValue}
+                      onChange={(event) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          [config.max]: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )
+            })}
             <div className="space-y-1">
               <Label>Tipo de línea</Label>
               <Select
@@ -4354,6 +4354,8 @@ function ProspectosView() {
                 </SelectContent>
               </Select>
             </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Dominio correo/sitio</Label>
               <Select
@@ -4478,7 +4480,9 @@ function ProspectosView() {
                 )}
               </div>
             </div>
-            <div className="space-y-1">
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="order-last space-y-1">
               <Label>Consulta</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -4661,7 +4665,7 @@ function ProspectosView() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 lg:col-start-1">
               <Label>Estado</Label>
               <Select
                 value={filters.geoEstado || "all"}
@@ -4730,6 +4734,7 @@ function ProspectosView() {
                   <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
             </div>
           </div>
         </form>
