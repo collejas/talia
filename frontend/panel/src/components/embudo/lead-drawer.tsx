@@ -5193,6 +5193,11 @@ export function LeadDrawer({
                         {quoteError}
                       </p>
                     ) : null}
+                    {quoteDiscountWarning ? (
+                      <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+                        {quoteDiscountWarning} Ajusta el descuento a 0% o solicita/configura un límite autorizado.
+                      </p>
+                    ) : null}
                     {quoteSuccess ? (
                       <p className="rounded-md bg-green-50 px-2.5 py-2 text-xs text-green-800">
                         {quoteSuccess}
@@ -6580,6 +6585,7 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
       const quantity = parseNumberInput(form.cantidad);
       const unitPrice = parseNumberInput(form.precioUnitario);
       const discount = parseNumberInput(form.descuento);
+      const discountPercent = parseNumberInput(form.descuentoPorcentaje);
       const total = computeQuoteItemTotal(form);
       const hasContent =
         (form.nombre && form.nombre.trim()) ||
@@ -6597,8 +6603,11 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
         unidad: form.unidad.trim() || "unidad",
         cantidad: quantity ?? null,
         precio_unitario: unitPrice ?? null,
-        descuento: discount ?? null,
-        descuento_porcentaje: parseNumberInput(form.descuentoPorcentaje),
+        // El porcentaje es la fuente única cuando está capturado. El backend
+        // recalcula el importe sobre el precio vigente del catálogo y evita
+        // inconsistencias con importes guardados en borradores anteriores.
+        descuento: discountPercent != null ? null : discount ?? null,
+        descuento_porcentaje: discountPercent,
         total,
         moneda: form.moneda.trim().slice(0, 3).toUpperCase(),
         lista_precio_id: form.listaPrecioId,
