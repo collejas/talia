@@ -26,6 +26,7 @@ export default async function Page({ searchParams }: InboxPageProps) {
     batchId: pickQueryParam(resolvedSearchParams, "batchId") ?? pickQueryParam(resolvedSearchParams, "batch_id"),
     campanaId:
       pickQueryParam(resolvedSearchParams, "campanaId") ?? pickQueryParam(resolvedSearchParams, "campana_id"),
+    search: pickQueryParam(resolvedSearchParams, "search"),
   }
   const inboxData = await loadInboxData(initialFilters)
 

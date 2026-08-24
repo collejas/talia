@@ -16119,6 +16119,7 @@ class CRMRepository:
         campana_id: UUID | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
         body = {
             "p_estado": estado,
@@ -16141,7 +16142,11 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
-        rpc_name = "/rest/v1/rpc/panel_inbox_threads_persisted"
+        if search and search.strip():
+            body["p_search"] = search.strip()
+        rpc_name = "/rest/v1/rpc/panel_inbox_threads_persisted_search"
+        if not body.get("p_search"):
+            rpc_name = "/rest/v1/rpc/panel_inbox_threads_persisted"
         resp = await self._request_with_user(
             "POST",
             rpc_name,

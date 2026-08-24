@@ -1018,6 +1018,7 @@ type InboxSplitViewProps = {
   batchFilter?: string | null;
   campanaFilter?: string | null;
   dateFilter: DateFilterOption;
+  search?: string | null;
   reengageFilter: string;
   onVisibleThreadsCountChange?: (count: number) => void;
   onThreadRead?: (unreadMessages: number) => void;
@@ -1034,6 +1035,7 @@ export function InboxSplitView({
   batchFilter,
   campanaFilter,
   dateFilter,
+  search,
   reengageFilter,
   onVisibleThreadsCountChange,
   onThreadRead,
@@ -1086,10 +1088,10 @@ export function InboxSplitView({
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const activeThreadsFilterKey = React.useMemo(
     () =>
-      [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter]
+      [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search]
         .map((value) => String(value ?? "").trim().toLowerCase())
         .join("|"),
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
   );
   const lastThreadsFilterKeyRef = React.useRef(activeThreadsFilterKey);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -1514,9 +1516,12 @@ export function InboxSplitView({
       if (dateFilter && dateFilter !== "all") {
         params.set("date", dateFilter);
       }
+      if (search?.trim()) {
+        params.set("search", search.trim());
+      }
       return params;
     },
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
   );
 
   const shouldEnrichThreads = React.useMemo(() => {
@@ -1551,9 +1556,12 @@ export function InboxSplitView({
       if (dateFilter && dateFilter !== "all") {
         params.set("date", dateFilter);
       }
+      if (search?.trim()) {
+        params.set("search", search.trim());
+      }
       return params;
     },
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
   );
 
   const needsThreadEnrichment = React.useCallback((thread: InboxThread | null | undefined): boolean => {

@@ -29,6 +29,7 @@ export type InboxThreadsFilters = {
   date?: string | null;
   batchId?: string | null;
   campanaId?: string | null;
+  search?: string | null;
 };
 
 const FOLDER_LABELS: Record<string, string> = {
@@ -122,12 +123,14 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   const normalizedDate = filters?.date?.trim();
   const normalizedBatchId = filters?.batchId?.trim();
   const normalizedCampanaId = filters?.campanaId?.trim();
+  const normalizedSearch = filters?.search?.trim();
   if (normalizedEstado) normalizedFilters.estado = normalizedEstado;
   if (normalizedSource) normalizedFilters.source = normalizedSource;
   if (normalizedChannel) normalizedFilters.channel = normalizedChannel;
   if (normalizedDate) normalizedFilters.date = normalizedDate;
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
+  if (normalizedSearch) normalizedFilters.search = normalizedSearch;
   normalizedFilters.enrich = sourceRequiresEnrichment ? "true" : "false";
 
   const [bootstrap, tags] = await Promise.all([

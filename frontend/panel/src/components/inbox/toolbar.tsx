@@ -44,6 +44,8 @@ const STATE_FILTER_OPTIONS = [
 type InboxToolbarProps = {
   summary: InboxSummary;
   visibleTotal?: number;
+  searchValue: string;
+  onSearchValueChange?: (value: string) => void;
   stateFilterValue: string;
   onStateFilterValueChange?: (value: string) => void;
   channelFilterValue: string;
@@ -68,6 +70,8 @@ type InboxToolbarProps = {
 export function InboxToolbar({
   summary,
   visibleTotal,
+  searchValue,
+  onSearchValueChange,
   stateFilterValue,
   onStateFilterValueChange,
   channelFilterValue,
@@ -219,8 +223,11 @@ export function InboxToolbar({
           <div className="flex items-center gap-1 lg:flex-none">
             <IconSearch className="size-3 text-muted-foreground" />
             <Input
-              placeholder="Buscar por contacto, asunto o etiqueta"
+              placeholder="Buscar nombre, teléfono, correo o texto"
               className="w-28 leading-none"
+              value={searchValue}
+              onChange={(event) => onSearchValueChange?.(event.target.value)}
+              aria-label="Buscar conversaciones por nombre, teléfono, correo o texto"
             />
           </div>
         </div>

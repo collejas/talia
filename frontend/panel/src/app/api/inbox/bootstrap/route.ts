@@ -49,6 +49,7 @@ export async function GET(request: Request) {
   const date = searchParams.get("date")?.trim() || "";
   const batchId = searchParams.get("batch_id")?.trim() || "";
   const campanaId = searchParams.get("campana_id")?.trim() || "";
+  const search = searchParams.get("search")?.trim() || "";
 
   const response = await callCrmApi<InboxBootstrapResponse>("/crm/inbox/bootstrap", {
     withUserToken: true,
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
       ...(date ? { date } : {}),
       ...(batchId ? { batch_id: batchId } : {}),
       ...(campanaId ? { campana_id: campanaId } : {}),
+      ...(search ? { search } : {}),
     },
   });
 

@@ -26,6 +26,7 @@ type InboxWorkspaceProps = {
     date?: string | null;
     batchId?: string | null;
     campanaId?: string | null;
+    search?: string | null;
   };
 };
 
@@ -45,6 +46,7 @@ export function InboxWorkspace({
   const [campanaFilterValue, setCampanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [estadoFilterValue, setEstadoFilterValue] = React.useState(initialFilters?.estado ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState(initialFilters?.date ?? "");
+  const [searchValue, setSearchValue] = React.useState(initialFilters?.search ?? "");
   const [reengageFilter, setReengageFilter] = React.useState("");
   const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
   const [visibleThreadsCount, setVisibleThreadsCount] = React.useState(threads.length);
@@ -152,6 +154,7 @@ export function InboxWorkspace({
     upsert("reengage", reengageFilter, { skipAll: true });
 
     upsert("estado", estadoFilterValue, { skipAll: true });
+    upsert("search", searchValue);
 
     const nextQuery = params.toString();
     const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ""}`;
@@ -168,6 +171,7 @@ export function InboxWorkspace({
     campanaFilterValue,
     dateFilterValue,
     reengageFilter,
+    searchValue,
   ]);
 
   React.useEffect(() => {
@@ -202,6 +206,8 @@ export function InboxWorkspace({
       <InboxToolbar
         summary={{ ...summary, unread: unreadMessages }}
         visibleTotal={visibleThreadsCount}
+        searchValue={searchValue}
+        onSearchValueChange={setSearchValue}
         stateFilterValue={estadoFilterValue}
         onStateFilterValueChange={setEstadoFilterValue}
         sourceFilterValue={sourceFilterValue}
@@ -233,6 +239,7 @@ export function InboxWorkspace({
         batchFilter={activeBatchFilter}
         campanaFilter={activeCampanaFilter}
         dateFilter={activeDateFilter}
+        search={searchValue}
         reengageFilter={reengageFilter}
         onVisibleThreadsCountChange={setVisibleThreadsCount}
         onThreadRead={(count) => setUnreadMessages((current) => Math.max(0, current - count))}
