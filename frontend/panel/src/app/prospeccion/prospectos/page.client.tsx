@@ -77,7 +77,6 @@ import {
   listContactoLogs,
   listProspectoContactIndicators,
   listProspectoAudit,
-  ejecutarChecklistLookup,
   ejecutarChecklistScraper,
   getProspectosTablePreferences,
   getContactoBatchResumen,
@@ -291,12 +290,6 @@ function normalizeEnvioCanal(raw?: string | null): ConEnvioCanalFilter | null {
   }
   return null
 }
-type ChecklistSummary = {
-  telefonos_pendientes: number
-  sin_email: number
-  datos_incompletos: number
-}
-
 const initialFilters: Filters = {
   search: "",
   fuente: "",
@@ -913,15 +906,12 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   timeZone: getActiveTimeZone(),
 })
 
-type FlowStepKey = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+type FlowStepKey = "discover" | "prepare" | "launch" | "evaluate"
 type FlowStepDefinition = {
   key: FlowStepKey
   title: string
   description: string
-  actionHref: string
-  actionLabel: string
   icon: typeof IconSearch
-  count?: number
   meta?: string
   isCurrent?: boolean
 }
@@ -929,42 +919,26 @@ type FlowStepDefinition = {
 const PROSPECCION_FLOW_DEFINITIONS: FlowStepDefinition[] = [
   {
     key: "discover",
-    title: "1. Descubre",
-    description: "Busca en Google, DENUE o Web para alimentar tu lista.",
-    actionHref: "/prospeccion/buscador",
-    actionLabel: "Abrir buscador",
+    title: "1. Selecciona prospectos",
+    description: "Marca los prospectos a los que quieres contactar.",
     icon: IconSearch,
   },
   {
-    key: "enrich",
-    title: "2. Enriquecer",
-    description: "Valida teléfonos y completa datos clave desde este panel.",
-    actionHref: "#checklist",
-    actionLabel: "Ver checklist",
-    icon: IconSparkles,
-  },
-  {
     key: "prepare",
-    title: "3. Preparar",
-    description: "Selecciona prospectos, define filtros y listas inteligentes.",
-    actionHref: "#prospectos",
-    actionLabel: "Revisar tabla",
+    title: "2. Elige canal y mensaje",
+    description: "Selecciona campaña, plantilla y canal: correo, WhatsApp o voz.",
     icon: IconUsersGroup,
   },
   {
     key: "launch",
-    title: "4. Lanzar",
-    description: "Configura canales y plantillas multicanal antes de enviar.",
-    actionHref: "/prospeccion/campanas",
-    actionLabel: "Ver campañas",
+    title: "3. Programa o envía",
+    description: "Define la fecha y separación, o ejecuta el lote de inmediato.",
     icon: IconTargetArrow,
   },
   {
     key: "evaluate",
-    title: "5. Evaluar",
-    description: "Monitorea KPIs, streams y reintentos en tiempo real.",
-    actionHref: "/prospeccion/contactos",
-    actionLabel: "Abrir monitor",
+    title: "4. Monitorea resultados",
+    description: "Revisa estados, entregas y respuestas en Contactos.",
     icon: IconPhone,
   },
 ]
@@ -1055,8 +1029,6 @@ function ProspectosView() {
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState<string | null>(null)
   const [historyTab, setHistoryTab] = useState<"timeline" | "envios" | "audit">("timeline")
-  const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
-  const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
   const [recentBatches, setRecentBatches] = useState<ContactoBatch[]>([])
   const [recentBatchLoading, setRecentBatchLoading] = useState(false)
@@ -2263,22 +2235,6 @@ function ProspectosView() {
     loadActivitiesForQueries,
   ])
 
-  const refreshChecklist = useCallback(async () => {
-    setChecklistLoading(true)
-    try {
-      const response = await fetch("/api/prospeccion/prospectos/checklist", { cache: "no-store" })
-      if (!response.ok) {
-        throw new Error("checklist_error")
-      }
-      const data = (await response.json()) as { checklist?: ChecklistSummary }
-      setChecklist(data?.checklist ?? null)
-    } catch {
-      setChecklist(null)
-    } finally {
-      setChecklistLoading(false)
-    }
-  }, [])
-
   const fetchRecentBatches = useCallback(async () => {
     setRecentBatchLoading(true)
     setRecentBatchError(null)
@@ -2307,10 +2263,6 @@ function ProspectosView() {
       setRecentBatchLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    void refreshChecklist()
-  }, [refreshChecklist])
 
   const fetchStageSummary = useCallback(async () => {
     setStageSummaryLoading(true)
@@ -2362,7 +2314,6 @@ function ProspectosView() {
         await Promise.all([
           fetchProspectos(0),
           loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo }),
-          refreshChecklist(),
           fetchStageSummary(),
         ])
       } finally {
@@ -2413,7 +2364,6 @@ function ProspectosView() {
     filters.dateOption,
     filters.fuente,
     loadQueryOptions,
-    refreshChecklist,
   ])
 
   useEffect(() => {
@@ -2427,110 +2377,6 @@ function ProspectosView() {
       setFormSubmitting(false)
     }
   }, [formDialogOpen])
-
-  const handleChecklistLookup = useCallback(async () => {
-    setChecklistAction("lookup")
-    setBanner(null)
-    setVerificationDialog({
-      open: true,
-      status: "loading",
-      title: "Procesando solicitud",
-      message: "Verificando teléfonos pendientes...",
-    })
-    const pending = checklist?.telefonos_pendientes ?? 0
-    const targetLimit = pending > 0 ? Math.min(300, pending) : 300
-    try {
-      const response = await ejecutarChecklistLookup({
-        limit: targetLimit,
-        reintentar: true,
-      })
-      if (!response.procesados) {
-        setVerificationDialog({
-          open: true,
-          status: "success",
-          title: "Operación completada",
-          message: "No hay teléfonos pendientes de validar.",
-        })
-      } else {
-        setVerificationDialog({
-          open: true,
-          status: "success",
-          title: "Operación completada",
-          message: `Se validaron ${response.procesados} prospectos.`,
-        })
-        await fetchProspectos(offset)
-      }
-      await refreshChecklist()
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "No se pudo ejecutar la verificación automática de teléfonos."
-      setVerificationDialog({
-        open: true,
-        status: "error",
-        title: "Operación con error",
-        message,
-      })
-    } finally {
-      setChecklistAction(null)
-    }
-  }, [checklist, fetchProspectos, offset, refreshChecklist])
-
-  const handleChecklistScraper = useCallback(async () => {
-    setChecklistAction("scraper")
-    setBanner(null)
-    setVerificationDialog({
-      open: true,
-      status: "loading",
-      title: "Procesando solicitud",
-      message: "Lanzando scraper automático...",
-    })
-    const pending = checklist?.sin_email ?? 0
-    if (pending <= 0) {
-      setVerificationDialog({
-        open: true,
-        status: "success",
-        title: "Operación completada",
-        message: "No hay prospectos pendientes de correo.",
-      })
-      setChecklistAction(null)
-      return
-    }
-    try {
-      const response = await ejecutarChecklistScraper({
-        limit: Math.max(1, Math.min(300, pending)),
-        mode: "auto",
-      })
-      if (!response.programados) {
-        setVerificationDialog({
-          open: true,
-          status: "error",
-          title: "Operación con error",
-          message: "No encontramos sitios web válidos para lanzar el scraper automático.",
-        })
-      } else {
-        setVerificationDialog({
-          open: true,
-          status: "success",
-          title: "Operación completada",
-          message: `Se lanzaron ${response.programados} scrapers. Puedes revisar el progreso en el historial del buscador.`,
-        })
-      }
-      await refreshChecklist()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
-      if (isFriendlyLimitError(message)) {
-        setLimitErrorDialog({ open: true, message })
-      }
-      setVerificationDialog({
-        open: true,
-        status: "error",
-        title: "Operación con error",
-        message,
-      })
-    } finally {
-      setChecklistAction(null)
-    }
-  }, [checklist, refreshChecklist])
 
   const handleScraperSelected = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2589,7 +2435,6 @@ function ProspectosView() {
           message: `Scraper lanzado para ${response.programados} prospectos seleccionados.`,
         })
       }
-      await refreshChecklist()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
       if (isFriendlyLimitError(message)) {
@@ -2604,15 +2449,7 @@ function ProspectosView() {
     } finally {
       setChecklistAction(null)
     }
-  }, [refreshChecklist, selectedIds])
-
-  const handleChecklistManual = useCallback(() => {
-    setFormMode("create")
-    setFormDialogOpen(true)
-    setEditingId(null)
-    setMetadataBase({})
-    setFormValues(initialProspectoForm)
-  }, [])
+  }, [selectedIds])
 
   useEffect(() => {
     if (!deleteDialogOpen) {
@@ -2717,38 +2554,22 @@ function ProspectosView() {
     setLimitInput(String(limit))
   }, [limit])
   const flowSteps = useMemo(() => {
-    const pendingPhones = checklist?.telefonos_pendientes ?? 0
-    const pendingEmails = checklist?.sin_email ?? 0
     const steps = PROSPECCION_FLOW_DEFINITIONS.map((step) => {
-      let meta: string
-      switch (step.key) {
-        case "discover":
-          meta = effectiveTotal ? `${effectiveTotal.toLocaleString("es-MX")} prospectos` : "Sin búsquedas guardadas"
-          break
-        case "enrich": {
-          const parts = []
-          if (pendingPhones > 0) parts.push(`${pendingPhones} tel. pendientes`)
-          if (pendingEmails > 0) parts.push(`${pendingEmails} sin email`)
-          meta = parts.length ? parts.join(" · ") : "Datos verificados"
-          break
-        }
-        case "prepare":
-          meta = selectedCount ? `${selectedCount} seleccionados` : "Selecciona prospectos"
-          break
-        case "launch":
-          meta = "Wizard multicanal"
-          break
-        case "evaluate":
-          meta = "KPIs y stream en vivo"
-          break
-        default:
-          meta = ""
+      let meta = ""
+      if (step.key === "discover") {
+        meta = effectiveTotal ? `${effectiveTotal.toLocaleString("es-MX")} disponibles` : "Sin prospectos"
+      } else if (step.key === "prepare") {
+        meta = selectedCount ? `${selectedCount} seleccionados` : "Selecciona registros"
+      } else if (step.key === "launch") {
+        meta = `${stageSummary.launch ?? 0} lotes activos`
+      } else if (step.key === "evaluate") {
+        meta = `${stageSummary.evaluate ?? 0} lotes completados`
       }
-      const count = stageSummary[step.key] ?? 0
-      return { ...step, meta, count, isCurrent: step.key === "prepare" }
+      const isCurrent = step.key === "discover" ? !selectedCount : step.key === "prepare" && selectedCount > 0
+      return { ...step, meta, isCurrent }
     })
     return steps
-  }, [checklist, effectiveTotal, selectedCount, stageSummary])
+  }, [effectiveTotal, selectedCount, stageSummary])
 
   const handleToggleRow = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -3951,12 +3772,12 @@ function ProspectosView() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Guía rápida de prospección">
+      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Flujo de envíos">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo recomendado</p>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo de envíos</p>
             <p className="text-base text-muted-foreground">
-              Sigue los pasos “Descubre → Enriquecer → Preparar → Lanzar → Evaluar” desde un solo lugar.
+              Selecciona prospectos, configura el canal y monitorea el resultado de cada envío.
             </p>
           </div>
           <Button size="sm" onClick={handlePlannerOpen}>
@@ -3964,42 +3785,33 @@ function ProspectosView() {
             Preparar envíos
           </Button>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {flowSteps.map((step) => {
             const Icon = step.icon
             return (
               <div
                 key={step.key}
                 className={cn(
-                  "flex h-full flex-col rounded-xl border bg-background/70 p-4 text-sm shadow-sm transition",
-                  step.isCurrent ? "border-primary shadow-md" : "border-border hover:border-primary/40"
+                  "flex min-h-0 flex-col rounded-xl border bg-background/70 p-3 text-sm transition",
+                  step.isCurrent ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                 )}
               >
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center rounded-full p-1.5",
+                      "inline-flex items-center justify-center rounded-full p-1",
                       step.isCurrent ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     )}
                   >
-                    <Icon className="size-4" />
+                    <Icon className="size-3.5" />
                   </span>
                   <span>{step.title}</span>
-                  {step.isCurrent ? <Badge variant="secondary">En esta vista</Badge> : null}
+                  {step.isCurrent ? <Badge variant="secondary" className="ml-auto text-[10px]">Actual</Badge> : null}
                 </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold">
-                    {stageSummaryLoading ? "…" : (step.count ?? 0).toLocaleString("es-MX")}
-                  </span>
-                  <span className="text-xs text-muted-foreground">en etapa</span>
-                </div>
-                <p className="mt-2 flex-1 text-muted-foreground">{step.description}</p>
-                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{step.meta}</span>
-                  <Button asChild variant={step.isCurrent ? "secondary" : "ghost"} size="sm">
-                    <Link href={step.actionHref}>{step.actionLabel}</Link>
-                  </Button>
-                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">{step.description}</p>
+                <span className="mt-2 text-[11px] font-medium text-foreground/70">
+                  {stageSummaryLoading && (step.key === "launch" || step.key === "evaluate") ? "Actualizando…" : step.meta}
+                </span>
               </div>
             )
           })}
@@ -4110,17 +3922,8 @@ function ProspectosView() {
         </div>
       </section>
 
-      <EnrichmentChecklist
-        data={checklist}
-        loading={checklistLoading}
-        actionInProgress={checklistAction}
-        onRefresh={refreshChecklist}
-        onVerifyPhones={handleChecklistLookup}
-        onOpenScraper={handleChecklistScraper}
-        onOpenManual={handleChecklistManual}
-      />
-
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
+        <h2 className="mb-4 text-base font-semibold">Filtros</h2>
         <form onSubmit={handleSearchSubmit} className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex flex-1 items-center gap-2">
@@ -6655,123 +6458,6 @@ function batchDeliveryMetrics(
   const total = Math.max(positives, Number(totalEnvios) || computedTotal || 0)
   const percent = total > 0 ? (positives / total) * 100 : 0
   return { positives, total, percent }
-}
-
-type EnrichmentChecklistProps = {
-  data: ChecklistSummary | null
-  loading: boolean
-  actionInProgress: "lookup" | "scraper" | null
-  onRefresh: () => void
-  onVerifyPhones: () => void
-  onOpenScraper: () => void
-  onOpenManual: () => void
-}
-
-function EnrichmentChecklist({
-  data,
-  loading,
-  actionInProgress,
-  onRefresh,
-  onVerifyPhones,
-  onOpenScraper,
-  onOpenManual,
-}: EnrichmentChecklistProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setMounted(true)
-    }, 0)
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [])
-
-  if (!mounted) {
-    return null
-  }
-
-  const cards = [
-    {
-      key: "telefonos",
-      title: "Verificar teléfonos",
-      description: "Confirma móvil/fijo antes de lanzar WhatsApp o voz (modo gratis).",
-      count: data?.telefonos_pendientes ?? 0,
-      icon: <IconPhoneCheck className="size-4 text-primary" />,
-      actionLabel: "Verificar gratis",
-      actionKey: "lookup" as const,
-      onAction: onVerifyPhones,
-    },
-    {
-      key: "correo",
-      title: "Buscar datos adicionales",
-      description: "Prospectos sin correo confirmado aún.",
-      count: data?.sin_email ?? 0,
-      icon: <IconMail className="size-4 text-primary" />,
-      actionLabel: "Lanzar scraper",
-      actionKey: "scraper" as const,
-      onAction: onOpenScraper,
-    },
-    {
-      key: "captura",
-      title: "Completar fichas",
-      description: "Registra emails, puestos o notas manualmente.",
-      count: data?.datos_incompletos ?? 0,
-      icon: <IconPencil className="size-4 text-primary" />,
-      actionLabel: "Nuevo prospecto",
-      actionKey: null,
-      onAction: onOpenManual,
-    },
-  ]
-
-  return (
-      <Card id="checklist">
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <CardTitle className="text-base font-semibold">Checklist de enriquecimiento</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Prioriza la verificación de datos antes de lanzar una campaña.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <IconRefresh className={cn("mr-2 size-4", loading && "animate-spin")} />
-          Actualizar
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-3 md:grid-cols-3">
-          {cards.map((card) => (
-            <div key={card.key} className="rounded-xl border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                {card.icon}
-                <span>{card.title}</span>
-              </div>
-              <div className="mt-2 text-3xl font-bold">{loading ? "…" : card.count}</div>
-              <p className="mt-2 text-xs text-muted-foreground">{card.description}</p>
-              <Button
-                className="mt-3"
-                variant="secondary"
-                size="sm"
-                onClick={card.onAction}
-                disabled={
-                  loading || !card.count || (card.actionKey ? actionInProgress === card.actionKey : false)
-                }
-              >
-                {card.actionKey && actionInProgress === card.actionKey ? (
-                  <>
-                    <IconLoader className="mr-2 size-4 animate-spin" />
-                    Ejecutando...
-                  </>
-                ) : (
-                  card.actionLabel
-                )}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
 }
 
 function carrierLabel(value: string | null | undefined) {
