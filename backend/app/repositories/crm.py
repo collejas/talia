@@ -19425,6 +19425,7 @@ class CRMRepository:
         metadata_queries: list[str] | None = None,
         actividades: list[str] | None = None,
         campana_id: UUID | None = None,
+        template_id: UUID | None = None,
         con_envio: bool | None = None,
         con_envio_canales: Sequence[str] | None = None,
         con_scraper: bool | None = None,
@@ -19712,6 +19713,7 @@ class CRMRepository:
                 usuario_token=usuario_token,
                 organizacion_id=organizacion_id,
                 campana_id=campana_id,
+                template_id=template_id,
                 canales=normalized_con_envio_canales or None,
             )
         if campana_id is not None:
@@ -20215,6 +20217,7 @@ class CRMRepository:
         usuario_token: str,
         organizacion_id: UUID | None = None,
         campana_id: UUID | None = None,
+        template_id: UUID | None = None,
         canales: Sequence[str] | None = None,
     ) -> set[str]:
         def _normalize_envio_channel(value: str | None) -> str | None:
@@ -20240,7 +20243,10 @@ class CRMRepository:
         cache_key = _build_prospectos_ids_cache_key(
             usuario_token=usuario_token,
             organizacion_id=organizacion_id,
-            suffix=f"envios:{str(campana_id) if campana_id else '__all__'}:{canales_key}",
+            suffix=(
+                f"envios:{str(campana_id) if campana_id else '__all__'}:"
+                f"{str(template_id) if template_id else '__all_templates__'}:{canales_key}"
+            ),
         )
         cached_ids = _read_prospectos_ids_cache(
             _PROSPECTOS_ENVIO_IDS_CACHE,
@@ -20351,7 +20357,7 @@ class CRMRepository:
                 offset = 0
                 while offset < max_scan:
                     params = {
-                        "select": "prospecto_id,canal",
+                        "select": "prospecto_id,canal,payload",
                         "limit": str(page_size),
                         "offset": str(offset),
                         "estado": "neq.cancelado",
@@ -20377,6 +20383,14 @@ class CRMRepository:
                         if normalized_canales:
                             row_canal = _normalize_envio_channel(row.get("canal"))
                             if not row_canal or row_canal not in normalized_canales_set:
+                                continue
+                        if template_id is not None:
+                            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+                            row_template_id = _clean_text(
+                                payload.get("whatsapp_template_id")
+                                or payload.get("template_id")
+                            )
+                            if row_template_id != str(template_id):
                                 continue
                         prospecto_id = row.get("prospecto_id")
                         if prospecto_id is None:

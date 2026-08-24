@@ -830,6 +830,7 @@ type ListProspectosParams = {
   minRating?: number
   estratoGroup?: "micro" | "pequena" | "mediana" | "grande"
   campanaId?: string
+  templateId?: string
   conEnvio?: boolean
   conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
   conScraper?: boolean
@@ -904,6 +905,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   }
   if (params.campanaId?.trim().length) {
     url.searchParams.set("campana_id", params.campanaId.trim())
+  }
+  if (params.templateId?.trim().length) {
+    url.searchParams.set("template_id", params.templateId.trim())
   }
   if (typeof params.conEnvio === "boolean") {
     url.searchParams.set("con_envio", params.conEnvio ? "true" : "false")

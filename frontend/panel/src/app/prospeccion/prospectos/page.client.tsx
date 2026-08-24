@@ -160,6 +160,7 @@ type Filters = {
   minRating: MinRatingFilter
   estratoGroup: EstratoGroupFilter
   order: OrderOption
+  plantillaId: string
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
   queryFilters: string[]
@@ -298,6 +299,7 @@ const initialFilters: Filters = {
   websiteLookupStatus: "",
   emailDomainRelation: "",
   campanaId: "",
+  plantillaId: "",
   conEnvioModo: "",
   conEnvioCanales: [],
   enviosCorreoMin: "",
@@ -797,6 +799,7 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["emailDomainRelation"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
+    plantillaId: typeof filtersObj["plantillaId"] === "string" ? filtersObj["plantillaId"] : "",
     conEnvioModo:
       filtersObj["conEnvioModo"] === "si" || filtersObj["conEnvioModo"] === "no"
         ? filtersObj["conEnvioModo"]
@@ -1053,6 +1056,8 @@ function ProspectosView() {
   const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("5")
   const [campaignFilterOptions, setCampaignFilterOptions] = useState<CampaignOption[]>([])
   const [campaignFilterLoading, setCampaignFilterLoading] = useState(false)
+  const [templateFilterOptions, setTemplateFilterOptions] = useState<ContactoTemplate[]>([])
+  const [templateFilterLoading, setTemplateFilterLoading] = useState(false)
   const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
   const [plannerCampaignsLoading, setPlannerCampaignsLoading] = useState(false)
   const [plannerScheduleMode, setPlannerScheduleMode] = useState<"ahora" | "programado">("ahora")
@@ -1236,6 +1241,7 @@ function ProspectosView() {
       !filters.websiteLookupStatus &&
       !filters.emailDomainRelation &&
       !filters.campanaId &&
+      !filters.plantillaId &&
       !filters.conEnvioModo &&
       filters.conEnvioCanales.length === 0 &&
       !filters.enviosCorreoMin &&
@@ -1689,6 +1695,10 @@ function ProspectosView() {
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? "Campaña"}`)
     }
+    if (filters.plantillaId) {
+      const template = templateFilterOptions.find((item) => item.id === filters.plantillaId)
+      chips.push(`Plantilla: ${template?.nombre ?? "Plantilla"}`)
+    }
     if (filters.conEnvioCanales.length || filters.conEnvioModo) {
       const labels = filters.conEnvioCanales.length
         ? filters.conEnvioCanales.map((canal) => envioCanalLabel[canal] ?? canal)
@@ -1728,7 +1738,7 @@ function ProspectosView() {
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
-  }, [campaignLabelMap, filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap])
+  }, [campaignLabelMap, filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap, templateFilterOptions])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       const requestSeq = ++prospectosRequestSeqRef.current
@@ -1765,6 +1775,7 @@ function ProspectosView() {
           emailLookupStatus: filters.emailLookupStatus || undefined,
           websiteLookupStatus: filters.websiteLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
+          templateId: filters.plantillaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
@@ -1859,6 +1870,7 @@ function ProspectosView() {
           emailLookupStatus: filters.emailLookupStatus || undefined,
           websiteLookupStatus: filters.websiteLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
+          templateId: filters.plantillaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
@@ -3034,6 +3046,46 @@ function ProspectosView() {
     void loadCampaignFilterOptions()
   }, [loadCampaignFilterOptions])
 
+  useEffect(() => {
+    let cancelled = false
+    const campanaId = filters.campanaId.trim()
+    if (!campanaId) {
+      setTemplateFilterOptions([])
+      setTemplateFilterLoading(false)
+      setFilters((prev) => (prev.plantillaId ? { ...prev, plantillaId: "" } : prev))
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setTemplateFilterLoading(true)
+    void listContactoTemplates({ campana_id: campanaId })
+      .then((response) => {
+        if (cancelled) return
+        const options = (response.items ?? [])
+          .filter((item) => item?.id && !item.id.startsWith("runtime:"))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
+        setTemplateFilterOptions(options)
+        setFilters((prev) =>
+          prev.plantillaId && options.some((item) => item.id === prev.plantillaId)
+            ? prev
+            : { ...prev, plantillaId: "" }
+        )
+      })
+      .catch(() => {
+        if (cancelled) return
+        setTemplateFilterOptions([])
+        setFilters((prev) => ({ ...prev, plantillaId: "" }))
+      })
+      .finally(() => {
+        if (!cancelled) setTemplateFilterLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [filters.campanaId])
+
   const handlePlannerOpen = useCallback(() => {
     setPlannerCampaignId("")
     setPlannerScheduleDate("")
@@ -4096,6 +4148,7 @@ function ProspectosView() {
                   setFilters((prev) => ({
                     ...prev,
                     campanaId: value === "all" ? "" : value,
+                    plantillaId: "",
                   }))
                 }
               >
@@ -4109,6 +4162,39 @@ function ProspectosView() {
                   {campaignFilterOptions.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
                       {option.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Plantilla</Label>
+              <Select
+                value={filters.plantillaId || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    plantillaId: value === "all" ? "" : value,
+                  }))
+                }
+                disabled={!filters.campanaId || templateFilterLoading || !templateFilterOptions.length}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue
+                    placeholder={
+                      !filters.campanaId
+                        ? "Selecciona campaña"
+                        : templateFilterLoading
+                          ? "Cargando..."
+                          : "Todas las plantillas"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {templateFilterOptions.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>

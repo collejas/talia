@@ -32600,6 +32600,7 @@ async def listar_prospectos(
         Query(alias="con_envio_canal"),
     ] = None,
     con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
+    template_id: Annotated[UUID | None, Query(alias="template_id")] = None,
     envios_correo_min: Annotated[int | None, Query(alias="envios_correo_min")] = None,
     envios_correo_max: Annotated[int | None, Query(alias="envios_correo_max")] = None,
     envios_whatsapp_min: Annotated[int | None, Query(alias="envios_whatsapp_min")] = None,
@@ -32611,6 +32612,9 @@ async def listar_prospectos(
     segmentos: Annotated[list[str] | None, Query(alias="segmentos")] = None,
 ) -> dict[str, Any]:
     """Devuelve prospectos guardados con paginación y filtros básicos."""
+
+    if template_id is not None and params.campana_id is None:
+        raise HTTPException(status_code=422, detail="template_id_requires_campana_id")
 
     request_started = time.perf_counter()
     rows: list[dict[str, Any]] = []
@@ -32657,6 +32661,7 @@ async def listar_prospectos(
                 metadata_queries=metadata_query,
                 actividades=actividad,
                 campana_id=params.campana_id,
+                template_id=template_id,
                 con_envio=params.con_envio,
                 con_envio_canales=con_envio_canales_values or None,
                 con_scraper=params.con_scraper,
