@@ -8919,6 +8919,7 @@ def _quote_items_to_repository_payload(
         repository_items.append(
             {
                 "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
+                "orden": int(item.get("orden") or index),
                 "cantidad": _as_number(item.get("cantidad")) or 1,
                 "precio_unitario": _as_number(item.get("precio_unitario")),
                 "descuento_porcentaje": _as_number(item.get("descuento_porcentaje_aplicado")),
@@ -10812,6 +10813,7 @@ async def _list_batch_envios_all(
         offset += len(rows)
         if len(rows) < page or offset >= total:
             break
+    items.sort(key=lambda item: (item.orden is None, item.orden or 0, str(item.id or "")))
     return items
 
 

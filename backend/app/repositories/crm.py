@@ -4178,7 +4178,7 @@ class CRMRepository:
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
             "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo,descripcion))",
-            "items.order": "id.asc",
+            "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
@@ -4197,7 +4197,7 @@ class CRMRepository:
             "id": f"eq.{quote_id}",
             "limit": "1",
             "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:productos(id,nombre,codigo,descripcion))",
-            "items.order": "id.asc",
+            "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
