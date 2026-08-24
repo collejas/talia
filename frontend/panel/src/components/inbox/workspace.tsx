@@ -48,7 +48,6 @@ export function InboxWorkspace({
   const [dateFilterValue, setDateFilterValue] = React.useState(initialFilters?.date ?? "");
   const [searchValue, setSearchValue] = React.useState(initialFilters?.search ?? "");
   const [reengageFilter, setReengageFilter] = React.useState("");
-  const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
   const [visibleThreadsCount, setVisibleThreadsCount] = React.useState(threads.length);
   const [unreadMessages, setUnreadMessages] = React.useState(summary.unread ?? 0);
 
@@ -174,23 +173,6 @@ export function InboxWorkspace({
     searchValue,
   ]);
 
-  React.useEffect(() => {
-    if (copyLinkLabel === "Copiar enlace") return;
-    const timeout = window.setTimeout(() => setCopyLinkLabel("Copiar enlace"), 1800);
-    return () => window.clearTimeout(timeout);
-  }, [copyLinkLabel]);
-
-  const handleCopyLink = React.useCallback(async () => {
-    if (typeof window === "undefined") return;
-    const href = window.location.href;
-    try {
-      await navigator.clipboard.writeText(href);
-      setCopyLinkLabel("Enlace copiado");
-    } catch {
-      setCopyLinkLabel("No se pudo copiar");
-    }
-  }, []);
-
   const activeSourceFilter =
     sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
   const activeChannelFilter =
@@ -220,8 +202,6 @@ export function InboxWorkspace({
         campanaFilterValue={campanaFilterValue}
         onCampanaFilterValueChange={setCampanaFilterValue}
         campanaOptions={campanaOptions}
-        onCopyLink={handleCopyLink}
-        copyLinkLabel={copyLinkLabel}
         dateFilterValue={dateFilterValue}
         onDateFilterValueChange={setDateFilterValue}
         reengageFilter={reengageFilter}

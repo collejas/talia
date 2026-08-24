@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { IconLink, IconPlus, IconSearch } from "@tabler/icons-react";
+import { IconSearch } from "@tabler/icons-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { InboxSummary } from "@/lib/inbox/data";
 import type { ReengageFilterOption } from "@/lib/inbox/reengage-filter";
@@ -58,8 +57,6 @@ type InboxToolbarProps = {
   campanaFilterValue: string;
   onCampanaFilterValueChange?: (value: string) => void;
   campanaOptions: Array<{ value: string; label: string }>;
-  onCopyLink?: () => void;
-  copyLinkLabel?: string;
   dateFilterValue: string;
   onDateFilterValueChange?: (value: string) => void;
   reengageFilter: string;
@@ -84,8 +81,6 @@ export function InboxToolbar({
   campanaFilterValue,
   onCampanaFilterValueChange,
   campanaOptions,
-  onCopyLink,
-  copyLinkLabel,
   dateFilterValue,
   onDateFilterValueChange,
   reengageFilter,
@@ -230,18 +225,6 @@ export function InboxToolbar({
               aria-label="Buscar conversaciones por nombre, teléfono, correo o texto"
             />
           </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {onCopyLink ? (
-            <Button size="sm" variant="outline" onClick={onCopyLink}>
-              <IconLink className="mr-2 size-4" />
-              {copyLinkLabel ?? "Copiar enlace"}
-            </Button>
-          ) : null}
-          <Button size="sm">
-            <IconPlus className="mr-2 size-4" />
-            Nuevo mensaje
-          </Button>
         </div>
       </div>
     </div>
