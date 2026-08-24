@@ -19682,7 +19682,17 @@ class CRMRepository:
         # Estos contadores se mantienen en prospeccion_prospectos y tienen índices
         # por organización. Evitamos escanear la vista agregada de envíos para los
         # filtros más usados de la pantalla.
-        if normalized_con_envio_canales:
+        if normalized_con_envio_canales and con_envio is False:
+            channel_columns = {
+                "correo": "envios_correo_total",
+                "whatsapp": "envios_whatsapp_total",
+                "llamada": "envios_voz_total",
+            }
+            and_filters.extend(
+                f"{channel_columns[channel]}.eq.0"
+                for channel in normalized_con_envio_canales
+            )
+        elif normalized_con_envio_canales:
             channel_columns = {
                 "correo": "envios_correo_total",
                 "whatsapp": "envios_whatsapp_total",
@@ -19714,10 +19724,11 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 campana_id=campana_id,
                 template_id=template_id,
+                con_envio=con_envio,
                 canales=normalized_con_envio_canales or None,
             )
         if campana_id is not None:
-            if con_envio is False:
+            if con_envio is False and not normalized_con_envio_canales:
                 return [], 0
             if not envio_prospecto_ids:
                 return [], 0
@@ -20218,6 +20229,7 @@ class CRMRepository:
         organizacion_id: UUID | None = None,
         campana_id: UUID | None = None,
         template_id: UUID | None = None,
+        con_envio: bool | None = None,
         canales: Sequence[str] | None = None,
     ) -> set[str]:
         def _normalize_envio_channel(value: str | None) -> str | None:
@@ -20239,13 +20251,15 @@ class CRMRepository:
                 continue
             normalized_canales_set.add(value)
         normalized_canales = sorted(normalized_canales_set)
+        exclude_channel_ids = con_envio is False and bool(normalized_canales)
         canales_key = ",".join(normalized_canales) if normalized_canales else "__all_canales__"
         cache_key = _build_prospectos_ids_cache_key(
             usuario_token=usuario_token,
             organizacion_id=organizacion_id,
             suffix=(
                 f"envios:{str(campana_id) if campana_id else '__all__'}:"
-                f"{str(template_id) if template_id else '__all_templates__'}:{canales_key}"
+                f"{str(template_id) if template_id else '__all_templates__'}:"
+                f"{con_envio if con_envio is not None else '__all_modes__'}:{canales_key}"
             ),
         )
         cached_ids = _read_prospectos_ids_cache(
@@ -20257,6 +20271,7 @@ class CRMRepository:
             return cached_ids
 
         ids: set[str] = set()
+        matched_channel_ids: set[str] = set()
         batch_ids_filter: set[str] | None = None
         if campana_id is not None:
             batch_ids_filter = set()
@@ -20380,8 +20395,8 @@ class CRMRepository:
                     for row in data:
                         if not isinstance(row, dict):
                             continue
-                        if normalized_canales:
-                            row_canal = _normalize_envio_channel(row.get("canal"))
+                        row_canal = _normalize_envio_channel(row.get("canal"))
+                        if normalized_canales and not exclude_channel_ids:
                             if not row_canal or row_canal not in normalized_canales_set:
                                 continue
                         if template_id is not None:
@@ -20395,8 +20410,15 @@ class CRMRepository:
                         prospecto_id = row.get("prospecto_id")
                         if prospecto_id is None:
                             continue
+                        if exclude_channel_ids:
+                            if row_canal in normalized_canales_set:
+                                matched_channel_ids.add(str(prospecto_id))
+                            ids.add(str(prospecto_id))
+                            continue
                         ids.add(str(prospecto_id))
                     offset += len(data)
+        if exclude_channel_ids:
+            ids.difference_update(matched_channel_ids)
         _write_prospectos_ids_cache(
             _PROSPECTOS_ENVIO_IDS_CACHE,
             key=cache_key,
@@ -20698,7 +20720,12 @@ class CRMRepository:
             "whatsapp": "envios_whatsapp_total",
             "llamada": "envios_voz_total",
         }
-        if normalized_channels:
+        if normalized_channels and con_envio is False:
+            envio_filters.extend(
+                f"{channel_columns[channel]}.eq.0"
+                for channel in sorted(normalized_channels)
+            )
+        elif normalized_channels:
             envio_filters.append(
                 "or(" + ",".join(
                     f"{channel_columns[channel]}.gt.0"
@@ -20762,7 +20789,7 @@ class CRMRepository:
                 data.append(row)
             scan_offset += len(page)
         if envio_prospecto_ids is not None:
-            if con_envio is False:
+            if con_envio is False and not con_envio_canales:
                 data = [row for row in data if str(row.get("id") or "") not in envio_prospecto_ids]
             else:
                 data = [row for row in data if str(row.get("id") or "") in envio_prospecto_ids]

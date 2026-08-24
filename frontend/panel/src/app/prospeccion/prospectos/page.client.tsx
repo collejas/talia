@@ -4267,49 +4267,45 @@ function ProspectosView() {
               </DropdownMenu>
             </div>
             <div className="space-y-1">
-              <Label>Cantidad de envíos</Label>
-              <div className="grid gap-3 xl:grid-cols-3">
+              <Label>Envíos por canal</Label>
+              <div className="flex flex-wrap gap-2">
                 {(["correo", "whatsapp", "voz"] as const).map((channel) => {
                   const config = ENVIO_COUNT_FILTER_FIELDS[channel]
                   const minValue = filters[config.min] as string
                   const maxValue = filters[config.max] as string
                   return (
-                    <div key={channel} className="rounded-lg border bg-background p-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        {envioCountChannelLabel[channel]}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          step={1}
-                          inputMode="numeric"
-                          placeholder="Mín"
-                          value={minValue}
-                          onChange={(event) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              [config.min]: event.target.value,
-                            }))
-                          }
-                          className="h-9 w-full"
-                        />
-                        <Input
-                          type="number"
-                          min={0}
-                          step={1}
-                          inputMode="numeric"
-                          placeholder="Máx"
-                          value={maxValue}
-                          onChange={(event) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              [config.max]: event.target.value,
-                            }))
-                          }
-                          className="h-9 w-full"
-                        />
-                      </div>
+                    <div key={channel} className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">{envioCountChannelLabel[channel]}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        placeholder="Mín"
+                        value={minValue}
+                        onChange={(event) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            [config.min]: event.target.value,
+                          }))
+                        }
+                        className="h-9 w-[76px]"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        placeholder="Máx"
+                        value={maxValue}
+                        onChange={(event) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            [config.max]: event.target.value,
+                          }))
+                        }
+                        className="h-9 w-[76px]"
+                      />
                     </div>
                   )
                 })}

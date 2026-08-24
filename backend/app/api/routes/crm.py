@@ -32811,6 +32811,7 @@ async def listar_prospectos_query_metadata(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             campana_id=campana_id,
+            con_envio=con_envio,
             canales=envio_canales_values or None,
         )
     cache_key = _build_prospecto_queries_cache_key(
