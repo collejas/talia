@@ -42786,6 +42786,16 @@ def _dashboard_lead_reviewer(row: Mapping[str, Any]) -> str:
     return "Sin asignar"
 
 
+def _dashboard_won_amount(row: Mapping[str, Any]) -> float:
+    """Importe neto ganado: subtotal de la cotización aceptada, sin IVA."""
+
+    try:
+        amount = float(row.get("_cotizacion_aceptada_subtotal") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return amount if math.isfinite(amount) and amount > 0 else 0.0
+
+
 def _dashboard_build_leads_cards(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -42806,11 +42816,8 @@ def _dashboard_build_leads_cards(
         categoria = _dashboard_lead_category(row)
         if categoria == "ganada":
             ganadas += 1
-            try:
-                amount = float(row.get("monto_estimado") or 0)
-            except (TypeError, ValueError):
-                amount = 0.0
-            if math.isfinite(amount) and amount > 0:
+            amount = _dashboard_won_amount(row)
+            if amount > 0:
                 monto_total += amount
                 won_amounts.append(amount)
             created_at = _parse_datetime(row.get("creado_en"))
@@ -42904,11 +42911,8 @@ def _dashboard_build_leads_chart(
         categoria = _dashboard_lead_category(row)
         if categoria == "ganada":
             buckets[closed_key]["ganados"] += 1
-            try:
-                amount = float(row.get("monto_estimado") or 0)
-            except (TypeError, ValueError):
-                amount = 0.0
-            if math.isfinite(amount) and amount > 0:
+            amount = _dashboard_won_amount(row)
+            if amount > 0:
                 buckets[closed_key]["valorGanado"] += int(round(amount))
         elif categoria == "perdida":
             buckets[closed_key]["perdidos"] += 1
@@ -42933,14 +42937,11 @@ def _dashboard_build_sales_by_seller(rows: Sequence[Mapping[str, Any]]) -> list[
             )
         else:
             seller_id = row.get("asignado_a_usuario_id") or "sin-asignar"
-        try:
-            amount = float(row.get("monto_estimado") or 0)
-        except (TypeError, ValueError):
-            amount = 0.0
+        amount = _dashboard_won_amount(row)
         key = str(seller_id)
         seller = sellers.setdefault(key, {"id": key, "nombre": seller_name, "ganados": 0, "valorGanado": 0})
         seller["ganados"] = int(seller.get("ganados") or 0) + 1
-        if math.isfinite(amount) and amount > 0:
+        if amount > 0:
             seller["valorGanado"] = int(seller.get("valorGanado") or 0) + int(round(amount))
     return sorted(
         sellers.values(),
@@ -43159,6 +43160,38 @@ async def _dashboard_fetch_all_lead_rows(
         existing_closed = _parse_datetime(row.get("cerrado_en")) or _parse_datetime(row.get("actualizado_en"))
         if existing_closed is None or closed_at > existing_closed:
             row["cerrado_en"] = _format_utc(closed_at)
+
+    opportunity_ids = []
+    for opportunity_id in rows_by_id:
+        try:
+            opportunity_ids.append(UUID(opportunity_id))
+        except (TypeError, ValueError):
+            continue
+    accepted_quotes = await repo.list_accepted_quotes_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=opportunity_ids,
+    )
+    accepted_by_opportunity: dict[str, dict[str, Any]] = {}
+    for quote in accepted_quotes:
+        opportunity_id = _clean_text(quote.get("oportunidad_id"))
+        if not opportunity_id or opportunity_id in accepted_by_opportunity:
+            continue
+        accepted_by_opportunity[opportunity_id] = quote
+    for opportunity_id, row in rows_by_id.items():
+        quote = accepted_by_opportunity.get(opportunity_id)
+        quote_metadata = _ensure_dict(quote.get("metadata"), default={}) if quote else {}
+        subtotal = _as_number(quote_metadata.get("subtotal"))
+        if subtotal is None and quote:
+            total = _as_number(quote.get("total"))
+            taxes = _as_number(quote_metadata.get("impuestos"))
+            if total is not None and taxes is not None:
+                subtotal = max(0.0, total - taxes)
+            elif total is not None:
+                subtotal = total
+        row["_cotizacion_aceptada_subtotal"] = subtotal
+        row["_cotizacion_aceptada_en"] = (
+            quote.get("actualizado_en") or quote.get("creado_en") if quote else None
+        )
 
     return list(rows_by_id.values())
 

@@ -4058,6 +4058,39 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
         return data
 
+    async def list_accepted_quotes_by_opportunity_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        """Lista cotizaciones aceptadas del tenant para oportunidades concretas."""
+
+        values = sorted({str(value) for value in oportunidad_ids if value})
+        if not values:
+            return []
+
+        rows: list[dict[str, Any]] = []
+        chunk_size = 100
+        for start in range(0, len(values), chunk_size):
+            chunk = values[start : start + chunk_size]
+            params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "oportunidad_id": _postgrest_in_clause(chunk),
+                "estatus": "eq.aceptada",
+                "select": "id,oportunidad_id,total,moneda,metadata,creado_en,actualizado_en",
+                "order": "actualizado_en.desc,creado_en.desc",
+                "limit": str(len(chunk) * 2),
+            }
+            resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(
+                    f"Respuesta inesperada al listar cotizaciones aceptadas: {data!r}"
+                )
+            rows.extend(row for row in data if isinstance(row, dict))
+        return rows
+
     async def reserve_quote_folio(
         self,
         *,
