@@ -1806,9 +1806,7 @@ function ProspectosView() {
         const rows = response.items ?? []
         setItems(rows)
         const nextTotal =
-          typeof response.total === "number"
-            ? Math.max(response.total, nextOffset + rows.length)
-            : nextOffset + rows.length
+          typeof response.total === "number" ? response.total : nextOffset + rows.length
         setTotal(nextTotal)
         setOffset(nextOffset)
         setSelected((prev) => {
@@ -1899,7 +1897,7 @@ function ProspectosView() {
           setItems((prev) => [...prev, ...rows])
         }
         if (typeof response.total === "number") {
-          setTotal(Math.max(response.total, startOffset + rows.length))
+          setTotal(response.total)
         } else if (rows.length) {
           setTotal((prev) => Math.max(prev, startOffset + rows.length))
         }

@@ -20244,6 +20244,33 @@ class CRMRepository:
                 return "llamada"
             return normalized
 
+        def _template_identifiers(payload: Any) -> set[str]:
+            """Obtiene identificadores de plantilla de payloads actuales y legacy."""
+
+            if not isinstance(payload, dict):
+                return set()
+            identifiers: set[str] = set()
+
+            def _collect(value: Any) -> None:
+                if isinstance(value, dict):
+                    for key in (
+                        "template_id",
+                        "whatsapp_template_id",
+                        "contact_template_id",
+                    ):
+                        candidate = _clean_text(value.get(key))
+                        if candidate:
+                            identifiers.add(candidate.casefold())
+                    for nested in value.values():
+                        if isinstance(nested, (dict, list)):
+                            _collect(nested)
+                elif isinstance(value, list):
+                    for nested in value:
+                        _collect(nested)
+
+            _collect(payload)
+            return identifiers
+
         normalized_canales_set: set[str] = set()
         for raw in canales or []:
             value = _normalize_envio_channel(str(raw or ""))
@@ -20401,11 +20428,8 @@ class CRMRepository:
                                 continue
                         if template_id is not None:
                             payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
-                            row_template_id = _clean_text(
-                                payload.get("whatsapp_template_id")
-                                or payload.get("template_id")
-                            )
-                            if row_template_id != str(template_id):
+                            template_identifiers = _template_identifiers(payload)
+                            if str(template_id).casefold() not in template_identifiers:
                                 continue
                         prospecto_id = row.get("prospecto_id")
                         if prospecto_id is None:
