@@ -261,44 +261,6 @@ function buildScianLookups(scian: DenueCatalogosResponse["scian"]): ScianLookups
   return { titles };
 }
 
-function expandScianCodesForSearch(
-  codes: string[],
-  claseCodes: string[],
-): string[] {
-  const seen = new Set<string>();
-  const expanded: string[] = [];
-  const claseList = claseCodes
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-
-  for (const rawCode of codes) {
-    const code = rawCode.trim();
-    if (!code) {
-      continue;
-    }
-    if (code.length === 5) {
-      const descendants = claseList.filter((candidate) => candidate.startsWith(code));
-      if (descendants.length) {
-        for (const descendant of descendants) {
-          if (seen.has(descendant)) {
-            continue;
-          }
-          seen.add(descendant);
-          expanded.push(descendant);
-        }
-        continue;
-      }
-    }
-    if (seen.has(code)) {
-      continue;
-    }
-    seen.add(code);
-    expanded.push(code);
-  }
-
-  return expanded;
-}
-
 function buildGeoDisplay(
   filters?: BusquedaMetaFilters,
   lookups?: GeoLookups | null,
@@ -468,11 +430,6 @@ export function DenueBusquedaView() {
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
   const [scianCatalogs, setScianCatalogs] = useState<DenueCatalogosResponse["scian"] | null>(null);
   const scianTitles = scianLookups?.titles;
-  const scianClaseCodes = useMemo(() => {
-    return (scianCatalogs?.clase ?? [])
-      .map((row) => String(row.codigo ?? "").trim())
-      .filter((value) => value.length > 0);
-  }, [scianCatalogs]);
   const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
   const [geoEstadoFilter, setGeoEstadoFilter] = useState<string>("any");
   const [geoMunicipioFilter, setGeoMunicipioFilter] = useState<string>("any");
@@ -1626,10 +1583,12 @@ export function DenueBusquedaView() {
               .filter((value) => value.length >= 2),
           ),
         );
-    const actividadCodesForSearch = filters.allActivitiesSelected
-      ? ["0"]
-      : expandScianCodesForSearch(actividadCodes, scianClaseCodes);
-    const estrato = filters.estrato.filter((value) => value !== "0");
+    const actividadCodesForSearch = actividadCodes;
+    const selectedEstratos = new Set(filters.estrato.filter((value) => value !== "0"));
+    const allSizeIds = ["1", "2", "3", "4", "5", "6", "7"];
+    const estrato = filters.estrato.includes("0") || allSizeIds.every((value) => selectedEstratos.has(value))
+      ? []
+      : Array.from(selectedEstratos);
     const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
     const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
     const hasActivitySelection =
@@ -1673,7 +1632,7 @@ export function DenueBusquedaView() {
       geo_estados: geoEstados,
       geo_municipios: geoMunicipios,
     };
-  }, [scianClaseCodes, scianTitles]);
+  }, [scianTitles]);
 
   const runBusqueda = useCallback(
     async (options?: { filters?: DenueAdvancedFilters | null; forceStandard?: boolean }) => {
@@ -1746,14 +1705,17 @@ export function DenueBusquedaView() {
               try {
                 const jobResp = await getDenueJob(response.job_id as string);
                 const status = String(jobResp.job.status || "");
+                const quotaReached = jobResp.job.progress?.quota_reached === true;
                 setActiveDenueJobStatus(status);
                 if (["completed", "failed", "canceled"].includes(status)) {
                   setActiveDenueJobId(null);
                   if (status === "completed") {
                     const total = typeof jobResp.job.total === "number" ? jobResp.job.total : null;
                     setFeedback({
-                      type: "success",
-                      message: `Búsqueda DENUE completada${total !== null ? ` (${numberFormatter.format(total)} registros).` : "."}`,
+                      type: quotaReached ? "info" : "success",
+                      message: quotaReached
+                        ? `Búsqueda completada con la cuota de Resultados crudos DENUE alcanzada${total !== null ? ` (${numberFormatter.format(total)} registros guardados).` : "."}`
+                        : `Búsqueda DENUE completada${total !== null ? ` (${numberFormatter.format(total)} registros).` : "."}`,
                     });
                   } else if (status === "canceled") {
                     setFeedback({ type: "info", message: "Búsqueda DENUE cancelada." });
@@ -2745,7 +2707,7 @@ export function DenueBusquedaView() {
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
           ) : busquedas.length ? (
             <ScrollArea className="h-[360px] rounded-lg border border-border/60">
-              <div className="min-w-[860px]">
+              <div className="min-w-[980px]">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
@@ -2781,6 +2743,7 @@ export function DenueBusquedaView() {
                           Fecha {busquedasSort.key === "fecha" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
                         </Button>
                       </TableHead>
+                      <TableHead className="w-40">Realizada por</TableHead>
                       <TableHead className="w-44 text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2875,6 +2838,9 @@ export function DenueBusquedaView() {
                             )}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{createdLabel}</TableCell>
+                          <TableCell className="max-w-[160px] truncate text-xs" title={item.creado_por_nombre || undefined}>
+                            {item.creado_por_nombre || "Usuario no disponible"}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex flex-wrap justify-end gap-2">
                               <Button

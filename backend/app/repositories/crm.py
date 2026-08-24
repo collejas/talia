@@ -18795,6 +18795,47 @@ class CRMRepository:
             raise CRMRepositoryError("prospeccion_raw_usage_invalid_response")
         return data
 
+    async def reserve_denue_raw_results_batch(
+        self,
+        *,
+        organizacion_id: UUID,
+        busqueda_id: UUID,
+        requested_count: int,
+    ) -> dict[str, Any]:
+        """Reserva la cuota mensual DENUE de forma atomica para un lote."""
+
+        if requested_count < 0:
+            raise CRMRepositoryError("prospeccion_request_invalid")
+        try:
+            response = await self._request_service_role(
+                "POST",
+                "/rest/v1/rpc/prospeccion_reservar_resultados_denue_lote",
+                json={
+                    "p_tenant_id": str(organizacion_id),
+                    "p_busqueda_id": str(busqueda_id),
+                    "p_requested_count": requested_count,
+                },
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raw_error = str(exc)
+            known_codes = (
+                "prospeccion_access_blocked",
+                "prospeccion_credits_not_configured",
+                "prospeccion_plan_not_configured",
+                "prospeccion_request_invalid",
+                "prospeccion_search_not_owned",
+                "prospeccion_usage_period_invalid",
+            )
+            for code in known_codes:
+                if code in raw_error:
+                    raise CRMRepositoryError(code) from exc
+            raise CRMRepositoryError("prospeccion_raw_usage_failed") from exc
+        data = response.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError("prospeccion_raw_usage_invalid_response")
+        return data
+
     async def denue_resultados_map(
         self,
         *,

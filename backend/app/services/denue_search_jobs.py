@@ -199,17 +199,16 @@ class DenueSearchJobManager:
                     items.append(value.strip())
             return expand_denue_activity_codes(items)
 
-        combo_limit = 20
         batch_base_size = max(requested_registro_final - registro_inicial + 1, 1)
         batch_size = min(batch_base_size, settings.denue_batch_size)
         if batch_size <= 0:
             batch_size = settings.denue_batch_size
-        max_batches = settings.denue_max_batches or None
 
         upserted_total = 0
         processed_batches = 0
         preview_items: list[dict[str, Any]] = []
         seen_external_ids: set[str] = set()
+        quota_reached = False
 
         def _is_statement_timeout(error: Exception) -> bool:
             text = str(error) or ""
@@ -263,6 +262,7 @@ class DenueSearchJobManager:
                 "upserted": upserted_total,
                 "batches": processed_batches,
                 "batch_size": batch_size,
+                "quota_reached": quota_reached,
             }
             payload_progress.update(extra)
             await repo.worker_update_denue_job(
@@ -276,7 +276,7 @@ class DenueSearchJobManager:
             *,
             extra: dict[str, Any],
         ) -> None:
-            nonlocal upserted_total, processed_batches, preview_items
+            nonlocal upserted_total, processed_batches, preview_items, quota_reached
             current = registro_inicial
             batch_index = 0
             while True:
@@ -309,7 +309,20 @@ class DenueSearchJobManager:
                     normalized.append(item)
                 if normalized and len(preview_items) < 10:
                     preview_items.extend(normalized[: 10 - len(preview_items)])
-                upserted_total += await _upsert(normalized)
+                items_to_upsert = normalized
+                if settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None and normalized:
+                    reservation = await repo.reserve_denue_raw_results_batch(
+                        organizacion_id=organizacion_id,
+                        busqueda_id=job.busqueda_id,
+                        requested_count=len(normalized),
+                    )
+                    try:
+                        reserved = max(0, int(reservation.get("reserved") or 0))
+                    except (TypeError, ValueError):
+                        raise CRMRepositoryError("prospeccion_raw_usage_invalid_response") from None
+                    quota_reached = bool(reservation.get("quota_reached"))
+                    items_to_upsert = normalized[:reserved]
+                upserted_total += await _upsert(items_to_upsert)
                 await repo.worker_update_busqueda(
                     busqueda_id=job.busqueda_id,
                     payload={"total_encontrados": upserted_total},
@@ -324,10 +337,10 @@ class DenueSearchJobManager:
                         **extra,
                     }
                 )
+                if quota_reached:
+                    break
                 if not rows:
                     break
-                if max_batches is not None and batch_index >= max_batches:
-                        break
                 if len(rows) < (end - current + 1):
                     break
                 current = end + 1
@@ -341,7 +354,20 @@ class DenueSearchJobManager:
             normalized_items = [normalize_denue_place(item) for item in records]
             if normalized_items and len(preview_items) < 10:
                 preview_items.extend(normalized_items[:10])
-            upserted_total += await _upsert(normalized_items)
+            items_to_upsert = normalized_items
+            if settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None and normalized_items:
+                reservation = await repo.reserve_denue_raw_results_batch(
+                    organizacion_id=organizacion_id,
+                    busqueda_id=job.busqueda_id,
+                    requested_count=len(normalized_items),
+                )
+                try:
+                    reserved = max(0, int(reservation.get("reserved") or 0))
+                except (TypeError, ValueError):
+                    raise CRMRepositoryError("prospeccion_raw_usage_invalid_response") from None
+                quota_reached = bool(reservation.get("quota_reached"))
+                items_to_upsert = normalized_items[:reserved]
+            upserted_total += await _upsert(items_to_upsert)
         elif modo == "entidad":
             if not text_query:
                 raise DenueError("texto_busqueda_required")
@@ -349,8 +375,6 @@ class DenueSearchJobManager:
             entidades = [estado for estado, _ in targets if estado]
             if not entidades:
                 raise DenueError("entidad_required")
-            if len(entidades) > combo_limit:
-                entidades = entidades[:combo_limit]
             for entidad in entidades:
                 async def fetch_batch(start: int, end: int, *, _entidad: str = entidad) -> list[dict[str, Any]]:
                     return await client.search_by_entidad(
@@ -361,6 +385,8 @@ class DenueSearchJobManager:
                     )
 
                 await _process_batches(fetch_batch, extra={"entidad": entidad})
+                if quota_reached:
+                    break
         elif modo in {"area_act", "area_act_estr"}:
             acts = _activities()
             if not acts:
@@ -384,9 +410,6 @@ class DenueSearchJobManager:
                 for entidad, municipio in targets:
                     for estrato in estratos:
                         combos.append((activity, entidad, municipio, estrato))
-            if len(combos) > combo_limit:
-                combos = combos[:combo_limit]
-
             for activity, entidad, municipio, estrato in combos:
                 async def _run_combo(
                     *,
@@ -490,6 +513,8 @@ class DenueSearchJobManager:
                             )
                     if not fallback_success and last_fallback_exc is not None:
                         raise last_fallback_exc
+                if quota_reached:
+                    break
         else:
             raise DenueError("modo_desconocido")
 
@@ -497,16 +522,29 @@ class DenueSearchJobManager:
             busqueda_id=job.busqueda_id,
             payload={"total_encontrados": upserted_total},
         )
-        if settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None:
+        if not settings.prospeccion_credits_enforcement_enabled and organizacion_id is not None:
             await repo.record_denue_raw_results(
                 organizacion_id=organizacion_id,
                 busqueda_id=job.busqueda_id,
             )
         await repo.worker_update_denue_job(
             job_id=job.job_id,
-            payload={"total": upserted_total, "stats": {"upserted": upserted_total, "batches": processed_batches}},
+            payload={
+                "total": upserted_total,
+                "stats": {
+                    "upserted": upserted_total,
+                    "batches": processed_batches,
+                    "quota_reached": quota_reached,
+                },
+            },
             strict=False,
         )
+        if quota_reached:
+            await self._patch_busqueda_meta(
+                repo,
+                busqueda_id=job.busqueda_id,
+                patch={"raw_results_quota_reached": True},
+            )
 
 
 DENUE_SEARCH_JOB_MANAGER = DenueSearchJobManager()

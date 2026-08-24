@@ -5139,6 +5139,44 @@ class DenueBusquedaPayload(BaseModel):
     def validate_paginacion(self) -> "DenueBusquedaPayload":
         if self.registro_final < self.registro_inicial:
             raise ValueError("registro_final_menor")
+        if self.modo in {"area_act", "area_act_estr"}:
+            activity_codes = list(dict.fromkeys(
+                str(value).strip()
+                for value in (self.actividad_codigos or [])
+                if value and str(value).strip()
+            ))
+            if len(activity_codes) != 1 or activity_codes[0] == "0":
+                raise ValueError("actividad_unica_requerida")
+
+        if self.modo != "radio":
+            geo_count = len({
+                str(value).strip()
+                for value in (self.geo_estados or [])
+                if value and str(value).strip()
+            }) + len({
+                str(value).strip()
+                for value in (self.geo_municipios or [])
+                if value and str(value).strip()
+            })
+            if geo_count != 1:
+                raise ValueError("seleccion_demografica_unica_requerida")
+            if self.modo in {"area_act", "area_act_estr"}:
+                has_state_selection = bool(self.geo_estados) and not self.geo_municipios
+                selected_activity = activity_codes[0] if activity_codes else ""
+                is_sector = bool(re.fullmatch(r"\d{2}(?:-\d{2})?", selected_activity))
+                if has_state_selection and is_sector:
+                    raise ValueError("actividad_minima_subsector_requerida")
+
+        if self.modo == "area_act_estr":
+            selected_sizes = {
+                str(value).strip()
+                for value in (self.estrato_ids or [])
+                if value and str(value).strip() and str(value).strip() != "0"
+            }
+            if not selected_sizes or selected_sizes == {str(value) for value in range(1, 8)}:
+                self.modo = "area_act"
+                self.estrato_ids = None
+
         return self
 
 
@@ -31379,6 +31417,7 @@ async def crear_busqueda_denue(
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
     advanced_meta = await _build_advanced_meta(payload, repo)
     modo = payload.modo or "radio"
+    async_mode = payload.async_mode or modo in {"entidad", "area_act", "area_act_estr"}
     text_query = (payload.texto_busqueda or "").strip()
     search_logger.info(
         "denue.search_requested",
@@ -31442,7 +31481,7 @@ async def crear_busqueda_denue(
             except (TypeError, ValueError):
                 organizacion_id = None
 
-    if payload.async_mode:
+    if async_mode:
         if modo == "entidad" and not text_query:
             raise HTTPException(status_code=400, detail="texto_busqueda_required")
         if modo in {"area_act", "area_act_estr"} and not _activity_codes_from_payload(payload):
@@ -31616,7 +31655,6 @@ async def crear_busqueda_denue(
                 upserted += await _upsert_normals(normalized_items)
             preview_items = normalized_items[:10]
         else:
-            combo_limit = 20
             if modo == "entidad":
                 if not text_query:
                     raise HTTPException(status_code=400, detail="texto_busqueda_required")
@@ -31624,13 +31662,6 @@ async def crear_busqueda_denue(
                 entidades = _unique_preserve_order([estado for estado, _ in geo_targets if estado])
                 if not entidades:
                     raise HTTPException(status_code=400, detail="entidad_required")
-                if len(entidades) > combo_limit:
-                    search_logger.warning(
-                        "denue.combo_limit_reached",
-                        extra={"modo": modo, "limit": combo_limit, "combos": len(entidades)},
-                    )
-                    entidades = entidades[:combo_limit]
-
                 for entidad in entidades:
                     async def search_batch(
                         registro_inicial: int,
@@ -31671,13 +31702,6 @@ async def crear_busqueda_denue(
                     for entidad, municipio in geo_targets:
                         for estrato in estratos:
                             combos.append((activity, entidad, municipio, estrato))
-
-                if len(combos) > combo_limit:
-                    search_logger.warning(
-                        "denue.combo_limit_reached",
-                        extra={"modo": modo, "limit": combo_limit, "combos": len(combos)},
-                    )
-                    combos = combos[:combo_limit]
 
                 for activity, entidad, municipio, estrato in combos:
                     async def _run_combo(
@@ -31954,8 +31978,18 @@ async def listar_busquedas_denue(
     offset: Annotated[int, Query(ge=0)] = 0,
     search: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    tenant_organizacion_id: UUID | None = None
+    user_sub = _jwt_verify_and_sub(user_token)
+    if user_sub:
+        try:
+            user_uuid = UUID(user_sub)
+        except (TypeError, ValueError):
+            user_uuid = None
+        if user_uuid:
+            tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
+
     params: dict[str, str] = {
-        "select": "id,fuente,query,radio_m,lat,lng,status,modo,source,recovered_at,denue_job_id,denue_batch_size,advanced_filters,meta,total_encontrados,creado_en",
+        "select": "id,fuente,query,radio_m,lat,lng,status,modo,source,recovered_at,denue_job_id,denue_batch_size,advanced_filters,meta,total_encontrados,creado_en,creado_por",
         "order": "creado_en.desc",
         "limit": str(limit),
         "offset": str(offset),
@@ -31969,8 +32003,32 @@ async def listar_busquedas_denue(
             usuario_token=user_token,
             params=params,
         )
+        creator_ids = [
+            creator_id
+            for row in rows
+            if isinstance(row, dict)
+            for creator_id in [_safe_uuid(row.get("creado_por"))]
+            if creator_id is not None
+        ]
+        creators = (
+            await repo.list_users_by_ids(
+                organizacion_id=tenant_organizacion_id,
+                user_ids=creator_ids,
+            )
+            if tenant_organizacion_id and creator_ids
+            else []
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    creator_names = {
+        str(row.get("id")): str(row.get("nombre_completo") or "").strip() or None
+        for row in creators
+        if isinstance(row, dict) and row.get("id")
+    }
+    for row in rows:
+        if isinstance(row, dict):
+            creator_id = str(row.get("creado_por") or "")
+            row["creado_por_nombre"] = creator_names.get(creator_id)
     return {
         "ok": True,
         "items": rows,

@@ -32,6 +32,8 @@ export type DenueBusquedaItem = {
   advanced_filters?: Record<string, unknown> | null;
   total_encontrados: number | null;
   creado_en: string;
+  creado_por?: string | null;
+  creado_por_nombre?: string | null;
 };
 
 export type DenueBusquedasResponse = {
