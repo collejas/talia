@@ -37707,6 +37707,7 @@ async def prospeccion_checklist_lookup(
     try:
         prospectos = await repo.list_lookup_pending_prospectos(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             limit=payload.limit,
         )
     except CRMRepositoryError as exc:

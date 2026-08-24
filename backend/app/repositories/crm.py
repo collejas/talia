@@ -21406,12 +21406,14 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
         """Obtiene prospectos con verificación pendiente o con error."""
 
         params = {
             "select": "id,phone,phone_e164,lookup_status",
+            "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.asc",
             "limit": str(max(1, min(limit, 200))),
             "lookup_status": "in.(pendiente,error)",
