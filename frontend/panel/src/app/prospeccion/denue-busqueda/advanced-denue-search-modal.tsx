@@ -27,9 +27,6 @@ import {
 export type DenueAdvancedFilters = {
   search: {
     nombre: string
-    calle: string
-    colonia: string
-    cp: string
   }
   actividad: string[]
   allActivitiesSelected: boolean
@@ -174,9 +171,6 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
   })
   const [searchFields, setSearchFields] = useState({
     nombre: "",
-    calle: "",
-    colonia: "",
-    cp: "",
   })
   const [selectedScianCodes, setSelectedScianCodes] = useState<Set<string>>(() => new Set())
   const [expandedScianCodes, setExpandedScianCodes] = useState<Set<string>>(() => new Set())
@@ -662,48 +656,16 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
               />
             </button>
             {expandedSections.search ? (
-              <div className="max-h-36 overflow-auto pr-1 text-xs">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="advanced-nombre" className="text-[11px]">Nombre o razón social</Label>
-                    <Input
-                      id="advanced-nombre"
-                      value={searchFields.nombre}
-                      onChange={(event) => handleFieldChange("nombre", event.target.value)}
-                      placeholder="Ej. OXXO, hospital"
-                      className="text-[11px] py-2"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="advanced-calle" className="text-[11px]">Calle o avenida</Label>
-                    <Input
-                      id="advanced-calle"
-                      value={searchFields.calle}
-                      onChange={(event) => handleFieldChange("calle", event.target.value)}
-                      placeholder="Ej. Reforma"
-                      className="text-[11px] py-2"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="advanced-colonia" className="text-[11px]">Colonia o fraccionamiento</Label>
-                    <Input
-                      id="advanced-colonia"
-                      value={searchFields.colonia}
-                      onChange={(event) => handleFieldChange("colonia", event.target.value)}
-                      placeholder="Ej. Roma Norte"
-                      className="text-[11px] py-2"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="advanced-cp" className="text-[11px]">Código postal</Label>
-                    <Input
-                      id="advanced-cp"
-                      value={searchFields.cp}
-                      onChange={(event) => handleFieldChange("cp", event.target.value)}
-                      placeholder="Ej. 06000"
-                      className="text-[11px] py-2"
-                    />
-                  </div>
+              <div className="max-w-xl pr-1 text-xs">
+                <div className="space-y-1">
+                  <Label htmlFor="advanced-nombre" className="text-[11px]">Nombre del establecimiento o razón social</Label>
+                  <Input
+                    id="advanced-nombre"
+                    value={searchFields.nombre}
+                    onChange={(event) => handleFieldChange("nombre", event.target.value)}
+                    placeholder="Ej. OXXO, hospital"
+                    className="text-[11px] py-2"
+                  />
                 </div>
               </div>
             ) : null}

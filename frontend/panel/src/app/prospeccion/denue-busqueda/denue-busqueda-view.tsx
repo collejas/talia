@@ -1567,9 +1567,6 @@ export function DenueBusquedaView() {
     }
     const textParts = [
       filters.search.nombre,
-      filters.search.calle,
-      filters.search.colonia,
-      filters.search.cp,
     ]
       .map((value) => value.trim())
       .filter(Boolean);
