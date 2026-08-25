@@ -3975,22 +3975,6 @@ function ProspectosView() {
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-base font-semibold">Filtros</h2>
         <form onSubmit={handleSearchSubmit} className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex flex-1 items-center gap-2">
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Buscar por nombre, actividad, teléfono o email"
-              />
-              <Button type="submit" variant="secondary" size="sm">
-                <IconSearch className="mr-2 size-4" />
-                Buscar
-              </Button>
-            </div>
-            <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters}>
-              Limpiar filtros
-            </Button>
-          </div>
           <div className="grid gap-2 lg:grid-cols-[minmax(240px,320px)_minmax(220px,1fr)_auto_auto]">
             <div className="space-y-1">
               <Label>Vistas guardadas</Label>
@@ -4480,7 +4464,7 @@ function ProspectosView() {
             </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="order-last space-y-1">
+            <div className="space-y-1">
               <Label>Consulta</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -4663,7 +4647,23 @@ function ProspectosView() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="space-y-1 lg:col-start-1">
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_180px_180px_160px] lg:items-end">
+            <div className="space-y-1">
+              <Label>Buscar</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder="Nombre, actividad, teléfono o email"
+                />
+                <Button type="submit" variant="secondary" size="sm">
+                  <IconSearch className="mr-2 size-4" />
+                  Buscar
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
               <Label>Estado</Label>
               <Select
                 value={filters.geoEstado || "all"}
