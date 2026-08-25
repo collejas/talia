@@ -406,3 +406,11 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se definió que la sección **Comercial** solo será visible y operable para el usuario `owner` del tenant maestro dueño de la aplicación.
 - Los `owner` y administradores de tenants clientes no podrán consultar ni modificar planes, precios, entitlements, defaults o Billing/Stripe global.
 - La autorización deberá validarse en backend por endpoint; el ocultamiento del menú en frontend será únicamente una mejora de UX.
+
+### Implementación inicial
+- Se agregó la entrada lateral **Comercial** con `/settings/commercial` como punto de acceso.
+- Se agregó `/settings/commercial/plans` como catálogo y `/settings/commercial/billing` como sección separada para la operación de cobro.
+- Se agregó `/settings/commercial/plans/{plan_id}` para operar un plan específico conservando sus pestañas de configuración.
+- La vista de catálogo ahora organiza planes, precios, entitlements y defaults mediante pestañas.
+- `/settings/commercial-plans` dejó de contener la vista y redirige a la nueva ruta.
+- Los endpoints administrativos del catálogo comercial y límites de plan ahora requieren el `owner` del tenant maestro.

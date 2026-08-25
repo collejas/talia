@@ -114,7 +114,7 @@ export default async function TenantsSettingsPage() {
               </p>
             </div>
             <Button asChild variant="outline" size="sm">
-              <Link href="/settings/commercial-plans">Ver planes comerciales</Link>
+              <Link href="/settings/commercial/plans">Ver planes comerciales</Link>
             </Button>
           </div>
         </header>

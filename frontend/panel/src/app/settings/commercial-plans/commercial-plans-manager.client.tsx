@@ -113,7 +113,10 @@ type Props = {
   prices: CommercialPlanPrice[]
   entitlements: CommercialPlanEntitlement[]
   defaults: CommercialPlanDefault[]
+  selectedPlanId?: string
 }
+
+type CommercialCatalogSection = "plans" | "prices" | "entitlements" | "defaults"
 
 function formatMoney(amountCents: number, currency: string): string {
   return new Intl.NumberFormat("es-MX", {
@@ -136,8 +139,9 @@ function priceLabel(price: CommercialPlanPrice | undefined): string {
   return `${formatMoney(price.amount_cents, price.currency)} ${intervalLabel}`.trim()
 }
 
-export function CommercialPlansManager({ plans, prices, entitlements, defaults }: Props) {
+export function CommercialPlansManager({ plans, prices, entitlements, defaults, selectedPlanId }: Props) {
   const router = useRouter()
+  const [activeSection, setActiveSection] = useState<CommercialCatalogSection>("plans")
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -162,7 +166,7 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
     active: true,
   })
   const [priceForm, setPriceForm] = useState<PriceFormState>({
-    planId: "",
+    planId: selectedPlanId ?? "",
     billingProvider: "stripe",
     providerProductId: "",
     providerPriceId: "",
@@ -172,7 +176,7 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
     active: true,
   })
   const [entitlementForm, setEntitlementForm] = useState<EntitlementFormState>({
-    planId: "",
+    planId: selectedPlanId ?? "",
     entitlementKey: "",
     valueType: "boolean",
     enabled: true,
@@ -183,57 +187,74 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
     scope: "",
   })
   const [defaultForm, setDefaultForm] = useState<DefaultFormState>({
-    planId: "",
+    planId: selectedPlanId ?? "",
     defaultKey: "",
     defaultValue: "",
     scope: "",
   })
 
+  const scopedPlans = useMemo(
+    () => (selectedPlanId ? plans.filter((plan) => plan.id === selectedPlanId) : plans),
+    [plans, selectedPlanId],
+  )
+  const scopedPrices = useMemo(
+    () => (selectedPlanId ? prices.filter((price) => price.plan_id === selectedPlanId) : prices),
+    [prices, selectedPlanId],
+  )
+  const scopedEntitlements = useMemo(
+    () => (selectedPlanId ? entitlements.filter((item) => item.plan_id === selectedPlanId) : entitlements),
+    [entitlements, selectedPlanId],
+  )
+  const scopedDefaults = useMemo(
+    () => (selectedPlanId ? defaults.filter((item) => item.plan_id === selectedPlanId) : defaults),
+    [defaults, selectedPlanId],
+  )
+
   const priceByPlanId = useMemo(() => {
     const map = new Map<string, CommercialPlanPrice>()
-    for (const price of prices) {
+    for (const price of scopedPrices) {
       if (!price.active || map.has(price.plan_id)) continue
       map.set(price.plan_id, price)
     }
     return map
-  }, [prices])
+  }, [scopedPrices])
 
-  const sortedPlans = useMemo(() => [...plans].sort((a, b) => a.sort_order - b.sort_order), [plans])
+  const sortedPlans = useMemo(() => [...scopedPlans].sort((a, b) => a.sort_order - b.sort_order), [scopedPlans])
   const sortedPrices = useMemo(
     () =>
-      [...prices].sort((a, b) => {
+      [...scopedPrices].sort((a, b) => {
         if (a.active !== b.active) return a.active ? -1 : 1
         if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
         if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents
         return a.provider_price_id.localeCompare(b.provider_price_id)
       }),
-    [prices],
+    [scopedPrices],
   )
 
   const planNameById = useMemo(() => {
     const map = new Map<string, string>()
-    for (const plan of plans) {
+    for (const plan of scopedPlans) {
       map.set(plan.id, `${plan.name} (${plan.code})`)
     }
     return map
-  }, [plans])
+  }, [scopedPlans])
 
   const sortedEntitlements = useMemo(
     () =>
-      [...entitlements].sort((a, b) => {
+      [...scopedEntitlements].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
         return a.entitlement_key.localeCompare(b.entitlement_key)
       }),
-    [entitlements],
+    [scopedEntitlements],
   )
 
   const sortedDefaults = useMemo(
     () =>
-      [...defaults].sort((a, b) => {
+      [...scopedDefaults].sort((a, b) => {
         if (a.plan_id !== b.plan_id) return a.plan_id.localeCompare(b.plan_id)
         return a.default_key.localeCompare(b.default_key)
       }),
-    [defaults],
+    [scopedDefaults],
   )
 
   const resetForm = () => {
@@ -614,6 +635,29 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 rounded-lg border border-border/60 bg-muted/20 p-2" role="tablist" aria-label="Configuración comercial">
+        {([
+          ["plans", "Planes"],
+          ["prices", "Precios y Stripe"],
+          ["entitlements", "Entitlements"],
+          ["defaults", "Defaults"],
+        ] as const).map(([section, label]) => (
+          <button
+            key={section}
+            type="button"
+            role="tab"
+            aria-selected={activeSection === section}
+            className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              activeSection === section ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveSection(section)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={activeSection === "plans" ? "space-y-6" : "hidden"}>
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>{editingPlanId ? "Editar plan comercial" : "Crear plan comercial"}</CardTitle>
@@ -759,6 +803,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
                             <Button size="sm" variant="outline" onClick={() => startEdit(plan)}>
                               Editar
                             </Button>
+                            <Button size="sm" variant="outline" onClick={() => router.push(`/settings/commercial/plans/${plan.id}`)}>
+                              Configurar
+                            </Button>
                             <Button
                               size="sm"
                               variant={plan.active ? "destructive" : "secondary"}
@@ -778,7 +825,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
           </div>
         </CardContent>
       </Card>
+      </div>
 
+      <div className={activeSection === "prices" ? "space-y-6" : "hidden"}>
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>{editingPriceId ? "Editar precio comercial" : "Crear precio comercial"}</CardTitle>
@@ -989,7 +1038,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
           </div>
         </CardContent>
       </Card>
+      </div>
 
+      <div className={activeSection === "entitlements" ? "space-y-6" : "hidden"}>
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>{editingEntitlementId ? "Editar entitlement" : "Crear entitlement"}</CardTitle>
@@ -1222,7 +1273,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
           </div>
         </CardContent>
       </Card>
+      </div>
 
+      <div className={activeSection === "defaults" ? "space-y-6" : "hidden"}>
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>{editingDefaultId ? "Editar default" : "Crear default"}</CardTitle>
@@ -1367,6 +1420,7 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults }
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

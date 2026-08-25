@@ -40,6 +40,7 @@ logger = get_logger("app.api.admin")
 
 PROSPECCION_CREDITS_KEY = "limit.prospeccion.credits_month"
 PROSPECCION_RAW_RESULTS_KEY = "limit.prospeccion.denue_raw_results_month"
+MASTER_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 class AdminDebugRowsResponse(BaseModel):
@@ -202,6 +203,50 @@ async def require_platform_admin_or_owner(
         organizacion_id=organizacion_id,
         is_owner=True,
     )
+
+
+async def require_master_tenant_owner(
+    user_token: str = Depends(require_user_token),
+    repo: PlatformRepository = Depends(get_platform_repo),
+    crm_repo: CRMRepository = Depends(get_crm_repo_with_user),
+) -> UUID:
+    """Allow only the owner user of the master tenant to manage commercial settings."""
+    try:
+        user = await repo.auth_get_user(user_token=user_token)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    raw_id = user.get("id")
+    try:
+        user_id = UUID(str(raw_id))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
+
+    try:
+        context = await crm_repo.get_permission_context()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        context_user_id = UUID(str(context.get("usuario_id")))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="master_tenant_owner_required") from exc
+
+    if context_user_id != user_id:
+        raise HTTPException(status_code=403, detail="master_tenant_owner_required")
+
+    if not _is_owner_context(context):
+        raise HTTPException(status_code=403, detail="master_tenant_owner_required")
+
+    try:
+        organizacion_id = UUID(str(context.get("organizacion_id")))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="master_tenant_owner_required") from exc
+
+    if organizacion_id != MASTER_TENANT_ID:
+        raise HTTPException(status_code=403, detail="master_tenant_owner_required")
+
+    return user_id
 
 
 @router.get("/me/platform-admin")
@@ -2199,7 +2244,7 @@ async def list_tenants(
 
 @router.get("/commercial-plans", response_model=CommercialPlansResponse)
 async def list_commercial_plans(
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlansResponse:
     plans = await repo.list_commercial_plans()
@@ -2220,7 +2265,7 @@ async def list_commercial_plans(
 )
 async def get_prospeccion_plan_limits(
     plan_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> ProspeccionPlanLimitsResponse:
     plan = await repo.get_commercial_plan(plan_id=plan_id)
@@ -2248,7 +2293,7 @@ async def get_prospeccion_plan_limits(
 async def update_prospeccion_plan_limits(
     plan_id: UUID,
     payload: ProspeccionPlanLimitsUpdate,
-    actor_id: UUID = Depends(require_platform_admin),
+    actor_id: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> ProspeccionPlanLimitsResponse:
     try:
@@ -2270,7 +2315,7 @@ async def update_prospeccion_plan_limits(
 @router.post("/commercial-plans", response_model=CommercialPlanResponse)
 async def create_commercial_plan(
     payload: CommercialPlanCreateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanResponse:
     try:
@@ -2292,7 +2337,7 @@ async def create_commercial_plan(
 async def update_commercial_plan(
     plan_id: UUID,
     payload: CommercialPlanUpdateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanResponse:
     update_payload = payload.model_dump(exclude_none=True)
@@ -2308,7 +2353,7 @@ async def update_commercial_plan(
 @router.delete("/commercial-plans/{plan_id}", response_model=CommercialPlanArchiveResponse)
 async def archive_commercial_plan(
     plan_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanArchiveResponse:
     try:
@@ -2320,7 +2365,7 @@ async def archive_commercial_plan(
 
 @router.get("/commercial-plan-prices", response_model=CommercialPlanPricesResponse)
 async def list_commercial_plan_prices(
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanPricesResponse:
     prices = await repo.list_commercial_plan_prices()
@@ -2330,7 +2375,7 @@ async def list_commercial_plan_prices(
 @router.post("/commercial-plan-prices", response_model=CommercialPlanPriceResponse)
 async def create_commercial_plan_price(
     payload: CommercialPlanPriceCreateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanPriceResponse:
     try:
@@ -2355,7 +2400,7 @@ async def create_commercial_plan_price(
 async def update_commercial_plan_price(
     price_id: UUID,
     payload: CommercialPlanPriceUpdateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanPriceResponse:
     update_payload = payload.model_dump(exclude_none=True)
@@ -2373,7 +2418,7 @@ async def update_commercial_plan_price(
 @router.delete("/commercial-plan-prices/{price_id}", response_model=CommercialPlanPriceResponse)
 async def archive_commercial_plan_price(
     price_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanPriceResponse:
     try:
@@ -2385,7 +2430,7 @@ async def archive_commercial_plan_price(
 
 @router.get("/commercial-plan-entitlements", response_model=CommercialPlanEntitlementsResponse)
 async def list_commercial_plan_entitlements(
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanEntitlementsResponse:
     entitlements = await repo.list_commercial_plan_entitlements()
@@ -2397,7 +2442,7 @@ async def list_commercial_plan_entitlements(
 @router.post("/commercial-plan-entitlements", response_model=CommercialPlanEntitlementResponse)
 async def create_commercial_plan_entitlement(
     payload: CommercialPlanEntitlementCreateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanEntitlementResponse:
     try:
@@ -2423,7 +2468,7 @@ async def create_commercial_plan_entitlement(
 async def update_commercial_plan_entitlement(
     entitlement_id: UUID,
     payload: CommercialPlanEntitlementUpdateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanEntitlementResponse:
     update_payload = payload.model_dump(exclude_none=True)
@@ -2441,7 +2486,7 @@ async def update_commercial_plan_entitlement(
 @router.delete("/commercial-plan-entitlements/{entitlement_id}", response_model=CommercialPlanEntitlementResponse)
 async def archive_commercial_plan_entitlement(
     entitlement_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanEntitlementResponse:
     try:
@@ -2455,7 +2500,7 @@ async def archive_commercial_plan_entitlement(
 
 @router.get("/commercial-plan-defaults", response_model=CommercialPlanDefaultsResponse)
 async def list_commercial_plan_defaults(
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanDefaultsResponse:
     defaults = await repo.list_commercial_plan_defaults()
@@ -2467,7 +2512,7 @@ async def list_commercial_plan_defaults(
 @router.post("/commercial-plan-defaults", response_model=CommercialPlanDefaultResponse)
 async def create_commercial_plan_default(
     payload: CommercialPlanDefaultCreateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanDefaultResponse:
     try:
@@ -2488,7 +2533,7 @@ async def create_commercial_plan_default(
 async def update_commercial_plan_default(
     default_id: UUID,
     payload: CommercialPlanDefaultUpdateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CommercialPlanDefaultResponse:
     update_payload = payload.model_dump(exclude_none=True)
@@ -2506,7 +2551,7 @@ async def update_commercial_plan_default(
 @router.delete("/commercial-plan-defaults/{default_id}", response_model=dict[str, bool])
 async def delete_commercial_plan_default(
     default_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> dict[str, bool]:
     try:

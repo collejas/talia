@@ -4,11 +4,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
+from fastapi import HTTPException
 
-from app.api.routes.admin import get_platform_repo, require_platform_admin
+from app.api.routes.admin import get_platform_repo, require_master_tenant_owner, require_platform_admin
 from app.main import app
 
 ACTOR_ID = UUID("00000000-0000-0000-0000-000000000001")
+MASTER_TENANT_ID = ACTOR_ID
 
 
 class ProspeccionAdminRepo:
@@ -69,9 +71,53 @@ class ProspeccionAdminRepo:
         }
 
 
+class AuthRepo:
+    async def auth_get_user(self, *, user_token: str) -> dict[str, str]:
+        return {"id": str(ACTOR_ID)}
+
+
+class PermissionRepo:
+    def __init__(self, *, organizacion_id: UUID, owner: bool = True) -> None:
+        self.organizacion_id = organizacion_id
+        self.owner = owner
+
+    async def get_permission_context(self) -> dict[str, Any]:
+        return {
+            "usuario_id": str(ACTOR_ID),
+            "organizacion_id": str(self.organizacion_id),
+            "es_owner": self.owner,
+            "roles": ["owner"] if self.owner else [],
+        }
+
+
+@pytest.mark.asyncio
+async def test_commercial_access_requires_master_tenant_owner() -> None:
+    assert await require_master_tenant_owner(
+        user_token="token",
+        repo=AuthRepo(),
+        crm_repo=PermissionRepo(organizacion_id=MASTER_TENANT_ID),
+    ) == ACTOR_ID
+
+    with pytest.raises(HTTPException) as customer_error:
+        await require_master_tenant_owner(
+            user_token="token",
+            repo=AuthRepo(),
+            crm_repo=PermissionRepo(organizacion_id=uuid4()),
+        )
+    assert customer_error.value.status_code == 403
+
+    with pytest.raises(HTTPException) as role_error:
+        await require_master_tenant_owner(
+            user_token="token",
+            repo=AuthRepo(),
+            crm_repo=PermissionRepo(organizacion_id=MASTER_TENANT_ID, owner=False),
+        )
+    assert role_error.value.status_code == 403
+
 @pytest.fixture
 def prospeccion_repo() -> ProspeccionAdminRepo:
     repo = ProspeccionAdminRepo()
+    app.dependency_overrides[require_master_tenant_owner] = lambda: ACTOR_ID
     app.dependency_overrides[require_platform_admin] = lambda: ACTOR_ID
     app.dependency_overrides[get_platform_repo] = lambda: repo
     yield repo

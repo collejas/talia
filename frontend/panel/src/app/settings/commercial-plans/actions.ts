@@ -186,7 +186,7 @@ export async function createCommercialPlanAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Plan creado.")
   } catch (error) {
     return failure(error, "No se pudo crear el plan.")
@@ -213,7 +213,7 @@ export async function createCommercialPlanPriceAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Precio creado.")
   } catch (error) {
     return failure(error, "No se pudo crear el precio.")
@@ -241,7 +241,7 @@ export async function updateCommercialPlanPriceAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Precio actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el precio.")
@@ -260,7 +260,7 @@ export async function archiveCommercialPlanPriceAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Precio desactivado.")
   } catch (error) {
     return failure(error, "No se pudo desactivar el precio.")
@@ -288,7 +288,7 @@ export async function createCommercialPlanEntitlementAction(
     )
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Entitlement creado.")
   } catch (error) {
     return failure(error, "No se pudo crear el entitlement.")
@@ -317,7 +317,7 @@ export async function updateCommercialPlanEntitlementAction(
     )
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Entitlement actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el entitlement.")
@@ -339,7 +339,7 @@ export async function archiveCommercialPlanEntitlementAction(
     )
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Entitlement desactivado.")
   } catch (error) {
     return failure(error, "No se pudo desactivar el entitlement.")
@@ -367,7 +367,7 @@ export async function createCommercialPlanDefaultAction(
     )
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Default creado.")
   } catch (error) {
     return failure(error, "No se pudo crear el default.")
@@ -393,7 +393,7 @@ export async function updateCommercialPlanDefaultAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Default actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el default.")
@@ -412,7 +412,7 @@ export async function deleteCommercialPlanDefaultAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Default eliminado.")
   } catch (error) {
     return failure(error, "No se pudo eliminar el default.")
@@ -436,7 +436,7 @@ export async function updateCommercialPlanAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Plan actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el plan.")
@@ -455,7 +455,7 @@ export async function archiveCommercialPlanAction(
     })
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     return success("Plan desactivado.")
   } catch (error) {
     return failure(error, "No se pudo desactivar el plan.")
@@ -491,7 +491,7 @@ export async function updateProspeccionPlanLimitsAction(
     )
     if (!response.ok) throw new Error(response.error)
 
-    revalidatePath("/settings/commercial-plans")
+    revalidatePath("/settings/commercial/plans")
     revalidatePath("/settings/tenants")
     return success("Límites de prospección actualizados.")
   } catch (error) {
