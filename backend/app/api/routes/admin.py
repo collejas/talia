@@ -3222,7 +3222,7 @@ async def update_tenant_info(
 )
 async def get_tenant_prospeccion_limits(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantProspeccionLimitsResponse:
     try:
@@ -3239,7 +3239,7 @@ async def get_tenant_prospeccion_limits(
 async def update_tenant_prospeccion_limits(
     organizacion_id: UUID,
     payload: TenantProspeccionLimitsUpdate,
-    actor_id: UUID = Depends(require_platform_admin),
+    actor_id: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantProspeccionLimitsResponse:
     try:
@@ -3261,7 +3261,7 @@ async def update_tenant_prospeccion_limits(
 async def update_tenant_commercial_state(
     organizacion_id: UUID,
     payload: UpdateTenantCommercialStateRequest,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantDetailResponse:
     try:
