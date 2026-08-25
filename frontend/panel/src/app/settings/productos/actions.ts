@@ -86,6 +86,7 @@ async function fetchCrmRows(path: string, params: Record<string, string | undefi
 
 export type LineaDeNegocio = {
   id: string;
+  codigo: string | null;
   nombre: string;
   descripcion: string | null;
   activo: boolean;
@@ -97,6 +98,7 @@ export type LineaDeNegocio = {
 
 export type FamiliaProducto = {
   id: string;
+  codigo: string | null;
   lineaId: string | null;
   nombre: string;
   descripcion: string | null;
@@ -109,6 +111,7 @@ export type FamiliaProducto = {
 
 export type ModeloProducto = {
   id: string;
+  codigo: string | null;
   nombre: string;
   descripcion: string | null;
   activo: boolean;
@@ -134,6 +137,7 @@ const transformLinea = (row: CrmRow): LineaDeNegocio => {
   const meta = normalizeMetadata(row.metadata);
   return {
     id: String(row.id ?? ""),
+    codigo: normalizeString(row.codigo),
     nombre: normalizeString(row.nombre) ?? "Sin nombre",
     descripcion: normalizeString(row.descripcion),
     activo: normalizeBoolean(row.activo, true),
@@ -148,6 +152,7 @@ const transformFamilia = (row: CrmRow): FamiliaProducto => {
   const meta = normalizeMetadata(row.metadata);
   return {
     id: String(row.id ?? ""),
+    codigo: normalizeString(row.codigo),
     lineaId: normalizeString(row.linea_id ?? row.lineaId),
     nombre: normalizeString(row.nombre) ?? "Sin nombre",
     descripcion: normalizeString(row.descripcion),
@@ -163,6 +168,7 @@ const transformModelo = (row: CrmRow): ModeloProducto => {
   const meta = normalizeMetadata(row.metadata);
   return {
     id: String(row.id ?? ""),
+    codigo: normalizeString(row.codigo),
     nombre: normalizeString(row.nombre) ?? "Sin nombre",
     descripcion: normalizeString(row.descripcion),
     activo: normalizeBoolean(row.activo, true),
@@ -243,6 +249,7 @@ function normalizeResponseRow(response: CrmResult<CrmRow>): CrmRow {
 }
 
 export type LineaFormInput = {
+  codigo?: string | null
   nombre: string
   descripcion?: string | null
   activo?: boolean
@@ -254,6 +261,7 @@ export async function createLineaDeNegocio(input: LineaFormInput): Promise<Linea
     method: "POST",
     body: {
       nombre: input.nombre,
+      codigo: input.codigo ?? null,
       descripcion: input.descripcion ?? null,
       activo: input.activo ?? true,
       metadata: input.metadata ?? {},
@@ -272,6 +280,7 @@ export async function updateLineaDeNegocio(
   }
   const payload: CrmPayload = {}
   if (input.nombre) payload.nombre = input.nombre
+  if (input.codigo !== undefined) payload.codigo = input.codigo
   if (input.descripcion !== undefined) payload.descripcion = input.descripcion
   if (input.activo !== undefined) payload.activo = input.activo
   if (input.metadata !== undefined) payload.metadata = input.metadata
@@ -287,6 +296,7 @@ export async function updateLineaDeNegocio(
 }
 
 export type FamiliaFormInput = {
+  codigo?: string | null
   nombre: string
   lineaId: string
   descripcion?: string | null
@@ -299,6 +309,7 @@ export async function createFamiliaProducto(input: FamiliaFormInput): Promise<Fa
     method: "POST",
     body: {
       nombre: input.nombre,
+      codigo: input.codigo ?? null,
       descripcion: input.descripcion ?? null,
       linea_id: input.lineaId,
       activo: input.activo ?? true,
@@ -318,6 +329,7 @@ export async function updateFamiliaProducto(
   }
   const payload: CrmPayload = {}
   if (input.nombre) payload.nombre = input.nombre
+  if (input.codigo !== undefined) payload.codigo = input.codigo
   if (input.descripcion !== undefined) payload.descripcion = input.descripcion
   if (input.lineaId) payload.linea_id = input.lineaId
   if (input.activo !== undefined) payload.activo = input.activo
@@ -334,6 +346,7 @@ export async function updateFamiliaProducto(
 }
 
 export type ModeloFormInput = {
+  codigo?: string | null
   nombre: string
   descripcion?: string | null
   activo?: boolean
@@ -346,6 +359,7 @@ export async function createModeloProducto(input: ModeloFormInput): Promise<Mode
     method: "POST",
     body: {
       nombre: input.nombre,
+      codigo: input.codigo ?? null,
       descripcion: input.descripcion ?? null,
       activo: input.activo ?? true,
       metadata: input.metadata ?? {},
@@ -365,6 +379,7 @@ export async function updateModeloProducto(
   }
   const payload: CrmPayload = {}
   if (input.nombre) payload.nombre = input.nombre
+  if (input.codigo !== undefined) payload.codigo = input.codigo
   if (input.descripcion !== undefined) payload.descripcion = input.descripcion
   if (input.activo !== undefined) payload.activo = input.activo
   if (input.metadata !== undefined) payload.metadata = input.metadata

@@ -41,6 +41,7 @@ type ModelosViewProps = {
 }
 
 type ModeloFormValues = {
+  codigo: string
   nombre: string
   descripcion: string
   activo: boolean
@@ -48,6 +49,7 @@ type ModeloFormValues = {
 }
 
 const MODELO_FORM_DEFAULTS: ModeloFormValues = {
+  codigo: "",
   nombre: "",
   descripcion: "",
   activo: true,
@@ -177,6 +179,7 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     (modelo?: ModeloProducto) => {
       if (modelo) {
         form.reset({
+          codigo: modelo.codigo ?? "",
           nombre: modelo.nombre,
           descripcion: modelo.descripcion ?? "",
           activo: modelo.activo,
@@ -212,7 +215,12 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
   }, [form])
 
   const handleSubmit = form.handleSubmit((values) => {
+    if (!editing && !values.codigo.trim()) {
+      setFeedback({ type: "error", message: "El código estable es obligatorio al crear un modelo." })
+      return
+    }
     const payload = {
+      codigo: values.codigo.trim() || null,
       nombre: values.nombre.trim(),
       descripcion: values.descripcion.trim() || null,
       activo: values.activo,
@@ -660,6 +668,11 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
             <SheetTitle>{editing ? "Editar modelo" : "Nuevo modelo"}</SheetTitle>
           </SheetHeader>
           <form className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4" onSubmit={handleSubmit}>
+            <div className="space-y-1">
+              <Label htmlFor="modelo-codigo">Código estable</Label>
+              <Input id="modelo-codigo" {...form.register("codigo")} placeholder="MOD-001" />
+              <p className="text-xs text-muted-foreground">Permite renombrar el modelo sin crear otro.</p>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="modelo-nombre">Nombre</Label>
               <Input id="modelo-nombre" {...form.register("nombre")} autoFocus />

@@ -11,6 +11,7 @@ const DEFAULT_TIPO = "servicio";
 
 export type CatalogItem = {
   id: string;
+  codigo: string | null;
   slug: string | null;
   nombre: string;
   tipo: "producto" | "servicio" | "paquete";
@@ -48,6 +49,7 @@ export type CatalogItem = {
 };
 
 export type CatalogItemInput = {
+  codigo?: string | null;
   nombre: string;
   slug?: string | null;
   tipo?: "producto" | "servicio" | "paquete";
@@ -200,6 +202,7 @@ function normalizeTipo(value: unknown): "producto" | "servicio" | "paquete" {
 function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
   return {
     id: String(record.id ?? ""),
+    codigo: normalizeString(record.codigo),
     slug: normalizeString(record.slug),
     nombre: normalizeString(record.nombre) ?? "Sin nombre",
     tipo: normalizeTipo(record.tipo),
@@ -288,6 +291,7 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
     nombre: input.nombre.trim(),
   }
 
+  if (input.codigo !== undefined) payload.codigo = sanitizeText(input.codigo)
   if (input.slug !== undefined) payload.slug = sanitizeText(input.slug)
   if (input.tipo) payload.tipo = input.tipo
   if (input.descripcionCorta !== undefined) payload.descripcion_corta = sanitizeText(input.descripcionCorta)

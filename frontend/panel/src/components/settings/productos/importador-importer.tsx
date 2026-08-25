@@ -95,7 +95,9 @@ export function ProductMetadataImporterUploader({ initialSchemes }: ProductMetad
       <CardHeader>
         <CardTitle>Importar productos</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Subir un CSV o Excel con la misma estructura de un esquema definido. <Link className="text-primary" href="/settings/productos/ayuda">Ver guía</Link>
+          Sube un CSV o Excel. La columna <code>codigo</code> identifica el producto y permite actualizar nombre,
+          descripción, precio y jerarquía sin duplicarlo. Para renombrar líneas, familias o modelos incluye sus
+          códigos estables. <Link className="text-primary" href="/settings/productos/ayuda">Ver guía</Link>
         </p>
       </CardHeader>
       <CardContent className="space-y-6">

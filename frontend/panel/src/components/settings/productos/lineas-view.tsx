@@ -37,12 +37,14 @@ type LineasViewProps = {
 }
 
 type LineaFormValues = {
+  codigo: string
   nombre: string
   descripcion: string
   activo: boolean
 }
 
 const LINEA_FORM_DEFAULTS: LineaFormValues = {
+  codigo: "",
   nombre: "",
   descripcion: "",
   activo: true,
@@ -158,6 +160,7 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
     (linea?: LineaDeNegocio) => {
       if (linea) {
         form.reset({
+          codigo: linea.codigo ?? "",
           nombre: linea.nombre,
           descripcion: linea.descripcion ?? "",
           activo: linea.activo,
@@ -192,7 +195,12 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
   }, [form])
 
   const handleSubmit = form.handleSubmit((values) => {
+    if (!editing && !values.codigo.trim()) {
+      setFeedback({ type: "error", message: "El código estable es obligatorio al crear una línea." })
+      return
+    }
     const payload = {
+      codigo: values.codigo.trim() || null,
       nombre: values.nombre.trim(),
       descripcion: values.descripcion.trim() || null,
       activo: values.activo,
@@ -547,6 +555,11 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
             <SheetTitle>{editing ? "Editar línea" : "Nueva línea"}</SheetTitle>
           </SheetHeader>
           <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-1">
+              <Label htmlFor="linea-codigo">Código estable</Label>
+              <Input id="linea-codigo" {...form.register("codigo")} placeholder="LIN-001" />
+              <p className="text-xs text-muted-foreground">Permite renombrar la línea sin crear otra.</p>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="linea-nombre">Nombre</Label>
               <Input id="linea-nombre" {...form.register("nombre")} autoFocus />

@@ -96,6 +96,7 @@ type UnidadMedidaOption = {
 }
 
 type CatalogItemFormValues = {
+  codigo: string
   nombre: string
   slug: string
   tipo: "producto" | "servicio" | "paquete"
@@ -120,6 +121,7 @@ type CatalogItemFormValues = {
 }
 
 const EMPTY_FORM: CatalogItemFormValues = {
+  codigo: "",
   nombre: "",
   slug: "",
   tipo: "servicio",
@@ -557,6 +559,7 @@ function CatalogSortableHeaderMounted({
 
 function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
   return {
+    codigo: item.codigo ?? "",
     nombre: item.nombre,
     slug: item.slug ?? "",
     tipo: item.tipo,
@@ -583,6 +586,7 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
 
 function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogItem["impuestos"], metadatos?: Record<string, unknown>): CatalogItemInput {
   return {
+    codigo: values.codigo.trim() || null,
     nombre: values.nombre,
     slug: values.slug || null,
     tipo: values.tipo,
@@ -611,6 +615,7 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
 
 function catalogItemToInput(item: CatalogItem): CatalogItemInput {
   return {
+    codigo: item.codigo,
     nombre: item.nombre,
     slug: item.slug,
     tipo: item.tipo,
@@ -998,6 +1003,10 @@ export function CatalogItemsPanel({
   }, [])
 
   const handleSubmit = form.handleSubmit((values) => {
+    if (values.tipo === "producto" && !values.codigo.trim()) {
+      setFeedback({ type: "error", message: "El código estable del producto es obligatorio." })
+      return
+    }
     if (!values.nombre.trim()) {
       setFeedback({ type: "error", message: "El nombre del producto es obligatorio." })
       return
@@ -1477,7 +1486,7 @@ const handleDelete = useCallback(
           <SheetHeader className="space-y-2 border-b px-6 py-4 text-left">
             <SheetTitle>{editing ? "Editar producto" : "Nuevo producto"}</SheetTitle>
             <SheetDescription>
-              Captura la información que aparecerá en las cotizaciones y reportes. El nombre y precio base son obligatorios.
+              Captura la información que aparecerá en las cotizaciones y reportes. El código estable y nombre son obligatorios.
             </SheetDescription>
           </SheetHeader>
           <form
@@ -1485,6 +1494,11 @@ const handleDelete = useCallback(
             className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4"
           >
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="catalog-codigo">Código estable</Label>
+                <Input id="catalog-codigo" {...form.register("codigo")} placeholder="PROD-001" />
+                <p className="text-xs text-muted-foreground">No cambia aunque cambien el nombre o la descripción.</p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-nombre">Nombre</Label>
                 <Input id="catalog-nombre" {...form.register("nombre")} placeholder="Implementación Tal-IA" />

@@ -39,6 +39,7 @@ type FamiliasViewProps = {
 }
 
 type FamiliaFormValues = {
+  codigo: string
   nombre: string
   descripcion: string
   lineaId: string
@@ -46,6 +47,7 @@ type FamiliaFormValues = {
 }
 
 const FAMILIA_FORM_DEFAULTS: FamiliaFormValues = {
+  codigo: "",
   nombre: "",
   descripcion: "",
   lineaId: "",
@@ -152,6 +154,7 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     (familia?: FamiliaProducto) => {
       if (familia) {
         form.reset({
+          codigo: familia.codigo ?? "",
           nombre: familia.nombre,
           descripcion: familia.descripcion ?? "",
           lineaId: familia.lineaId ?? "",
@@ -190,7 +193,12 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   }, [form])
 
   const handleSubmit = form.handleSubmit((values) => {
+    if (!editing && !values.codigo.trim()) {
+      setFeedback({ type: "error", message: "El código estable es obligatorio al crear una familia." })
+      return
+    }
     const payload = {
+      codigo: values.codigo.trim() || null,
       nombre: values.nombre.trim(),
       descripcion: values.descripcion.trim() || null,
       lineaId: values.lineaId,
@@ -608,6 +616,11 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
             <SheetTitle>{editing ? "Editar familia" : "Nueva familia"}</SheetTitle>
           </SheetHeader>
           <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-1">
+              <Label htmlFor="familia-codigo">Código estable</Label>
+              <Input id="familia-codigo" {...form.register("codigo")} placeholder="FAM-001" />
+              <p className="text-xs text-muted-foreground">Permite renombrar la familia sin crear otra.</p>
+            </div>
             <div className="space-y-1">
               <Label htmlFor="familia-nombre">Nombre</Label>
               <Input id="familia-nombre" {...form.register("nombre")} autoFocus />

@@ -14364,6 +14364,7 @@ class CRMQuoteTemplateUpdate(BaseModel):
 
 class CRMCatalogItem(BaseModel):
     id: UUID
+    codigo: str | None = None
     slug: str | None = None
     nombre: str
     tipo: str
@@ -14404,6 +14405,7 @@ class CRMCatalogItem(BaseModel):
 
 
 class CRMCatalogItemCreate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     slug: str | None = Field(default=None, max_length=140)
     nombre: str = Field(..., max_length=255)
     tipo: str = Field(default="servicio")
@@ -14435,6 +14437,7 @@ class CRMCatalogItemCreate(BaseModel):
 
 
 class CRMCatalogItemUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     slug: str | None = Field(default=None, max_length=140)
     nombre: str | None = Field(default=None, max_length=255)
     tipo: str | None = Field(default=None)
@@ -15727,6 +15730,7 @@ def _default_product_metadata_fields() -> list[dict[str, Any]]:
 
 class CRMLineaDeNegocio(BaseModel):
     id: UUID
+    codigo: str | None = None
     nombre: str
     descripcion: str | None = None
     activo: bool
@@ -15737,6 +15741,7 @@ class CRMLineaDeNegocio(BaseModel):
 
 class CRMFamiliaProducto(BaseModel):
     id: UUID
+    codigo: str | None = None
     linea_id: UUID | None = None
     nombre: str
     descripcion: str | None = None
@@ -15748,6 +15753,7 @@ class CRMFamiliaProducto(BaseModel):
 
 class CRMModeloProducto(BaseModel):
     id: UUID
+    codigo: str | None = None
     nombre: str
     descripcion: str | None = None
     activo: bool
@@ -15786,6 +15792,7 @@ class CRMUnidadMedidaUpdate(BaseModel):
 
 
 class CRMLineaDeNegocioCreate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str = Field(..., max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool = True
@@ -15793,6 +15800,7 @@ class CRMLineaDeNegocioCreate(BaseModel):
 
 
 class CRMLineaDeNegocioUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str | None = Field(default=None, max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool | None = None
@@ -15800,6 +15808,7 @@ class CRMLineaDeNegocioUpdate(BaseModel):
 
 
 class CRMFamiliaProductoCreate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str = Field(..., max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     linea_id: UUID
@@ -15808,6 +15817,7 @@ class CRMFamiliaProductoCreate(BaseModel):
 
 
 class CRMFamiliaProductoUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str | None = Field(default=None, max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     linea_id: UUID | None = None
@@ -15816,6 +15826,7 @@ class CRMFamiliaProductoUpdate(BaseModel):
 
 
 class CRMModeloProductoCreate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str = Field(..., max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool = True
@@ -15824,6 +15835,7 @@ class CRMModeloProductoCreate(BaseModel):
 
 
 class CRMModeloProductoUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=120)
     nombre: str | None = Field(default=None, max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool | None = None
@@ -19225,6 +19237,11 @@ async def import_product_catalog_items(
         for linea in lineas_raw
         if linea.get("nombre")
     }
+    lineas_by_code = {
+        _normalize_stable_code(str(linea.get("codigo"))): linea
+        for linea in lineas_raw
+        if linea.get("codigo")
+    }
     familias_cache: dict[tuple[str, str], dict[str, Any]] = {}
     familias = await repo.list_familias_productos(
         organizacion_id=organizacion_id,
@@ -19237,8 +19254,12 @@ async def import_product_catalog_items(
         if not linea_id or not nombre:
             continue
         familias_cache[(str(linea_id), _normalize_column_value(nombre))] = familia
+    familias_by_code = {
+        _normalize_stable_code(str(familia.get("codigo"))): familia
+        for familia in familias
+        if familia.get("codigo")
+    }
     modelos_cache: dict[tuple[str, str], dict[str, Any]] = {}
-    modelos_global: dict[str, dict[str, Any]] = {}
     modelos = await repo.list_modelos_productos(
         organizacion_id=organizacion_id,
         include_inactive=True,
@@ -19250,53 +19271,105 @@ async def import_product_catalog_items(
         if not familia_id or not nombre:
             continue
         modelos_cache[(str(familia_id), _normalize_column_value(nombre))] = modelo
-        modelos_global[_normalize_column_value(nombre)] = modelo
+    modelos_by_code = {
+        _normalize_stable_code(str(modelo.get("codigo"))): modelo
+        for modelo in modelos
+        if modelo.get("codigo")
+    }
 
-    async def ensure_linea(name: str) -> UUID:
+    async def ensure_linea(name: str, code: str | None, description: str | None) -> UUID:
         normalized = _normalize_column_value(name)
         if not normalized:
             raise ValueError("Línea vacía")
-        cached = lineas_cache.get(normalized)
+        normalized_code = _normalize_stable_code(code)
+        cached = lineas_by_code.get(normalized_code) if normalized_code else lineas_cache.get(normalized)
         if cached:
+            updates = {}
+            if normalized_code and cached.get("codigo") != normalized_code:
+                updates["codigo"] = normalized_code
+            if cached.get("nombre") != name:
+                updates["nombre"] = name
+            if description is not None and cached.get("descripcion") != description:
+                updates["descripcion"] = description
+            if updates:
+                cached = await repo.update_linea_de_negocio(
+                    organizacion_id=organizacion_id,
+                    linea_id=UUID(str(cached["id"])),
+                    payload=updates,
+                )
             return UUID(str(cached["id"]))
-        payload = {"nombre": name, "activo": True}
+        payload = {"nombre": name, "codigo": normalized_code or None, "descripcion": description, "activo": True}
         nueva = await repo.create_linea_de_negocio(
             organizacion_id=organizacion_id,
             payload=payload,
         )
         lineas_cache[_normalize_column_value(str(nueva.get("nombre", name)))] = nueva
+        if nueva.get("codigo"):
+            lineas_by_code[_normalize_stable_code(str(nueva["codigo"]))] = nueva
         return UUID(str(nueva["id"]))
 
-    async def ensure_familia(name: str, linea_id: UUID) -> UUID:
+    async def ensure_familia(name: str, code: str | None, linea_id: UUID, description: str | None) -> UUID:
         normalized = _normalize_column_value(name)
         key = (str(linea_id), normalized)
-        cached = familias_cache.get(key)
+        normalized_code = _normalize_stable_code(code)
+        cached = familias_by_code.get(normalized_code) if normalized_code else familias_cache.get(key)
+        if cached and str(cached.get("linea_id")) != str(linea_id):
+            raise ValueError(f"La familia {code or name} no pertenece a la línea indicada.")
         if cached:
+            updates = {}
+            if normalized_code and cached.get("codigo") != normalized_code:
+                updates["codigo"] = normalized_code
+            if cached.get("nombre") != name:
+                updates["nombre"] = name
+            if description is not None and cached.get("descripcion") != description:
+                updates["descripcion"] = description
+            if updates:
+                cached = await repo.update_familia_producto(
+                    organizacion_id=organizacion_id,
+                    familia_id=UUID(str(cached["id"])),
+                    payload=updates,
+                )
             return UUID(str(cached["id"]))
-        payload = {"nombre": name, "linea_id": str(linea_id), "activo": True}
+        payload = {"nombre": name, "codigo": normalized_code or None, "descripcion": description, "linea_id": str(linea_id), "activo": True}
         nueva = await repo.create_familia_producto(
             organizacion_id=organizacion_id,
             payload=payload,
         )
         familias_cache[key] = nueva
+        if nueva.get("codigo"):
+            familias_by_code[_normalize_stable_code(str(nueva["codigo"]))] = nueva
         return UUID(str(nueva["id"]))
 
-    async def ensure_model(name: str, familia_id: UUID) -> UUID:
+    async def ensure_model(name: str, code: str | None, familia_id: UUID, description: str | None) -> UUID:
         normalized = _normalize_column_value(name)
         key = (str(familia_id), normalized)
-        cached = modelos_cache.get(key)
+        normalized_code = _normalize_stable_code(code)
+        cached = modelos_by_code.get(normalized_code) if normalized_code else modelos_cache.get(key)
+        if cached and cached.get("familia_id") and str(cached.get("familia_id")) != str(familia_id):
+            raise ValueError(f"El modelo {code or name} no pertenece a la familia indicada.")
         if cached:
+            updates = {}
+            if normalized_code and cached.get("codigo") != normalized_code:
+                updates["codigo"] = normalized_code
+            if cached.get("nombre") != name:
+                updates["nombre"] = name
+            if description is not None and cached.get("descripcion") != description:
+                updates["descripcion"] = description
+            if updates:
+                cached = await repo.update_modelo_producto(
+                    organizacion_id=organizacion_id,
+                    modelo_id=UUID(str(cached["id"])),
+                    payload=updates,
+                )
             return UUID(str(cached["id"]))
-        global_cached = modelos_global.get(normalized)
-        if global_cached:
-            return UUID(str(global_cached["id"]))
-        payload = {"nombre": name, "familia_id": str(familia_id), "activo": True}
+        payload = {"nombre": name, "codigo": normalized_code or None, "descripcion": description, "familia_id": str(familia_id), "activo": True}
         nuevo = await repo.create_modelo_producto(
             organizacion_id=organizacion_id,
             payload=payload,
         )
         modelos_cache[key] = nuevo
-        modelos_global[normalized] = nuevo
+        if nuevo.get("codigo"):
+            modelos_by_code[_normalize_stable_code(str(nuevo["codigo"]))] = nuevo
         return UUID(str(nuevo["id"]))
 
     created = 0
@@ -19307,6 +19380,9 @@ async def import_product_catalog_items(
             nombre = _pick_value(row, BASE_HEADER_CANDIDATES["nombre"])
             if not nombre:
                 raise ValueError("Falta el nombre del producto.")
+            codigo = _normalize_stable_code(_pick_value(row, BASE_HEADER_CANDIDATES["codigo"]))
+            if not codigo:
+                raise ValueError("Falta el código estable del producto.")
             descripcion_corta = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion_corta"])
             descripcion_larga = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion_larga"])
             precio_base = _parse_metadata_value(
@@ -19321,11 +19397,25 @@ async def import_product_catalog_items(
                 raise ValueError("Falta la familia asociada.")
             modelo_name = _pick_value(row, BASE_HEADER_CANDIDATES["modelo"])
 
-            linea_id = await ensure_linea(linea_name)
-            familia_id = await ensure_familia(familia_name, linea_id)
+            linea_id = await ensure_linea(
+                linea_name,
+                _normalize_stable_code(_pick_value(row, BASE_HEADER_CANDIDATES["linea_codigo"])) or None,
+                _pick_value(row, BASE_HEADER_CANDIDATES["linea_descripcion"]),
+            )
+            familia_id = await ensure_familia(
+                familia_name,
+                _normalize_stable_code(_pick_value(row, BASE_HEADER_CANDIDATES["familia_codigo"])) or None,
+                linea_id,
+                _pick_value(row, BASE_HEADER_CANDIDATES["familia_descripcion"]),
+            )
             modelo_id = None
             if modelo_name:
-                modelo_id = await ensure_model(modelo_name, familia_id)
+                modelo_id = await ensure_model(
+                    modelo_name,
+                    _normalize_stable_code(_pick_value(row, BASE_HEADER_CANDIDATES["modelo_codigo"])) or None,
+                    familia_id,
+                    _pick_value(row, BASE_HEADER_CANDIDATES["modelo_descripcion"]),
+                )
 
             metadata: dict[str, Any] = {}
             for field in scheme_fields:
@@ -19345,13 +19435,13 @@ async def import_product_catalog_items(
 
             provided_slug = _pick_value(row, BASE_HEADER_CANDIDATES["slug"])
             slug = provided_slug or _slugify(nombre) or f"item-{uuid4().hex}"
-            existing = await repo.get_catalog_item_by_slug(
+            existing = await repo.get_catalog_item_by_codigo(
                 organizacion_id=organizacion_id,
-                slug=slug,
+                codigo=codigo,
             )
             payload: dict[str, Any] = {
                 "nombre": nombre,
-                "slug": slug,
+                "codigo": codigo,
                 "linea_id": str(linea_id),
                 "familia_id": str(familia_id),
                 "activo": True,
@@ -19368,13 +19458,14 @@ async def import_product_catalog_items(
                 payload["modelo_id"] = str(modelo_id)
             if metadata:
                 payload["metadatos"] = metadata
+            if existing and existing.get("slug") and provided_slug:
+                payload["slug"] = provided_slug
+            payload["organizacion_id"] = str(organizacion_id)
             if existing:
-                await repo.update_catalog_item(
-                    item_id=UUID(str(existing["id"])),
-                    payload=payload,
-                )
+                await repo.update_catalog_item(item_id=UUID(str(existing["id"])), payload=payload)
                 updated += 1
             else:
+                payload["slug"] = slug
                 await repo.create_catalog_item(payload=payload)
                 created += 1
         except (ValueError, CRMRepositoryError) as exc:
@@ -20057,6 +20148,8 @@ async def create_catalog_item(
     background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if isinstance(body.get("metadatos"), dict):
         body["metadatos"] = _strip_catalog_reserved_metadata_keys(body["metadatos"])
     if usuario_id:
@@ -20089,10 +20182,13 @@ async def update_catalog_item(
     background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
     if isinstance(body.get("metadatos"), dict):
         body["metadatos"] = _strip_catalog_reserved_metadata_keys(body["metadatos"])
+    body["organizacion_id"] = str(organizacion_id)
     if usuario_id:
         body["updated_by"] = str(usuario_id)
     try:
@@ -22721,6 +22817,8 @@ async def create_product_linea(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if payload.metadata is not None:
         body["metadata"] = payload.metadata
     try:
@@ -22753,6 +22851,8 @@ async def update_product_linea(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
     try:
@@ -22900,6 +23000,8 @@ async def create_product_familia(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     try:
         row = await repo.create_familia_producto(
             organizacion_id=organizacion_id,
@@ -22930,6 +23032,8 @@ async def update_product_familia(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
     try:
@@ -23075,6 +23179,8 @@ async def create_product_modelo(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     try:
         row = await repo.create_modelo_producto(
             organizacion_id=organizacion_id,
@@ -23105,6 +23211,8 @@ async def update_product_modelo(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    if body.get("codigo") is not None:
+        body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
     try:
@@ -23395,6 +23503,13 @@ def _normalize_column_value(value: str | None) -> str:
     return re.sub(r"\s+", " ", filtered).strip().lower()
 
 
+def _normalize_stable_code(value: str | None) -> str:
+    """Canonicalize import keys so case/spacing changes cannot create duplicates."""
+    if not value:
+        return ""
+    return re.sub(r"\s+", " ", value).strip().upper()
+
+
 def _slugify(value: str) -> str:
     text = unicodedata.normalize("NFKD", value or "")
     slug = "".join(ch if ch.isalnum() else "-" for ch in text.lower())
@@ -23511,6 +23626,7 @@ def _ensure_default_product_metadata_field(row: dict[str, Any]) -> dict[str, Any
 
 
 BASE_HEADER_CANDIDATES = {
+    "codigo": ["codigo", "codigo_producto", "sku", "product_code"],
     "nombre": ["nombre", "name"],
     "descripcion_corta": ["descripcion_corta", "descripcion corta", "desc_corta", "short_description"],
     "descripcion_larga": ["descripcion_larga", "descripcion larga", "desc_larga", "descripcion", "description", "desc"],
@@ -23519,6 +23635,12 @@ BASE_HEADER_CANDIDATES = {
     "familia": ["familia", "family", "familia_nombre"],
     "modelo": ["modelo", "model", "modelo_nombre"],
     "slug": ["slug"],
+    "linea_codigo": ["linea_codigo", "codigo_linea"],
+    "familia_codigo": ["familia_codigo", "codigo_familia"],
+    "modelo_codigo": ["modelo_codigo", "codigo_modelo"],
+    "linea_descripcion": ["linea_descripcion", "descripcion_linea"],
+    "familia_descripcion": ["familia_descripcion", "descripcion_familia"],
+    "modelo_descripcion": ["modelo_descripcion", "descripcion_modelo"],
 }
 
 BASE_HEADER_KEYS = {

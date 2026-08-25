@@ -13019,6 +13019,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
         return row
 
+    async def get_catalog_item_by_codigo(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/catalog_items",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "codigo": f"eq.{codigo}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar catálogo por código: {data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
     async def get_catalog_item(
         self,
         *,
@@ -13961,7 +13982,7 @@ class CRMRepository:
         linea_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        params = {"id": f"eq.{linea_id}"}
+        params = {"id": f"eq.{linea_id}", "organizacion_id": f"eq.{organizacion_id}"}
         resp = await self._request(
             "PATCH",
             "/rest/v1/lineas_de_negocio",
@@ -14035,7 +14056,7 @@ class CRMRepository:
         familia_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        params = {"id": f"eq.{familia_id}"}
+        params = {"id": f"eq.{familia_id}", "organizacion_id": f"eq.{organizacion_id}"}
         resp = await self._request(
             "PATCH",
             "/rest/v1/familias_productos",
@@ -14109,7 +14130,7 @@ class CRMRepository:
         modelo_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        params = {"id": f"eq.{modelo_id}"}
+        params = {"id": f"eq.{modelo_id}", "organizacion_id": f"eq.{organizacion_id}"}
         resp = await self._request(
             "PATCH",
             "/rest/v1/modelos_productos",
@@ -14180,6 +14201,8 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         params = {"id": f"eq.{item_id}"}
+        if organizacion_id := payload.get("organizacion_id"):
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         resp = await self._request(
             "PATCH",
             "/rest/v1/catalog_items",

@@ -45,7 +45,7 @@ export default function SettingsProductosAyudaPage() {
               <CardTitle>Cómo está estructurado el catálogo</CardTitle>
               <CardDescription>
                 Cada producto se vincula a una línea, una familia y puede tener un modelo. El importador
-                espera al menos: nombre, línea y familia. El modelo es opcional.
+                espera: código estable, nombre, línea y familia. El modelo es opcional.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -55,6 +55,12 @@ export default function SettingsProductosAyudaPage() {
                 <strong> catalog_items</strong>; la descripción breve vive en <strong>descripcion_corta</strong>,
                 la descripción larga vive en <strong>descripcion_larga</strong> y el precio base vive en
                 <strong>precio_base</strong>; el resto de columnas va a <strong>metadata</strong>.
+              </p>
+              <p>
+                En cargas masivas usa <strong>codigo</strong> para el producto y, cuando la jerarquía también pueda
+                cambiar de nombre, <strong>linea_codigo</strong>, <strong>familia_codigo</strong> y
+                <strong>modelo_codigo</strong>. Los nombres y descripciones se actualizan; los códigos evitan crear
+                registros nuevos.
               </p>
               <ul className="space-y-1 pl-4 text-foreground">
                 <li>• Primero define o selecciona la línea correspondiente.</li>
