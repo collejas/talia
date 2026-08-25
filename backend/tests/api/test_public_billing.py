@@ -182,7 +182,8 @@ async def test_create_public_billing_checkout(
     payload = {
         "provider_price_id": "price_starter_mxn_month",
         "nombre": "Cliente Público",
-        "correo_contacto_principal": "hola@cliente.test",
+        "contacto_nombre": "Jorge Cliente",
+        "correo_contacto_principal": "hola@cliente.example.com",
         "dominio_principal": "cliente.test",
         "moneda": "MXN",
         "timezone": "America/Mexico_City",

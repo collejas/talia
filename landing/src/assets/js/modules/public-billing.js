@@ -14,7 +14,7 @@ const currencyFormatters = new Map();
 
 document.addEventListener('DOMContentLoaded', () => {
   const root = document.querySelector('[data-commercial-checkout]');
-  const trigger = document.querySelector('[data-public-billing-trigger]');
+  const triggers = Array.from(document.querySelectorAll('[data-public-billing-trigger]'));
   if (!root) {
     return;
   }
@@ -25,10 +25,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   root.hidden = false;
   root.removeAttribute('aria-hidden');
-  if (trigger) {
+  triggers.forEach((trigger) => {
     trigger.hidden = false;
     trigger.removeAttribute('aria-hidden');
-  }
+    trigger.addEventListener('click', (event) => {
+      const interval = trigger.getAttribute('data-billing-interval') || '';
+      if (interval) {
+        const matchingPrice = planList?.querySelector(`[data-price-interval="${cssEscape(interval)}"]`);
+        if (matchingPrice instanceof HTMLElement) {
+          event.preventDefault();
+          matchingPrice.click();
+        }
+      }
+    });
+  });
 
   const planList = root.querySelector('[data-plan-list]');
   const planCount = root.querySelector('[data-plan-count]');
@@ -47,10 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const url = new URL(window.location.href);
   const checkoutState = url.searchParams.get('checkout');
   if (checkoutState === 'success') {
+    banner.hidden = false;
     banner.classList.remove('hidden');
     banner.className = 'billing-banner billing-banner--success';
     banner.textContent = 'El pago fue confirmado. Si el webhook ya procesó la suscripción, tu tenant quedará activo en breve.';
   } else if (checkoutState === 'cancel') {
+    banner.hidden = false;
     banner.classList.remove('hidden');
     banner.className = 'billing-banner billing-banner--warning';
     banner.textContent = 'El checkout fue cancelado. Puedes volver a elegir un plan y continuar cuando quieras.';
@@ -290,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showMessage(message, kind = 'info') {
     formMessage.textContent = message;
+    formMessage.hidden = false;
     formMessage.classList.remove('hidden');
     formMessage.className =
       kind === 'error'

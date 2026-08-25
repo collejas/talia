@@ -184,6 +184,239 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       line-height: 1.6;
     }
 
+    .billing-checkout {
+      scroll-margin-top: 24px;
+    }
+
+    .billing-checkout__panel {
+      display: grid;
+      gap: 24px;
+      padding: 28px;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+    }
+
+    .billing-checkout__header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .billing-checkout__header h2 {
+      margin-top: 12px;
+    }
+
+    .billing-checkout__status,
+    .billing-message,
+    .billing-banner {
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .billing-checkout__status,
+    .billing-message--info {
+      background: #eff6ff;
+      color: #1e40af;
+    }
+
+    .billing-message--error {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    .billing-message--success,
+    .billing-banner--success {
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    .billing-banner--warning {
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .billing-plan-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .billing-plan-card {
+      padding: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 16px;
+      background: #f8fafc;
+    }
+
+    .billing-plan-card--selected {
+      border-color: var(--core-blue);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+
+    .billing-price-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .billing-plan-code,
+    .billing-price-hint {
+      margin: 0;
+      color: var(--core-muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .billing-plan-title,
+    .billing-plan-desc,
+    .billing-price-amount,
+    .billing-price-interval {
+      margin: 4px 0 0;
+    }
+
+    .billing-plan-desc {
+      color: var(--core-muted);
+      font-size: 14px;
+    }
+
+    .billing-plan-badge,
+    .billing-price-badge {
+      color: var(--core-blue);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .billing-price-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .billing-price-option {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 12px;
+      background: #fff;
+      color: #111827;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .billing-price-option--selected {
+      border-color: var(--core-blue);
+      background: #eff6ff;
+    }
+
+    .billing-price-amount {
+      font-size: 20px;
+      font-weight: 950;
+    }
+
+    .billing-price-interval {
+      color: var(--core-muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .billing-price-hint {
+      margin-top: 12px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .billing-form {
+      display: grid;
+      gap: 18px;
+    }
+
+    .billing-form__grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .billing-form__field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .billing-form__field--full {
+      grid-column: 1 / -1;
+    }
+
+    .billing-form__field label {
+      color: #111827;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .billing-form__field input,
+    .billing-form__field select {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid rgba(15, 23, 42, 0.16);
+      border-radius: 10px;
+      background: #fff;
+      color: #111827;
+      font: inherit;
+    }
+
+    .billing-form__help {
+      margin: 0;
+      color: var(--core-muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .billing-selected {
+      padding: 16px;
+      border-radius: 14px;
+      background: #f1f5f9;
+    }
+
+    .billing-selected strong,
+    .billing-selected span {
+      display: block;
+    }
+
+    .billing-selected span {
+      margin-top: 4px;
+      color: var(--core-muted);
+      font-size: 14px;
+    }
+
+    .billing-submit-button--loading {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
+    @media (max-width: 640px) {
+      .billing-checkout__panel {
+        padding: 20px;
+      }
+
+      .billing-checkout__header,
+      .billing-form__grid {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .billing-form__field--full {
+        grid-column: auto;
+      }
+    }
+
     @media (max-width: 640px) {
       .pricing-card,
       .setup-card {
@@ -363,7 +596,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </ul>
           <div class="pricing-card__highlight">La opción con mayor ahorro</div>
           <div class="pricing-card__action">
-            <a class="button primary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20contratar%20el%20plan%20anual%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">Contratar plan anual</a>
+          <a class="button primary" data-public-billing-trigger data-billing-interval="year" href="#checkout">Contratar plan anual</a>
           </div>
         </article>
 
@@ -380,9 +613,85 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </ul>
           <p>No incluye el mes adicional ni el descuento anual.</p>
           <div class="pricing-card__action">
-            <a class="button secondary" href="https://wa.me/5214443354450?text=Hola,%20quiero%20contratar%20el%20plan%20mensual%20de%20Tal-IA." target="_blank" rel="noopener noreferrer">Contratar plan mensual</a>
+            <a class="button secondary" data-public-billing-trigger data-billing-interval="month" href="#checkout">Contratar plan mensual</a>
           </div>
         </article>
+      </div>
+    </section>
+
+    <section class="section billing-checkout" id="checkout" data-commercial-checkout hidden aria-hidden="true">
+      <div class="billing-checkout__panel">
+        <div data-checkout-banner class="billing-banner hidden" hidden></div>
+        <div class="billing-checkout__header">
+          <div>
+            <div class="eyebrow">Contratación en línea</div>
+            <h2>Registra tu empresa y continúa a Stripe</h2>
+            <p class="section__lead">Primero crearemos un tenant provisional. Después completarás el pago de forma segura en Stripe.</p>
+          </div>
+          <div class="billing-checkout__status" data-checkout-status role="status">Cargando planes comerciales...</div>
+        </div>
+
+        <div>
+          <p class="billing-form__help"><strong data-plan-count>0</strong> plan(es) disponible(s). Los precios se cargan desde la configuración comercial vigente.</p>
+          <div class="billing-plan-list" data-plan-list aria-live="polite"></div>
+        </div>
+
+        <div class="billing-selected" aria-live="polite">
+          <strong>Selección</strong>
+          <span data-selected-plan>Selecciona un plan</span>
+          <span data-selected-price>Elige una modalidad para continuar.</span>
+        </div>
+
+        <form class="billing-form" data-commercial-checkout-form>
+          <div>
+            <h3>Datos provisionales del tenant</h3>
+            <p class="billing-form__help">Solo solicitamos lo necesario para crear la cuenta inicial. No pedimos contraseñas, tokens ni configuraciones de integración en este paso.</p>
+          </div>
+          <div class="billing-form__grid">
+            <div class="billing-form__field">
+              <label for="billing-tenant-name">Nombre de la empresa o tenant *</label>
+              <input id="billing-tenant-name" name="nombre" type="text" minlength="2" maxlength="160" autocomplete="organization" required />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-contact-name">Nombre del contacto principal *</label>
+              <input id="billing-contact-name" name="contacto_nombre" type="text" minlength="2" maxlength="160" autocomplete="name" required />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-contact-email">Correo del contacto principal *</label>
+              <input id="billing-contact-email" name="correo_contacto_principal" type="email" maxlength="320" autocomplete="email" required />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-phone">Teléfono de contacto</label>
+              <input id="billing-phone" name="telefono" type="tel" maxlength="40" autocomplete="tel" />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-legal-name">Razón social</label>
+              <input id="billing-legal-name" name="razon_social" type="text" maxlength="200" autocomplete="organization" />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-rfc">RFC</label>
+              <input id="billing-rfc" name="rfc" type="text" maxlength="20" autocomplete="off" />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-state">Estado</label>
+              <input id="billing-state" name="estado" type="text" maxlength="120" autocomplete="address-level1" />
+            </div>
+            <div class="billing-form__field">
+              <label for="billing-city">Ciudad</label>
+              <input id="billing-city" name="ciudad" type="text" maxlength="120" autocomplete="address-level2" />
+            </div>
+            <div class="billing-form__field billing-form__field--full">
+              <label for="billing-billing-email">Correo de facturación</label>
+              <input id="billing-billing-email" name="correo_facturacion" type="email" maxlength="320" autocomplete="email" />
+            </div>
+          </div>
+          <input type="hidden" name="pais" value="MX" />
+          <input type="hidden" name="moneda" value="MXN" />
+          <input type="hidden" name="idioma" value="es-MX" />
+          <input type="hidden" name="timezone" value="America/Mexico_City" />
+          <div data-form-message class="billing-message hidden" hidden role="alert"></div>
+          <button class="button primary billing-submit-button" type="submit">Crear tenant y continuar a Stripe</button>
+        </form>
       </div>
     </section>
 
@@ -473,6 +782,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="footer-note">Tal-IA · CRM, prospección y atención comercial con inteligencia artificial.</div>
   </main>
   <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
+  <script src="/assets/js/public-config.js?v=20260825a"></script>
+  <script type="module" src="/assets/js/modules/public-billing.js?v=20260825a"></script>
   <script type="module" src="https://talia.mx/assets/js/site-tracking.js?v=20260815-cors1"
   data-talia-public-site-id="talia_site_058c3bb887b24340b5d06bc5629e0faf"
   data-talia-tracking-endpoint="https://talia.mx/api/crm/web/visit"></script>

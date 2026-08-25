@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.config import settings
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
@@ -69,9 +69,9 @@ class PublicTenantBillingRequest(BaseModel):
     telefono: str | None = None
     sitio_web: str | None = None
     nombre_comercial: str | None = None
-    correo_contacto_principal: str | None = None
-    correo_facturacion: str | None = None
-    contacto_nombre: str | None = None
+    correo_contacto_principal: EmailStr
+    correo_facturacion: EmailStr | None = None
+    contacto_nombre: str = Field(..., min_length=2, max_length=160)
     contacto_telefono: str | None = None
     timezone: str | None = None
     idioma: str | None = None

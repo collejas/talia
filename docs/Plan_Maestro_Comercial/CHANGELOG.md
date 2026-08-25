@@ -428,3 +428,12 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se corrigió la autorización de lectura y edición de límites/overrides DENUE y del estado comercial por tenant: ahora exige exclusivamente al owner del tenant maestro, no cualquier `platform_admin`.
 - Se agregó `Comercial / Billing / Configuración de conexión`, con diagnóstico seguro de variables Stripe, modo test/live, URLs requeridas y ruta del webhook.
 - El endpoint de diagnóstico no devuelve claves ni secretos y requiere `require_master_tenant_owner`.
+
+### Alta pública desde `/precios`
+- Se habilitó la contratación en línea desde la página pública de precios mediante `GET /public/billing/commercial-plans` y `POST /public/billing/checkout`.
+- La página muestra los planes y modalidades activas desde el catálogo comercial, sin confiar en precios escritos en el frontend para crear el checkout.
+- El formulario solicita únicamente nombre del tenant, contacto principal y correo; país, moneda, idioma y zona horaria se envían con valores iniciales de México.
+- Los datos fiscales y de ubicación quedan como opcionales para completar el registro provisional sin pedir contraseñas, tokens ni credenciales de integración.
+- El backend ahora exige y valida el correo y nombre del contacto principal antes de crear el tenant provisional.
+- Los botones anual y mensual seleccionan su intervalo dinámico y llevan al mismo flujo seguro de Stripe.
+- La configuración pública quedó habilitada en el source mediante `showPublicBilling: true`; el espejo `/var/www/talia-landing` requiere despliegue para reflejarlo.
