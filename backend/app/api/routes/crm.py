@@ -42847,8 +42847,16 @@ def _dashboard_build_leads_cards(
             seller_id = row.get("asignado_a_usuario_id")
         if seller_id:
             seller_key = str(seller_id)
-            seller = seller_counts.setdefault(seller_key, {"id": seller_key, "nombre": seller_name, "total": 0})
+            seller = seller_counts.setdefault(
+                seller_key,
+                {"id": seller_key, "nombre": seller_name, "total": 0, "ganados": 0, "valorGanado": 0},
+            )
             seller["total"] = int(seller.get("total") or 0) + 1
+            if categoria == "ganada":
+                seller["ganados"] = int(seller.get("ganados") or 0) + 1
+                seller["valorGanado"] = int(seller.get("valorGanado") or 0) + int(
+                    round(_dashboard_won_amount(row))
+                )
 
     ticket_promedio = int(round(sum(won_amounts) / len(won_amounts))) if won_amounts else 0
     dias_cierre = int(round(sum(close_durations) / len(close_durations))) if close_durations else 0

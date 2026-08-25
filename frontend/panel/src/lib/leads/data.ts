@@ -16,6 +16,8 @@ export type LeadCards = {
     id?: string;
     nombre?: string;
     total?: number;
+    ganados?: number;
+    valorGanado?: number;
   };
 };
 
