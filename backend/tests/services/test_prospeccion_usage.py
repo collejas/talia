@@ -140,3 +140,18 @@ async def test_fractional_monthly_limit_is_rejected() -> None:
             organizacion_id=TENANT_ID,
             now=NOW,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("access_status", ["blocked", "manual_review", "past_due", "unpaid", None])
+async def test_blocked_access_is_rejected_before_commercial_usage_is_returned(access_status: str | None) -> None:
+    context = _context()
+    context["billing"]["access_status"] = access_status
+    repo = FakeProspeccionUsageRepository(context)
+
+    with pytest.raises(ProspeccionUsageError, match="prospeccion_access_blocked"):
+        await resolve_prospeccion_usage(
+            repo=repo,
+            organizacion_id=TENANT_ID,
+            now=NOW,
+        )

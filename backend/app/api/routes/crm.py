@@ -31863,6 +31863,17 @@ async def crear_busqueda_denue(
         if user_uuid:
             tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
 
+    if settings.prospeccion_credits_enforcement_enabled and tenant_organizacion_id is not None:
+        try:
+            await resolve_prospeccion_usage(
+                repo=repo,
+                organizacion_id=tenant_organizacion_id,
+            )
+        except ProspeccionUsageError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="prospeccion_usage_unavailable") from exc
+
     denue_settings = await tenant_runtime.get_denue_runtime_settings(
         organizacion_id=tenant_organizacion_id
     )

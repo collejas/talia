@@ -10,6 +10,7 @@ from uuid import UUID
 
 CREDITS_KEY = "limit.prospeccion.credits_month"
 RAW_RESULTS_KEY = "limit.prospeccion.denue_raw_results_month"
+ALLOWED_ACCESS_STATUSES = frozenset({"active", "grace", "internal_free"})
 
 
 class ProspeccionUsageError(RuntimeError):
@@ -86,6 +87,10 @@ async def resolve_prospeccion_usage(
     if not isinstance(billing, dict) or not billing.get("plan_id"):
         raise ProspeccionUsageError("prospeccion_plan_not_configured")
 
+    access_status = str(billing.get("access_status") or "").strip().lower()
+    if access_status not in ALLOWED_ACCESS_STATUSES:
+        raise ProspeccionUsageError("prospeccion_access_blocked")
+
     plan = context.get("plan")
     if not isinstance(plan, dict) or plan.get("active") is not True:
         raise ProspeccionUsageError("prospeccion_plan_not_configured")
@@ -131,7 +136,7 @@ async def resolve_prospeccion_usage(
     return {
         "ok": True,
         "plan": {"code": plan.get("code"), "name": plan.get("name")},
-        "access_status": billing.get("access_status"),
+        "access_status": access_status,
         "period": {
             "start": period_start.isoformat(),
             "end": period_end.isoformat(),

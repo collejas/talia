@@ -421,3 +421,6 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Suscripciones consulta cuentas con `stripe_subscription_id`, periodo, estado de billing/acceso, trial, cancelación al cierre y último evento.
 - Eventos webhook consulta los últimos 100 registros de `tenant_billing_events`, mostrando tipo, tenant, estado de procesamiento y error sin exponer payloads completos.
 - Ambas consultas tienen autorización backend exclusiva para el owner del tenant maestro y permanecen en modo lectura.
+- Se inició la aplicación del billing guard en prospección: con enforcement activo, las búsquedas DENUE validan acceso comercial antes de consultar al proveedor.
+- Se permiten estados `active`, `grace` e `internal_free`; `blocked`, `manual_review`, `unpaid`, `past_due` sin acceso válido y cuentas sin estado comercial se rechazan con `prospeccion_access_blocked`.
+- La validación conserva la contabilización atómica posterior de resultados como segunda protección de cuota.
