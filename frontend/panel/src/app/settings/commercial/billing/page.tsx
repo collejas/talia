@@ -61,7 +61,11 @@ export default async function CommercialBillingPage() {
             <h1 className="text-3xl font-semibold tracking-tight">Billing / Stripe</h1>
             <p className="max-w-3xl text-sm text-muted-foreground">Consulta el estado global de cobro y acceso de los tenants. Los cambios de billing continúan siendo responsabilidad del backend y Stripe.</p>
           </div>
-          <Button asChild variant="outline"><Link href="/settings/commercial">Volver a Comercial</Link></Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline"><Link href="/settings/commercial/billing/subscriptions">Suscripciones</Link></Button>
+            <Button asChild variant="outline"><Link href="/settings/commercial/billing/events">Eventos webhook</Link></Button>
+            <Button asChild variant="ghost"><Link href="/settings/commercial">Volver a Comercial</Link></Button>
+          </div>
         </header>
 
         <div className="grid gap-4 md:grid-cols-3">

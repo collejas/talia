@@ -417,3 +417,7 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - La vista de catálogo ahora organiza planes, precios, entitlements y defaults mediante pestañas.
 - `/settings/commercial-plans` dejó de contener la vista y redirige a la nueva ruta.
 - Los endpoints administrativos del catálogo comercial y límites de plan ahora requieren el `owner` del tenant maestro.
+- Billing se dividió en vistas operativas de `Suscripciones` y `Eventos webhook` bajo `/settings/commercial/billing`.
+- Suscripciones consulta cuentas con `stripe_subscription_id`, periodo, estado de billing/acceso, trial, cancelación al cierre y último evento.
+- Eventos webhook consulta los últimos 100 registros de `tenant_billing_events`, mostrando tipo, tenant, estado de procesamiento y error sin exponer payloads completos.
+- Ambas consultas tienen autorización backend exclusiva para el owner del tenant maestro y permanecen en modo lectura.

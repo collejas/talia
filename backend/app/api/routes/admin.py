@@ -479,11 +479,35 @@ class CommercialBillingTenantSummary(BaseModel):
     current_period_end: datetime | None = None
     cancel_at_period_end: bool | None = None
     updated_at: datetime | None = None
+    trial_ends_at: datetime | None = None
+    last_stripe_event_id: str | None = None
 
 
 class CommercialBillingTenantsResponse(BaseModel):
     ok: bool = True
     items: list[CommercialBillingTenantSummary] = Field(default_factory=list)
+
+
+class CommercialBillingEventSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    tenant_id: UUID
+    tenant_name: str
+    stripe_event_id: str
+    stripe_event_type: str
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    event_created_at: datetime | None = None
+    processed_at: datetime | None = None
+    processing_error: str | None = None
+    created_at: datetime
+
+
+class CommercialBillingEventsResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialBillingEventSummary] = Field(default_factory=list)
+    limit: int
 
 
 class CommercialPlanSummary(BaseModel):
@@ -2321,12 +2345,91 @@ async def list_commercial_billing_tenants(
                     "current_period_end": account.get("current_period_end"),
                     "cancel_at_period_end": account.get("cancel_at_period_end"),
                     "updated_at": account.get("updated_at"),
+                    "trial_ends_at": account.get("trial_ends_at"),
+                    "last_stripe_event_id": account.get("last_stripe_event_id"),
                 }
             )
         )
 
     items.sort(key=lambda item: item.nombre.lower())
     return CommercialBillingTenantsResponse(items=items)
+
+
+@router.get("/commercial-billing/subscriptions", response_model=CommercialBillingTenantsResponse)
+async def list_commercial_billing_subscriptions(
+    _: UUID = Depends(require_master_tenant_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialBillingTenantsResponse:
+    try:
+        organizations = await repo.list_organizaciones()
+        billing_accounts = await repo.list_tenant_billing_accounts()
+        plans = await repo.list_commercial_plans()
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    organization_by_id = {str(row.get("id")): row for row in organizations}
+    plan_by_id = {str(row.get("id")): row for row in plans}
+    items: list[CommercialBillingTenantSummary] = []
+    for account in billing_accounts:
+        subscription_id = str(account.get("stripe_subscription_id") or "").strip()
+        if not subscription_id:
+            continue
+        tenant_id = str(account.get("tenant_id") or "")
+        organization = organization_by_id.get(tenant_id, {})
+        plan = plan_by_id.get(str(account.get("plan_id")))
+        items.append(
+            CommercialBillingTenantSummary.model_validate(
+                {
+                    "id": tenant_id,
+                    "nombre": organization.get("nombre") or organization.get("nombre_comercial") or tenant_id,
+                    "commercial_plan_id": account.get("plan_id"),
+                    "commercial_plan_code": plan.get("code") if plan else None,
+                    "commercial_plan_name": plan.get("name") if plan else None,
+                    "billing_provider": account.get("billing_provider"),
+                    "billing_status": account.get("billing_status"),
+                    "access_status": account.get("access_status"),
+                    "stripe_customer_id": account.get("stripe_customer_id"),
+                    "stripe_subscription_id": subscription_id,
+                    "stripe_price_id": account.get("stripe_price_id"),
+                    "current_period_start": account.get("current_period_start"),
+                    "current_period_end": account.get("current_period_end"),
+                    "cancel_at_period_end": account.get("cancel_at_period_end"),
+                    "updated_at": account.get("updated_at"),
+                    "trial_ends_at": account.get("trial_ends_at"),
+                    "last_stripe_event_id": account.get("last_stripe_event_id"),
+                }
+            )
+        )
+    items.sort(key=lambda item: item.nombre.lower())
+    return CommercialBillingTenantsResponse(items=items)
+
+
+@router.get("/commercial-billing/events", response_model=CommercialBillingEventsResponse)
+async def list_commercial_billing_events(
+    limit: int = Query(default=100, ge=1, le=250),
+    _: UUID = Depends(require_master_tenant_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialBillingEventsResponse:
+    try:
+        organizations = await repo.list_organizaciones()
+        events = await repo.list_tenant_billing_events(limit=limit)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    organization_by_id = {str(row.get("id")): row for row in organizations}
+    items: list[CommercialBillingEventSummary] = []
+    for event in events:
+        tenant_id = str(event.get("tenant_id") or "")
+        organization = organization_by_id.get(tenant_id, {})
+        items.append(
+            CommercialBillingEventSummary.model_validate(
+                {
+                    **event,
+                    "tenant_name": organization.get("nombre") or organization.get("nombre_comercial") or tenant_id,
+                }
+            )
+        )
+    return CommercialBillingEventsResponse(items=items, limit=limit)
 
 
 @router.get(

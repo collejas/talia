@@ -748,6 +748,17 @@ class PlatformRepository:
             raise PlatformRepositoryError("tenant_billing_event_invalid_response")
         return row
 
+    async def list_tenant_billing_events(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,tenant_id,stripe_event_id,stripe_event_type,stripe_customer_id,stripe_subscription_id,event_created_at,processed_at,processing_error,created_at",
+            "order": "created_at.desc",
+            "limit": str(limit),
+        }
+        data = await self._rest("GET", "/rest/v1/tenant_billing_events", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("tenant_billing_events_invalid_response")
+        return data
+
     async def upsert_tenant_billing_event(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
             "POST",
