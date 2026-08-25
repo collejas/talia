@@ -25,14 +25,11 @@ export default function SettingsProductosAyudaPage() {
           <h1 className="text-2xl font-semibold">Guía para productos complejos</h1>
           <p className="text-sm text-muted-foreground max-w-3xl">
             ¿Tienes productos inmobiliarios con decenas de atributos? Esta guía te ayuda a organizar
-            las líneas, familias, modelos y metadata antes de llevarla al importador.
+            las líneas, familias, modelos y metadata antes de cargar un archivo masivo.
           </p>
         </header>
 
         <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/settings/productos/importador">Configurar importador</Link>
-          </Button>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/settings/productos/items">Ver ítems del catálogo</Link>
           </Button>
@@ -52,9 +49,9 @@ export default function SettingsProductosAyudaPage() {
               <p>
                 Las líneas agrupan estrategias generales, las familias agrupan productos dentro de esa línea
                 y los modelos conservan variantes reutilizables. Los productos se crean en
-                <strong> catalog_items</strong>; la descripción breve vive en <strong>descripcion_corta</strong>,
-                la descripción larga vive en <strong>descripcion_larga</strong> y el precio base vive en
-                <strong>precio_base</strong>; el resto de columnas va a <strong>metadata</strong>.
+                <strong> catalog_items</strong>. La plantilla incluye los campos operativos editables de esa tabla;
+                los identificadores internos, tenant y timestamps se conservan en la base de datos y no se capturan
+                manualmente.
               </p>
               <p>
                 En cargas masivas usa <strong>codigo</strong> para el producto y, cuando la jerarquía también pueda
@@ -110,24 +107,22 @@ export default function SettingsProductosAyudaPage() {
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide">2. Descarga la plantilla</p>
               <p>
-                Usa el botón <em>Descargar plantilla CSV</em> para obtener el encabezado con: nombre,
-                descripción corta, descripción larga, precio base, línea, familia, modelo y los campos
-                adicionales.
+                Usa el botón <em>Descargar plantilla</em> en la vista principal de Productos para obtener todos
+                los campos editables, incluidos los códigos estables del producto, línea, familia y modelo.
               </p>
             </div>
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide">3. Llena el documento</p>
               <p>
-                Completa cada fila siguiendo el mismo orden: el nombre del producto irá a la columna
-                <strong> nombre</strong>, la descripción breve en <strong>descripcion_corta</strong>, la
-                descripción larga en <strong>descripcion_larga</strong>, la línea debe existir en el catálogo,
-                el precio base en <strong>precio_base</strong> y las columnas extra se convertirán en metadata.
+                Conserva siempre el <strong>codigo</strong> del producto. Las columnas <strong>linea_codigo</strong>,
+                <strong>familia_codigo</strong> y <strong>modelo_codigo</strong> permiten renombrar o describir la
+                jerarquía sin crear registros nuevos.
               </p>
             </div>
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide">4. Importa el archivo</p>
               <p>
-                Sube el archivo desde el importador. El sistema validará los campos obligatorios y te
+                Sube el archivo desde la sección de carga masiva en la vista principal. El sistema validará los campos obligatorios y te
                 mostrará qué filas se crearon/actualizaron o qué errores debes corregir.
               </p>
             </div>
@@ -154,7 +149,7 @@ export default function SettingsProductosAyudaPage() {
             <div className="space-y-2">
               <p>
                 Si necesitas ayuda continua, comparte el archivo con tu equipo técnico para que verifiquen la
-                estructura antes de subirla al importador.
+                estructura antes de subirla.
               </p>
             </div>
           </CardContent>

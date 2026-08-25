@@ -3,6 +3,11 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { IconBuildingFactory, IconHierarchy, IconBox, IconPhoto, IconActivity, IconRulerMeasure } from "@tabler/icons-react"
+import { CatalogDownloadActions } from "@/components/settings/productos/catalog-download-actions"
+import { ProductMetadataImporterUploader } from "@/components/settings/productos/importador-importer"
+import { fetchProductMetadataSchemes } from "@/app/settings/productos/importador/actions"
+
+export const dynamic = "force-dynamic"
 
 const SECTIONS = [
   {
@@ -43,7 +48,8 @@ const SECTIONS = [
   },
 ]
 
-export default function SettingsProductosPage() {
+export default async function SettingsProductosPage() {
+  const schemes = await fetchProductMetadataSchemes()
   return (
     <AppViewLayout title="Settings · Productos y servicios">
       <div className="space-y-6 px-4 py-6 lg:px-6">
@@ -57,6 +63,17 @@ export default function SettingsProductosPage() {
             poblarlos con precios, medios o cotizaciones.
           </p>
         </header>
+        <section className="rounded-xl border border-border/80 bg-muted/20 p-4">
+          <div className="mb-3 space-y-1">
+            <h2 className="text-base font-semibold">Carga y respaldo del catálogo</h2>
+            <p className="text-sm text-muted-foreground">
+              Descarga una plantilla completa para capturar productos o exporta todos los productos actuales
+              con sus códigos estables y relaciones de línea, familia y modelo.
+            </p>
+          </div>
+          <CatalogDownloadActions />
+        </section>
+        <ProductMetadataImporterUploader initialSchemes={schemes} />
         <div className="grid gap-4 md:grid-cols-2">
           {SECTIONS.map((section) => (
             <Card key={section.title} className="flex flex-col justify-between">

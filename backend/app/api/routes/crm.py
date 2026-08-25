@@ -19389,6 +19389,19 @@ async def import_product_catalog_items(
                 _pick_value(row, BASE_HEADER_CANDIDATES["precio_base"]),
                 "number",
             )
+            descripcion = _pick_value(row, BASE_HEADER_CANDIDATES["descripcion"])
+            tipo = _pick_value(row, BASE_HEADER_CANDIDATES["tipo"])
+            slug_value = _pick_value(row, BASE_HEADER_CANDIDATES["slug"])
+            impuestos = _parse_catalog_json_value(
+                _pick_value(row, BASE_HEADER_CANDIDATES["impuestos"]),
+                "impuestos",
+            )
+            metadatos_importados = _parse_catalog_json_value(
+                _pick_value(row, BASE_HEADER_CANDIDATES["metadatos"]),
+                "metadatos",
+            )
+            if metadatos_importados is not None and not isinstance(metadatos_importados, dict):
+                raise ValueError("El campo metadatos debe contener un objeto JSON.")
             linea_name = _pick_value(row, BASE_HEADER_CANDIDATES["linea"])
             if not linea_name:
                 raise ValueError("Falta la línea asociada.")
@@ -19417,7 +19430,7 @@ async def import_product_catalog_items(
                     _pick_value(row, BASE_HEADER_CANDIDATES["modelo_descripcion"]),
                 )
 
-            metadata: dict[str, Any] = {}
+            metadata: dict[str, Any] = dict(metadatos_importados or {})
             for field in scheme_fields:
                 header = field_header_map.get(field["id"])
                 if not header:
@@ -19433,7 +19446,7 @@ async def import_product_catalog_items(
                 metadata[headers_map.get(key, key)] = value
             metadata = _strip_catalog_reserved_metadata_keys(metadata)
 
-            provided_slug = _pick_value(row, BASE_HEADER_CANDIDATES["slug"])
+            provided_slug = slug_value
             slug = provided_slug or _slugify(nombre) or f"item-{uuid4().hex}"
             existing = await repo.get_catalog_item_by_codigo(
                 organizacion_id=organizacion_id,
@@ -19447,6 +19460,35 @@ async def import_product_catalog_items(
                 "activo": True,
                 "tipo": "producto",
             }
+            for field_name in (
+                "tipo", "descripcion", "descripcion_corta", "descripcion_larga", "unidad", "moneda",
+                "clave_sat", "unidad_sat", "unidad_inventario", "proveedor_principal_id",
+            ):
+                field_value = tipo if field_name == "tipo" else (
+                    descripcion if field_name == "descripcion" else _pick_value(row, BASE_HEADER_CANDIDATES[field_name])
+                )
+                if field_value is not None:
+                    payload[field_name] = field_value
+            if impuestos is not None:
+                if not isinstance(impuestos, list):
+                    raise ValueError("El campo impuestos debe contener una lista JSON.")
+                payload["impuestos"] = impuestos
+            for field_name in (
+                "activo", "requiere_factura", "maneja_inventario", "requiere_lote", "requiere_serie", "activo_compra",
+            ):
+                parsed_value = _parse_metadata_value(
+                    _pick_value(row, BASE_HEADER_CANDIDATES[field_name]),
+                    "boolean",
+                )
+                if parsed_value is not None:
+                    payload[field_name] = parsed_value
+            for field_name in ("stock_minimo", "stock_objetivo", "costo_ultimo", "costo_promedio"):
+                parsed_value = _parse_metadata_value(
+                    _pick_value(row, BASE_HEADER_CANDIDATES[field_name]),
+                    "number",
+                )
+                if parsed_value is not None:
+                    payload[field_name] = parsed_value
             payload["organizacion_id"] = str(organizacion_id)
             if descripcion_corta:
                 payload["descripcion_corta"] = descripcion_corta
@@ -20114,6 +20156,93 @@ async def list_price_history(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="price_history_unavailable") from exc
     return [CRMPriceHistoryRead.model_validate(row) for row in rows]
+
+
+def _catalog_csv_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, default=str)
+    return str(value)
+
+
+def _catalog_export_row(row: Mapping[str, Any]) -> list[str]:
+    linea = row.get("linea") if isinstance(row.get("linea"), dict) else {}
+    familia = row.get("familia") if isinstance(row.get("familia"), dict) else {}
+    modelo = row.get("modelo") if isinstance(row.get("modelo"), dict) else {}
+    values: dict[str, Any] = {
+        key: row.get(key)
+        for key in CATALOG_IMPORT_HEADERS
+        if key in row
+    }
+    values.update(
+        {
+            "linea_codigo": linea.get("codigo"),
+            "linea": linea.get("nombre"),
+            "linea_descripcion": linea.get("descripcion"),
+            "familia_codigo": familia.get("codigo"),
+            "familia": familia.get("nombre"),
+            "familia_descripcion": familia.get("descripcion"),
+            "modelo_codigo": modelo.get("codigo"),
+            "modelo": modelo.get("nombre"),
+            "modelo_descripcion": modelo.get("descripcion"),
+        }
+    )
+    return [_catalog_csv_value(values.get(header)) for header in CATALOG_IMPORT_HEADERS]
+
+
+def _render_catalog_items_csv(rows: Sequence[Mapping[str, Any]]) -> str:
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(CATALOG_IMPORT_HEADERS)
+    for row in rows:
+        writer.writerow(_catalog_export_row(row))
+    return output.getvalue()
+
+
+@router.get("/catalog/items/template")
+async def download_catalog_items_template(
+    *,
+    _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
+) -> Response:
+    return Response(
+        content=_render_catalog_items_csv([]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="productos_plantilla.csv"'},
+    )
+
+
+@router.get("/catalog/items/export")
+async def export_catalog_items_csv(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
+) -> Response:
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    batch_size = 5000
+    try:
+        while True:
+            batch = await repo.list_catalog_items(
+                organizacion_id=organizacion_id,
+                include_inactive=True,
+                limit=batch_size,
+                offset=offset,
+            )
+            rows.extend(batch)
+            if len(batch) < batch_size:
+                break
+            offset += batch_size
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="catalog_export_unavailable") from exc
+    filename = f"productos_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=_render_catalog_items_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/catalog/items", response_model=list[CRMCatalogItem])
@@ -23539,6 +23668,15 @@ def _parse_metadata_value(raw_value: str | None, field_type: str) -> str | float
     return cleaned
 
 
+def _parse_catalog_json_value(raw_value: str | None, field_name: str) -> Any:
+    if not raw_value or not raw_value.strip():
+        return None
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"El campo {field_name} debe contener JSON válido.") from exc
+
+
 def _normalize_scheme_fields(raw_fields: Any) -> list[dict[str, Any]]:
     fields: list[dict[str, Any]] = []
     if not isinstance(raw_fields, list):
@@ -23628,9 +23766,34 @@ def _ensure_default_product_metadata_field(row: dict[str, Any]) -> dict[str, Any
 BASE_HEADER_CANDIDATES = {
     "codigo": ["codigo", "codigo_producto", "sku", "product_code"],
     "nombre": ["nombre", "name"],
+    "id": ["id", "producto_id"],
+    "organizacion_id": ["organizacion_id", "tenant_id"],
+    "tipo": ["tipo", "type"],
+    "slug": ["slug"],
+    "descripcion": ["descripcion", "description", "desc"],
     "descripcion_corta": ["descripcion_corta", "descripcion corta", "desc_corta", "short_description"],
-    "descripcion_larga": ["descripcion_larga", "descripcion larga", "desc_larga", "descripcion", "description", "desc"],
+    "descripcion_larga": ["descripcion_larga", "descripcion larga", "desc_larga", "long_description"],
+    "unidad": ["unidad", "unit"],
     "precio_base": ["precio_base", "precio base", "precio", "price", "base_price"],
+    "moneda": ["moneda", "currency"],
+    "impuestos": ["impuestos", "taxes"],
+    "activo": ["activo", "active"],
+    "requiere_factura": ["requiere_factura", "requiere factura", "requires_invoice"],
+    "clave_sat": ["clave_sat", "sat_key"],
+    "unidad_sat": ["unidad_sat", "sat_unit"],
+    "metadatos": ["metadatos", "metadata", "meta"],
+    "maneja_inventario": ["maneja_inventario", "maneja inventario", "inventory_enabled"],
+    "unidad_inventario": ["unidad_inventario", "inventory_unit"],
+    "stock_minimo": ["stock_minimo", "minimum_stock"],
+    "stock_objetivo": ["stock_objetivo", "target_stock"],
+    "costo_ultimo": ["costo_ultimo", "last_cost"],
+    "costo_promedio": ["costo_promedio", "average_cost"],
+    "requiere_lote": ["requiere_lote", "requiere lote", "requires_batch"],
+    "requiere_serie": ["requiere_serie", "requiere serie", "requires_serial"],
+    "proveedor_principal_id": ["proveedor_principal_id", "main_supplier_id"],
+    "activo_compra": ["activo_compra", "purchase_active"],
+    "creado_en": ["creado_en", "created_at"],
+    "actualizado_en": ["actualizado_en", "updated_at"],
     "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
     "familia": ["familia", "family", "familia_nombre"],
     "modelo": ["modelo", "model", "modelo_nombre"],
@@ -23642,6 +23805,44 @@ BASE_HEADER_CANDIDATES = {
     "familia_descripcion": ["familia_descripcion", "descripcion_familia"],
     "modelo_descripcion": ["modelo_descripcion", "descripcion_modelo"],
 }
+
+CATALOG_IMPORT_HEADERS = [
+    "codigo",
+    "nombre",
+    "slug",
+    "tipo",
+    "descripcion",
+    "descripcion_corta",
+    "descripcion_larga",
+    "unidad",
+    "precio_base",
+    "moneda",
+    "impuestos",
+    "activo",
+    "requiere_factura",
+    "clave_sat",
+    "unidad_sat",
+    "metadatos",
+    "maneja_inventario",
+    "unidad_inventario",
+    "stock_minimo",
+    "stock_objetivo",
+    "costo_ultimo",
+    "costo_promedio",
+    "requiere_lote",
+    "requiere_serie",
+    "proveedor_principal_id",
+    "activo_compra",
+    "linea_codigo",
+    "linea",
+    "linea_descripcion",
+    "familia_codigo",
+    "familia",
+    "familia_descripcion",
+    "modelo_codigo",
+    "modelo",
+    "modelo_descripcion",
+]
 
 BASE_HEADER_KEYS = {
     _normalize_column_value(candidate)

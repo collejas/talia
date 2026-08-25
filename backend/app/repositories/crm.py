@@ -12958,18 +12958,20 @@ class CRMRepository:
         modelo_id: UUID | None = None,
         search: str | None = None,
         limit: int = 200,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "order": "nombre.asc",
             "limit": str(max(1, min(limit, 5000))),
+            "offset": str(max(0, offset)),
         }
         params[
             "select"
         ] = (
             "*,"
-            "linea:lineas_de_negocio(id,nombre,activo,descripcion,metadata,creado_en,actualizado_en),"
-            "familia:familias_productos(id,linea_id,nombre,descripcion,activo,metadata,creado_en,actualizado_en),"
-            "modelo:modelos_productos(id,nombre,descripcion,activo,metadata,creado_en,actualizado_en)"
+            "linea:lineas_de_negocio(id,codigo,nombre,activo,descripcion,metadata,creado_en,actualizado_en),"
+            "familia:familias_productos(id,codigo,linea_id,nombre,descripcion,activo,metadata,creado_en,actualizado_en),"
+            "modelo:modelos_productos(id,codigo,nombre,descripcion,activo,metadata,creado_en,actualizado_en,familia_id)"
         )
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
