@@ -424,3 +424,4 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se inició la aplicación del billing guard en prospección: con enforcement activo, las búsquedas DENUE validan acceso comercial antes de consultar al proveedor.
 - Se permiten estados `active`, `grace` e `internal_free`; `blocked`, `manual_review`, `unpaid`, `past_due` sin acceso válido y cuentas sin estado comercial se rechazan con `prospeccion_access_blocked`.
 - La validación conserva la contabilización atómica posterior de resultados como segunda protección de cuota.
+- La vista de uso DENUE ahora muestra visualmente el estado comercial efectivo del tenant y distingue acceso activo, gracia, interno o bloqueado/revisión.

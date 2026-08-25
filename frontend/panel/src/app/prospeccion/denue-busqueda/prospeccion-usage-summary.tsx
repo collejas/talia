@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, RefreshCw } from "lucide-react"
+import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,19 @@ const numberFormatter = new Intl.NumberFormat("es-MX")
 function percentage(consumed: number, limit: number): number {
   if (limit <= 0) return 100
   return Math.min(Math.max((consumed / limit) * 100, 0), 100)
+}
+
+function accessStatusPresentation(status?: string | null) {
+  if (status === "grace") {
+    return { label: "Acceso en gracia", className: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300", icon: AlertTriangle }
+  }
+  if (status === "internal_free") {
+    return { label: "Acceso interno", className: "border-sky-500/40 bg-sky-500/10 text-sky-800 dark:text-sky-300", icon: CheckCircle2 }
+  }
+  if (status !== "active") {
+    return { label: "Acceso bloqueado o en revisión", className: "border-destructive/40 bg-destructive/5 text-destructive", icon: ShieldAlert }
+  }
+  return { label: "Acceso activo", className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300", icon: CheckCircle2 }
 }
 
 function UsageMeter({
@@ -113,6 +126,17 @@ export function ProspeccionUsageSummary({
         ) : null}
         {usage ? (
           <div className="space-y-4">
+            {(() => {
+              const access = accessStatusPresentation(usage.access_status)
+              const AccessIcon = access.icon
+              return (
+                <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", access.className)}>
+                  <AccessIcon className="h-4 w-4" />
+                  <span className="font-medium">{access.label}</span>
+                  <span className="text-xs opacity-80">Estado comercial: {usage.access_status || "sin configurar"}</span>
+                </div>
+              )
+            })()}
             <div className="grid gap-3 md:grid-cols-2">
               <UsageMeter
                 label="Créditos de prospección"
