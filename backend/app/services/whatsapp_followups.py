@@ -400,6 +400,45 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
         )
         return
 
+    source = str(_ensure_dict(context["conversation"].get("inbox_context")).get("source") or "").strip().lower()
+    flow = "prospeccion" if source in {"prospeccion", "publicidad_whatsapp"} else "normal"
+    schedule = await tenant_runtime.get_whatsapp_assistant_schedule(
+        organizacion_id=context["org_uuid"],
+    )
+    assistant_allowed, schedule_reason = tenant_runtime.should_run_whatsapp_assistant(
+        schedule=schedule,
+        now=reference_time,
+        flow=flow,
+        manual_override=bool(context["conversation"].get("manual_override")),
+    )
+    if not assistant_allowed and schedule_reason == "human_hours":
+        next_available_at = tenant_runtime.next_whatsapp_assistant_time(
+            schedule=schedule,
+            now=reference_time,
+        )
+        await repo.worker_reschedule_whatsapp_followup_job(
+            job_id=job_id,
+            due_at=max(next_available_at, next_due["due_at"]),
+            next_action=next_due["next_action"],
+            scheduled_reason="assistant_schedule_human_hours",
+        )
+        logger.info(
+            "whatsapp.followup.deferred_by_assistant_schedule",
+            extra={
+                "job_id": str(job_id),
+                "conversation_id": str(conversation_id),
+                "flow": flow,
+                "next_available_at": next_available_at.isoformat(),
+            },
+        )
+        return
+    if not assistant_allowed and schedule_reason == "manual_override":
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "manual_override"},
+        )
+        return
+
     logger.info(
         "whatsapp.followup.check",
         extra={

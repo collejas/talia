@@ -1179,6 +1179,49 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizacion_update_failed")
         return data[0]
 
+    async def get_whatsapp_assistant_schedule(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/whatsapp_asistente_horarios",
+            params={
+                "select": (
+                    "id,organizacion_id,activo,zona_horaria,aplica_a_normal,aplica_a_prospeccion,"
+                    "lunes_activo,lunes_inicio,lunes_fin,"
+                    "martes_activo,martes_inicio,martes_fin,"
+                    "miercoles_activo,miercoles_inicio,miercoles_fin,"
+                    "jueves_activo,jueves_inicio,jueves_fin,"
+                    "viernes_activo,viernes_inicio,viernes_fin,"
+                    "sabado_activo,sabado_inicio,sabado_fin,"
+                    "domingo_activo,domingo_inicio,domingo_fin,"
+                    "creado_en,actualizado_en,actualizado_por_usuario_id"
+                ),
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def upsert_whatsapp_assistant_schedule(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        data = await self._rest(
+            "POST",
+            "/rest/v1/whatsapp_asistente_horarios",
+            params={"on_conflict": "organizacion_id"},
+            json=body,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("whatsapp_assistant_schedule_upsert_failed")
+        return data[0]
+
     async def list_secret_metadata(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,organizacion_id,clave,etiqueta,version,creado_por,actualizado_por,creado_en,actualizado_en",

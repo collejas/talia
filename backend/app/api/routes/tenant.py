@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import secrets
 from typing import Any, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.api.routes.admin import (
     ChannelRoute,
@@ -320,6 +320,70 @@ class TenantScopedSettings(BaseModel):
     activo: bool | None = None
     config: dict[str, Any] | None = None
     routes: list[ChannelRoute] = Field(default_factory=list)
+
+
+class WhatsAppAssistantSchedulePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activo: bool = False
+    zona_horaria: str = Field(default="UTC", min_length=1, max_length=100)
+    aplica_a_normal: bool = True
+    aplica_a_prospeccion: bool = True
+    lunes_activo: bool = False
+    lunes_inicio: dt_time | None = None
+    lunes_fin: dt_time | None = None
+    martes_activo: bool = False
+    martes_inicio: dt_time | None = None
+    martes_fin: dt_time | None = None
+    miercoles_activo: bool = False
+    miercoles_inicio: dt_time | None = None
+    miercoles_fin: dt_time | None = None
+    jueves_activo: bool = False
+    jueves_inicio: dt_time | None = None
+    jueves_fin: dt_time | None = None
+    viernes_activo: bool = False
+    viernes_inicio: dt_time | None = None
+    viernes_fin: dt_time | None = None
+    sabado_activo: bool = False
+    sabado_inicio: dt_time | None = None
+    sabado_fin: dt_time | None = None
+    domingo_activo: bool = False
+    domingo_inicio: dt_time | None = None
+    domingo_fin: dt_time | None = None
+
+    @field_validator("zona_horaria")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("zona_horaria_required")
+        try:
+            ZoneInfo(normalized)
+        except Exception as exc:
+            raise ValueError("zona_horaria_invalid") from exc
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_day_windows(self) -> "WhatsAppAssistantSchedulePayload":
+        for label in ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"):
+            active = getattr(self, f"{label}_activo")
+            start = getattr(self, f"{label}_inicio")
+            end = getattr(self, f"{label}_fin")
+            if active and (start is None or end is None):
+                raise ValueError(f"{label}_horario_incompleto")
+            if active and start == end:
+                raise ValueError(f"{label}_horario_inicio_fin_iguales")
+        return self
+
+
+class WhatsAppAssistantScheduleResponse(WhatsAppAssistantSchedulePayload):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID | None = None
+    organizacion_id: UUID
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+    actualizado_por_usuario_id: UUID | None = None
 
 
 class TenantContactCatalogsResponse(BaseModel):
@@ -995,6 +1059,77 @@ async def update_tenant_settings(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+def _default_whatsapp_assistant_schedule(organizacion_id: UUID) -> WhatsAppAssistantScheduleResponse:
+    return WhatsAppAssistantScheduleResponse(
+        organizacion_id=organizacion_id,
+        activo=False,
+        zona_horaria="UTC",
+        aplica_a_normal=True,
+        aplica_a_prospeccion=True,
+    )
+
+
+def _build_whatsapp_assistant_schedule_response(
+    *,
+    organizacion_id: UUID,
+    row: dict[str, Any] | None,
+) -> WhatsAppAssistantScheduleResponse:
+    if not isinstance(row, dict):
+        return _default_whatsapp_assistant_schedule(organizacion_id)
+    return WhatsAppAssistantScheduleResponse.model_validate(
+        {**row, "organizacion_id": row.get("organizacion_id") or organizacion_id}
+    )
+
+
+@router.get(
+    "/me/whatsapp-assistant-schedule",
+    response_model=WhatsAppAssistantScheduleResponse,
+)
+async def get_whatsapp_assistant_schedule(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> WhatsAppAssistantScheduleResponse:
+    await require_permission(user_token, "settings.view")
+    try:
+        row = await platform_repo.get_whatsapp_assistant_schedule(
+            organizacion_id=context.organizacion_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_assistant_schedule_read_failed") from exc
+    return _build_whatsapp_assistant_schedule_response(
+        organizacion_id=context.organizacion_id,
+        row=row,
+    )
+
+
+@router.put(
+    "/me/whatsapp-assistant-schedule",
+    response_model=WhatsAppAssistantScheduleResponse,
+)
+async def update_whatsapp_assistant_schedule(
+    payload: WhatsAppAssistantSchedulePayload,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> WhatsAppAssistantScheduleResponse:
+    await require_permission(user_token, "settings.manage")
+    schedule_payload = payload.model_dump(mode="json")
+    schedule_payload["actualizado_por_usuario_id"] = str(context.user_id)
+    try:
+        row = await platform_repo.upsert_whatsapp_assistant_schedule(
+            organizacion_id=context.organizacion_id,
+            payload=schedule_payload,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_assistant_schedule_save_failed") from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=context.organizacion_id)
+    return _build_whatsapp_assistant_schedule_response(
+        organizacion_id=context.organizacion_id,
+        row=row,
+    )
 
 
 @router.get("/me/profile", response_model=UserProfileResponse)

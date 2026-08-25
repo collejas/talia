@@ -87,6 +87,33 @@ Este archivo registra los avances, decisiones y pendientes del plan documentado 
 - Todavía no existe la tabla, API, runtime ni UI del horario.
 - Todavía no existen pruebas específicas para horarios, medianoche o zonas horarias.
 
+## 2026-08-25 — Implementación ejecutada
+
+Se implementó la primera versión funcional del plan:
+
+- Se creó `whatsapp_asistente_horarios`, con una fila por tenant, zona horaria IANA, activación por flujo y ventanas explícitas para los siete días.
+- La migración `20260825_120000_whatsapp_assistant_schedules.sql` fue aplicada y verificada en Supabase.
+- Se agregó runtime tenant-aware con caché, invalidación y soporte para ventanas que cruzan medianoche.
+- El webhook de WhatsApp evalúa el horario después del registro, asignación del vendedor y notificación al Inbox; esto aplica a los flujos normal y prospección.
+- Se protegieron los reenganches automáticos para no enviar mensajes durante horario humano; el escalamiento conserva la notificación al vendedor.
+- Se agregaron `GET` y `PUT /tenant/me/whatsapp-assistant-schedule`, con permisos `settings.view` y `settings.manage`.
+- Se agregó el panel de configuración dentro de `settings/variables`, en la sección de WhatsApp.
+- Se agregaron pruebas para zonas horarias, horario nocturno, selección de flujo, `manual_override` y siguiente ventana de IA.
+
+### Validación
+
+- Supabase: tabla creada, RLS habilitado y una policy de `service_role` verificada.
+- Backend: compilación y `4 passed` en la suite específica del evaluador horario.
+- Frontend: TypeScript sin errores, lint sin errores y React Doctor `100/100`.
+- Persisten dos warnings de lint preexistentes en `actions.ts` (`_` y `_formData`, líneas 275-276).
+
+### Pendiente operativo
+
+- Desplegar backend y panel en el entorno correspondiente.
+- Probar con un tenant real las cuatro combinaciones: normal/prospección y horario humano/fuera de horario.
+- Confirmar en frontend la asignación y la notificación realtime con un vendedor autenticado.
+- Validar que la ausencia de vendedor produzca el comportamiento operativo esperado antes de activar el feature para producción.
+
 ## Pendientes para la siguiente fase
 
 - Confirmar esquema y migraciones remotas de Supabase.
@@ -102,4 +129,3 @@ Este archivo registra los avances, decisiones y pendientes del plan documentado 
 - Crear la UI dentro de `settings/variables`.
 - Agregar pruebas unitarias, integración y tenant isolation.
 - Desplegar y validar un tenant real en horario humano y fuera de horario.
-

@@ -166,6 +166,40 @@ export async function updateTenantConfigAction(_: CrudActionState, formData: For
   }
 }
 
+export async function updateWhatsappAssistantScheduleAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const dayNames = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+    const payload: Record<string, unknown> = {
+      activo: formData.has("whatsapp_schedule_activo"),
+      zona_horaria: getText(formData, "whatsapp_schedule_zona_horaria") || "UTC",
+      aplica_a_normal: formData.has("whatsapp_schedule_aplica_a_normal"),
+      aplica_a_prospeccion: formData.has("whatsapp_schedule_aplica_a_prospeccion"),
+    }
+    for (const day of dayNames) {
+      payload[`${day}_activo`] = formData.has(`whatsapp_schedule_${day}_activo`)
+      const start = getText(formData, `whatsapp_schedule_${day}_inicio`)
+      const end = getText(formData, `whatsapp_schedule_${day}_fin`)
+      payload[`${day}_inicio`] = start || null
+      payload[`${day}_fin`] = end || null
+    }
+
+    const response = await callCrmApi<{ ok?: boolean }>("/tenant/me/whatsapp-assistant-schedule", {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: payload,
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/variables")
+    return success("Horario del asistente guardado.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar el horario del asistente.")
+  }
+}
+
 export async function updateTenantInfoAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const payload: Record<string, unknown> = {}

@@ -12,10 +12,11 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -108,6 +109,27 @@ class CloseLeadPolicy:
             "No inventes campos faltantes; si falta un campo obligatorio, solicítalo de forma breve o continúa la conversación.",
         ]
         return "\n".join(lines)
+
+
+@dataclass(slots=True, frozen=True)
+class WhatsAppAssistantSchedule:
+    """Horario tenant-scoped para decidir si responde IA o el equipo humano."""
+
+    activo: bool = False
+    zona_horaria: str = "UTC"
+    aplica_a_normal: bool = True
+    aplica_a_prospeccion: bool = True
+    windows: tuple[tuple[bool, dt_time | None, dt_time | None], ...] = ()
+
+    @classmethod
+    def disabled(cls) -> "WhatsAppAssistantSchedule":
+        return cls(
+            activo=False,
+            zona_horaria="UTC",
+            aplica_a_normal=True,
+            aplica_a_prospeccion=True,
+            windows=tuple((False, None, None) for _ in range(7)),
+        )
 
 
 @dataclass(slots=True)
@@ -214,7 +236,9 @@ def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
 
     cache_prefix = f"{organizacion_id}:"
     _CONFIG_CACHE.pop(str(organizacion_id), None)
+    _CONFIG_CACHE.pop(f"whatsapp_schedule:{organizacion_id}", None)
     _CONFIG_CACHE_EXPIRES.pop(str(organizacion_id), None)
+    _CONFIG_CACHE_EXPIRES.pop(f"whatsapp_schedule:{organizacion_id}", None)
     for key in list(_SECRET_CACHE.keys()):
         if key.startswith(cache_prefix):
             _SECRET_CACHE.pop(key, None)
@@ -1650,6 +1674,176 @@ async def get_whatsapp_runtime_settings(
         settings_payload.meta_graph_api_version = meta_graph_api_version
 
     return settings_payload
+
+
+_WHATSAPP_SCHEDULE_DAY_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("lunes_activo", "lunes_inicio", "lunes_fin"),
+    ("martes_activo", "martes_inicio", "martes_fin"),
+    ("miercoles_activo", "miercoles_inicio", "miercoles_fin"),
+    ("jueves_activo", "jueves_inicio", "jueves_fin"),
+    ("viernes_activo", "viernes_inicio", "viernes_fin"),
+    ("sabado_activo", "sabado_inicio", "sabado_fin"),
+    ("domingo_activo", "domingo_inicio", "domingo_fin"),
+)
+
+
+def _parse_schedule_time(value: Any) -> dt_time | None:
+    if isinstance(value, dt_time):
+        return value.replace(tzinfo=None)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return dt_time.fromisoformat(text).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _schedule_from_row(row: dict[str, Any] | None) -> WhatsAppAssistantSchedule:
+    if not isinstance(row, dict):
+        return WhatsAppAssistantSchedule.disabled()
+    windows: list[tuple[bool, dt_time | None, dt_time | None]] = []
+    for active_key, start_key, end_key in _WHATSAPP_SCHEDULE_DAY_COLUMNS:
+        windows.append(
+            (
+                _coerce_bool(row.get(active_key), False),
+                _parse_schedule_time(row.get(start_key)),
+                _parse_schedule_time(row.get(end_key)),
+            )
+        )
+    timezone_value = _coerce_str_or_none(row.get("zona_horaria")) or "UTC"
+    try:
+        ZoneInfo(timezone_value)
+    except ZoneInfoNotFoundError:
+        timezone_value = "UTC"
+    return WhatsAppAssistantSchedule(
+        activo=_coerce_bool(row.get("activo"), False),
+        zona_horaria=timezone_value,
+        aplica_a_normal=_coerce_bool(row.get("aplica_a_normal"), True),
+        aplica_a_prospeccion=_coerce_bool(row.get("aplica_a_prospeccion"), True),
+        windows=tuple(windows),
+    )
+
+
+async def get_whatsapp_assistant_schedule(
+    *,
+    organizacion_id: UUID,
+    force_refresh: bool = False,
+) -> WhatsAppAssistantSchedule:
+    """Carga el horario del tenant; ausencia de fila conserva el comportamiento actual."""
+
+    cache_key = f"whatsapp_schedule:{organizacion_id}"
+    now = datetime.now(timezone.utc)
+    if not force_refresh:
+        expires = _CONFIG_CACHE_EXPIRES.get(cache_key)
+        cached = _CONFIG_CACHE.get(cache_key)
+        if expires and expires > now and isinstance(cached, WhatsAppAssistantSchedule):
+            return cached
+
+    try:
+        rows = await _supabase_get(
+            "/rest/v1/whatsapp_asistente_horarios",
+            params={
+                "select": (
+                    "activo,zona_horaria,aplica_a_normal,aplica_a_prospeccion,"
+                    "lunes_activo,lunes_inicio,lunes_fin,"
+                    "martes_activo,martes_inicio,martes_fin,"
+                    "miercoles_activo,miercoles_inicio,miercoles_fin,"
+                    "jueves_activo,jueves_inicio,jueves_fin,"
+                    "viernes_activo,viernes_inicio,viernes_fin,"
+                    "sabado_activo,sabado_inicio,sabado_fin,"
+                    "domingo_activo,domingo_inicio,domingo_fin"
+                ),
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+    except Exception as exc:  # pragma: no cover - resiliencia del runtime
+        logger.warning(
+            "tenant_runtime.whatsapp_schedule_fetch_failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        schedule = WhatsAppAssistantSchedule.disabled()
+    else:
+        row = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
+        schedule = _schedule_from_row(row)
+
+    _CONFIG_CACHE[cache_key] = schedule
+    _CONFIG_CACHE_EXPIRES[cache_key] = now + timedelta(seconds=CONFIG_TTL_SECONDS)
+    return schedule
+
+
+def is_within_human_schedule(
+    *,
+    schedule: WhatsAppAssistantSchedule,
+    now: datetime,
+) -> bool:
+    """Indica si `now` está dentro de una ventana de atención humana."""
+
+    if not schedule.activo:
+        return False
+    try:
+        local_now = now.astimezone(ZoneInfo(schedule.zona_horaria))
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+
+    current_time = local_now.time().replace(tzinfo=None)
+    current_day = local_now.weekday()
+    previous_day = (current_day - 1) % 7
+
+    def contains(day_index: int, candidate: dt_time) -> bool:
+        active, start, end = schedule.windows[day_index]
+        if not active or start is None or end is None or start == end:
+            return False
+        if start < end:
+            return start <= candidate < end
+        return candidate >= start
+
+    if contains(current_day, current_time):
+        return True
+    previous_active, previous_start, previous_end = schedule.windows[previous_day]
+    if previous_active and previous_start and previous_end and previous_start > previous_end:
+        return current_time < previous_end
+    return False
+
+
+def next_whatsapp_assistant_time(
+    *,
+    schedule: WhatsAppAssistantSchedule,
+    now: datetime,
+) -> datetime:
+    """Busca el siguiente instante fuera de horario humano para un job diferido."""
+
+    if not schedule.activo:
+        return now
+    candidate = now.astimezone(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    for _ in range(7 * 24 * 60 + 1):
+        if not is_within_human_schedule(schedule=schedule, now=candidate):
+            return candidate
+        candidate += timedelta(minutes=1)
+    return now + timedelta(hours=1)
+
+
+def should_run_whatsapp_assistant(
+    *,
+    schedule: WhatsAppAssistantSchedule,
+    now: datetime,
+    flow: Literal["normal", "prospeccion"],
+    manual_override: bool = False,
+) -> tuple[bool, str]:
+    """Devuelve si IA puede ejecutarse y una razón auditable."""
+
+    if manual_override:
+        return False, "manual_override"
+    if not schedule.activo:
+        return True, "schedule_disabled"
+    if flow == "normal" and not schedule.aplica_a_normal:
+        return True, "flow_not_configured"
+    if flow == "prospeccion" and not schedule.aplica_a_prospeccion:
+        return True, "flow_not_configured"
+    if is_within_human_schedule(schedule=schedule, now=now):
+        return False, "human_hours"
+    return True, "assistant_hours"
 
 
 @dataclass(slots=True)

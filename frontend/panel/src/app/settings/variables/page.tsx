@@ -14,6 +14,7 @@ import {
   type TemplateAiPromptConfig,
 } from "./components/tenant-template-ai-prompt-config-panel"
 import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
+import { WhatsAppAssistantSchedulePanel } from "./components/whatsapp-assistant-schedule-panel"
 import {
   TenantTemplateAiLayoutsPanel,
   type TemplateAiLayout,
@@ -124,6 +125,15 @@ type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: str
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
 type TemplateAiPromptConfigResponse = { items: TemplateAiPromptConfig[] }
 type TemplateAiLayoutsResponse = { items: TemplateAiLayout[] }
+type WhatsAppAssistantScheduleResponse = {
+  id?: string | null
+  organizacion_id: string
+  activo: boolean
+  zona_horaria: string
+  aplica_a_normal: boolean
+  aplica_a_prospeccion: boolean
+  [key: string]: unknown
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -172,6 +182,13 @@ export default async function SettingsVariablesPage() {
     organizacionId: null,
     withUserToken: true,
   })
+  const scheduleResp = await callCrmApi<WhatsAppAssistantScheduleResponse>(
+    "/tenant/me/whatsapp-assistant-schedule",
+    {
+      organizacionId: null,
+      withUserToken: true,
+    },
+  )
   const data = settingsResp.ok ? settingsResp.data : null
   const promptConfigResp = data?.organizacion_id === MASTER_TENANT_ID
     ? await callCrmApi<TemplateAiPromptConfigResponse>("/tenant/me/prospeccion-template-ai-prompts", {
@@ -194,6 +211,7 @@ export default async function SettingsVariablesPage() {
   if (!settingsResp.ok) errors.push(settingsResp.error)
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
+  if (!scheduleResp.ok) errors.push(scheduleResp.error)
   if (promptConfigResp && !promptConfigResp.ok) errors.push(promptConfigResp.error)
   if (layoutConfigResp && !layoutConfigResp.ok) errors.push(layoutConfigResp.error)
 
@@ -533,6 +551,9 @@ export default async function SettingsVariablesPage() {
                   <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
                 </TabsContent>
                 <TabsContent value="whatsapp" className="pt-4">
+                  <WhatsAppAssistantSchedulePanel
+                    initialValues={scheduleResp.ok ? scheduleResp.data : null}
+                  />
                   <TenantWhatsAppSettings
                     tenantId={tenantId}
                     initialValues={whatsappInitialValues}

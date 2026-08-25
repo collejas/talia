@@ -3095,6 +3095,48 @@ async def handle_incoming_message(
         )
         return
 
+    if org_uuid:
+        schedule = await tenant_runtime.get_whatsapp_assistant_schedule(
+            organizacion_id=org_uuid,
+        )
+    else:
+        schedule = tenant_runtime.WhatsAppAssistantSchedule.disabled()
+    assistant_flow = "prospeccion" if is_prospeccion_mode else "normal"
+    assistant_allowed, schedule_reason = tenant_runtime.should_run_whatsapp_assistant(
+        schedule=schedule,
+        now=datetime.now(timezone.utc),
+        flow=assistant_flow,
+        manual_override=False,
+    )
+    log_event(
+        logger,
+        "whatsapp.assistant_schedule_decision",
+        organizacion_id=str(org_uuid or ""),
+        conversation_id=conversation_id,
+        inbound_message_id=inbound_message_id,
+        flow=assistant_flow,
+        schedule_active=schedule.activo,
+        timezone=schedule.zona_horaria,
+        assistant_allowed=assistant_allowed,
+        decision_reason=schedule_reason,
+    )
+    if not assistant_allowed:
+        _log_turn_timing(
+            trace_id=trace_id,
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            inbound_message_id=inbound_message_id,
+            total_started_at=turn_started,
+            stage_timings=stage_timings,
+            extra={
+                "source": source,
+                "assistant_skipped": True,
+                "assistant_skip_reason": schedule_reason,
+                "flow": assistant_flow,
+            },
+        )
+        return
+
     previous_response_id = conversation_meta.get("last_response_id")
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")

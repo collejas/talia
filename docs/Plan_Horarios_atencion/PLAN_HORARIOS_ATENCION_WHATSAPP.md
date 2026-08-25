@@ -1055,3 +1055,7 @@ Así cada tenant podrá aprovechar la atención personal durante su jornada y la
 - `supabase/migrations/20251221_200000_whatsapp_sales_round_robin.sql`
 - `supabase/migrations/20251221_210000_sales_assignment_audit.sql`
 - `supabase/migrations/20280426_150000_sales_notification_jobs.sql`
+
+## 29. Estado de ejecución
+
+La primera versión del plan fue implementada el 25 de agosto de 2026. La migración remota ya fue aplicada en Supabase y la funcionalidad quedó integrada en backend, panel y jobs de reenganche. El detalle de cambios, validaciones y pendientes operativos se mantiene en `changelog.md`.
