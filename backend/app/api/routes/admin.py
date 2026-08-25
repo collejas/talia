@@ -510,6 +510,21 @@ class CommercialBillingEventsResponse(BaseModel):
     limit: int
 
 
+class CommercialStripeConnectionResponse(BaseModel):
+    ok: bool = True
+    provider: str = "stripe"
+    connection_status: Literal["ready", "incomplete"]
+    api_key_configured: bool
+    api_mode: Literal["test", "live", "unknown", "not_configured"]
+    webhook_secret_configured: bool
+    webhook_endpoint_path: str
+    checkout_success_url_configured: bool
+    checkout_cancel_url_configured: bool
+    portal_return_url_configured: bool
+    api_base_url: str
+    webhook_tolerance_seconds: int
+
+
 class CommercialPlanSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -2430,6 +2445,48 @@ async def list_commercial_billing_events(
             )
         )
     return CommercialBillingEventsResponse(items=items, limit=limit)
+
+
+@router.get("/commercial-billing/connection", response_model=CommercialStripeConnectionResponse)
+async def get_commercial_stripe_connection(
+    _: UUID = Depends(require_master_tenant_owner),
+) -> CommercialStripeConnectionResponse:
+    secret_key = str(settings.stripe_secret_key or "").strip()
+    api_key_configured = bool(secret_key)
+    if secret_key.startswith(("sk_test_", "rk_test_")):
+        api_mode: Literal["test", "live", "unknown", "not_configured"] = "test"
+    elif secret_key.startswith(("sk_live_", "rk_live_")):
+        api_mode = "live"
+    elif api_key_configured:
+        api_mode = "unknown"
+    else:
+        api_mode = "not_configured"
+
+    webhook_secret_configured = bool(str(settings.stripe_webhook_secret or "").strip())
+    checkout_success_url_configured = bool(str(settings.stripe_checkout_success_url or "").strip())
+    checkout_cancel_url_configured = bool(str(settings.stripe_checkout_cancel_url or "").strip())
+    portal_return_url_configured = bool(str(settings.stripe_portal_return_url or "").strip())
+    ready = all(
+        (
+            api_key_configured,
+            webhook_secret_configured,
+            checkout_success_url_configured,
+            checkout_cancel_url_configured,
+            portal_return_url_configured,
+        )
+    )
+    return CommercialStripeConnectionResponse(
+        connection_status="ready" if ready else "incomplete",
+        api_key_configured=api_key_configured,
+        api_mode=api_mode,
+        webhook_secret_configured=webhook_secret_configured,
+        webhook_endpoint_path="/api/webhooks/stripe",
+        checkout_success_url_configured=checkout_success_url_configured,
+        checkout_cancel_url_configured=checkout_cancel_url_configured,
+        portal_return_url_configured=portal_return_url_configured,
+        api_base_url=settings.stripe_api_base_url,
+        webhook_tolerance_seconds=settings.stripe_webhook_tolerance_seconds,
+    )
 
 
 @router.get(

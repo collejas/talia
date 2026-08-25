@@ -255,6 +255,13 @@ const NAVIGATION: {
           ownerOnly: true,
           masterTenantOnly: true,
         },
+        {
+          title: "Configuración de conexión",
+          url: "/settings/commercial/billing/connection",
+          icon: IconSettings,
+          ownerOnly: true,
+          masterTenantOnly: true,
+        },
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder, masterTenantOnly: true },

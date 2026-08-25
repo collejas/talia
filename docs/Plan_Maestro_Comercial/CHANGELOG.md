@@ -426,3 +426,5 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - La validación conserva la contabilización atómica posterior de resultados como segunda protección de cuota.
 - La vista de uso DENUE ahora muestra visualmente el estado comercial efectivo del tenant y distingue acceso activo, gracia, interno o bloqueado/revisión.
 - Se corrigió la autorización de lectura y edición de límites/overrides DENUE y del estado comercial por tenant: ahora exige exclusivamente al owner del tenant maestro, no cualquier `platform_admin`.
+- Se agregó `Comercial / Billing / Configuración de conexión`, con diagnóstico seguro de variables Stripe, modo test/live, URLs requeridas y ruta del webhook.
+- El endpoint de diagnóstico no devuelve claves ni secretos y requiere `require_master_tenant_owner`.

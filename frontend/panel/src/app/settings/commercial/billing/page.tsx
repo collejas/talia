@@ -64,6 +64,7 @@ export default async function CommercialBillingPage() {
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline"><Link href="/settings/commercial/billing/subscriptions">Suscripciones</Link></Button>
             <Button asChild variant="outline"><Link href="/settings/commercial/billing/events">Eventos webhook</Link></Button>
+            <Button asChild variant="outline"><Link href="/settings/commercial/billing/connection">Configuración</Link></Button>
             <Button asChild variant="ghost"><Link href="/settings/commercial">Volver a Comercial</Link></Button>
           </div>
         </header>
