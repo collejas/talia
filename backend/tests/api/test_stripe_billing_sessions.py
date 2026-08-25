@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 
-from app.api.routes.admin import get_platform_repo, require_platform_admin
+from app.api.routes.admin import get_platform_repo, require_master_tenant_owner
 from app.core.config import settings
 from app.main import app
 
@@ -85,7 +85,7 @@ async def test_create_tenant_billing_checkout_session_bootstraps_customer(
             "stripe_price_id": None,
         }
     )
-    app.dependency_overrides[require_platform_admin] = lambda: TEST_PLATFORM_ADMIN_ID
+    app.dependency_overrides[require_master_tenant_owner] = lambda: TEST_PLATFORM_ADMIN_ID
     app.dependency_overrides[get_platform_repo] = lambda: repo
     monkeypatch.setattr(
         "app.api.routes.admin.create_stripe_customer",
@@ -131,7 +131,7 @@ async def test_create_tenant_billing_portal_session(
             "stripe_price_id": "price_test_2",
         }
     )
-    app.dependency_overrides[require_platform_admin] = lambda: TEST_PLATFORM_ADMIN_ID
+    app.dependency_overrides[require_master_tenant_owner] = lambda: TEST_PLATFORM_ADMIN_ID
     app.dependency_overrides[get_platform_repo] = lambda: repo
     monkeypatch.setattr(
         "app.api.routes.admin.create_stripe_portal_session",

@@ -411,6 +411,9 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se agregó la entrada lateral **Comercial** con `/settings/commercial` como punto de acceso.
 - Se agregó `/settings/commercial/plans` como catálogo y `/settings/commercial/billing` como sección separada para la operación de cobro.
 - Se agregó `/settings/commercial/plans/{plan_id}` para operar un plan específico conservando sus pestañas de configuración.
+- Billing / Stripe ahora consulta un resumen global de cobro por tenant mediante un endpoint de lectura protegido.
+- La vista muestra plan, proveedor, estado de billing, estado de acceso, periodo y referencia de Stripe, con enlace al detalle del tenant.
+- Checkout y portal Stripe quedaron protegidos por la misma autorización exclusiva del owner del tenant maestro.
 - La vista de catálogo ahora organiza planes, precios, entitlements y defaults mediante pestañas.
 - `/settings/commercial-plans` dejó de contener la vista y redirige a la nueva ruta.
 - Los endpoints administrativos del catálogo comercial y límites de plan ahora requieren el `owner` del tenant maestro.

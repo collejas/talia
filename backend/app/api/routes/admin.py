@@ -461,6 +461,31 @@ class TenantsResponse(BaseModel):
     items: list[TenantSummary] = Field(default_factory=list)
 
 
+class CommercialBillingTenantSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    nombre: str
+    commercial_plan_id: UUID | None = None
+    commercial_plan_code: str | None = None
+    commercial_plan_name: str | None = None
+    billing_provider: str | None = None
+    billing_status: str | None = None
+    access_status: str | None = None
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    stripe_price_id: str | None = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    cancel_at_period_end: bool | None = None
+    updated_at: datetime | None = None
+
+
+class CommercialBillingTenantsResponse(BaseModel):
+    ok: bool = True
+    items: list[CommercialBillingTenantSummary] = Field(default_factory=list)
+
+
 class CommercialPlanSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -2259,6 +2284,51 @@ async def list_commercial_plans(
     )
 
 
+@router.get("/commercial-billing/tenants", response_model=CommercialBillingTenantsResponse)
+async def list_commercial_billing_tenants(
+    _: UUID = Depends(require_master_tenant_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialBillingTenantsResponse:
+    try:
+        organizations = await repo.list_organizaciones()
+        billing_accounts = await repo.list_tenant_billing_accounts()
+        plans = await repo.list_commercial_plans()
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    plan_by_id = {str(row.get("id")): row for row in plans}
+    billing_by_tenant = {str(row.get("tenant_id")): row for row in billing_accounts}
+    items: list[CommercialBillingTenantSummary] = []
+    for organization in organizations:
+        tenant_id = str(organization.get("id"))
+        account = billing_by_tenant.get(tenant_id, {})
+        plan = plan_by_id.get(str(account.get("plan_id")))
+        items.append(
+            CommercialBillingTenantSummary.model_validate(
+                {
+                    "id": organization.get("id"),
+                    "nombre": organization.get("nombre") or organization.get("nombre_comercial") or tenant_id,
+                    "commercial_plan_id": account.get("plan_id"),
+                    "commercial_plan_code": plan.get("code") if plan else None,
+                    "commercial_plan_name": plan.get("name") if plan else None,
+                    "billing_provider": account.get("billing_provider"),
+                    "billing_status": account.get("billing_status"),
+                    "access_status": account.get("access_status"),
+                    "stripe_customer_id": account.get("stripe_customer_id"),
+                    "stripe_subscription_id": account.get("stripe_subscription_id"),
+                    "stripe_price_id": account.get("stripe_price_id"),
+                    "current_period_start": account.get("current_period_start"),
+                    "current_period_end": account.get("current_period_end"),
+                    "cancel_at_period_end": account.get("cancel_at_period_end"),
+                    "updated_at": account.get("updated_at"),
+                }
+            )
+        )
+
+    items.sort(key=lambda item: item.nombre.lower())
+    return CommercialBillingTenantsResponse(items=items)
+
+
 @router.get(
     "/commercial-plans/{plan_id}/prospeccion-limits",
     response_model=ProspeccionPlanLimitsResponse,
@@ -3140,7 +3210,7 @@ async def update_tenant_commercial_state(
 async def create_tenant_billing_checkout_session(
     organizacion_id: UUID,
     payload: dict[str, Any] | None = None,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantBillingCheckoutResponse:
     try:
@@ -3232,7 +3302,7 @@ async def create_tenant_billing_checkout_session(
 @router.post("/tenants/{organizacion_id}/billing/portal-session", response_model=TenantBillingPortalResponse)
 async def create_tenant_billing_portal_session(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    _: UUID = Depends(require_master_tenant_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantBillingPortalResponse:
     try:
