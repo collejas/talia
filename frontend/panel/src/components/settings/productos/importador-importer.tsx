@@ -19,6 +19,35 @@ type ImportStatus = "idle" | "uploading" | "success" | "error"
 
 const ACCEPTED_FILE_EXT = ".csv,.xlsx,.xls"
 
+function friendlyImportRequestError(message: string): string {
+  const normalized = message.toLowerCase()
+  if (normalized.includes("xlrd_required")) {
+    return "El servidor todavía no puede leer archivos .xls. Usa .xlsx o CSV, o solicita habilitar este formato."
+  }
+  if (normalized.includes("openpyxl_required")) {
+    return "El servidor todavía no puede leer archivos .xlsx. Usa CSV o solicita habilitar este formato."
+  }
+  if (normalized.includes("empty_file")) {
+    return "El archivo está vacío. Agrega al menos una fila de productos."
+  }
+  if (normalized.includes("scheme_id_required")) {
+    return "Selecciona el esquema de importación antes de continuar."
+  }
+  if (normalized.includes("file_required") || normalized.includes("invalid_payload")) {
+    return "Selecciona un archivo CSV o Excel válido antes de continuar."
+  }
+  if (normalized.includes("401") || normalized.includes("sesión")) {
+    return "Tu sesión caducó. Vuelve a iniciar sesión e inténtalo nuevamente."
+  }
+  if (normalized.includes("403") || normalized.includes("permisos")) {
+    return "No tienes permisos para importar productos."
+  }
+  if (normalized.includes("500") || normalized.includes("internal server error")) {
+    return "No se pudo procesar el archivo. Revisa su formato e inténtalo nuevamente."
+  }
+  return "No se pudo procesar el archivo. Revisa los datos e inténtalo nuevamente."
+}
+
 export type ProductMetadataImporterUploaderProps = {
   initialSchemes: ImporterScheme[]
 }
@@ -77,7 +106,7 @@ export function ProductMetadataImporterUploader({ initialSchemes }: ProductMetad
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload) {
-        throw new Error(payload?.error ?? "error")
+        throw new Error(friendlyImportRequestError(payload?.error ?? "error"))
       }
       setSummary(payload)
       setStatus("success")
@@ -157,11 +186,6 @@ export function ProductMetadataImporterUploader({ initialSchemes }: ProductMetad
                       <p>
                         <strong>Fila {item.row}:</strong> {item.message}
                       </p>
-                      {item.data && (
-                        <pre className="whitespace-pre-wrap text-[11px]">
-                          {JSON.stringify(item.data, null, 2)}
-                        </pre>
-                      )}
                     </div>
                   ))}
                 </div>

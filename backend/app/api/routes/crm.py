@@ -54,6 +54,10 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     Workbook = None
     load_workbook = None
+try:
+    import xlrd
+except ModuleNotFoundError:  # pragma: no cover
+    xlrd = None
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -19282,10 +19286,14 @@ async def import_product_catalog_items(
         if not normalized:
             raise ValueError("Línea vacía")
         normalized_code = _normalize_stable_code(code)
-        cached = lineas_by_code.get(normalized_code) if normalized_code else lineas_cache.get(normalized)
+        # A legacy export may contain a generated/stale code.  The name is the
+        # safe fallback within the tenant when the code does not exist yet.
+        cached_by_code = lineas_by_code.get(normalized_code) if normalized_code else None
+        cached = cached_by_code or lineas_cache.get(normalized)
         if cached:
             updates = {}
-            if normalized_code and cached.get("codigo") != normalized_code:
+            # Never replace an existing stable identity with a stale import code.
+            if cached_by_code and normalized_code and cached.get("codigo") != normalized_code:
                 updates["codigo"] = normalized_code
             if cached.get("nombre") != name:
                 updates["nombre"] = name
@@ -19312,12 +19320,13 @@ async def import_product_catalog_items(
         normalized = _normalize_column_value(name)
         key = (str(linea_id), normalized)
         normalized_code = _normalize_stable_code(code)
-        cached = familias_by_code.get(normalized_code) if normalized_code else familias_cache.get(key)
-        if cached and str(cached.get("linea_id")) != str(linea_id):
+        cached_by_code = familias_by_code.get(normalized_code) if normalized_code else None
+        if cached_by_code and str(cached_by_code.get("linea_id")) != str(linea_id):
             raise ValueError(f"La familia {code or name} no pertenece a la línea indicada.")
+        cached = cached_by_code or familias_cache.get(key)
         if cached:
             updates = {}
-            if normalized_code and cached.get("codigo") != normalized_code:
+            if cached_by_code and normalized_code and cached.get("codigo") != normalized_code:
                 updates["codigo"] = normalized_code
             if cached.get("nombre") != name:
                 updates["nombre"] = name
@@ -19344,12 +19353,13 @@ async def import_product_catalog_items(
         normalized = _normalize_column_value(name)
         key = (str(familia_id), normalized)
         normalized_code = _normalize_stable_code(code)
-        cached = modelos_by_code.get(normalized_code) if normalized_code else modelos_cache.get(key)
-        if cached and cached.get("familia_id") and str(cached.get("familia_id")) != str(familia_id):
+        cached_by_code = modelos_by_code.get(normalized_code) if normalized_code else None
+        if cached_by_code and cached_by_code.get("familia_id") and str(cached_by_code.get("familia_id")) != str(familia_id):
             raise ValueError(f"El modelo {code or name} no pertenece a la familia indicada.")
+        cached = cached_by_code or modelos_cache.get(key)
         if cached:
             updates = {}
-            if normalized_code and cached.get("codigo") != normalized_code:
+            if cached_by_code and normalized_code and cached.get("codigo") != normalized_code:
                 updates["codigo"] = normalized_code
             if cached.get("nombre") != name:
                 updates["nombre"] = name
@@ -19510,12 +19520,16 @@ async def import_product_catalog_items(
                 payload["slug"] = slug
                 await repo.create_catalog_item(payload=payload)
                 created += 1
-        except (ValueError, CRMRepositoryError) as exc:
+        except Exception as exc:
+            if not isinstance(exc, ValueError):
+                import_debug_logger.warning(
+                    "catalog_import_row_failed",
+                    extra={"row": index, "error": str(exc)[:500]},
+                )
             errors.append(
                 CRMProductImportRowError(
                     row=index,
-                    message=str(exc),
-                    data=_build_error_payload(row, headers_map),
+                    message=_friendly_product_import_error(exc, row),
                 )
             )
     _trigger_catalog_reindex(
@@ -23863,6 +23877,74 @@ def _pick_value(row: Mapping[str, str], candidates: list[str]) -> str | None:
     return None
 
 
+def _friendly_product_import_error(exc: Exception, row: Mapping[str, str]) -> str:
+    """Translate importer failures into actionable, non-technical messages."""
+    raw = str(exc or "").strip()
+    detail = raw.lower()
+    product_name = _pick_value(row, BASE_HEADER_CANDIDATES["nombre"]) or "este producto"
+    product_code = _pick_value(row, BASE_HEADER_CANDIDATES["codigo"])
+    line_name = _pick_value(row, BASE_HEADER_CANDIDATES["linea"])
+    family_name = _pick_value(row, BASE_HEADER_CANDIDATES["familia"])
+    model_name = _pick_value(row, BASE_HEADER_CANDIDATES["modelo"])
+
+    if "modelos_productos_unq_org_familia_nombre" in detail:
+        return (
+            f'El modelo "{model_name or "sin nombre"}" ya existe dentro de la familia '
+            f'"{family_name or "indicada"}". Se encontró un duplicado; usa el modelo existente '
+            "o cambia el nombre antes de importar."
+        )
+    if "familias_productos_unq_org_linea_nombre" in detail:
+        return (
+            f'La familia "{family_name or "sin nombre"}" ya existe dentro de la línea '
+            f'"{line_name or "indicada"}". Se encontró un duplicado; usa la familia existente.'
+        )
+    if "lineas_de_negocio_unq_org_nombre" in detail:
+        return (
+            f'La línea "{line_name or "sin nombre"}" ya existe. Se encontró un duplicado; '
+            "usa la línea existente."
+        )
+    if "catalog_items_organizacion_slug_key" in detail:
+        return (
+            f'El producto "{product_name}" no se importó porque su identificador de enlace '
+            "ya lo usa otro producto. Cambia el valor de la columna slug."
+        )
+    if "catalog_items_org_codigo_unq" in detail or "catalog_items_organizacion_codigo" in detail:
+        return (
+            f'El código de producto "{product_code or "sin código"}" ya está usado por otro '
+            "producto. Usa el código existente para actualizarlo o asigna uno diferente."
+        )
+    if "lineas_de_negocio_org_codigo_unq" in detail:
+        return "El código de la línea ya está usado por otra línea. Revisa linea_codigo."
+    if "familias_productos_org_codigo_unq" in detail:
+        return "El código de la familia ya está usado por otra familia. Revisa familia_codigo."
+    if "modelos_productos_org_codigo_unq" in detail:
+        return "El código del modelo ya está usado por otro modelo. Revisa modelo_codigo."
+    if "23505" in detail or "duplicate key" in detail or "unique constraint" in detail:
+        return (
+            f'El producto "{product_name}" no se importó porque uno de sus datos ya está '
+            "registrado en otro elemento. Revisa códigos, nombres y slug."
+        )
+    if "falta el nombre" in detail:
+        return "Falta el nombre del producto. Agrega un valor en la columna nombre."
+    if "falta el código estable" in detail:
+        return "Falta el código del producto. Agrega un valor único en la columna codigo."
+    if "falta la línea" in detail:
+        return "Falta la línea asociada. Agrega un valor en la columna linea."
+    if "falta la familia" in detail:
+        return "Falta la familia asociada. Agrega un valor en la columna familia."
+    if "campo metadatos" in detail or "campo impuestos" in detail:
+        return "Hay un dato estructurado con formato incorrecto. Revisa que JSON esté bien escrito."
+    if "invalid input syntax" in detail or "could not parse" in detail or "formato" in detail:
+        return f'El producto "{product_name}" tiene un dato con formato no válido. Revisa números, fechas o valores booleanos.'
+    if "foreign key" in detail or "violates foreign key" in detail:
+        return f'El producto "{product_name}" hace referencia a un elemento que no existe. Revisa su línea, familia, modelo o proveedor.'
+    if "not-null" in detail or "not null" in detail:
+        return f'El producto "{product_name}" no tiene un dato obligatorio. Revisa las columnas requeridas.'
+    if "timeout" in detail or "connection" in detail or "supabase" in detail:
+        return "No se pudo guardar esta fila por un problema temporal. Intenta importar el archivo nuevamente."
+    return f'El producto "{product_name}" no se importó. Revisa los datos de esta fila e inténtalo nuevamente.'
+
+
 async def _read_import_rows(
     file: UploadFile,
 ) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -23871,7 +23953,33 @@ async def _read_import_rows(
     suffix = Path(filename).suffix.lower()
     headers_map: dict[str, str] = {}
     rows: list[dict[str, str]] = []
-    if suffix in {".xlsx", ".xls"}:
+    if suffix == ".xls":
+        if xlrd is None:
+            raise RuntimeError("xlrd_required")
+        workbook = xlrd.open_workbook(file_contents=content, on_demand=True)
+        try:
+            sheet = workbook.sheet_by_index(0)
+            if sheet.nrows == 0:
+                return headers_map, []
+            header_row = sheet.row_values(0)
+            normalized_headers: list[str] = []
+            for header in header_row:
+                normalized = _normalize_column_value(str(header or ""))
+                if not normalized:
+                    continue
+                normalized_headers.append(normalized)
+                headers_map.setdefault(normalized, str(header or ""))
+            for row_index in range(1, sheet.nrows):
+                row_map: dict[str, str] = {}
+                row_values = sheet.row_values(row_index)
+                for idx, header in enumerate(normalized_headers):
+                    cell_value = row_values[idx] if idx < len(row_values) else ""
+                    row_map[header] = str(cell_value).strip() if cell_value is not None else ""
+                if any(value for value in row_map.values()):
+                    rows.append(row_map)
+        finally:
+            workbook.release_resources()
+    elif suffix == ".xlsx":
         if load_workbook is None:
             raise RuntimeError("openpyxl_required")
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
