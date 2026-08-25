@@ -191,7 +191,7 @@ Registro cronológico de la implementación definida en:
 
 ### Frontend
 
-- `/settings/commercial-plans`: tarjeta para editar créditos y resultados crudos mensuales por plan.
+- `/settings/commercial/plans`: pestaña de límites de prospección para editar créditos y resultados crudos mensuales por plan.
 - `/settings/tenants/[tenantId]`: tarjeta `Prospección DENUE` con criterio de contacto, herencia, excepciones y consumo actual.
 - Los controles sólo se consultan y muestran al administrador maestro.
 

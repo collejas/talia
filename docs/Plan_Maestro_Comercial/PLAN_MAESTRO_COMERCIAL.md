@@ -315,7 +315,7 @@ No tratar como CRUD libre:
 
 ### Reglas
 
-- Solo `platform admin` puede crear, editar o desactivar planes.
+- Solo el usuario `owner` autorizado del tenant maestro puede crear, editar o desactivar planes.
 - No borrar físicamente un plan que ya tenga tenants activos.
 - Si un plan cambia de comportamiento comercial, preferir desactivarlo o versionarlo.
 - Los precios deben manejarse por filas nuevas cuando aplique un cambio real de cobro.
@@ -330,6 +330,131 @@ No tratar como CRUD libre:
 - `commercial_plan_entitlements` se administra como catálogo de features y límites.
 - `commercial_plan_defaults` se administra como catálogo de valores iniciales.
 - `tenant_plan_overrides` se usa solo para excepciones puntuales por cliente.
+
+## Navegación administrativa comercial
+
+La administración comercial debe tener una sección propia dentro del panel lateral izquierdo, visible y operable únicamente para el usuario propietario (`owner`) del tenant maestro dueño de la aplicación.
+
+El tenant maestro es la organización central que opera y comercializa TalIA. Los tenants clientes son consumidores de los planes y no administran el catálogo comercial ni la conexión global con Stripe.
+
+Esta restricción debe aplicarse en dos capas:
+
+- **Frontend:** solo mostrar la sección **Comercial** al usuario propietario autorizado del tenant maestro.
+- **Backend:** validar en cada endpoint que el actor sea el propietario autorizado del tenant maestro. Ocultar el menú no es una medida de autorización suficiente.
+
+No deben tener acceso a este módulo:
+
+- usuarios de tenants clientes;
+- propietarios (`owner`) de tenants clientes;
+- administradores internos que no sean el propietario autorizado del tenant maestro;
+- cualquier usuario que únicamente tenga permisos generales de configuración.
+
+La sección debe llamarse **Comercial** y no debe mezclarse con la configuración operativa de cada tenant.
+
+### Estructura principal del panel
+
+```txt
+Comercial
+├── Resumen comercial
+├── Planes comerciales
+└── Billing / Stripe
+```
+
+La ruta heredada `/settings/commercial-plans` queda fuera de la arquitectura objetivo y no debe seguir utilizándose como entrada del módulo. El acceso debe comenzar en la nueva sección `/settings/commercial`.
+
+No se deben crear varias opciones laterales para cada tabla del catálogo, porque eso fragmentaría el flujo administrativo. La sección lateral **Comercial** será el punto de entrada único.
+
+### Vista de planes comerciales
+
+La vista principal debe funcionar como catálogo y resumen. Debe mostrar, como mínimo:
+
+- nombre y código del plan;
+- estado activo o inactivo;
+- precio activo principal;
+- cantidad de entitlements configurados;
+- cantidad de defaults configurados;
+- acciones para editar, configurar o desactivar.
+
+La configuración detallada debe abrirse por plan, conservando el contexto del plan seleccionado:
+
+```txt
+/settings/commercial
+/settings/commercial/plans
+/settings/commercial/plans/{plan_id}
+```
+
+Dentro del detalle del plan se deben usar pestañas, porque las siguientes funciones pertenecen al mismo objeto comercial:
+
+```txt
+Detalle del plan
+├── General
+├── Precios y Stripe
+├── Entitlements
+├── Defaults
+└── Límites de prospección
+```
+
+Las pestañas deben cambiar el contexto de configuración sin obligar al administrador a volver a seleccionar el plan en cada formulario.
+
+### Pestaña Precios y Stripe
+
+Esta pestaña administra la relación entre un plan y sus precios publicados en el proveedor de cobro:
+
+- proveedor de billing, inicialmente Stripe;
+- `provider_product_id`;
+- `provider_price_id`;
+- moneda;
+- intervalo;
+- monto;
+- estado activo o inactivo.
+
+Esta pestaña pertenece al catálogo del plan. No debe convertirse en una pantalla de monitoreo de pagos.
+
+### Sección Billing / Stripe
+
+La sección **Billing / Stripe** debe reservarse para la operación de cobro y sincronización, no para definir qué incluye un plan. Sus futuras vistas pueden incluir:
+
+```txt
+/settings/commercial/billing
+/settings/commercial/billing/events
+/settings/commercial/billing/subscriptions
+```
+
+Su responsabilidad será mostrar y operar, según permisos:
+
+- estado de conexión y configuración operativa de Stripe;
+- customers y suscripciones;
+- estado de cobro de tenants;
+- eventos recibidos por webhook;
+- errores de sincronización y reintentos controlados;
+- checkout, portal de cliente y conciliación básica.
+
+`tenant_billing_accounts` y `tenant_billing_events` no deben tratarse como CRUD libre desde la pantalla de catálogo. Su fuente de verdad sigue siendo el backend, el webhook firmado y los procesos de billing.
+
+### Separación de responsabilidades
+
+La navegación debe mantener esta frontera:
+
+| Área | Responsabilidad |
+| --- | --- |
+| Planes comerciales | Qué se vende y cómo se presenta el catálogo |
+| Precios y Stripe | Qué precio externo corresponde a cada plan |
+| Entitlements | Qué funciones y límites incluye cada plan |
+| Defaults | Qué configuración inicial recibe un tenant |
+| Billing / Stripe | Qué ocurrió con pagos, suscripciones y webhooks |
+| Tenant | Excepciones y configuración particular de un cliente |
+
+No se debe usar la sección **Billing / Stripe** para editar directamente el acceso final de un tenant. El acceso debe resolverse desde backend con `billing_status`, `access_status`, entitlements y permisos.
+
+### Decisión de UX
+
+- Usar una sección lateral propia **Comercial** para que el módulo sea descubrible y pueda crecer.
+- Mostrarla únicamente al propietario autorizado del tenant maestro.
+- Usar pestañas dentro del detalle de cada plan para funciones estrechamente relacionadas.
+- Mantener una acción principal visible en cada vista.
+- Evitar formularios y tablas de dominios distintos en una sola página larga.
+- Mostrar estados de carga, vacío, error y éxito por sección.
+- Mantener las funciones técnicas de Stripe separadas de las decisiones comerciales del plan.
 
 ---
 

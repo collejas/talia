@@ -1184,7 +1184,7 @@ backend/tests/
 ```text
 frontend/panel/src/app/prospeccion/denue-busqueda/
 frontend/panel/src/app/settings/tenants/[tenantId]/
-frontend/panel/src/app/settings/commercial-plans/
+frontend/panel/src/app/settings/commercial/plans/
 frontend/panel/src/lib/prospeccion/
 ```
 

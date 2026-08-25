@@ -379,3 +379,30 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - La página comercial ya no depende solo de WhatsApp o demo para iniciar un alta.
 - Para producción, `STRIPE_CHECKOUT_SUCCESS_URL` y `STRIPE_CHECKOUT_CANCEL_URL` deben apuntar a la página de precios con el query param correspondiente.
 - El checkout queda acoplado a precios activos de Stripe publicados desde la base de datos comercial.
+
+---
+
+## 2026-08-25
+
+### Frontend
+- Se documentó la propuesta de navegación para separar la administración comercial de la operación de cobro.
+- Se definió una sección lateral propia **Comercial** para perfiles de plataforma.
+- Se mantuvo `/settings/commercial-plans` como entrada del catálogo de planes.
+- Se propuso abrir el detalle de cada plan en `/settings/commercial-plans/{plan_id}` con pestañas para `General`, `Precios y Stripe`, `Entitlements`, `Defaults` y `Límites de prospección`.
+- Se propuso reservar `Billing / Stripe` para customers, suscripciones, webhooks, estados de cobro y errores de sincronización.
+
+### Operación/Notas
+- La configuración del catálogo comercial y la operación de billing son dominios relacionados, pero no deben vivir en una sola vista larga.
+- `tenant_billing_accounts` y `tenant_billing_events` no deben exponerse como CRUD libre en el catálogo.
+- Esta entrada documenta la arquitectura objetivo; la implementación frontend queda pendiente.
+
+### Corrección de arquitectura de navegación
+- Se descartó `/settings/commercial-plans` como entrada del módulo.
+- La sección lateral **Comercial** tendrá como entrada única `/settings/commercial`.
+- Las vistas objetivo quedan bajo `/settings/commercial/plans` y `/settings/commercial/billing`.
+- La ruta anterior debe considerarse heredada y no debe usarse en la nueva implementación.
+
+### Corrección de autorización
+- Se definió que la sección **Comercial** solo será visible y operable para el usuario `owner` del tenant maestro dueño de la aplicación.
+- Los `owner` y administradores de tenants clientes no podrán consultar ni modificar planes, precios, entitlements, defaults o Billing/Stripe global.
+- La autorización deberá validarse en backend por endpoint; el ocultamiento del menú en frontend será únicamente una mejora de UX.

@@ -1,6 +1,6 @@
 # Plan Maestro Comercial
 
-Última actualización: 2026-06-28.
+Última actualización: 2026-08-25.
 
 Este directorio concentra la documentación base para la capa comercial de TalIA:
 
@@ -20,6 +20,9 @@ Este directorio concentra la documentación base para la capa comercial de TalIA
 - [ALTA_TENANT_DESDE_STRIPE.md](./ALTA_TENANT_DESDE_STRIPE.md): definición funcional del alta de tenant desde Stripe.
 - [IMPLEMENTACION_ALTA_TENANT_STRIPE.md](./IMPLEMENTACION_ALTA_TENANT_STRIPE.md): implementación por capas, separada en base de datos, backend y frontend.
 - [MIGRACIONES_ALTA_TENANT_STRIPE.md](./MIGRACIONES_ALTA_TENANT_STRIPE.md): migraciones exactas propuestas para Supabase/PostgreSQL.
+- La navegación administrativa propuesta para catálogo comercial y operación de Stripe queda definida en `PLAN_MAESTRO_COMERCIAL.md`, en la sección **Navegación administrativa comercial**.
+- La ruta heredada `/settings/commercial-plans` queda fuera de la arquitectura objetivo; el módulo debe entrar por `/settings/commercial`.
+- El módulo Comercial es exclusivo del usuario propietario (`owner`) del tenant maestro dueño de la aplicación; no debe estar disponible para tenants clientes ni para sus administradores.
 - [CHANGELOG.md](./CHANGELOG.md): registro cronológico de cambios del plan.
 
 ## Orden de trabajo recomendado
