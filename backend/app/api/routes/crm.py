@@ -12074,6 +12074,7 @@ class CRMOpportunity(BaseModel):
     titulo: str
     descripcion: str | None = None
     monto_estimado: float | None = None
+    monto_real: float | None = None
     moneda: str
     probabilidad: float | None = None
     fecha_cierre_probable: str | None = None
@@ -18663,6 +18664,29 @@ async def list_opportunities(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    opportunity_ids = [row.get("id") for row in rows if isinstance(row, dict) and row.get("id")]
+    current_quotes = await repo.list_current_quote_amounts_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=[UUID(str(value)) for value in opportunity_ids],
+    ) if opportunity_ids else []
+    quote_by_opportunity: dict[str, dict[str, Any]] = {}
+    for quote in current_quotes:
+        opportunity_id = _clean_text(quote.get("oportunidad_id"))
+        if opportunity_id and opportunity_id not in quote_by_opportunity:
+            quote_by_opportunity[opportunity_id] = quote
+    for row in rows:
+        opportunity_id = _clean_text(row.get("id"))
+        quote = quote_by_opportunity.get(opportunity_id)
+        quote_metadata = _ensure_dict(quote.get("metadata"), default={}) if quote else {}
+        real_amount = _as_number(quote_metadata.get("subtotal"))
+        if real_amount is None and quote:
+            total_value = _as_number(quote.get("total"))
+            taxes = _as_number(quote_metadata.get("impuestos"))
+            if total_value is not None and taxes is not None:
+                real_amount = max(0.0, total_value - taxes)
+            elif total_value is not None:
+                real_amount = total_value
+        row["monto_real"] = real_amount
     items = [CRMOpportunity.model_validate(row) for row in rows]
     return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset, total=total or len(items))
 

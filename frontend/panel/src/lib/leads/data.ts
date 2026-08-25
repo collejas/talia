@@ -101,6 +101,7 @@ type CRMOpportunity = {
   titulo: string | null;
   descripcion: string | null;
   monto_estimado: number | null;
+  monto_real?: number | null;
   moneda: string | null;
   probabilidad: number | null;
   fecha_cierre_probable: string | null;
@@ -324,7 +325,7 @@ function buildLeadCards(rows: CRMOpportunity[], days: number): LeadCards {
     const categoria = normalizeOpportunityCategory(row);
     if (categoria === "ganada") {
       ganadas += 1;
-      const amount = Number(row.monto_estimado ?? 0);
+      const amount = Number(row.monto_real ?? 0);
       if (Number.isFinite(amount) && amount > 0) {
         montoTotal += amount;
         wonAmounts.push(amount);
@@ -410,7 +411,7 @@ function buildLeadChart(
     const categoria = normalizeOpportunityCategory(row);
     if (categoria === "ganada") {
       closedBucket.ganados += 1;
-      const amount = Number(row.monto_estimado ?? 0);
+      const amount = Number(row.monto_real ?? 0);
       if (Number.isFinite(amount) && amount > 0) {
         closedBucket.valorGanado += amount;
       }
@@ -431,7 +432,7 @@ function buildSalesBySeller(rows: CRMOpportunity[]): LeadSellerPoint[] {
 
     const id = row.asignado?.id ?? row.asignado_a_usuario_id ?? "sin-asignar";
     const nombre = row.asignado?.nombre_completo?.trim() || row.asignado?.correo?.trim() || "Sin asignar";
-    const amount = Number(row.monto_estimado ?? 0);
+    const amount = Number(row.monto_real ?? 0);
     const current = sellers.get(id) ?? { id, nombre, ganados: 0, valorGanado: 0 };
     current.ganados += 1;
     if (Number.isFinite(amount) && amount > 0) {
