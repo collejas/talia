@@ -2,6 +2,33 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-08-26]
+
+### Cambios
+
+- Se agregó el adaptador aislado `backend/app/integrations/postmark/` para llamadas HTTP al servicio de correo.
+- Se agregaron contratos internos para mensajes y resultados individuales o batch.
+- Se agregaron variables de configuración exclusivas del backend para tokens transaccional y broadcast, sin valores por defecto sensibles.
+- El adaptador valida cuerpo, remitente, destinatario, asunto y el límite máximo de 500 mensajes por batch.
+
+### Decisiones
+
+- El adaptador no resuelve tenant, permisos, cuotas ni persistencia; esas reglas permanecerán en servicios de negocio separados.
+- Los envíos batch conservan el resultado de cada destinatario aunque la respuesta HTTP sea exitosa.
+- No se conectó Postmark a Brevo, SMTP, panel ni jobs existentes.
+
+### Validaciones
+
+- `backend/tests/integrations/postmark/test_client.py`: 4 pruebas aprobadas.
+- `git diff --check`: aprobado.
+
+### Pendientes
+
+- Crear servicio de negocio con tenant, dominio, cuota, idempotencia y persistencia en las tablas nuevas.
+- Reconciliar el historial formal de migraciones de Supabase con las tablas ya existentes.
+- Crear endpoints neutrales protegidos y webhooks autenticados.
+- Configurar tokens y recursos reales de la cuenta de correo solo durante el piloto.
+
 ## [No publicado]
 
 ### Base de datos

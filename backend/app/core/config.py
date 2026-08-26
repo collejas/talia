@@ -197,6 +197,36 @@ class Settings(BaseSettings):
     )
     supabase_url: str | None = None
     supabase_service_role: str | None = None
+    postmark_base_url: str = Field(
+        default="https://api.postmarkapp.com",
+        validation_alias=AliasChoices("POSTMARK_BASE_URL", "TALIA_POSTMARK_BASE_URL"),
+    )
+    postmark_account_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("POSTMARK_ACCOUNT_TOKEN", "TALIA_POSTMARK_ACCOUNT_TOKEN"),
+    )
+    postmark_server_token_transactional: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "POSTMARK_SERVER_TOKEN_TRANSACTIONAL",
+            "TALIA_POSTMARK_SERVER_TOKEN_TRANSACTIONAL",
+        ),
+    )
+    postmark_server_token_broadcast: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "POSTMARK_SERVER_TOKEN_BROADCAST",
+            "TALIA_POSTMARK_SERVER_TOKEN_BROADCAST",
+        ),
+    )
+    postmark_timeout_seconds: float = Field(
+        default=20.0,
+        ge=5.0,
+        le=60.0,
+        validation_alias=AliasChoices(
+            "POSTMARK_TIMEOUT_SECONDS", "TALIA_POSTMARK_TIMEOUT_SECONDS"
+        ),
+    )
     stripe_webhook_secret: str | None = Field(
         default=None,
         validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "TALIA_STRIPE_WEBHOOK_SECRET"),
