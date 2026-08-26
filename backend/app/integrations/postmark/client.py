@@ -7,6 +7,8 @@ aplicar esas reglas sin depender del contrato del proveedor.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import httpx
 
 from app.core.config import settings
@@ -129,9 +131,13 @@ class PostmarkClient:
         error_message = value.get("Message")
         message_id = value.get("MessageID")
         accepted = error_code in (None, 0, "0") and bool(message_id)
+        try:
+            normalized_message_id = UUID(str(message_id)) if message_id else None
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise PostmarkRequestError("invalid_provider_message_id") from exc
         return PostmarkSendResult(
             accepted=accepted,
-            provider_message_id=str(message_id) if message_id else None,
+            provider_message_id=normalized_message_id,
             error_code=int(error_code) if isinstance(error_code, (int, str)) and str(error_code).isdigit() else None,
             error_message=str(error_message) if error_message else None,
         )

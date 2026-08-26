@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from uuid import UUID
 
 from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkRequestError
@@ -24,7 +25,10 @@ async def test_send_message_uses_stream_token_and_normalizes_result():
         captured["url"] = str(request.url)
         captured["token"] = request.headers["X-Postmark-Server-Token"]
         captured["json"] = request.read()
-        return httpx.Response(200, json={"ErrorCode": 0, "MessageID": "pm-123", "Message": "OK"})
+        return httpx.Response(
+            200,
+            json={"ErrorCode": 0, "MessageID": "11111111-1111-1111-1111-111111111111", "Message": "OK"},
+        )
 
     client = PostmarkClient(
         base_url="https://mail.test",
@@ -34,7 +38,7 @@ async def test_send_message_uses_stream_token_and_normalizes_result():
     result = await client.send_message(_message(), message_kind="transactional")
 
     assert result.accepted is True
-    assert result.provider_message_id == "pm-123"
+    assert result.provider_message_id == UUID("11111111-1111-1111-1111-111111111111")
     assert captured["url"] == "https://mail.test/email"
     assert captured["token"] == "transactional-secret"
     assert captured["json"] == (
@@ -49,7 +53,7 @@ async def test_send_batch_keeps_individual_provider_failures():
         return httpx.Response(
             200,
             json=[
-                {"ErrorCode": 0, "MessageID": "pm-1", "Message": "OK"},
+                {"ErrorCode": 0, "MessageID": "11111111-1111-1111-1111-111111111111", "Message": "OK"},
                 {"ErrorCode": 406, "MessageID": "", "Message": "Inactive recipient"},
             ],
         )

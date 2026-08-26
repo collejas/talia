@@ -77,6 +77,21 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("queue_invalid_response")
         return data[0]
 
+    async def start_attempt(self, *, organizacion_id: UUID, message_id: UUID) -> dict[str, Any]:
+        data = await self._rpc(
+            "tenant_email_start_attempt",
+            {"p_organizacion_id": str(organizacion_id), "p_message_id": str(message_id)},
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("attempt_start_invalid_response")
+        return data[0]
+
+    async def finish_attempt(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rpc("tenant_email_finish_attempt", payload)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("attempt_finish_invalid_response")
+        return data[0]
+
     async def _get_one(self, path: str, *, params: dict[str, str]) -> dict[str, Any] | None:
         headers = {
             "apikey": self._service_role,

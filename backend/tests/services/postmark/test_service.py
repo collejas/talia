@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.integrations.postmark.errors import PostmarkError
-from app.integrations.postmark.schemas import PostmarkMessage
+from app.integrations.postmark.schemas import PostmarkMessage, PostmarkSendResult
 from app.services.postmark.service import PostmarkService
 
 
@@ -77,3 +77,39 @@ async def test_broadcast_requires_explicit_tag():
             message=message(),
             message_kind="broadcast",
         )
+
+
+@pytest.mark.asyncio
+async def test_deliver_queued_message_finishes_provider_attempt():
+    class DeliveryRepository(FakeRepository):
+        async def start_attempt(self, *, organizacion_id, message_id):
+            return {
+                "attempt_id": str(uuid4()),
+                "from_email": "noreply@geoactiv.mx",
+                "to_email": "client@example.com",
+                "subject": "Aviso",
+                "text_body": "Contenido",
+                "message_kind": "transactional",
+                "tag": None,
+            }
+
+        async def finish_attempt(self, *, payload):
+            assert payload["p_accepted"] is True
+            return {"message_status": "submitted"}
+
+    class DeliveryClient:
+        async def send_message(self, message, *, message_kind):
+            assert message.to_email == "client@example.com"
+            assert message_kind == "transactional"
+            return PostmarkSendResult(
+                accepted=True,
+                provider_message_id=UUID("11111111-1111-1111-1111-111111111111"),
+            )
+
+    result = await PostmarkService(repository=DeliveryRepository()).deliver_queued_message(
+        organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+        message_id=uuid4(),
+        client=DeliveryClient(),
+    )
+
+    assert result == {"provider_accepted": True, "state": "submitted"}

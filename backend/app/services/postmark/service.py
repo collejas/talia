@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError
 from app.integrations.postmark.schemas import MessageKind, PostmarkMessage
 
@@ -27,6 +28,47 @@ class PostmarkService:
 
     def __init__(self, *, repository: PostmarkRepository) -> None:
         self.repository = repository
+
+    async def deliver_queued_message(
+        self,
+        *,
+        organizacion_id: UUID,
+        message_id: UUID,
+        client: PostmarkClient,
+    ) -> dict[str, object]:
+        """Entrega un mensaje previamente encolado y cierra su intento."""
+        attempt = await self.repository.start_attempt(
+            organizacion_id=organizacion_id,
+            message_id=message_id,
+        )
+        message = PostmarkMessage(
+            from_email=str(attempt["from_email"]),
+            from_name=attempt.get("from_name"),
+            reply_to=attempt.get("reply_to_email"),
+            to_email=str(attempt["to_email"]),
+            subject=str(attempt["subject"]),
+            html_body=attempt.get("html_body"),
+            text_body=attempt.get("text_body"),
+            tag=attempt.get("tag"),
+        )
+        kind = attempt.get("message_kind")
+        if kind not in {"transactional", "broadcast"}:
+            raise PostmarkError("email_message_kind_invalid")
+        result = await client.send_message(message, message_kind=kind)
+        finish = await self.repository.finish_attempt(
+            payload={
+                "p_organizacion_id": str(organizacion_id),
+                "p_message_id": str(message_id),
+                "p_attempt_id": str(attempt["attempt_id"]),
+                "p_accepted": result.accepted,
+                "p_external_message_id": (
+                    str(result.provider_message_id) if result.provider_message_id else None
+                ),
+                "p_error_code": str(result.error_code) if result.error_code is not None else None,
+                "p_error_message": result.error_message,
+            }
+        )
+        return {"provider_accepted": result.accepted, "state": finish.get("message_status")}
 
     async def validate_send(
         self,

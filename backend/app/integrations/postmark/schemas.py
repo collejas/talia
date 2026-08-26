@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -52,7 +53,7 @@ class PostmarkSendResult(BaseModel):
     """Resultado normalizado de un destinatario."""
 
     accepted: bool
-    provider_message_id: str | None = None
+    provider_message_id: UUID | None = None
     error_code: int | None = None
     error_message: str | None = None
 

@@ -11,6 +11,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregaron variables de configuración exclusivas del backend para tokens transaccional y broadcast, sin valores por defecto sensibles.
 - El adaptador valida cuerpo, remitente, destinatario, asunto y el límite máximo de 500 mensajes por batch.
 - Se agregó una migración nueva para conservar el contenido explícito del mensaje y reservar cuota con idempotencia en una transacción.
+- Se agregó una migración de intentos de entrega para reclamar, cerrar y contabilizar mensajes Postmark de forma idempotente.
 
 ### Decisiones
 
@@ -19,13 +20,16 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Postmark no importa, reutiliza ni comparte implementación con Brevo o SMTP; ambos proveedores permanecen completamente separados.
 - El servicio Postmark tampoco se conectó todavía al panel ni a los jobs existentes.
 - La reserva de cuota y la creación del registro local deben ocurrir antes de llamar al proveedor externo.
+- Un mensaje aceptado por el proveedor queda en `submitted` hasta que un webhook confirme la entrega.
+- El ciclo de entrega reclama el mensaje, llama únicamente al adaptador Postmark y cierra su intento en las tablas propias.
 
 ### Validaciones
 
 - `backend/tests/integrations/postmark/test_client.py`: 4 pruebas aprobadas.
-- `backend/tests/services/postmark/test_service.py`: 3 pruebas aprobadas.
+- `backend/tests/services/postmark/test_service.py`: 4 pruebas aprobadas.
 - `git diff --check`: aprobado.
 - `20260826_220000_postmark_queue_quota` fue aplicada y verificada en Supabase; agregó las columnas de contenido y la RPC atómica de cola/cuota.
+- `20260826_230000_postmark_delivery_attempts` fue aplicada y verificada en Supabase; las RPC quedaron protegidas y no se crearon registros de prueba.
 
 ### Pendientes
 
