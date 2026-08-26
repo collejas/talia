@@ -31,7 +31,7 @@
     .selected { display: grid; gap: 3px; background: #f6f8fb; border-radius: 10px; padding: 11px 13px; margin: 12px 0; }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px; }
     label { display: grid; gap: 4px; font-weight: 600; font-size: .86rem; }
-    input { width: 100%; box-sizing: border-box; border: 1px solid #cbd4e1; border-radius: 7px; padding: 8px 10px; font: inherit; }
+    input, select { width: 100%; box-sizing: border-box; border: 1px solid #cbd4e1; border-radius: 7px; padding: 8px 10px; font: inherit; background: #fff; }
     .full { grid-column: 1 / -1; }
     button.primary { margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 18px; background: #3154d8; color: #fff; font-weight: 750; cursor: pointer; box-shadow: 0 5px 12px rgba(49,84,216,.2); }
     button:disabled { opacity: .6; cursor: wait; }
@@ -74,20 +74,23 @@
       </div>
 
       <form data-commercial-checkout-form>
-        <h2>Información de contacto</h2>
-        <p class="help">Solo solicitamos los datos necesarios para crear el tenant inicial.</p>
+        <h2>Datos iniciales</h2>
+        <p class="help">Usaremos estos datos para preparar tu cuenta y enviarte el acceso después de confirmar el pago.</p>
         <div class="form-grid">
-          <label>Empresa o tenant *<input name="nombre" minlength="2" maxlength="160" autocomplete="organization" required /></label>
-          <label>Contacto principal *<input name="contacto_nombre" minlength="2" maxlength="160" autocomplete="name" required /></label>
-          <label>Correo principal *<input name="correo_contacto_principal" type="email" maxlength="320" autocomplete="email" required /></label>
-          <label>Teléfono<input name="telefono" maxlength="40" autocomplete="tel" /></label>
-          <label>Razón social<input name="razon_social" maxlength="200" /></label>
-          <label>RFC<input name="rfc" maxlength="20" autocomplete="off" /></label>
-          <label>Estado<input name="estado" maxlength="120" autocomplete="address-level1" /></label>
-          <label>Ciudad<input name="ciudad" maxlength="120" autocomplete="address-level2" /></label>
-          <label class="full">Correo de facturación<input name="correo_facturacion" type="email" maxlength="320" autocomplete="email" /></label>
+          <label>Nombre *<input name="contacto_nombre" minlength="2" maxlength="80" autocomplete="given-name" required /></label>
+          <label>Apellidos *<input name="contacto_apellidos" minlength="2" maxlength="120" autocomplete="family-name" required /></label>
+          <label>Correo *<input name="correo_contacto_principal" type="email" maxlength="320" autocomplete="email" required /></label>
+          <label>Teléfono de WhatsApp *<input name="telefono" minlength="7" maxlength="40" autocomplete="tel" required /></label>
+          <label>Nombre comercial de la empresa *<input name="nombre_comercial" minlength="2" maxlength="200" autocomplete="organization" required /></label>
+          <label>País *<select name="pais_codigo_iso2" data-country-select required><option value="MX">México</option></select></label>
+          <label>Razón social<input name="razon_social" maxlength="200" autocomplete="organization" /></label>
+          <div class="full hidden" data-mexico-fields>
+            <div class="form-grid">
+              <label>RFC (si cuentas con él)<input name="rfc" maxlength="20" autocomplete="off" /></label>
+              <label>Tipo de persona<select name="tipo_persona_fiscal"><option value="">Selecciona una opción</option><option value="moral">Persona moral</option><option value="pfae">Persona física con actividad empresarial (PFAE)</option></select></label>
+            </div>
+          </div>
         </div>
-        <input type="hidden" name="pais" value="MX" />
         <input type="hidden" name="moneda" value="MXN" />
         <input type="hidden" name="idioma" value="es-MX" />
         <input type="hidden" name="timezone" value="America/Mexico_City" />
@@ -113,6 +116,6 @@
     </section>
   </main>
   <script src="/assets/js/public-config.js?v=20260825a"></script>
-  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826h"></script>
+  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826j"></script>
 </body>
 </html>

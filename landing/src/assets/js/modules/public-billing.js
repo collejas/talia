@@ -59,6 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const paymentInstallmentSelect = root.querySelector('[data-payment-installment-count]');
   const paymentEligibility = root.querySelector('[data-payment-eligibility]');
   const dataScreen = root.querySelector('[data-data-screen]');
+  const countrySelect = form?.querySelector('[data-country-select]');
+  const mexicoFields = form?.querySelector('[data-mexico-fields]');
+  const rfcInput = form?.querySelector('[name="rfc"]');
+  const fiscalTypeSelect = form?.querySelector('[name="tipo_persona_fiscal"]');
 
   if (!planList || !planCount || !statusEl) {
     return;
@@ -81,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     banner.hidden = false;
     banner.classList.remove('hidden');
     banner.className = 'billing-banner billing-banner--success';
-    banner.textContent = 'El pago fue confirmado. Si el webhook ya procesó la suscripción, tu tenant quedará activo en breve.';
+    banner.textContent = 'El pago fue confirmado. Tu cuenta quedará activa en breve.';
   } else if (!catalogOnly && checkoutState === 'cancel') {
     banner.hidden = false;
     banner.classList.remove('hidden');
@@ -94,7 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
   async function bootstrap() {
     setStatus('Cargando modalidades de contratación...');
     try {
-      const plans = await loadPlans();
+      const [plans] = await Promise.all([
+        loadPlans(),
+        loadCountries(),
+      ]);
       renderPlans(plans);
       setStatus('Modalidades cargadas. Elige una opción para continuar.');
     } catch (error) {
@@ -106,6 +113,37 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       planCount.textContent = '0';
       setStatus('Error al cargar modalidades');
+    }
+  }
+
+  async function loadCountries() {
+    if (!countrySelect) return;
+    const response = await fetch(`${API_BASE}/countries`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const countries = Array.isArray(data?.items) ? data.items : [];
+    if (!countries.length) throw new Error('No hay países activos configurados.');
+    const current = countrySelect.value || 'MX';
+    countrySelect.innerHTML = countries
+      .map((country) => `<option value="${escapeAttr(country.codigo_iso2)}">${escapeHtml(country.codigo_iso2 === 'MX' ? 'México' : (country.nombre_largo || country.nombre))}</option>`)
+      .join('');
+    countrySelect.value = countries.some((country) => country.codigo_iso2 === current) ? current : 'MX';
+    toggleMexicoFields();
+    countrySelect.addEventListener('change', toggleMexicoFields);
+  }
+
+  function toggleMexicoFields() {
+    if (!countrySelect || !mexicoFields) return;
+    const isMexico = countrySelect.value === 'MX';
+    mexicoFields.hidden = !isMexico;
+    mexicoFields.classList.toggle('hidden', !isMexico);
+    if (rfcInput) {
+      rfcInput.disabled = !isMexico;
+      if (!isMexico) rfcInput.value = '';
+    }
+    if (fiscalTypeSelect) {
+      fiscalTypeSelect.disabled = !isMexico;
+      if (!isMexico) fiscalTypeSelect.value = '';
     }
   }
 
@@ -286,11 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const payload = collectPayload(form);
     payload.provider_price_id = state.selectedPriceId;
+    payload.nombre = payload.nombre_comercial || payload.nombre || '';
     payload.nombre = payload.nombre || '';
     payload.correo_contacto_principal = payload.correo_contacto_principal || '';
 
     if (!payload.nombre.trim()) {
-      showMessage('El nombre del tenant es obligatorio.', 'error');
+      showMessage('El nombre comercial de la empresa es obligatorio.', 'error');
       return;
     }
 
@@ -300,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setSubmitting(true);
-    showMessage('Creando tenant y preparando el pago seguro...', 'info');
+    showMessage('Preparando tu cuenta y el pago seguro...', 'info');
 
     try {
       const response = await fetch(`${API_BASE}/checkout`, {
@@ -437,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const action = await stripe.handleNextAction({ clientSecret: confirmData.client_secret });
           if (action.error) throw new Error(action.error.message || 'No se pudo autenticar el pago.');
         }
-        paymentMessage.textContent = 'Pago confirmado. El tenant quedará activo cuando el webhook termine de procesarlo.';
+        paymentMessage.textContent = 'Pago confirmado. Tu cuenta quedará activa cuando terminemos de procesar la confirmación.';
         paymentMessage.className = 'billing-message billing-message--success';
       } catch (error) {
         console.error('[public-billing] Pago falló.', error);

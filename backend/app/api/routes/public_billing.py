@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -68,6 +68,17 @@ class PublicCommercialPlansResponse(BaseModel):
     items: list[PublicCommercialPlanSummary] = Field(default_factory=list)
 
 
+class PublicCountrySummary(BaseModel):
+    codigo_iso2: str
+    nombre: str
+    nombre_largo: str | None = None
+
+
+class PublicCountriesResponse(BaseModel):
+    ok: bool = True
+    items: list[PublicCountrySummary] = Field(default_factory=list)
+
+
 class PublicTenantBillingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -78,6 +89,7 @@ class PublicTenantBillingRequest(BaseModel):
     dominio_principal: str | None = None
     rfc: str | None = None
     pais: str | None = None
+    pais_codigo_iso2: str | None = Field(default=None, min_length=2, max_length=2)
     estado: str | None = None
     ciudad: str | None = None
     telefono: str | None = None
@@ -86,7 +98,9 @@ class PublicTenantBillingRequest(BaseModel):
     correo_contacto_principal: EmailStr
     correo_facturacion: EmailStr | None = None
     contacto_nombre: str = Field(..., min_length=2, max_length=160)
+    contacto_apellidos: str | None = Field(default=None, min_length=2, max_length=160)
     contacto_telefono: str | None = None
+    tipo_persona_fiscal: Literal["moral", "pfae"] | None = None
     timezone: str | None = None
     idioma: str | None = None
     moneda: str | None = None
@@ -98,6 +112,25 @@ class PublicTenantBillingRequest(BaseModel):
         default=None,
         description="Alias webchat opcional para activar el canal desde el alta comercial.",
     )
+
+
+@router.get("/countries", response_model=PublicCountriesResponse)
+async def list_public_billing_countries(
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> PublicCountriesResponse:
+    try:
+        rows = await repo.list_geo_paises(limit=300)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="public_billing_countries_unavailable") from exc
+
+    countries: list[PublicCountrySummary] = []
+    for row in rows:
+        try:
+            countries.append(PublicCountrySummary.model_validate(row))
+        except Exception:
+            continue
+    countries.sort(key=lambda item: (item.codigo_iso2 != "MX", item.nombre.casefold()))
+    return PublicCountriesResponse(items=countries)
 
 
 class PublicTenantBillingResponse(BaseModel):
@@ -210,6 +243,12 @@ async def create_public_billing_checkout(
             raise HTTPException(status_code=400, detail="price_provider_invalid")
         if str(price_row.get("billing_interval") or "").strip().lower() != "one_time":
             raise HTTPException(status_code=409, detail="upfront_price_must_be_one_time")
+        country_code = str(payload.pais_codigo_iso2 or "").strip().upper() or "MX"
+        country = await repo.get_geo_pais(codigo_iso2=country_code) if payload.pais_codigo_iso2 else None
+        if payload.pais_codigo_iso2 and not country:
+            raise HTTPException(status_code=400, detail="pais_no_disponible")
+        if country_code != "MX" and (payload.rfc or payload.tipo_persona_fiscal):
+            raise HTTPException(status_code=400, detail="fiscal_fields_only_for_mexico")
         plan_id = UUID(str(price_row.get("plan_id")))
         plan = await repo.get_commercial_plan(plan_id=plan_id)
         if not plan or not bool(plan.get("active", False)):
@@ -232,7 +271,9 @@ async def create_public_billing_checkout(
             "correo_contacto_principal": payload.correo_contacto_principal,
             "correo_facturacion": payload.correo_facturacion,
             "contacto_nombre": payload.contacto_nombre,
-            "contacto_telefono": payload.contacto_telefono,
+            "contacto_apellidos": payload.contacto_apellidos,
+            "contacto_telefono": payload.contacto_telefono or payload.telefono,
+            "tipo_persona_fiscal": payload.tipo_persona_fiscal if country_code == "MX" else None,
             "timezone": payload.timezone,
             "idioma": payload.idioma,
             "moneda": payload.moneda,
@@ -242,7 +283,8 @@ async def create_public_billing_checkout(
             "regimen_fiscal": payload.regimen_fiscal,
             "dominio_principal": payload.dominio_principal,
             "rfc": payload.rfc,
-            "pais": payload.pais,
+            "pais": str((country or {}).get("nombre") or payload.pais or "Mexico"),
+            "pais_codigo_iso2": country_code,
             "estado": payload.estado,
             "ciudad": payload.ciudad,
             "telefono": payload.telefono,

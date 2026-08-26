@@ -54,13 +54,43 @@ class PlatformRepository:
 
     async def list_organizaciones(self) -> list[dict[str, Any]]:
         params = {
-            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,estado_onboarding,activo,config,fecha_alta",
+            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_apellidos,contacto_telefono,tipo_persona_fiscal,timezone,idioma,moneda,logo_url,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,estado_onboarding,activo,config,fecha_alta",
             "order": "fecha_alta.desc",
         }
         data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
         if not isinstance(data, list):
             raise PlatformRepositoryError("organizaciones_invalid_response")
         return data
+
+    async def list_geo_paises(self, *, limit: int = 250) -> list[dict[str, Any]]:
+        params = {
+            "select": "codigo_iso2,nombre,nombre_largo",
+            "activo": "eq.true",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 300))),
+        }
+        data = await self._rest("GET", "/rest/v1/geo_paises", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("geo_paises_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_geo_pais(self, *, codigo_iso2: str) -> dict[str, Any] | None:
+        code = str(codigo_iso2 or "").strip().upper()
+        if len(code) != 2:
+            return None
+        data = await self._rest(
+            "GET",
+            "/rest/v1/geo_paises",
+            params={
+                "select": "codigo_iso2,nombre,nombre_largo",
+                "codigo_iso2": f"eq.{code}",
+                "activo": "eq.true",
+                "limit": "1",
+            },
+        )
+        if not isinstance(data, list) or not data:
+            return None
+        return data[0] if isinstance(data[0], dict) else None
 
     async def list_tenant_billing_accounts(self) -> list[dict[str, Any]]:
         params = {
@@ -1218,7 +1248,7 @@ class PlatformRepository:
 
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_telefono,timezone,idioma,moneda,logo_url,ia_descripcion_empresa,ia_productos_servicios,ia_publico_objetivo,ia_propuesta_valor,ia_diferenciadores,ia_restricciones_comerciales,ia_color_primario,ia_color_secundario,ia_color_acento,ia_color_fondo,ia_estilo_visual,ia_radio_bordes,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "select": "id,nombre,nombre_comercial,eslogan_empresa,razon_social,rfc,pais,pais_codigo_iso2,estado,estado_clave_entidad,ciudad,municipio_clave_entidad,municipio_clave_municipio,dominio_principal,telefono,correo_contacto_principal,correo_facturacion,contacto_nombre,contacto_apellidos,contacto_telefono,tipo_persona_fiscal,timezone,idioma,moneda,logo_url,ia_descripcion_empresa,ia_productos_servicios,ia_publico_objetivo,ia_propuesta_valor,ia_diferenciadores,ia_restricciones_comerciales,ia_color_primario,ia_color_secundario,ia_color_acento,ia_color_fondo,ia_estilo_visual,ia_radio_bordes,direccion_fiscal,direccion_fiscal_calle,direccion_fiscal_numero_exterior,direccion_fiscal_numero_interior,direccion_fiscal_colonia,direccion_fiscal_localidad,direccion_fiscal_referencia,codigo_postal,regimen_fiscal,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
             "id": f"eq.{organizacion_id}",
             "limit": "1",
         }
