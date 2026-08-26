@@ -10,6 +10,10 @@ import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-pa
 import { WhatsAppCloseWindowForm } from "@/components/settings/whatsapp-close-window-form"
 import { TenantWebTrackingPanel } from "./components/tenant-web-tracking-panel"
 import {
+  TenantEmailServicePanel,
+  type TenantEmailServiceData,
+} from "./components/tenant-email-service-panel"
+import {
   TenantTemplateAiPromptConfigPanel,
   type TemplateAiPromptConfig,
 } from "./components/tenant-template-ai-prompt-config-panel"
@@ -189,6 +193,10 @@ export default async function SettingsVariablesPage() {
       withUserToken: true,
     },
   )
+  const emailServiceResp = await callCrmApi<TenantEmailServiceData>("/tenant/me/email-service", {
+    organizacionId: null,
+    withUserToken: true,
+  })
   const data = settingsResp.ok ? settingsResp.data : null
   const promptConfigResp = data?.organizacion_id === MASTER_TENANT_ID
     ? await callCrmApi<TemplateAiPromptConfigResponse>("/tenant/me/prospeccion-template-ai-prompts", {
@@ -212,6 +220,7 @@ export default async function SettingsVariablesPage() {
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
   if (!scheduleResp.ok) errors.push(scheduleResp.error)
+  if (!emailServiceResp.ok) errors.push(emailServiceResp.error)
   if (promptConfigResp && !promptConfigResp.ok) errors.push(promptConfigResp.error)
   if (layoutConfigResp && !layoutConfigResp.ok) errors.push(layoutConfigResp.error)
 
@@ -541,6 +550,9 @@ export default async function SettingsVariablesPage() {
                   />
                 </TabsContent>
                 <TabsContent value="mail" className="pt-4">
+                  <div className="space-y-6">
+                    <TenantEmailServicePanel data={emailServiceResp.ok ? emailServiceResp.data : null} />
+                  </div>
                   <TenantMailSettings
                     tenantId={tenantId}
                     initialValues={mailInitialValues}

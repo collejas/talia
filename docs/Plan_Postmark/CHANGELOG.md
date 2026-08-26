@@ -12,13 +12,15 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - El adaptador valida cuerpo, remitente, destinatario, asunto y el límite máximo de 500 mensajes por batch.
 - Se agregó una migración nueva para conservar el contenido explícito del mensaje y reservar cuota con idempotencia en una transacción.
 - Se agregó una migración de intentos de entrega para reclamar, cerrar y contabilizar mensajes Postmark de forma idempotente.
+- Se agregó el endpoint tenant-scoped `GET /tenant/me/email-service` con autorización `settings.view`.
+- Se agregó el panel de tenant para consultar estado, dominios, registros DNS y cuota sin exponer tokens ni identificadores del proveedor.
 
 ### Decisiones
 
 - El adaptador no resuelve tenant, permisos, cuotas ni persistencia; esas reglas permanecerán en servicios de negocio separados.
 - Los envíos batch conservan el resultado de cada destinatario aunque la respuesta HTTP sea exitosa.
 - Postmark no importa, reutiliza ni comparte implementación con Brevo o SMTP; ambos proveedores permanecen completamente separados.
-- El servicio Postmark tampoco se conectó todavía al panel ni a los jobs existentes.
+- El panel ya consulta el servicio mediante un contrato neutral; los jobs y los envíos productivos todavía no están conectados.
 - La reserva de cuota y la creación del registro local deben ocurrir antes de llamar al proveedor externo.
 - Un mensaje aceptado por el proveedor queda en `submitted` hasta que un webhook confirme la entrega.
 - El ciclo de entrega reclama el mensaje, llama únicamente al adaptador Postmark y cierra su intento en las tablas propias.
@@ -34,9 +36,9 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 ### Pendientes
 
-- Crear servicio de negocio con tenant, dominio, cuota, idempotencia y persistencia en las tablas nuevas.
-- Reconciliar el historial formal de migraciones de Supabase con las tablas ya existentes.
-- Crear endpoints neutrales protegidos y webhooks autenticados.
+- Completar el servicio de negocio de cola/envío y conectar un worker aislado.
+- Crear webhooks autenticados y procesar eventos de entrega, rebote, queja y supresión.
+- Agregar la operación administrativa para asignar planes, dominios y cuota por tenant.
 - Configurar tokens y recursos reales de la cuenta de correo solo durante el piloto.
 
 ## [No publicado]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -45,6 +46,17 @@ class PostmarkRepository:
             },
         )
 
+    async def list_domains(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        data = await self._get_many(
+            "/rest/v1/tenant_email_domains",
+            params={
+                "select": "id,organizacion_id,domain_name,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,blocked_at,default_from_email,default_from_name,reply_to_email",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "created_at.asc",
+            },
+        )
+        return data
+
     async def get_active_plan(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         return await self._get_one(
             "/rest/v1/tenant_email_plans",
@@ -53,6 +65,20 @@ class PostmarkRepository:
                 "organizacion_id": f"eq.{organizacion_id}",
                 "status": "eq.active",
                 "order": "starts_at.desc",
+                "limit": "1",
+            },
+        )
+
+    async def get_current_usage(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        now = datetime.now(timezone.utc).isoformat()
+        return await self._get_one(
+            "/rest/v1/tenant_email_usage_periods",
+            params={
+                "select": "id,plan_id,period_start,period_end,reserved_recipients,accepted_recipients,failed_recipients,delivered_recipients,bounced_recipients,complained_recipients,released_recipients",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "period_start": f"lte.{now}",
+                "period_end": f"gt.{now}",
+                "order": "period_start.desc",
                 "limit": "1",
             },
         )
@@ -108,6 +134,23 @@ class PostmarkRepository:
         if not isinstance(data, list):
             raise PostmarkRepositoryError("database_invalid_response")
         return data[0] if data and isinstance(data[0], dict) else None
+
+    async def _get_many(self, path: str, *, params: dict[str, str]) -> list[dict[str, Any]]:
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.get(f"{self._base_url}{path}", params=params, headers=headers)
+        except httpx.RequestError as exc:
+            raise PostmarkRepositoryError("database_unreachable") from exc
+        if response.status_code >= 400:
+            raise PostmarkRepositoryError("database_read_failed")
+        data = response.json()
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("database_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         headers = {
