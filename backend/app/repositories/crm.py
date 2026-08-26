@@ -18052,6 +18052,41 @@ class CRMRepository:
             return row
         return None
 
+    async def get_cliente_por_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene el cliente usando la identidad canónica de persona."""
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "persona_id": f"eq.{persona_id}",
+            "select": self._CLIENTE_SELECT,
+            "limit": "1",
+        }
+        if usuario_token:
+            try:
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/clientes",
+                    token=usuario_token,
+                    params=params,
+                )
+            except CRMRepositoryError as exc:
+                if not _is_jwt_expired_error(exc):
+                    raise
+            else:
+                data = resp.json() or []
+                row = self._first_row(data)
+                if isinstance(row, dict):
+                    return row
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
     async def get_cliente_por_id(
         self,
         *,
@@ -23275,7 +23310,10 @@ class CRMRepository:
         )
         in_clause = _postgrest_in_clause(safe_ids)
         params = {
-            "select": "id,cliente_id,monto_estimado,metadata,creado_en,asignado_a_usuario_id",
+            # `cliente_id` pertenece a tablas de clientes/documentos; no es una
+            # columna de oportunidades. La relación de una oportunidad con el
+            # contacto se expresa mediante contacto_principal_id/persona_id.
+            "select": "id,contacto_principal_id,persona_id,monto_estimado,metadata,creado_en,asignado_a_usuario_id",
             "organizacion_id": f"eq.{organizacion_id}",
             "or": f"(metadata->>conversation_id.{in_clause},metadata->>conversacion_id.{in_clause})",
             "order": "creado_en.desc",

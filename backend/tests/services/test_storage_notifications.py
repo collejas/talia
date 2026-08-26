@@ -25,9 +25,26 @@ class NotificationRepo:
         self.permitted_users = permitted_users or set()
         self.global_fallback_called = False
         self.assignment_calls: list[dict[str, object]] = []
+        self.client: dict[str, object] | None = None
+        self.client_opportunity: dict[str, object] | None = None
 
     async def get_conversation_summary(self, *, conversation_id: UUID) -> dict[str, object]:
         return self.conversation
+
+    async def get_cliente_por_contacto(
+        self, *, organizacion_id: UUID, contacto_id: UUID
+    ) -> dict[str, object] | None:
+        return self.client
+
+    async def get_cliente_por_persona(
+        self, *, organizacion_id: UUID, persona_id: UUID
+    ) -> dict[str, object] | None:
+        return self.client
+
+    async def get_pipeline_opportunity(
+        self, *, organizacion_id: UUID, oportunidad_id: UUID
+    ) -> dict[str, object] | None:
+        return self.client_opportunity
 
     async def list_opportunities_by_conversation_ids(self, **_: object) -> list[dict[str, object]]:
         if self.opportunity_assignee is None:
@@ -93,6 +110,28 @@ async def test_inbox_recipients_recover_assignee_from_opportunity() -> None:
         opportunity_assignee=assignee,
         permitted_users={assignee},
     )
+
+    recipients = await storage._resolve_inbox_notification_users(
+        repo=repo,
+        organizacion_id=organization_id,
+        conversation_id=uuid4(),
+    )
+
+    assert recipients == [assignee]
+
+
+@pytest.mark.asyncio
+async def test_inbox_recipients_recover_assignee_from_existing_client_opportunity() -> None:
+    organization_id = uuid4()
+    contact_id = uuid4()
+    opportunity_id = uuid4()
+    assignee = uuid4()
+    repo = NotificationRepo(
+        conversation={"asignado_a_usuario_id": None, "persona_id": str(contact_id)},
+        permitted_users={assignee},
+    )
+    repo.client = {"id": str(uuid4()), "oportunidad_id": str(opportunity_id)}
+    repo.client_opportunity = {"asignado_a_usuario_id": str(assignee)}
 
     recipients = await storage._resolve_inbox_notification_users(
         repo=repo,

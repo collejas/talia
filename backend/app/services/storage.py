@@ -367,6 +367,49 @@ async def _resolve_inbox_notification_users(
                 assigned_user_id=assigned,
             )
 
+        # Un contacto que ya compró se identifica en `clientes`, no mediante
+        # una columna cliente_id dentro de `oportunidades`. Si el cliente
+        # conserva una oportunidad, esa oportunidad es la fuente de su dueño.
+        persona_id = _safe_uuid(convo.get("persona_id"))
+        contact_id = _safe_uuid(convo.get("contacto_id"))
+        client = None
+        if persona_id:
+            try:
+                client = await repo.get_cliente_por_persona(
+                    organizacion_id=organizacion_id,
+                    persona_id=persona_id,
+                )
+            except CRMRepositoryError:
+                client = None
+        if client is None and contact_id and contact_id != persona_id:
+            try:
+                client = await repo.get_cliente_por_contacto(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contact_id,
+                )
+            except CRMRepositoryError:
+                client = None
+        if isinstance(client, dict):
+            client_opportunity_id = _safe_uuid(client.get("oportunidad_id"))
+            if client_opportunity_id:
+                try:
+                    client_opportunity = await repo.get_pipeline_opportunity(
+                        organizacion_id=organizacion_id,
+                        oportunidad_id=client_opportunity_id,
+                    )
+                except CRMRepositoryError:
+                    client_opportunity = None
+                if isinstance(client_opportunity, dict):
+                    assigned = _safe_uuid(
+                        client_opportunity.get("asignado_a_usuario_id")
+                    )
+                    if assigned:
+                        return await _resolve_opportunity_notification_users(
+                            repo=repo,
+                            organizacion_id=organizacion_id,
+                            assigned_user_id=assigned,
+                        )
+
         try:
             opportunities = await repo.list_opportunities_by_conversation_ids(
                 organizacion_id=organizacion_id,
@@ -447,6 +490,28 @@ async def _notify_inbox_message(
     convo_uuid = _safe_uuid(conversation_id)
     if not convo_uuid:
         return
+
+    # Este worker puede arrancar en paralelo con la creación de la oportunidad.
+    # Reintentar la asignación aquí evita publicar la notificación mientras la
+    # conversación todavía no tiene destinatario confirmado.
+    try:
+        await _ensure_inbound_assignment_before_notification(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            channel=channel or "",
+        )
+    except Exception as exc:
+        logger.warning(
+            "storage.inbox_notification_assignment_prepare_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "error": str(exc),
+            },
+        )
 
     recipients: list[UUID] = []
     for attempt, delay_seconds in enumerate(INBOX_NOTIFICATION_RETRY_DELAYS_SECONDS, start=1):
