@@ -13,7 +13,7 @@ Que GEOACTIV opere el servicio de correo desde Talia para todos los tenants:
 
 ## Estado de este documento
 
-Plan inicial basado en la revisión del repositorio al 2026-08-12. No se ha modificado todavía el código ni se ha aplicado una migración de base de datos.
+Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tablas ya existe en Supabase y quedó reconciliado mediante una migración de verificación; la implementación funcional y el piloto siguen pendientes.
 
 ## Orden de lectura
 

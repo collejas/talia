@@ -30,6 +30,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - `git diff --check`: aprobado.
 - `20260826_220000_postmark_queue_quota` fue aplicada y verificada en Supabase; agregó las columnas de contenido y la RPC atómica de cola/cuota.
 - `20260826_230000_postmark_delivery_attempts` fue aplicada y verificada en Supabase; las RPC quedaron protegidas y no se crearon registros de prueba.
+- `20260826_235000_reconcile_postmark_core` fue aplicada y verificada en Supabase; confirmó las 11 tablas originales, `FORCE RLS` y el único registro pendiente del tenant maestro sin reejecutar el DDL inicial.
 
 ### Pendientes
 
