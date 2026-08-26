@@ -329,9 +329,39 @@ async def create_stripe_payment_intent(
         "metadata[plan_id]": str(plan_id),
         "metadata[provider_price_id]": provider_price_id,
         "metadata[installment_count]": str(installment_count),
-        "payment_method_options[card][installments][enabled]": "true" if installment_count > 1 else "false",
+        # La selección de MSI se hace después de conocer la tarjeta elegible.
+        # Así Stripe no muestra su selector global dentro del Payment Element.
+        "payment_method_options[card][installments][enabled]": "false",
     }
     return await _stripe_request(method="POST", path="/v1/payment_intents", data=payload)
+
+
+async def prepare_stripe_payment_intent_installments(
+    *, payment_intent_id: str, payment_method_id: str
+) -> dict[str, Any]:
+    """Asocia la tarjeta y solicita a Stripe sus MSI elegibles sin confirmar."""
+    return await _stripe_request(
+        method="POST",
+        path=f"/v1/payment_intents/{payment_intent_id}",
+        data={
+            "payment_method": payment_method_id,
+            "payment_method_options[card][installments][enabled]": "true",
+        },
+    )
+
+
+async def confirm_stripe_payment_intent(
+    *, payment_intent_id: str, installment_count: int, return_url: str
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"return_url": return_url}
+    if installment_count > 1:
+        payload["payment_method_options[card][installments][enabled]"] = "true"
+        payload["payment_method_options[card][installments][plan][count]"] = str(installment_count)
+    else:
+        payload["payment_method_options[card][installments][enabled]"] = "false"
+    return await _stripe_request(
+        method="POST", path=f"/v1/payment_intents/{payment_intent_id}/confirm", data=payload
+    )
 
 
 async def update_stripe_customer_default_payment_method(

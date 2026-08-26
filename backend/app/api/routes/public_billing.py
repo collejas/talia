@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
-from app.services.stripe_billing import StripeApiError, create_stripe_customer, create_stripe_payment_intent
+from app.services.stripe_billing import (
+    StripeApiError,
+    confirm_stripe_payment_intent,
+    create_stripe_customer,
+    create_stripe_payment_intent,
+    prepare_stripe_payment_intent_installments,
+)
 
 from .admin import (
     _bootstrap_default_org_structure,
@@ -105,6 +111,35 @@ class PublicTenantBillingResponse(BaseModel):
     payment_intent_client_secret: str
     stripe_publishable_key: str
     payment_return_url: str
+
+
+class PublicPaymentMethodOptionsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    payment_intent_id: str = Field(..., min_length=8, max_length=100)
+    payment_method_id: str = Field(..., min_length=8, max_length=100)
+
+
+class PublicPaymentMethodOptionsResponse(BaseModel):
+    ok: bool = True
+    payment_intent_id: str
+    available_installment_counts: list[int] = Field(default_factory=list)
+
+
+class PublicPaymentConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    payment_intent_id: str = Field(..., min_length=8, max_length=100)
+    installment_count: int = Field(..., ge=1, le=12)
+
+
+class PublicPaymentConfirmationResponse(BaseModel):
+    ok: bool = True
+    payment_intent_id: str
+    status: str
+    client_secret: str | None = None
 
 
 @router.get("/commercial-plans", response_model=PublicCommercialPlansResponse)
@@ -311,4 +346,90 @@ async def create_public_billing_checkout(
         payment_intent_client_secret=client_secret,
         stripe_publishable_key=str(settings.stripe_publishable_key),
         payment_return_url=settings.stripe_checkout_success_url,
+    )
+
+
+async def _validate_public_payment_intent_context(
+    *, repo: PlatformRepository, tenant_id: UUID, payment_intent_id: str
+) -> tuple[dict[str, Any], int]:
+    account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
+    if not account or str(account.get("upfront_payment_intent_id") or "") != payment_intent_id:
+        raise HTTPException(status_code=404, detail="public_payment_intent_not_found")
+    plan_id = UUID(str(account.get("plan_id")))
+    plan = await repo.get_commercial_plan(plan_id=plan_id)
+    if not plan or not bool(plan.get("active", False)):
+        raise HTTPException(status_code=409, detail="commercial_plan_inactive")
+    return account, int(plan.get("max_installment_count") or 1)
+
+
+def _stripe_available_installment_counts(payment_intent: dict[str, Any]) -> list[int]:
+    counts = {1}
+    options = payment_intent.get("payment_method_options")
+    if isinstance(options, dict):
+        card = options.get("card")
+        if isinstance(card, dict):
+            installments = card.get("installments")
+            if isinstance(installments, dict):
+                plans = installments.get("available_plans")
+                if isinstance(plans, list):
+                    for plan in plans:
+                        if isinstance(plan, dict):
+                            try:
+                                count = int(plan.get("count"))
+                            except (TypeError, ValueError):
+                                continue
+                            if count in INSTALLMENT_COUNTS[1:]:
+                                counts.add(count)
+    return sorted(counts)
+
+
+@router.post("/payment-method-options", response_model=PublicPaymentMethodOptionsResponse)
+async def prepare_public_payment_method_options(
+    payload: PublicPaymentMethodOptionsRequest,
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> PublicPaymentMethodOptionsResponse:
+    try:
+        _, max_installments = await _validate_public_payment_intent_context(
+            repo=repo, tenant_id=payload.tenant_id, payment_intent_id=payload.payment_intent_id
+        )
+        payment_intent = await prepare_stripe_payment_intent_installments(
+            payment_intent_id=payload.payment_intent_id,
+            payment_method_id=payload.payment_method_id,
+        )
+    except HTTPException:
+        raise
+    except (StripeApiError, PlatformRepositoryError) as exc:
+        logger.error("public_billing_payment_method_options_failed", extra={"error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="stripe_payment_method_options_unavailable") from exc
+    counts = [count for count in _stripe_available_installment_counts(payment_intent) if count <= max_installments]
+    return PublicPaymentMethodOptionsResponse(
+        payment_intent_id=payload.payment_intent_id, available_installment_counts=counts
+    )
+
+
+@router.post("/confirm-payment", response_model=PublicPaymentConfirmationResponse)
+async def confirm_public_payment(
+    payload: PublicPaymentConfirmationRequest,
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> PublicPaymentConfirmationResponse:
+    try:
+        _, max_installments = await _validate_public_payment_intent_context(
+            repo=repo, tenant_id=payload.tenant_id, payment_intent_id=payload.payment_intent_id
+        )
+        if payload.installment_count not in INSTALLMENT_COUNTS or payload.installment_count > max_installments:
+            raise HTTPException(status_code=400, detail="installment_count_not_allowed")
+        payment_intent = await confirm_stripe_payment_intent(
+            payment_intent_id=payload.payment_intent_id,
+            installment_count=payload.installment_count,
+            return_url=settings.stripe_checkout_success_url,
+        )
+    except HTTPException:
+        raise
+    except (StripeApiError, PlatformRepositoryError) as exc:
+        logger.error("public_billing_payment_confirmation_failed", extra={"error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="stripe_payment_confirmation_unavailable") from exc
+    return PublicPaymentConfirmationResponse(
+        payment_intent_id=payload.payment_intent_id,
+        status=str(payment_intent.get("status") or "unknown"),
+        client_secret=str(payment_intent.get("client_secret") or "") or None,
     )
