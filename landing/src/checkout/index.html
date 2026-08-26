@@ -48,6 +48,12 @@
     .payment-eligibility { margin: 14px 0; padding: 12px 14px; border-radius: 10px; line-height: 1.45; }
     .payment-eligibility--available { background: #edf9f1; color: #176b38; }
     .payment-eligibility--unavailable { background: #fff7e8; color: #805b12; }
+    .dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15, 25, 48, .48); z-index: 20; }
+    .dialog { width: min(100%, 440px); border: 1px solid #e1e7f0; border-radius: 18px; padding: 26px; background: #fff; box-shadow: 0 24px 70px rgba(15, 25, 48, .25); }
+    .dialog__icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 16px; border-radius: 50%; background: #fff3d7; color: #8b5d00; font-size: 1.35rem; font-weight: 800; }
+    .dialog h2 { margin-bottom: 8px; }
+    .dialog p { margin: 0; color: #5f6b7a; line-height: 1.55; }
+    .dialog button { width: 100%; margin-top: 22px; }
     .hidden { display: none !important; }
     @media (max-width: 640px) { body { padding: 10px; } .checkout { min-height: calc(100dvh - 20px); } .form-grid { grid-template-columns: 1fr; } .full { grid-column: auto; } .checkout__header, .checkout__panel { padding: 16px; } }
   </style>
@@ -115,7 +121,15 @@
       </div>
     </section>
   </main>
+  <div class="dialog-backdrop hidden" data-registered-email-dialog hidden>
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="registered-email-title" aria-describedby="registered-email-description">
+      <div class="dialog__icon" aria-hidden="true">!</div>
+      <h2 id="registered-email-title">Correo ya registrado</h2>
+      <p id="registered-email-description">Este correo ya está registrado en Tal-IA. Ingresa otro correo electrónico para continuar con tu contratación.</p>
+      <button class="primary" type="button" data-close-registered-email>Aceptar</button>
+    </section>
+  </div>
   <script src="/assets/js/public-config.js?v=20260825a"></script>
-  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826j"></script>
+  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826l"></script>
 </body>
 </html>

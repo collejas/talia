@@ -195,6 +195,10 @@ async def test_create_public_billing_checkout(
     monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
     monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_public")
     monkeypatch.setattr(
+        "app.api.routes.public_billing.is_email_registered",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(
         "app.api.routes.public_billing.create_stripe_customer",
         AsyncMock(return_value={"id": "cus_test_public"}),
     )
@@ -242,6 +246,10 @@ async def test_create_public_billing_rejects_installments_above_modality_limit(
     monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_public")
     monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
     monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+    monkeypatch.setattr(
+        "app.api.routes.public_billing.is_email_registered",
+        AsyncMock(return_value=False),
+    )
     repo = DummyPublicBillingRepo()
     app.dependency_overrides[get_platform_repo] = lambda: repo
     payload = {
@@ -258,3 +266,34 @@ async def test_create_public_billing_rejects_installments_above_modality_limit(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "installment_count_not_allowed"
+
+
+@pytest.mark.asyncio
+async def test_create_public_billing_rejects_registered_email_before_provisioning(
+    monkeypatch: pytest.MonkeyPatch,
+    async_client: AsyncClient,
+    clear_overrides: None,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_public")
+    monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+    monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+    monkeypatch.setattr(
+        "app.api.routes.public_billing.is_email_registered",
+        AsyncMock(return_value=True),
+    )
+    repo = DummyPublicBillingRepo()
+    app.dependency_overrides[get_platform_repo] = lambda: repo
+    payload = {
+        "provider_price_id": "price_starter_llave_mano",
+        "nombre": "Cliente Público",
+        "contacto_nombre": "Jorge Cliente",
+        "correo_contacto_principal": "existente@cliente.example.com",
+    }
+    try:
+        response = await async_client.post("/public/billing/checkout", json=payload)
+    finally:
+        app.dependency_overrides.pop(get_platform_repo, None)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "email_already_registered"
+    assert repo.created_organizations == []

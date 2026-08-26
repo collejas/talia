@@ -18,6 +18,7 @@ from app.services.stripe_billing import (
     create_stripe_payment_intent,
     prepare_stripe_payment_intent_installments,
 )
+from app.services.supabase_admin import SupabaseAdminError, is_email_registered
 
 from .admin import (
     _bootstrap_default_org_structure,
@@ -243,6 +244,18 @@ async def create_public_billing_checkout(
             raise HTTPException(status_code=400, detail="price_provider_invalid")
         if str(price_row.get("billing_interval") or "").strip().lower() != "one_time":
             raise HTTPException(status_code=409, detail="upfront_price_must_be_one_time")
+        try:
+            email_exists = await is_email_registered(
+                email=str(payload.correo_contacto_principal).strip().lower()
+            )
+        except SupabaseAdminError as exc:
+            logger.error(
+                "public_billing_email_validation_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+            raise HTTPException(status_code=503, detail="email_validation_unavailable") from exc
+        if email_exists:
+            raise HTTPException(status_code=409, detail="email_already_registered")
         country_code = str(payload.pais_codigo_iso2 or "").strip().upper() or "MX"
         country = await repo.get_geo_pais(codigo_iso2=country_code) if payload.pais_codigo_iso2 else None
         if payload.pais_codigo_iso2 and not country:

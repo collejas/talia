@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const mexicoFields = form?.querySelector('[data-mexico-fields]');
   const rfcInput = form?.querySelector('[name="rfc"]');
   const fiscalTypeSelect = form?.querySelector('[name="tipo_persona_fiscal"]');
+  const registeredEmailDialog = document.querySelector('[data-registered-email-dialog]');
+  const closeRegisteredEmailButton = document.querySelector('[data-close-registered-email]');
 
   if (!planList || !planCount || !statusEl) {
     return;
@@ -71,6 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!catalogOnly && (!selectedPlanEl || !selectedPriceEl || !formMessage || !banner || !submitButton || !installmentSelect || !paymentStep || !paymentElementMount || !paymentMessage || !confirmPaymentButton || !paymentInstallments || !paymentInstallmentSelect || !paymentEligibility || !dataScreen)) {
     return;
   }
+
+  closeRegisteredEmailButton?.addEventListener('click', closeRegisteredEmailDialog);
+  registeredEmailDialog?.addEventListener('click', (event) => {
+    if (event.target === registeredEmailDialog) closeRegisteredEmailDialog();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && registeredEmailDialog && !registeredEmailDialog.hidden) {
+      closeRegisteredEmailDialog();
+    }
+  });
 
   let stripe = null;
   let stripeElements = null;
@@ -352,7 +364,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(extractErrorMessage(data) || `HTTP ${response.status}`);
+        const errorCode = extractErrorMessage(data);
+        if (errorCode === 'email_already_registered') {
+          showRegisteredEmailDialog();
+          return;
+        }
+        if (errorCode === 'email_validation_unavailable') {
+          throw new Error('No pudimos validar el correo en este momento. Intenta nuevamente en unos minutos.');
+        }
+        throw new Error(errorCode || `HTTP ${response.status}`);
       }
 
       if (!data?.payment_intent_client_secret || !data?.stripe_publishable_key) {
@@ -389,6 +409,23 @@ document.addEventListener('DOMContentLoaded', () => {
         : kind === 'success'
           ? 'billing-message billing-message--success'
           : 'billing-message billing-message--info';
+  }
+
+  function showRegisteredEmailDialog() {
+    if (!registeredEmailDialog) {
+      showMessage('Este correo ya está registrado en Tal-IA. Ingresa otro correo electrónico para continuar.', 'error');
+      return;
+    }
+    registeredEmailDialog.hidden = false;
+    registeredEmailDialog.classList.remove('hidden');
+    closeRegisteredEmailButton?.focus();
+  }
+
+  function closeRegisteredEmailDialog() {
+    if (!registeredEmailDialog) return;
+    registeredEmailDialog.hidden = true;
+    registeredEmailDialog.classList.add('hidden');
+    form?.querySelector('[name="correo_contacto_principal"]')?.focus();
   }
 
   function renderInstallmentOptions(maxCount) {

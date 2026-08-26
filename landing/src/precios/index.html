@@ -400,6 +400,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       opacity: 0.7;
       cursor: wait;
     }
+    .dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15, 25, 48, .48); z-index: 50; }
+    .dialog { width: min(100%, 440px); border: 1px solid #e1e7f0; border-radius: 18px; padding: 26px; background: #fff; box-shadow: 0 24px 70px rgba(15, 25, 48, .25); }
+    .dialog__icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 16px; border-radius: 50%; background: #fff3d7; color: #8b5d00; font-size: 1.35rem; font-weight: 800; }
+    .dialog h2 { margin: 0 0 8px; }
+    .dialog p { margin: 0; color: #5f6b7a; line-height: 1.55; }
+    .dialog button { width: 100%; margin-top: 22px; }
 
     .billing-payment-step {
       display: grid;
@@ -778,7 +784,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </main>
   <script type="module" src="/assets/js/whatsapp-float.js?v=20260625a"></script>
   <script src="/assets/js/public-config.js?v=20260825a"></script>
-  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826d"></script>
+  <div class="dialog-backdrop hidden" data-registered-email-dialog hidden>
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="registered-email-title" aria-describedby="registered-email-description">
+      <div class="dialog__icon" aria-hidden="true">!</div>
+      <h2 id="registered-email-title">Correo ya registrado</h2>
+      <p id="registered-email-description">Este correo ya está registrado en Tal-IA. Ingresa otro correo electrónico para continuar con tu contratación.</p>
+      <button class="button primary" type="button" data-close-registered-email>Aceptar</button>
+    </section>
+  </div>
+  <script type="module" src="/assets/js/modules/public-billing.js?v=20260826l"></script>
   <script type="module" src="https://talia.mx/assets/js/site-tracking.js?v=20260815-cors1"
   data-talia-public-site-id="talia_site_058c3bb887b24340b5d06bc5629e0faf"
   data-talia-tracking-endpoint="https://talia.mx/api/crm/web/visit"></script>
