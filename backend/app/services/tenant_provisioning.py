@@ -11,6 +11,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services import EmailSendError
 from app.services.tenant_access_onboarding import create_tenant_access_invitation
 
 logger = get_logger("app.services.tenant_provisioning")
@@ -567,13 +568,19 @@ async def provision_tenant_from_billing(
                 or ""
             ).strip()
             if access_email:
-                await create_tenant_access_invitation(
-                    repo=repo,
-                    tenant_id=tenant_id,
-                    email=access_email,
-                    flow_kind="stripe",
-                    tenant_name=str(tenant.get("nombre") or "Tenant"),
-                )
+                try:
+                    await create_tenant_access_invitation(
+                        repo=repo,
+                        tenant_id=tenant_id,
+                        email=access_email,
+                        flow_kind="stripe",
+                        tenant_name=str(tenant.get("nombre") or "Tenant"),
+                    )
+                except EmailSendError as exc:
+                    logger.warning(
+                        "tenant_provisioning.access_invitation_email_failed",
+                        extra={"tenant_id": str(tenant_id), "source": source, "error": str(exc)},
+                    )
             else:
                 logger.warning(
                     "tenant_provisioning.access_email_missing",

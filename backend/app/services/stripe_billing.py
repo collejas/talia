@@ -331,11 +331,6 @@ async def create_stripe_payment_intent(
         "metadata[installment_count]": str(installment_count),
         "payment_method_options[card][installments][enabled]": "true" if installment_count > 1 else "false",
     }
-    allowed_counts = [count for count in (3, 6, 9, 12) if count <= installment_count]
-    for index, count in enumerate(allowed_counts):
-        payload[f"payment_method_options[card][installments][available_plans][{index}][type]"] = "fixed_count"
-        payload[f"payment_method_options[card][installments][available_plans][{index}][interval]"] = "month"
-        payload[f"payment_method_options[card][installments][available_plans][{index}][count]"] = str(count)
     return await _stripe_request(method="POST", path="/v1/payment_intents", data=payload)
 
 
@@ -476,6 +471,15 @@ def _build_billing_account_payload(
     trial_ends_at = _maybe_timestamp_to_iso(event_object.get("trial_end") or event_object.get("trial_ends_at"))
     if event_type == "checkout.session.completed" and not subscription_id:
         subscription_id = _extract_stripe_reference(event_object, "subscription")
+    payload: dict[str, Any] = {
+        "tenant_id": str(tenant_id),
+        "plan_id": str(plan_id),
+        "billing_provider": "stripe",
+        "stripe_customer_id": customer_id,
+        "billing_status": billing_status,
+        "access_status": access_status,
+        "last_stripe_event_id": event_id,
+    }
     if event_type == "payment_intent.succeeded":
         payment_intent_id = _extract_stripe_reference(event_object, "id")
         if payment_intent_id:
@@ -502,16 +506,6 @@ def _build_billing_account_payload(
                             actual_installment_count = 1
                         if actual_installment_count in {3, 6, 9, 12}:
                             payload["selected_installment_count"] = actual_installment_count
-
-    payload: dict[str, Any] = {
-        "tenant_id": str(tenant_id),
-        "plan_id": str(plan_id),
-        "billing_provider": "stripe",
-        "stripe_customer_id": customer_id,
-        "billing_status": billing_status,
-        "access_status": access_status,
-        "last_stripe_event_id": event_id,
-    }
     if subscription_id:
         payload["stripe_subscription_id"] = subscription_id
     if price_id:

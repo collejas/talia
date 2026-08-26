@@ -766,13 +766,12 @@ class PlatformRepository:
         tenant_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"tenant_id": str(tenant_id), **payload}
         data = await self._rest(
-            "POST",
+            "PATCH",
             "/rest/v1/tenant_billing_accounts",
-            params={"on_conflict": "tenant_id"},
-            json=body,
-            prefer="return=representation,resolution=merge-duplicates",
+            params={"tenant_id": f"eq.{tenant_id}"},
+            json=payload,
+            prefer="return=representation",
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PlatformRepositoryError("tenant_billing_account_update_failed")
@@ -1432,11 +1431,13 @@ class PlatformRepository:
         await self._rest(
             "POST",
             "/rest/v1/roles_permisos",
+            params={"on_conflict": "organizacion_id,rol_id,permiso_id"},
             json={
                 "organizacion_id": str(organizacion_id),
                 "rol_id": str(rol_id),
                 "permiso_id": str(permiso_id),
             },
+            prefer="resolution=merge-duplicates",
         )
 
     async def create_department(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
