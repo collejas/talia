@@ -70,6 +70,13 @@ class PostmarkRepository:
         )
         return row is not None
 
+    async def queue_message(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        """Encola y reserva cuota mediante la RPC atómica propia de Postmark."""
+        data = await self._rpc("tenant_email_queue_message", payload)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("queue_invalid_response")
+        return data[0]
+
     async def _get_one(self, path: str, *, params: dict[str, str]) -> dict[str, Any] | None:
         headers = {
             "apikey": self._service_role,
@@ -86,6 +93,25 @@ class PostmarkRepository:
         if not isinstance(data, list):
             raise PostmarkRepositoryError("database_invalid_response")
         return data[0] if data and isinstance(data[0], dict) else None
+
+    async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    f"{self._base_url}/rest/v1/rpc/{function_name}",
+                    json=payload,
+                    headers=headers,
+                )
+        except httpx.RequestError as exc:
+            raise PostmarkRepositoryError("database_unreachable") from exc
+        if response.status_code >= 400:
+            raise PostmarkRepositoryError("queue_failed")
+        return response.json()
 
 
 __all__ = ["PostmarkRepository", "PostmarkRepositoryError"]
