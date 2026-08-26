@@ -439,6 +439,11 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - El Checkout público cambia conceptualmente de suscripción inicial a PaymentIntent de pago único con Payment Element; la licencia posterior se programa desde el webhook de pago confirmado.
 - Antes de habilitar producción deben aplicarse la migración, configurar `STRIPE_PUBLISHABLE_KEY` y crear/vincular los precios reales en Stripe Test.
 
+### Activación Stripe Test — 2026-08-26
+- Se aplicó en Supabase la migración `llave_en_mano_modalidades_msi`.
+- Se crearon y vincularon en Stripe Test los cinco precios de pago único y el precio recurrente mensual de `Licencia Tal-IA`.
+- Se actualizó el webhook `https://talia.mx/api/webhooks/stripe` para escuchar también `payment_intent.succeeded` y `payment_intent.payment_failed`.
+
 ### Alta pública desde `/precios`
 - Se habilitó la contratación en línea desde la página pública de precios mediante `GET /public/billing/commercial-plans` y `POST /public/billing/checkout`.
 - La página muestra los planes y modalidades activas desde el catálogo comercial, sin confiar en precios escritos en el frontend para crear el checkout.
