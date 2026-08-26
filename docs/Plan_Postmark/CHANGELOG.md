@@ -15,11 +15,13 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - El adaptador no resuelve tenant, permisos, cuotas ni persistencia; esas reglas permanecerán en servicios de negocio separados.
 - Los envíos batch conservan el resultado de cada destinatario aunque la respuesta HTTP sea exitosa.
-- No se conectó Postmark a Brevo, SMTP, panel ni jobs existentes.
+- Postmark no importa, reutiliza ni comparte implementación con Brevo o SMTP; ambos proveedores permanecen completamente separados.
+- El servicio Postmark tampoco se conectó todavía al panel ni a los jobs existentes.
 
 ### Validaciones
 
 - `backend/tests/integrations/postmark/test_client.py`: 4 pruebas aprobadas.
+- `backend/tests/services/postmark/test_service.py`: 3 pruebas aprobadas.
 - `git diff --check`: aprobado.
 
 ### Pendientes
