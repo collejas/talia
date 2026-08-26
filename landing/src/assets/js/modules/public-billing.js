@@ -70,10 +70,9 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   const catalogOnly = !form;
-  if (!catalogOnly && (!selectedPlanEl || !selectedPriceEl || !formMessage || !banner || !submitButton || !installmentSelect || !paymentStep || !paymentElementMount || !paymentMessage || !confirmPaymentButton || !paymentInstallments || !paymentInstallmentSelect || !paymentEligibility || !dataScreen)) {
-    return;
-  }
 
+  // El modal de correo registrado debe funcionar también en /precios,
+  // aunque esa vista conserve un formulario comercial antiguo oculto.
   closeRegisteredEmailButton?.addEventListener('click', closeRegisteredEmailDialog);
   registeredEmailDialog?.addEventListener('click', (event) => {
     if (event.target === registeredEmailDialog) closeRegisteredEmailDialog();
@@ -83,6 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
       closeRegisteredEmailDialog();
     }
   });
+
+  if (!catalogOnly && (!selectedPlanEl || !selectedPriceEl || !formMessage || !banner || !submitButton || !installmentSelect || !paymentStep || !paymentElementMount || !paymentMessage || !confirmPaymentButton || !paymentInstallments || !paymentInstallmentSelect || !paymentEligibility || !dataScreen)) {
+    return;
+  }
 
   let stripe = null;
   let stripeElements = null;
@@ -551,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  confirmPaymentButton.disabled = true;
+  if (confirmPaymentButton) confirmPaymentButton.disabled = true;
 });
 
 function collectPayload(form) {
