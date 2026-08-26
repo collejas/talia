@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
-from app.services.stripe_billing import StripeApiError, create_stripe_checkout_session, create_stripe_customer
+from app.services.stripe_billing import StripeApiError, create_stripe_customer, create_stripe_payment_intent
 
 from .admin import (
     _bootstrap_default_org_structure,
@@ -22,6 +23,8 @@ from .admin import (
 )
 
 router = APIRouter(prefix="/public/billing", tags=["public-billing"])
+logger = get_logger("app.api.public_billing")
+INSTALLMENT_COUNTS = (1, 3, 6, 9, 12)
 
 
 class PublicPlanPriceSummary(BaseModel):
@@ -47,6 +50,10 @@ class PublicCommercialPlanSummary(BaseModel):
     description: str | None = None
     active: bool
     sort_order: int
+    contract_duration_months: int | None = None
+    max_installment_count: int | None = None
+    pricing_model: str = "legacy"
+    allowed_installment_counts: list[int] = Field(default_factory=list)
     prices: list[PublicPlanPriceSummary] = Field(default_factory=list)
 
 
@@ -59,6 +66,7 @@ class PublicTenantBillingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider_price_id: str = Field(..., min_length=3)
+    installment_count: int = Field(default=1, ge=1, le=12)
     nombre: str = Field(..., min_length=2)
     razon_social: str | None = None
     dominio_principal: str | None = None
@@ -92,8 +100,11 @@ class PublicTenantBillingResponse(BaseModel):
     plan_id: UUID
     price_id: str
     customer_id: str
-    checkout_session_id: str
-    checkout_url: str
+    payment_intent_id: str
+    checkout_url: str | None = None
+    payment_intent_client_secret: str
+    stripe_publishable_key: str
+    payment_return_url: str
 
 
 @router.get("/commercial-plans", response_model=PublicCommercialPlansResponse)
@@ -130,6 +141,10 @@ async def list_public_commercial_plans(
         except Exception:
             continue
         plan_summary.prices = prices_by_plan.get(str(plan_summary.id), [])
+        max_installments = plan_summary.max_installment_count or 1
+        plan_summary.allowed_installment_counts = [
+            count for count in INSTALLMENT_COUNTS if count <= max_installments
+        ]
         items.append(plan_summary)
 
     return PublicCommercialPlansResponse(items=items)
@@ -147,6 +162,8 @@ async def create_public_billing_checkout(
     try:
         if not settings.stripe_checkout_success_url or not settings.stripe_checkout_cancel_url:
             raise HTTPException(status_code=503, detail="stripe_checkout_return_urls_missing")
+        if not settings.stripe_publishable_key:
+            raise HTTPException(status_code=503, detail="stripe_publishable_key_missing")
         price_row = await repo.get_commercial_plan_price_by_provider_price_id(
             provider_price_id=payload.provider_price_id.strip()
         )
@@ -156,10 +173,18 @@ async def create_public_billing_checkout(
             raise HTTPException(status_code=409, detail="commercial_plan_price_inactive")
         if str(price_row.get("billing_provider") or "").strip().lower() != "stripe":
             raise HTTPException(status_code=400, detail="price_provider_invalid")
+        if str(price_row.get("billing_interval") or "").strip().lower() != "one_time":
+            raise HTTPException(status_code=409, detail="upfront_price_must_be_one_time")
         plan_id = UUID(str(price_row.get("plan_id")))
         plan = await repo.get_commercial_plan(plan_id=plan_id)
         if not plan or not bool(plan.get("active", False)):
             raise HTTPException(status_code=409, detail="commercial_plan_inactive")
+        max_installments = int(plan.get("max_installment_count") or 1)
+        if payload.installment_count not in INSTALLMENT_COUNTS or payload.installment_count > max_installments:
+            raise HTTPException(status_code=400, detail="installment_count_not_allowed")
+        license_price = await repo.get_active_commercial_license_price()
+        if not license_price:
+            raise HTTPException(status_code=503, detail="commercial_license_price_not_configured")
 
         alias = payload.webchat_alias.strip().lower() if payload.webchat_alias else None
         await _ensure_webchat_alias_is_available(repo=repo, alias=alias)
@@ -211,6 +236,10 @@ async def create_public_billing_checkout(
                     "stripe_price_id": str(price_row.get("provider_price_id")),
                     "billing_status": "incomplete",
                     "access_status": "manual_review",
+                    "contract_duration_months": int(plan.get("contract_duration_months") or 1),
+                    "selected_installment_count": payload.installment_count,
+                    "license_price_id": str(license_price.get("id")),
+                    "license_status": "pending",
                 }
             )
             if alias:
@@ -240,18 +269,23 @@ async def create_public_billing_checkout(
                     "stripe_price_id": str(price_row.get("provider_price_id")),
                 },
             )
-            session = await create_stripe_checkout_session(
+            payment_intent = await create_stripe_payment_intent(
                 customer_id=customer_id,
-                price_id=str(price_row.get("provider_price_id")),
-                success_url=settings.stripe_checkout_success_url,
-                cancel_url=settings.stripe_checkout_cancel_url,
+                amount_cents=int(price_row.get("amount_cents") or 0),
+                currency=str(price_row.get("currency") or "MXN"),
                 tenant_id=tenant_id,
                 plan_id=plan_id,
+                provider_price_id=str(price_row.get("provider_price_id")),
+                installment_count=payload.installment_count,
             )
-            checkout_url = str(session.get("url") or "").strip()
-            session_id = str(session.get("id") or "").strip()
-            if not checkout_url or not session_id:
-                raise HTTPException(status_code=502, detail="stripe_checkout_session_invalid")
+            session_id = str(payment_intent.get("id") or "").strip()
+            client_secret = str(payment_intent.get("client_secret") or "").strip()
+            if not client_secret or not session_id:
+                raise HTTPException(status_code=502, detail="stripe_payment_intent_invalid")
+            await repo.update_tenant_billing_account(
+                tenant_id=tenant_id,
+                payload={"upfront_payment_intent_id": session_id},
+            )
         except Exception:
             if tenant_id is not None:
                 await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
@@ -259,17 +293,22 @@ async def create_public_billing_checkout(
     except StripeApiError as exc:
         if tenant_id is not None:
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error("public_billing_stripe_failed", extra={"tenant_id": str(tenant_id) if tenant_id else None, "error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="stripe_checkout_unavailable") from exc
     except PlatformRepositoryError as exc:
         if tenant_id is not None:
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error("public_billing_repository_failed", extra={"tenant_id": str(tenant_id) if tenant_id else None, "error_type": type(exc).__name__})
+        raise HTTPException(status_code=502, detail="billing_provisioning_unavailable") from exc
 
     return PublicTenantBillingResponse(
         tenant_id=tenant_id,
         plan_id=plan_id,
         price_id=str(price_row["provider_price_id"]),
         customer_id=customer_id,
-        checkout_session_id=session_id,
-        checkout_url=checkout_url,
+        payment_intent_id=session_id,
+        checkout_url=None,
+        payment_intent_client_secret=client_secret,
+        stripe_publishable_key=str(settings.stripe_publishable_key),
+        payment_return_url=settings.stripe_checkout_success_url,
     )

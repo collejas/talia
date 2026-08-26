@@ -38,6 +38,9 @@ class DummyPublicBillingRepo:
                 "description": "Plan starter",
                 "active": True,
                 "sort_order": 1,
+                "contract_duration_months": 3,
+                "max_installment_count": 3,
+                "pricing_model": "one_time_plus_license",
             }
         ]
 
@@ -48,23 +51,42 @@ class DummyPublicBillingRepo:
                 "plan_id": str(TEST_PLAN_ID),
                 "billing_provider": "stripe",
                 "provider_product_id": "prod_starter",
-                "provider_price_id": "price_starter_mxn_month",
+                "provider_price_id": "price_starter_llave_mano",
                 "currency": "MXN",
-                "billing_interval": "month",
-                "amount_cents": 100,
+                "billing_interval": "one_time",
+                "amount_cents": 2938750,
                 "active": True,
             }
         ]
 
     async def get_commercial_plan_price_by_provider_price_id(self, *, provider_price_id: str) -> dict[str, Any] | None:
-        if provider_price_id != "price_starter_mxn_month":
+        if provider_price_id != "price_starter_llave_mano":
             return None
         return (await self.list_commercial_plan_prices())[0]
 
     async def get_commercial_plan(self, *, plan_id: UUID) -> dict[str, Any] | None:
         if str(plan_id) != str(TEST_PLAN_ID):
             return None
-        return {"id": str(plan_id), "code": "starter", "name": "Starter", "active": True}
+        return {
+            "id": str(plan_id),
+            "code": "starter",
+            "name": "Starter",
+            "active": True,
+            "contract_duration_months": 3,
+            "max_installment_count": 3,
+            "pricing_model": "one_time_plus_license",
+        }
+
+    async def get_active_commercial_license_price(self) -> dict[str, Any] | None:
+        return {
+            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "code": "talia_license_monthly",
+            "provider_price_id": "price_license_monthly",
+            "amount_cents": 150000,
+            "currency": "MXN",
+            "billing_interval": "month",
+            "active": True,
+        }
 
     async def resolve_org_for_route(self, *, canal: str, clave: str) -> str | None:
         return None
@@ -157,7 +179,8 @@ async def test_list_public_commercial_plans(async_client: AsyncClient, clear_ove
     body = response.json()
     assert body["ok"] is True
     assert body["items"][0]["code"] == "starter"
-    assert body["items"][0]["prices"][0]["provider_price_id"] == "price_starter_mxn_month"
+    assert body["items"][0]["prices"][0]["provider_price_id"] == "price_starter_llave_mano"
+    assert body["items"][0]["allowed_installment_counts"] == [1, 3]
 
 
 @pytest.mark.asyncio
@@ -170,17 +193,18 @@ async def test_create_public_billing_checkout(
     app.dependency_overrides[get_platform_repo] = lambda: repo
     monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
     monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+    monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_public")
     monkeypatch.setattr(
         "app.api.routes.public_billing.create_stripe_customer",
         AsyncMock(return_value={"id": "cus_test_public"}),
     )
     monkeypatch.setattr(
-        "app.api.routes.public_billing.create_stripe_checkout_session",
-        AsyncMock(return_value={"id": "cs_test_public", "url": "https://checkout.stripe.test/session"}),
+        "app.api.routes.public_billing.create_stripe_payment_intent",
+        AsyncMock(return_value={"id": "pi_test_public", "client_secret": "pi_test_public_secret"}),
     )
 
     payload = {
-        "provider_price_id": "price_starter_mxn_month",
+        "provider_price_id": "price_starter_llave_mano",
         "nombre": "Cliente Público",
         "contacto_nombre": "Jorge Cliente",
         "correo_contacto_principal": "hola@cliente.example.com",
@@ -188,6 +212,7 @@ async def test_create_public_billing_checkout(
         "moneda": "MXN",
         "timezone": "America/Mexico_City",
         "webchat_alias": "cliente-publico",
+        "installment_count": 3,
     }
 
     try:
@@ -200,8 +225,36 @@ async def test_create_public_billing_checkout(
     assert body["ok"] is True
     assert body["tenant_id"] == str(TEST_TENANT_ID)
     assert body["customer_id"] == "cus_test_public"
-    assert body["checkout_session_id"] == "cs_test_public"
-    assert body["checkout_url"] == "https://checkout.stripe.test/session"
+    assert body["payment_intent_id"] == "pi_test_public"
+    assert body["payment_intent_client_secret"] == "pi_test_public_secret"
+    assert body["stripe_publishable_key"] == "pk_test_public"
     assert repo.created_organizations[0]["activo"] is False
     assert repo.billing_accounts[0]["stripe_customer_id"].startswith("pending:")
     assert repo.updated_accounts[0]["payload"]["stripe_customer_id"] == "cus_test_public"
+
+
+@pytest.mark.asyncio
+async def test_create_public_billing_rejects_installments_above_modality_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    async_client: AsyncClient,
+    clear_overrides: None,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_public")
+    monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+    monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+    repo = DummyPublicBillingRepo()
+    app.dependency_overrides[get_platform_repo] = lambda: repo
+    payload = {
+        "provider_price_id": "price_starter_llave_mano",
+        "nombre": "Cliente Público",
+        "contacto_nombre": "Jorge Cliente",
+        "correo_contacto_principal": "hola@cliente.example.com",
+        "installment_count": 6,
+    }
+    try:
+        response = await async_client.post("/public/billing/checkout", json=payload)
+    finally:
+        app.dependency_overrides.pop(get_platform_repo, None)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "installment_count_not_allowed"

@@ -205,6 +205,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("STRIPE_SECRET_KEY", "TALIA_STRIPE_SECRET_KEY"),
     )
+    stripe_publishable_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_PUBLISHABLE_KEY", "TALIA_STRIPE_PUBLISHABLE_KEY"),
+    )
     stripe_api_base_url: str = Field(
         default="https://api.stripe.com",
         validation_alias=AliasChoices("STRIPE_API_BASE_URL", "TALIA_STRIPE_API_BASE_URL"),

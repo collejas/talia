@@ -6,6 +6,7 @@ const state = {
   selectedPlanName: '',
   selectedPriceId: '',
   selectedPriceLabel: '',
+  maxInstallmentCount: 1,
   loading: true,
   submitting: false,
 };
@@ -49,10 +50,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const formMessage = root.querySelector('[data-form-message]');
   const banner = root.querySelector('[data-checkout-banner]');
   const submitButton = form?.querySelector('button[type="submit"]');
+  const installmentSelect = form?.querySelector('[data-installment-count]');
+  const paymentStep = root.querySelector('[data-payment-step]');
+  const paymentElementMount = root.querySelector('[data-payment-element]');
+  const paymentMessage = root.querySelector('[data-payment-message]');
+  const confirmPaymentButton = root.querySelector('[data-confirm-payment]');
 
-  if (!planList || !planCount || !statusEl || !selectedPlanEl || !selectedPriceEl || !form || !formMessage || !banner || !submitButton) {
+  if (!planList || !planCount || !statusEl || !selectedPlanEl || !selectedPriceEl || !form || !formMessage || !banner || !submitButton || !installmentSelect || !paymentStep || !paymentElementMount || !paymentMessage || !confirmPaymentButton) {
     return;
   }
+
+  let stripe = null;
+  let stripeElements = null;
+  let stripePaymentElement = null;
 
   const url = new URL(window.location.href);
   const checkoutState = url.searchParams.get('checkout');
@@ -71,20 +81,20 @@ document.addEventListener('DOMContentLoaded', () => {
   void bootstrap();
 
   async function bootstrap() {
-    setStatus('Cargando planes comerciales...');
+    setStatus('Cargando modalidades de contratación...');
     try {
       const plans = await loadPlans();
       renderPlans(plans);
-      setStatus('Planes cargados. Elige una modalidad para continuar.');
+      setStatus('Modalidades cargadas. Elige una opción para continuar.');
     } catch (error) {
-      console.error('[public-billing] No se pudieron cargar los planes.', error);
+      console.error('[public-billing] No se pudieron cargar las modalidades.', error);
       planList.innerHTML = `
         <div class="billing-message billing-message--error">
-          No se pudieron cargar los planes comerciales en este momento. Intenta más tarde o solicita apoyo por WhatsApp.
+          No se pudieron cargar las modalidades de contratación en este momento. Intenta más tarde o solicita apoyo por WhatsApp.
         </div>
       `;
       planCount.textContent = '0';
-      setStatus('Error al cargar planes');
+      setStatus('Error al cargar modalidades');
     }
   }
 
@@ -110,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activePlans.length) {
       planList.innerHTML = `
         <div class="billing-message billing-message--info" style="border-style: dashed;">
-          No hay planes activos disponibles por ahora.
+          No hay modalidades activas disponibles por ahora.
         </div>
       `;
       state.loading = false;
@@ -155,12 +165,13 @@ document.addEventListener('DOMContentLoaded', () => {
             class="billing-plan-card ${index === 0 ? 'billing-plan-card--selected' : ''}"
             data-plan-card
             data-plan-id="${escapeAttr(plan.id)}"
+            data-max-installments="${escapeAttr(String(plan.max_installment_count || 1))}"
           >
             <div class="billing-price-row">
               <div>
                 <p class="billing-plan-code">${escapeHtml(plan.code)}</p>
                 <h4 class="billing-plan-title">${escapeHtml(plan.name)}</h4>
-                <p class="billing-plan-desc">${escapeHtml(plan.description || 'Plan comercial activo')}</p>
+                <p class="billing-plan-desc">${escapeHtml(plan.description || 'Modalidad de contratación activa')}</p>
               </div>
               <div class="billing-plan-badge">
                 ${plan.prices.length} precio${plan.prices.length === 1 ? '' : 's'}
@@ -217,9 +228,12 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedPlanName = planName;
     state.selectedPriceId = priceId;
     state.selectedPriceLabel = priceLabel;
+    const selectedCard = planList.querySelector(`[data-plan-id="${cssEscape(planId)}"]`);
+    state.maxInstallmentCount = Number(selectedCard?.getAttribute('data-max-installments') || 1);
+    renderInstallmentOptions(state.maxInstallmentCount);
 
     selectedPlanEl.textContent = planName || 'Selecciona un plan';
-    selectedPriceEl.textContent = priceLabel ? `${priceLabel} · Stripe checkout` : 'Elige una modalidad para continuar.';
+    selectedPriceEl.textContent = priceLabel ? `${priceLabel} · Pago seguro con Stripe` : 'Elige una modalidad para continuar.';
 
     planList.querySelectorAll('[data-plan-card]').forEach((card) => {
       const isSelected = card.getAttribute('data-plan-id') === planId;
@@ -260,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setSubmitting(true);
-    showMessage('Creando tenant y preparando checkout de Stripe...', 'info');
+    showMessage('Creando tenant y preparando el pago seguro...', 'info');
 
     try {
       const response = await fetch(`${API_BASE}/checkout`, {
@@ -276,11 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(extractErrorMessage(data) || `HTTP ${response.status}`);
       }
 
-      if (!data?.checkout_url) {
-        throw new Error('La respuesta no devolvió checkout_url.');
+      if (!data?.payment_intent_client_secret || !data?.stripe_publishable_key) {
+        throw new Error('La respuesta no devolvió la configuración del pago.');
       }
-
-      window.location.assign(data.checkout_url);
+      await mountPaymentElement(data);
+      showMessage('Revisa los datos de tu tarjeta y confirma el pago.', 'info');
     } catch (error) {
       console.error('[public-billing] Checkout falló.', error);
       showMessage(error instanceof Error ? error.message : 'No se pudo crear el checkout.', 'error');
@@ -296,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setSubmitting(isSubmitting) {
     state.submitting = isSubmitting;
     submitButton.disabled = isSubmitting;
-    submitButton.textContent = isSubmitting ? 'Creando checkout...' : 'Crear tenant y continuar a Stripe';
+    submitButton.textContent = isSubmitting ? 'Preparando pago...' : 'Continuar al pago';
     submitButton.classList.toggle('billing-submit-button--loading', isSubmitting);
   }
 
@@ -311,6 +325,66 @@ document.addEventListener('DOMContentLoaded', () => {
           ? 'billing-message billing-message--success'
           : 'billing-message billing-message--info';
   }
+
+  function renderInstallmentOptions(maxCount) {
+    const counts = [1, 3, 6, 9, 12].filter((count) => count <= maxCount);
+    installmentSelect.innerHTML = counts
+      .map((count) => `<option value="${count}">${count === 1 ? 'Pago único' : `${count} MSI`}</option>`)
+      .join('');
+  }
+
+  async function mountPaymentElement(data) {
+    const StripeConstructor = await loadStripeJs();
+    stripe = StripeConstructor(data.stripe_publishable_key);
+    stripeElements = stripe.elements({ clientSecret: data.payment_intent_client_secret });
+    stripePaymentElement?.unmount();
+    stripePaymentElement = stripeElements.create('payment');
+    stripePaymentElement.mount(paymentElementMount);
+    paymentStep.hidden = false;
+    paymentStep.removeAttribute('aria-hidden');
+    submitButton.hidden = true;
+    confirmPaymentButton.disabled = false;
+    confirmPaymentButton.onclick = async () => {
+      confirmPaymentButton.disabled = true;
+      paymentMessage.textContent = 'Confirmando el pago...';
+      paymentMessage.className = 'billing-message billing-message--info';
+      paymentMessage.hidden = false;
+      const result = await stripe.confirmPayment({
+        elements: stripeElements,
+        confirmParams: { return_url: data.payment_return_url || window.location.href },
+        redirect: 'if_required',
+      });
+      if (result.error) {
+        paymentMessage.textContent = result.error.message || 'No se pudo confirmar el pago.';
+        paymentMessage.className = 'billing-message billing-message--error';
+        confirmPaymentButton.disabled = false;
+        return;
+      }
+      paymentMessage.textContent = 'Pago confirmado. El tenant quedará activo cuando el webhook termine de procesarlo.';
+      paymentMessage.className = 'billing-message billing-message--success';
+    };
+  }
+
+  function loadStripeJs() {
+    if (window.Stripe) return Promise.resolve(window.Stripe);
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-stripe-js]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.Stripe), { once: true });
+        existing.addEventListener('error', () => reject(new Error('No se pudo cargar Stripe.js.')), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://js.stripe.com/v3/';
+      script.async = true;
+      script.dataset.stripeJs = 'true';
+      script.onload = () => (window.Stripe ? resolve(window.Stripe) : reject(new Error('Stripe.js no está disponible.')));
+      script.onerror = () => reject(new Error('No se pudo cargar Stripe.js.'));
+      document.head.appendChild(script);
+    });
+  }
+
+  confirmPaymentButton.disabled = true;
 });
 
 function collectPayload(form) {

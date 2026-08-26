@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic"
 
 type Plan = { id: string; code: string; name: string; description?: string | null; active: boolean; sort_order: number; created_at: string; updated_at: string }
 type Price = { id: string; plan_id: string; billing_provider: string; provider_product_id: string; provider_price_id: string; currency: string; billing_interval: string; amount_cents: number; active: boolean }
+type LicensePrice = { id: string; code: string; name: string; billing_provider: string; provider_product_id: string; provider_price_id: string; currency: string; billing_interval: string; amount_cents: number; active: boolean }
 type Entitlement = { id: string; plan_id: string; entitlement_key: string; value_type: string; enabled: boolean; limit_value?: number | null; value_text?: string | null; value_json?: unknown; limit_unit?: string | null; scope?: string | null; created_at: string }
 type Default = { id: string; plan_id: string; default_key: string; default_value: string; scope?: string | null; created_at: string }
-type Response = { ok: boolean; items: Plan[]; prices: Price[]; entitlements: Entitlement[]; defaults: Default[] }
+type Response = { ok: boolean; items: Plan[]; prices: Price[]; entitlements: Entitlement[]; defaults: Default[]; license_prices: LicensePrice[] }
 
 export default async function CommercialPlanDetailPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params
@@ -31,7 +32,7 @@ export default async function CommercialPlanDetailPage({ params }: { params: Pro
           <div className="space-y-2"><p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Comercial / Planes</p><h1 className="text-3xl font-semibold tracking-tight">{plan.name}</h1><p className="text-sm text-muted-foreground">{plan.code} · {plan.description || "Sin descripción"}</p></div>
           <Button asChild variant="outline"><Link href="/settings/commercial/plans">Volver al catálogo</Link></Button>
         </header>
-        <CommercialPlansManager plans={[plan]} prices={response.data.prices} entitlements={response.data.entitlements} defaults={response.data.defaults} selectedPlanId={plan.id} />
+        <CommercialPlansManager plans={[plan]} prices={response.data.prices} entitlements={response.data.entitlements} defaults={response.data.defaults} licensePrices={response.data.license_prices} selectedPlanId={plan.id} />
       </div>
     </AppViewLayout>
   )

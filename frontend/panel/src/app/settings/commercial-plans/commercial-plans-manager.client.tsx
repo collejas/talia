@@ -22,6 +22,8 @@ import {
   updateCommercialPlanDefaultAction,
   updateCommercialPlanEntitlementAction,
   updateCommercialPlanPriceAction,
+  syncCommercialPlanPriceToStripeAction,
+  syncCommercialLicensePriceToStripeAction,
 } from "./actions"
 
 type CommercialPlan = {
@@ -31,6 +33,9 @@ type CommercialPlan = {
   description?: string | null
   active: boolean
   sort_order: number
+  contract_duration_months?: number | null
+  max_installment_count?: number | null
+  pricing_model?: string
   created_at: string
   updated_at: string
 }
@@ -38,6 +43,19 @@ type CommercialPlan = {
 type CommercialPlanPrice = {
   id: string
   plan_id: string
+  billing_provider: string
+  provider_product_id: string
+  provider_price_id: string
+  currency: string
+  billing_interval: string
+  amount_cents: number
+  active: boolean
+}
+
+type CommercialLicensePrice = {
+  id: string
+  code: string
+  name: string
   billing_provider: string
   provider_product_id: string
   provider_price_id: string
@@ -106,6 +124,9 @@ type FormState = {
   description: string
   sortOrder: string
   active: boolean
+  contractDurationMonths: string
+  maxInstallmentCount: string
+  pricingModel: "legacy" | "one_time_plus_license"
 }
 
 type Props = {
@@ -114,6 +135,7 @@ type Props = {
   entitlements: CommercialPlanEntitlement[]
   defaults: CommercialPlanDefault[]
   selectedPlanId?: string
+  licensePrices: CommercialLicensePrice[]
 }
 
 type CommercialCatalogSection = "plans" | "prices" | "entitlements" | "defaults"
@@ -139,7 +161,7 @@ function priceLabel(price: CommercialPlanPrice | undefined): string {
   return `${formatMoney(price.amount_cents, price.currency)} ${intervalLabel}`.trim()
 }
 
-export function CommercialPlansManager({ plans, prices, entitlements, defaults, selectedPlanId }: Props) {
+export function CommercialPlansManager({ plans, prices, entitlements, defaults, licensePrices, selectedPlanId }: Props) {
   const router = useRouter()
   const [activeSection, setActiveSection] = useState<CommercialCatalogSection>("plans")
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
@@ -150,6 +172,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
   const [priceError, setPriceError] = useState<string | null>(null)
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null)
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null)
+  const [licenseMessage, setLicenseMessage] = useState<string | null>(null)
+  const [licenseError, setLicenseError] = useState<string | null>(null)
+  const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
   const [entitlementMessage, setEntitlementMessage] = useState<string | null>(null)
   const [entitlementError, setEntitlementError] = useState<string | null>(null)
   const [editingEntitlementId, setEditingEntitlementId] = useState<string | null>(null)
@@ -164,6 +189,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
     description: "",
     sortOrder: "0",
     active: true,
+    contractDurationMonths: "",
+    maxInstallmentCount: "",
+    pricingModel: "legacy",
   })
   const [priceForm, setPriceForm] = useState<PriceFormState>({
     planId: selectedPlanId ?? "",
@@ -265,6 +293,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
       description: "",
       sortOrder: "0",
       active: true,
+      contractDurationMonths: "",
+      maxInstallmentCount: "",
+      pricingModel: "legacy",
     })
   }
 
@@ -317,6 +348,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
       description: plan.description ?? "",
       sortOrder: String(plan.sort_order ?? 0),
       active: plan.active,
+      contractDurationMonths: plan.contract_duration_months ? String(plan.contract_duration_months) : "",
+      maxInstallmentCount: plan.max_installment_count ? String(plan.max_installment_count) : "",
+      pricingModel: plan.pricing_model === "one_time_plus_license" ? "one_time_plus_license" : "legacy",
     })
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -383,6 +417,9 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
     }
     body.set("sort_order", form.sortOrder)
     body.set("active", form.active ? "true" : "false")
+    if (form.contractDurationMonths) body.set("contract_duration_months", form.contractDurationMonths)
+    if (form.maxInstallmentCount) body.set("max_installment_count", form.maxInstallmentCount)
+    body.set("pricing_model", form.pricingModel)
     if (editingPlanId) {
       body.set("plan_id", editingPlanId)
     } else {
@@ -495,6 +532,48 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
       setPriceError(err instanceof Error ? err.message : "No se pudo desactivar el precio.")
     } finally {
       setLoadingPriceId(null)
+    }
+  }
+
+  const handleSyncPrice = async (priceId: string) => {
+    setPriceMessage(null)
+    setPriceError(null)
+    setLoadingPriceId(priceId)
+    try {
+      const body = new FormData()
+      body.set("price_id", priceId)
+      const result = await syncCommercialPlanPriceToStripeAction(body)
+      if (!result.ok) {
+        setPriceError(result.error)
+        return
+      }
+      setPriceMessage(result.message)
+      router.refresh()
+    } catch (err) {
+      setPriceError(err instanceof Error ? err.message : "No se pudo sincronizar el precio con Stripe.")
+    } finally {
+      setLoadingPriceId(null)
+    }
+  }
+
+  const handleSyncLicensePrice = async (priceId: string) => {
+    setLicenseMessage(null)
+    setLicenseError(null)
+    setLoadingLicenseId(priceId)
+    try {
+      const body = new FormData()
+      body.set("license_price_id", priceId)
+      const result = await syncCommercialLicensePriceToStripeAction(body)
+      if (!result.ok) {
+        setLicenseError(result.error)
+        return
+      }
+      setLicenseMessage(result.message)
+      router.refresh()
+    } catch (err) {
+      setLicenseError(err instanceof Error ? err.message : "No se pudo sincronizar la licencia con Stripe.")
+    } finally {
+      setLoadingLicenseId(null)
     }
   }
 
@@ -718,6 +797,18 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
                   onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: event.target.value }))}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-duration">Meses incluidos</Label>
+                <select id="commercial-plan-duration" value={form.contractDurationMonths} onChange={(event) => setForm((prev) => ({ ...prev, contractDurationMonths: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="">Sin modalidad</option><option value="1">1 mes</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="9">9 meses</option><option value="12">12 meses</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commercial-plan-max-installments">Máximo de MSI</Label>
+                <select id="commercial-plan-max-installments" value={form.maxInstallmentCount} onChange={(event) => setForm((prev) => ({ ...prev, maxInstallmentCount: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="">Sin MSI</option><option value="1">Pago único</option><option value="3">3 MSI</option><option value="6">6 MSI</option><option value="9">9 MSI</option><option value="12">12 MSI</option>
+                </select>
+              </div>
               <div className="flex items-end gap-3 rounded-lg border border-border/60 px-3 py-2">
                 <input
                   id="commercial-plan-active"
@@ -789,6 +880,7 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
                             {plan.description ? (
                               <div className="text-xs text-muted-foreground">{plan.description}</div>
                             ) : null}
+                            {plan.contract_duration_months ? <div className="text-xs text-muted-foreground">{plan.contract_duration_months} meses · hasta {plan.max_installment_count ?? 1} MSI</div> : null}
                           </div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-sm">
@@ -1016,6 +1108,11 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
                             <Button size="sm" variant="outline" onClick={() => startEditPrice(price)}>
                               Editar
                             </Button>
+                            {!price.provider_price_id.startsWith("price_") ? (
+                              <Button size="sm" variant="secondary" disabled={isLoading} onClick={() => void handleSyncPrice(price.id)}>
+                                Crear en Stripe
+                              </Button>
+                            ) : null}
                             <Button
                               size="sm"
                               variant={price.active ? "destructive" : "secondary"}
@@ -1036,6 +1133,26 @@ export function CommercialPlansManager({ plans, prices, entitlements, defaults, 
           <div className="mt-4 text-sm text-muted-foreground">
             El catálogo de precios ya se administra aquí sin salir del módulo comercial.
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>Licencia posterior</CardTitle>
+          <CardDescription>Precio recurrente que inicia cuando termina la modalidad llave en mano.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {licenseMessage ? <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{licenseMessage}</div> : null}
+          {licenseError ? <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{licenseError}</div> : null}
+          {licensePrices.length === 0 ? <p className="text-sm text-muted-foreground">No hay precio de licencia configurado.</p> : licensePrices.map((price) => {
+            const isLoading = loadingLicenseId === price.id
+            return (
+              <div key={price.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 p-3">
+                <div><p className="font-medium">{price.name}</p><p className="text-sm text-muted-foreground">{formatMoney(price.amount_cents, price.currency)} / mes · {price.provider_price_id}</p></div>
+                {!price.provider_price_id.startsWith("price_") ? <Button size="sm" variant="secondary" disabled={isLoading} onClick={() => void handleSyncLicensePrice(price.id)}>Crear en Stripe</Button> : <span className="text-sm text-emerald-700">Vinculada</span>}
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
       </div>

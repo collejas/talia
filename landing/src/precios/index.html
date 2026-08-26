@@ -401,6 +401,21 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       cursor: wait;
     }
 
+    .billing-payment-step {
+      display: grid;
+      gap: 16px;
+      padding-top: 22px;
+      border-top: 1px solid rgba(15, 23, 42, 0.1);
+    }
+
+    .billing-payment-element {
+      min-height: 120px;
+      padding: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 12px;
+      background: #fff;
+    }
+
     @media (max-width: 640px) {
       .billing-checkout__panel {
         padding: 20px;
@@ -628,19 +643,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <h2>Registra tu empresa y continúa a Stripe</h2>
             <p class="section__lead">Primero crearemos un tenant provisional. Después completarás el pago de forma segura en Stripe.</p>
           </div>
-          <div class="billing-checkout__status" data-checkout-status role="status">Cargando planes comerciales...</div>
+          <div class="billing-checkout__status" data-checkout-status role="status">Cargando modalidades de contratación...</div>
         </div>
 
         <div>
-          <p class="billing-form__help"><strong data-plan-count>0</strong> plan(es) disponible(s). Los precios se cargan desde la configuración comercial vigente.</p>
+          <p class="billing-form__help"><strong data-plan-count>0</strong> modalidad(es) disponible(s). Los precios se cargan desde la configuración comercial vigente.</p>
           <div class="billing-plan-list" data-plan-list aria-live="polite"></div>
         </div>
 
-        <div class="billing-selected" aria-live="polite">
-          <strong>Selección</strong>
-          <span data-selected-plan>Selecciona un plan</span>
-          <span data-selected-price>Elige una modalidad para continuar.</span>
-        </div>
+          <div class="billing-selected" aria-live="polite">
+            <strong>Selección</strong>
+            <span data-selected-plan>Selecciona una modalidad</span>
+            <span data-selected-price>Elige una modalidad para continuar.</span>
+          </div>
 
         <form class="billing-form" data-commercial-checkout-form>
           <div>
@@ -684,14 +699,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <label for="billing-billing-email">Correo de facturación</label>
               <input id="billing-billing-email" name="correo_facturacion" type="email" maxlength="320" autocomplete="email" />
             </div>
+            <div class="billing-form__field billing-form__field--full">
+              <label for="billing-installment-count">Forma de pago</label>
+              <select id="billing-installment-count" name="installment_count" data-installment-count required></select>
+              <p class="billing-form__help">La modalidad contratada limita las opciones disponibles. Los MSI aplican únicamente a tarjetas de crédito mexicanas elegibles.</p>
+            </div>
           </div>
           <input type="hidden" name="pais" value="MX" />
           <input type="hidden" name="moneda" value="MXN" />
           <input type="hidden" name="idioma" value="es-MX" />
           <input type="hidden" name="timezone" value="America/Mexico_City" />
           <div data-form-message class="billing-message hidden" hidden role="alert"></div>
-          <button class="button primary billing-submit-button" type="submit">Crear tenant y continuar a Stripe</button>
+          <button class="button primary billing-submit-button" type="submit">Continuar al pago</button>
         </form>
+
+        <div class="billing-payment-step" data-payment-step hidden aria-hidden="true">
+          <h3>Confirma tu pago</h3>
+          <p class="billing-form__help">Stripe mostrará el formulario seguro y, si tu tarjeta es elegible, los MSI permitidos para esta modalidad.</p>
+          <div class="billing-payment-element" data-payment-element></div>
+          <div data-payment-message class="billing-message hidden" hidden role="alert"></div>
+          <button class="button primary" data-confirm-payment type="button">Confirmar pago</button>
+        </div>
       </div>
     </section>
 

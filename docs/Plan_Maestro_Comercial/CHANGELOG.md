@@ -429,6 +429,16 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se agregó `Comercial / Billing / Configuración de conexión`, con diagnóstico seguro de variables Stripe, modo test/live, URLs requeridas y ruta del webhook.
 - El endpoint de diagnóstico no devuelve claves ni secretos y requiere `require_master_tenant_owner`.
 
+### Modalidades Tal-IA Llave en Mano y MSI
+- Se definieron cinco modalidades de contratación de pago único: 1, 3, 6, 9 y 12 meses.
+- Cada modalidad conserva el monto total IVA incluido y declara explícitamente su duración y máximo de MSI permitido.
+- Las opciones de MSI se limitan por modalidad: 3 meses permite 3; 6 meses permite 3 y 6; 9 meses permite 3, 6 y 9; 12 meses permite 3, 6, 9 y 12.
+- Se agregó un catálogo separado para la licencia recurrente mensual de `$1,500 MXN`, que inicia al terminar la modalidad contratada.
+- Se agregó la migración `supabase/migrations/20260826_120000_llave_en_mano_modalidades_msi.sql`.
+- El panel comercial incorpora acciones protegidas para crear productos y precios en Stripe y guardar automáticamente los IDs reales.
+- El Checkout público cambia conceptualmente de suscripción inicial a PaymentIntent de pago único con Payment Element; la licencia posterior se programa desde el webhook de pago confirmado.
+- Antes de habilitar producción deben aplicarse la migración, configurar `STRIPE_PUBLISHABLE_KEY` y crear/vincular los precios reales en Stripe Test.
+
 ### Alta pública desde `/precios`
 - Se habilitó la contratación en línea desde la página pública de precios mediante `GET /public/billing/commercial-plans` y `POST /public/billing/checkout`.
 - La página muestra los planes y modalidades activas desde el catálogo comercial, sin confiar en precios escritos en el frontend para crear el checkout.

@@ -64,7 +64,7 @@ class PlatformRepository:
 
     async def list_tenant_billing_accounts(self) -> list[dict[str, Any]]:
         params = {
-            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,contract_duration_months,selected_installment_count,upfront_payment_intent_id,contract_started_at,contract_ends_at,license_price_id,license_starts_at,license_status,created_at,updated_at",
             "order": "updated_at.desc",
         }
         data = await self._rest("GET", "/rest/v1/tenant_billing_accounts", params=params)
@@ -74,7 +74,7 @@ class PlatformRepository:
 
     async def get_tenant_billing_account(self, *, tenant_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,contract_duration_months,selected_installment_count,upfront_payment_intent_id,contract_started_at,contract_ends_at,license_price_id,license_starts_at,license_status,created_at,updated_at",
             "tenant_id": f"eq.{tenant_id}",
             "limit": "1",
         }
@@ -90,7 +90,7 @@ class PlatformRepository:
         self, *, stripe_customer_id: str
     ) -> dict[str, Any] | None:
         params = {
-            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,contract_duration_months,selected_installment_count,upfront_payment_intent_id,contract_started_at,contract_ends_at,license_price_id,license_starts_at,license_status,created_at,updated_at",
             "stripe_customer_id": f"eq.{stripe_customer_id}",
             "limit": "1",
         }
@@ -106,7 +106,7 @@ class PlatformRepository:
         self, *, stripe_subscription_id: str
     ) -> dict[str, Any] | None:
         params = {
-            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,created_at,updated_at",
+            "select": "id,tenant_id,plan_id,billing_provider,stripe_customer_id,stripe_subscription_id,stripe_price_id,billing_status,access_status,trial_ends_at,current_period_start,current_period_end,grace_until,cancel_at_period_end,activated_at,deactivated_at,last_stripe_event_id,contract_duration_months,selected_installment_count,upfront_payment_intent_id,contract_started_at,contract_ends_at,license_price_id,license_starts_at,license_status,created_at,updated_at",
             "stripe_subscription_id": f"eq.{stripe_subscription_id}",
             "limit": "1",
         }
@@ -120,7 +120,7 @@ class PlatformRepository:
 
     async def list_commercial_plans(self) -> list[dict[str, Any]]:
         params = {
-            "select": "id,code,name,description,active,sort_order,created_at,updated_at",
+            "select": "id,code,name,description,active,sort_order,contract_duration_months,max_installment_count,pricing_model,created_at,updated_at",
             "order": "active.desc,sort_order.asc,name.asc",
         }
         data = await self._rest("GET", "/rest/v1/commercial_plans", params=params)
@@ -130,7 +130,7 @@ class PlatformRepository:
 
     async def get_commercial_plan(self, *, plan_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,code,name,description,active,sort_order,created_at,updated_at",
+            "select": "id,code,name,description,active,sort_order,contract_duration_months,max_installment_count,pricing_model,created_at,updated_at",
             "id": f"eq.{plan_id}",
             "limit": "1",
         }
@@ -157,6 +157,34 @@ class PlatformRepository:
         if not isinstance(row, dict):
             raise PlatformRepositoryError("commercial_plan_price_invalid_response")
         return row
+
+    async def get_commercial_plan_price(self, *, price_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,plan_id,billing_provider,provider_product_id,provider_price_id,currency,billing_interval,amount_cents,active,created_at,updated_at",
+            "id": f"eq.{price_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_plan_prices", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("commercial_plan_price_invalid_response")
+        return row
+
+    async def update_commercial_license_price(
+        self, *, price_id: UUID, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/commercial_license_prices",
+            params={"id": f"eq.{price_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("commercial_license_price_update_failed")
+        return data[0]
 
     async def create_commercial_plan(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
@@ -207,6 +235,31 @@ class PlatformRepository:
         if not isinstance(data, list):
             raise PlatformRepositoryError("commercial_plan_prices_invalid_response")
         return data
+
+    async def list_commercial_license_prices(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,code,name,billing_provider,provider_product_id,provider_price_id,currency,billing_interval,amount_cents,active,created_at,updated_at",
+            "order": "active.desc,code.asc",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_license_prices", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("commercial_license_prices_invalid_response")
+        return data
+
+    async def get_active_commercial_license_price(self) -> dict[str, Any] | None:
+        params = {
+            "select": "id,code,name,billing_provider,provider_product_id,provider_price_id,currency,billing_interval,amount_cents,active,created_at,updated_at",
+            "active": "eq.true",
+            "billing_interval": "eq.month",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/commercial_license_prices", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise PlatformRepositoryError("commercial_license_price_invalid_response")
+        return row
 
     async def create_commercial_plan_price(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(

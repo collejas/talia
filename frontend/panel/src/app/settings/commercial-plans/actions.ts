@@ -10,6 +10,9 @@ type CommercialPlanPayload = {
   description?: string
   active?: boolean
   sort_order?: number
+  contract_duration_months?: 1 | 3 | 6 | 9 | 12
+  max_installment_count?: 1 | 3 | 6 | 9 | 12
+  pricing_model?: "legacy" | "one_time_plus_license"
 }
 
 type CommercialPlanPricePayload = {
@@ -108,6 +111,9 @@ function buildPayload(formData: FormData, includeCode = true): CommercialPlanPay
     description: getText(formData, "description") || undefined,
     active: getBoolean(formData, "active"),
     sort_order: getNumber(formData, "sort_order") ?? 0,
+    contract_duration_months: getNumber(formData, "contract_duration_months") as CommercialPlanPayload["contract_duration_months"],
+    max_installment_count: getNumber(formData, "max_installment_count") as CommercialPlanPayload["max_installment_count"],
+    pricing_model: (getText(formData, "pricing_model") as CommercialPlanPayload["pricing_model"]) || "legacy",
   }
   if (includeCode) {
     payload.code = getText(formData, "code")
@@ -245,6 +251,41 @@ export async function updateCommercialPlanPriceAction(
     return success("Precio actualizado.")
   } catch (error) {
     return failure(error, "No se pudo actualizar el precio.")
+  }
+}
+
+export async function syncCommercialPlanPriceToStripeAction(
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const priceId = requirePriceId(formData)
+    const response = await callCrmApi<{ ok: boolean; provider_price_id?: string }>(
+      `/admin/commercial-plan-prices/${priceId}/sync-stripe`,
+      { method: "POST", organizacionId: null, withUserToken: true },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/commercial/plans")
+    return success(`Precio creado en Stripe: ${response.data.provider_price_id ?? "listo"}.`)
+  } catch (error) {
+    return failure(error, "No se pudo crear el precio en Stripe.")
+  }
+}
+
+export async function syncCommercialLicensePriceToStripeAction(
+  formData: FormData,
+): Promise<CommercialPlanActionState> {
+  try {
+    const priceId = getText(formData, "license_price_id")
+    if (!priceId) throw new Error("Falta license_price_id.")
+    const response = await callCrmApi<{ ok: boolean; provider_price_id?: string }>(
+      `/admin/commercial-license-prices/${priceId}/sync-stripe`,
+      { method: "POST", organizacionId: null, withUserToken: true },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/commercial/plans")
+    return success(`Licencia creada en Stripe: ${response.data.provider_price_id ?? "lista"}.`)
+  } catch (error) {
+    return failure(error, "No se pudo crear la licencia en Stripe.")
   }
 }
 

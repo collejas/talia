@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import json
 from collections.abc import Mapping
+from calendar import monthrange
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any
@@ -30,6 +31,10 @@ STRIPE_INVOICE_EVENT_TYPES = {
 }
 STRIPE_CHECKOUT_EVENT_TYPES = {
     "checkout.session.completed",
+}
+STRIPE_PAYMENT_INTENT_EVENT_TYPES = {
+    "payment_intent.succeeded",
+    "payment_intent.payment_failed",
 }
 
 
@@ -116,6 +121,11 @@ def _extract_price_id(obj: Mapping[str, Any]) -> str | None:
                     price_id = _extract_stripe_reference(plan, "id")
                     if price_id:
                         return price_id
+    metadata = obj.get("metadata")
+    if isinstance(metadata, Mapping):
+        metadata_price_id = _extract_stripe_reference(metadata, "provider_price_id")
+        if metadata_price_id:
+            return metadata_price_id
     for key in ("price", "provider_price_id"):
         price_id = _extract_stripe_reference(obj, key)
         if price_id:
@@ -124,6 +134,10 @@ def _extract_price_id(obj: Mapping[str, Any]) -> str | None:
 
 
 def _extract_status(obj: Mapping[str, Any], event_type: str) -> str:
+    if event_type == "payment_intent.succeeded":
+        return "active"
+    if event_type == "payment_intent.payment_failed":
+        return "incomplete"
     if event_type == "invoice.paid":
         return "active"
     if event_type == "invoice.payment_failed":
@@ -158,6 +172,14 @@ def _maybe_timestamp_to_iso(value: Any) -> str | None:
         return datetime.fromtimestamp(int(value), tz=UTC).isoformat()
     except (TypeError, ValueError, OSError):
         return None
+
+
+def _add_calendar_months(value: datetime, months: int) -> datetime:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
 
 
 def _build_event_signature(secret: str, payload: bytes, timestamp: int) -> str:
@@ -210,12 +232,15 @@ async def _stripe_request(
     path: str,
     data: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     secret_key = settings.stripe_secret_key
     if not secret_key:
         raise StripeApiError("stripe_secret_key_missing")
     url = f"{settings.stripe_api_base_url.rstrip('/')}{path}"
     headers = {"Authorization": f"Bearer {secret_key}"}
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.request(method, url, data=data, params=params, headers=headers)
@@ -242,6 +267,111 @@ async def create_stripe_customer(
         for key, value in metadata.items():
             payload[f"metadata[{key}]"] = value
     return await _stripe_request(method="POST", path="/v1/customers", data=payload)
+
+
+async def create_stripe_product_and_price(
+    *,
+    name: str,
+    amount_cents: int,
+    currency: str,
+    metadata: dict[str, str],
+    recurring_interval: str | None = None,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    product_payload: dict[str, Any] = {"name": name}
+    for key, value in metadata.items():
+        product_payload[f"metadata[{key}]"] = value
+    product = await _stripe_request(
+        method="POST",
+        path="/v1/products",
+        data=product_payload,
+        idempotency_key=f"{idempotency_key}-product",
+    )
+    product_id = str(product.get("id") or "").strip()
+    if not product_id:
+        raise StripeApiError("stripe_product_create_failed")
+    price_payload: dict[str, Any] = {
+        "product": product_id,
+        "unit_amount": str(amount_cents),
+        "currency": currency.lower(),
+    }
+    if recurring_interval:
+        price_payload["recurring[interval]"] = recurring_interval
+    price = await _stripe_request(
+        method="POST",
+        path="/v1/prices",
+        data=price_payload,
+        idempotency_key=f"{idempotency_key}-price",
+    )
+    price_id = str(price.get("id") or "").strip()
+    if not price_id:
+        raise StripeApiError("stripe_price_create_failed")
+    return {"product": product, "price": price}
+
+
+async def create_stripe_payment_intent(
+    *,
+    customer_id: str,
+    amount_cents: int,
+    currency: str,
+    tenant_id: UUID,
+    plan_id: UUID,
+    provider_price_id: str,
+    installment_count: int,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "amount": str(amount_cents),
+        "currency": currency.lower(),
+        "customer": customer_id,
+        "automatic_payment_methods[enabled]": "true",
+        "setup_future_usage": "off_session",
+        "metadata[tenant_id]": str(tenant_id),
+        "metadata[plan_id]": str(plan_id),
+        "metadata[provider_price_id]": provider_price_id,
+        "metadata[installment_count]": str(installment_count),
+        "payment_method_options[card][installments][enabled]": "true" if installment_count > 1 else "false",
+    }
+    allowed_counts = [count for count in (3, 6, 9, 12) if count <= installment_count]
+    for index, count in enumerate(allowed_counts):
+        payload[f"payment_method_options[card][installments][available_plans][{index}][type]"] = "fixed_count"
+        payload[f"payment_method_options[card][installments][available_plans][{index}][interval]"] = "month"
+        payload[f"payment_method_options[card][installments][available_plans][{index}][count]"] = str(count)
+    return await _stripe_request(method="POST", path="/v1/payment_intents", data=payload)
+
+
+async def update_stripe_customer_default_payment_method(
+    *, customer_id: str, payment_method_id: str
+) -> dict[str, Any]:
+    return await _stripe_request(
+        method="POST",
+        path=f"/v1/customers/{customer_id}",
+        data={"invoice_settings[default_payment_method]": payment_method_id},
+    )
+
+
+async def create_stripe_license_subscription(
+    *,
+    customer_id: str,
+    price_id: str,
+    trial_end: int,
+    tenant_id: UUID,
+    plan_id: UUID,
+) -> dict[str, Any]:
+    payload = {
+        "customer": customer_id,
+        "items[0][price]": price_id,
+        "trial_end": str(trial_end),
+        "collection_method": "charge_automatically",
+        "metadata[tenant_id]": str(tenant_id),
+        "metadata[plan_id]": str(plan_id),
+        "metadata[billing_kind]": "post_contract_license",
+    }
+    return await _stripe_request(
+        method="POST",
+        path="/v1/subscriptions",
+        data=payload,
+        idempotency_key=f"talia-license-subscription-{tenant_id}",
+    )
 
 
 async def create_stripe_checkout_session(
@@ -346,6 +476,32 @@ def _build_billing_account_payload(
     trial_ends_at = _maybe_timestamp_to_iso(event_object.get("trial_end") or event_object.get("trial_ends_at"))
     if event_type == "checkout.session.completed" and not subscription_id:
         subscription_id = _extract_stripe_reference(event_object, "subscription")
+    if event_type == "payment_intent.succeeded":
+        payment_intent_id = _extract_stripe_reference(event_object, "id")
+        if payment_intent_id:
+            payload["upfront_payment_intent_id"] = payment_intent_id
+        metadata = event_object.get("metadata")
+        if isinstance(metadata, Mapping) and metadata.get("installment_count"):
+            try:
+                selected_installment_count = int(metadata["installment_count"])
+            except (TypeError, ValueError):
+                selected_installment_count = 1
+            if selected_installment_count in {1, 3, 6, 9, 12}:
+                payload["selected_installment_count"] = selected_installment_count
+        payment_options = event_object.get("payment_method_options")
+        if isinstance(payment_options, Mapping):
+            card_options = payment_options.get("card")
+            if isinstance(card_options, Mapping):
+                installments = card_options.get("installments")
+                if isinstance(installments, Mapping):
+                    plan = installments.get("plan")
+                    if isinstance(plan, Mapping):
+                        try:
+                            actual_installment_count = int(plan.get("count"))
+                        except (TypeError, ValueError):
+                            actual_installment_count = 1
+                        if actual_installment_count in {3, 6, 9, 12}:
+                            payload["selected_installment_count"] = actual_installment_count
 
     payload: dict[str, Any] = {
         "tenant_id": str(tenant_id),
@@ -379,6 +535,63 @@ def _build_billing_account_payload(
         payload["grace_until"] = (datetime.now(tz=UTC) + timedelta(days=7)).isoformat()
 
     return payload
+
+
+async def _schedule_post_contract_license(
+    *,
+    repo: PlatformRepository,
+    tenant_id: UUID,
+    plan_id: UUID,
+    event_object: Mapping[str, Any],
+) -> None:
+    account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
+    if not account or str(account.get("stripe_subscription_id") or "").strip():
+        return
+    if str(account.get("license_status") or "pending") not in {"pending", "scheduled"}:
+        return
+    payment_method_id = _extract_stripe_reference(event_object, "payment_method")
+    customer_id = _extract_stripe_reference(event_object, "customer") or str(account.get("stripe_customer_id") or "").strip()
+    if not payment_method_id or not customer_id:
+        logger.warning(
+            "stripe.license_schedule_missing_payment_method",
+            extra={"tenant_id": str(tenant_id)},
+        )
+        return
+    license_price = await repo.get_active_commercial_license_price()
+    if not license_price:
+        logger.warning(
+            "stripe.license_schedule_missing_price",
+            extra={"tenant_id": str(tenant_id)},
+        )
+        return
+    duration = int(account.get("contract_duration_months") or 1)
+    now = datetime.now(tz=UTC)
+    license_starts_at = _add_calendar_months(now, duration)
+    await update_stripe_customer_default_payment_method(
+        customer_id=customer_id,
+        payment_method_id=payment_method_id,
+    )
+    subscription = await create_stripe_license_subscription(
+        customer_id=customer_id,
+        price_id=str(license_price.get("provider_price_id")),
+        trial_end=int(license_starts_at.timestamp()),
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+    )
+    subscription_id = str(subscription.get("id") or "").strip()
+    if not subscription_id:
+        raise StripeWebhookError("stripe_license_subscription_invalid")
+    await repo.update_tenant_billing_account(
+        tenant_id=tenant_id,
+        payload={
+            "stripe_subscription_id": subscription_id,
+            "license_price_id": str(license_price.get("id")),
+            "contract_started_at": now.isoformat(),
+            "contract_ends_at": license_starts_at.isoformat(),
+            "license_starts_at": license_starts_at.isoformat(),
+            "license_status": "scheduled",
+        },
+    )
 
 
 async def process_stripe_webhook(
@@ -452,7 +665,7 @@ async def process_stripe_webhook(
     )
 
     try:
-        if event_type in STRIPE_SUBSCRIPTION_EVENT_TYPES | STRIPE_INVOICE_EVENT_TYPES | STRIPE_CHECKOUT_EVENT_TYPES:
+        if event_type in STRIPE_SUBSCRIPTION_EVENT_TYPES | STRIPE_INVOICE_EVENT_TYPES | STRIPE_CHECKOUT_EVENT_TYPES | STRIPE_PAYMENT_INTENT_EVENT_TYPES:
             billing_payload = _build_billing_account_payload(
                 tenant_id=tenant_id,
                 event_id=event_id,
@@ -462,6 +675,13 @@ async def process_stripe_webhook(
                 commercial_plan_price=plan_price_row,
             )
             await repo.update_tenant_billing_account(tenant_id=tenant_id, payload=billing_payload)
+            if event_type == "payment_intent.succeeded":
+                await _schedule_post_contract_license(
+                    repo=repo,
+                    tenant_id=tenant_id,
+                    plan_id=UUID(str(billing_payload["plan_id"])),
+                    event_object=event_object,
+                )
             if billing_payload.get("billing_status") in {"active", "trialing"}:
                 await provision_tenant_from_billing(repo=repo, tenant_id=tenant_id, source=event_id)
 

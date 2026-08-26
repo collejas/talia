@@ -28,6 +28,7 @@ from app.services.stripe_billing import (
     create_stripe_checkout_session,
     create_stripe_customer,
     create_stripe_portal_session,
+    create_stripe_product_and_price,
 )
 from app.services.supabase_admin import (
     SupabaseAdminError,
@@ -515,6 +516,7 @@ class CommercialStripeConnectionResponse(BaseModel):
     provider: str = "stripe"
     connection_status: Literal["ready", "incomplete"]
     api_key_configured: bool
+    publishable_key_configured: bool
     api_mode: Literal["test", "live", "unknown", "not_configured"]
     webhook_secret_configured: bool
     webhook_endpoint_path: str
@@ -534,6 +536,9 @@ class CommercialPlanSummary(BaseModel):
     description: str | None = None
     active: bool
     sort_order: int
+    contract_duration_months: int | None = None
+    max_installment_count: int | None = None
+    pricing_model: str = "legacy"
     created_at: datetime
     updated_at: datetime
 
@@ -554,12 +559,40 @@ class CommercialPlanPriceSummary(BaseModel):
     updated_at: datetime
 
 
+class CommercialLicensePriceSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    code: str
+    name: str
+    billing_provider: str
+    provider_product_id: str
+    provider_price_id: str
+    currency: str
+    billing_interval: str
+    amount_cents: int
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommercialStripePriceSyncResponse(BaseModel):
+    ok: bool = True
+    price_id: UUID
+    provider_product_id: str
+    provider_price_id: str
+    amount_cents: int
+    currency: str
+    billing_interval: str
+
+
 class CommercialPlansResponse(BaseModel):
     ok: bool = True
     items: list[CommercialPlanSummary] = Field(default_factory=list)
     prices: list[CommercialPlanPriceSummary] = Field(default_factory=list)
     entitlements: list[CommercialPlanEntitlementSummary] = Field(default_factory=list)
     defaults: list[CommercialPlanDefaultSummary] = Field(default_factory=list)
+    license_prices: list[CommercialLicensePriceSummary] = Field(default_factory=list)
 
 
 class CommercialPlanResponse(BaseModel):
@@ -752,6 +785,18 @@ class CommercialPlanCreateRequest(BaseModel):
     description: str | None = None
     active: bool = True
     sort_order: int = Field(default=0, ge=0, le=9999)
+    contract_duration_months: Literal[1, 3, 6, 9, 12] | None = None
+    max_installment_count: Literal[1, 3, 6, 9, 12] | None = None
+    pricing_model: Literal["legacy", "one_time_plus_license"] = "legacy"
+
+    @model_validator(mode="after")
+    def _validate_contract_fields(self) -> "CommercialPlanCreateRequest":
+        if self.pricing_model == "one_time_plus_license":
+            if self.contract_duration_months is None or self.max_installment_count is None:
+                raise ValueError("contract_duration_and_max_installments_required")
+            if self.contract_duration_months != self.max_installment_count:
+                raise ValueError("max_installments_must_match_contract_duration")
+        return self
 
     @field_validator("code")
     @classmethod
@@ -779,6 +824,16 @@ class CommercialPlanUpdateRequest(BaseModel):
     description: str | None = None
     active: bool | None = None
     sort_order: int | None = Field(default=None, ge=0, le=9999)
+    contract_duration_months: Literal[1, 3, 6, 9, 12] | None = None
+    max_installment_count: Literal[1, 3, 6, 9, 12] | None = None
+    pricing_model: Literal["legacy", "one_time_plus_license"] | None = None
+
+    @model_validator(mode="after")
+    def _validate_contract_fields(self) -> "CommercialPlanUpdateRequest":
+        if self.contract_duration_months is not None and self.max_installment_count is not None:
+            if self.contract_duration_months != self.max_installment_count:
+                raise ValueError("max_installments_must_match_contract_duration")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -2315,11 +2370,13 @@ async def list_commercial_plans(
     prices = await repo.list_commercial_plan_prices()
     entitlements = await repo.list_commercial_plan_entitlements()
     defaults = await repo.list_commercial_plan_defaults()
+    license_prices = await repo.list_commercial_license_prices()
     return CommercialPlansResponse(
         items=[CommercialPlanSummary.model_validate(row) for row in plans],
         prices=[CommercialPlanPriceSummary.model_validate(row) for row in prices],
         entitlements=[CommercialPlanEntitlementSummary.model_validate(row) for row in entitlements],
         defaults=[CommercialPlanDefaultSummary.model_validate(row) for row in defaults],
+        license_prices=[CommercialLicensePriceSummary.model_validate(row) for row in license_prices],
     )
 
 
@@ -2453,6 +2510,7 @@ async def get_commercial_stripe_connection(
 ) -> CommercialStripeConnectionResponse:
     secret_key = str(settings.stripe_secret_key or "").strip()
     api_key_configured = bool(secret_key)
+    publishable_key_configured = bool(str(settings.stripe_publishable_key or "").strip())
     if secret_key.startswith(("sk_test_", "rk_test_")):
         api_mode: Literal["test", "live", "unknown", "not_configured"] = "test"
     elif secret_key.startswith(("sk_live_", "rk_live_")):
@@ -2469,6 +2527,7 @@ async def get_commercial_stripe_connection(
     ready = all(
         (
             api_key_configured,
+            publishable_key_configured,
             webhook_secret_configured,
             checkout_success_url_configured,
             checkout_cancel_url_configured,
@@ -2478,6 +2537,7 @@ async def get_commercial_stripe_connection(
     return CommercialStripeConnectionResponse(
         connection_status="ready" if ready else "incomplete",
         api_key_configured=api_key_configured,
+        publishable_key_configured=publishable_key_configured,
         api_mode=api_mode,
         webhook_secret_configured=webhook_secret_configured,
         webhook_endpoint_path="/api/webhooks/stripe",
@@ -2556,6 +2616,9 @@ async def create_commercial_plan(
                 "description": payload.description,
                 "active": bool(payload.active),
                 "sort_order": int(payload.sort_order),
+                "contract_duration_months": payload.contract_duration_months,
+                "max_installment_count": payload.max_installment_count,
+                "pricing_model": payload.pricing_model,
             }
         )
     except PlatformRepositoryError as exc:
@@ -2624,6 +2687,110 @@ async def create_commercial_plan_price(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CommercialPlanPriceResponse(price=CommercialPlanPriceSummary.model_validate(row))
+
+
+@router.post(
+    "/commercial-plan-prices/{price_id}/sync-stripe",
+    response_model=CommercialStripePriceSyncResponse,
+)
+async def sync_commercial_plan_price_to_stripe(
+    price_id: UUID,
+    _: UUID = Depends(require_master_tenant_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialStripePriceSyncResponse:
+    price = await repo.get_commercial_plan_price(price_id=price_id)
+    if not price:
+        raise HTTPException(status_code=404, detail="commercial_plan_price_not_found")
+    plan_id = UUID(str(price.get("plan_id")))
+    plan = await repo.get_commercial_plan(plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="commercial_plan_not_found")
+    if str(price.get("billing_provider") or "").lower() != "stripe":
+        raise HTTPException(status_code=400, detail="price_provider_invalid")
+    if str(price.get("billing_interval") or "") != "one_time":
+        raise HTTPException(status_code=400, detail="llave_mano_price_must_be_one_time")
+    existing_price_id = str(price.get("provider_price_id") or "")
+    if existing_price_id.startswith("price_"):
+        raise HTTPException(status_code=409, detail="stripe_price_already_linked")
+    try:
+        created = await create_stripe_product_and_price(
+            name=str(plan.get("name") or "Tal-IA Llave en Mano"),
+            amount_cents=int(price.get("amount_cents") or 0),
+            currency=str(price.get("currency") or "MXN"),
+            metadata={"talia_plan_id": str(plan_id), "talia_price_id": str(price_id)},
+            idempotency_key=f"talia-plan-price-{price_id}",
+        )
+        stripe_product = created["product"]
+        stripe_price = created["price"]
+        provider_product_id = str(stripe_product.get("id") or "").strip()
+        provider_price_id = str(stripe_price.get("id") or "").strip()
+        await repo.update_commercial_plan_price(
+            price_id=price_id,
+            payload={
+                "provider_product_id": provider_product_id,
+                "provider_price_id": provider_price_id,
+                "active": True,
+            },
+        )
+    except StripeApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialStripePriceSyncResponse(
+        price_id=price_id,
+        provider_product_id=provider_product_id,
+        provider_price_id=provider_price_id,
+        amount_cents=int(price.get("amount_cents") or 0),
+        currency=str(price.get("currency") or "MXN"),
+        billing_interval="one_time",
+    )
+
+
+@router.post(
+    "/commercial-license-prices/{price_id}/sync-stripe",
+    response_model=CommercialStripePriceSyncResponse,
+)
+async def sync_commercial_license_price_to_stripe(
+    price_id: UUID,
+    _: UUID = Depends(require_master_tenant_owner),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CommercialStripePriceSyncResponse:
+    rows = await repo.list_commercial_license_prices()
+    price = next((row for row in rows if str(row.get("id")) == str(price_id)), None)
+    if not price:
+        raise HTTPException(status_code=404, detail="commercial_license_price_not_found")
+    existing_price_id = str(price.get("provider_price_id") or "")
+    if existing_price_id.startswith("price_"):
+        raise HTTPException(status_code=409, detail="stripe_price_already_linked")
+    try:
+        created = await create_stripe_product_and_price(
+            name=str(price.get("name") or "Licencia Tal-IA"),
+            amount_cents=int(price.get("amount_cents") or 0),
+            currency=str(price.get("currency") or "MXN"),
+            metadata={"talia_license_price_id": str(price_id)},
+            recurring_interval="month",
+            idempotency_key=f"talia-license-price-{price_id}",
+        )
+        stripe_product = created["product"]
+        stripe_price = created["price"]
+        provider_product_id = str(stripe_product.get("id") or "").strip()
+        provider_price_id = str(stripe_price.get("id") or "").strip()
+        await repo.update_commercial_license_price(
+            price_id=price_id,
+            payload={
+                "provider_product_id": provider_product_id,
+                "provider_price_id": provider_price_id,
+                "active": True,
+            },
+        )
+    except StripeApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CommercialStripePriceSyncResponse(
+        price_id=price_id,
+        provider_product_id=provider_product_id,
+        provider_price_id=provider_price_id,
+        amount_cents=int(price.get("amount_cents") or 0),
+        currency=str(price.get("currency") or "MXN"),
+        billing_interval="month",
+    )
 
 
 @router.patch("/commercial-plan-prices/{price_id}", response_model=CommercialPlanPriceResponse)
